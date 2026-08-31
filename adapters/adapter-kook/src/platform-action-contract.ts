@@ -26,6 +26,8 @@ export interface KookActionRouteContract {
     path: string;
     method: "GET" | "POST";
     params: Readonly<Record<string, KookActionParamRule>>;
+    /** 每个字段组都必须至少提供一项，用于表达官方 one-of 参数约束。 */
+    atLeastOne?: readonly (readonly string[])[];
 }
 
 type KookActionValue = string | number;
@@ -43,6 +45,7 @@ export function defineKookActionRoutes(
     for (const [action, route] of Object.entries(routes)) {
         handlers[action] = (bot, params) => {
             const values = validateParams(action, params, route.params);
+            validateAtLeastOne(action, values, route.atLeastOne);
             return bot.callApi(
                 route.path,
                 route.method === "GET" ? { query: values } : { method: "POST", body: values },
@@ -50,6 +53,21 @@ export function defineKookActionRoutes(
         };
     }
     return handlers;
+}
+
+function validateAtLeastOne(
+    action: string,
+    values: Readonly<Record<string, KookActionValue>>,
+    groups?: readonly (readonly string[])[],
+): void {
+    for (const keys of groups || []) {
+        if (keys.some(key => Object.hasOwn(values, key))) continue;
+        throw KookError.invalid(
+            `KOOK 动作 ${action} 必须至少提供参数 ${keys.join(" 或 ")}`,
+            "KOOK_ACTION_PARAM_REQUIRED",
+            { action, keys },
+        );
+    }
 }
 
 function validateParams(

@@ -237,6 +237,35 @@ describe("KOOK 平台扩展动作", () => {
         ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_UNKNOWN" });
     });
 
+    test("邀请动作表达目标 one-of 与官方枚举", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+
+        await executeKookPlatformAction(bot, "create_invite", {
+            guild_id: "guild",
+            duration: 3_600,
+            setting_times: 5,
+        });
+        expect(callApi).toHaveBeenCalledWith("/v3/invite/create", {
+            method: "POST",
+            body: { guild_id: "guild", duration: 3_600, setting_times: 5 },
+        });
+
+        await expect(executeKookPlatformAction(bot, "list_invites", {})).rejects.toMatchObject({
+            code: "KOOK_ACTION_PARAM_REQUIRED",
+            details: { action: "list_invites", keys: ["guild_id", "channel_id"] },
+        });
+        await expect(
+            executeKookPlatformAction(bot, "create_invite", {
+                channel_id: "channel",
+                duration: 60,
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+        await expect(
+            executeKookPlatformAction(bot, "list_invitees", { page: 1 }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_REQUIRED" });
+    });
+
     test("通用动作拒绝跳出 /v3 API", async () => {
         await expect(
             executeKookPlatformAction({ callApi: vi.fn() } as never, "call_kook_api", {

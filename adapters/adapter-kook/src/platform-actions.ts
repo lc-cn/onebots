@@ -10,6 +10,7 @@ import { KookError } from "./errors.js";
 import type { KookApiRequestOptions, KookOAuthScope } from "./types.js";
 import { KOOK_FRIEND_PLATFORM_ACTIONS } from "./platform-actions-friend.js";
 import { KOOK_GUILD_PLATFORM_ACTIONS } from "./platform-actions-guild.js";
+import { KOOK_INVITE_PLATFORM_ACTIONS } from "./platform-actions-invite.js";
 import { KOOK_MESSAGE_PLATFORM_ACTIONS } from "./platform-actions-message.js";
 import { KOOK_PERMISSION_PLATFORM_ACTIONS } from "./platform-actions-permission.js";
 import { KOOK_TEMPLATE_PLATFORM_ACTIONS } from "./platform-actions-template.js";
@@ -20,10 +21,6 @@ interface ActionRoute {
 }
 
 const ROUTES: Readonly<Record<string, ActionRoute>> = {
-    list_invites: { path: "/v3/invite/list", method: "GET" },
-    create_invite: { path: "/v3/invite/create", method: "POST" },
-    delete_invite: { path: "/v3/invite/delete", method: "POST" },
-    list_invitees: { path: "/v3/invite/invitees", method: "GET" },
     list_channel_messages: { path: "/v3/message/list", method: "GET" },
     send_pipe_message: { path: "/v3/message/send-pipemsg", method: "POST" },
     list_direct_messages: { path: "/v3/direct-message/list", method: "GET" },
@@ -147,6 +144,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         ...SPECIAL_ACTIONS,
         ...KOOK_FRIEND_PLATFORM_ACTIONS,
         ...KOOK_GUILD_PLATFORM_ACTIONS,
+        ...KOOK_INVITE_PLATFORM_ACTIONS,
         ...KOOK_MESSAGE_PLATFORM_ACTIONS,
         ...KOOK_PERMISSION_PLATFORM_ACTIONS,
         ...KOOK_TEMPLATE_PLATFORM_ACTIONS,
