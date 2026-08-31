@@ -32,3 +32,10 @@ export function getAccountProtocolSelectionState(
         description: "当前账号已有可用的开放协议出口。",
     };
 }
+
+export function resolveRequestedProtocol(
+    protocolKeys: readonly string[],
+    requestedProtocol: string,
+): string | null {
+    return protocolKeys.includes(requestedProtocol) ? requestedProtocol : null;
+}

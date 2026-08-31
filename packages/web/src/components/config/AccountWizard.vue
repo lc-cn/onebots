@@ -28,7 +28,10 @@ import {
     protocolTitle,
 } from "./utils";
 import { buildProtocolFieldLayout } from "./protocol-layout";
-import { getAccountProtocolSelectionState } from "./account-protocol-selection.js";
+import {
+    getAccountProtocolSelectionState,
+    resolveRequestedProtocol,
+} from "./account-protocol-selection.js";
 import {
     getAccountAdapterSelectionState,
     type SchemaLoadStatus,
@@ -67,6 +70,7 @@ const steps = [
 ];
 const currentStep = ref(0);
 const activeProtocolTab = ref("");
+const preferredProtocol = ref("");
 
 const protocolTabs = computed(() =>
     protocolGroups.value.map(group => ({ key: group.key, label: group.title })),
@@ -152,6 +156,17 @@ const syncFormModel = (configObject: Record<string, unknown>) => {
         }
         accountFormModel[field.key] = resolveSchemaFieldInitialValue(configObject, field);
     });
+};
+
+const applyPreferredProtocol = () => {
+    const requestedProtocol = resolveRequestedProtocol(
+        protocolGroups.value.map(group => group.key),
+        preferredProtocol.value,
+    );
+    if (!requestedProtocol) return null;
+    protocolEnabled[requestedProtocol] = true;
+    activeProtocolTab.value = requestedProtocol;
+    return requestedProtocol;
 };
 
 const goNextStep = () => {
@@ -279,21 +294,23 @@ const handleAdapterAction = () => {
     void router.push("/extensions?type=adapter");
 };
 
-const openAdd = (platform = "") => {
+const openAdd = (platform = "", protocol = "") => {
     dialogTitle.value = "新增账号";
     isEdit.value = false;
+    preferredProtocol.value = protocol;
     accountOriginalConfig.value = {};
     accountForm.value = { platform, account_id: "" };
     buildAdapterFields(platform);
     syncFormModel({});
     currentStep.value = 0;
-    activeProtocolTab.value = protocolGroups.value[0]?.key ?? "";
+    activeProtocolTab.value = applyPreferredProtocol() ?? protocolGroups.value[0]?.key ?? "";
     dialogVisible.value = true;
 };
 
 const openEdit = (row: AccountRow) => {
     dialogTitle.value = "编辑账号";
     isEdit.value = true;
+    preferredProtocol.value = "";
     accountOriginalConfig.value = JSON.parse(JSON.stringify(row.config || {})) as Record<
         string,
         unknown
@@ -320,6 +337,7 @@ watch(
         if (!platform) return;
         buildAdapterFields(platform);
         syncFormModel(accountOriginalConfig.value || {});
+        applyPreferredProtocol();
     },
 );
 

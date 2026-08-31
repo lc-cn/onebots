@@ -107,6 +107,7 @@ function extension(
         displayName: `${name} catalog`,
         description: "catalog",
         packageName: `@onebots/adapter-${name}`,
+        configurationTarget: { kind: "account", platform: name },
         targetVersion: "1.2.3",
         installedVersion: null,
         versionAligned: false,

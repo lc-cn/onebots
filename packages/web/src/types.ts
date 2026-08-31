@@ -127,6 +127,9 @@ export interface ExtensionInfo {
     displayName: string;
     description: string;
     packageName: string;
+    configurationTarget:
+        | { kind: "account"; platform: string }
+        | { kind: "protocol"; protocolKey: string };
     targetVersion: string;
     installedVersion: string | null;
     versionAligned: boolean;

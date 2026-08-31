@@ -6,6 +6,10 @@ export interface ExtensionSetupStep {
     url?: string;
 }
 
+export type ExtensionConfigurationTarget =
+    | { kind: "account"; platform: string }
+    | { kind: "protocol"; protocolKey: string };
+
 export interface ExtensionCatalogEntry {
     id: string;
     type: ExtensionType;
@@ -13,6 +17,7 @@ export interface ExtensionCatalogEntry {
     displayName: string;
     description: string;
     packageName: string;
+    configurationTarget: ExtensionConfigurationTarget;
     setup: ExtensionSetupStep[];
 }
 
@@ -28,11 +33,13 @@ const adapter = (
     displayName,
     description,
     packageName: `@onebots/adapter-${name}`,
+    configurationTarget: { kind: "account", platform: name },
     setup,
 });
 
 const protocol = (
     name: string,
+    protocolKey: string,
     displayName: string,
     description: string,
 ): ExtensionCatalogEntry => ({
@@ -42,6 +49,7 @@ const protocol = (
     displayName,
     description,
     packageName: `@onebots/protocol-${name}`,
+    configurationTarget: { kind: "protocol", protocolKey },
     setup: [
         {
             title: "配置协议出口",
@@ -196,11 +204,11 @@ export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
     adapter("zulip", "Zulip", "连接 Zulip Bot。", genericSetup),
     adapter("heychat", "黑盒语音", "连接黑盒语音机器人。", genericSetup),
     adapter("icqq", "ICQQ", "通过 ICQQ 接入 QQ。", genericSetup),
-    protocol("onebot-v11", "OneBot v11", "提供 OneBot v11 HTTP 与 WebSocket 接口。"),
-    protocol("onebot-v12", "OneBot v12", "提供 OneBot v12 标准接口。"),
-    protocol("satori-v1", "Satori v1", "提供 Satori v1 协议接口。"),
-    protocol("milky-v1", "Milky v1", "提供 Milky v1 协议接口。"),
-    protocol("mcp-v1", "MCP v1", "将机器人能力暴露为 MCP 工具。"),
+    protocol("onebot-v11", "onebot.v11", "OneBot v11", "提供 OneBot v11 HTTP 与 WebSocket 接口。"),
+    protocol("onebot-v12", "onebot.v12", "OneBot v12", "提供 OneBot v12 标准接口。"),
+    protocol("satori-v1", "satori.v1", "Satori v1", "提供 Satori v1 协议接口。"),
+    protocol("milky-v1", "milky.v1", "Milky v1", "提供 Milky v1 协议接口。"),
+    protocol("mcp-v1", "mcp.v1", "MCP v1", "将机器人能力暴露为 MCP 工具。"),
 ];
 
 export function getExtensionCatalogEntry(id: string): ExtensionCatalogEntry | undefined {

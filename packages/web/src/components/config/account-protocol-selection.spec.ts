@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getAccountProtocolSelectionState } from "./account-protocol-selection.js";
+import {
+    getAccountProtocolSelectionState,
+    resolveRequestedProtocol,
+} from "./account-protocol-selection.js";
 
 describe("account protocol selection", () => {
     it("directs an account wizard without loaded protocols to extension installation", () => {
@@ -33,5 +36,13 @@ describe("account protocol selection", () => {
             title: "协议出口已配置",
             description: "当前账号已有可用的开放协议出口。",
         });
+    });
+
+    it("preselects only a protocol published by the loaded schema", () => {
+        const protocols = ["onebot.v11", "satori.v1"];
+
+        expect(resolveRequestedProtocol(protocols, "satori.v1")).toBe("satori.v1");
+        expect(resolveRequestedProtocol(protocols, "milky.v1")).toBeNull();
+        expect(resolveRequestedProtocol(protocols, "")).toBeNull();
     });
 });

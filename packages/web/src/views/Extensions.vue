@@ -105,11 +105,11 @@
                                 v-if="extension.loaded"
                                 v-slot="{ navigate }"
                                 custom
-                                :to="{ path: '/config', query: { add: extension.name } }">
+                                :to="configurationAction(extension).to">
                                 <UiButton
                                     :variant="extension.versionAligned ? 'primary' : 'ghost'"
                                     @click="navigate">
-                                    去配置
+                                    {{ configurationAction(extension).label }}
                                 </UiButton>
                             </RouterLink>
                             <UiButton
@@ -138,6 +138,7 @@ import { readCurrentServiceInstanceId, waitForServiceRestart } from "../utils/se
 import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiSpinner } from "../ui";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
+import { getExtensionConfigurationAction } from "./extension-configuration.js";
 
 const route = useRoute();
 const extensions = ref<ExtensionInfo[]>([]);
@@ -165,6 +166,9 @@ function installActionLabel(extension: ExtensionInfo): string {
     if (!extension.versionAligned) return `切换至 v${extension.targetVersion} 并重启`;
     return "启用并重启";
 }
+
+const configurationAction = (extension: ExtensionInfo) =>
+    getExtensionConfigurationAction(extension);
 
 const visibleExtensions = computed(() =>
     filter.value === "all"

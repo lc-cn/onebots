@@ -9,6 +9,7 @@ import UiButton from "../ui/UiButton.vue";
 import UiCard from "../ui/UiCard.vue";
 import UiTabs from "../ui/UiTabs.vue";
 import UiTextarea from "../ui/UiTextarea.vue";
+import UiAlert from "../ui/UiAlert.vue";
 import { useToast } from "../ui/toast.js";
 import { useConfirm } from "../ui/confirm.js";
 
@@ -20,6 +21,7 @@ import AccountWizard from "../components/config/AccountWizard.vue";
 import type { SchemaBundle, SchemaGroup, AccountRow } from "../components/config/types";
 import type { SchemaLoadStatus } from "../components/config/account-adapter-selection.js";
 import { isAccountWizardRequest } from "./bot-onboarding.js";
+import { parseProtocolConfigurationRequest } from "./protocol-configuration-request.js";
 import {
     getValueByPath,
     deleteValueByPath,
@@ -31,6 +33,7 @@ import {
     normalizeSchema,
     buildConfigGroups,
     extractAccountRows,
+    protocolTitle,
 } from "../components/config/utils";
 
 const toast = useToast();
@@ -55,10 +58,28 @@ const formModel = reactive<Record<string, unknown>>({});
 
 const accounts = ref<AccountRow[]>([]);
 const accountEmptyText = ref("暂无账号");
+const protocolConfigurationHint = ref("");
 const saving = ref(false);
 
 const staticTabRef = ref<InstanceType<typeof ConfigStaticTab>>();
 const accountWizardRef = ref<InstanceType<typeof AccountWizard>>();
+
+const applyProtocolConfigurationRequest = async () => {
+    if (schemaStatus.value !== "ready" || route.query.protocol === undefined) return;
+    const requestedProtocol = parseProtocolConfigurationRequest(
+        route.query.protocol,
+        Object.keys(schema.value?.protocols ?? {}),
+    );
+    const query = { ...route.query };
+    delete query.protocol;
+    await router.replace({ query });
+    if (!requestedProtocol) {
+        toast.warning("请求配置的开放协议未加载");
+        return;
+    }
+    activeTab.value = "accounts";
+    protocolConfigurationHint.value = requestedProtocol;
+};
 
 const syncFormModel = (configObject: Record<string, unknown>) => {
     schemaGroups.value.forEach(group => {
@@ -119,6 +140,7 @@ const loadSchema = async () => {
         const rawSchema = await response.json();
         schema.value = normalizeSchema(rawSchema);
         schemaStatus.value = "ready";
+        await applyProtocolConfigurationRequest();
     } catch (error) {
         schemaStatus.value = "error";
         console.error("加载配置 Schema 失败:", error);
@@ -282,12 +304,30 @@ watch(activeTab, name => {
 
                 <ConfigStaticTab v-else-if="activeTab === 'static'" ref="staticTabRef" />
 
-                <ConfigAccountsTab
-                    v-else-if="activeTab === 'accounts'"
-                    :accounts="accounts"
-                    :account-empty-text="accountEmptyText"
-                    @edit="row => accountWizardRef?.openEdit(row)"
-                    @remove="handleRemoveAccount" />
+                <template v-else-if="activeTab === 'accounts'">
+                    <UiAlert
+                        v-if="protocolConfigurationHint"
+                        class="mt-4"
+                        variant="info"
+                        closable
+                        :title="`配置 ${protocolTitle(protocolConfigurationHint)} 账号出口`"
+                        @close="protocolConfigurationHint = ''">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <span>新增或编辑账号，并在协议配置步骤启用这个协议。</span>
+                            <UiButton
+                                size="sm"
+                                variant="secondary"
+                                @click="accountWizardRef?.openAdd('', protocolConfigurationHint)">
+                                新增账号并启用
+                            </UiButton>
+                        </div>
+                    </UiAlert>
+                    <ConfigAccountsTab
+                        :accounts="accounts"
+                        :account-empty-text="accountEmptyText"
+                        @edit="row => accountWizardRef?.openEdit(row)"
+                        @remove="handleRemoveAccount" />
+                </template>
             </UiCard>
         </div>
     </div>
