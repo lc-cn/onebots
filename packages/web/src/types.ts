@@ -78,6 +78,8 @@ export interface AdapterInfo {
     description: string;
     icon: string;
     capabilities: AdapterCapabilityManifest;
+    /** false 表示插件已加载，但未注册可信的默认能力清单。 */
+    capabilityDeclared?: boolean;
     /** 仅包含与适配器默认清单不同的账号级能力覆写。 */
     accountCapabilities?: Record<string, AdapterCapabilityManifest>;
     /** 动态账号能力无法形成可信清单时的隔离诊断。 */

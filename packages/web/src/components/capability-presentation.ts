@@ -70,6 +70,7 @@ export function mergeCapabilityAdapters(
                 description: extension.description,
                 icon: "",
                 capabilities: extension.capability.manifest,
+                capabilityDeclared: true,
                 capabilitySource: extension.capability.source,
                 capabilityPackageVersion: extension.capability.packageVersion,
                 accounts: [],
@@ -83,6 +84,7 @@ export function mergeCapabilityAdapters(
             )?.capability;
             return {
                 ...adapter,
+                capabilityDeclared: adapter.capabilityDeclared ?? true,
                 capabilitySource: "runtime" as const,
                 capabilityPackageVersion:
                     adapter.capabilityPackageVersion ?? runtimeCapability?.packageVersion,

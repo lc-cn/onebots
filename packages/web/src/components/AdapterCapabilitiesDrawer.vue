@@ -74,6 +74,13 @@
                 </div>
 
                 <UiAlert
+                    v-if="selectedAdapter.capabilityDeclared === false"
+                    variant="warning"
+                    title="默认能力清单未知">
+                    该适配器已经加载，但插件没有注册可信的默认能力清单。下方空分类不能作为平台不支持这些能力的证据；请查看适配器文档或联系插件作者补充声明。
+                </UiAlert>
+
+                <UiAlert
                     v-if="selectedAccountCapabilityError"
                     variant="warning"
                     title="账号能力证据不可用">

@@ -104,11 +104,13 @@ describe("capability presentation", () => {
         expect(result.map(adapter => adapter.platform)).toEqual(["telegram", "discord"]);
         expect(result[0]).toMatchObject({
             displayName: "Telegram runtime",
+            capabilityDeclared: true,
             capabilitySource: "runtime",
             capabilityPackageVersion: "1.2.3",
         });
         expect(result[1]).toMatchObject({
             displayName: "discord catalog",
+            capabilityDeclared: true,
             capabilitySource: "catalog",
             capabilityPackageVersion: "1.2.3",
             accounts: [],

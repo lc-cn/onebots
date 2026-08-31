@@ -103,6 +103,7 @@ interface RuntimeAccountSummary {
 interface RuntimeAdapterSummary {
     platform?: unknown;
     accounts?: unknown;
+    capabilityDeclared?: unknown;
     accountCapabilityErrors?: unknown;
 }
 
@@ -184,6 +185,9 @@ async function probeAuthenticatedRuntime(
                 return unavailableRuntimeChecks("管理运行态契约无效: 适配器缺少 accounts 数组");
             }
             const platform = runtimeLabel(adapter.platform, "unknown");
+            if (adapter.capabilityDeclared === false) {
+                capabilityIssues.push(`${platform}: 适配器默认能力清单未声明`);
+            }
             const accountIds = new Set(
                 (adapter.accounts as RuntimeAccountSummary[]).map(account =>
                     runtimeLabel(account.uin, "unknown"),

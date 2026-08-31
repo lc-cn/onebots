@@ -327,6 +327,50 @@ describe("doctor management probes", () => {
         });
     });
 
+    it("fails capability verification for a loaded zero-account adapter with an unknown manifest", async () => {
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/adapters")) {
+                return new Response(
+                    JSON.stringify([
+                        {
+                            platform: "third-party",
+                            capabilityDeclared: false,
+                            accountCapabilityErrors: {},
+                            accounts: [],
+                        },
+                    ]),
+                    { status: 200 },
+                );
+            }
+            if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            return new Headers(init?.headers).has("authorization")
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "secret" },
+            {
+                fetcher,
+                upgrade: async (_url, token) => ({
+                    upgraded: Boolean(token),
+                    status: token ? 101 : 401,
+                }),
+            },
+        );
+
+        expect(checks.find(check => check.name === "management-runtime")).toMatchObject({
+            level: "ok",
+            message: expect.stringContaining("0 个账号"),
+        });
+        expect(checks.find(check => check.name === "management-capabilities")).toEqual({
+            name: "management-capabilities",
+            level: "error",
+            message: "账号能力证据不可用: third-party: 适配器默认能力清单未声明",
+        });
+    });
+
     it("rejects malformed capability diagnostics as an invalid management contract", async () => {
         const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
             if (input.endsWith("/api/adapters")) {

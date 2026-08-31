@@ -5,13 +5,98 @@ import {
     EMPTY_ADAPTER_CAPABILITIES,
     type Adapter,
 } from "@onebots/core";
-import { getAdapterInfo } from "./adapter-info.js";
+import { getAdapterInfo, getAdapterInfos } from "./adapter-info.js";
 
 const factory = (() => undefined) as unknown as Adapter.Factory;
 
 afterEach(() => AdapterRegistry.clear());
 
 describe("adapter management info", () => {
+    it("publishes a loaded adapter manifest before any account creates a runtime instance", () => {
+        const capabilities = defineAdapterCapabilities({
+            actions: { send_message: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        AdapterRegistry.register("mock", factory, {
+            displayName: "模拟平台",
+            description: "用于首次配置",
+            icon: "mock.svg",
+            capabilities,
+        });
+
+        const infos = getAdapterInfos(
+            [],
+            [
+                { type: "adapter", name: "mock", version: "1.2.3" },
+                { type: "protocol", name: "test", version: "2.0.0" },
+            ],
+        );
+
+        expect(infos).toEqual([
+            expect.objectContaining({
+                platform: "mock",
+                displayName: "模拟平台",
+                description: "用于首次配置",
+                icon: "mock.svg",
+                capabilities,
+                capabilityDeclared: true,
+                capabilitySource: "runtime",
+                capabilityPackageVersion: "1.2.3",
+                accounts: [],
+            }),
+        ]);
+    });
+
+    it("keeps a loaded third-party adapter with no manifest visible but explicitly unknown", () => {
+        AdapterRegistry.register("third-party", factory, {
+            displayName: "第三方平台",
+        });
+
+        const infos = getAdapterInfos(
+            [],
+            [{ type: "adapter", name: "third-party", version: null }],
+        );
+
+        expect(infos).toEqual([
+            expect.objectContaining({
+                platform: "third-party",
+                capabilityDeclared: false,
+                capabilitySource: "runtime",
+                capabilityPackageVersion: null,
+                capabilities: EMPTY_ADAPTER_CAPABILITIES,
+                accounts: [],
+            }),
+        ]);
+    });
+
+    it("keeps an instantiated adapter authoritative without duplicating its loaded plugin", () => {
+        AdapterRegistry.register("mock", factory);
+        const adapter = {
+            platform: "mock",
+            info: {
+                platform: "mock",
+                icon: "",
+                capabilities: EMPTY_ADAPTER_CAPABILITIES,
+                accounts: [{ uin: "demo" }],
+            },
+            describeCapabilities: () => EMPTY_ADAPTER_CAPABILITIES,
+        } as unknown as Adapter;
+
+        const infos = getAdapterInfos(
+            [adapter],
+            [{ type: "adapter", name: "mock", version: "1.2.3" }],
+        );
+
+        expect(infos).toHaveLength(1);
+        expect(infos[0]).toMatchObject({
+            platform: "mock",
+            capabilityPackageVersion: "1.2.3",
+            accounts: [{ uin: "demo" }],
+        });
+    });
+
     it("merges registered display metadata into runtime adapter information", () => {
         AdapterRegistry.register("mock", factory, {
             displayName: "模拟平台",

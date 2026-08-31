@@ -37,7 +37,7 @@ import {
     validateAccountConfigCandidate,
     validateRuntimeConfig,
 } from "./runtime-config-validator.js";
-import { getAdapterInfo } from "./adapter-info.js";
+import { getAdapterInfos } from "./adapter-info.js";
 import { handleManagementConfigSocketAction } from "./management-config-socket.js";
 import {
     authorizeManagementUpgrade,
@@ -193,7 +193,7 @@ export class App extends BaseApp {
 
     /** 为 REST 与 WebSocket 提供同一份带注册元数据的适配器摘要。 */
     get adapterInfos() {
-        return [...this.adapters.values()].map(getAdapterInfo);
+        return getAdapterInfos(this.adapters.values(), this.pluginInfos);
     }
 
     /** 当前进程真正通过加载与注册契约校验的插件包清单。 */
