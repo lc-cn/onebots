@@ -32,6 +32,14 @@ interface PackageUpdateEvidence {
     target: string;
 }
 
+export interface PackageUpdateChange extends PackageUpdateEvidence {
+    current: string | null;
+}
+
+export type UpdateRunResult =
+    | { status: "current"; changes: [] }
+    | { status: "updates_available" | "updated" | "cancelled"; changes: PackageUpdateChange[] };
+
 interface ExtensionVersionCatalogSnapshot {
     schemaVersion?: unknown;
     packages?: unknown;
@@ -90,7 +98,7 @@ export function resolveUpdatePluginSelection(
 }
 
 /** 检查并更新 OneBots 与当前服务使用的插件。 */
-export async function runUpdate(options: UpdateOptions): Promise<void> {
+export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult> {
     const controller = new ServiceController(options.scope);
     const spec = controller.readSpec();
     const { adapters, protocols } = resolveUpdatePluginSelection(options, spec);
@@ -116,9 +124,9 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
     const changed = updates.filter(item => item.current !== item.target);
     if (!changed.length) {
         writeCliOutput("已是最新稳定版本");
-        return;
+        return { status: "current", changes: [] };
     }
-    if (options.check) return;
+    if (options.check) return { status: "updates_available", changes: changed };
 
     if (!options.yes) {
         if (!process.stdin.isTTY) throw new Error("非交互环境执行更新需要 --yes");
@@ -131,7 +139,7 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
                 .toLowerCase();
             if (answer !== "y" && answer !== "yes") {
                 writeCliOutput("已取消");
-                return;
+                return { status: "cancelled", changes: changed };
             }
         } finally {
             prompt.close();
@@ -169,10 +177,11 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
         );
         if (result.wasRunning && !result.restarted) {
             writeCliOutput("软件包已更新，但运行中的旧实例尚未重启；请执行 onebots restart");
-            return;
+            return { status: "updated", changes: changed };
         }
     }
     writeCliOutput("OneBots 及插件更新完成");
+    return { status: "updated", changes: changed };
 }
 
 /** 包管理器成功退出后，逐包确认实际清单版本，再允许服务预检与切换。 */

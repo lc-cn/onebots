@@ -26,6 +26,7 @@ import {
     revokeManagementSession,
     type ManagementFetch,
 } from "../management-credential.js";
+import type { UpdateRunResult } from "../updater.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
 export interface CommandResult {
@@ -376,6 +377,15 @@ export async function diagnose(
     };
 }
 
+/** 将更新器结果映射为稳定的 CLI 输出与退出码。 */
+export function updateCommandResult(result: UpdateRunResult): CommandResult {
+    if (result.status !== "updates_available") return {};
+    return {
+        output: `发现 ${result.changes.length} 个可用更新（已通过目标版本目录校验）`,
+        exitCode: 2,
+    };
+}
+
 /** 检查或更新 OneBots 与当前选用的插件。 */
 export async function updatePackages(
     options: RuntimeOptions & ScopeOptions & { check: boolean; yes: boolean },
@@ -385,14 +395,14 @@ export async function updatePackages(
         ? normalizeRuntimeOptions(options)
         : resolveConfiguredRuntimeOptions(options);
     const { runUpdate } = await import("../updater.js");
-    await runUpdate({
+    const result = await runUpdate({
         adapters: runtime.adapters,
         protocols: runtime.protocols,
         scope,
         check: options.check,
         yes: options.yes,
     });
-    return {};
+    return updateCommandResult(result);
 }
 
 /** 读取点分隔路径表示的配置项。 */
