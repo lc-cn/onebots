@@ -18,11 +18,16 @@
             <UiEmpty
                 v-if="totalBotCount === 0"
                 title="暂无机器人"
-                :description="
-                    adapters.length > 0
-                        ? '适配器已经加载，请在配置管理中添加账号。'
-                        : '可先打开能力概览比较平台，再到功能扩展安装并配置账号。'
-                " />
+                :description="onboarding.description">
+                <div class="mt-2 flex flex-wrap justify-center gap-2">
+                    <UiButton size="sm" @click="capabilitiesOpen = true">比较平台能力</UiButton>
+                    <RouterLink v-slot="{ navigate }" custom :to="onboarding.route">
+                        <UiButton size="sm" variant="primary" @click="navigate">
+                            {{ onboarding.actionLabel }}
+                        </UiButton>
+                    </RouterLink>
+                </div>
+            </UiEmpty>
             <div
                 v-else
                 class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">
@@ -57,6 +62,7 @@ import BotCard from "../components/BotCard.vue";
 import AdapterCapabilitiesDrawer from "../components/AdapterCapabilitiesDrawer.vue";
 import type { AccountInfo, ExtensionInfo } from "../types";
 import { mergeCapabilityAdapters } from "../components/capability-presentation.js";
+import { getBotOnboardingState } from "./bot-onboarding.js";
 
 const { adapters, totalBotCount, startBot, stopBot } = useApi();
 const toast = useToast();
@@ -67,6 +73,7 @@ const extensions = ref<ExtensionInfo[]>([]);
 const capabilityAdapters = computed(() =>
     mergeCapabilityAdapters(adapters.value, extensions.value),
 );
+const onboarding = computed(() => getBotOnboardingState(adapters.value.length > 0));
 
 onMounted(async () => {
     try {

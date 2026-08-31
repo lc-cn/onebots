@@ -18,6 +18,7 @@ import ConfigAccountsTab from "../components/config/ConfigAccountsTab.vue";
 import AccountWizard from "../components/config/AccountWizard.vue";
 
 import type { SchemaBundle, SchemaGroup, AccountRow } from "../components/config/types";
+import { isAccountWizardRequest } from "./bot-onboarding.js";
 import {
     getValueByPath,
     deleteValueByPath,
@@ -216,7 +217,7 @@ onMounted(async () => {
     await loadSchema();
     await loadConfig();
     const requestedPlatform = route.query.add;
-    if (typeof requestedPlatform === "string" && schema.value?.adapters?.[requestedPlatform]) {
+    if (isAccountWizardRequest(requestedPlatform, Object.keys(schema.value?.adapters ?? {}))) {
         activeTab.value = "accounts";
         accountWizardRef.value?.openAdd(requestedPlatform);
         const query = { ...route.query };
