@@ -4,7 +4,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { AdapterRegistry, ProtocolRegistry } from "@onebots/core";
-import { loadPlugin, tryLoadPlugin, tryLoadRegisteredPlugin } from "./plugin-loader.js";
+import {
+    clearLoadedPlugins,
+    getLoadedPlugins,
+    loadPlugin,
+    tryLoadPlugin,
+    tryLoadRegisteredPlugin,
+} from "./plugin-loader.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -12,6 +18,7 @@ afterEach(() => {
     vi.restoreAllMocks();
     AdapterRegistry.clear();
     ProtocolRegistry.clear();
+    clearLoadedPlugins();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -227,6 +234,7 @@ describe("plugin loader", () => {
                     `请将 ${packageName} 声明为 peerDependency`,
                 );
                 expect(globals.__onebotsIsolatedPluginExecuted).toBeUndefined();
+                expect(getLoadedPlugins()).toEqual([]);
             } finally {
                 delete globals.__onebotsIsolatedPluginExecuted;
             }
@@ -389,6 +397,62 @@ describe("plugin loader", () => {
         );
 
         expect(result).toMatchObject({ loaded: true });
+    });
+
+    it("records package identity only after the promised registration contract succeeds", async () => {
+        const directory = createImportOnlyPlugin(
+            "inventory-adapter",
+            "globalThis.__onebotsRegisterInventoryAdapter();\n",
+        );
+        const packageJsonPath = path.join(
+            directory,
+            "node_modules",
+            "inventory-adapter",
+            "package.json",
+        );
+        fs.writeFileSync(
+            packageJsonPath,
+            JSON.stringify({
+                name: "inventory-adapter",
+                version: "2.4.6",
+                type: "module",
+                exports: "./index.js",
+            }),
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterInventoryAdapter?: () => void;
+        };
+        globals.__onebotsRegisterInventoryAdapter = () => {
+            AdapterRegistry.register("inventory", (() => undefined) as never);
+            AdapterRegistry.registerSchema("inventory", {});
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "adapter",
+                "inventory",
+                ["inventory-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({
+                loaded: true,
+                inspection: { packageName: "inventory-adapter", version: "2.4.6" },
+            });
+            expect(getLoadedPlugins()).toEqual([
+                {
+                    type: "adapter",
+                    name: "inventory",
+                    packageName: "inventory-adapter",
+                    version: "2.4.6",
+                    entryPath: fs.realpathSync(
+                        path.join(directory, "node_modules", "inventory-adapter", "index.js"),
+                    ),
+                },
+            ]);
+        } finally {
+            delete globals.__onebotsRegisterInventoryAdapter;
+        }
     });
 });
 

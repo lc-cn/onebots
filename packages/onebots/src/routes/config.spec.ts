@@ -17,8 +17,9 @@ function setup(reload: App["reload"], isReloading = false) {
     BaseApp.configDir = directory;
     fs.writeFileSync(BaseApp.configPath, "access_token: old-token\n", { mode: 0o600 });
     const posts = new Map<string, RouteHandler>();
+    const gets = new Map<string, RouteHandler>();
     const router = {
-        get: vi.fn(),
+        get: vi.fn((route: string, handler: RouteHandler) => gets.set(route, handler)),
         post: vi.fn((route: string, handler: RouteHandler) => posts.set(route, handler)),
     };
     const app = {
@@ -28,9 +29,22 @@ function setup(reload: App["reload"], isReloading = false) {
         backupDataToHf: vi.fn(async () => ({ success: true })),
         logger: { warn: vi.fn() },
         info: {},
+        pluginInfos: [
+            {
+                type: "adapter",
+                name: "mock",
+                packageName: "@onebots/adapter-mock",
+                version: "1.0.17",
+                entryPath: "/runtime/adapter-mock/lib/index.js",
+            },
+        ],
     } as unknown as App;
     registerConfigRoutes(app, router as never);
-    return { app, handler: posts.get("/api/config")! };
+    return {
+        app,
+        handler: posts.get("/api/config")!,
+        systemHandler: gets.get("/api/system")!,
+    };
 }
 
 afterEach(() => {
@@ -41,6 +55,25 @@ afterEach(() => {
 });
 
 describe("configuration route", () => {
+    it("系统信息公开当前进程已验证的插件清单", () => {
+        const { systemHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
+        const ctx = {} as RouterContext;
+
+        systemHandler(ctx);
+
+        expect(ctx.body).toMatchObject({
+            plugins: [
+                {
+                    type: "adapter",
+                    name: "mock",
+                    packageName: "@onebots/adapter-mock",
+                    version: "1.0.17",
+                    entryPath: "/runtime/adapter-mock/lib/index.js",
+                },
+            ],
+        });
+    });
+
     it("返回已保存并生效的机器可读状态", async () => {
         const reload = vi.fn(async () => undefined) as App["reload"];
         const { app, handler } = setup(reload);

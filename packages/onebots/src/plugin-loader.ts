@@ -11,7 +11,13 @@ import {
 import { writeCliError } from "./cli-output.js";
 
 export type PluginInspection =
-    | { status: "ready"; candidate: string; entryPath: string }
+    | {
+          status: "ready";
+          candidate: string;
+          entryPath: string;
+          packageName: string;
+          version: string | null;
+      }
     | { status: "broken"; candidate: string; reason: string; buildCommand?: string }
     | { status: "missing"; candidates: string[] };
 
@@ -21,7 +27,32 @@ export type PluginLoadResult =
 
 export type PluginType = "adapter" | "protocol";
 
+export interface LoadedPluginInfo {
+    type: PluginType;
+    name: string;
+    packageName: string;
+    version: string | null;
+    entryPath: string;
+}
+
 let pluginRegistrationTail = Promise.resolve();
+const loadedPlugins = new Map<string, LoadedPluginInfo>();
+
+/** 返回当前进程已通过注册契约校验的扩展，顺序不受 CLI 参数顺序影响。 */
+export function getLoadedPlugins(): LoadedPluginInfo[] {
+    return [...loadedPlugins.values()]
+        .map(plugin => ({ ...plugin }))
+        .sort((left, right) => {
+            const leftKey = `${left.type}:${left.name}`;
+            const rightKey = `${right.type}:${right.name}`;
+            return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+        });
+}
+
+/** @internal 仅供隔离测试进程级插件状态。 */
+export function clearLoadedPlugins(): void {
+    loadedPlugins.clear();
+}
 
 /** 所有 CLI 路径共享同一组插件包名候选，避免运行、doctor 与服务预检规则漂移。 */
 export function pluginCandidates(type: PluginType, name: string): string[] {
@@ -56,7 +87,7 @@ export function inspectPlugin(
                 };
             }
             if (fs.existsSync(entryPath)) {
-                return { status: "ready", candidate, entryPath };
+                return readyInspection(candidate, entryPath, readPackageJson(packageJsonPath));
             }
             return {
                 status: "broken",
@@ -68,7 +99,7 @@ export function inspectPlugin(
             };
         }
 
-        if (requireEntry) return { status: "ready", candidate, entryPath: requireEntry };
+        if (requireEntry) return readyInspection(candidate, requireEntry);
     }
     return { status: "missing", candidates };
 }
@@ -146,7 +177,16 @@ export async function tryLoadRegisteredPlugin(
         }
 
         const contractError = getRegistrationContractError(type, name);
-        if (!contractError) return result;
+        if (!contractError) {
+            loadedPlugins.set(`${type}:${name}`, {
+                type,
+                name,
+                packageName: result.inspection.packageName,
+                version: result.inspection.version,
+                entryPath: realPath(result.inspection.entryPath),
+            });
+            return result;
+        }
         restoreExtensionRegistryState(registryState);
         return {
             loaded: false,
@@ -214,9 +254,30 @@ function parseProtocolIdentity(name: string): { protocol: string; version: strin
 
 interface PackageManifest {
     name?: unknown;
+    version?: unknown;
     main?: unknown;
     module?: unknown;
     exports?: unknown;
+}
+
+function readyInspection(
+    candidate: string,
+    entryPath: string,
+    manifest?: PackageManifest,
+): Extract<PluginInspection, { status: "ready" }> {
+    return {
+        status: "ready",
+        candidate,
+        entryPath,
+        packageName:
+            typeof manifest?.name === "string" && manifest.name.trim()
+                ? manifest.name.trim()
+                : (parsePackageName(candidate) ?? candidate),
+        version:
+            typeof manifest?.version === "string" && manifest.version.trim()
+                ? manifest.version.trim()
+                : null,
+    };
 }
 
 interface ExtensionRuntimeMismatch {

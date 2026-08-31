@@ -48,6 +48,16 @@ export interface SystemInfo {
     configPath?: string;
     /** 数据目录（数据库、日志等） */
     dataDir?: string;
+    /** 当前进程已通过加载与注册校验的插件包。 */
+    plugins: LoadedPluginInfo[];
+}
+
+export interface LoadedPluginInfo {
+    type: "adapter" | "protocol";
+    name: string;
+    packageName: string;
+    version: string | null;
+    entryPath: string;
 }
 
 export interface AdapterInfo {

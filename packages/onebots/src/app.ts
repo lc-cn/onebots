@@ -27,7 +27,7 @@ import { pathToFileURL } from "url";
 import koaStatic from "koa-static";
 import { existsSync, writeFileSync, mkdirSync, readFileSync } from "fs";
 import type { WsServer, Dict } from "@onebots/core";
-import { loadPlugin, pluginCandidates } from "./plugin-loader.js";
+import { getLoadedPlugins, loadPlugin, pluginCandidates } from "./plugin-loader.js";
 import { writeCliError, writeCliOutput } from "./cli-output.js";
 import { validateRuntimeConfig } from "./runtime-config-validator.js";
 import { getAdapterInfo } from "./adapter-info.js";
@@ -165,6 +165,11 @@ export class App extends BaseApp {
         return [...this.adapters.values()].map(getAdapterInfo);
     }
 
+    /** 当前进程真正通过加载与注册契约校验的插件包清单。 */
+    get pluginInfos() {
+        return getLoadedPlugins();
+    }
+
     async start() {
         this.assertCanStart();
         if (this.isStarted) return;
@@ -206,6 +211,7 @@ export class App extends BaseApp {
                         config: fs.readFileSync(BaseApp.configPath, "utf8"),
                         adapters: this.adapterInfos,
                         protocol: ProtocolRegistry.getAllMetadata(),
+                        plugins: this.pluginInfos,
                         app: this.info,
                         schema: getAppConfigSchema(),
                         logs: fs.existsSync(BaseApp.logFile)

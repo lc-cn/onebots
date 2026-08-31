@@ -147,7 +147,10 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             checks.push({
                 name: `${kind}:${name}`,
                 level: result.loaded ? "ok" : "error",
-                message: result.loaded === true ? `已加载 ${name}` : result.message,
+                message:
+                    result.loaded === true
+                        ? `已加载 ${name}（${result.inspection.packageName}@${result.inspection.version ?? "未知版本"}）`
+                        : result.message,
             });
         }
     }

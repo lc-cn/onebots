@@ -159,6 +159,35 @@
                 </dl>
             </UiCard>
 
+            <UiCard v-if="systemInfo" class="mb-6">
+                <template #header>
+                    <span class="flex-1">运行时插件</span>
+                    <UiBadge variant="neutral">{{ systemInfo.plugins.length }} 个</UiBadge>
+                </template>
+                <div v-if="systemInfo.plugins.length" class="divide-y divide-border">
+                    <div
+                        v-for="plugin in systemInfo.plugins"
+                        :key="`${plugin.type}:${plugin.name}`"
+                        class="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-3">
+                        <div class="flex min-w-0 flex-1 items-center gap-2">
+                            <UiBadge :variant="plugin.type === 'adapter' ? 'success' : 'neutral'">
+                                {{ plugin.type === 'adapter' ? '适配器' : '协议' }}
+                            </UiBadge>
+                            <span class="font-medium text-fg">{{ plugin.name }}</span>
+                            <span class="truncate font-mono text-xs text-fg-secondary">
+                                {{ plugin.packageName }}@{{ plugin.version ?? '未知版本' }}
+                            </span>
+                        </div>
+                        <span
+                            class="max-w-full truncate font-mono text-xs text-fg-tertiary sm:max-w-[45%]"
+                            :title="plugin.entryPath">
+                            {{ plugin.entryPath }}
+                        </span>
+                    </div>
+                </div>
+                <p v-else class="text-sm text-fg-secondary">当前进程未加载适配器或协议插件。</p>
+            </UiCard>
+
             <!-- 服务状态 -->
             <UiCard>
                 <template #header>
