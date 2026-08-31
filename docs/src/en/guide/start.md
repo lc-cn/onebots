@@ -30,8 +30,8 @@ Robot Frameworks (Koishi, NoneBot...)
 
 ## Prerequisites
 
-- Node.js >= 22
-- pnpm / npm / yarn (pnpm recommended)
+- Node.js >= 24
+- pnpm >= 9.12.0 or npm (source development pins pnpm 9.15.9)
 
 ## Installation
 
@@ -51,6 +51,17 @@ npm install onebots
 pnpm add onebots
 ```
 
+## Recommended: Generate a Safe Starting Configuration
+
+Install the selected plugins, then let setup build configuration defaults from the schemas that were actually loaded. This example uses the Mock adapter and does not contact an external platform:
+
+```bash
+pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
+pnpm exec onebots setup -c config.yaml -r mock -p onebot-v11
+```
+
+Setup does not create placeholder platform accounts. It generates defaults only for protocols selected with `-p` and prints a shell-safe foreground command. Open `http://localhost:6727`, sign in with the initial credentials from the startup log, then add an account in **Configuration**. In non-interactive environments an existing file is preserved unless `--force` is explicit; forced updates create a `.bak` backup.
+
 ## How It Works
 
 1. **Configure Platform Accounts**: Fill in platform robot authentication information in the configuration file
@@ -69,27 +80,10 @@ port: 6727              # HTTP server port
 log_level: info         # Log level: trace, debug, info, warn, error
 timeout: 30             # Login timeout (seconds)
 
-# General configuration (protocol default configuration)
-general:
-  onebot.v11:
-    use_http: true
-    use_ws: true
-    access_token: ''
-    enable_cors: true
-    heartbeat_interval: 5
+# The starting file references no unloaded protocol and contacts no platform
+general: {}
 
-# Account configuration
-# Format: {platform}.{account_id}
-wechat.my_wechat_mp:
-  # Protocol configuration
-  onebot.v11:
-    use_http: true
-    use_ws: true
-  
-  # WeChat platform configuration
-  app_id: your_app_id
-  app_secret: your_app_secret
-  token: your_token
+# Add accounts in the Web console; keys use {platform}.{account_id}
 ```
 
 For complete configuration examples, see [Configuration Guide](/en/config/global).
@@ -105,32 +99,28 @@ If Docker is installed, you can run the image directly without Node.js on the ho
 docker compose up -d
 
 # Or docker run
-docker run -d -p 6727:6727 -v $(pwd)/data:/data onebots
+docker run -d -p 6727:6727 -v $(pwd)/data:/data ghcr.io/lc-cn/onebots:master
 ```
 
 ### Method 1: Command Line (Recommended)
 
 ```bash
-# Start with default configuration
-onebots
+# Load the plugins selected during setup
+onebots -c config.yaml -r mock -p onebot-v11
 
-# Start with custom configuration file
-onebots -c config.yaml
-
-# Register adapters
-onebots -r wechat -r qq -r kook
+# The explicit run subcommand is equivalent
+onebots run -c config.yaml -r mock -p onebot-v11
 ```
 
 ### Method 2: Programmatic
 
 ```typescript
-import { App } from 'onebots';
+import '@onebots/adapter-wechat'
+import '@onebots/protocol-onebot-v11'
+import { createOnebots } from 'onebots'
 
-const app = new App({
-  configPath: './config.yaml'
-});
-
-await app.start();
+const app = createOnebots('config.yaml')
+await app.start()
 ```
 
 ## Install Adapters
@@ -149,6 +139,16 @@ npm install @onebots/adapter-wechat @onebots/adapter-qq @onebots/adapter-kook
 ```
 
 For more adapter installation instructions, see [Adapter Guide](/en/guide/adapter).
+
+## Verify the Deployment
+
+```bash
+onebots doctor -c config.yaml -r mock -p onebot-v11
+curl --fail http://localhost:6727/health
+curl --fail http://localhost:6727/ready
+```
+
+Before an account is configured, `/ready` keeps the management surface reachable and reports `configured: false`; doctor presents this as a warning. An unavailable account or protocol outlet makes `/ready` return HTTP 503.
 
 ## Next Steps
 

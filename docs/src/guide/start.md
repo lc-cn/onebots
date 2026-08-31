@@ -30,8 +30,8 @@ onebots 是一个**多平台多协议机器人应用框架**，提供完整的�
 
 ## 前置要求
 
-- Node.js >= 22
-- pnpm / npm / yarn（推荐使用 pnpm）
+- Node.js >= 24
+- pnpm >= 9.12.0，或 npm（源码开发固定使用 pnpm 9.15.9）
 
 ## 安装
 
@@ -51,6 +51,17 @@ npm install onebots
 pnpm add onebots
 ```
 
+## 推荐：生成安全起步配置
+
+先安装要使用的插件，再让 setup 根据实际加载的 Schema 生成配置。以下命令使用不连接外部平台的 Mock 适配器：
+
+```bash
+pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
+pnpm exec onebots setup -c config.yaml -r mock -p onebot-v11
+```
+
+setup 不会写入占位平台账号；它只为本次 `-p` 实际加载的协议生成默认值，并输出一条可直接执行的前台启动命令。随后打开 `http://localhost:6727`，使用启动日志中的初始凭据登录，在「配置管理」添加账号。已有配置在非交互环境默认不会覆盖，显式传入 `--force` 时会先生成 `.bak`。
+
 ## 工作原理
 
 1. **配置平台账号**：在配置文件中填写平台机器人的认证信息
@@ -69,27 +80,10 @@ port: 6727              # HTTP 服务器端口
 log_level: info         # 日志级别: trace, debug, info, warn, error
 timeout: 30             # 登录超时时间(秒)
 
-# 通用配置（协议默认配置）
-general:
-  onebot.v11:
-    use_http: true
-    use_ws: true
-    access_token: ''
-    enable_cors: true
-    heartbeat_interval: 5
+# 起步配置不引用尚未加载的协议，也不使用空凭据连接平台
+general: {}
 
-# 账号配置
-# 格式: {platform}.{account_id}
-wechat.my_wechat_mp:
-  # 协议配置
-  onebot.v11:
-    use_http: true
-    use_ws: true
-  
-  # 微信平台配置
-  app_id: your_app_id
-  app_secret: your_app_secret
-  token: your_token
+# 登录 Web 管理端后添加账号，键格式为 {platform}.{account_id}
 ```
 
 完整配置示例请查看 [配置文件说明](/config/global)。
@@ -105,7 +99,7 @@ wechat.my_wechat_mp:
 docker compose up -d
 
 # 或使用 docker run
-docker run -d -p 6727:6727 -v $(pwd)/data:/data onebots
+docker run -d -p 6727:6727 -v $(pwd)/data:/data ghcr.io/lc-cn/onebots:master
 ```
 
 ### 方式一：命令行（推荐）
@@ -134,17 +128,13 @@ onebots -r wechat -p onebot-v11 -p onebot-v12 -p satori-v1
 创建 `index.js` 或 `index.ts`：
 
 ```javascript
-import { App } from 'onebots';
-import { WechatAdapter } from '@onebots/adapter-wechat';
-import { OneBotV11Protocol } from '@onebots/protocol-onebot-v11';
+import '@onebots/adapter-wechat'
+import '@onebots/protocol-onebot-v11'
+import { createOnebots } from 'onebots'
 
-// 注册适配器和协议
-await App.registerAdapter('wechat', WechatAdapter);
-await App.registerProtocol('onebot', OneBotV11Protocol, 'v11');
-
-// 创建并启动转换服务
-const app = new App();
-await app.start();
+// 插件入口在导入时注册；配置仍使用与 CLI 相同的 config.yaml
+const app = createOnebots('config.yaml')
+await app.start()
 ```
 
 运行：
@@ -198,7 +188,15 @@ npm install @onebots/protocol-milky-v1
 [2025-11-29 12:00:00] [INFO] [onebots:onebot/v11] - HTTP server listening on /wechat/my_wechat_mp/onebot/v11/:action
 ```
 
-看到以上输出说明服务已正常运行。
+不要只依赖启动日志。使用 doctor 和健康端点验证服务、账号与协议出口：
+
+```bash
+onebots doctor -c config.yaml -r wechat -p onebot-v11
+curl --fail http://localhost:6727/health
+curl --fail http://localhost:6727/ready
+```
+
+首次尚未添加账号时 `/ready` 会保持管理面可访问，并返回 `configured: false`；doctor 会明确标为警告。账号或协议出口未就绪时 `/ready` 返回 HTTP 503。
 
 ## 接入机器人框架
 
@@ -243,8 +241,7 @@ ws://localhost:6727/{platform}/{account_id}/onebot/v11
 
 ## 下一步
 
-- 📚 [配置文件详解](/zh/config/global)
-- 💻 [客户端SDK使用指南](/zh/guide/client-sdk)
-- 🔌 [开发自定义适配器](/zh/guide/adapter)
-- 📡 [协议说明](/zh/protocol/onebot-v11/index)
-- 🛠️ [API 参考](/zh/protocol/onebot-v11/action)
+- 📚 [配置文件详解](/config/global)
+- 💻 [客户端 SDK 使用指南](/guide/client-sdk)
+- 🔌 [适配器与扩展开发](/guide/adapter)
+- 📡 [OneBot V11 协议](/protocol/onebot-v11/)
