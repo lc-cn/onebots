@@ -40,13 +40,42 @@ describe("doctor configuration scope", () => {
             strict: true,
         });
         const report = JSON.parse(result.output || "{}") as {
+            schemaVersion: number;
+            generatedAt: string;
+            application: { name: string; version: string };
+            target: {
+                configPath: string;
+                extensionRoot: string;
+                workingDirectory: string;
+                service: { scope: string; mode: string };
+                plugins: {
+                    adapters: { source: string; names: string[] };
+                    protocols: { source: string; names: string[] };
+                };
+            };
             ok: boolean;
             strict: boolean;
             checks: Array<{ name: string; level: string }>;
         };
 
         expect(result.exitCode).toBe(1);
-        expect(report).toMatchObject({ ok: false, strict: true });
+        expect(report).toMatchObject({
+            schemaVersion: 1,
+            application: { name: "onebots", version: packageMetadata.version },
+            target: {
+                configPath,
+                extensionRoot: directory,
+                workingDirectory: process.cwd(),
+                service: { scope: "user", mode: "standalone" },
+                plugins: {
+                    adapters: { source: "none", names: [] },
+                    protocols: { source: "none", names: [] },
+                },
+            },
+            ok: false,
+            strict: true,
+        });
+        expect(new Date(report.generatedAt).toISOString()).toBe(report.generatedAt);
         expect(report.checks.find(check => check.name === "extension-catalog")).toMatchObject({
             level: "ok",
         });
@@ -90,12 +119,20 @@ describe("doctor configuration scope", () => {
             json: true,
         });
         const report = JSON.parse(result.output || "{}") as {
+            target: {
+                service: { mode: string };
+                plugins: { adapters: { source: string; names: string[] } };
+            };
             checks: Array<{ name: string; message: string }>;
         };
 
         expect(report.checks.find(check => check.name === "plugin-selection")?.message).toContain(
             "适配器 配置文件 [candidate-missing]",
         );
+        expect(report.target).toMatchObject({
+            service: { mode: "standalone" },
+            plugins: { adapters: { source: "config", names: ["candidate-missing"] } },
+        });
         expect(report.checks.some(check => check.name === "adapter:candidate-missing")).toBe(true);
         expect(report.checks.some(check => check.name === "adapter:installed-missing")).toBe(false);
         expect(report.checks.find(check => check.name === "service")?.message).toContain(
@@ -148,12 +185,20 @@ describe("doctor configuration scope", () => {
             json: true,
         });
         const report = JSON.parse(result.output || "{}") as {
+            target: {
+                service: { mode: string };
+                plugins: { adapters: { source: string; names: string[] } };
+            };
             checks: Array<{ name: string; message: string }>;
         };
 
         expect(report.checks.find(check => check.name === "plugin-selection")?.message).toContain(
             "适配器 服务定义 [service-missing]",
         );
+        expect(report.target).toMatchObject({
+            service: { mode: "managed" },
+            plugins: { adapters: { source: "service", names: ["service-missing"] } },
+        });
         expect(report.checks.some(check => check.name === "adapter:service-missing")).toBe(true);
         expect(report.checks.some(check => check.name === "adapter:config-missing")).toBe(false);
         expect(report.checks.some(check => check.name === "gateway-address")).toBe(false);

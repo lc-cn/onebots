@@ -32,7 +32,31 @@ import {
 
 export { compareDoctorEndpointIdentities, probeDoctorEndpoint, resolveGatewayBaseUrl };
 export type { CheckLevel, DoctorCheck, DoctorEndpointIdentity } from "./doctor-endpoint.js";
+export interface DoctorPluginTarget {
+    source: DoctorPluginSource;
+    names: string[];
+}
+export interface DoctorTarget {
+    configPath: string;
+    extensionRoot: string;
+    workingDirectory: string;
+    service: {
+        scope: ServiceScope;
+        mode: "managed" | "standalone" | "uninstalled";
+    };
+    plugins: {
+        adapters: DoctorPluginTarget;
+        protocols: DoctorPluginTarget;
+    };
+}
 export interface DoctorReport {
+    schemaVersion: 1;
+    generatedAt: string;
+    application: {
+        name: string;
+        version: string;
+    };
+    target: DoctorTarget;
     ok: boolean;
     strict: boolean;
     checks: DoctorCheck[];
@@ -333,6 +357,31 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     }
     const strict = options.strict === true;
     return {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        application: {
+            name: packageMetadata.name,
+            version: packageMetadata.version,
+        },
+        target: {
+            configPath: path.resolve(options.configPath),
+            extensionRoot: extensionRuntime.root,
+            workingDirectory: path.resolve(selection.workingDirectory),
+            service: {
+                scope: options.scope,
+                mode: useInstalledService ? (spec ? "managed" : "uninstalled") : "standalone",
+            },
+            plugins: {
+                adapters: {
+                    source: selection.adapterSource,
+                    names: [...selection.adapters],
+                },
+                protocols: {
+                    source: selection.protocolSource,
+                    names: [...selection.protocols],
+                },
+            },
+        },
         ok: !checks.some(check => check.level === "error" || (strict && check.level === "warning")),
         strict,
         checks,

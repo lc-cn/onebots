@@ -770,6 +770,14 @@ describe("doctor persisted plugin selection", () => {
             level: "ok",
             message: expect.stringContaining("适配器 配置文件 [missing-first-run]"),
         });
+        expect(report.target).toMatchObject({
+            configPath,
+            service: { scope: "user", mode: "uninstalled" },
+            plugins: {
+                adapters: { source: "config", names: ["missing-first-run"] },
+                protocols: { source: "config", names: [] },
+            },
+        });
     });
 });
 
