@@ -112,7 +112,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 kind === "adapter"
                     ? [`@onebots/adapter-${name}`, `onebots-adapter-${name}`, name]
                     : [`@onebots/protocol-${name}`, `onebots-protocol-${name}`, name];
-            const result = tryLoadPlugin(
+            const result = await tryLoadPlugin(
                 kind === "adapter" ? "适配器" : "协议",
                 name,
                 candidates,

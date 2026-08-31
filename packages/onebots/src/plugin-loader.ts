@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 import { writeCliError } from "./cli-output.js";
 
 export type PluginInspection =
@@ -42,12 +43,12 @@ export function inspectPlugin(
 }
 
 /** 加载第一个可用插件，并且每个逻辑插件最多输出一条诊断。 */
-export function tryLoadPlugin(
+export async function tryLoadPlugin(
     kind: "适配器" | "协议",
     name: string,
     candidates: string[],
     runtimeRequire: NodeJS.Require,
-): PluginLoadResult {
+): Promise<PluginLoadResult> {
     const inspection = inspectPlugin(candidates, runtimeRequire);
     if (inspection.status === "missing") {
         return {
@@ -65,7 +66,7 @@ export function tryLoadPlugin(
         };
     }
     try {
-        runtimeRequire(inspection.candidate);
+        await import(pathToFileURL(inspection.entryPath).href);
         return { loaded: true, inspection };
     } catch (error) {
         return {
@@ -77,14 +78,14 @@ export function tryLoadPlugin(
 }
 
 /** 兼容布尔返回值的加载入口；失败时输出结构化结果中的唯一诊断。 */
-export function loadPlugin(
+export async function loadPlugin(
     kind: "适配器" | "协议",
     name: string,
     candidates: string[],
     runtimeRequire: NodeJS.Require,
     warn: (message: string) => void = writeCliError,
-): boolean {
-    const result = tryLoadPlugin(kind, name, candidates, runtimeRequire);
+): Promise<boolean> {
+    const result = await tryLoadPlugin(kind, name, candidates, runtimeRequire);
     if (result.loaded === false) {
         warn(`[onebots] ${result.message}`);
     }
