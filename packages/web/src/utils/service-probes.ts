@@ -1,4 +1,9 @@
 import { buildApiUrl } from "../config";
+import {
+    DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
+    runServiceProbe,
+    ServiceProbeTimeoutError,
+} from "./service-probe-request";
 
 export type ServiceProbeState = "success" | "warning" | "danger";
 
@@ -36,13 +41,20 @@ export function pendingReadinessProbe(): ServiceProbeResult {
     };
 }
 
-export async function probeHealth(fetcher: typeof fetch = fetch): Promise<ServiceProbeResult> {
+export async function probeHealth(
+    fetcher: typeof fetch = fetch,
+    timeoutMs = DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
+): Promise<ServiceProbeResult> {
     try {
-        const response = await fetcher(buildApiUrl("/health") || "/health", {
-            cache: "no-store",
-        });
+        const { response, payload } = await runServiceProbe(async signal => {
+            const response = await fetcher(buildApiUrl("/health") || "/health", {
+                cache: "no-store",
+                signal,
+            });
+            const payload: unknown = response.ok ? await response.json() : null;
+            return { response, payload };
+        }, timeoutMs);
         if (!response.ok) return danger("存活异常", `health HTTP ${response.status}`);
-        const payload: unknown = await response.json();
         if (!isRecord(payload) || payload.status !== "ok") {
             return danger("证据无效", "health 未声明 status=ok");
         }
@@ -61,16 +73,26 @@ export async function probeHealth(fetcher: typeof fetch = fetch): Promise<Servic
             detail: `OneBots ${payload.version.trim()}，实例 ${payload.instance_id.trim()}`,
         };
     } catch (error) {
+        if (error instanceof ServiceProbeTimeoutError) {
+            return danger("存活未知", `health 探测超时（${error.timeoutMs}ms）`);
+        }
         return danger("存活未知", `health 不可达：${errorMessage(error)}`);
     }
 }
 
-export async function probeReadiness(fetcher: typeof fetch = fetch): Promise<ServiceProbeResult> {
+export async function probeReadiness(
+    fetcher: typeof fetch = fetch,
+    timeoutMs = DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
+): Promise<ServiceProbeResult> {
     try {
-        const response = await fetcher(buildApiUrl("/ready") || "/ready", {
-            cache: "no-store",
-        });
-        const payload: unknown = await response.json();
+        const { response, payload } = await runServiceProbe(async signal => {
+            const response = await fetcher(buildApiUrl("/ready") || "/ready", {
+                cache: "no-store",
+                signal,
+            });
+            const payload: unknown = await response.json();
+            return { response, payload };
+        }, timeoutMs);
         if (!isReadinessPayload(payload)) {
             return danger("证据无效", "ready 响应缺少完整的账号、协议或配置状态");
         }
@@ -93,6 +115,9 @@ export async function probeReadiness(fetcher: typeof fetch = fetch): Promise<Ser
             detail,
         };
     } catch (error) {
+        if (error instanceof ServiceProbeTimeoutError) {
+            return danger("就绪未知", `ready 探测超时（${error.timeoutMs}ms）`);
+        }
         return danger("就绪未知", `ready 不可达：${errorMessage(error)}`);
     }
 }

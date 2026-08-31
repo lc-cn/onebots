@@ -73,4 +73,29 @@ describe("Web service restart verification", () => {
         ).rejects.toThrow(/缺少重启前的实例身份/);
         expect(fetcher).not.toHaveBeenCalled();
     });
+
+    it("bounds a stalled pre-restart identity probe", async () => {
+        const fetcher = vi.fn<typeof fetch>(() => new Promise(() => undefined));
+
+        await expect(readCurrentServiceInstanceId(fetcher, 5)).rejects.toThrow(
+            /health 探测超时（5ms）.*未发送重启请求/,
+        );
+        expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+        expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    });
+
+    it("keeps every restart probe bounded when the endpoint stalls", async () => {
+        const fetcher = vi.fn<typeof fetch>(() => new Promise(() => undefined));
+
+        await expect(
+            waitForServiceRestart("old", {
+                fetcher,
+                attempts: 2,
+                initialDelayMs: 0,
+                intervalMs: 0,
+                probeTimeoutMs: 5,
+            }),
+        ).rejects.toThrow(/未观察到新实例.*health 探测超时（5ms）/);
+        expect(fetcher).toHaveBeenCalledTimes(2);
+    });
 });

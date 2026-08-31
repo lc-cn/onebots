@@ -35,6 +35,18 @@ function readiness(
     );
 }
 
+function stalledJsonResponse(): Response {
+    const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+            controller.enqueue(new TextEncoder().encode("{"));
+        },
+    });
+    return new Response(body, {
+        status: 200,
+        headers: { "content-type": "application/json" },
+    });
+}
+
 describe("Web semantic service probes", () => {
     it("requires health semantics and OneBots identity instead of HTTP success alone", async () => {
         const valid = vi.fn(
@@ -144,6 +156,45 @@ describe("Web semantic service probes", () => {
             state: "danger",
             label: "就绪未知",
             detail: "ready 不可达：connection refused",
+        });
+    });
+
+    it("bounds stalled health and readiness requests with explicit evidence", async () => {
+        const healthFetcher = vi.fn<typeof fetch>(() => new Promise(() => undefined));
+        const readinessFetcher = vi.fn<typeof fetch>(() => new Promise(() => undefined));
+
+        await expect(probeHealth(healthFetcher, 5)).resolves.toEqual({
+            state: "danger",
+            label: "存活未知",
+            detail: "health 探测超时（5ms）",
+        });
+        await expect(probeReadiness(readinessFetcher, 5)).resolves.toEqual({
+            state: "danger",
+            label: "就绪未知",
+            detail: "ready 探测超时（5ms）",
+        });
+        expect(healthFetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+        expect(readinessFetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    });
+
+    it("also bounds a response whose headers arrive but JSON body never completes", async () => {
+        await expect(
+            probeHealth(
+                vi.fn(async () => stalledJsonResponse()),
+                5,
+            ),
+        ).resolves.toMatchObject({
+            state: "danger",
+            detail: "health 探测超时（5ms）",
+        });
+        await expect(
+            probeReadiness(
+                vi.fn(async () => stalledJsonResponse()),
+                5,
+            ),
+        ).resolves.toMatchObject({
+            state: "danger",
+            detail: "ready 探测超时（5ms）",
         });
     });
 });
