@@ -1,4 +1,5 @@
-import { AdapterRegistry, type Adapter } from "@onebots/core";
+import { AdapterRegistry, normalizeAdapterCapabilities, type Adapter } from "@onebots/core";
+import { isDeepStrictEqual } from "node:util";
 
 type AdapterInfoSource = Pick<Adapter, "describeCapabilities" | "info" | "platform">;
 
@@ -7,14 +8,20 @@ export function getAdapterInfo(adapter: AdapterInfoSource) {
     const info = adapter.info;
     const platform = String(adapter.platform);
     const metadata = AdapterRegistry.getMetadata(platform);
+    const defaultCapabilities = normalizeAdapterCapabilities(info.capabilities);
     const accountCapabilities = Object.fromEntries(
         info.accounts.flatMap(account => {
-            const capabilities = adapter.describeCapabilities(account.uin);
-            return capabilities === info.capabilities ? [] : [[String(account.uin), capabilities]];
+            const capabilities = normalizeAdapterCapabilities(
+                adapter.describeCapabilities(account.uin),
+            );
+            return isDeepStrictEqual(capabilities, defaultCapabilities)
+                ? []
+                : [[String(account.uin), capabilities]];
         }),
     );
     return {
         ...info,
+        capabilities: defaultCapabilities,
         displayName: metadata?.displayName || platform,
         description: metadata?.description || "",
         accountCapabilities,

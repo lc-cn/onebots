@@ -76,4 +76,79 @@ describe("adapter management info", () => {
             limited: accountCapabilities,
         });
     });
+
+    it("omits a separately allocated account manifest with the same semantics", () => {
+        const defaultCapabilities = defineAdapterCapabilities({
+            actions: { send_message: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        const equivalentCapabilities = defineAdapterCapabilities({
+            actions: { send_message: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        const adapter = {
+            platform: "mock",
+            info: {
+                platform: "mock",
+                icon: "",
+                capabilities: defaultCapabilities,
+                accounts: [{ uin: "equivalent" }],
+            },
+            describeCapabilities: () => equivalentCapabilities,
+        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+
+        expect(getAdapterInfo(adapter).accountCapabilities).toEqual({});
+    });
+
+    it("validates and snapshots account-specific manifests before publishing them", () => {
+        const mutableCapabilities = {
+            version: 1,
+            actions: { send_message: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        };
+        const adapter = {
+            platform: "mock",
+            info: {
+                platform: "mock",
+                icon: "",
+                capabilities: EMPTY_ADAPTER_CAPABILITIES,
+                accounts: [{ uin: "mutable" }],
+            },
+            describeCapabilities: () => mutableCapabilities,
+        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+
+        const published = getAdapterInfo(adapter).accountCapabilities.mutable;
+        mutableCapabilities.actions.send_message.support = "unsupported";
+
+        expect(published.actions.send_message.support).toBe("native");
+        expect(Object.isFrozen(published)).toBe(true);
+        expect(Object.isFrozen(published.actions.send_message)).toBe(true);
+    });
+
+    it("rejects a malformed account-specific manifest instead of publishing it", () => {
+        const adapter = {
+            platform: "mock",
+            info: {
+                platform: "mock",
+                icon: "",
+                capabilities: EMPTY_ADAPTER_CAPABILITIES,
+                accounts: [{ uin: "malformed" }],
+            },
+            describeCapabilities: () => ({
+                version: 1,
+                actions: {},
+                events: {},
+                segments: {},
+                transports: { webhook: { support: "native", mode: "http" } },
+            }),
+        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+
+        expect(() => getAdapterInfo(adapter)).toThrow("mode 无效");
+    });
 });
