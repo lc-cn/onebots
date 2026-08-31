@@ -28,9 +28,9 @@
     "catalog:capabilities": "node scripts/generate-extension-capability-catalog.mjs",
     "catalog:capabilities:check": "node scripts/generate-extension-capability-catalog.mjs --check",
     "changeset": "changeset",
-    "changeset:version": "changeset version",
+    "changeset:version": "changeset version && pnpm catalog:capabilities",
     "changeset:publish": "changeset publish",
-    "bump": "changeset version",
+    "bump": "pnpm changeset:version",
     "pub": "changeset publish"
   },
   "engines": {

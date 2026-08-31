@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const adaptersRoot = path.join(repositoryRoot, "adapters");
+const protocolsRoot = path.join(repositoryRoot, "protocols");
 const outputPath = path.join(
     repositoryRoot,
     "packages",
@@ -20,6 +21,7 @@ async function buildCatalog() {
         .filter(name => name !== "adapter-mock")
         .sort();
     const adapters = {};
+    const packages = {};
 
     for (const directory of adapterDirectories) {
         const platform = directory.slice("adapter-".length);
@@ -27,6 +29,7 @@ async function buildCatalog() {
         const packageJson = JSON.parse(
             fs.readFileSync(path.join(packageDirectory, "package.json"), "utf8"),
         );
+        packages[packageJson.name] = { version: packageJson.version };
         const capabilityPath = path.join(packageDirectory, "lib", "capabilities.js");
         if (!fs.existsSync(capabilityPath)) {
             throw new Error(
@@ -54,7 +57,19 @@ async function buildCatalog() {
         };
     }
 
-    return `${JSON.stringify({ schemaVersion: 1, adapters }, null, 2)}\n`;
+    const protocolDirectories = fs
+        .readdirSync(protocolsRoot, { withFileTypes: true })
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name)
+        .sort();
+    for (const directory of protocolDirectories) {
+        const manifestPath = path.join(protocolsRoot, directory, "protocol", "package.json");
+        if (!fs.existsSync(manifestPath)) continue;
+        const packageJson = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        packages[packageJson.name] = { version: packageJson.version };
+    }
+
+    return `${JSON.stringify({ schemaVersion: 2, packages, adapters }, null, 2)}\n`;
 }
 
 const content = await buildCatalog();

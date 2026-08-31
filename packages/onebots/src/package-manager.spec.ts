@@ -27,27 +27,27 @@ describe("runtime package manager", () => {
     it("在 OneBots pnpm workspace 中安装扩展时不调用会解析 catalog: 的 npm", () => {
         const invocation = buildExtensionInstallInvocation(
             process.cwd(),
-            "@onebots/protocol-mcp-v1",
+            "@onebots/protocol-mcp-v1@0.1.5",
             "darwin",
             {},
         );
 
         expect(invocation).toMatchObject({
             executable: "pnpm",
-            args: ["add", "--save-prod", "--workspace-root", "@onebots/protocol-mcp-v1@latest"],
+            args: ["add", "--save-prod", "--workspace-root", "@onebots/protocol-mcp-v1@0.1.5"],
         });
     });
 
     it("独立 npm 运行目录继续使用 npm 并省略开发依赖", () => {
         const root = fixture({ packageManager: "npm@11.17.0" });
-        const invocation = buildExtensionInstallInvocation(root, "@onebots/adapter-slack");
+        const invocation = buildExtensionInstallInvocation(root, "@onebots/adapter-slack@3.0.8");
 
         expect(invocation.executable).toBe("npm");
         expect(invocation.args).toEqual([
             "install",
             "--save",
             "--omit=dev",
-            "@onebots/adapter-slack@latest",
+            "@onebots/adapter-slack@3.0.8",
         ]);
     });
 

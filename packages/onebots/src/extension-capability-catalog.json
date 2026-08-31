@@ -1,5 +1,76 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "packages": {
+    "@onebots/adapter-dingtalk": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-discord": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-email": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-feishu": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-heychat": {
+      "version": "4.0.7"
+    },
+    "@onebots/adapter-icqq": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-kook": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-line": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-qq": {
+      "version": "3.0.10"
+    },
+    "@onebots/adapter-slack": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-teams": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-telegram": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-wechat": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-wechat-clawbot": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-wecom": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-wecom-kf": {
+      "version": "2.0.8"
+    },
+    "@onebots/adapter-whatsapp": {
+      "version": "3.0.8"
+    },
+    "@onebots/adapter-zulip": {
+      "version": "3.0.8"
+    },
+    "@onebots/protocol-mcp-v1": {
+      "version": "0.1.5"
+    },
+    "@onebots/protocol-milky-v1": {
+      "version": "3.0.8"
+    },
+    "@onebots/protocol-onebot-v11": {
+      "version": "3.0.8"
+    },
+    "@onebots/protocol-onebot-v12": {
+      "version": "3.0.8"
+    },
+    "@onebots/protocol-satori-v1": {
+      "version": "3.0.8"
+    }
+  },
   "adapters": {
     "dingtalk": {
       "packageName": "@onebots/adapter-dingtalk",

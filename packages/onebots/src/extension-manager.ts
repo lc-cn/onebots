@@ -6,7 +6,10 @@ import { promisify } from "node:util";
 import { BaseApp, writeConfigFileAtomic, yaml } from "@onebots/core";
 import { EXTENSION_CATALOG, getExtensionCatalogEntry } from "./extension-catalog.js";
 import { buildAdapterCapabilityReport, summarizeManifest } from "./capability-report.js";
-import { getExtensionCapabilityCatalogEntry } from "./extension-capability-catalog.js";
+import {
+    getExtensionCapabilityCatalogEntry,
+    getExtensionPackageCatalogEntry,
+} from "./extension-capability-catalog.js";
 import {
     getRuntimePluginSelection,
     setRuntimePluginSelection,
@@ -20,12 +23,15 @@ import { buildExtensionInstallInvocation } from "./package-manager.js";
 const execFileAsync = promisify(execFile);
 
 export interface ExtensionInstaller {
-    install(packageName: string, runtimeRoot: string): Promise<void>;
+    install(packageName: string, packageVersion: string, runtimeRoot: string): Promise<void>;
 }
 
 class RuntimeExtensionInstaller implements ExtensionInstaller {
-    async install(packageName: string, runtimeRoot: string): Promise<void> {
-        const invocation = buildExtensionInstallInvocation(runtimeRoot, packageName);
+    async install(packageName: string, packageVersion: string, runtimeRoot: string): Promise<void> {
+        const invocation = buildExtensionInstallInvocation(
+            runtimeRoot,
+            `${packageName}@${packageVersion}`,
+        );
         await execFileAsync(invocation.executable, invocation.args, {
             cwd: runtimeRoot,
             env: invocation.environment,
@@ -86,6 +92,8 @@ export class ExtensionManager {
             ]),
         );
         return EXTENSION_CATALOG.map(entry => {
+            const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
+            const installedVersion = this.installedVersion(entry.packageName);
             const loaded = loadedPlugins.some(
                 plugin => plugin.type === entry.type && plugin.name === entry.name,
             );
@@ -95,7 +103,10 @@ export class ExtensionManager {
                     : undefined;
             return {
                 ...entry,
-                installed: this.isInstalled(entry.packageName),
+                targetVersion: packageCatalog.packageVersion,
+                installedVersion,
+                versionAligned: installedVersion === packageCatalog.packageVersion,
+                installed: installedVersion !== null,
                 enabled: (entry.type === "adapter"
                     ? selection.adapters
                     : selection.protocols
@@ -140,10 +151,21 @@ export class ExtensionManager {
         }
         this.assertRuntimeRoot();
         const preparedConfig = this.prepareConfig(entry.type, entry.name);
+        const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
         this.installing = id;
         try {
-            if (!this.isInstalled(entry.packageName)) {
-                await this.installer.install(entry.packageName, this.runtimeRoot);
+            if (this.installedVersion(entry.packageName) !== packageCatalog.packageVersion) {
+                await this.installer.install(
+                    entry.packageName,
+                    packageCatalog.packageVersion,
+                    this.runtimeRoot,
+                );
+                const installedVersion = this.installedVersion(entry.packageName);
+                if (installedVersion !== packageCatalog.packageVersion) {
+                    throw new Error(
+                        `扩展安装版本校验失败：${entry.packageName} 期望 ${packageCatalog.packageVersion}，实际 ${installedVersion ?? "未安装"}`,
+                    );
+                }
             }
             let candidate = preparedConfig;
             for (let attempt = 0; attempt < 3; attempt++) {
@@ -197,9 +219,27 @@ export class ExtensionManager {
         return getRuntimePluginSelection(config) ?? { adapters: [], protocols: [] };
     }
 
-    private isInstalled(packageName: string): boolean {
+    private installedVersion(packageName: string): string | null {
         const parts = packageName.split("/");
-        return fs.existsSync(path.join(this.runtimeRoot, "node_modules", ...parts, "package.json"));
+        const manifestPath = path.join(this.runtimeRoot, "node_modules", ...parts, "package.json");
+        if (!fs.existsSync(manifestPath)) return null;
+        try {
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+                version?: unknown;
+            };
+            return typeof manifest.version === "string" && manifest.version.trim()
+                ? manifest.version.trim()
+                : null;
+        } catch {
+            // 损坏或尚未完整写入的清单不应被当作已安装的验证版本。
+            return null;
+        }
+    }
+
+    private requirePackageCatalogEntry(packageName: string) {
+        const entry = getExtensionPackageCatalogEntry(packageName);
+        if (!entry) throw new Error(`扩展版本目录缺少 ${packageName}`);
+        return entry;
     }
 
     private assertRuntimeRoot(): void {

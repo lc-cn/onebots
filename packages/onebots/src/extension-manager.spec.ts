@@ -11,6 +11,7 @@ import {
     type ExtensionInstaller,
 } from "./extension-manager.js";
 import type { ServicePreflightSpec } from "./service-preflight.js";
+import { getExtensionPackageCatalogEntry } from "./extension-capability-catalog.js";
 
 const directories: string[] = [];
 const successfulPreflight: ExtensionConfigPreflight = async () => undefined;
@@ -32,6 +33,21 @@ function fixture() {
         "plugins:\n  adapters: []\n  protocols: [onebot-v11]\ngeneral: {}\n",
     );
     return { root, configPath };
+}
+
+function catalogVersion(packageName: string): string {
+    const entry = getExtensionPackageCatalogEntry(packageName);
+    if (!entry) throw new Error(`测试目录缺少 ${packageName}`);
+    return entry.packageVersion;
+}
+
+function installFixturePackage(packageName: string, version: string, runtimeRoot: string): void {
+    const packageDirectory = path.join(runtimeRoot, "node_modules", ...packageName.split("/"));
+    fs.mkdirSync(packageDirectory, { recursive: true });
+    fs.writeFileSync(
+        path.join(packageDirectory, "package.json"),
+        `${JSON.stringify({ name: packageName, version })}\n`,
+    );
 }
 
 describe("ExtensionManager", () => {
@@ -137,6 +153,11 @@ describe("ExtensionManager", () => {
         const slack = manager.list([]).find(item => item.id === "adapter:slack");
 
         expect(slack?.loaded).toBe(false);
+        expect(slack).toMatchObject({
+            targetVersion: catalogVersion("@onebots/adapter-slack"),
+            installedVersion: null,
+            versionAligned: false,
+        });
         expect(slack?.capability).toMatchObject({
             source: "catalog",
             packageVersion: expect.any(String),
@@ -177,15 +198,11 @@ describe("ExtensionManager", () => {
 
     it("只安装目录中的固定包名并持久化插件选择", async () => {
         const { root, configPath } = fixture();
-        const install = vi.fn(async (packageName: string, runtimeRoot: string) => {
-            const packageDirectory = path.join(
-                runtimeRoot,
-                "node_modules",
-                ...packageName.split("/"),
-            );
-            fs.mkdirSync(packageDirectory, { recursive: true });
-            fs.writeFileSync(path.join(packageDirectory, "package.json"), "{}\n");
-        });
+        const install = vi.fn(
+            async (packageName: string, packageVersion: string, runtimeRoot: string) => {
+                installFixturePackage(packageName, packageVersion, runtimeRoot);
+            },
+        );
         const manager = new ExtensionManager({
             runtimeRoot: root,
             configPath,
@@ -196,7 +213,11 @@ describe("ExtensionManager", () => {
         await expect(manager.install("adapter:slack")).resolves.toEqual({
             restartRequired: true,
         });
-        expect(install).toHaveBeenCalledWith("@onebots/adapter-slack", root);
+        expect(install).toHaveBeenCalledWith(
+            "@onebots/adapter-slack",
+            catalogVersion("@onebots/adapter-slack"),
+            root,
+        );
         const config = yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
         expect(config.plugins).toEqual({
             adapters: ["slack"],
@@ -204,6 +225,8 @@ describe("ExtensionManager", () => {
         });
         expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
             installed: true,
+            installedVersion: catalogVersion("@onebots/adapter-slack"),
+            versionAligned: true,
             enabled: true,
             loaded: false,
         });
@@ -227,9 +250,11 @@ describe("ExtensionManager", () => {
 
     it("已安装依赖只启用配置，不重复调用包管理器", async () => {
         const { root, configPath } = fixture();
-        const packageDirectory = path.join(root, "node_modules", "@onebots", "adapter-slack");
-        fs.mkdirSync(packageDirectory, { recursive: true });
-        fs.writeFileSync(path.join(packageDirectory, "package.json"), "{}\n");
+        installFixturePackage(
+            "@onebots/adapter-slack",
+            catalogVersion("@onebots/adapter-slack"),
+            root,
+        );
         const install = vi.fn();
         const manager = new ExtensionManager({
             runtimeRoot: root,
@@ -240,6 +265,60 @@ describe("ExtensionManager", () => {
 
         await manager.install("adapter:slack");
         expect(install).not.toHaveBeenCalled();
+    });
+
+    it("已安装版本偏离目录时切换到当前 OneBots 验证版本", async () => {
+        const { root, configPath } = fixture();
+        installFixturePackage("@onebots/adapter-slack", "99.0.0", root);
+        const install = vi.fn(
+            async (packageName: string, packageVersion: string, runtimeRoot: string) => {
+                installFixturePackage(packageName, packageVersion, runtimeRoot);
+            },
+        );
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight: successfulPreflight,
+        });
+
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+            installedVersion: "99.0.0",
+            targetVersion: catalogVersion("@onebots/adapter-slack"),
+            versionAligned: false,
+        });
+
+        await manager.install("adapter:slack");
+
+        expect(install).toHaveBeenCalledWith(
+            "@onebots/adapter-slack",
+            catalogVersion("@onebots/adapter-slack"),
+            root,
+        );
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+            installedVersion: catalogVersion("@onebots/adapter-slack"),
+            versionAligned: true,
+        });
+    });
+
+    it("包管理器未落下验证版本时在插件预检前失败", async () => {
+        const { root, configPath } = fixture();
+        const preflight = vi.fn(successfulPreflight);
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: {
+                install: async (packageName, _packageVersion, runtimeRoot) => {
+                    installFixturePackage(packageName, "0.0.0-wrong", runtimeRoot);
+                },
+            },
+            preflight,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow(
+            /扩展安装版本校验失败.*期望.*实际 0\.0\.0-wrong/,
+        );
+        expect(preflight).not.toHaveBeenCalled();
     });
 
     it("配置无效时不开始安装，避免留下半完成依赖", async () => {
@@ -259,7 +338,8 @@ describe("ExtensionManager", () => {
 
     it("安装期间配置发生变化时合并最新内容", async () => {
         const { root, configPath } = fixture();
-        const install = vi.fn(async () => {
+        const install = vi.fn(async (packageName: string, version: string, runtimeRoot: string) => {
+            installFixturePackage(packageName, version, runtimeRoot);
             fs.writeFileSync(
                 configPath,
                 "plugins:\n  adapters: [telegram]\n  protocols: [onebot-v11]\ngeneral:\n  host: 127.0.0.1\n",
@@ -287,7 +367,9 @@ describe("ExtensionManager", () => {
     it("候选插件预检失败时不启用配置", async () => {
         const { root, configPath } = fixture();
         const original = fs.readFileSync(configPath, "utf8");
-        const install = vi.fn(async () => undefined);
+        const install = vi.fn(async (packageName: string, version: string, runtimeRoot: string) => {
+            installFixturePackage(packageName, version, runtimeRoot);
+        });
         const preflight = vi.fn(async () => {
             throw new Error("插件没有注册配置 Schema");
         });
@@ -324,7 +406,13 @@ describe("ExtensionManager", () => {
         const manager = new ExtensionManager({
             runtimeRoot: root,
             configPath,
-            installer: { install: vi.fn(async () => undefined) },
+            installer: {
+                install: vi.fn(
+                    async (packageName: string, version: string, runtimeRoot: string) => {
+                        installFixturePackage(packageName, version, runtimeRoot);
+                    },
+                ),
+            },
             preflight,
         });
 

@@ -118,6 +118,9 @@ export interface ExtensionInfo {
     displayName: string;
     description: string;
     packageName: string;
+    targetVersion: string;
+    installedVersion: string | null;
+    versionAligned: boolean;
     setup: ExtensionSetupStep[];
     installed: boolean;
     enabled: boolean;

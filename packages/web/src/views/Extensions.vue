@@ -47,7 +47,22 @@
                             <p class="mt-1 font-mono text-xs text-fg-tertiary">
                                 {{ extension.packageName }}
                             </p>
+                            <div
+                                class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg-tertiary">
+                                <span>验证版本 v{{ extension.targetVersion }}</span>
+                                <span v-if="extension.installedVersion">
+                                    已安装 v{{ extension.installedVersion }}
+                                </span>
+                            </div>
                         </div>
+
+                        <UiAlert
+                            v-if="extension.installedVersion && !extension.versionAligned"
+                            variant="warning">
+                            已安装版本与当前 OneBots 验证版本不一致。能力目录和兼容性预检对应 v{{
+                                extension.targetVersion
+                            }}；可切换后重启。
+                        </UiAlert>
 
                         <ExtensionCapabilities
                             v-if="extension.capability"
@@ -85,21 +100,25 @@
                             </ol>
                         </details>
 
-                        <div class="flex justify-end">
+                        <div class="flex justify-end gap-2">
                             <RouterLink
                                 v-if="extension.loaded"
                                 v-slot="{ navigate }"
                                 custom
                                 :to="{ path: '/config', query: { add: extension.name } }">
-                                <UiButton variant="primary" @click="navigate">去配置</UiButton>
+                                <UiButton
+                                    :variant="extension.versionAligned ? 'primary' : 'ghost'"
+                                    @click="navigate">
+                                    去配置
+                                </UiButton>
                             </RouterLink>
                             <UiButton
-                                v-else
+                                v-if="!extension.loaded || !extension.versionAligned"
                                 variant="primary"
                                 :loading="installingId === extension.id || extension.installing"
                                 :disabled="restarting || Boolean(installingId)"
                                 @click="install(extension)">
-                                {{ extension.installed ? "启用并重启" : "安装并重启" }}
+                                {{ installActionLabel(extension) }}
                             </UiButton>
                         </div>
                     </div>
@@ -130,6 +149,12 @@ const filters: Array<{ value: ExtensionFilter; label: string }> = [
     { value: "adapter", label: "平台适配器" },
     { value: "protocol", label: "开放协议" },
 ];
+
+function installActionLabel(extension: ExtensionInfo): string {
+    if (!extension.installed) return `安装 v${extension.targetVersion} 并重启`;
+    if (!extension.versionAligned) return `切换至 v${extension.targetVersion} 并重启`;
+    return "启用并重启";
+}
 
 const visibleExtensions = computed(() =>
     filter.value === "all"

@@ -59,7 +59,7 @@ export function sanitizeNpmEnvironment(source: NodeJS.ProcessEnv): NodeJS.Proces
 /** 生成可直接执行的扩展安装命令；pnpm workspace 根目录必须显式使用 workspace-root。 */
 export function buildExtensionInstallInvocation(
     runtimeRoot: string,
-    packageName: string,
+    packageSpec: string,
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
 ): PackageInstallInvocation {
@@ -74,9 +74,9 @@ export function buildExtensionInstallInvocation(
                       ...(fs.existsSync(path.join(runtimeRoot, "pnpm-workspace.yaml"))
                           ? ["--workspace-root"]
                           : []),
-                      `${packageName}@latest`,
+                      packageSpec,
                   ]
-                : ["install", "--save", "--omit=dev", `${packageName}@latest`],
+                : ["install", "--save", "--omit=dev", packageSpec],
         environment: manager === "npm" ? sanitizeNpmEnvironment(environment) : environment,
     };
 }
