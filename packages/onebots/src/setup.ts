@@ -4,7 +4,11 @@ import * as readline from "node:readline/promises";
 import yaml from "js-yaml";
 import { ProtocolRegistry, writeConfigFileAtomic } from "@onebots/core";
 import { writeCliOutput } from "./cli-output.js";
-import { validateRuntimeConfig } from "./runtime-config-validator.js";
+import {
+    formatRuntimeConfigDiagnostic,
+    parseRuntimeConfig,
+    validateRuntimeConfig,
+} from "./runtime-config-validator.js";
 import { ensureManagementCredentials } from "./management-credentials.js";
 import {
     createBaseSetupConfig,
@@ -39,9 +43,25 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
         return;
     }
 
-    let config = exists
-        ? (yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>) || {}
-        : createBaseSetupConfig();
+    let config: Record<string, unknown>;
+    if (exists) {
+        try {
+            config = parseRuntimeConfig(fs.readFileSync(configPath, "utf8"));
+        } catch (error) {
+            const diagnostic = formatRuntimeConfigDiagnostic(error);
+            if (!options.force) {
+                throw new Error(
+                    `现有配置无法读取：${diagnostic}。请修复配置，或使用 --force 备份并重建。`,
+                );
+            }
+            config = createBaseSetupConfig();
+            writeCliOutput(
+                `现有配置无法解析，将保留至 ${configPath}.bak 并安全重建：${diagnostic}`,
+            );
+        }
+    } else {
+        config = createBaseSetupConfig();
+    }
 
     const configuredPlugins = getRuntimePluginSelection(config);
     let adapters = options.adapters?.length

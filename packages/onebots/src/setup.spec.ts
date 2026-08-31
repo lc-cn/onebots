@@ -69,6 +69,25 @@ describe("setup workflow", () => {
         });
     });
 
+    it("强制更新时备份损坏配置并在不泄露凭据的前提下安全重建", async () => {
+        const configPath = temporaryConfigPath();
+        const original = "access_token: secret-never-return\nplugins: [\n";
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+        const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+        await runSetup(configPath, { force: true });
+
+        expect(fs.readFileSync(`${configPath}.bak`, "utf8")).toBe(original);
+        const config = parseConfig(configPath);
+        expect(config.general).toEqual({});
+        expect(config.access_token).toMatch(/^[a-f0-9]{64}$/u);
+        const renderedOutput = output.mock.calls.map(call => String(call[0])).join("");
+        expect(renderedOutput).toContain("现有配置无法解析");
+        expect(renderedOutput).toContain("YAML 解析失败");
+        expect(renderedOutput).not.toContain("secret-never-return");
+        expect(renderedOutput).not.toContain("plugins: [");
+    });
+
     it("keeps the first-run config secret-free when deployment auth is supplied", async () => {
         vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "space-secret");
         const configPath = temporaryConfigPath();
@@ -107,3 +126,7 @@ describe("setup workflow", () => {
         expect(renderedOutput).not.toContain("-p onebot-v11");
     });
 });
+
+function parseConfig(configPath: string): Record<string, unknown> {
+    return yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+}

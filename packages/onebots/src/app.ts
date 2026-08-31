@@ -519,7 +519,7 @@ export function createOnebots(config: BaseApp.Config | string = "config.yaml") {
         mkdirSync(BaseApp.dataDir);
         writeCliOutput(`[onebots] 已创建数据存储目录: ${BaseApp.dataDir}`);
     }
-    config = yaml.load(readFileSync(BaseApp.configPath, "utf8")) as BaseApp.Config;
+    config = parseRuntimeConfig(readFileSync(BaseApp.configPath, "utf8")) as BaseApp.Config;
     const managementCredentials = ensureManagementCredentials(config as Record<string, unknown>);
     config = managementCredentials.config as BaseApp.Config;
     if (managementCredentials.generated) {

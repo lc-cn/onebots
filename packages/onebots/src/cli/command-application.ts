@@ -672,11 +672,11 @@ async function preflightService(spec: ServicePreflightSpec, action: string): Pro
 
 function readConfig(file: string): Record<string, unknown> {
     if (!fs.existsSync(file)) throw new CliError(`配置文件不存在: ${file}`, 2);
-    const loaded: unknown = yaml.load(fs.readFileSync(file, "utf8"));
-    if (loaded === undefined || loaded === null) return {};
-    if (typeof loaded !== "object" || Array.isArray(loaded))
-        throw new CliError(`配置文件根节点必须是对象: ${file}`, 2);
-    return loaded as Record<string, unknown>;
+    try {
+        return parseRuntimeConfig(fs.readFileSync(file, "utf8"));
+    } catch (error) {
+        throw new CliError(`配置文件无效: ${formatRuntimeConfigDiagnostic(error)}`, 2);
+    }
 }
 
 function backupAndWriteConfig(file: string, data: Record<string, unknown>): void {
