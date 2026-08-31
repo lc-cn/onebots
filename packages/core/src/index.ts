@@ -32,6 +32,7 @@ export * from "./db.js";
 export * from "./errors.js";
 export * from "./logger.js";
 export * from "./config-validator.js";
+export * from "./config-file.js";
 export * from "./di-container.js";
 export * from "./lifecycle.js";
 

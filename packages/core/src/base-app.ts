@@ -1,7 +1,6 @@
 import Koa from "koa";
 import * as os from "os";
 import "reflect-metadata";
-import { writeFileSync } from "fs";
 import log4js from "log4js";
 import type { Logger } from "log4js";
 import { createServer, Server } from "http";
@@ -34,6 +33,7 @@ import { metricsCollector } from "./middleware/metrics-collector.js";
 import { registerObservabilityEndpoints } from "./app-observability.js";
 import { resolvePublicStaticRoot } from "./public-static-root.js";
 import { assertHostConfigReloadable, resolveListenPort } from "./app-reload.js";
+import { writeConfigFileAtomic } from "./config-file.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -242,7 +242,9 @@ export class BaseApp extends Koa {
         const account = adapter.createAccount(config);
         adapter.accounts.set(config.account_id, account);
         if (this.isStarted) await account.start();
-        writeFileSync(BaseApp.configPath, yaml.dump(deepClone(this.config)));
+        writeConfigFileAtomic(BaseApp.configPath, yaml.dump(deepClone(this.config)), {
+            backup: true,
+        });
     }
 
     public async updateAccount<P extends keyof Adapter.Configs>(config: Adapter.Configs[P]) {
@@ -263,7 +265,7 @@ export class BaseApp extends Koa {
         await account.stop(force);
         delete this.config[`${p}.${uin}`];
         adapter.accounts.delete(uin);
-        writeFileSync(BaseApp.configPath, yaml.dump(this.config));
+        writeConfigFileAtomic(BaseApp.configPath, yaml.dump(this.config), { backup: true });
     }
 
     get accounts() {

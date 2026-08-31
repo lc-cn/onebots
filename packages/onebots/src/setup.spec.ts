@@ -40,4 +40,19 @@ describe("setup workflow", () => {
         expect(fs.readFileSync(configPath, "utf8")).toBe("port: 7000\n");
         expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
     });
+
+    it("atomically backs up an existing config before a forced update", async () => {
+        const configPath = temporaryConfigPath();
+        const original = "port: 7000\nlog_level: info\ntimeout: 30\ngeneral: {}\n";
+        fs.writeFileSync(configPath, original, { mode: 0o640 });
+
+        await runSetup(configPath, { force: true });
+
+        expect(fs.readFileSync(`${configPath}.bak`, "utf8")).toBe(original);
+        expect(fs.statSync(configPath).mode & 0o777).toBe(0o640);
+        expect(yaml.load(fs.readFileSync(configPath, "utf8"))).toMatchObject({
+            port: 7000,
+            general: {},
+        });
+    });
 });

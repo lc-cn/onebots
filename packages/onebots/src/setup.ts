@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
 import yaml from "js-yaml";
-import { ProtocolRegistry } from "@onebots/core";
+import { ProtocolRegistry, writeConfigFileAtomic } from "@onebots/core";
 import { writeCliOutput } from "./cli-output.js";
 import { validateRuntimeConfig } from "./runtime-config-validator.js";
 import {
@@ -102,13 +102,9 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
 
     await validateConfig(config);
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    if (exists) fs.copyFileSync(configPath, `${configPath}.bak`);
-    const temporary = `${configPath}.${process.pid}.tmp`;
-    fs.writeFileSync(temporary, yaml.dump(config, { noRefs: true }), {
-        encoding: "utf8",
-        mode: 0o600,
+    writeConfigFileAtomic(configPath, yaml.dump(config, { noRefs: true }), {
+        backup: exists,
     });
-    fs.renameSync(temporary, configPath);
     fs.mkdirSync(path.join(path.dirname(configPath), "data"), { recursive: true });
     writeCliOutput(`配置已就绪: ${configPath}`);
     writeCliOutput(`前台启动: ${formatSetupCommand(configPath, adapters, protocols)}`);
