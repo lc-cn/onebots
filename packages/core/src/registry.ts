@@ -3,6 +3,7 @@ import { Adapter } from "./adapter.js";
 import { BaseApp } from "./base-app.js";
 import { Account } from "./account.js";
 import { assertSchemaFormContract, type Schema } from "./config-validator.js";
+import { ValidationError } from "./errors.js";
 
 /**
  * Protocol Registry
@@ -31,6 +32,15 @@ export class ProtocolRegistry {
         }
 
         const versions = this.protocols.get(name)!;
+        const registeredFactory = versions.get(version);
+        if (registeredFactory) {
+            if (registeredFactory === factory) {
+                return;
+            }
+            throw new ValidationError(`协议 ${name}/${version} 已由其他实现注册`, {
+                context: { name, version },
+            });
+        }
         versions.set(version, factory);
         // Store or update metadata
         if (!this.metadata.has(name)) {
@@ -146,6 +156,11 @@ export class ProtocolRegistry {
             // Unregister all versions
             this.protocols.delete(name);
             this.metadata.delete(name);
+            for (const key of this.schemas.keys()) {
+                if (key.startsWith(`${name}.`)) {
+                    this.schemas.delete(key);
+                }
+            }
             return true;
         }
 
@@ -153,6 +168,7 @@ export class ProtocolRegistry {
         if (!versions) return false;
 
         const result = versions.delete(version);
+        this.schemas.delete(`${name}.${version}`);
 
         // Update metadata
         const meta = this.metadata.get(name);
@@ -196,6 +212,15 @@ export class AdapterRegistry {
         factory: Adapter.Factory,
         metadata?: Partial<Adapter.Metadata>,
     ): void {
+        const registeredFactory = this.adapters.get(name);
+        if (registeredFactory) {
+            if (registeredFactory === factory) {
+                return;
+            }
+            throw new ValidationError(`适配器 ${name} 已由其他实现注册`, {
+                context: { name },
+            });
+        }
         this.adapters.set(name, factory);
         // Store or update metadata
         if (!this.metadata.has(name)) {
@@ -293,6 +318,7 @@ export class AdapterRegistry {
      */
     static unregister(name: string): boolean {
         this.metadata.delete(name);
+        this.schemas.delete(name);
         return this.adapters.delete(name);
     }
 
