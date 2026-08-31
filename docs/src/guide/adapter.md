@@ -29,6 +29,8 @@ onebots 目前支持以下平台适配器：
 | **Email** | ✅ 已实现 | `@onebots/adapter-email` | 支持SMTP发送和IMAP接收邮件 |
 | **WhatsApp** | ✅ 已实现 | `@onebots/adapter-whatsapp` | 支持WhatsApp Business API |
 | **Zulip** | ✅ 已实现 | `@onebots/adapter-zulip` | 支持Zulip流和私信 |
+| **Matrix** | ✅ 已实现 | `@onebots/adapter-matrix` | 支持 Client-Server API、AppService 与手动接入 |
+| **Google Chat** | ✅ 已实现 | `@onebots/adapter-google-chat` | 支持 Interaction HTTPS、Workspace Events 与手动接入 |
 
 ## 能力清单
 
@@ -110,6 +112,8 @@ Schema 中的封闭枚举继续使用 `choices`。若数组字段只想提供常
 - [Email 适配器文档](/platform/email)
 - [WhatsApp 适配器文档](/platform/whatsapp)
 - [Zulip 适配器文档](/platform/zulip)
+- [Matrix 适配器文档](/platform/matrix)
+- [Google Chat 适配器文档](/platform/google-chat)
 
 ## 1. 安装依赖 
 

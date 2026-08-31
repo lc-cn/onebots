@@ -13,6 +13,9 @@
     "@onebots/adapter-feishu": {
       "version": "3.0.8"
     },
+    "@onebots/adapter-google-chat": {
+      "version": "0.1.0"
+    },
     "@onebots/adapter-heychat": {
       "version": "4.0.7"
     },
@@ -1600,6 +1603,339 @@
             "support": "native",
             "mode": "native",
             "note": "通过 ingest() 接入既有 Host"
+          }
+        }
+      }
+    },
+    "google-chat": {
+      "packageName": "@onebots/adapter-google-chat",
+      "packageVersion": "0.1.0",
+      "manifest": {
+        "version": 1,
+        "actions": {
+          "send_message": {
+            "support": "native",
+            "scenes": [
+              "group",
+              "direct"
+            ]
+          },
+          "delete_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.bot 或 chat.messages"
+            ]
+          },
+          "get_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.bot 或 chat.messages"
+            ]
+          },
+          "get_message_history": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.messages.readonly / chat.messages 或管理员批准的 chat.app.messages.readonly"
+            ]
+          },
+          "update_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.bot 或 chat.messages"
+            ]
+          },
+          "mark_message_as_read": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.users.readstate 或 chat.users"
+            ]
+          },
+          "get_login_info": {
+            "support": "native"
+          },
+          "get_user_info": {
+            "support": "native",
+            "availability": "context",
+            "note": "Google Chat 没有通用 users.get；返回事件或 membership 缓存中的用户"
+          },
+          "create_user_channel": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "get_group_list": {
+            "support": "native"
+          },
+          "get_group_info": {
+            "support": "native"
+          },
+          "set_group_name": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.spaces 或管理员批准的 chat.app.spaces"
+            ]
+          },
+          "leave_group": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.memberships（用户）或 chat.memberships.app（应用自行退出）"
+            ]
+          },
+          "get_group_member_list": {
+            "support": "native"
+          },
+          "get_group_member_info": {
+            "support": "native"
+          },
+          "invite_group_member": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.memberships 或管理员批准的 chat.app.memberships"
+            ]
+          },
+          "kick_group_member": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.memberships 或管理员批准的 chat.app.memberships"
+            ]
+          },
+          "send_group_message_reaction": {
+            "support": "native",
+            "availability": "context",
+            "permissions": [
+              "chat.bot 或 chat.messages"
+            ],
+            "note": "删除 reaction 需要先观察或创建对应 reaction resource"
+          },
+          "upload_file": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.messages.create 或 chat.messages（仅用户身份）"
+            ]
+          },
+          "can_send_image": {
+            "support": "native"
+          },
+          "can_send_record": {
+            "support": "native"
+          },
+          "get_version": {
+            "support": "native"
+          },
+          "get_status": {
+            "support": "native"
+          },
+          "get_supported_actions": {
+            "support": "native"
+          },
+          "call_google_chat_api": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Google Chat REST 方法要求的 OAuth scope"
+            ]
+          },
+          "find_google_chat_direct_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.bot 或 chat.messages"
+            ]
+          },
+          "find_google_chat_group_chats": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.memberships.readonly 或 chat.memberships（仅用户身份）"
+            ]
+          },
+          "setup_google_chat_space": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.spaces.create 或 chat.spaces"
+            ]
+          },
+          "create_google_chat_space": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.spaces.create 或 chat.spaces"
+            ]
+          },
+          "delete_google_chat_space": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.bot 或 chat.messages"
+            ]
+          },
+          "list_google_chat_space_events": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "事件资源对应的 Chat read-only scope"
+            ]
+          },
+          "get_google_chat_availability": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.users.availability.readonly 或 chat.users.availability"
+            ]
+          },
+          "mark_google_chat_active": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.users.availability（仅当前用户）"
+            ]
+          },
+          "mark_google_chat_away": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.users.availability（仅当前用户）"
+            ]
+          },
+          "mark_google_chat_do_not_disturb": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.users.availability（仅当前用户）"
+            ]
+          },
+          "get_google_chat_space_read_state": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.users.readstate.readonly 或 chat.users.readstate"
+            ]
+          },
+          "get_google_chat_thread_read_state": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.users.readstate.readonly 或 chat.users.readstate"
+            ]
+          },
+          "list_google_chat_reactions": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.bot 或 chat.messages"
+            ]
+          },
+          "send_google_chat_rich_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "chat.bot 或 chat.messages"
+            ]
+          }
+        },
+        "events": {
+          "message": {
+            "support": "native",
+            "scenes": [
+              "group",
+              "direct"
+            ]
+          },
+          "message_updated": {
+            "support": "native"
+          },
+          "message_deleted": {
+            "support": "native"
+          },
+          "reaction_added": {
+            "support": "native"
+          },
+          "reaction_removed": {
+            "support": "native"
+          },
+          "member_joined": {
+            "support": "native"
+          },
+          "member_left": {
+            "support": "native"
+          },
+          "user_updated": {
+            "support": "native"
+          },
+          "channel_updated": {
+            "support": "native"
+          },
+          "message_status": {
+            "support": "native"
+          },
+          "custom": {
+            "support": "native",
+            "note": "卡片、命令、dialog 与未投影字段完整保留在 raw_event/extensions"
+          }
+        },
+        "segments": {
+          "text": {
+            "support": "native",
+            "direction": "both"
+          },
+          "at": {
+            "support": "native",
+            "direction": "send"
+          },
+          "emoji": {
+            "support": "native",
+            "direction": "send"
+          },
+          "image": {
+            "support": "native",
+            "direction": "both"
+          },
+          "video": {
+            "support": "native",
+            "direction": "both"
+          },
+          "audio": {
+            "support": "native",
+            "direction": "both"
+          },
+          "file": {
+            "support": "native",
+            "direction": "both"
+          },
+          "google_chat_card": {
+            "support": "native",
+            "direction": "receive"
+          },
+          "thread": {
+            "support": "native",
+            "direction": "receive"
+          }
+        },
+        "transports": {
+          "interaction_http": {
+            "support": "native",
+            "mode": "webhook",
+            "note": "校验 Google Chat OIDC/JWT，可返回同步结构化响应"
+          },
+          "pubsub_push": {
+            "support": "native",
+            "mode": "webhook",
+            "note": "校验 Pub/Sub OIDC push 并展开 Workspace batch event"
+          },
+          "manual": {
+            "support": "native",
+            "mode": "native",
+            "note": "ingest(rawEvent) 复用相同 Client、去重和事件投影管线"
           }
         }
       }

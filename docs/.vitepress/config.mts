@@ -61,7 +61,8 @@ const baseConfig = defineConfig({
                             { text: "邮件", link: "/platform/email" },
                             { text: "WhatsApp", link: "/platform/whatsapp" },
                             { text: "Zulip", link: "/platform/zulip" },
-                            { text: "Matrix", link: "/platform/matrix" }
+                            { text: "Matrix", link: "/platform/matrix" },
+                            { text: "Google Chat", link: "/platform/google-chat" }
                         ]
                     },
                     {
@@ -122,7 +123,8 @@ const baseConfig = defineConfig({
                         { text: "邮件", link: "/platform/email" },
                         { text: "WhatsApp", link: "/platform/whatsapp" },
                         { text: "Zulip", link: "/platform/zulip" },
-                        { text: "Matrix", link: "/platform/matrix" }
+                        { text: "Matrix", link: "/platform/matrix" },
+                        { text: "Google Chat", link: "/platform/google-chat" }
                     ],
                     "/protocol/": [
                         { text: "OneBot V11", link: "/protocol/onebot-v11" },
@@ -196,7 +198,8 @@ const baseConfig = defineConfig({
                             { text: "Email", link: "/en/platform/email" },
                             { text: "WhatsApp", link: "/en/platform/whatsapp" },
                             { text: "Zulip", link: "/en/platform/zulip" },
-                            { text: "Matrix", link: "/en/platform/matrix" }
+                            { text: "Matrix", link: "/en/platform/matrix" },
+                            { text: "Google Chat", link: "/en/platform/google-chat" }
                         ]
                     },
                     {
@@ -270,7 +273,8 @@ const baseConfig = defineConfig({
                         { text: "Email", link: "/en/platform/email" },
                         { text: "WhatsApp", link: "/en/platform/whatsapp" },
                         { text: "Zulip", link: "/en/platform/zulip" },
-                        { text: "Matrix", link: "/en/platform/matrix" }
+                        { text: "Matrix", link: "/en/platform/matrix" },
+                        { text: "Google Chat", link: "/en/platform/google-chat" }
                     ],
                     "/en/protocol/": [
                         { text: "OneBot V11", link: "/en/protocol/onebot-v11" },

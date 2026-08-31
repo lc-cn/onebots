@@ -177,6 +177,7 @@ For configuration details of other platforms, see:
 - [WeCom Platform](/en/platform/wecom)
 - [Microsoft Teams Platform](/en/platform/teams)
 - [Matrix Platform](/en/platform/matrix)
+- [Google Chat Platform](/en/platform/google-chat)
 
 ## Related Links
 

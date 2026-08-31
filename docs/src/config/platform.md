@@ -493,6 +493,7 @@ wechat.prod:
 - [QQ 平台](/platform/qq)
 - [Discord 平台](/platform/discord)
 - [Matrix 平台](/platform/matrix)
+- [Google Chat 平台](/platform/google-chat)
 - [Kook 平台](/platform/kook)
 - [黑盒语音平台](/platform/heychat)
 - [钉钉平台](/platform/dingtalk)

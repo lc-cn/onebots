@@ -86,7 +86,7 @@ flowchart LR
 
 ## Features (summary)
 
-- **15+ adapters**: QQ official, ICQQ, WeChat OA, DingTalk, Feishu, WeCom, Telegram, Slack, Discord, Kook, Teams, Line, Email, WhatsApp, Zulip, Mock, …  
+- **20+ adapters**: QQ official, ICQQ, WeChat OA, DingTalk, Feishu, WeCom, Telegram, Slack, Discord, Kook, Teams, Line, Email, WhatsApp, Zulip, Matrix, Google Chat, Mock, …
 - **Protocols**: OneBot v11/v12, Satori v1, Milky v1  
 - **Monorepo**: `pnpm workspace` (`packages/*`, `adapters/*`, `protocols/*`)  
 - **Optional Web UI**: `@onebots/web`  

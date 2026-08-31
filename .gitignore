@@ -9,6 +9,7 @@ onebots.log
 .env.*
 !.env.example
 **/tsconfig.tsbuildinfo
+**/*.tsbuildinfo
 /docs/.vitepress/cache
 /docs/.vitepress/.temp
 # Dependencies

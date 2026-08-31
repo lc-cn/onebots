@@ -24,6 +24,8 @@ onebots currently supports the following platform adapters:
 | **Email** | ✅ Implemented | `@onebots/adapter-email` | Supports SMTP sending and IMAP receiving |
 | **WhatsApp** | ✅ Implemented | `@onebots/adapter-whatsapp` | Supports WhatsApp Business API |
 | **Zulip** | ✅ Implemented | `@onebots/adapter-zulip` | Supports Zulip streams and private messages |
+| **Matrix** | ✅ Implemented | `@onebots/adapter-matrix` | Client-Server API, AppService, and manual ingress |
+| **Google Chat** | ✅ Implemented | `@onebots/adapter-google-chat` | Interaction HTTPS, Workspace Events, and manual ingress |
 
 ## Capability manifests
 
@@ -99,6 +101,8 @@ Plugin import and contract verification run as one serialized registry transacti
 - [Email Adapter Documentation](/en/platform/email)
 - [WhatsApp Adapter Documentation](/en/platform/whatsapp)
 - [Zulip Adapter Documentation](/en/platform/zulip)
+- [Matrix Adapter Documentation](/en/platform/matrix)
+- [Google Chat Adapter Documentation](/en/platform/google-chat)
 
 ## Installation
 
