@@ -69,6 +69,11 @@ describe("runtime config validation", () => {
         }
 
         const diagnostic = formatRuntimeConfigDiagnostic(error);
+        expect(error).toMatchObject({ message: expect.stringContaining("YAML 解析失败") });
+        expect((error as Error).message).not.toContain("secret-never-return");
+        expect((error as Error).message).not.toContain("plugins: [");
+        expect((error as Error).message).not.toContain("\n");
+        expect((error as Error & { cause?: unknown }).cause).toBeUndefined();
         expect(diagnostic).toContain("YAML 解析失败");
         expect(diagnostic).not.toContain("secret-never-return");
         expect(diagnostic).not.toContain("plugins: [");

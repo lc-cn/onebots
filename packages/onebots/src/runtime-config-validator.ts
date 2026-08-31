@@ -39,10 +39,8 @@ export function parseRuntimeConfig(source: string): Record<string, unknown> {
         return config;
     } catch (error) {
         if (error instanceof ValidationError) throw error;
-        throw new ValidationError(
-            `YAML 解析失败: ${error instanceof Error ? error.message : String(error)}`,
-            { cause: error instanceof Error ? error : undefined },
-        );
+        // js-yaml 的原始 message/cause 含源码片段；不可挂入会被日志序列化的错误链。
+        throw new ValidationError(`YAML 解析失败: ${formatRuntimeConfigDiagnostic(error)}`);
     }
 }
 

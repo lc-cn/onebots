@@ -61,6 +61,27 @@ describe("service install preflight", () => {
         expect(install).not.toHaveBeenCalled();
     });
 
+    it("严格拒绝损坏 YAML 但不把相邻凭据带入安装错误", async () => {
+        const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+        const config = createConfig("access_token: secret-never-return\nplugins: [\n");
+
+        let error: unknown;
+        try {
+            await installService(options(config));
+        } catch (caught) {
+            error = caught;
+        }
+
+        expect(error).toMatchObject({
+            message: expect.stringContaining("服务安装预检失败：YAML 解析失败"),
+            exitCode: 2,
+        });
+        expect((error as Error).message).not.toContain("secret-never-return");
+        expect((error as Error).message).not.toContain("plugins: [");
+        expect((error as Error).message).not.toContain("\n");
+        expect(install).not.toHaveBeenCalled();
+    });
+
     it("waits for plugin initialization before writing a service definition", async () => {
         const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
         const config = createConfig("general: {}\n");
