@@ -73,6 +73,8 @@ describe("ExtensionManager", () => {
             .find(item => item.id === "adapter:slack");
 
         expect(slack?.capability).toEqual({
+            source: "runtime",
+            packageVersion: "1.2.3",
             declared: true,
             summary: expect.objectContaining({
                 actions: {
@@ -116,9 +118,33 @@ describe("ExtensionManager", () => {
             .find(item => item.id === "adapter:slack");
 
         expect(slack?.capability).toEqual({
+            source: "runtime",
+            packageVersion: null,
             declared: false,
             summary: null,
             manifest: null,
+        });
+    });
+
+    it("在安装和创建账号前提供带版本的目录能力快照", () => {
+        const { root, configPath } = fixture();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            preflight: successfulPreflight,
+        });
+
+        const slack = manager.list([]).find(item => item.id === "adapter:slack");
+
+        expect(slack?.loaded).toBe(false);
+        expect(slack?.capability).toMatchObject({
+            source: "catalog",
+            packageVersion: expect.any(String),
+            declared: true,
+            summary: {
+                actions: { total: expect.any(Number), supported: expect.any(Number) },
+            },
+            manifest: { version: 1 },
         });
     });
 

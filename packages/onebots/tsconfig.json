@@ -3,6 +3,7 @@
     "target": "ESNext",
     "module": "nodenext",
     "moduleResolution": "nodenext",
+    "resolveJsonModule": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": false,
@@ -18,6 +19,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"],
   "exclude": ["node_modules", "lib"]
 }

@@ -101,6 +101,8 @@ export interface CapabilityCategorySummary {
 }
 
 export interface ExtensionCapabilityInfo {
+    source: "catalog" | "runtime";
+    packageVersion: string | null;
     declared: boolean;
     summary: Record<
         "actions" | "events" | "segments" | "transports",

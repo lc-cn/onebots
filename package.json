@@ -25,6 +25,8 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "create:adapter": "node scripts/create-adapter.mjs",
+    "catalog:capabilities": "node scripts/generate-extension-capability-catalog.mjs",
+    "catalog:capabilities:check": "node scripts/generate-extension-capability-catalog.mjs --check",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "changeset:publish": "changeset publish",

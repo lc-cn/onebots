@@ -2,13 +2,26 @@
     <div
         v-if="!capability.declared || !capability.manifest || !capability.summary"
         class="rounded-card border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-5 text-fg-secondary">
-        此适配器未声明默认能力清单，创建账号前无法验证平台边界。请查阅适配器文档，并将未声明能力视为未知。
+        {{
+            capability.source === "runtime"
+                ? "当前插件未声明默认能力清单，请将未声明能力视为未知。"
+                : "能力目录暂未收录此适配器，请安装后查看插件运行时清单。"
+        }}
     </div>
 
-    <details v-else class="group rounded-card border border-border-subtle">
+    <details
+        v-else
+        class="group rounded-card border border-border-subtle"
+        @toggle="handleToggle">
         <summary class="cursor-pointer list-none p-3 select-none">
             <div class="flex items-center justify-between gap-3">
-                <span class="text-sm font-medium text-fg">平台能力</span>
+                <span class="text-sm font-medium text-fg">
+                    平台能力 ·
+                    {{ capability.source === "runtime" ? "当前插件" : "目录快照" }}
+                    <template v-if="capability.packageVersion">
+                        v{{ capability.packageVersion }}
+                    </template>
+                </span>
                 <span class="text-xs text-accent group-open:hidden">展开完整清单</span>
                 <span class="hidden text-xs text-accent group-open:inline">收起</span>
             </div>
@@ -24,7 +37,7 @@
             </div>
         </summary>
 
-        <div class="space-y-4 border-t border-border-subtle p-3">
+        <div v-if="expanded" class="space-y-4 border-t border-border-subtle p-3">
             <section v-for="category in categories" :key="category.key">
                 <div class="mb-2 flex items-center justify-between gap-3">
                     <h3 class="text-xs font-semibold text-fg-secondary">{{ category.label }}</h3>
@@ -76,13 +89,19 @@
                 </div>
             </section>
             <p class="text-xs leading-5 text-fg-tertiary">
-                默认清单来自当前已加载插件。账号 token、权限和事件订阅可能进一步收窄实际可用范围。
+                {{
+                    capability.source === "runtime"
+                        ? "默认清单来自当前已加载插件。"
+                        : "目录快照随当前 OneBots 版本发布，安装后以插件实际注册清单为准。"
+                }}
+                账号 token、权限和事件订阅可能进一步收窄实际可用范围。
             </p>
         </div>
     </details>
 </template>
 
 <script setup lang="ts">
+import { ref } from "vue";
 import type { CapabilityAvailability, CapabilityDirection, CapabilitySupport } from "@onebots/core";
 import type { ExtensionCapabilityInfo } from "../types";
 import UiBadge from "../ui/UiBadge.vue";
@@ -94,6 +113,11 @@ import {
 
 const props = defineProps<{ capability: ExtensionCapabilityInfo }>();
 const categories = CAPABILITY_CATEGORIES;
+const expanded = ref(false);
+
+function handleToggle(event: Event): void {
+    expanded.value = (event.currentTarget as HTMLDetailsElement).open;
+}
 
 function entries(category: CapabilityCategory) {
     return props.capability.manifest

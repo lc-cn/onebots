@@ -105,7 +105,7 @@ export function formatAdapterCapabilityReport(
     return lines.join("\n");
 }
 
-function summarizeManifest(
+export function summarizeManifest(
     manifest: AdapterCapabilityManifest,
 ): Record<CapabilityCategory, CapabilityCategorySummary> {
     return Object.fromEntries(

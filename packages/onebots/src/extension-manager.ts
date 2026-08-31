@@ -5,7 +5,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { BaseApp, writeConfigFileAtomic, yaml } from "@onebots/core";
 import { EXTENSION_CATALOG, getExtensionCatalogEntry } from "./extension-catalog.js";
-import { buildAdapterCapabilityReport } from "./capability-report.js";
+import { buildAdapterCapabilityReport, summarizeManifest } from "./capability-report.js";
+import { getExtensionCapabilityCatalogEntry } from "./extension-capability-catalog.js";
 import {
     getRuntimePluginSelection,
     setRuntimePluginSelection,
@@ -73,6 +74,8 @@ export class ExtensionManager {
             buildAdapterCapabilityReport(loadedPlugins).adapters.map(adapter => [
                 adapter.name,
                 {
+                    source: "runtime" as const,
+                    packageVersion: adapter.packageVersion,
                     declared: adapter.declared,
                     summary: adapter.summary,
                     manifest: adapter.capabilities,
@@ -83,6 +86,10 @@ export class ExtensionManager {
             const loaded = loadedPlugins.some(
                 plugin => plugin.type === entry.type && plugin.name === entry.name,
             );
+            const catalogCapability =
+                entry.type === "adapter"
+                    ? getExtensionCapabilityCatalogEntry(entry.name)
+                    : undefined;
             return {
                 ...entry,
                 installed: this.isInstalled(entry.packageName),
@@ -93,13 +100,31 @@ export class ExtensionManager {
                 loaded,
                 installing: this.installing === entry.id,
                 capability:
-                    entry.type === "adapter" && loaded
-                        ? (adapterCapabilities.get(entry.name) ?? {
-                              declared: false,
-                              summary: null,
-                              manifest: null,
-                          })
-                        : null,
+                    entry.type !== "adapter"
+                        ? null
+                        : loaded
+                          ? (adapterCapabilities.get(entry.name) ?? {
+                                source: "runtime" as const,
+                                packageVersion: null,
+                                declared: false,
+                                summary: null,
+                                manifest: null,
+                            })
+                          : catalogCapability
+                            ? {
+                                  source: "catalog" as const,
+                                  packageVersion: catalogCapability.packageVersion,
+                                  declared: true,
+                                  summary: summarizeManifest(catalogCapability.manifest),
+                                  manifest: catalogCapability.manifest,
+                              }
+                            : {
+                                  source: "catalog" as const,
+                                  packageVersion: null,
+                                  declared: false,
+                                  summary: null,
+                                  manifest: null,
+                              },
             };
         });
     }
