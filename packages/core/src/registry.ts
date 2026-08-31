@@ -4,7 +4,11 @@ import { BaseApp } from "./base-app.js";
 import { Account } from "./account.js";
 import { assertSchemaFormContract, type Schema } from "./config-validator.js";
 import { ValidationError } from "./errors.js";
-import { normalizeAdapterCapabilities } from "./adapter-capability.js";
+import {
+    assertSupportedActionsImplemented,
+    normalizeAdapterCapabilities,
+} from "./adapter-capability.js";
+import { isDeepStrictEqual } from "node:util";
 
 export interface ExtensionRegistryState {
     readonly adapters: {
@@ -384,10 +388,19 @@ export class AdapterRegistry {
         if (!factory) {
             throw new Error(`Adapter ${name} not registered`);
         }
-        if (Adapter.isClassAdapter(factory)) {
-            return new factory(app);
+        const adapter = Adapter.isClassAdapter(factory) ? new factory(app) : factory(app);
+        const runtimeCapabilities = normalizeAdapterCapabilities(adapter.describeCapabilities());
+        const registeredCapabilities = this.metadata.get(name)?.capabilities;
+        if (
+            registeredCapabilities &&
+            !isDeepStrictEqual(registeredCapabilities, runtimeCapabilities)
+        ) {
+            throw new ValidationError(`适配器 ${name} 的注册能力清单与实例默认能力不一致`, {
+                context: { name },
+            });
         }
-        return factory(app);
+        assertSupportedActionsImplemented(adapter, runtimeCapabilities);
+        return adapter;
     }
 
     /**

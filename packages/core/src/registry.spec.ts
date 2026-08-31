@@ -8,6 +8,8 @@ import {
     restoreExtensionRegistryState,
 } from "./registry.js";
 import { ConfigValidator, type Schema, type ValidationRule } from "./config-validator.js";
+import { defineAdapterCapabilities } from "./adapter-capability.js";
+import type { BaseApp } from "./base-app.js";
 
 const schema: Schema = {};
 const anotherSchema: Schema = {
@@ -95,6 +97,48 @@ describe("extension registries", () => {
             registered.displayName = "运行时篡改";
         }).toThrow(TypeError);
         expect(AdapterRegistry.getMetadata("mock")?.displayName).toBe("Mock");
+    });
+
+    it("rejects an adapter instance whose default capabilities differ from registration", () => {
+        const registeredCapabilities = defineAdapterCapabilities({
+            actions: { ping: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        const runtimeCapabilities = defineAdapterCapabilities({
+            actions: { ping: { support: "unsupported" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        const factory = (() => ({
+            describeCapabilities: () => runtimeCapabilities,
+            isActionImplemented: () => true,
+        })) as unknown as Adapter.Factory;
+        AdapterRegistry.register("drifted", factory, { capabilities: registeredCapabilities });
+
+        expect(() => AdapterRegistry.create("drifted", {} as BaseApp)).toThrow(
+            "注册能力清单与实例默认能力不一致",
+        );
+    });
+
+    it("validates advertised action implementations when creating an adapter", () => {
+        const capabilities = defineAdapterCapabilities({
+            actions: { ping: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        const factory = (() => ({
+            describeCapabilities: () => capabilities,
+            isActionImplemented: () => false,
+        })) as unknown as Adapter.Factory;
+        AdapterRegistry.register("incomplete", factory, { capabilities });
+
+        expect(() => AdapterRegistry.create("incomplete", {} as BaseApp)).toThrow(
+            "适配器能力清单声明了未实现动作: ping",
+        );
     });
 
     it("keeps repeated protocol registration with the same factory idempotent", () => {
