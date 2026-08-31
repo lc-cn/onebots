@@ -1,8 +1,5 @@
 import { AdapterRegistry, type AdapterCapabilityManifest } from "@onebots/core";
-import {
-    getExtensionCapabilityCatalogEntry,
-    getExtensionCapabilityCatalogPlatforms,
-} from "./extension-capability-catalog.js";
+import { getExtensionCapabilityCatalogEntry } from "./extension-capability-catalog.js";
 import { getExtensionCatalogEntry } from "./extension-catalog.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
 
@@ -141,11 +138,6 @@ export function formatAdapterCapabilityReport(
         lines.push("目录快照随当前 OneBots 版本发布，不代表适配器已安装或账号已授权。");
     }
     return lines.join("\n");
-}
-
-/** 返回当前 OneBots 随包发布的全部平台能力目录。 */
-export function getCatalogCapabilityPlatforms(): string[] {
-    return getExtensionCapabilityCatalogPlatforms();
 }
 
 export function summarizeManifest(

@@ -155,4 +155,23 @@ describe("capabilities command", () => {
             ],
         });
     });
+
+    it("fails closed when the packaged capability catalog is incomplete", async () => {
+        const result = await showCapabilities(
+            { register: [], protocol: [], json: true },
+            {
+                loadPlugins: async () => [],
+                getLoadedPlugins: () => [],
+                catalogPlatforms: () => ["slack"],
+                catalogIssues: () => ["适配器能力快照缺失: telegram"],
+            },
+        );
+
+        expect(result).toMatchObject({ raw: true, exitCode: 1 });
+        expect(JSON.parse(result.output || "{}")).toMatchObject({
+            complete: false,
+            errors: ["extension-catalog: 适配器能力快照缺失: telegram"],
+            adapters: [{ name: "slack", source: "catalog" }],
+        });
+    });
 });

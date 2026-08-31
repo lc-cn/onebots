@@ -12,8 +12,11 @@ import { getLoadedPlugins, type LoadedPluginInfo } from "../plugin-loader.js";
 import {
     buildAdapterCapabilityReport,
     formatAdapterCapabilityReport,
-    getCatalogCapabilityPlatforms,
 } from "../capability-report.js";
+import {
+    getInstallableAdapterNames,
+    validateExtensionCatalogIntegrity,
+} from "../extension-catalog-integrity.js";
 import packageMetadata from "../../package.json" with { type: "json" };
 import { readServiceInstanceId, verifyServiceOnline } from "../service-online-verification.js";
 import { verifyServiceStopped } from "../service-offline-verification.js";
@@ -67,6 +70,8 @@ export function scopeFrom(options: ScopeOptions): ServiceScope {
 interface CapabilityCommandDependencies {
     loadPlugins(adapters: string[], protocols: string[]): Promise<string[]>;
     getLoadedPlugins(): LoadedPluginInfo[];
+    catalogIssues?(): string[];
+    catalogPlatforms?(): string[];
 }
 
 /** 无连接加载适配器入口，并导出实际安装包注册的默认能力契约。 */
@@ -85,13 +90,20 @@ export async function showCapabilities(
             getLoadedPlugins,
         } satisfies CapabilityCommandDependencies);
     const failures = await resolved.loadPlugins(runtime.adapters, []);
+    const catalogIssues = (resolved.catalogIssues ?? validateExtensionCatalogIntegrity)();
+    const reportErrors = [
+        ...failures,
+        ...catalogIssues.map(issue => `extension-catalog: ${issue}`),
+    ];
     const selected = new Set(runtime.adapters);
     const report = buildAdapterCapabilityReport(
         resolved
             .getLoadedPlugins()
             .filter(plugin => plugin.type === "adapter" && selected.has(plugin.name)),
-        failures,
-        runtime.adapters.length ? runtime.adapters : getCatalogCapabilityPlatforms(),
+        reportErrors,
+        runtime.adapters.length
+            ? runtime.adapters
+            : (resolved.catalogPlatforms ?? getInstallableAdapterNames)(),
     );
     return {
         output: formatAdapterCapabilityReport(report, options.json),

@@ -224,9 +224,9 @@ curl --fail http://localhost:6727/health
 curl --fail http://localhost:6727/ready
 ```
 
-`doctor` 会先验证扩展目录中每个“去配置”入口与适配器或协议身份一致；`--json` 输出中的 `extension-catalog` 检查可供部署脚本和 CI 判定，漂移时会列出全部目录项及原因。首次尚未添加账号时 `/ready` 会保持管理面可访问，并返回 `configured: false`；doctor 会明确标为警告。账号离线、协议出口启动失败，或任一账号尚未配置协议出口时，`/ready` 返回 HTTP 503。
+`doctor` 会验证扩展目录中每个“去配置”入口与插件身份一致，并确认安装白名单、固定包版本和适配器能力快照形成闭合集合；`--json` 输出中的 `extension-catalog` 检查可供部署脚本和 CI 判定，缺失、孤立、版本错配或配置目标漂移时会列出全部目录项及原因。首次尚未添加账号时 `/ready` 会保持管理面可访问，并返回 `configured: false`；doctor 会明确标为警告。账号离线、协议出口启动失败，或任一账号尚未配置协议出口时，`/ready` 返回 HTTP 503。
 
-尚未选择适配器、安装插件或创建账号时，`onebots capabilities --json` 会直接导出当前 OneBots 随包发布的全部平台能力目录；目录条目标记为 `source: "catalog"` 且 `entryPath: null`。一旦通过配置或 `-r` 选中适配器，命令会无连接加载插件，并让标记为 `source: "runtime"` 的实际注册清单优先；加载失败仍以错误码退出，同时保留可用的目录快照用于排查与选型。
+尚未选择适配器、安装插件或创建账号时，`onebots capabilities --json` 会直接导出当前 OneBots 随包发布的全部平台能力目录；目录条目标记为 `source: "catalog"` 且 `entryPath: null`。命令会先执行与 doctor 相同的闭合校验，不能把漏项快照误报为 `complete: true`。一旦通过配置或 `-r` 选中适配器，命令会无连接加载插件，并让标记为 `source: "runtime"` 的实际注册清单优先；加载失败仍以错误码退出，同时保留可用的目录快照用于排查与选型。
 
 ## 接入机器人框架
 
