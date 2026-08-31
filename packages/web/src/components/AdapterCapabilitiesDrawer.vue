@@ -12,7 +12,12 @@
                 <UiSelect v-model="selectedPlatform" :options="adapterOptions" />
             </div>
 
-            <template v-if="selectedAdapter">
+            <div v-if="selectedAdapter?.accounts.length">
+                <label class="mb-1.5 block text-xs font-medium text-fg-secondary">能力范围</label>
+                <UiSelect v-model="selectedAccountId" :options="accountOptions" />
+            </div>
+
+            <template v-if="selectedAdapter && selectedCapabilities">
                 <div class="flex items-center gap-3 border-b border-border pb-4">
                     <UiAvatar
                         :src="selectedAdapter.icon"
@@ -22,11 +27,26 @@
                         <div class="font-medium text-fg">{{ selectedAdapter.displayName }}</div>
                         <div class="text-xs text-fg-tertiary">
                             {{ selectedAdapter.platform }} · 能力清单 v{{
-                                selectedAdapter.capabilities.version
+                                selectedCapabilities.version
                             }}
                             · {{ selectedAdapter.accounts.length }} 个账号
                         </div>
                     </div>
+                </div>
+
+                <div
+                    v-if="selectedAccount"
+                    class="flex flex-wrap items-center gap-2 rounded-card border border-border bg-surface-raised px-3 py-2">
+                    <span class="text-xs text-fg-secondary">
+                        {{ selectedAccount.nickname || selectedAccount.uin }} ·
+                        {{ selectedAccount.uin }}
+                    </span>
+                    <UiBadge :variant="accountStatusVariant(selectedAccount.status)" dot>
+                        {{ accountStatusLabel(selectedAccount.status) }}
+                    </UiBadge>
+                    <UiBadge :variant="selectedAccountHasOverride ? 'accent' : 'neutral'">
+                        {{ selectedAccountHasOverride ? "账号专属清单" : "沿用适配器默认清单" }}
+                    </UiBadge>
                 </div>
 
                 <p v-if="selectedAdapter.description" class="text-xs leading-5 text-fg-secondary">
@@ -98,7 +118,9 @@
 
                 <p class="text-xs leading-5 text-fg-tertiary">
                     数字仅统计原生和模拟能力；明确不支持的项目仍会显示，便于确认平台边界。
-                    账号权限和当前会话可能进一步限制实际可用范围。
+                    当前视图{{
+                        selectedAccount ? "已按账号查询" : "展示适配器默认值"
+                    }}；权限和会话上下文仍可能进一步限制实际可用范围。
                 </p>
             </template>
         </div>
@@ -118,12 +140,15 @@ import {
     CAPABILITY_CATEGORIES,
     countSupportedCapabilities,
     getCapabilityEntries,
+    hasAccountCapabilityOverride,
+    resolveAccountCapabilities,
     type CapabilityCategory,
 } from "./capability-presentation.js";
 
 const props = defineProps<{ adapters: AdapterInfo[] }>();
 const visible = defineModel<boolean>({ default: false });
 const selectedPlatform = ref<string | number | boolean>();
+const selectedAccountId = ref<string | number | boolean>("");
 const activeCategory = ref<CapabilityCategory>("actions");
 
 const adapterOptions = computed(() =>
@@ -135,12 +160,32 @@ const adapterOptions = computed(() =>
 const selectedAdapter = computed(() =>
     props.adapters.find(adapter => adapter.platform === selectedPlatform.value),
 );
+const accountOptions = computed(() => [
+    { label: "适配器默认清单", value: "" },
+    ...(selectedAdapter.value?.accounts.map(account => ({
+        label: `${account.nickname || account.uin} (${account.uin})`,
+        value: account.uin,
+    })) ?? []),
+]);
+const selectedAccount = computed(() =>
+    selectedAdapter.value?.accounts.find(account => account.uin === selectedAccountId.value),
+);
+const selectedCapabilities = computed(() =>
+    selectedAdapter.value
+        ? resolveAccountCapabilities(selectedAdapter.value, String(selectedAccountId.value || ""))
+        : undefined,
+);
+const selectedAccountHasOverride = computed(() =>
+    selectedAdapter.value
+        ? hasAccountCapabilityOverride(selectedAdapter.value, String(selectedAccountId.value || ""))
+        : false,
+);
 const categorySummary = computed(() => {
-    if (!selectedAdapter.value) return [];
+    if (!selectedCapabilities.value) return [];
     return CAPABILITY_CATEGORIES.map(category => ({
         ...category,
-        supported: countSupportedCapabilities(selectedAdapter.value!.capabilities, category.key),
-        total: Object.keys(selectedAdapter.value!.capabilities[category.key]).length,
+        supported: countSupportedCapabilities(selectedCapabilities.value!, category.key),
+        total: Object.keys(selectedCapabilities.value![category.key]).length,
     }));
 });
 const categoryTabs = computed(() =>
@@ -150,8 +195,8 @@ const categoryTabs = computed(() =>
     })),
 );
 const entries = computed(() =>
-    selectedAdapter.value
-        ? getCapabilityEntries(selectedAdapter.value.capabilities, activeCategory.value)
+    selectedCapabilities.value
+        ? getCapabilityEntries(selectedCapabilities.value, activeCategory.value)
         : [],
 );
 
@@ -160,6 +205,16 @@ watch(
     adapters => {
         if (!adapters.some(adapter => adapter.platform === selectedPlatform.value)) {
             selectedPlatform.value = adapters[0]?.platform;
+        }
+    },
+    { immediate: true },
+);
+
+watch(
+    selectedAdapter,
+    adapter => {
+        if (!adapter?.accounts.some(account => account.uin === selectedAccountId.value)) {
+            selectedAccountId.value = adapter?.accounts[0]?.uin ?? "";
         }
     },
     { immediate: true },
@@ -182,5 +237,13 @@ function availabilityLabel(availability: "always" | "permission" | "context") {
 
 function directionLabel(direction: "send" | "receive" | "both") {
     return { send: "发送", receive: "接收", both: "收发" }[direction];
+}
+
+function accountStatusLabel(status: string) {
+    return { online: "在线", pending: "连接中", offline: "离线" }[status] || status;
+}
+
+function accountStatusVariant(status: string) {
+    return status === "online" ? ("success" as const) : ("warning" as const);
 }
 </script>

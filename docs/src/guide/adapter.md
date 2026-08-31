@@ -40,6 +40,8 @@ onebots 目前支持以下平台适配器：
 
 需要额外权限或会话上下文的能力还会声明 `permissions`、`availability` 和适用 `scenes`。调用 `adapter.describeCapabilities(accountId)` 可取得完整清单；调用 `adapter.getSupportedActions(accountId)` 可取得当前可调用动作。OneBots 会校验清单中的动作确有具体实现，防止能力声明与运行时漂移。
 
+管理 API 与 Web 能力面板会实际调用 `describeCapabilities(accountId)`。为避免重复传输，`/api/adapters` 的 `capabilities` 保存适配器默认清单，`accountCapabilities` 只包含与默认对象不同的账号级覆写；Web 选择账号后会明确标记“账号专属清单”或“沿用适配器默认清单”。适配器可据账号 token、套餐或稳定权限信息返回不同清单，但不要把瞬时网络故障伪装成平台能力变化。
+
 启动 Web 管理端后，可在「机器人管理」点击「能力概览」，按适配器查看上述四类声明。选择器同时显示平台展示名与内部标识，详情保留注册说明。概览数字只统计原生和模拟能力，明确标记为不支持的项目仍会保留在列表中；权限、场景和上下文限制也会随条目展示。这里展示的是当前进程实际加载的运行时清单，因此比静态平台列表更适合确认一次部署的能力边界。
 
 ### 平台原生动作

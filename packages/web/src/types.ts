@@ -48,6 +48,8 @@ export interface AdapterInfo {
     description: string;
     icon: string;
     capabilities: AdapterCapabilityManifest;
+    /** 仅包含与适配器默认清单不同的账号级能力覆写。 */
+    accountCapabilities?: Record<string, AdapterCapabilityManifest>;
     accounts: AccountInfo[];
 }
 

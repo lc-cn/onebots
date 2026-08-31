@@ -4,6 +4,7 @@ import type {
     SegmentCapabilityDescriptor,
     TransportCapabilityDescriptor,
 } from "@onebots/core";
+import type { AdapterInfo } from "../types";
 
 export const CAPABILITY_CATEGORIES = [
     { key: "actions", label: "动作" },
@@ -45,4 +46,18 @@ export function countSupportedCapabilities(
     return getCapabilityEntries(manifest, category).filter(
         entry => entry.descriptor.support !== "unsupported",
     ).length;
+}
+
+export function resolveAccountCapabilities(
+    adapter: Pick<AdapterInfo, "accountCapabilities" | "capabilities">,
+    accountId?: string,
+): AdapterCapabilityManifest {
+    return (accountId && adapter.accountCapabilities?.[accountId]) || adapter.capabilities;
+}
+
+export function hasAccountCapabilityOverride(
+    adapter: Pick<AdapterInfo, "accountCapabilities">,
+    accountId?: string,
+): boolean {
+    return Boolean(accountId && adapter.accountCapabilities?.[accountId]);
 }

@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { AdapterRegistry, type Adapter } from "@onebots/core";
+import {
+    AdapterRegistry,
+    defineAdapterCapabilities,
+    EMPTY_ADAPTER_CAPABILITIES,
+    type Adapter,
+} from "@onebots/core";
 import { getAdapterInfo } from "./adapter-info.js";
 
 const factory = (() => undefined) as unknown as Adapter.Factory;
@@ -14,8 +19,14 @@ describe("adapter management info", () => {
         });
         const adapter = {
             platform: "mock",
-            info: { platform: "mock", icon: "mock.svg", capabilities: {}, accounts: [] },
-        } as unknown as Pick<Adapter, "info" | "platform">;
+            info: {
+                platform: "mock",
+                icon: "mock.svg",
+                capabilities: EMPTY_ADAPTER_CAPABILITIES,
+                accounts: [],
+            },
+            describeCapabilities: () => EMPTY_ADAPTER_CAPABILITIES,
+        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
 
         expect(getAdapterInfo(adapter)).toMatchObject({
             platform: "mock",
@@ -27,12 +38,42 @@ describe("adapter management info", () => {
     it("falls back to the platform identifier when metadata is unavailable", () => {
         const adapter = {
             platform: "custom",
-            info: { platform: "custom", icon: "", capabilities: {}, accounts: [] },
-        } as unknown as Pick<Adapter, "info" | "platform">;
+            info: {
+                platform: "custom",
+                icon: "",
+                capabilities: EMPTY_ADAPTER_CAPABILITIES,
+                accounts: [],
+            },
+            describeCapabilities: () => EMPTY_ADAPTER_CAPABILITIES,
+        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
 
         expect(getAdapterInfo(adapter)).toMatchObject({
             displayName: "custom",
             description: "",
+        });
+    });
+
+    it("publishes only account-specific capability overrides", () => {
+        const accountCapabilities = defineAdapterCapabilities({
+            actions: { send_message: { support: "unsupported", note: "当前账号无发送权限" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        const adapter = {
+            platform: "mock",
+            info: {
+                platform: "mock",
+                icon: "",
+                capabilities: EMPTY_ADAPTER_CAPABILITIES,
+                accounts: [{ uin: "limited" }, { uin: "default" }],
+            },
+            describeCapabilities: (accountId?: string) =>
+                accountId === "limited" ? accountCapabilities : EMPTY_ADAPTER_CAPABILITIES,
+        } as unknown as Pick<Adapter, "describeCapabilities" | "info" | "platform">;
+
+        expect(getAdapterInfo(adapter).accountCapabilities).toEqual({
+            limited: accountCapabilities,
         });
     });
 });
