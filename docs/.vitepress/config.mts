@@ -60,7 +60,8 @@ const baseConfig = defineConfig({
                             { text: "Microsoft Teams", link: "/platform/teams" },
                             { text: "邮件", link: "/platform/email" },
                             { text: "WhatsApp", link: "/platform/whatsapp" },
-                            { text: "Zulip", link: "/platform/zulip" }
+                            { text: "Zulip", link: "/platform/zulip" },
+                            { text: "Matrix", link: "/platform/matrix" }
                         ]
                     },
                     {
@@ -120,7 +121,8 @@ const baseConfig = defineConfig({
                         { text: "Microsoft Teams", link: "/platform/teams" },
                         { text: "邮件", link: "/platform/email" },
                         { text: "WhatsApp", link: "/platform/whatsapp" },
-                        { text: "Zulip", link: "/platform/zulip" }
+                        { text: "Zulip", link: "/platform/zulip" },
+                        { text: "Matrix", link: "/platform/matrix" }
                     ],
                     "/protocol/": [
                         { text: "OneBot V11", link: "/protocol/onebot-v11" },
@@ -193,7 +195,8 @@ const baseConfig = defineConfig({
                             { text: "Microsoft Teams", link: "/en/platform/teams" },
                             { text: "Email", link: "/en/platform/email" },
                             { text: "WhatsApp", link: "/en/platform/whatsapp" },
-                            { text: "Zulip", link: "/en/platform/zulip" }
+                            { text: "Zulip", link: "/en/platform/zulip" },
+                            { text: "Matrix", link: "/en/platform/matrix" }
                         ]
                     },
                     {
@@ -266,7 +269,8 @@ const baseConfig = defineConfig({
                         { text: "Microsoft Teams", link: "/en/platform/teams" },
                         { text: "Email", link: "/en/platform/email" },
                         { text: "WhatsApp", link: "/en/platform/whatsapp" },
-                        { text: "Zulip", link: "/en/platform/zulip" }
+                        { text: "Zulip", link: "/en/platform/zulip" },
+                        { text: "Matrix", link: "/en/platform/matrix" }
                     ],
                     "/en/protocol/": [
                         { text: "OneBot V11", link: "/en/protocol/onebot-v11" },

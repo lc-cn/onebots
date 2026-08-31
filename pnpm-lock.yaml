@@ -269,6 +269,22 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  adapters/adapter-matrix:
+    dependencies:
+      onebots:
+        specifier: workspace:*
+        version: link:../../packages/onebots
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.12.0
+      tsc-alias:
+        specifier: latest
+        version: 1.9.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   adapters/adapter-mock:
     dependencies:
       onebots:

@@ -176,6 +176,7 @@ For configuration details of other platforms, see:
 - [Slack Platform](/en/platform/slack)
 - [WeCom Platform](/en/platform/wecom)
 - [Microsoft Teams Platform](/en/platform/teams)
+- [Matrix Platform](/en/platform/matrix)
 
 ## Related Links
 

@@ -66,6 +66,25 @@ const genericSetup: ExtensionSetupStep[] = [
 ];
 
 export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
+    adapter("matrix", "Matrix", "连接 Matrix homeserver，支持 /sync、Application Service 和手动接入。", [
+        {
+            title: "准备 Matrix 机器人身份",
+            description: "创建专用 Matrix 用户并获取 Access Token；若使用 AppService，同时准备 homeserver registration。",
+            url: "https://spec.matrix.org/latest/client-server-api/#get_matrixclientv3accountwhoami",
+        },
+        {
+            title: "选择事件接收方式",
+            description: "普通机器人使用 /sync；homeserver 集成使用 AppService；已有连接或 Host 使用 manual。",
+        },
+        {
+            title: "填写凭据与事件类型",
+            description: "安装并重启后，Web 表单会按接收方式显示所需 token、挂载路径和可动态增减的事件类型。",
+        },
+        {
+            title: "保存并验证身份",
+            description: "保存后 OneBots 会调用 whoami 核对 user_id，并自动热重载账号。",
+        },
+    ]),
     adapter("slack", "Slack", "连接 Slack 工作区，支持 Socket Mode 和 Events API。", [
         {
             title: "创建 Slack App",

@@ -24,7 +24,7 @@ IM 平台原始事件 → Adapter（适配器）→ Account + id_map（统一 Co
 
 - 仓库：<https://github.com/lc-cn/onebots>（分支 `master`），许可证 MIT。
 - 在线文档：<https://onebots.pages.dev>（VitePress，部署在 Cloudflare Pages）。
-- 支持 18 个平台适配器（QQ 官方、ICQQ、微信公众号、企业微信、钉钉、飞书、Slack、Discord、Telegram、Kook、Teams、LINE、邮件、WhatsApp、Zulip、Mock 等）与 4 种对外协议。
+- 支持 20 个平台适配器（QQ 官方、ICQQ、微信公众号、企业微信、钉钉、飞书、Slack、Discord、Telegram、Kook、Teams、LINE、邮件、WhatsApp、Zulip、Matrix、Mock 等）与 5 种对外协议。
 
 ---
 

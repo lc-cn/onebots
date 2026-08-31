@@ -25,6 +25,9 @@
     "@onebots/adapter-line": {
       "version": "3.0.8"
     },
+    "@onebots/adapter-matrix": {
+      "version": "0.1.0"
+    },
     "@onebots/adapter-qq": {
       "version": "3.0.10"
     },
@@ -4167,6 +4170,282 @@
             "support": "native",
             "mode": "native",
             "note": "通过 await ingest() 接入既有 Host 并等待协议投递"
+          }
+        }
+      }
+    },
+    "matrix": {
+      "packageName": "@onebots/adapter-matrix",
+      "packageVersion": "0.1.0",
+      "manifest": {
+        "version": 1,
+        "actions": {
+          "send_message": {
+            "support": "native",
+            "scenes": [
+              "group",
+              "direct"
+            ]
+          },
+          "delete_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Matrix 房间 power level / homeserver policy"
+            ]
+          },
+          "get_message": {
+            "support": "native",
+            "availability": "context"
+          },
+          "get_message_history": {
+            "support": "native"
+          },
+          "update_message": {
+            "support": "native",
+            "availability": "context"
+          },
+          "mark_message_as_read": {
+            "support": "native"
+          },
+          "get_login_info": {
+            "support": "native"
+          },
+          "get_user_info": {
+            "support": "native"
+          },
+          "get_group_list": {
+            "support": "native"
+          },
+          "get_group_info": {
+            "support": "native"
+          },
+          "set_group_name": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Matrix 房间 power level / homeserver policy"
+            ]
+          },
+          "leave_group": {
+            "support": "native"
+          },
+          "get_group_member_list": {
+            "support": "native"
+          },
+          "get_group_member_info": {
+            "support": "native"
+          },
+          "invite_group_member": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Matrix 房间 power level / homeserver policy"
+            ]
+          },
+          "kick_group_member": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Matrix 房间 power level / homeserver policy"
+            ]
+          },
+          "handle_group_request": {
+            "support": "native",
+            "availability": "context"
+          },
+          "send_group_message_reaction": {
+            "support": "native",
+            "availability": "context"
+          },
+          "upload_file": {
+            "support": "native"
+          },
+          "can_send_image": {
+            "support": "native"
+          },
+          "can_send_record": {
+            "support": "native"
+          },
+          "get_version": {
+            "support": "native"
+          },
+          "get_status": {
+            "support": "native"
+          },
+          "get_supported_actions": {
+            "support": "native"
+          },
+          "call_matrix_api": {
+            "support": "native"
+          },
+          "create_matrix_room": {
+            "support": "native"
+          },
+          "join_matrix_room": {
+            "support": "native"
+          },
+          "knock_matrix_room": {
+            "support": "native"
+          },
+          "ban_matrix_member": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Matrix 房间 power level / homeserver policy"
+            ]
+          },
+          "unban_matrix_member": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Matrix 房间 power level / homeserver policy"
+            ]
+          },
+          "set_matrix_room_topic": {
+            "support": "native"
+          },
+          "send_matrix_state_event": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Matrix 房间 power level / homeserver policy"
+            ]
+          },
+          "send_matrix_typing": {
+            "support": "native"
+          },
+          "set_matrix_presence": {
+            "support": "native"
+          },
+          "get_matrix_room_state": {
+            "support": "native"
+          },
+          "get_matrix_public_rooms": {
+            "support": "native"
+          },
+          "set_matrix_read_markers": {
+            "support": "native"
+          },
+          "ping_matrix_appservice": {
+            "support": "native",
+            "availability": "context",
+            "note": "仅 appservice 模式且 homeserver 已安装对应 registration 时可用"
+          }
+        },
+        "events": {
+          "message": {
+            "support": "native",
+            "scenes": [
+              "group",
+              "direct"
+            ]
+          },
+          "message_updated": {
+            "support": "native"
+          },
+          "message_deleted": {
+            "support": "native"
+          },
+          "reaction_added": {
+            "support": "native"
+          },
+          "reaction_removed": {
+            "support": "native",
+            "availability": "context",
+            "note": "Matrix 通过 redaction 撤销 reaction；原始 redaction 同时无损保留"
+          },
+          "member_joined": {
+            "support": "native"
+          },
+          "member_left": {
+            "support": "native"
+          },
+          "user_updated": {
+            "support": "native"
+          },
+          "channel_updated": {
+            "support": "native"
+          },
+          "typing_started": {
+            "support": "native"
+          },
+          "typing_stopped": {
+            "support": "native"
+          },
+          "message_status": {
+            "support": "native",
+            "note": "投影 m.receipt，包括线程回执"
+          },
+          "group_invitation": {
+            "support": "native"
+          },
+          "custom": {
+            "support": "native",
+            "note": "未知状态、to-device、account-data 与加密事件保留 raw_event；本适配器不伪装 E2EE 解密"
+          }
+        },
+        "segments": {
+          "text": {
+            "support": "native",
+            "direction": "both"
+          },
+          "at": {
+            "support": "native",
+            "direction": "send"
+          },
+          "emoji": {
+            "support": "native",
+            "direction": "send"
+          },
+          "image": {
+            "support": "native",
+            "direction": "both"
+          },
+          "video": {
+            "support": "native",
+            "direction": "both"
+          },
+          "audio": {
+            "support": "native",
+            "direction": "both"
+          },
+          "file": {
+            "support": "native",
+            "direction": "both"
+          },
+          "location": {
+            "support": "native",
+            "direction": "both"
+          },
+          "sticker": {
+            "support": "native",
+            "direction": "receive"
+          },
+          "reply": {
+            "support": "native",
+            "direction": "receive"
+          },
+          "thread": {
+            "support": "native",
+            "direction": "receive"
+          }
+        },
+        "transports": {
+          "sync": {
+            "support": "native",
+            "mode": "polling",
+            "note": "无限重试的 Client-Server /sync"
+          },
+          "appservice": {
+            "support": "native",
+            "mode": "webhook",
+            "note": "标准 AppService v1 transaction 与 ping，复用现有 HTTP Host"
+          },
+          "manual": {
+            "support": "native",
+            "mode": "native",
+            "note": "通过 ingest()/ingestHttp()/acceptHttp() 接入已有连接或 Host"
           }
         }
       }
