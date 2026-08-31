@@ -5,6 +5,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { BaseApp, writeConfigFileAtomic, yaml } from "@onebots/core";
 import { EXTENSION_CATALOG, getExtensionCatalogEntry } from "./extension-catalog.js";
+import { buildAdapterCapabilityReport } from "./capability-report.js";
 import {
     getRuntimePluginSelection,
     setRuntimePluginSelection,
@@ -68,17 +69,39 @@ export class ExtensionManager {
 
     list(loadedPlugins: readonly LoadedPluginInfo[]) {
         const selection = this.readSelection();
-        return EXTENSION_CATALOG.map(entry => ({
-            ...entry,
-            installed: this.isInstalled(entry.packageName),
-            enabled: (entry.type === "adapter" ? selection.adapters : selection.protocols).includes(
-                entry.name,
-            ),
-            loaded: loadedPlugins.some(
+        const adapterCapabilities = new Map(
+            buildAdapterCapabilityReport(loadedPlugins).adapters.map(adapter => [
+                adapter.name,
+                {
+                    declared: adapter.declared,
+                    summary: adapter.summary,
+                    manifest: adapter.capabilities,
+                },
+            ]),
+        );
+        return EXTENSION_CATALOG.map(entry => {
+            const loaded = loadedPlugins.some(
                 plugin => plugin.type === entry.type && plugin.name === entry.name,
-            ),
-            installing: this.installing === entry.id,
-        }));
+            );
+            return {
+                ...entry,
+                installed: this.isInstalled(entry.packageName),
+                enabled: (entry.type === "adapter"
+                    ? selection.adapters
+                    : selection.protocols
+                ).includes(entry.name),
+                loaded,
+                installing: this.installing === entry.id,
+                capability:
+                    entry.type === "adapter" && loaded
+                        ? (adapterCapabilities.get(entry.name) ?? {
+                              declared: false,
+                              summary: null,
+                              manifest: null,
+                          })
+                        : null,
+            };
+        });
     }
 
     async install(id: string): Promise<{ restartRequired: true }> {

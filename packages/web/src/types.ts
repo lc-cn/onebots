@@ -92,6 +92,23 @@ export interface ExtensionSetupStep {
     url?: string;
 }
 
+export interface CapabilityCategorySummary {
+    total: number;
+    supported: number;
+    native: number;
+    emulated: number;
+    unsupported: number;
+}
+
+export interface ExtensionCapabilityInfo {
+    declared: boolean;
+    summary: Record<
+        "actions" | "events" | "segments" | "transports",
+        CapabilityCategorySummary
+    > | null;
+    manifest: AdapterCapabilityManifest | null;
+}
+
 export interface ExtensionInfo {
     id: string;
     type: "adapter" | "protocol";
@@ -104,6 +121,8 @@ export interface ExtensionInfo {
     enabled: boolean;
     loaded: boolean;
     installing: boolean;
+    /** 仅在适配器已加载后提供，内容来自插件注册的默认能力契约。 */
+    capability: ExtensionCapabilityInfo | null;
 }
 
 /** 验证请求展示块（Web 按 type 通用渲染） */

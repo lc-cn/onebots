@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import yaml from "js-yaml";
+import { AdapterRegistry, defineAdapterCapabilities, type Adapter } from "@onebots/core";
 import {
     ExtensionManager,
     preflightExtensionConfig,
@@ -15,6 +16,7 @@ const directories: string[] = [];
 const successfulPreflight: ExtensionConfigPreflight = async () => undefined;
 
 afterEach(() => {
+    AdapterRegistry.clear();
     for (const directory of directories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -33,6 +35,93 @@ function fixture() {
 }
 
 describe("ExtensionManager", () => {
+    it("向已加载适配器发布注册表中的权威能力清单", () => {
+        const { root, configPath } = fixture();
+        const capabilities = defineAdapterCapabilities({
+            actions: {
+                send_message: { support: "native" },
+                delete_message: { support: "unsupported" },
+            },
+            events: {},
+            segments: {},
+            transports: {
+                websocket: {
+                    support: "emulated",
+                    mode: "websocket",
+                },
+            },
+        });
+        AdapterRegistry.register("slack", (() => undefined) as unknown as Adapter.Factory, {
+            capabilities,
+        });
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            preflight: successfulPreflight,
+        });
+
+        const slack = manager
+            .list([
+                {
+                    type: "adapter",
+                    name: "slack",
+                    packageName: "@onebots/adapter-slack",
+                    version: "1.2.3",
+                    entryPath: "/runtime/slack.js",
+                },
+            ])
+            .find(item => item.id === "adapter:slack");
+
+        expect(slack?.capability).toEqual({
+            declared: true,
+            summary: expect.objectContaining({
+                actions: {
+                    total: 2,
+                    supported: 1,
+                    native: 1,
+                    emulated: 0,
+                    unsupported: 1,
+                },
+                transports: {
+                    total: 1,
+                    supported: 1,
+                    native: 0,
+                    emulated: 1,
+                    unsupported: 0,
+                },
+            }),
+            manifest: capabilities,
+        });
+    });
+
+    it("明确标记未声明能力清单的已加载第三方适配器", () => {
+        const { root, configPath } = fixture();
+        AdapterRegistry.register("slack", (() => undefined) as unknown as Adapter.Factory);
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            preflight: successfulPreflight,
+        });
+
+        const slack = manager
+            .list([
+                {
+                    type: "adapter",
+                    name: "slack",
+                    packageName: "third-party-slack",
+                    version: null,
+                    entryPath: "/runtime/slack.js",
+                },
+            ])
+            .find(item => item.id === "adapter:slack");
+
+        expect(slack?.capability).toEqual({
+            declared: false,
+            summary: null,
+            manifest: null,
+        });
+    });
+
     it("候选配置临时文件使用私有权限并在预检失败后清理", async () => {
         const { root, configPath } = fixture();
         let temporaryPath = "";

@@ -49,6 +49,10 @@
                             </p>
                         </div>
 
+                        <ExtensionCapabilities
+                            v-if="extension.capability"
+                            :capability="extension.capability" />
+
                         <details v-if="extension.loaded" class="group">
                             <summary
                                 class="cursor-pointer text-sm font-medium text-accent select-none hover:underline">
@@ -110,6 +114,7 @@ import { computed, onMounted, ref } from "vue";
 import type { ExtensionInfo } from "../types";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
+import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiSpinner } from "../ui";
 
 type ExtensionFilter = "all" | "adapter" | "protocol";
