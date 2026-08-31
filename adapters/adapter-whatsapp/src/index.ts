@@ -261,7 +261,6 @@ export { projectMessageContent, projectWhatsAppWebhook } from "./events.js";
 export {
     isWhatsAppSettingsAction,
     WhatsAppSettings,
-    WHATSAPP_SETTINGS_ACTIONS,
     type WhatsAppSettingsAction,
 } from "./settings.js";
 export { isWhatsAppGroupWebhookEntry } from "./group-webhook.js";

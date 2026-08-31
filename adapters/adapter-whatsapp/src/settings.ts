@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import { parsePhoneNumberSettings, parseSettingsUpdateResponse } from "./settings-responses.js";
@@ -9,20 +10,6 @@ import type {
     WhatsAppSettingsUpdateResponse,
     WhatsAppStorageConfigurationUpdate,
 } from "./settings-types.js";
-
-export const WHATSAPP_SETTINGS_ACTIONS = Object.freeze([
-    "get_phone_number_settings",
-    "update_calling_settings",
-    "update_user_identity_change_settings",
-    "update_payload_encryption_settings",
-    "update_storage_configuration_settings",
-] as const);
-
-export type WhatsAppSettingsAction = (typeof WHATSAPP_SETTINGS_ACTIONS)[number];
-
-export function isWhatsAppSettingsAction(action: string): action is WhatsAppSettingsAction {
-    return (WHATSAPP_SETTINGS_ACTIONS as readonly string[]).includes(action);
-}
 
 /** 号码级设置深模块；每次更新严格只发送一个 Meta feature setting。 */
 export class WhatsAppSettings {
@@ -40,6 +27,11 @@ export class WhatsAppSettings {
     async updateCalling(
         settings: WhatsAppCallingSettingsUpdate,
     ): Promise<WhatsAppSettingsUpdateResponse> {
+        rejectUnknown(
+            settings,
+            ["status", "call_icon_visibility", "video", "sip", "srtp_key_exchange_protocol"],
+            "calling",
+        );
         featureStatus(settings.status, "calling.status");
         if (
             settings.call_icon_visibility !== undefined &&
@@ -81,6 +73,7 @@ export class WhatsAppSettings {
     async updatePayloadEncryption(
         settings: WhatsAppPayloadEncryptionUpdate,
     ): Promise<WhatsAppSettingsUpdateResponse> {
+        rejectUnknown(settings, ["status", "client_encryption_key"], "payload_encryption");
         featureStatus(settings.status, "payload_encryption.status");
         if (settings.status === "enabled") {
             requireText(settings.client_encryption_key, "client_encryption_key");
@@ -101,6 +94,7 @@ export class WhatsAppSettings {
     async updateStorage(
         settings: WhatsAppStorageConfigurationUpdate,
     ): Promise<WhatsAppSettingsUpdateResponse> {
+        rejectUnknown(settings, ["enabled", "region"], "storage_configuration");
         if (typeof settings.enabled !== "boolean") {
             invalidParameter("storage_configuration.enabled 必须是布尔值");
         }
@@ -113,24 +107,6 @@ export class WhatsAppSettings {
                 ? { enabled: true, region: settings.region }
                 : { enabled: false },
         });
-    }
-
-    execute(
-        action: WhatsAppSettingsAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_phone_number_settings":
-                return this.get(optionalBoolean(params, "include_sip_credentials") || false);
-            case "update_calling_settings":
-                return this.updateCalling(callingUpdateParam(params));
-            case "update_user_identity_change_settings":
-                return this.updateUserIdentityChange(booleanParam(params, "enabled"));
-            case "update_payload_encryption_settings":
-                return this.updatePayloadEncryption(encryptionUpdateParam(params));
-            case "update_storage_configuration_settings":
-                return this.updateStorage(storageUpdateParam(params));
-        }
     }
 
     private async update(
@@ -146,13 +122,38 @@ export class WhatsAppSettings {
     }
 }
 
-export const WHATSAPP_SETTINGS_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_SETTINGS_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.settings.execute(action, params),
-    ]),
-) as Record<WhatsAppSettingsAction, PlatformActionHandler<WhatsAppClient>>;
+type SettingsActionParams = Readonly<Record<string, unknown>>;
+
+const SETTINGS_ACTION_HANDLERS = {
+    get_phone_number_settings: (client: WhatsAppClient, params: SettingsActionParams) =>
+        client.settings.get(optionalBoolean(params, "include_sip_credentials") || false),
+    update_calling_settings: (client: WhatsAppClient, params: SettingsActionParams) =>
+        client.settings.updateCalling(callingUpdateParam(params)),
+    update_user_identity_change_settings: (client: WhatsAppClient, params: SettingsActionParams) =>
+        client.settings.updateUserIdentityChange(booleanParam(params, "enabled")),
+    update_payload_encryption_settings: (client: WhatsAppClient, params: SettingsActionParams) =>
+        client.settings.updatePayloadEncryption(encryptionUpdateParam(params)),
+    update_storage_configuration_settings: (client: WhatsAppClient, params: SettingsActionParams) =>
+        client.settings.updateStorage(storageUpdateParam(params)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Phone Number Settings 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_SETTINGS_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    SETTINGS_ACTION_HANDLERS,
+    {
+        get_phone_number_settings: ["include_sip_credentials"],
+        update_calling_settings: ["calling"],
+        update_user_identity_change_settings: ["enabled"],
+        update_payload_encryption_settings: ["payload_encryption"],
+        update_storage_configuration_settings: ["storage_configuration"],
+    },
+);
+
+export type WhatsAppSettingsAction = keyof typeof WHATSAPP_SETTINGS_ACTION_HANDLERS;
+
+export function isWhatsAppSettingsAction(action: string): action is WhatsAppSettingsAction {
+    return Object.hasOwn(WHATSAPP_SETTINGS_ACTION_HANDLERS, action);
+}
 
 function featureStatus(value: unknown, name: string): asserts value is "enabled" | "disabled" {
     if (value !== "enabled" && value !== "disabled") invalidParameter(`${name} 无效`);
@@ -162,6 +163,7 @@ function optionalNestedStatus(value: unknown, name: string): void {
     if (value === undefined) return;
     const settings = asRecord(value);
     if (!settings) invalidParameter(`${name} 所在设置必须是对象`);
+    rejectUnknown(settings, ["status"], name.replace(/\.status$/u, ""));
     featureStatus(settings.status, name);
 }
 
@@ -178,6 +180,11 @@ function callingUpdateParam(
     params: Readonly<Record<string, unknown>>,
 ): WhatsAppCallingSettingsUpdate {
     const value = recordParam(params, "calling");
+    rejectUnknown(
+        value,
+        ["status", "call_icon_visibility", "video", "sip", "srtp_key_exchange_protocol"],
+        "calling",
+    );
     const status = value.status;
     featureStatus(status, "calling.status");
     const visibility = value.call_icon_visibility;
@@ -203,6 +210,7 @@ function encryptionUpdateParam(
     params: Readonly<Record<string, unknown>>,
 ): WhatsAppPayloadEncryptionUpdate {
     const value = recordParam(params, "payload_encryption");
+    rejectUnknown(value, ["status", "client_encryption_key"], "payload_encryption");
     if (value.status === "enabled") {
         requireText(value.client_encryption_key, "client_encryption_key");
         return { status: "enabled", client_encryption_key: value.client_encryption_key };
@@ -220,6 +228,7 @@ function storageUpdateParam(
     params: Readonly<Record<string, unknown>>,
 ): WhatsAppStorageConfigurationUpdate {
     const value = recordParam(params, "storage_configuration");
+    rejectUnknown(value, ["enabled", "region"], "storage_configuration");
     if (value.enabled === true) {
         requireText(value.region, "storage_configuration.region");
         return { enabled: true, region: value.region };
@@ -238,6 +247,7 @@ function nestedStatus(
     if (value === undefined) return undefined;
     const settings = asRecord(value);
     if (!settings) invalidParameter(`${name} 必须是对象`);
+    rejectUnknown(settings, ["status"], name);
     featureStatus(settings.status, `${name}.status`);
     return { status: settings.status };
 }
@@ -256,6 +266,13 @@ function optionalBoolean(
     if (value === undefined) return undefined;
     if (typeof value !== "boolean") invalidParameter(`${name} 必须是布尔值`);
     return value;
+}
+
+function rejectUnknown(value: unknown, allowed: readonly string[], name: string): void {
+    const source = asRecord(value);
+    if (!source) invalidParameter(`${name} 必须是对象`);
+    const unknown = Object.keys(source).find(key => !allowed.includes(key));
+    if (unknown) invalidParameter(`${name} 包含未知字段: ${unknown}`);
 }
 
 function requireText(value: unknown, name: string): asserts value is string {

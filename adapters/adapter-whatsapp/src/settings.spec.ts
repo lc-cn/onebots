@@ -115,16 +115,32 @@ describe("WhatsApp Phone Number Settings", () => {
         });
     });
 
-    it("固定平台动作不接受混合 feature JSON", async () => {
-        const fetcher = jsonFetcher({ success: true });
+    it("固定平台动作拒绝混合 feature JSON 并保留动作上下文", async () => {
+        const fetcher = vi.fn<typeof fetch>();
         const client = new WhatsAppClient(config, fetcher);
 
-        await executeWhatsAppPlatformAction(client, "update_storage_configuration_settings", {
-            storage_configuration: { enabled: false },
-            payload_encryption: { status: "disabled" },
+        await expect(
+            executeWhatsAppPlatformAction(client, "update_storage_configuration_settings", {
+                storage_configuration: { enabled: false },
+                payload_encryption: { status: "disabled" },
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: {
+                action: "update_storage_configuration_settings",
+                parameter: "payload_encryption",
+            },
         });
+        expect(fetcher).not.toHaveBeenCalled();
+    });
 
-        expect(requestJson(fetcher)).toEqual({ storage_configuration: { enabled: false } });
+    it("固定平台动作拒绝 feature 内的未知字段", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "update_calling_settings", {
+                calling: { status: "enabled", codec: "opus" },
+            }),
+        ).rejects.toMatchObject({ code: "WHATSAPP_INVALID_PARAMETER" });
     });
 
     it("拒绝不闭合的更新和畸形响应", async () => {
