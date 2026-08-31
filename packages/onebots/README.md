@@ -32,17 +32,17 @@ pnpm add onebots
 
 ```yaml
 # 全局配置
-port: 6727 # HTTP 服务器端口
-log_level: info # 日志级别: trace, debug, info, warn, error
-timeout: 30 # 登录超时时间(秒)
+port: 6727              # HTTP 服务器端口
+log_level: info         # 日志级别: trace, debug, info, warn, error
+timeout: 30             # 登录超时时间(秒)
 
 # 通用配置（协议默认配置）
 general:
   onebot.v11:
     use_http: true
     use_ws: true
-    access_token: ""
-    secret: ""
+    access_token: ''
+    secret: ''
     enable_cors: true
     heartbeat_interval: 5
     http_reverse: []
@@ -51,8 +51,8 @@ general:
   satori.v1:
     use_http: true
     use_ws: true
-    token: ""
-    platform: "unknown"
+    token: ''
+    platform: 'unknown'
     webhooks: []
 
 # 账号配置
@@ -62,16 +62,16 @@ qq.my_bot:
   onebot.v11:
     use_http: true
     use_ws: true
-    access_token: "your_token"
+    access_token: 'your_token'
 
   # QQ 平台配置
-  appid: "" # QQ 机器人 AppID（v4 起字段名为 appid）
-  secret: "" # QQ 机器人 secret
-  mode: websocket # websocket（默认）或 webhook
-  sandbox: false # 是否沙箱环境
+  appid: ''               # QQ 机器人 AppID（v4 起字段名为 appid）
+  secret: ''              # QQ 机器人 secret
+  mode: websocket         # websocket（默认）或 webhook
+  sandbox: false          # 是否沙箱环境
   intents:
-    - "GROUP_AND_C2C_EVENT"
-    - "PUBLIC_GUILD_MESSAGES"
+    - 'GROUP_AND_C2C_EVENT'
+    - 'PUBLIC_GUILD_MESSAGES'
 
 wechat.my_wechat_mp:
   # OneBot V11 协议配置
@@ -103,18 +103,18 @@ npx onebots -r wechat -p onebot-v11 -p satori-v1
 #### 使用代码
 
 ```typescript
-import { App } from "onebots";
-import { WeChatAdapter } from "@onebots/adapter-wechat";
-import { OneBotV11Protocol } from "@onebots/protocol-onebot-v11";
+import { App } from 'onebots';
+import { WeChatAdapter } from '@onebots/adapter-wechat';
+import { OneBotV11Protocol } from '@onebots/protocol-onebot-v11';
 
 // 注册适配器和协议
-await App.registerAdapter("wechat", WeChatAdapter);
-await App.registerProtocol("onebot", OneBotV11Protocol, "v11");
+await App.registerAdapter('wechat', WeChatAdapter);
+await App.registerProtocol('onebot', OneBotV11Protocol, 'v11');
 
 // 创建应用（可选传入配置）
 const app = new App({
   port: 6727,
-  log_level: "info",
+  log_level: 'info',
   // 或者不传参数，使用 config.yaml
 });
 
@@ -153,14 +153,14 @@ onebots update [--check] [--yes]
 
 ### v2 CLI 迁移
 
-| v1 命令                             | v2 命令                                  |
-| ----------------------------------- | ---------------------------------------- |
-| `onebots gateway start`             | `onebots run`                            |
-| `onebots gateway daemon`            | `onebots install` 后执行 `onebots start` |
-| `onebots gateway stop`              | `onebots stop`                           |
-| `onebots gateway service install`   | `onebots install`                        |
-| `onebots gateway service status`    | `onebots status`                         |
-| `onebots gateway service uninstall` | `onebots uninstall`                      |
+| v1 命令 | v2 命令 |
+|---|---|
+| `onebots gateway start` | `onebots run` |
+| `onebots gateway daemon` | `onebots install` 后执行 `onebots start` |
+| `onebots gateway stop` | `onebots stop` |
+| `onebots gateway service install` | `onebots install` |
+| `onebots gateway service status` | `onebots status` |
+| `onebots gateway service uninstall` | `onebots uninstall` |
 
 v2 不再接受 `gateway` / `service` / `daemon` 命令层级。默认命令操作用户级服务，需要系统级服务时添加 `--system`。
 
@@ -217,38 +217,38 @@ timeout: 30
 ```yaml
 general:
   onebot.v11:
-    use_http: true # 启用 HTTP
-    use_ws: true # 启用 WebSocket
-    access_token: "" # 访问令牌
-    secret: "" # 签名密钥
-    enable_cors: true # 启用 CORS
-    heartbeat_interval: 5 # 心跳间隔(秒)
-    http_reverse: [] # HTTP 反向推送地址
-    ws_reverse: [] # WebSocket 反向连接地址
+    use_http: true              # 启用 HTTP
+    use_ws: true                # 启用 WebSocket
+    access_token: ''            # 访问令牌
+    secret: ''                  # 签名密钥
+    enable_cors: true           # 启用 CORS
+    heartbeat_interval: 5       # 心跳间隔(秒)
+    http_reverse: []            # HTTP 反向推送地址
+    ws_reverse: []              # WebSocket 反向连接地址
 
   onebot.v12:
     use_http: true
     use_ws: true
-    access_token: ""
+    access_token: ''
     enable_cors: true
     heartbeat_interval: 5
-    webhooks: [] # HTTP Webhook 地址
+    webhooks: []                # HTTP Webhook 地址
     ws_reverse: []
-    request_timeout: 15 # 请求超时(秒)
+    request_timeout: 15         # 请求超时(秒)
 
   satori.v1:
     use_http: true
     use_ws: true
-    token: "" # 访问令牌
-    platform: "unknown" # 平台名称
-    webhooks: [] # Webhook 地址
+    token: ''                   # 访问令牌
+    platform: 'unknown'         # 平台名称
+    webhooks: []                # Webhook 地址
 
   milky.v1:
     use_http: true
     use_ws: true
-    access_token: ""
-    secret: ""
-    heartbeat: 5 # 心跳间隔(秒)
+    access_token: ''
+    secret: ''
+    heartbeat: 5                # 心跳间隔(秒)
     http_reverse: []
     ws_reverse: []
 ```
@@ -264,22 +264,22 @@ qq.my_bot:
   onebot.v11:
     use_http: true
     use_ws: true
-    access_token: "qq_v11_token"
+    access_token: 'qq_v11_token'
 
   satori.v1:
     use_http: true
     use_ws: true
-    token: "qq_satori_token"
-    platform: "qq"
+    token: 'qq_satori_token'
+    platform: 'qq'
 
   # QQ 平台配置
-  appid: "" # QQ 机器人 AppID（v4 起字段名为 appid）
-  secret: "" # QQ 机器人 secret
-  mode: websocket # websocket（默认）或 webhook
-  sandbox: false # 是否沙箱环境
-  intents: # 需要监听的 intents
-    - "GROUP_AND_C2C_EVENT"
-    - "PUBLIC_GUILD_MESSAGES"
+  appid: ''                     # QQ 机器人 AppID（v4 起字段名为 appid）
+  secret: ''                    # QQ 机器人 secret
+  mode: websocket               # websocket（默认）或 webhook
+  sandbox: false                # 是否沙箱环境
+  intents:                      # 需要监听的 intents
+    - 'GROUP_AND_C2C_EVENT'
+    - 'PUBLIC_GUILD_MESSAGES'
 
 # 微信公众号示例
 wechat.my_wechat_mp:
@@ -291,7 +291,7 @@ wechat.my_wechat_mp:
   app_id: your_app_id
   app_secret: your_app_secret
   token: your_token
-  encoding_aes_key: "" # 消息加解密密钥(可选)
+  encoding_aes_key: ''          # 消息加解密密钥(可选)
 
 # Kook (开黑啦) 示例
 kook.my_kook_bot:
@@ -302,11 +302,11 @@ kook.my_kook_bot:
   satori.v1:
     use_http: true
     use_ws: true
-    token: "kook_token"
-    platform: "kook"
+    token: 'kook_token'
+    platform: 'kook'
 
   # Kook 平台配置
-  token: "" # Kook Bot Token
+  token: ''                     # Kook Bot Token
 ```
 
 ### 配置优先级
@@ -324,9 +324,9 @@ kook.my_kook_bot:
 ```typescript
 class App extends BaseApp {
   constructor(config?: {
-    port?: number; // HTTP 端口
-    log_level?: string; // 日志级别
-    timeout?: number; // 超时时间
+    port?: number;           // HTTP 端口
+    log_level?: string;      // 日志级别
+    timeout?: number;        // 超时时间
     // ... 其他配置
   });
 
@@ -343,19 +343,34 @@ class App extends BaseApp {
 ```typescript
 namespace App {
   // 注册通用配置
-  function registerGeneral<K>(key: K, config: Protocol.Config): void;
+  function registerGeneral<K>(
+    key: K,
+    config: Protocol.Config
+  ): void;
 
   // 注册适配器
-  function registerAdapter(platform: string, factory?: Adapter.Factory): Promise<void>;
+  function registerAdapter(
+    platform: string,
+    factory?: Adapter.Factory
+  ): Promise<void>;
 
   // 注册协议
-  function registerProtocol(name: string, factory?: Protocol.Factory, version?: string): Promise<void>;
+  function registerProtocol(
+    name: string,
+    factory?: Protocol.Factory,
+    version?: string
+  ): Promise<void>;
 
   // 加载适配器工厂
-  function loadAdapterFactory(platform: string): Promise<Adapter.Factory>;
+  function loadAdapterFactory(
+    platform: string
+  ): Promise<Adapter.Factory>;
 
   // 加载协议工厂
-  function loadProtocolFactory(name: string, version?: string): Promise<Protocol.Factory>;
+  function loadProtocolFactory(
+    name: string,
+    version?: string
+  ): Promise<Protocol.Factory>;
 }
 ```
 
@@ -366,13 +381,11 @@ namespace App {
 onebots 会自动尝试加载以下格式的包：
 
 **适配器:**
-
 - `@onebots/adapter-{platform}`
 - `onebots-adapter-{platform}`
 - `{platform}`
 
 **协议:**
-
 - `@onebots/protocol-{name}-{version}`
 - `onebots-protocol-{name}-{version}`
 - `{name}`
@@ -380,15 +393,15 @@ onebots 会自动尝试加载以下格式的包：
 ### 手动注册
 
 ```typescript
-import { App } from "onebots";
-import MyAdapter from "./my-adapter";
-import MyProtocol from "./my-protocol";
+import { App } from 'onebots';
+import MyAdapter from './my-adapter';
+import MyProtocol from './my-protocol';
 
 // 注册自定义适配器
-await App.registerAdapter("myplatform", MyAdapter);
+await App.registerAdapter('myplatform', MyAdapter);
 
 // 注册自定义协议
-await App.registerProtocol("myprotocol", MyProtocol, "v1");
+await App.registerProtocol('myprotocol', MyProtocol, 'v1');
 ```
 
 ## 开发
