@@ -11,6 +11,7 @@
 
     <details
         v-else
+        :open="expanded"
         class="group rounded-card border border-border-subtle"
         @toggle="handleToggle">
         <summary class="cursor-pointer list-none p-3 select-none">
@@ -38,7 +39,7 @@
         </summary>
 
         <div v-if="expanded" class="space-y-4 border-t border-border-subtle p-3">
-            <section v-for="category in categories" :key="category.key">
+            <section v-for="category in visibleCategories" :key="category.key">
                 <div class="mb-2 flex items-center justify-between gap-3">
                     <h3 class="text-xs font-semibold text-fg-secondary">{{ category.label }}</h3>
                     <span class="text-xs text-fg-tertiary">
@@ -101,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
 import type { CapabilityAvailability, CapabilityDirection, CapabilitySupport } from "@onebots/core";
 import type { ExtensionCapabilityInfo } from "../types";
 import UiBadge from "../ui/UiBadge.vue";
@@ -110,19 +111,48 @@ import {
     getCapabilityEntries,
     type CapabilityCategory,
 } from "./capability-presentation.js";
+import { getCapabilitySearchMatches } from "./capability-search.js";
 
-const props = defineProps<{ capability: ExtensionCapabilityInfo }>();
+const props = withDefaults(defineProps<{ capability: ExtensionCapabilityInfo; query?: string }>(), {
+    query: "",
+});
 const categories = CAPABILITY_CATEGORIES;
 const expanded = ref(false);
+const matchingEntries = computed(() =>
+    props.capability.manifest
+        ? getCapabilitySearchMatches(props.capability.manifest, props.query)
+        : [],
+);
+const matchingKeys = computed(
+    () => new Set(matchingEntries.value.map(entry => `${entry.category}:${entry.name}`)),
+);
+const visibleCategories = computed(() =>
+    matchingEntries.value.length > 0
+        ? categories.filter(category =>
+              matchingEntries.value.some(entry => entry.category === category.key),
+          )
+        : categories,
+);
+
+watch(
+    () => matchingEntries.value.length,
+    count => {
+        if (count > 0) expanded.value = true;
+    },
+    { immediate: true },
+);
 
 function handleToggle(event: Event): void {
     expanded.value = (event.currentTarget as HTMLDetailsElement).open;
 }
 
 function entries(category: CapabilityCategory) {
-    return props.capability.manifest
+    const allEntries = props.capability.manifest
         ? getCapabilityEntries(props.capability.manifest, category)
         : [];
+    return matchingEntries.value.length > 0
+        ? allEntries.filter(entry => matchingKeys.value.has(`${category}:${entry.name}`))
+        : allEntries;
 }
 
 function supportMeta(support: CapabilitySupport) {

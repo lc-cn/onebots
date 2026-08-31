@@ -15,6 +15,18 @@
             <UiAlert v-if="catalogErrorMessage" variant="danger">
                 {{ catalogErrorMessage }}。扩展安装已禁用；现有运行时插件仍可继续配置和使用。
             </UiAlert>
+            <UiAlert v-if="activeInstallation" variant="warning">
+                <p>
+                    {{ activeInstallation.displayName }}：{{
+                        installationProgress(activeInstallation)?.label ?? "正在安装扩展"
+                    }}。完成前暂不能开始其他扩展安装。
+                </p>
+                <p
+                    v-if="installationProgress(activeInstallation)?.detail"
+                    class="mt-1 font-mono text-xs opacity-75">
+                    {{ installationProgress(activeInstallation)?.detail }}
+                </p>
+            </UiAlert>
 
             <div class="flex flex-wrap gap-2">
                 <UiButton
@@ -25,9 +37,26 @@
                     @click="filter = option.value">
                     {{ option.label }}
                 </UiButton>
+                <div class="relative min-w-56 flex-1 sm:max-w-sm">
+                    <IconSearch
+                        :size="15"
+                        class="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2 text-fg-tertiary" />
+                    <UiInput
+                        v-model="searchKeyword"
+                        clearable
+                        placeholder="搜索平台或能力，如 group file"
+                        class="[&_input]:pl-9" />
+                </div>
+                <span class="self-center text-xs tabular-nums text-fg-tertiary">
+                    {{ visibleExtensions.length }}/{{ filteredExtensions.length }} 项
+                </span>
             </div>
 
             <div v-if="loading" class="flex justify-center py-20"><UiSpinner /></div>
+            <UiEmpty
+                v-else-if="visibleExtensions.length === 0"
+                title="没有匹配的平台或能力"
+                description="能力搜索只返回原生支持或可模拟实现的清单条目。" />
             <div v-else class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <UiCard v-for="extension in visibleExtensions" :key="extension.id">
                     <template #header>
@@ -95,7 +124,8 @@
 
                         <ExtensionCapabilities
                             v-if="extension.capability"
-                            :capability="extension.capability" />
+                            :capability="extension.capability"
+                            :query="searchKeyword" />
 
                         <details v-if="extension.loaded" class="group">
                             <summary
@@ -148,6 +178,7 @@
                                 :disabled="
                                     restarting ||
                                     Boolean(installingId) ||
+                                    Boolean(activeInstallation) ||
                                     !installationAction(extension).available
                                 "
                                 @click="install(extension)">
@@ -164,6 +195,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
+import { IconSearch } from "@tabler/icons-vue";
 import type { ExtensionInfo } from "../types";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
@@ -173,7 +205,8 @@ import {
     waitForServiceRestart,
 } from "../utils/service-restart";
 import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
-import { UiAlert, UiBadge, UiButton, UiCard, UiSpinner } from "../ui";
+import { UiAlert, UiBadge, UiButton, UiCard, UiEmpty, UiInput, UiSpinner } from "../ui";
+import { matchesExtensionSearch } from "../components/capability-search.js";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
 import {
@@ -187,6 +220,7 @@ const route = useRoute();
 const extensions = ref<ExtensionInfo[]>([]);
 const loading = ref(true);
 const filter = ref<ExtensionFilter>("all");
+const searchKeyword = ref("");
 const installingId = ref("");
 const restarting = ref(false);
 const errorMessage = ref("");
@@ -229,11 +263,19 @@ const runtimeStatus = (extension: ExtensionInfo) => getExtensionRuntimeStatus(ex
 const catalogErrorMessage = computed(
     () => extensions.value.find(extension => extension.catalogError)?.catalogError ?? "",
 );
+const activeInstallation = computed(
+    () => extensions.value.find(extension => extension.installing) ?? null,
+);
 
-const visibleExtensions = computed(() =>
+const filteredExtensions = computed(() =>
     filter.value === "all"
         ? extensions.value
         : extensions.value.filter(item => item.type === filter.value),
+);
+const visibleExtensions = computed(() =>
+    filteredExtensions.value.filter(extension =>
+        matchesExtensionSearch(extension, searchKeyword.value),
+    ),
 );
 
 function clearInstallationRefresh(): void {
