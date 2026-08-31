@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 
@@ -74,19 +75,6 @@ export interface WhatsAppQrCodeDeleteResponse {
     success: true;
 }
 
-export const WHATSAPP_QR_CODE_ACTIONS = Object.freeze([
-    "list_qr_codes",
-    "get_qr_code",
-    "create_qr_code",
-    "update_qr_code",
-    "delete_qr_code",
-] as const);
-export type WhatsAppQrCodeAction = (typeof WHATSAPP_QR_CODE_ACTIONS)[number];
-
-export function isWhatsAppQrCodeAction(action: string): action is WhatsAppQrCodeAction {
-    return (WHATSAPP_QR_CODE_ACTIONS as readonly string[]).includes(action);
-}
-
 /** Phone Number 级消息二维码管理，严格映射 Meta v23 message_qrdls 资源。 */
 export class WhatsAppQrCodes {
     constructor(private readonly client: WhatsAppClient) {}
@@ -137,38 +125,42 @@ export class WhatsAppQrCodes {
         if (!isRecord(response) || response.success !== true) invalidResponse(response);
         return { success: true };
     }
-
-    execute(
-        action: WhatsAppQrCodeAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "list_qr_codes":
-                return this.list(actionListQuery(params));
-            case "get_qr_code":
-                rejectUnknown(params, ["code", "fields", "qr_image_format"]);
-                return this.get(qrCode(params.code), actionSelection(params));
-            case "create_qr_code":
-                return this.create(actionCreate(params));
-            case "update_qr_code":
-                return this.update(actionUpdate(params));
-            case "delete_qr_code":
-                rejectUnknown(params, ["code"]);
-                return this.delete(qrCode(params.code));
-        }
-    }
 }
 
-export const WHATSAPP_QR_CODE_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_QR_CODE_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.qrCodes.execute(action, params),
-    ]),
-) as Record<WhatsAppQrCodeAction, PlatformActionHandler<WhatsAppClient>>;
+type QrCodeActionParams = Readonly<Record<string, unknown>>;
+
+const QR_CODE_ACTION_HANDLERS = {
+    list_qr_codes: (client: WhatsAppClient, params: QrCodeActionParams) =>
+        client.qrCodes.list(actionListQuery(params)),
+    get_qr_code: (client: WhatsAppClient, params: QrCodeActionParams) =>
+        client.qrCodes.get(qrCode(params.code), actionSelection(params)),
+    create_qr_code: (client: WhatsAppClient, params: QrCodeActionParams) =>
+        client.qrCodes.create(createRequest(params)),
+    update_qr_code: (client: WhatsAppClient, params: QrCodeActionParams) =>
+        client.qrCodes.update(updateRequest(params)),
+    delete_qr_code: (client: WhatsAppClient, params: QrCodeActionParams) =>
+        client.qrCodes.delete(qrCode(params.code)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** QR Code 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_QR_CODE_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    QR_CODE_ACTION_HANDLERS,
+    {
+        list_qr_codes: ["code", "fields", "qr_image_format", "limit", "after"],
+        get_qr_code: ["code", "fields", "qr_image_format"],
+        create_qr_code: ["prefilled_message", "generate_qr_image"],
+        update_qr_code: ["code", "prefilled_message"],
+        delete_qr_code: ["code"],
+    },
+);
+
+export type WhatsAppQrCodeAction = keyof typeof WHATSAPP_QR_CODE_ACTION_HANDLERS;
+
+export function isWhatsAppQrCodeAction(action: string): action is WhatsAppQrCodeAction {
+    return Object.hasOwn(WHATSAPP_QR_CODE_ACTION_HANDLERS, action);
+}
 
 function actionListQuery(params: Readonly<Record<string, unknown>>): WhatsAppQrCodeListQuery {
-    rejectUnknown(params, ["code", "fields", "qr_image_format", "limit", "after"]);
     return {
         ...actionSelection(params),
         ...(params.code === undefined ? {} : { code: qrCode(params.code) }),
@@ -184,16 +176,6 @@ function actionSelection(params: Readonly<Record<string, unknown>>): WhatsAppQrC
             ? {}
             : { qr_image_format: imageFormat(params.qr_image_format, "qr_image_format") }),
     };
-}
-
-function actionCreate(params: Readonly<Record<string, unknown>>): WhatsAppQrCodeCreate {
-    rejectUnknown(params, ["prefilled_message", "generate_qr_image"]);
-    return createRequest(params);
-}
-
-function actionUpdate(params: Readonly<Record<string, unknown>>): WhatsAppQrCodeUpdate {
-    rejectUnknown(params, ["code", "prefilled_message"]);
-    return updateRequest(params);
 }
 
 function listQuery(value: unknown): Record<string, string | number> {

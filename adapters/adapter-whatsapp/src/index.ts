@@ -53,7 +53,6 @@ export {
 export {
     isWhatsAppQrCodeAction,
     WhatsAppQrCodes,
-    WHATSAPP_QR_CODE_ACTIONS,
     WHATSAPP_QR_CODE_FIELDS,
     WHATSAPP_QR_IMAGE_FORMATS,
     type WhatsAppQrCode,

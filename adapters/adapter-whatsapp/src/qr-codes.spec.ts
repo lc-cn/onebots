@@ -112,6 +112,16 @@ describe("WhatsAppQrCodes", () => {
         expect(fetcher.mock.calls[1]?.[1]?.method).toBe("DELETE");
     });
 
+    it("QR Code 动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "delete_qr_code", { code, force: true }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "delete_qr_code", parameter: "force" },
+        });
+    });
+
     it.each([
         { label: "字符串 fields", action: "list_qr_codes", params: { fields: "code" } },
         { label: "未知字段", action: "list_qr_codes", params: { fields: ["name"] } },
@@ -128,7 +138,6 @@ describe("WhatsAppQrCodes", () => {
             params: { prefilled_message: "x".repeat(141) },
         },
         { label: "越界 limit", action: "list_qr_codes", params: { limit: 26 } },
-        { label: "附加参数", action: "delete_qr_code", params: { code, force: true } },
     ])("拒绝非法动作参数：$label", async ({ action, params }) => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(executeWhatsAppPlatformAction(client, action, params)).rejects.toMatchObject({
