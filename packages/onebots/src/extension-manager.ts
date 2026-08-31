@@ -128,6 +128,7 @@ export function formatExtensionInstallationError(error: unknown): string {
 export class ExtensionNotFoundError extends Error {}
 export class ExtensionInstallConflictError extends Error {}
 export class ExtensionCatalogIntegrityError extends Error {}
+export class ExtensionRuntimeConfigError extends Error {}
 
 /** 白名单扩展的安装、启用和运行态查询。 */
 export class ExtensionManager {
@@ -156,7 +157,13 @@ export class ExtensionManager {
     }
 
     list(loadedPlugins: readonly LoadedPluginInfo[]) {
-        const selection = this.readSelection();
+        let selection: RuntimePluginSelection = { adapters: [], protocols: [] };
+        let runtimeConfigError: string | null = null;
+        try {
+            selection = this.readSelection();
+        } catch (error) {
+            runtimeConfigError = formatExtensionRuntimeConfigError(error);
+        }
         const catalogIssues = this.catalogIssues();
         const catalogError = catalogIssues.length
             ? `扩展目录完整性校验失败：${catalogIssues.join("；")}`
@@ -197,6 +204,7 @@ export class ExtensionManager {
                 ...entry,
                 catalogError,
                 runtimeError,
+                runtimeConfigError,
                 configurationError: validateExtensionConfigurationTarget(entry),
                 targetVersion: packageCatalog?.packageVersion ?? null,
                 installedVersion,
@@ -381,24 +389,31 @@ export class ExtensionManager {
 
     /** 在调用包管理器前验证配置，并生成不会丢失现有插件选择的候选内容。 */
     private prepareConfig(type: "adapter" | "protocol", name: string, source?: string) {
-        const currentSource = source ?? fs.readFileSync(this.configPath, "utf8");
-        const config = parseRuntimeConfig(currentSource);
-        const currentSelection = getRuntimePluginSelection(config) ?? {
-            adapters: [],
-            protocols: [],
-        };
-        const selection = {
-            adapters: [...currentSelection.adapters],
-            protocols: [...currentSelection.protocols],
-        };
-        const key = type === "adapter" ? "adapters" : "protocols";
-        if (!selection[key].includes(name)) selection[key].push(name);
-        setRuntimePluginSelection(config, selection);
-        return {
-            source: currentSource,
-            content: yaml.dump(config, { noRefs: true }),
-            selection,
-        };
+        try {
+            const currentSource = source ?? fs.readFileSync(this.configPath, "utf8");
+            const config = parseRuntimeConfig(currentSource);
+            const currentSelection = getRuntimePluginSelection(config) ?? {
+                adapters: [],
+                protocols: [],
+            };
+            const selection = {
+                adapters: [...currentSelection.adapters],
+                protocols: [...currentSelection.protocols],
+            };
+            const key = type === "adapter" ? "adapters" : "protocols";
+            if (!selection[key].includes(name)) selection[key].push(name);
+            setRuntimePluginSelection(config, selection);
+            return {
+                source: currentSource,
+                content: yaml.dump(config, { noRefs: true }),
+                selection,
+            };
+        } catch (error) {
+            if (error instanceof ExtensionRuntimeConfigError) throw error;
+            throw new ExtensionRuntimeConfigError(formatExtensionRuntimeConfigError(error), {
+                cause: error,
+            });
+        }
     }
 
     private readSelection() {
@@ -459,6 +474,14 @@ export class ExtensionManager {
         const error = inspectExtensionRuntimeRoot(this.runtimeRoot).error;
         if (error) throw new Error(error);
     }
+}
+
+/** 只公开解析原因首行，避免 YAML 代码片段把相邻凭据带到扩展目录。 */
+export function formatExtensionRuntimeConfigError(error: unknown): string {
+    const message = (error instanceof Error ? error.message : String(error))
+        .split(/\r?\n/, 1)[0]
+        ?.trim();
+    return `扩展启动配置无法读取：${message || "未知错误"}`;
 }
 
 /** @internal 使用正式重启的隔离预检，并确保含凭据的临时文件被清理。 */

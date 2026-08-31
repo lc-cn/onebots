@@ -32,6 +32,7 @@ describe("extension install completion", () => {
 const base = {
     catalogError: null,
     runtimeError: null,
+    runtimeConfigError: null,
     enabled: false,
     installed: false,
     loaded: false,
@@ -64,6 +65,15 @@ describe("extension installation action", () => {
                 runtimeError: "扩展运行目录未声明 onebots 依赖",
             }),
         ).toEqual({ visible: true, available: false, label: "运行目录不可用" });
+    });
+
+    it("keeps capability browsing but blocks installation when startup config is unreadable", () => {
+        expect(
+            getExtensionInstallationAction({
+                ...base,
+                runtimeConfigError: "扩展启动配置无法读取：YAML 解析失败",
+            }),
+        ).toEqual({ visible: true, available: false, label: "启动配置不可用" });
     });
 
     it("keeps the normal install and version-alignment actions", () => {

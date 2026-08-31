@@ -5,6 +5,7 @@ import {
     ExtensionCatalogIntegrityError,
     ExtensionInstallConflictError,
     ExtensionNotFoundError,
+    ExtensionRuntimeConfigError,
     formatExtensionInstallationError,
 } from "../extension-manager.js";
 
@@ -34,9 +35,11 @@ export function registerExtensionRoutes(app: App, router: Router): void {
                     ? 409
                     : error instanceof ExtensionNotFoundError
                       ? 404
-                      : error instanceof ExtensionCatalogIntegrityError
-                        ? 503
-                        : 500;
+                      : error instanceof ExtensionRuntimeConfigError
+                        ? 422
+                        : error instanceof ExtensionCatalogIntegrityError
+                          ? 503
+                          : 500;
             ctx.body = { success: false, message };
             app.logger.error("管理端安装扩展失败", { error: message });
         }

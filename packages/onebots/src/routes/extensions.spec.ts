@@ -4,6 +4,7 @@ import type { App } from "../app.js";
 import {
     ExtensionCatalogIntegrityError,
     ExtensionInstallConflictError,
+    ExtensionRuntimeConfigError,
 } from "../extension-manager.js";
 import { registerExtensionRoutes } from "./extensions.js";
 
@@ -90,6 +91,22 @@ describe("extension routes", () => {
 
         expect(ctx.status).toBe(503);
         expect(ctx.body).toEqual({ success: false, message: "扩展目录完整性校验失败" });
+    });
+
+    it("启动配置损坏时返回可修复的语义错误", async () => {
+        const install = vi.fn(async () => {
+            throw new ExtensionRuntimeConfigError("扩展启动配置无法读取：plugins 必须是对象");
+        });
+        const { posts } = setup(install);
+        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+
+        await posts.get("/api/extensions/:id/install")!(ctx);
+
+        expect(ctx.status).toBe(422);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: "扩展启动配置无法读取：plugins 必须是对象",
+        });
     });
 
     it("响应与日志共用脱敏后的安装错误", async () => {

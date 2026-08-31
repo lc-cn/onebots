@@ -640,7 +640,7 @@ describe("ExtensionManager", () => {
 
     it("配置无效时不开始安装，避免留下半完成依赖", async () => {
         const { root, configPath } = fixture();
-        fs.writeFileSync(configPath, "plugins: []\n");
+        fs.writeFileSync(configPath, "access_token: secret-never-return\nplugins: [\n");
         const install = vi.fn();
         const manager = new ExtensionManager({
             runtimeRoot: root,
@@ -649,7 +649,18 @@ describe("ExtensionManager", () => {
             preflight: successfulPreflight,
         });
 
-        await expect(manager.install("adapter:slack")).rejects.toThrow("plugins 必须是对象");
+        const extensions = manager.list([]);
+        expect(extensions).not.toHaveLength(0);
+        expect(extensions.every(extension => extension.runtimeConfigError)).toBe(true);
+        expect(extensions[0]?.runtimeConfigError).toContain("扩展启动配置无法读取：YAML 解析失败");
+        expect(extensions[0]?.runtimeConfigError).not.toContain("secret-never-return");
+        expect(
+            extensions.find(extension => extension.id === "adapter:slack")?.capability,
+        ).toMatchObject({ source: "catalog", declared: true });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow(
+            "扩展启动配置无法读取：YAML 解析失败",
+        );
         expect(install).not.toHaveBeenCalled();
     });
 
