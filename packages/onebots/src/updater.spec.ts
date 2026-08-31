@@ -146,6 +146,9 @@ describe("post-update service safety", () => {
             `#!/bin/sh
 printf '%s\n' "$*" > "$UPDATE_MARKER"
 mkdir -p node_modules/onebots/lib
+cat > node_modules/onebots/package.json <<'EOF'
+{"name":"onebots","version":"1.3.0"}
+EOF
 cat > node_modules/onebots/lib/extension-capability-catalog.json <<'EOF'
 {"schemaVersion":2,"packages":{"@onebots/adapter-mock":{"version":"2.5.0"}}}
 EOF

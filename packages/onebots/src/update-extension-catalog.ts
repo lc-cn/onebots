@@ -38,9 +38,9 @@ export function loadTargetExtensionVersionCatalog(
     installedVersion: string | null,
     cliEntry = process.argv[1],
 ): ExtensionVersionCatalogSnapshot {
-    const installedCatalog = findInstalledOnebotsCatalog(runtimeRoot, cliEntry);
+    const installedCatalog = findInstalledOnebotsCatalog(runtimeRoot, onebotsVersion, cliEntry);
     if (installedVersion === onebotsVersion && installedCatalog) {
-        return readExtensionVersionCatalog(installedCatalog);
+        return installedCatalog;
     }
 
     const stagingRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-update-catalog-"));
@@ -70,14 +70,9 @@ export function loadTargetExtensionVersionCatalog(
             timeout: 10 * 60 * 1000,
             maxBuffer: 4 * 1024 * 1024,
         });
-        return readExtensionVersionCatalog(
-            path.join(
-                stagingRoot,
-                "node_modules",
-                "onebots",
-                "lib",
-                "extension-capability-catalog.json",
-            ),
+        return readVerifiedOnebotsCatalog(
+            path.join(stagingRoot, "node_modules", "onebots"),
+            onebotsVersion,
         );
     } catch (error) {
         const detail =
@@ -94,7 +89,11 @@ export function loadTargetExtensionVersionCatalog(
     }
 }
 
-function findInstalledOnebotsCatalog(runtimeRoot: string, cliEntry?: string): string | null {
+function findInstalledOnebotsCatalog(
+    runtimeRoot: string,
+    expectedVersion: string,
+    cliEntry?: string,
+): ExtensionVersionCatalogSnapshot | null {
     const candidates = [runtimeRoot];
     if (cliEntry) candidates.push(path.dirname(path.resolve(cliEntry)));
     const visited = new Set<string>();
@@ -102,17 +101,9 @@ function findInstalledOnebotsCatalog(runtimeRoot: string, cliEntry?: string): st
         let current = path.resolve(origin);
         while (!visited.has(current)) {
             visited.add(current);
-            for (const candidate of [
-                path.join(
-                    current,
-                    "node_modules",
-                    "onebots",
-                    "lib",
-                    "extension-capability-catalog.json",
-                ),
-                path.join(current, "lib", "extension-capability-catalog.json"),
-            ]) {
-                if (fs.existsSync(candidate)) return candidate;
+            for (const packageRoot of [path.join(current, "node_modules", "onebots"), current]) {
+                const catalog = tryReadVerifiedOnebotsCatalog(packageRoot, expectedVersion);
+                if (catalog) return catalog;
             }
             const parent = path.dirname(current);
             if (parent === current) break;
@@ -120,6 +111,59 @@ function findInstalledOnebotsCatalog(runtimeRoot: string, cliEntry?: string): st
         }
     }
     return null;
+}
+
+function tryReadVerifiedOnebotsCatalog(
+    packageRoot: string,
+    expectedVersion: string,
+): ExtensionVersionCatalogSnapshot | null {
+    const manifestPath = path.join(packageRoot, "package.json");
+    const catalogPath = path.join(packageRoot, "lib", "extension-capability-catalog.json");
+    if (!fs.existsSync(manifestPath) || !fs.existsSync(catalogPath)) return null;
+    let manifest: { name: string; version: string };
+    try {
+        manifest = readPackageIdentity(manifestPath);
+    } catch {
+        return null;
+    }
+    if (manifest.name !== "onebots" || manifest.version !== expectedVersion) return null;
+    return readExtensionVersionCatalog(catalogPath);
+}
+
+function readVerifiedOnebotsCatalog(
+    packageRoot: string,
+    expectedVersion: string,
+): ExtensionVersionCatalogSnapshot {
+    const manifestPath = path.join(packageRoot, "package.json");
+    if (!fs.existsSync(manifestPath)) {
+        throw new Error(`暂存结果缺少 onebots@${expectedVersion} 的 package.json`);
+    }
+    const manifest = readPackageIdentity(manifestPath);
+    if (manifest.name !== "onebots") {
+        throw new Error(`暂存包身份错配：期望 onebots，实际 ${manifest.name || "未声明"}`);
+    }
+    if (manifest.version !== expectedVersion) {
+        throw new Error(
+            `暂存包版本错配：期望 onebots@${expectedVersion}，实际 ${manifest.version || "未声明"}`,
+        );
+    }
+    return readExtensionVersionCatalog(
+        path.join(packageRoot, "lib", "extension-capability-catalog.json"),
+    );
+}
+
+function readPackageIdentity(file: string): { name: string; version: string } {
+    let value: unknown;
+    try {
+        value = JSON.parse(fs.readFileSync(file, "utf8"));
+    } catch {
+        throw new Error(`包清单不是有效 JSON: ${file}`);
+    }
+    if (!isRecord(value)) return { name: "", version: "" };
+    return {
+        name: typeof value.name === "string" ? value.name.trim() : "",
+        version: typeof value.version === "string" ? value.version.trim() : "",
+    };
 }
 
 function readExtensionVersionCatalog(file: string): ExtensionVersionCatalogSnapshot {
