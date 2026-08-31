@@ -81,6 +81,22 @@ describe("extension registries", () => {
         expect(Object.isFrozen(registered?.actions.ping)).toBe(true);
     });
 
+    it("keeps adapter metadata immutable through direct and bulk reads", () => {
+        AdapterRegistry.register("mock", adapterFactory, {
+            displayName: "Mock",
+            description: "测试适配器",
+            homepage: "https://example.com",
+        });
+        const registered = AdapterRegistry.getMetadata("mock")!;
+
+        expect(AdapterRegistry.getAllMetadata()[0]).toBe(registered);
+        expect(Object.isFrozen(registered)).toBe(true);
+        expect(() => {
+            registered.displayName = "运行时篡改";
+        }).toThrow(TypeError);
+        expect(AdapterRegistry.getMetadata("mock")?.displayName).toBe("Mock");
+    });
+
     it("keeps repeated protocol registration with the same factory idempotent", () => {
         ProtocolRegistry.register("test", "v1", protocolFactory, { displayName: "Test" });
 
@@ -88,6 +104,26 @@ describe("extension registries", () => {
 
         expect(ProtocolRegistry.get("test", "v1")).toBe(protocolFactory);
         expect(ProtocolRegistry.getMetadata("test")?.displayName).toBe("Test");
+    });
+
+    it("updates immutable protocol version metadata with copy-on-write", () => {
+        ProtocolRegistry.register("test", "v1", protocolFactory, { displayName: "Test" });
+        const first = ProtocolRegistry.getMetadata("test")!;
+
+        expect(Object.isFrozen(first)).toBe(true);
+        expect(Object.isFrozen(first.versions)).toBe(true);
+        expect(() => first.versions.push("hidden")).toThrow(TypeError);
+
+        ProtocolRegistry.register("test", "v2", anotherProtocolFactory);
+        const second = ProtocolRegistry.getMetadata("test")!;
+        expect(second).not.toBe(first);
+        expect(first.versions).toEqual(["v1"]);
+        expect(second.versions).toEqual(["v1", "v2"]);
+        expect(Object.isFrozen(second.versions)).toBe(true);
+
+        ProtocolRegistry.unregister("test", "v1");
+        expect(ProtocolRegistry.getMetadata("test")?.versions).toEqual(["v2"]);
+        expect(Object.isFrozen(ProtocolRegistry.getMetadata("test")?.versions)).toBe(true);
     });
 
     it("rejects a different protocol factory using an occupied name and version", () => {

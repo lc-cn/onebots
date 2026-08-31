@@ -59,16 +59,22 @@ export class ProtocolRegistry {
         versions.set(version, factory);
         // Store or update metadata
         if (!this.metadata.has(name)) {
-            this.metadata.set(name, {
+            this.metadata.set(
                 name,
-                displayName: metadata?.displayName || name,
-                description: metadata?.description || "",
-                versions: [version],
-            });
+                freezeProtocolMetadata({
+                    name,
+                    displayName: metadata?.displayName || name,
+                    description: metadata?.description || "",
+                    versions: [version],
+                }),
+            );
         } else {
             const meta = this.metadata.get(name)!;
             if (!meta.versions.includes(version)) {
-                meta.versions.push(version);
+                this.metadata.set(
+                    name,
+                    freezeProtocolMetadata({ ...meta, versions: [...meta.versions, version] }),
+                );
             }
         }
     }
@@ -199,10 +205,15 @@ export class ProtocolRegistry {
         // Update metadata
         const meta = this.metadata.get(name);
         if (meta) {
-            meta.versions = meta.versions.filter(v => v !== version);
-            if (meta.versions.length === 0) {
+            const remainingVersions = meta.versions.filter(v => v !== version);
+            if (remainingVersions.length === 0) {
                 this.metadata.delete(name);
                 this.protocols.delete(name);
+            } else {
+                this.metadata.set(
+                    name,
+                    freezeProtocolMetadata({ ...meta, versions: remainingVersions }),
+                );
             }
         }
 
@@ -224,12 +235,7 @@ export class ProtocolRegistry {
             factories: new Map(
                 [...this.protocols].map(([name, versions]) => [name, new Map(versions)]),
             ),
-            metadata: new Map(
-                [...this.metadata].map(([name, metadata]) => [
-                    name,
-                    { ...metadata, versions: [...metadata.versions] },
-                ]),
-            ),
+            metadata: new Map(this.metadata),
             schemas: new Map(this.schemas),
         };
     }
@@ -240,10 +246,7 @@ export class ProtocolRegistry {
             [...state.factories].map(([name, versions]) => [name, new Map(versions)]),
         );
         this.metadata = new Map(
-            [...state.metadata].map(([name, metadata]) => [
-                name,
-                { ...metadata, versions: [...metadata.versions] },
-            ]),
+            [...state.metadata].map(([name, metadata]) => [name, freezeProtocolMetadata(metadata)]),
         );
         this.schemas = new Map(state.schemas);
     }
@@ -284,15 +287,18 @@ export class AdapterRegistry {
         this.adapters.set(name, factory);
         // Store or update metadata
         if (!this.metadata.has(name)) {
-            this.metadata.set(name, {
+            this.metadata.set(
                 name,
-                displayName: metadata?.displayName || name,
-                description: metadata?.description || "",
-                icon: metadata?.icon || "",
-                homepage: metadata?.homepage,
-                author: metadata?.author,
-                capabilities,
-            });
+                freezeAdapterMetadata({
+                    name,
+                    displayName: metadata?.displayName || name,
+                    description: metadata?.description || "",
+                    icon: metadata?.icon || "",
+                    homepage: metadata?.homepage,
+                    author: metadata?.author,
+                    capabilities,
+                }),
+            );
         }
     }
 
@@ -406,9 +412,7 @@ export class AdapterRegistry {
     static captureState(): ExtensionRegistryState["adapters"] {
         return {
             factories: new Map(this.adapters),
-            metadata: new Map(
-                [...this.metadata].map(([name, metadata]) => [name, { ...metadata }]),
-            ),
+            metadata: new Map(this.metadata),
             schemas: new Map(this.schemas),
         };
     }
@@ -417,7 +421,7 @@ export class AdapterRegistry {
     static restoreState(state: ExtensionRegistryState["adapters"]): void {
         this.adapters = new Map(state.factories);
         this.metadata = new Map(
-            [...state.metadata].map(([name, metadata]) => [name, { ...metadata }]),
+            [...state.metadata].map(([name, metadata]) => [name, freezeAdapterMetadata(metadata)]),
         );
         this.schemas = new Map(state.schemas);
     }
@@ -541,4 +545,14 @@ function rejectSchemaMutation(): never {
 
 function rejectSchemaPropertyMutation(): false {
     return false;
+}
+
+function freezeAdapterMetadata(metadata: Adapter.Metadata): Adapter.Metadata {
+    return Object.freeze({ ...metadata });
+}
+
+function freezeProtocolMetadata(metadata: Protocol.Metadata): Protocol.Metadata {
+    const versions = [...metadata.versions];
+    Object.freeze(versions);
+    return Object.freeze({ ...metadata, versions });
 }
