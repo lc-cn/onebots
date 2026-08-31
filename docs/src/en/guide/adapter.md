@@ -31,7 +31,7 @@ Every adapter exports and registers one runtime capability manifest. It describe
 
 Use `adapter.describeCapabilities(accountId)` for the complete manifest and `adapter.getSupportedActions(accountId)` for callable actions. OneBots verifies that every advertised action has a concrete adapter implementation, preventing capability metadata from drifting away from runtime behavior.
 
-In the Web console, open **Capability overview** from **Bots** to inspect all four categories for each loaded adapter. Summary counts include native and emulated capabilities, while explicitly unsupported entries remain visible. Permission, scene, and context restrictions appear on each item. Because this view consumes the runtime manifest, it describes the adapters loaded in the current deployment rather than a static platform catalog.
+In the Web console, open **Capability overview** from **Bots** to inspect all four categories for each loaded adapter. The selector shows both the display name and internal platform identifier, while the details retain the registered description. Summary counts include native and emulated capabilities, while explicitly unsupported entries remain visible. Permission, scene, and context restrictions appear on each item. Because this view consumes the runtime manifest, it describes the adapters loaded in the current deployment rather than a static platform catalog.
 
 ### Native platform actions
 

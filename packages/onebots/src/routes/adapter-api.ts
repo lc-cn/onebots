@@ -17,7 +17,7 @@ import type { App } from "../app.js";
  */
 export function registerAdapterRoutes(app: App, router: Router): void {
     router.get("/api/adapters", (ctx: RouterContext) => {
-        ctx.body = [...app.adapters.values()].map(adapter => adapter.info);
+        ctx.body = app.adapterInfos;
     });
 
     router.get("/api/list", (ctx: RouterContext) => {

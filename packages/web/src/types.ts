@@ -44,6 +44,8 @@ export interface SystemInfo {
 
 export interface AdapterInfo {
     platform: string;
+    displayName: string;
+    description: string;
     icon: string;
     capabilities: AdapterCapabilityManifest;
     accounts: AccountInfo[];

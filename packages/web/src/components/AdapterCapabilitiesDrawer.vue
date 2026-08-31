@@ -19,13 +19,19 @@
                         :name="selectedAdapter.platform"
                         :size="40" />
                     <div class="min-w-0 flex-1">
-                        <div class="font-medium text-fg">{{ selectedAdapter.platform }}</div>
+                        <div class="font-medium text-fg">{{ selectedAdapter.displayName }}</div>
                         <div class="text-xs text-fg-tertiary">
-                            能力清单 v{{ selectedAdapter.capabilities.version }} ·
-                            {{ selectedAdapter.accounts.length }} 个账号
+                            {{ selectedAdapter.platform }} · 能力清单 v{{
+                                selectedAdapter.capabilities.version
+                            }}
+                            · {{ selectedAdapter.accounts.length }} 个账号
                         </div>
                     </div>
                 </div>
+
+                <p v-if="selectedAdapter.description" class="text-xs leading-5 text-fg-secondary">
+                    {{ selectedAdapter.description }}
+                </p>
 
                 <div
                     class="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-border bg-border sm:grid-cols-4">
@@ -121,7 +127,10 @@ const selectedPlatform = ref<string | number | boolean>();
 const activeCategory = ref<CapabilityCategory>("actions");
 
 const adapterOptions = computed(() =>
-    props.adapters.map(adapter => ({ label: adapter.platform, value: adapter.platform })),
+    props.adapters.map(adapter => ({
+        label: `${adapter.displayName} (${adapter.platform})`,
+        value: adapter.platform,
+    })),
 );
 const selectedAdapter = computed(() =>
     props.adapters.find(adapter => adapter.platform === selectedPlatform.value),

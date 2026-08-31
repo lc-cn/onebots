@@ -29,6 +29,7 @@ import type { WsServer, Dict } from "@onebots/core";
 import { randomBytes } from "node:crypto";
 import { loadPlugin } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
+import { getAdapterInfo } from "./adapter-info.js";
 import type { WebSocket } from "ws";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
@@ -151,6 +152,11 @@ export class App extends BaseApp {
         );
     }
 
+    /** 为 REST 与 WebSocket 提供同一份带注册元数据的适配器摘要。 */
+    get adapterInfos() {
+        return [...this.adapters.values()].map(getAdapterInfo);
+    }
+
     async start() {
         this.assertCanStart();
         if (this.isStarted) return;
@@ -189,7 +195,7 @@ export class App extends BaseApp {
                     event: "system.sync",
                     data: {
                         config: fs.readFileSync(BaseApp.configPath, "utf8"),
-                        adapters: [...this.adapters.values()].map(adapter => adapter.info),
+                        adapters: this.adapterInfos,
                         protocol: ProtocolRegistry.getAllMetadata(),
                         app: this.info,
                         schema: getAppConfigSchema(),
