@@ -187,6 +187,8 @@ doctor 还会实际加载服务选用的插件，并使用它们注册的 Schema
 
 使用 `onebots install -c config.yaml -r <adapter> -p <protocol>` 安装守护服务时，同一套插件加载与配置校验会在系统服务定义写入前执行。仅暴露 `exports.import` 的插件、顶层 `await`、Schema 校验和初始化异常都按前台启动语义处理；预检失败不会留下一个必然无法启动的服务。安装成功仍不会立即启动，可在审阅服务定义后执行 `onebots start`。
 
+`onebots start` 与 `onebots restart` 还会读取已保存的服务定义，以安装时的 `workingDirectory` 解析插件，并重新校验当前配置。这能捕获安装后被删除或损坏的插件与配置；启动预检失败时不会请求操作系统启动服务，重启预检失败时也不会先停止现有实例。
+
 **Kubernetes 配置示例**:
 
 ```yaml

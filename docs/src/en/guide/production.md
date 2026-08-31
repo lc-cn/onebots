@@ -185,6 +185,8 @@ Doctor also loads the selected plugins and validates the complete account and pr
 
 `onebots install -c config.yaml -r <adapter> -p <protocol>` performs the same plugin loading and configuration validation before writing an operating-system service definition. Import-only entries, top-level `await`, schema validation, and initialization failures therefore follow foreground startup semantics; a failed preflight leaves no service that is certain to fail at startup. A successful install still does not start the service, so you can inspect its definition before running `onebots start`.
 
+`onebots start` and `onebots restart` also read the saved service definition, resolve plugins from its installation `workingDirectory`, and validate the current configuration again. This catches plugins or configuration that were removed or damaged after installation. A failed start preflight never asks the operating system to launch the service, and a failed restart preflight leaves the existing instance running.
+
 **Kubernetes Configuration Example**:
 
 ```yaml
