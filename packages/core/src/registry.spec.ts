@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { Adapter, Protocol } from "./index.js";
 import { ValidationError } from "./errors.js";
-import { AdapterRegistry, ProtocolRegistry } from "./registry.js";
+import {
+    AdapterRegistry,
+    ProtocolRegistry,
+    captureExtensionRegistryState,
+    restoreExtensionRegistryState,
+} from "./registry.js";
 import type { Schema } from "./config-validator.js";
 
 const schema: Schema = {};
@@ -93,5 +98,32 @@ describe("extension registries", () => {
 
         expect(AdapterRegistry.getSchema("mock")).toBeUndefined();
         expect(ProtocolRegistry.getSchema("test.v1")).toBeUndefined();
+    });
+
+    it("restores factories, schemas and protocol version metadata as one state", () => {
+        AdapterRegistry.register("existing", adapterFactory, { displayName: "Existing" });
+        AdapterRegistry.registerSchema("existing", schema);
+        ProtocolRegistry.register("test", "v1", protocolFactory, { displayName: "Test" });
+        ProtocolRegistry.registerSchema("test.v1", schema);
+        const state = captureExtensionRegistryState();
+
+        AdapterRegistry.unregister("existing");
+        AdapterRegistry.register("partial", anotherAdapterFactory);
+        AdapterRegistry.registerSchema("partial", anotherSchema);
+        ProtocolRegistry.register("test", "v2", anotherProtocolFactory);
+        ProtocolRegistry.registerSchema("test.v2", anotherSchema);
+
+        restoreExtensionRegistryState(state);
+
+        expect(AdapterRegistry.get("existing")).toBe(adapterFactory);
+        expect(AdapterRegistry.getMetadata("existing")?.displayName).toBe("Existing");
+        expect(AdapterRegistry.getSchema("existing")).toBe(schema);
+        expect(AdapterRegistry.has("partial")).toBe(false);
+        expect(AdapterRegistry.getSchema("partial")).toBeUndefined();
+        expect(ProtocolRegistry.get("test", "v1")).toBe(protocolFactory);
+        expect(ProtocolRegistry.getSchema("test.v1")).toBe(schema);
+        expect(ProtocolRegistry.has("test", "v2")).toBe(false);
+        expect(ProtocolRegistry.getSchema("test.v2")).toBeUndefined();
+        expect(ProtocolRegistry.getMetadata("test")?.versions).toEqual(["v1"]);
     });
 });

@@ -76,6 +76,46 @@ describe("plugin loader", () => {
         });
     });
 
+    it("rolls back every registration made before plugin initialization fails", async () => {
+        const directory = createImportOnlyPlugin(
+            "partial-adapter",
+            "globalThis.__onebotsRegisterPartial(); throw new Error('partial failure');\n",
+        );
+        const existingFactory = (() => undefined) as never;
+        AdapterRegistry.register("existing", existingFactory, { displayName: "Existing" });
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterPartial?: () => void;
+        };
+        globals.__onebotsRegisterPartial = () => {
+            AdapterRegistry.register("partial", (() => undefined) as never);
+            AdapterRegistry.registerSchema("partial", {});
+            ProtocolRegistry.register("partial", "v1", (() => undefined) as never);
+            ProtocolRegistry.registerSchema("partial.v1", {});
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "adapter",
+                "partial",
+                ["partial-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({
+                loaded: false,
+                message: expect.stringContaining("partial failure"),
+            });
+            expect(AdapterRegistry.get("existing")).toBe(existingFactory);
+            expect(AdapterRegistry.getMetadata("existing")?.displayName).toBe("Existing");
+            expect(AdapterRegistry.has("partial")).toBe(false);
+            expect(AdapterRegistry.getSchema("partial")).toBeUndefined();
+            expect(ProtocolRegistry.has("partial")).toBe(false);
+            expect(ProtocolRegistry.getSchema("partial.v1")).toBeUndefined();
+        } finally {
+            delete globals.__onebotsRegisterPartial;
+        }
+    });
+
     it("loads a pure ESM plugin that uses top-level await", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
         temporaryDirectories.push(directory);
@@ -157,20 +197,95 @@ describe("plugin loader", () => {
     });
 
     it("rejects an adapter factory without its configuration schema", async () => {
-        const directory = createImportOnlyPlugin("factory-only-adapter");
-        AdapterRegistry.register("factory-only", (() => undefined) as never);
-
-        const result = await tryLoadRegisteredPlugin(
-            "adapter",
-            "factory-only",
-            ["factory-only-adapter"],
-            createRequire(path.join(directory, "package.json")),
+        const directory = createImportOnlyPlugin(
+            "factory-only-adapter",
+            "globalThis.__onebotsRegisterFactoryOnly();\n",
         );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterFactoryOnly?: () => void;
+        };
+        globals.__onebotsRegisterFactoryOnly = () => {
+            AdapterRegistry.register("factory-only", (() => undefined) as never);
+        };
 
-        expect(result).toMatchObject({
-            loaded: false,
-            message: expect.stringContaining("没有注册适配器配置 Schema factory-only"),
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "adapter",
+                "factory-only",
+                ["factory-only-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({
+                loaded: false,
+                message: expect.stringContaining("没有注册适配器配置 Schema factory-only"),
+            });
+            expect(AdapterRegistry.has("factory-only")).toBe(false);
+        } finally {
+            delete globals.__onebotsRegisterFactoryOnly;
+        }
+    });
+
+    it("serializes plugin transactions so a failed rollback cannot erase a concurrent success", async () => {
+        const brokenDirectory = createImportOnlyPlugin(
+            "queued-broken-adapter",
+            "await globalThis.__onebotsHoldBroken();\n",
+        );
+        const successfulDirectory = createImportOnlyPlugin(
+            "queued-success-adapter",
+            "globalThis.__onebotsRegisterQueuedSuccess();\n",
+        );
+        let releaseBroken: () => void = () => undefined;
+        let markBrokenEntered: () => void = () => undefined;
+        const brokenEntered = new Promise<void>(resolve => {
+            markBrokenEntered = resolve;
         });
+        const brokenGate = new Promise<void>(resolve => {
+            releaseBroken = resolve;
+        });
+        let successfulPluginExecuted = false;
+        const globals = globalThis as typeof globalThis & {
+            __onebotsHoldBroken?: () => Promise<void>;
+            __onebotsRegisterQueuedSuccess?: () => void;
+        };
+        globals.__onebotsHoldBroken = () => {
+            AdapterRegistry.register("queued-broken", (() => undefined) as never);
+            markBrokenEntered();
+            return brokenGate;
+        };
+        globals.__onebotsRegisterQueuedSuccess = () => {
+            successfulPluginExecuted = true;
+            AdapterRegistry.register("queued-success", (() => undefined) as never);
+            AdapterRegistry.registerSchema("queued-success", {});
+        };
+
+        try {
+            const broken = tryLoadRegisteredPlugin(
+                "adapter",
+                "queued-broken",
+                ["queued-broken-adapter"],
+                createRequire(path.join(brokenDirectory, "package.json")),
+            );
+            await brokenEntered;
+            const successful = tryLoadRegisteredPlugin(
+                "adapter",
+                "queued-success",
+                ["queued-success-adapter"],
+                createRequire(path.join(successfulDirectory, "package.json")),
+            );
+
+            await Promise.resolve();
+            expect(successfulPluginExecuted).toBe(false);
+            releaseBroken();
+            await expect(broken).resolves.toMatchObject({ loaded: false });
+            await expect(successful).resolves.toMatchObject({ loaded: true });
+            expect(AdapterRegistry.has("queued-broken")).toBe(false);
+            expect(AdapterRegistry.has("queued-success")).toBe(true);
+            expect(AdapterRegistry.getSchema("queued-success")).toBeDefined();
+        } finally {
+            delete globals.__onebotsHoldBroken;
+            delete globals.__onebotsRegisterQueuedSuccess;
+        }
     });
 
     it("accepts a protocol only when its name-version factory and schema are registered", async () => {
@@ -189,7 +304,10 @@ describe("plugin loader", () => {
     });
 });
 
-function createImportOnlyPlugin(packageName: string): string {
+function createImportOnlyPlugin(
+    packageName: string,
+    source = "export const loaded = true;\n",
+): string {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
     temporaryDirectories.push(directory);
     fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({ type: "module" }));
@@ -199,6 +317,6 @@ function createImportOnlyPlugin(packageName: string): string {
         path.join(packageDirectory, "package.json"),
         JSON.stringify({ name: packageName, type: "module", exports: "./index.js" }),
     );
-    fs.writeFileSync(path.join(packageDirectory, "index.js"), "export const loaded = true;\n");
+    fs.writeFileSync(path.join(packageDirectory, "index.js"), source);
     return directory;
 }

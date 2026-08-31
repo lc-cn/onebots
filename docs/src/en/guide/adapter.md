@@ -62,6 +62,8 @@ Plugin entries are resolved from the startup working directory with support for 
 
 After initialization, the loader also verifies the plugin contract. `-r <name>` must register an adapter factory and schema under that exact name. `-p <name>-<version>` must register the matching protocol factory and `<name>.<version>` schema. A package that merely exports code, skips registration, or registers the wrong identity now fails immediately with the missing registration in setup, doctor, and service preflight diagnostics.
 
+Plugin import and contract verification run as one serialized registry transaction. If module initialization throws, or the completed module is missing its promised factory or schema, OneBots restores every adapter, protocol, schema, and protocol-version metadata entry to the pre-import state. A failed plugin therefore cannot leave a partial registration or cause a false name conflict in the next plugin. Restart the process after fixing the package so Node.js imports the module again.
+
 ### Quick Links
 
 - [QQ Adapter Documentation](/en/platform/qq)

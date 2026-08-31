@@ -1,7 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { AdapterRegistry, ProtocolRegistry } from "@onebots/core";
+import {
+    AdapterRegistry,
+    ProtocolRegistry,
+    captureExtensionRegistryState,
+    restoreExtensionRegistryState,
+} from "@onebots/core";
 import { writeCliError } from "./cli-output.js";
 
 export type PluginInspection =
@@ -14,6 +19,8 @@ export type PluginLoadResult =
     | { loaded: false; inspection: PluginInspection; message: string };
 
 export type PluginType = "adapter" | "protocol";
+
+let pluginRegistrationTail = Promise.resolve();
 
 /** 所有 CLI 路径共享同一组插件包名候选，避免运行、doctor 与服务预检规则漂移。 */
 export function pluginCandidates(type: PluginType, name: string): string[] {
@@ -72,6 +79,17 @@ export async function tryLoadPlugin(
     candidates: string[],
     runtimeRequire: NodeJS.Require,
 ): Promise<PluginLoadResult> {
+    return serializePluginRegistration(() =>
+        tryLoadPluginUnlocked(kind, name, candidates, runtimeRequire),
+    );
+}
+
+async function tryLoadPluginUnlocked(
+    kind: "适配器" | "协议",
+    name: string,
+    candidates: string[],
+    runtimeRequire: NodeJS.Require,
+): Promise<PluginLoadResult> {
     const inspection = inspectPlugin(candidates, runtimeRequire);
     if (inspection.status === "missing") {
         return {
@@ -88,10 +106,12 @@ export async function tryLoadPlugin(
             message: `加载${kind} ${name} 失败：已找到 ${inspection.candidate}，但入口无法加载（${inspection.reason}）${suggestion}`,
         };
     }
+    const registryState = captureExtensionRegistryState();
     try {
         await import(pathToFileURL(inspection.entryPath).href);
         return { loaded: true, inspection };
     } catch (error) {
+        restoreExtensionRegistryState(registryState);
         return {
             loaded: false,
             inspection,
@@ -107,17 +127,39 @@ export async function tryLoadRegisteredPlugin(
     candidates: string[],
     runtimeRequire: NodeJS.Require,
 ): Promise<PluginLoadResult> {
-    const kind = type === "adapter" ? "适配器" : "协议";
-    const result = await tryLoadPlugin(kind, name, candidates, runtimeRequire);
-    if (result.loaded === false) return result;
+    return serializePluginRegistration(async () => {
+        const registryState = captureExtensionRegistryState();
+        const kind = type === "adapter" ? "适配器" : "协议";
+        const result = await tryLoadPluginUnlocked(kind, name, candidates, runtimeRequire);
+        if (result.loaded === false) {
+            restoreExtensionRegistryState(registryState);
+            return result;
+        }
 
-    const contractError = getRegistrationContractError(type, name);
-    if (!contractError) return result;
-    return {
-        loaded: false,
-        inspection: result.inspection,
-        message: `加载${kind} ${name} 失败：${result.inspection.candidate} 已初始化，但${contractError}`,
-    };
+        const contractError = getRegistrationContractError(type, name);
+        if (!contractError) return result;
+        restoreExtensionRegistryState(registryState);
+        return {
+            loaded: false,
+            inspection: result.inspection,
+            message: `加载${kind} ${name} 失败：${result.inspection.candidate} 已初始化，但${contractError}`,
+        };
+    });
+}
+
+/** 注册表是进程级共享状态；串行化导入，避免一个失败事务回滚另一个并发插件。 */
+async function serializePluginRegistration<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = pluginRegistrationTail;
+    let release: () => void = () => undefined;
+    pluginRegistrationTail = new Promise<void>(resolve => {
+        release = resolve;
+    });
+    await previous;
+    try {
+        return await operation();
+    } finally {
+        release();
+    }
 }
 
 /** 兼容布尔返回值的加载入口；失败时输出结构化结果中的唯一诊断。 */

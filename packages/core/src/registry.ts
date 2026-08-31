@@ -5,6 +5,19 @@ import { Account } from "./account.js";
 import { assertSchemaFormContract, type Schema } from "./config-validator.js";
 import { ValidationError } from "./errors.js";
 
+export interface ExtensionRegistryState {
+    readonly adapters: {
+        readonly factories: ReadonlyMap<string, Adapter.Factory>;
+        readonly metadata: ReadonlyMap<string, Adapter.Metadata>;
+        readonly schemas: ReadonlyMap<string, Schema>;
+    };
+    readonly protocols: {
+        readonly factories: ReadonlyMap<string, ReadonlyMap<string, Protocol.Factory>>;
+        readonly metadata: ReadonlyMap<string, Protocol.Metadata>;
+        readonly schemas: ReadonlyMap<string, Schema>;
+    };
+}
+
 /**
  * Protocol Registry
  * Manages registration and retrieval of protocol implementations
@@ -200,6 +213,36 @@ export class ProtocolRegistry {
         this.metadata.clear();
         this.schemas.clear();
     }
+
+    /** @internal 供插件加载事务捕获当前注册状态。 */
+    static captureState(): ExtensionRegistryState["protocols"] {
+        return {
+            factories: new Map(
+                [...this.protocols].map(([name, versions]) => [name, new Map(versions)]),
+            ),
+            metadata: new Map(
+                [...this.metadata].map(([name, metadata]) => [
+                    name,
+                    { ...metadata, versions: [...metadata.versions] },
+                ]),
+            ),
+            schemas: new Map(this.schemas),
+        };
+    }
+
+    /** @internal 恢复插件加载前的精确注册状态。 */
+    static restoreState(state: ExtensionRegistryState["protocols"]): void {
+        this.protocols = new Map(
+            [...state.factories].map(([name, versions]) => [name, new Map(versions)]),
+        );
+        this.metadata = new Map(
+            [...state.metadata].map(([name, metadata]) => [
+                name,
+                { ...metadata, versions: [...metadata.versions] },
+            ]),
+        );
+        this.schemas = new Map(state.schemas);
+    }
 }
 /**
  * Adapter Registry
@@ -348,4 +391,38 @@ export class AdapterRegistry {
         this.metadata.clear();
         this.schemas.clear();
     }
+
+    /** @internal 供插件加载事务捕获当前注册状态。 */
+    static captureState(): ExtensionRegistryState["adapters"] {
+        return {
+            factories: new Map(this.adapters),
+            metadata: new Map(
+                [...this.metadata].map(([name, metadata]) => [name, { ...metadata }]),
+            ),
+            schemas: new Map(this.schemas),
+        };
+    }
+
+    /** @internal 恢复插件加载前的精确注册状态。 */
+    static restoreState(state: ExtensionRegistryState["adapters"]): void {
+        this.adapters = new Map(state.factories);
+        this.metadata = new Map(
+            [...state.metadata].map(([name, metadata]) => [name, { ...metadata }]),
+        );
+        this.schemas = new Map(state.schemas);
+    }
+}
+
+/** 捕获 Adapter 与 Protocol 注册表，用于隔离一次插件初始化。 */
+export function captureExtensionRegistryState(): ExtensionRegistryState {
+    return {
+        adapters: AdapterRegistry.captureState(),
+        protocols: ProtocolRegistry.captureState(),
+    };
+}
+
+/** 回滚一次失败插件初始化造成的全部注册表修改。 */
+export function restoreExtensionRegistryState(state: ExtensionRegistryState): void {
+    AdapterRegistry.restoreState(state.adapters);
+    ProtocolRegistry.restoreState(state.protocols);
 }
