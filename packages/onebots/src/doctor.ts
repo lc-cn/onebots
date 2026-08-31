@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { ServiceController, type ServiceScope } from "./service-manager.js";
 import { tryLoadPlugin } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
+import { writeCliOutput } from "./cli-output.js";
 
 export type CheckLevel = "ok" | "warning" | "error";
 export interface DoctorCheck {
@@ -331,7 +332,7 @@ function validateEndpointBody(endpoint: DoctorEndpoint, body: string): string | 
 
 /** 以人类可读或 JSON 格式输出诊断结果。 */
 export function printDoctorReport(report: DoctorReport, json = false): void {
-    console.log(formatDoctorReport(report, json));
+    writeCliOutput(formatDoctorReport(report, json));
 }
 
 /** 将诊断结果格式化，供 CLI、TUI 和机器输出共享。 */

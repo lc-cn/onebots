@@ -18,31 +18,15 @@ export function registerAuthRoutes(app: App, router: Router): void {
 
     const expectedUsername = app.config.username ?? BaseApp.defaultConfig.username!;
     const expectedPassword = app.config.password ?? BaseApp.defaultConfig.password!;
-    const expectedAccessToken: string | undefined = (
-        (app.config as { access_token?: string }).access_token?.trim()
-        || process.env.ONEBOTS_ACCESS_TOKEN?.trim()
-        || undefined
-    );
-
-    /** Extract a Bearer token or ?access_token from an http.IncomingMessage (used by WebSocket auth). */
-    const getTokenFromRequest = (request: import('http').IncomingMessage): string | undefined => {
-        const authHeader = request.headers.authorization;
-        if (authHeader && typeof authHeader === 'string') {
-            const match = authHeader.match(/^Bearer\s+(.+)$/i);
-            return match ? match[1] : authHeader;
-        }
-        try {
-            const url = new URL(request.url || '/', 'http://localhost');
-            return url.searchParams.get('access_token') || undefined;
-        } catch {
-            return undefined;
-        }
-    };
+    const expectedAccessToken: string | undefined =
+        (app.config as { access_token?: string }).access_token?.trim() ||
+        process.env.ONEBOTS_ACCESS_TOKEN?.trim() ||
+        undefined;
 
     /** Extract a Bearer token or ?access_token from a Koa / RouterContext. */
     const getTokenFromKoa = (ctx: RouterContext): string | undefined => {
         const authHeader = ctx.request.headers.authorization;
-        if (authHeader && typeof authHeader === 'string') {
+        if (authHeader && typeof authHeader === "string") {
             const match = authHeader.match(/^Bearer\s+(.+)$/i);
             return match ? match[1] : authHeader;
         }
@@ -50,17 +34,21 @@ export function registerAuthRoutes(app: App, router: Router): void {
     };
 
     const authValidator = createManagedTokenValidator(app.tokenManager, {
-        tokenName: 'access_token',
-        errorMessage: 'Unauthorized',
+        tokenName: "access_token",
+        errorMessage: "Unauthorized",
     });
 
     /* ── routes ────────────────────────────────────────────────── */
 
     router.post("/api/auth/login", (ctx: RouterContext) => {
-        const body = ctx.request.body as { username?: string; password?: string; access_token?: string };
+        const body = ctx.request.body as {
+            username?: string;
+            password?: string;
+            access_token?: string;
+        };
 
         // 鉴权码登录
-        if (body.access_token != null && body.access_token !== '') {
+        if (body.access_token != null && body.access_token !== "") {
             if (expectedAccessToken && body.access_token === expectedAccessToken) {
                 ctx.body = {
                     success: true,
@@ -76,7 +64,12 @@ export function registerAuthRoutes(app: App, router: Router): void {
             return;
         }
 
-        if (!body.username || !body.password || body.username !== expectedUsername || body.password !== expectedPassword) {
+        if (
+            !body.username ||
+            !body.password ||
+            body.username !== expectedUsername ||
+            body.password !== expectedPassword
+        ) {
             ctx.status = 401;
             ctx.body = { success: false, message: "用户名或密码错误" };
             return;
@@ -119,16 +112,16 @@ export function registerAuthRoutes(app: App, router: Router): void {
      * the per-session token-manager check.  All other paths go through authValidator
      * which validates the Bearer token issued by the login endpoint.
      */
-    router.use('/api', async (ctx: RouterContext, next) => {
-        if (ctx.path === '/api/auth/login' || ctx.path === '/api/auth/refresh') return next();
+    router.use("/api", async (ctx: RouterContext, next) => {
+        if (ctx.path === "/api/auth/login" || ctx.path === "/api/auth/refresh") return next();
 
         const token = getTokenFromKoa(ctx);
         if (expectedAccessToken && token === expectedAccessToken) {
-            (ctx as any).state.token = token;
-            (ctx as any).state.tokenInfo = { metadata: { username: 'token' }, expiresAt: null };
+            ctx.state.token = token;
+            ctx.state.tokenInfo = { metadata: { username: "token" }, expiresAt: null };
             return next();
         }
-        return authValidator(ctx as any, next as any);
+        return authValidator(ctx, next);
     });
 
     router.post("/api/auth/logout", (ctx: RouterContext) => {
@@ -138,7 +131,9 @@ export function registerAuthRoutes(app: App, router: Router): void {
     });
 
     router.get("/api/auth/me", (ctx: RouterContext) => {
-        const tokenInfo = ctx.state.tokenInfo as { expiresAt?: number | null; metadata?: Record<string, unknown> } | undefined;
+        const tokenInfo = ctx.state.tokenInfo as
+            | { expiresAt?: number | null; metadata?: Record<string, unknown> }
+            | undefined;
         ctx.body = {
             success: true,
             data: {

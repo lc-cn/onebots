@@ -5,7 +5,22 @@ import ElementUI from 'element-plus'
 import {EnhanceAppContext, useRoute} from "vitepress";
 
 // Dynamically imported to avoid SSR issues (window is not defined)
-let svgPanZoom: ((svg: SVGElement | HTMLElement | string, options?: any) => any) | null = null
+interface SvgPanZoomOptions {
+    zoomEnabled?: boolean;
+    controlIconsEnabled?: boolean;
+    fit?: boolean;
+    center?: boolean;
+    minZoom?: number;
+    maxZoom?: number;
+    zoomScaleSensitivity?: number;
+}
+
+type SvgPanZoom = (
+    svg: SVGElement | HTMLElement | string,
+    options?: SvgPanZoomOptions,
+) => unknown;
+
+let svgPanZoom: SvgPanZoom | null = null
 
 export default {
     extends:DefaultTheme,
@@ -88,8 +103,9 @@ export default {
                         maxZoom: 20
                     })
                     }
-                } catch (e) {
-                    console.warn('Lightbox pan-zoom init failed', e)
+                } catch (error) {
+                    // eslint-disable-next-line no-console -- Documentation theme has no runtime logger.
+                    console.warn('Lightbox pan-zoom init failed', error)
                 }
             }, 50)
         }
@@ -106,7 +122,7 @@ export default {
             // 动态高度
             const viewBox = svg.getAttribute('viewBox')
             if (viewBox) {
-                const [x, y, w, h] = viewBox.split(' ').map(parseFloat)
+                const [, , w, h] = viewBox.split(' ').map(parseFloat)
                 if (w && h) {
                     const aspectRatio = h / w
                     const containerWidth = container.clientWidth || 800
@@ -141,7 +157,7 @@ export default {
                 })
                 svg.setAttribute('data-pan-zoom-initialized', 'true')
                 }
-            } catch (e) {
+            } catch {
                 // 忽略初始化错误（可能是 SVG 还没准备好）
             }
         }
@@ -153,7 +169,7 @@ export default {
         onMounted(async () => {
             // Dynamically import svg-pan-zoom only on client side
             const module = await import('svg-pan-zoom')
-            svgPanZoom = module.default
+            svgPanZoom = module.default as unknown as SvgPanZoom
             
             createLightbox()
             

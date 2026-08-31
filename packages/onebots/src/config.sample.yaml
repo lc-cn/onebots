@@ -5,15 +5,9 @@ timeout: 30 # 登录超时时间（秒）
 # username / password 不配置时，首次启动会自动生成并写入本文件。
 # 请从启动日志取得初始凭据，登录 Web 管理端后立即修改。
 
-# 协议默认值。账号未单独覆写时使用这里的配置。
-general:
-    onebot.v11:
-        use_http: true
-        use_ws: true
-        access_token: ""
-        secret: ""
-        enable_cors: true
-        heartbeat_interval: 5
+# 协议默认值。初始保持为空，避免引用启动命令没有加载的协议。
+# 添加账号时可在 Web 管理端按已加载协议生成配置。
+general: {}
 
 # 默认样例不创建平台账号，确保首次启动不会使用空凭据连接外部平台。
 # 登录 Web 管理端后可在「配置管理」中添加账号；也可以参考下方格式手动配置。

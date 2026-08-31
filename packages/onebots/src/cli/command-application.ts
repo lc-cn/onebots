@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { createRequire } from "node:module";
 import yaml from "js-yaml";
+import type { Account, Protocol } from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "../service-manager.js";
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
 
@@ -15,7 +16,10 @@ export interface CommandResult {
 
 /** 带进程退出码的用户可操作 CLI 错误。 */
 export class CliError extends Error {
-    constructor(message: string, public readonly exitCode = 1) {
+    constructor(
+        message: string,
+        public readonly exitCode = 1,
+    ) {
         super(message);
     }
 }
@@ -43,9 +47,12 @@ export async function runForeground(options: RuntimeOptions): Promise<CommandRes
 }
 
 /** 校验运行环境并安装或更新固定的 OneBots 服务定义。 */
-export async function installService(options: RuntimeOptions & ScopeOptions): Promise<CommandResult> {
+export async function installService(
+    options: RuntimeOptions & ScopeOptions,
+): Promise<CommandResult> {
     const runtime = normalizeRuntimeOptions(options);
-    if (!fs.existsSync(runtime.configPath)) throw new CliError(`配置文件不存在: ${runtime.configPath}`, 2);
+    if (!fs.existsSync(runtime.configPath))
+        throw new CliError(`配置文件不存在: ${runtime.configPath}`, 2);
     const missing = findMissingPlugins(runtime.adapters, runtime.protocols, process.cwd());
     if (missing.length) throw new CliError(`插件未安装: ${missing.join(", ")}`, 2);
     const scope = scopeFrom(options);
@@ -60,7 +67,9 @@ export async function installService(options: RuntimeOptions & ScopeOptions): Pr
     };
     await new ServiceController(scope).install(spec);
     const suffix = scope === "system" ? " --system" : "";
-    return { output: `已安装${scope === "system" ? "系统级" : "用户级"} OneBots 服务（未立即启动）\n启动: onebots start${suffix}` };
+    return {
+        output: `已安装${scope === "system" ? "系统级" : "用户级"} OneBots 服务（未立即启动）\n启动: onebots start${suffix}`,
+    };
 }
 
 /** 启动当前 scope 中已安装的服务。 */
@@ -85,11 +94,16 @@ export async function restartService(options: ScopeOptions): Promise<CommandResu
 export function serviceStatus(options: ScopeOptions): CommandResult {
     const status = new ServiceController(scopeFrom(options)).status();
     const summary = status.installed ? (status.running ? "运行中" : "已安装，未运行") : "未安装";
-    return { output: status.detail ? `${summary}\n${status.detail}` : summary, exitCode: status.installed ? undefined : 2 };
+    return {
+        output: status.detail ? `${summary}\n${status.detail}` : summary,
+        exitCode: status.installed ? undefined : 2,
+    };
 }
 
 /** 读取或持续跟随当前 scope 的服务日志。 */
-export async function serviceLogs(options: ScopeOptions & { follow: boolean; lines: number }): Promise<CommandResult> {
+export async function serviceLogs(
+    options: ScopeOptions & { follow: boolean; lines: number },
+): Promise<CommandResult> {
     const output = await new ServiceController(scopeFrom(options)).logs(options);
     return { output };
 }
@@ -101,35 +115,61 @@ export async function uninstallService(options: ScopeOptions): Promise<CommandRe
 }
 
 /** 运行配置 schema 驱动的 setup 流程。 */
-export async function setupConfiguration(options: RuntimeOptions & { force: boolean }): Promise<CommandResult> {
+export async function setupConfiguration(
+    options: RuntimeOptions & { force: boolean },
+): Promise<CommandResult> {
     const runtime = normalizeRuntimeOptions(options);
     const { runSetup } = await import("../setup.js");
-    await runSetup(runtime.configPath, { force: options.force, adapters: runtime.adapters, protocols: runtime.protocols });
+    await runSetup(runtime.configPath, {
+        force: options.force,
+        adapters: runtime.adapters,
+        protocols: runtime.protocols,
+    });
     return {};
 }
 
 /** 优先返回显式配置路径，否则使用已安装服务保存的路径。 */
 export function serviceConfigPath(options: RuntimeOptions & ScopeOptions): string {
     if (options.config) return path.resolve(options.config);
-    return new ServiceController(scopeFrom(options)).readSpec()?.configPath ?? path.resolve("config.yaml");
+    return (
+        new ServiceController(scopeFrom(options)).readSpec()?.configPath ??
+        path.resolve("config.yaml")
+    );
 }
 
 /** 执行 doctor 检查并格式化为人类或 JSON 输出。 */
-export async function diagnose(options: RuntimeOptions & ScopeOptions & { fix: boolean; json: boolean }): Promise<CommandResult> {
+export async function diagnose(
+    options: RuntimeOptions & ScopeOptions & { fix: boolean; json: boolean },
+): Promise<CommandResult> {
     const runtime = normalizeRuntimeOptions(options);
     const { runDoctor, formatDoctorReport } = await import("../doctor.js");
     const report = await runDoctor({
-        configPath: serviceConfigPath(options), adapters: runtime.adapters, protocols: runtime.protocols,
-        scope: scopeFrom(options), fix: options.fix,
+        configPath: serviceConfigPath(options),
+        adapters: runtime.adapters,
+        protocols: runtime.protocols,
+        scope: scopeFrom(options),
+        fix: options.fix,
     });
-    return { output: formatDoctorReport(report, options.json), exitCode: report.ok ? undefined : 1, raw: options.json };
+    return {
+        output: formatDoctorReport(report, options.json),
+        exitCode: report.ok ? undefined : 1,
+        raw: options.json,
+    };
 }
 
 /** 检查或更新 OneBots 与当前选用的插件。 */
-export async function updatePackages(options: RuntimeOptions & ScopeOptions & { check: boolean; yes: boolean }): Promise<CommandResult> {
+export async function updatePackages(
+    options: RuntimeOptions & ScopeOptions & { check: boolean; yes: boolean },
+): Promise<CommandResult> {
     const runtime = normalizeRuntimeOptions(options);
     const { runUpdate } = await import("../updater.js");
-    await runUpdate({ adapters: runtime.adapters, protocols: runtime.protocols, scope: scopeFrom(options), check: options.check, yes: options.yes });
+    await runUpdate({
+        adapters: runtime.adapters,
+        protocols: runtime.protocols,
+        scope: scopeFrom(options),
+        check: options.check,
+        yes: options.yes,
+    });
     return {};
 }
 
@@ -150,11 +190,19 @@ export function setConfig(options: RuntimeOptions, key: string, value: string): 
     const keys = key.split(".");
     let current = data;
     for (const part of keys.slice(0, -1)) {
-        if (!current[part] || typeof current[part] !== "object" || Array.isArray(current[part])) current[part] = {};
+        if (!current[part] || typeof current[part] !== "object" || Array.isArray(current[part]))
+            current[part] = {};
         current = current[part] as Record<string, unknown>;
     }
     const numeric = Number(value);
-    current[keys.at(-1)!] = value === "true" ? true : value === "false" ? false : Number.isNaN(numeric) ? value : numeric;
+    current[keys.at(-1)!] =
+        value === "true"
+            ? true
+            : value === "false"
+              ? false
+              : Number.isNaN(numeric)
+                ? value
+                : numeric;
     backupAndWriteConfig(file, data);
     return { output: `已设置 ${key}` };
 }
@@ -165,15 +213,26 @@ export function listConfig(options: RuntimeOptions): CommandResult {
 }
 
 /** 通过运行中网关的 HTTP API 发送消息。 */
-export async function sendMessage(options: RuntimeOptions & { target_type: string; channel: string; url?: string }, targetId: string, message: string): Promise<CommandResult> {
+export async function sendMessage(
+    options: RuntimeOptions & { target_type: string; channel: string; url?: string },
+    targetId: string,
+    message: string,
+): Promise<CommandResult> {
     const config = readConfig(normalizeRuntimeOptions(options).configPath);
     const baseUrl = options.url || `http://127.0.0.1:${config.port ?? 6727}${config.path ?? ""}`;
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (config.access_token) headers.Authorization = `Bearer ${config.access_token}`;
-    else if (config.username && config.password) headers.Authorization = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`;
+    else if (config.username && config.password)
+        headers.Authorization = `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`;
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/send`, {
-        method: "POST", headers,
-        body: JSON.stringify({ channel: options.channel, target_id: targetId, target_type: options.target_type, message }),
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+            channel: options.channel,
+            target_id: targetId,
+            target_type: options.target_type,
+            message,
+        }),
     });
     const text = await response.text();
     if (!response.ok) throw new CliError(`发送失败 (${response.status}): ${text}`, 2);
@@ -181,7 +240,9 @@ export async function sendMessage(options: RuntimeOptions & { target_type: strin
 }
 
 /** 以 stdio 模式运行 MCP 服务，通过 stdin/stdout 进行 JSON-RPC 通信。 */
-export async function runMcpStdio(options: RuntimeOptions & { account?: string }): Promise<CommandResult> {
+export async function runMcpStdio(
+    options: RuntimeOptions & { account?: string },
+): Promise<CommandResult> {
     const runtime = normalizeRuntimeOptions(options);
     const { loadPlugins } = await import("../runtime.js");
     const failures = await loadPlugins(runtime.adapters, runtime.protocols);
@@ -193,15 +254,14 @@ export async function runMcpStdio(options: RuntimeOptions & { account?: string }
     await app.start();
 
     // 查找目标 account
-    let targetAdapter: any = undefined;
-    let targetAccount: any = undefined;
+    let targetAccount: Account | undefined;
 
     if (options.account) {
         const [platform, accountId] = options.account.split("/");
-        if (!platform || !accountId) throw new CliError("--account 格式: platform/account_id（如 qq/my-bot）", 2);
+        if (!platform || !accountId)
+            throw new CliError("--account 格式: platform/account_id（如 qq/my-bot）", 2);
         for (const adapter of app.adapters.values()) {
             if (String(adapter.platform) === platform) {
-                targetAdapter = adapter;
                 targetAccount = adapter.getAccount(accountId);
                 if (targetAccount) break;
             }
@@ -211,33 +271,39 @@ export async function runMcpStdio(options: RuntimeOptions & { account?: string }
         // 没指定 account 时取第一个
         for (const adapter of app.adapters.values()) {
             for (const account of adapter.accounts.values()) {
-                targetAdapter = adapter;
                 targetAccount = account;
                 break;
             }
             if (targetAccount) break;
         }
-        if (!targetAccount) throw new CliError("没有可用的账号，请在配置中添加至少一个适配器账号", 2);
+        if (!targetAccount)
+            throw new CliError("没有可用的账号，请在配置中添加至少一个适配器账号", 2);
     }
 
     // 查找该 account 上的 MCP 协议实例
     const mcpProtocol = targetAccount.protocols?.find(
-        (p: any) => p.name === 'mcp' && p.version === 'v1',
+        protocol => protocol.name === "mcp" && protocol.version === "v1",
     );
     if (!mcpProtocol) {
         throw new CliError(
             `账号 ${targetAccount.platform}/${targetAccount.account_id} 未配置 mcp.v1 协议。\n` +
-            `请在 config.yaml 对应账号下添加:\n  mcp.v1: {}`,
+                `请在 config.yaml 对应账号下添加:\n  mcp.v1: {}`,
             2,
         );
     }
 
     // 动态导入 stdio 传输（协议包作为插件加载，不是编译时依赖）
     const mcpModName = "@onebots/protocol-mcp-v1";
-    let startStdioTransport: (options: any) => void;
+    let startStdioTransport: (options: {
+        protocol: Protocol;
+        onClose?: () => void | Promise<void>;
+    }) => void;
     try {
-        const mod = await import(/* webpackIgnore: true */ mcpModName);
-        startStdioTransport = mod.startStdioTransport;
+        const module: unknown = await import(/* webpackIgnore: true */ mcpModName);
+        if (!isMcpStdioModule(module)) {
+            throw new Error("插件未导出 startStdioTransport");
+        }
+        startStdioTransport = module.startStdioTransport;
     } catch {
         throw new CliError(
             "无法加载 @onebots/protocol-mcp-v1，请确保已安装:\n  pnpm add @onebots/protocol-mcp-v1",
@@ -255,26 +321,49 @@ export async function runMcpStdio(options: RuntimeOptions & { account?: string }
     return new Promise(() => {});
 }
 
+function isMcpStdioModule(value: unknown): value is {
+    startStdioTransport(options: {
+        protocol: Protocol;
+        onClose?: () => void | Promise<void>;
+    }): void;
+} {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        "startStdioTransport" in value &&
+        typeof value.startStdioTransport === "function"
+    );
+}
+
 function findMissingPlugins(adapters: string[], protocols: string[], cwd: string): string[] {
     const require = createRequire(path.join(cwd, "package.json"));
     const groups = [
         ...adapters.map(name => [`@onebots/adapter-${name}`, `onebots-adapter-${name}`, name]),
         ...protocols.map(name => [`@onebots/protocol-${name}`, `onebots-protocol-${name}`, name]),
     ];
-    return groups.filter(candidates => !candidates.some(candidate => {
-        try { require.resolve(candidate); return true; } catch (error) {
-            // 候选包解析失败是插件探测的预期分支，继续尝试下一个名称。
-            void error;
-            return false;
-        }
-    })).map(candidates => candidates[0]);
+    return groups
+        .filter(
+            candidates =>
+                !candidates.some(candidate => {
+                    try {
+                        require.resolve(candidate);
+                        return true;
+                    } catch (error) {
+                        // 候选包解析失败是插件探测的预期分支，继续尝试下一个名称。
+                        void error;
+                        return false;
+                    }
+                }),
+        )
+        .map(candidates => candidates[0]);
 }
 
 function readConfig(file: string): Record<string, unknown> {
     if (!fs.existsSync(file)) throw new CliError(`配置文件不存在: ${file}`, 2);
     const loaded: unknown = yaml.load(fs.readFileSync(file, "utf8"));
     if (loaded === undefined || loaded === null) return {};
-    if (typeof loaded !== "object" || Array.isArray(loaded)) throw new CliError(`配置文件根节点必须是对象: ${file}`, 2);
+    if (typeof loaded !== "object" || Array.isArray(loaded))
+        throw new CliError(`配置文件根节点必须是对象: ${file}`, 2);
     return loaded as Record<string, unknown>;
 }
 

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { writeCliError } from "./cli-output.js";
 
 export type PluginInspection =
     | { status: "ready"; candidate: string; entryPath: string }
@@ -81,7 +82,7 @@ export function loadPlugin(
     name: string,
     candidates: string[],
     runtimeRequire: NodeJS.Require,
-    warn: (message: string) => void = console.warn,
+    warn: (message: string) => void = writeCliError,
 ): boolean {
     const result = tryLoadPlugin(kind, name, candidates, runtimeRequire);
     if (result.loaded === false) {

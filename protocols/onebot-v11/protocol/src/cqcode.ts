@@ -1,4 +1,12 @@
-import { CommonTypes,Dict } from "onebots";
+import { CommonTypes, Dict } from "onebots";
+
+interface CustomMusicOptions {
+    url: string;
+    audio: string;
+    title: string;
+    content?: string;
+    image?: string;
+}
 
 /**
  * CQ Code utilities for OneBot V11
@@ -10,15 +18,12 @@ export namespace CQCode {
      * Escape special characters in CQ code
      */
     export function escape(text: string, insideCQ: boolean = false): string {
-        let result = text
-            .replace(/&/g, "&amp;")
-            .replace(/\[/g, "&#91;")
-            .replace(/\]/g, "&#93;");
-        
+        let result = text.replace(/&/g, "&amp;").replace(/\[/g, "&#91;").replace(/\]/g, "&#93;");
+
         if (insideCQ) {
             result = result.replace(/,/g, "&#44;");
         }
-        
+
         return result;
     }
 
@@ -143,7 +148,10 @@ export namespace CQCode {
     /**
      * Get all segments of a specific type
      */
-    export function getSegmentsByType(segments: CommonTypes.Segment[], type: string): CommonTypes.Segment[] {
+    export function getSegmentsByType(
+        segments: CommonTypes.Segment[],
+        type: string,
+    ): CommonTypes.Segment[] {
         return segments.filter(seg => seg.type === type);
     }
 
@@ -190,13 +198,16 @@ export namespace CQCode {
     /**
      * Create image segment
      */
-    export function image(file: string, options?: {
-        type?: "flash";
-        url?: string;
-        cache?: boolean;
-        proxy?: boolean;
-        timeout?: number;
-    }): CommonTypes.Segment {
+    export function image(
+        file: string,
+        options?: {
+            type?: "flash";
+            url?: string;
+            cache?: boolean;
+            proxy?: boolean;
+            timeout?: number;
+        },
+    ): CommonTypes.Segment {
         return {
             type: "image",
             data: {
@@ -227,13 +238,16 @@ export namespace CQCode {
     /**
      * Create record (voice) segment
      */
-    export function record(file: string, options?: {
-        magic?: boolean;
-        url?: string;
-        cache?: boolean;
-        proxy?: boolean;
-        timeout?: number;
-    }): CommonTypes.Segment {
+    export function record(
+        file: string,
+        options?: {
+            magic?: boolean;
+            url?: string;
+            cache?: boolean;
+            proxy?: boolean;
+            timeout?: number;
+        },
+    ): CommonTypes.Segment {
         return {
             type: "record",
             data: {
@@ -250,12 +264,15 @@ export namespace CQCode {
     /**
      * Create video segment
      */
-    export function video(file: string, options?: {
-        url?: string;
-        cache?: boolean;
-        proxy?: boolean;
-        timeout?: number;
-    }): CommonTypes.Segment {
+    export function video(
+        file: string,
+        options?: {
+            url?: string;
+            cache?: boolean;
+            proxy?: boolean;
+            timeout?: number;
+        },
+    ): CommonTypes.Segment {
         return {
             type: "video",
             data: {
@@ -271,10 +288,14 @@ export namespace CQCode {
     /**
      * Create share segment
      */
-    export function share(url: string, title: string, options?: {
-        content?: string;
-        image?: string;
-    }): CommonTypes.Segment {
+    export function share(
+        url: string,
+        title: string,
+        options?: {
+            content?: string;
+            image?: string;
+        },
+    ): CommonTypes.Segment {
         return {
             type: "share",
             data: {
@@ -289,25 +310,16 @@ export namespace CQCode {
     /**
      * Create music segment
      */
-    export function music(
-        type: "qq" | "163" | "xm",
-        id: string
-    ): CommonTypes.Segment;
-    export function music(
-        type: "custom",
-        options: {
-            url: string;
-            audio: string;
-            title: string;
-            content?: string;
-            image?: string;
-        }
-    ): CommonTypes.Segment;
+    export function music(type: "qq" | "163" | "xm", id: string): CommonTypes.Segment;
+    export function music(type: "custom", options: CustomMusicOptions): CommonTypes.Segment;
     export function music(
         type: "qq" | "163" | "xm" | "custom",
-        idOrOptions: string | any
+        idOrOptions: string | CustomMusicOptions,
     ): CommonTypes.Segment {
         if (type === "custom") {
+            if (typeof idOrOptions === "string") {
+                throw new TypeError("自定义音乐段必须提供结构化参数");
+            }
             return {
                 type: "music",
                 data: {
@@ -328,10 +340,14 @@ export namespace CQCode {
     /**
      * Create location segment
      */
-    export function location(lat: number, lon: number, options?: {
-        title?: string;
-        content?: string;
-    }): CommonTypes.Segment {
+    export function location(
+        lat: number,
+        lon: number,
+        options?: {
+            title?: string;
+            content?: string;
+        },
+    ): CommonTypes.Segment {
         return {
             type: "location",
             data: {
@@ -406,4 +422,3 @@ export namespace CQCode {
         return { type: "xml", data: { data } };
     }
 }
-

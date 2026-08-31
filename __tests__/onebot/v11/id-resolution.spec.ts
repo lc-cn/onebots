@@ -8,9 +8,9 @@ vi.mock("onebots", () => {
         };
 
         constructor(
-            public adapter: any,
-            public account: any,
-            public config: any,
+            public adapter: unknown,
+            public account: unknown,
+            public config: unknown,
         ) {}
     }
 
@@ -31,6 +31,7 @@ vi.mock("onebots", () => {
 });
 
 const { OneBotV11Protocol } = await import("../../../protocols/onebot-v11/protocol/src/index.ts");
+type ProtocolConstructorArgs = ConstructorParameters<typeof OneBotV11Protocol>;
 
 function createProtocol() {
     const resolvedId = { string: "openid-123", number: 123456789, source: "openid-123" };
@@ -73,9 +74,9 @@ function createProtocol() {
     };
 
     const protocol = new OneBotV11Protocol(
-        adapter as any,
-        { account_id: "bot" } as any,
-        { protocol: "onebot", version: "v11" } as any,
+        adapter as unknown as ProtocolConstructorArgs[0],
+        { account_id: "bot" } as unknown as ProtocolConstructorArgs[1],
+        { protocol: "onebot", version: "v11" } as ProtocolConstructorArgs[2],
     );
 
     return { adapter, protocol, resolvedId };

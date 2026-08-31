@@ -22,7 +22,10 @@ export function readLine(maxLen: number, ...params: Parameters<typeof fs.createR
     });
 }
 // 合并对象/数组
-export function deepMerge(base: Record<string, unknown> | unknown[] | unknown, ...from: unknown[]): unknown {
+export function deepMerge(
+    base: Record<string, unknown> | unknown[] | unknown,
+    ...from: unknown[]
+): unknown {
     if (base === null || base === undefined) base = from.shift();
     if (from.length === 0) {
         return base;
@@ -51,7 +54,10 @@ export function deepMerge(base: Record<string, unknown> | unknown[] | unknown, .
     return baseObj;
 }
 
-export function transformObj(obj: unknown, callback: (key: string, value: unknown) => unknown): unknown {
+export function transformObj(
+    obj: unknown,
+    callback: (key: string, value: unknown) => unknown,
+): unknown {
     if (!obj) return obj;
     if (Array.isArray(obj)) return obj.map(item => transformObj(item, callback));
     if (typeof obj !== "object") return obj;
@@ -108,8 +114,8 @@ export function toUnderLine(name: string): string {
 export function toLine<T extends string>(name: T): string {
     return toUnderLine(name);
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Constructor signatures require `any[]` for correct variance
 export interface Class<T = unknown> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Constructor signatures require bivariant arguments for class compatibility.
     new (...args: any[]): T; // bivariant constructor args required for class compatibility
 }
 
@@ -158,7 +164,7 @@ export function randomInt(min: number, max: number): number;
 export function randomInt(...args: number[]) {
     let min = args[0] || 0,
         max = args[1];
-    if (args.length === 1) (max = min), (min = 0);
+    if (args.length === 1) ((max = min), (min = 0));
     return Math.floor(Math.random() * (max - min) + min);
 }
 export function protectedFields<T>(source: T, ...keys: (keyof T | string)[]): T {
@@ -233,7 +239,9 @@ export function parseObjFromStr(str: string) {
         if (!data) return;
         if (typeof data !== "object" && typeof data !== "string") return;
         if (typeof data === "object")
-            return Object.entries(data as Record<string, unknown>).map(([k, v]) => format(v, [...keys, k]));
+            return Object.entries(data as Record<string, unknown>).map(([k, v]) =>
+                format(v, [...keys, k]),
+            );
         if (/\[Function:.+]/.test(data))
             return setValueToObj(
                 result,

@@ -22,11 +22,11 @@ export function registerVerificationRoutes(app: App, router: Router): void {
         ctx.req.socket.setNoDelay(true);
         ctx.req.socket.setKeepAlive(true);
         ctx.set({
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type",
         });
         ctx.status = 200;
         ctx.respond = false;
@@ -35,14 +35,14 @@ export function registerVerificationRoutes(app: App, router: Router): void {
 
         const heartbeat = setInterval(() => {
             try {
-                ctx.res.write(': heartbeat\n\n');
-            } catch (error) {
+                ctx.res.write(": heartbeat\n\n");
+            } catch {
                 clearInterval(heartbeat);
                 app.verificationClients.delete(ctx.res);
             }
         }, 30000);
 
-        ctx.req.on('close', () => {
+        ctx.req.on("close", () => {
             clearInterval(heartbeat);
             app.verificationClients.delete(ctx.res);
         });
@@ -57,11 +57,11 @@ export function registerVerificationRoutes(app: App, router: Router): void {
     router.post("/api/verification/request-sms", async (ctx: RouterContext) => {
         try {
             const body = (ctx.request.body as { platform?: string; account_id?: string }) || {};
-            const platform = String(body.platform ?? '');
-            const account_id = String(body.account_id ?? '');
+            const platform = String(body.platform ?? "");
+            const account_id = String(body.account_id ?? "");
             if (!platform || !account_id) {
                 ctx.status = 400;
-                ctx.body = { success: false, message: '缺少 platform 或 account_id' };
+                ctx.body = { success: false, message: "缺少 platform 或 account_id" };
                 return;
             }
             const adapter = app.adapters.get(platform as keyof Adapter.Configs);
@@ -70,8 +70,9 @@ export function registerVerificationRoutes(app: App, router: Router): void {
                 ctx.body = { success: false, message: `适配器 ${platform} 不存在` };
                 return;
             }
-            const requestSms = (adapter as { requestSmsCode?(a: string): void | Promise<void> }).requestSmsCode;
-            if (typeof requestSms !== 'function') {
+            const requestSms = (adapter as { requestSmsCode?(a: string): void | Promise<void> })
+                .requestSmsCode;
+            if (typeof requestSms !== "function") {
                 ctx.status = 501;
                 ctx.body = { success: false, message: `适配器 ${platform} 不支持请求短信验证码` };
                 return;
@@ -81,27 +82,28 @@ export function registerVerificationRoutes(app: App, router: Router): void {
         } catch (e) {
             const err = e as Error;
             ctx.status = 500;
-            ctx.body = { success: false, message: err?.message ?? '请求失败' };
+            ctx.body = { success: false, message: err?.message ?? "请求失败" };
         }
     });
 
     // 验证提交接口（Web 完成滑块/短信等后提交）
     router.post("/api/verification/submit", async (ctx: RouterContext) => {
         try {
-            const body = (ctx.request.body as {
-                platform?: string;
-                account_id?: string;
-                type?: string;
-                data?: Record<string, unknown>;
-            }) || {};
-            const platform = String(body.platform ?? '');
-            const account_id = String(body.account_id ?? '');
-            const type = String(body.type ?? '');
-            const data = body.data && typeof body.data === 'object' ? body.data : {};
+            const body =
+                (ctx.request.body as {
+                    platform?: string;
+                    account_id?: string;
+                    type?: string;
+                    data?: Record<string, unknown>;
+                }) || {};
+            const platform = String(body.platform ?? "");
+            const account_id = String(body.account_id ?? "");
+            const type = String(body.type ?? "");
+            const data = body.data && typeof body.data === "object" ? body.data : {};
 
             if (!platform || !account_id || !type) {
                 ctx.status = 400;
-                ctx.body = { success: false, message: '缺少 platform、account_id 或 type' };
+                ctx.body = { success: false, message: "缺少 platform、account_id 或 type" };
                 return;
             }
 
@@ -112,8 +114,16 @@ export function registerVerificationRoutes(app: App, router: Router): void {
                 return;
             }
 
-            const submit = (adapter as { submitVerification?(a: string, t: string, d: Record<string, unknown>): void | Promise<void> }).submitVerification;
-            if (typeof submit !== 'function') {
+            const submit = (
+                adapter as {
+                    submitVerification?(
+                        a: string,
+                        t: string,
+                        d: Record<string, unknown>,
+                    ): void | Promise<void>;
+                }
+            ).submitVerification;
+            if (typeof submit !== "function") {
                 ctx.status = 501;
                 ctx.body = { success: false, message: `适配器 ${platform} 不支持 Web 验证提交` };
                 return;
@@ -125,7 +135,7 @@ export function registerVerificationRoutes(app: App, router: Router): void {
         } catch (e) {
             const err = e as Error;
             ctx.status = 500;
-            ctx.body = { success: false, message: err?.message ?? '提交失败' };
+            ctx.body = { success: false, message: err?.message ?? "提交失败" };
         }
     });
 }

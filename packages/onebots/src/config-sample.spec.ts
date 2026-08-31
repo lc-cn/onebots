@@ -11,6 +11,6 @@ describe("default configuration sample", () => {
 
         expect(accountKeys).toEqual([]);
         expect(config.port).toBe(6727);
-        expect(config.general).toBeDefined();
+        expect(config.general).toEqual({});
     });
 });

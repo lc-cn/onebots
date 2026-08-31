@@ -1,142 +1,143 @@
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import type { AdapterInfo, SystemInfo } from '../types'
-import { buildApiUrl } from '../config'
-import { authFetch, appendAuthQuery } from './useAuth'
+import { ref, onMounted, onUnmounted, computed } from "vue";
+import type { AdapterInfo, SystemInfo } from "../types";
+import { buildApiUrl } from "../config";
+import { authFetch, appendAuthQuery } from "./useAuth";
+import { reportClientError } from "../client-diagnostics";
 
 export function useApi() {
-  const adapters = ref<AdapterInfo[]>([])
-  const systemInfo = ref<SystemInfo | null>(null)
-  const logs = ref<string[]>([])
-  
-  let logsEventSource: EventSource | null = null
+    const adapters = ref<AdapterInfo[]>([]);
+    const systemInfo = ref<SystemInfo | null>(null);
+    const logs = ref<string[]>([]);
 
-  const totalBotCount = computed(() => {
-    return adapters.value.reduce((acc, adapter) => acc + adapter.accounts.length, 0)
-  })
+    let logsEventSource: EventSource | null = null;
 
-  const onlineBotCount = computed(() => {
-    return adapters.value.reduce((acc, adapter) => {
-      return acc + adapter.accounts.filter(bot => bot.status === 'online').length
-    }, 0)
-  })
+    const totalBotCount = computed(() => {
+        return adapters.value.reduce((acc, adapter) => acc + adapter.accounts.length, 0);
+    });
 
-  const fetchAdapters = async () => {
-    try {
-      const response = await authFetch(buildApiUrl('/api/adapters'))
-      if (response.ok) {
-        adapters.value = await response.json()
-      }
-    } catch (error) {
-      console.error('获取适配器列表失败:', error)
-    }
-  }
+    const onlineBotCount = computed(() => {
+        return adapters.value.reduce((acc, adapter) => {
+            return acc + adapter.accounts.filter(bot => bot.status === "online").length;
+        }, 0);
+    });
 
-  const fetchSystemInfo = async () => {
-    try {
-      const response = await authFetch(buildApiUrl('/api/system'))
-      if (response.ok) {
-        systemInfo.value = await response.json()
-      }
-    } catch (error) {
-      console.error('获取系统信息失败:', error)
-    }
-  }
+    const fetchAdapters = async () => {
+        try {
+            const response = await authFetch(buildApiUrl("/api/adapters"));
+            if (response.ok) {
+                adapters.value = await response.json();
+            }
+        } catch (error) {
+            reportClientError("获取适配器列表失败", error);
+        }
+    };
 
-  const startLogsSSE = () => {
-    logsEventSource = new EventSource(appendAuthQuery(buildApiUrl('/api/logs')))
-    
-    logsEventSource.onmessage = (e) => {
-      const logData = JSON.parse(e.data)
-      logs.value.push(logData.message)
-      if (logs.value.length > 1000) {
-        logs.value = logs.value.slice(-1000)
-      }
-    }
+    const fetchSystemInfo = async () => {
+        try {
+            const response = await authFetch(buildApiUrl("/api/system"));
+            if (response.ok) {
+                systemInfo.value = await response.json();
+            }
+        } catch (error) {
+            reportClientError("获取系统信息失败", error);
+        }
+    };
 
-    logsEventSource.onerror = () => {
-      console.error('Logs SSE 连接错误')
-      logsEventSource?.close()
-      setTimeout(startLogsSSE, 5000)
-    }
-  }
+    const startLogsSSE = () => {
+        logsEventSource = new EventSource(appendAuthQuery(buildApiUrl("/api/logs")));
 
-  const startBot = async (platform: string, uin: string): Promise<boolean> => {
-    try {
-      const response = await authFetch(buildApiUrl('/api/bots/start'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform, uin }),
-      })
-      if (response.ok) {
-        await fetchAdapters()
-        return true
-      }
-      return false
-    } catch (error) {
-      console.error('启动机器人失败:', error)
-      return false
-    }
-  }
+        logsEventSource.onmessage = e => {
+            const logData = JSON.parse(e.data);
+            logs.value.push(logData.message);
+            if (logs.value.length > 1000) {
+                logs.value = logs.value.slice(-1000);
+            }
+        };
 
-  const stopBot = async (platform: string, uin: string): Promise<boolean> => {
-    try {
-      const response = await authFetch(buildApiUrl('/api/bots/stop'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform, uin }),
-      })
-      if (response.ok) {
-        await fetchAdapters()
-        return true
-      }
-      return false
-    } catch (error) {
-      console.error('停止机器人失败:', error)
-      return false
-    }
-  }
+        logsEventSource.onerror = () => {
+            reportClientError("Logs SSE 连接错误");
+            logsEventSource?.close();
+            setTimeout(startLogsSSE, 5000);
+        };
+    };
 
-  const ADAPTER_POLL_INTERVAL = 5_000
-  let adapterPollTimer: ReturnType<typeof setInterval> | null = null
+    const startBot = async (platform: string, uin: string): Promise<boolean> => {
+        try {
+            const response = await authFetch(buildApiUrl("/api/bots/start"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ platform, uin }),
+            });
+            if (response.ok) {
+                await fetchAdapters();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            reportClientError("启动机器人失败", error);
+            return false;
+        }
+    };
 
-  const startAdapterPolling = () => {
-    stopAdapterPolling()
-    adapterPollTimer = setInterval(fetchAdapters, ADAPTER_POLL_INTERVAL)
-  }
+    const stopBot = async (platform: string, uin: string): Promise<boolean> => {
+        try {
+            const response = await authFetch(buildApiUrl("/api/bots/stop"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ platform, uin }),
+            });
+            if (response.ok) {
+                await fetchAdapters();
+                return true;
+            }
+            return false;
+        } catch (error) {
+            reportClientError("停止机器人失败", error);
+            return false;
+        }
+    };
 
-  const stopAdapterPolling = () => {
-    if (adapterPollTimer) {
-      clearInterval(adapterPollTimer)
-      adapterPollTimer = null
-    }
-  }
+    const ADAPTER_POLL_INTERVAL = 5_000;
+    let adapterPollTimer: ReturnType<typeof setInterval> | null = null;
 
-  const cleanup = () => {
-    logsEventSource?.close()
-    stopAdapterPolling()
-  }
+    const startAdapterPolling = () => {
+        stopAdapterPolling();
+        adapterPollTimer = setInterval(fetchAdapters, ADAPTER_POLL_INTERVAL);
+    };
 
-  onMounted(() => {
-    fetchAdapters()
-    fetchSystemInfo()
-    startAdapterPolling()
-  })
+    const stopAdapterPolling = () => {
+        if (adapterPollTimer) {
+            clearInterval(adapterPollTimer);
+            adapterPollTimer = null;
+        }
+    };
 
-  onUnmounted(() => {
-    cleanup()
-  })
+    const cleanup = () => {
+        logsEventSource?.close();
+        stopAdapterPolling();
+    };
 
-  return {
-    adapters,
-    systemInfo,
-    logs,
-    totalBotCount,
-    onlineBotCount,
-    fetchAdapters,
-    fetchSystemInfo,
-    startBot,
-    stopBot,
-    startLogsSSE,
-    cleanup
-  }
+    onMounted(() => {
+        fetchAdapters();
+        fetchSystemInfo();
+        startAdapterPolling();
+    });
+
+    onUnmounted(() => {
+        cleanup();
+    });
+
+    return {
+        adapters,
+        systemInfo,
+        logs,
+        totalBotCount,
+        onlineBotCount,
+        fetchAdapters,
+        fetchSystemInfo,
+        startBot,
+        stopBot,
+        startLogsSSE,
+        cleanup,
+    };
 }

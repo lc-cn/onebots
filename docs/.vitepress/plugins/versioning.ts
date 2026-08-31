@@ -38,7 +38,6 @@ export function versioningPlugin(options: VersioningPluginOptions): Plugin {
     const {
         versions = [],
         currentVersion,
-        position = 'end'
     } = options;
 
     // 获取当前版本
@@ -46,15 +45,12 @@ export function versioningPlugin(options: VersioningPluginOptions): Plugin {
                    versions.find(v => v.version === currentVersion) ||
                    versions[0];
 
-    // 获取其他版本
-    const otherVersions = versions.filter(v => !v.isCurrent && v.version !== current?.version);
-
     return {
         name: 'vitepress-plugin-versioning',
         enforce: 'pre',
         
         // 在配置解析时注入版本信息
-        configResolved(config) {
+        configResolved(_config) {
             // 将版本信息注入到 Vite 环境变量中
             process.env.VITEPRESS_VERSIONS = JSON.stringify(versions);
             process.env.VITEPRESS_CURRENT_VERSION = current?.version || '';
@@ -110,7 +106,7 @@ export function withVersioning(
     };
 
     // 递归处理所有 locale 配置
-    const processLocales = (locales: any) => {
+    const processLocales = (locales: unknown) => {
         if (!locales) return;
 
         if (Array.isArray(locales)) {
@@ -121,7 +117,9 @@ export function withVersioning(
         if (typeof locales === 'object') {
             // 处理每个 locale
             Object.keys(locales).forEach(key => {
-                const locale = locales[key];
+                const locale = (locales as Record<string, unknown>)[key] as {
+                    themeConfig?: { nav?: Array<typeof versionNavItem> };
+                };
                 if (locale?.themeConfig?.nav) {
                     const nav = locale.themeConfig.nav;
                     
@@ -154,4 +152,3 @@ export function withVersioning(
 
     return config;
 }
-

@@ -4,8 +4,10 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { prepareCliInvocation } from "./cli-invocation.js";
 import { CliError } from "./cli/command-application.js";
+import { writeCliError } from "./cli-output.js";
 
-const packageVersion = (createRequire(import.meta.url)("../package.json") as { version: string }).version;
+const packageVersion = (createRequire(import.meta.url)("../package.json") as { version: string })
+    .version;
 
 /** 启动文件路由 CLI；系统服务的内部入口会绕过 Pastel 和 Ink。 */
 export async function runCli(argv = process.argv): Promise<void> {
@@ -32,16 +34,18 @@ export async function runCli(argv = process.argv): Promise<void> {
         await app.run(invocation.argv);
     } catch (error) {
         const normalized = error instanceof Error ? error : new Error(String(error));
-        console.error(`[onebots] ${normalized.message}`);
+        writeCliError(`[onebots] ${normalized.message}`);
         process.exitCode = normalized instanceof CliError ? normalized.exitCode : 1;
     }
 }
 
 function requiresHeadlessPresentation(argv: string[]): boolean {
-    return process.stdout.isTTY === true
-        && process.env.ONEBOTS_HEADLESS_CHILD !== "1"
-        && argv[2] === "doctor"
-        && argv.slice(3).includes("--json");
+    return (
+        process.stdout.isTTY === true &&
+        process.env.ONEBOTS_HEADLESS_CHILD !== "1" &&
+        argv[2] === "doctor" &&
+        argv.slice(3).includes("--json")
+    );
 }
 
 function runHeadlessCli(argv: string[]): Promise<number> {
@@ -57,17 +61,27 @@ function runHeadlessCli(argv: string[]): Promise<number> {
 }
 
 function parseServiceRuntimeOptions(argv: string[]) {
-    const options = { configPath: path.resolve("config.yaml"), adapters: [] as string[], protocols: [] as string[] };
+    const options = {
+        configPath: path.resolve("config.yaml"),
+        adapters: [] as string[],
+        protocols: [] as string[],
+    };
     const args = argv.slice(2);
     if (args[0] === "run") args.shift();
     for (let index = 0; index < args.length; index++) {
         const token = args[index];
-        if (token === "-c" || token === "--config") options.configPath = path.resolve(requireValue(args, ++index, token));
-        else if (token === "-r" || token === "--register") options.adapters.push(requireValue(args, ++index, token));
-        else if (token === "-p" || token === "--protocol") options.protocols.push(requireValue(args, ++index, token));
-        else if (token.startsWith("--config=")) options.configPath = path.resolve(token.slice("--config=".length));
-        else if (token.startsWith("--register=")) options.adapters.push(token.slice("--register=".length));
-        else if (token.startsWith("--protocol=")) options.protocols.push(token.slice("--protocol=".length));
+        if (token === "-c" || token === "--config")
+            options.configPath = path.resolve(requireValue(args, ++index, token));
+        else if (token === "-r" || token === "--register")
+            options.adapters.push(requireValue(args, ++index, token));
+        else if (token === "-p" || token === "--protocol")
+            options.protocols.push(requireValue(args, ++index, token));
+        else if (token.startsWith("--config="))
+            options.configPath = path.resolve(token.slice("--config=".length));
+        else if (token.startsWith("--register="))
+            options.adapters.push(token.slice("--register=".length));
+        else if (token.startsWith("--protocol="))
+            options.protocols.push(token.slice("--protocol=".length));
         else throw new CliError(`无效的服务运行参数: ${token}`, 2);
     }
     return options;

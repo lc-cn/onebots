@@ -2,8 +2,21 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
 import yaml from "js-yaml";
+import { ProtocolRegistry } from "@onebots/core";
+import { writeCliOutput } from "./cli-output.js";
+import { validateRuntimeConfig } from "./runtime-config-validator.js";
+import {
+    createBaseSetupConfig,
+    createProtocolDefaults,
+    formatSetupCommand,
+    normalizePluginNames,
+} from "./setup-config.js";
 
-export interface SetupOptions { force?: boolean; adapters?: string[]; protocols?: string[] }
+export interface SetupOptions {
+    force?: boolean;
+    adapters?: string[];
+    protocols?: string[];
+}
 
 interface PromptRule {
     type?: "string" | "number" | "boolean" | "object" | "array";
@@ -16,14 +29,14 @@ interface PromptRule {
 export async function runSetup(configPath: string, options: SetupOptions = {}): Promise<void> {
     const exists = fs.existsSync(configPath);
     if (exists && !options.force && !process.stdin.isTTY) {
-        console.log(`配置文件已存在: ${configPath}`);
-        console.log("非交互环境不会覆盖；如需更新请使用 --force。");
+        writeCliOutput(`配置文件已存在: ${configPath}`);
+        writeCliOutput("非交互环境不会覆盖；如需更新请使用 --force。");
         return;
     }
 
     let config = exists
-        ? ((yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>) || {})
-        : defaultConfig();
+        ? (yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>) || {}
+        : createBaseSetupConfig();
 
     let adapters = options.adapters ?? [];
     let protocols = options.protocols ?? [];
@@ -33,35 +46,72 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
         const prompt = readline.createInterface({ input: process.stdin, output: process.stdout });
         try {
             if (exists && !options.force) {
-                const answer = (await prompt.question("配置已存在，是否引导修改？ [y/N] ")).trim().toLowerCase();
+                const answer = (await prompt.question("配置已存在，是否引导修改？ [y/N] "))
+                    .trim()
+                    .toLowerCase();
                 if (answer !== "y" && answer !== "yes") return;
             }
             for (const [key, value] of Object.entries(baseSchema)) {
                 const rule = value as PromptRule;
-                if (!rule.type || rule.type === "object" || rule.type === "array" || key === "password") continue;
+                if (
+                    !rule.type ||
+                    rule.type === "object" ||
+                    rule.type === "array" ||
+                    key === "password"
+                )
+                    continue;
                 const current = config[key] ?? rule.default ?? "";
-                const answer = (await prompt.question(`${rule.label ?? key}${rule.description ? ` - ${rule.description}` : ""} [${String(current)}]: `)).trim();
+                const answer = (
+                    await prompt.question(
+                        `${rule.label ?? key}${rule.description ? ` - ${rule.description}` : ""} [${String(current)}]: `,
+                    )
+                ).trim();
                 if (answer) config[key] = parsePromptValue(answer, rule.type);
             }
-            const adapterAnswer = (await prompt.question(`Adapter（逗号分隔） [${adapters.join(",")}]: `)).trim();
-            if (adapterAnswer) adapters = adapterAnswer.split(",").map(value => value.trim()).filter(Boolean);
-            const protocolAnswer = (await prompt.question(`Protocol（逗号分隔） [${protocols.join(",")}]: `)).trim();
-            if (protocolAnswer) protocols = protocolAnswer.split(",").map(value => value.trim()).filter(Boolean);
+            const adapterAnswer = (
+                await prompt.question(`Adapter（逗号分隔） [${adapters.join(",")}]: `)
+            ).trim();
+            if (adapterAnswer)
+                adapters = adapterAnswer
+                    .split(",")
+                    .map(value => value.trim())
+                    .filter(Boolean);
+            const protocolAnswer = (
+                await prompt.question(`Protocol（逗号分隔） [${protocols.join(",")}]: `)
+            ).trim();
+            if (protocolAnswer)
+                protocols = protocolAnswer
+                    .split(",")
+                    .map(value => value.trim())
+                    .filter(Boolean);
         } finally {
             prompt.close();
         }
+    }
+
+    adapters = normalizePluginNames(adapters);
+    protocols = normalizePluginNames(protocols);
+    const { loadPlugins } = await import("./runtime.js");
+    const failures = await loadPlugins(adapters, protocols);
+    if (failures.length > 0) {
+        throw new Error(`无法加载插件: ${failures.join(", ")}`);
+    }
+    if (!exists) {
+        config.general = createProtocolDefaults(ProtocolRegistry.getAllSchemas());
     }
 
     await validateConfig(config);
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     if (exists) fs.copyFileSync(configPath, `${configPath}.bak`);
     const temporary = `${configPath}.${process.pid}.tmp`;
-    fs.writeFileSync(temporary, yaml.dump(config, { noRefs: true }), { encoding: "utf8", mode: 0o600 });
+    fs.writeFileSync(temporary, yaml.dump(config, { noRefs: true }), {
+        encoding: "utf8",
+        mode: 0o600,
+    });
     fs.renameSync(temporary, configPath);
     fs.mkdirSync(path.join(path.dirname(configPath), "data"), { recursive: true });
-    console.log(`配置已就绪: ${configPath}`);
-    const pluginArgs = [...adapters.flatMap(value => ["-r", value]), ...protocols.flatMap(value => ["-p", value])];
-    console.log(`前台启动: onebots -c ${JSON.stringify(configPath)}${pluginArgs.length ? ` ${pluginArgs.join(" ")}` : ""}`);
+    writeCliOutput(`配置已就绪: ${configPath}`);
+    writeCliOutput(`前台启动: ${formatSetupCommand(configPath, adapters, protocols)}`);
 }
 
 function parsePromptValue(value: string, type: PromptRule["type"]): string | number | boolean {
@@ -71,21 +121,11 @@ function parsePromptValue(value: string, type: PromptRule["type"]): string | num
         return parsed;
     }
     if (type === "boolean") {
-        if (!["true", "false"].includes(value.toLowerCase())) throw new Error(`布尔值必须是 true 或 false: ${value}`);
+        if (!["true", "false"].includes(value.toLowerCase()))
+            throw new Error(`布尔值必须是 true 或 false: ${value}`);
         return value.toLowerCase() === "true";
     }
     return value;
-}
-
-function defaultConfig(): Record<string, unknown> {
-    return {
-        port: 6727,
-        log_level: "info",
-        timeout: 30,
-        general: {
-            "onebot.v11": { use_http: true, use_ws: true, access_token: "", secret: "", enable_cors: true, heartbeat_interval: 5 },
-        },
-    };
 }
 
 async function validateConfig(config: Record<string, unknown>): Promise<void> {
@@ -94,4 +134,5 @@ async function validateConfig(config: Record<string, unknown>): Promise<void> {
         import("./config-schema.js"),
     ]);
     ConfigValidator.validate(config, getAppConfigSchema().base);
+    validateRuntimeConfig(config);
 }
