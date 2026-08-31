@@ -31,20 +31,17 @@ export function registerVerificationRoutes(app: App, router: Router): void {
         ctx.status = 200;
         ctx.respond = false;
 
-        app.verificationClients.add(ctx.res);
-
         const heartbeat = setInterval(() => {
             try {
                 ctx.res.write(": heartbeat\n\n");
             } catch {
-                clearInterval(heartbeat);
-                app.verificationClients.delete(ctx.res);
+                app.removeVerificationClient(ctx.res);
             }
         }, 30000);
+        app.registerVerificationClient(ctx.res, () => clearInterval(heartbeat));
 
         ctx.req.on("close", () => {
-            clearInterval(heartbeat);
-            app.verificationClients.delete(ctx.res);
+            app.removeVerificationClient(ctx.res);
         });
     });
 

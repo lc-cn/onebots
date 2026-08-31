@@ -2,15 +2,19 @@ import * as fs from "fs";
 import * as path from "path";
 import { existsSync, writeFileSync, mkdirSync } from "fs";
 import type { ServerResponse } from "node:http";
+import { ManagementStreamClients } from "./management-stream-clients.js";
 
 export class LogCacheManager {
     public readonly cacheFile: string;
-    public readonly clients: Set<ServerResponse> = new Set();
-    private readonly clientDisposers = new Map<ServerResponse, () => void>();
+    private readonly streamClients = new ManagementStreamClients();
     private writeStream!: fs.WriteStream;
     private restoreStdio?: () => void;
     private cleanupPromise?: Promise<void>;
     private isClosing = false;
+
+    get clients(): Set<ServerResponse> {
+        return this.streamClients.clients;
+    }
 
     constructor(cacheFile: string) {
         this.cacheFile = cacheFile;
@@ -58,19 +62,15 @@ export class LogCacheManager {
             }
             return;
         }
-        this.clients.add(client);
-        this.clientDisposers.set(client, dispose);
+        this.streamClients.register(client, dispose);
     }
 
     removeClient(client: ServerResponse): void {
-        const dispose = this.clientDisposers.get(client);
-        this.clientDisposers.delete(client);
-        this.clients.delete(client);
-        try {
-            dispose?.();
-        } catch {
-            // 常规断连清理不应影响其他日志客户端；停机路径会聚合清理失败。
-        }
+        this.streamClients.remove(client);
+    }
+
+    disconnectClients(): unknown[] {
+        return this.streamClients.disconnectAll();
     }
 
     cleanup(): Promise<void> {
@@ -112,23 +112,7 @@ export class LogCacheManager {
         this.isClosing = true;
         this.restoreStdio?.();
         this.restoreStdio = undefined;
-        const failures: unknown[] = [];
-
-        for (const client of this.clients) {
-            try {
-                this.clientDisposers.get(client)?.();
-            } catch (error) {
-                failures.push(error);
-            }
-            try {
-                client.end();
-            } catch (error) {
-                failures.push(error);
-            }
-        }
-        this.clientDisposers.clear();
-        this.clients.clear();
-        return failures;
+        return this.disconnectClients();
     }
 
     private closeWriteStream(): Promise<void> {

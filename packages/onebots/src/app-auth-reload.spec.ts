@@ -31,6 +31,9 @@ describe("App management credential reload", () => {
         const session = tokenManager.generateToken({ username: "admin" });
         const managementClient = { close: vi.fn() };
         const terminalClient = { close: vi.fn() };
+        const logStreams = { disconnectClients: vi.fn(() => []) };
+        const verificationStreams = { disconnectClients: vi.fn(() => []) };
+        const messageDebugStreams = { disconnectClients: vi.fn(() => []) };
         const app = {
             config: {
                 username: "admin",
@@ -40,6 +43,14 @@ describe("App management credential reload", () => {
             tokenManager,
             ws: { clients: new Set([managementClient]) },
             terminalClients: new Set([terminalClient]),
+            _logCache: logStreams,
+            _verification: verificationStreams,
+            _messageDebug: messageDebugStreams,
+            disconnectManagementStreams: () => [
+                ...logStreams.disconnectClients(),
+                ...verificationStreams.disconnectClients(),
+                ...messageDebugStreams.disconnectClients(),
+            ],
         } as unknown as App;
 
         await App.prototype.reload.call(app, {
@@ -52,6 +63,9 @@ describe("App management credential reload", () => {
         expect(tokenManager.validateToken(session.token).valid).toBe(false);
         expect(managementClient.close).toHaveBeenCalledWith(1008, "Credentials changed");
         expect(terminalClient.close).toHaveBeenCalledWith(1008, "Credentials changed");
+        expect(logStreams.disconnectClients).toHaveBeenCalledOnce();
+        expect(verificationStreams.disconnectClients).toHaveBeenCalledOnce();
+        expect(messageDebugStreams.disconnectClients).toHaveBeenCalledOnce();
     });
 
     it("非认证配置热重载保留现有会话与连接", async () => {

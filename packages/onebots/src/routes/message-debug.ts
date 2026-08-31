@@ -18,29 +18,26 @@ export function registerMessageDebugRoutes(app: App, router: Router): void {
         ctx.req.socket.setNoDelay(true);
         ctx.req.socket.setKeepAlive(true);
         ctx.set({
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type",
         });
         ctx.status = 200;
         ctx.respond = false;
 
-        app.messageDebug.clients.add(ctx.res);
-
         const heartbeat = setInterval(() => {
             try {
-                ctx.res.write(': heartbeat\n\n');
+                ctx.res.write(": heartbeat\n\n");
             } catch {
-                clearInterval(heartbeat);
-                app.messageDebug.clients.delete(ctx.res);
+                app.messageDebug.removeClient(ctx.res);
             }
         }, 30000);
+        app.messageDebug.registerClient(ctx.res, () => clearInterval(heartbeat));
 
-        ctx.req.on('close', () => {
-            clearInterval(heartbeat);
-            app.messageDebug.clients.delete(ctx.res);
+        ctx.req.on("close", () => {
+            app.messageDebug.removeClient(ctx.res);
         });
     });
 

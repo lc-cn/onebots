@@ -1,4 +1,5 @@
 import type { ServerResponse } from "node:http";
+import { ManagementStreamClients } from "./management-stream-clients.js";
 
 export interface MessageDebugEntry {
     /** 单调递增序号，供前端去重/排序 */
@@ -20,9 +21,25 @@ export interface MessageDebugEntry {
 export class MessageDebugManager {
     private static readonly MAX_ENTRIES = 300;
 
-    public readonly clients: Set<ServerResponse> = new Set();
+    private readonly streamClients = new ManagementStreamClients();
     private readonly entries: MessageDebugEntry[] = [];
     private seq = 0;
+
+    get clients(): Set<ServerResponse> {
+        return this.streamClients.clients;
+    }
+
+    registerClient(client: ServerResponse, dispose: () => void): void {
+        this.streamClients.register(client, dispose);
+    }
+
+    removeClient(client: ServerResponse): void {
+        this.streamClients.remove(client);
+    }
+
+    disconnectClients(): unknown[] {
+        return this.streamClients.disconnectAll();
+    }
 
     private broadcast(entry: MessageDebugEntry) {
         if (this.clients.size === 0) return;
@@ -38,7 +55,7 @@ export class MessageDebugManager {
             try {
                 client.write(data);
             } catch {
-                this.clients.delete(client);
+                this.removeClient(client);
             }
         }
     }
@@ -56,7 +73,13 @@ export class MessageDebugManager {
         this.push({ direction: "inbound", platform, account_id, payload });
     }
 
-    recordOutbound(platform: string, account_id: string, protocol: string, version: string, payload: unknown) {
+    recordOutbound(
+        platform: string,
+        account_id: string,
+        protocol: string,
+        version: string,
+        payload: unknown,
+    ) {
         this.push({ direction: "outbound", platform, account_id, protocol, version, payload });
     }
 

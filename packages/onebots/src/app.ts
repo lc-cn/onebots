@@ -111,8 +111,11 @@ export class App extends BaseApp {
     removeLogClient(client: ServerResponse): void {
         this._logCache.removeClient(client);
     }
-    get verificationClients() {
-        return this._verification.clients;
+    registerVerificationClient(client: ServerResponse, dispose: () => void): void {
+        this._verification.registerClient(client, dispose);
+    }
+    removeVerificationClient(client: ServerResponse): void {
+        this._verification.removeClient(client);
     }
     get pendingVerifications() {
         return this._verification.pending;
@@ -142,7 +145,16 @@ export class App extends BaseApp {
         process.once("exit", cleanupLogCacheOnExit);
         this.once("close", async () => {
             process.off("exit", cleanupLogCacheOnExit);
-            await this._logCache.cleanup();
+            const failures = this.disconnectManagementStreams();
+            try {
+                await this._logCache.cleanup();
+            } catch (error) {
+                failures.push(error);
+            }
+            if (failures.length === 1) throw failures[0];
+            if (failures.length > 1) {
+                throw new AggregateError(failures, "管理事件流清理未完整完成");
+            }
         });
     }
 
@@ -422,8 +434,24 @@ export class App extends BaseApp {
                 for (const client of this.terminalClients) {
                     client.close(1008, "Credentials changed");
                 }
+                const streamFailures = this.disconnectManagementStreams();
+                if (streamFailures.length) {
+                    this.logger.error("管理凭据轮换后关闭 SSE 连接失败", {
+                        failures: streamFailures.map(error =>
+                            error instanceof Error ? error.message : String(error),
+                        ),
+                    });
+                }
             });
         }
+    }
+
+    private disconnectManagementStreams(): unknown[] {
+        return [
+            ...this._logCache.disconnectClients(),
+            ...this._verification.disconnectClients(),
+            ...this._messageDebug.disconnectClients(),
+        ];
     }
 }
 

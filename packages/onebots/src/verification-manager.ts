@@ -1,11 +1,29 @@
 import type { ServerResponse } from "node:http";
+import { ManagementStreamClients } from "./management-stream-clients.js";
 
 export class VerificationManager {
     private static readonly TTL_MS = 30 * 60 * 1000;
     private static readonly MAX_PENDING = 20;
 
-    public readonly clients: Set<ServerResponse> = new Set();
-    public readonly pending: Map<string, { payload: Record<string, unknown>; createdAt: number }> = new Map();
+    private readonly streamClients = new ManagementStreamClients();
+    public readonly pending: Map<string, { payload: Record<string, unknown>; createdAt: number }> =
+        new Map();
+
+    get clients(): Set<ServerResponse> {
+        return this.streamClients.clients;
+    }
+
+    registerClient(client: ServerResponse, dispose: () => void): void {
+        this.streamClients.register(client, dispose);
+    }
+
+    removeClient(client: ServerResponse): void {
+        this.streamClients.remove(client);
+    }
+
+    disconnectClients(): unknown[] {
+        return this.streamClients.disconnectAll();
+    }
 
     private broadcast(payload: Record<string, unknown>) {
         const data = `data: ${JSON.stringify(payload)}\n\n`;
@@ -13,15 +31,15 @@ export class VerificationManager {
             try {
                 client.write(data);
             } catch {
-                this.clients.delete(client);
+                this.removeClient(client);
             }
         }
     }
 
     storeAndBroadcast(payload: Record<string, unknown>) {
-        const platform = String(payload.platform ?? '');
-        const account_id = String(payload.account_id ?? '');
-        const type = String(payload.type ?? '');
+        const platform = String(payload.platform ?? "");
+        const account_id = String(payload.account_id ?? "");
+        const type = String(payload.type ?? "");
         if (!platform || !account_id) return;
 
         const key = `${platform}:${account_id}:${type}`;
@@ -41,9 +59,9 @@ export class VerificationManager {
     }
 
     clearAndBroadcast(payload: Record<string, unknown>) {
-        const platform = String(payload.platform ?? '');
-        const account_id = String(payload.account_id ?? '');
-        const type = payload.type != null ? String(payload.type) : '';
+        const platform = String(payload.platform ?? "");
+        const account_id = String(payload.account_id ?? "");
+        const type = payload.type != null ? String(payload.type) : "";
         if (!platform || !account_id) return;
 
         if (type) {
@@ -56,7 +74,7 @@ export class VerificationManager {
             }
         }
         this.broadcast({
-            event: 'clear',
+            event: "clear",
             platform,
             account_id,
             ...(type ? { type } : {}),
