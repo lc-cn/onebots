@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 
@@ -50,18 +51,6 @@ export interface WhatsAppSolutionMigrationResponse {
     estimated_completion_time?: string;
 }
 
-export const WHATSAPP_SOLUTION_MIGRATION_ACTIONS = Object.freeze([
-    "get_migration_intent",
-    "set_solution_migration_intent",
-] as const);
-export type WhatsAppSolutionMigrationAction = (typeof WHATSAPP_SOLUTION_MIGRATION_ACTIONS)[number];
-
-export function isWhatsAppSolutionMigrationAction(
-    action: string,
-): action is WhatsAppSolutionMigrationAction {
-    return (WHATSAPP_SOLUTION_MIGRATION_ACTIONS as readonly string[]).includes(action);
-}
-
 /** WABA Multi-Partner Solution 迁移意图的强类型控制面。 */
 export class WhatsAppSolutionMigration {
     constructor(private readonly client: WhatsAppClient) {}
@@ -87,30 +76,39 @@ export class WhatsAppSolutionMigration {
         });
         return solutionMigrationResponse(response);
     }
-
-    execute(
-        action: WhatsAppSolutionMigrationAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_migration_intent":
-                return this.get(
-                    requireString(params.migration_intent_id, "migration_intent_id"),
-                    actionFields(params),
-                );
-            case "set_solution_migration_intent":
-                return this.set(actionRequest(params));
-        }
-    }
 }
 
-export const WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_SOLUTION_MIGRATION_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.solutionMigration.execute(action, params),
-    ]),
-) as Record<WhatsAppSolutionMigrationAction, PlatformActionHandler<WhatsAppClient>>;
+type SolutionMigrationActionParams = Readonly<Record<string, unknown>>;
+
+const SOLUTION_MIGRATION_ACTION_HANDLERS = {
+    get_migration_intent: (client: WhatsAppClient, params: SolutionMigrationActionParams) =>
+        client.solutionMigration.get(
+            requireString(params.migration_intent_id, "migration_intent_id"),
+            actionFields(params),
+        ),
+    set_solution_migration_intent: (
+        client: WhatsAppClient,
+        params: SolutionMigrationActionParams,
+    ) => client.solutionMigration.set(actionRequest(params)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Solution Migration 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    SOLUTION_MIGRATION_ACTION_HANDLERS,
+    {
+        get_migration_intent: ["migration_intent_id", "fields"],
+        set_solution_migration_intent: ["request"],
+    },
+);
+
+export type WhatsAppSolutionMigrationAction =
+    keyof typeof WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS;
+
+export function isWhatsAppSolutionMigrationAction(
+    action: string,
+): action is WhatsAppSolutionMigrationAction {
+    return Object.hasOwn(WHATSAPP_SOLUTION_MIGRATION_ACTION_HANDLERS, action);
+}
 
 function migrationIntentResponse(value: unknown): WhatsAppMigrationIntent {
     if (!isRecord(value)) invalidResponse(value);

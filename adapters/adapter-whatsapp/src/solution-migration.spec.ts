@@ -52,17 +52,19 @@ describe("WhatsAppSolutionMigration", () => {
         expect(bodyAt(fetcher)).toEqual(request);
     });
 
-    it("固定平台动作使用 request 包装且不透传外层字段", async () => {
-        const fetcher = jsonFetcher({ success: true, migration_intent_id: "intent" });
+    it("固定平台动作拒绝 request 外层字段并保留动作上下文", async () => {
+        const fetcher = vi.fn<typeof fetch>();
         const client = new WhatsAppClient(config, fetcher);
-        await executeWhatsAppPlatformAction(client, "set_solution_migration_intent", {
-            request: { solution_id: "111", migration_intent: "CANCEL_MIGRATION" },
-            arbitrary: true,
+        await expect(
+            executeWhatsAppPlatformAction(client, "set_solution_migration_intent", {
+                request: { solution_id: "111", migration_intent: "CANCEL_MIGRATION" },
+                arbitrary: true,
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "set_solution_migration_intent", parameter: "arbitrary" },
         });
-        expect(bodyAt(fetcher)).toEqual({
-            solution_id: "111",
-            migration_intent: "CANCEL_MIGRATION",
-        });
+        expect(fetcher).not.toHaveBeenCalled();
     });
 
     it.each([
