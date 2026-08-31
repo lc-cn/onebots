@@ -8,7 +8,7 @@ On Linux and macOS, the installer checks the runtime, installs an isolated Node.
 curl -fsSL https://raw.githubusercontent.com/lc-cn/onebots/master/install.sh | sh
 ```
 
-After the first login, use **Extensions** in the Web console to install platform adapters such as Slack or Telegram, follow the credential setup guide, and apply the account configuration without returning to the command line. Files are stored in `~/.onebots` by default; set `ONEBOTS_HOME` before running the script to change the location.
+After the first login, use **Extensions** in the Web console to install platform adapters such as Slack or Telegram, follow the credential setup guide, and apply the account configuration without returning to the command line. The extension manager validates the current configuration before downloading dependencies and merges changes made by other management actions while an installation is running. Files are stored in `~/.onebots` by default; set `ONEBOTS_HOME` before running the script to change the location.
 
 Windows PowerShell:
 

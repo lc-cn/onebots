@@ -89,4 +89,44 @@ describe("ExtensionManager", () => {
         await manager.install("adapter:slack");
         expect(install).not.toHaveBeenCalled();
     });
+
+    it("配置无效时不开始安装，避免留下半完成依赖", async () => {
+        const { root, configPath } = fixture();
+        fs.writeFileSync(configPath, "plugins: []\n");
+        const install = vi.fn();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow("plugins 必须是对象");
+        expect(install).not.toHaveBeenCalled();
+    });
+
+    it("安装期间配置发生变化时合并最新内容", async () => {
+        const { root, configPath } = fixture();
+        const install = vi.fn(async () => {
+            fs.writeFileSync(
+                configPath,
+                "plugins:\n  adapters: [telegram]\n  protocols: [onebot-v11]\ngeneral:\n  host: 127.0.0.1\n",
+            );
+        });
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+        });
+
+        await manager.install("adapter:slack");
+
+        const config = yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+        expect(config).toMatchObject({
+            plugins: {
+                adapters: ["telegram", "slack"],
+                protocols: ["onebot-v11"],
+            },
+            general: { host: "127.0.0.1" },
+        });
+    });
 });

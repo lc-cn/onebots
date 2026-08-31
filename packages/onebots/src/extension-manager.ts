@@ -73,24 +73,45 @@ export class ExtensionManager {
             throw new ExtensionInstallConflictError(`扩展 ${this.installing} 正在安装，请稍后再试`);
         }
         this.assertRuntimeRoot();
+        const preparedConfig = this.prepareConfig(entry.type, entry.name);
         this.installing = id;
         try {
             if (!this.isInstalled(entry.packageName)) {
                 await this.installer.install(entry.packageName, this.runtimeRoot);
             }
-            const source = fs.readFileSync(this.configPath, "utf8");
-            const config = parseRuntimeConfig(source);
-            const selection = getRuntimePluginSelection(config) ?? { adapters: [], protocols: [] };
-            const key = entry.type === "adapter" ? "adapters" : "protocols";
-            if (!selection[key].includes(entry.name)) selection[key].push(entry.name);
-            setRuntimePluginSelection(config, selection);
-            writeConfigFileAtomic(this.configPath, yaml.dump(config, { noRefs: true }), {
+            const latestSource = fs.readFileSync(this.configPath, "utf8");
+            const content =
+                latestSource === preparedConfig.source
+                    ? preparedConfig.content
+                    : this.prepareConfig(entry.type, entry.name, latestSource).content;
+            writeConfigFileAtomic(this.configPath, content, {
                 backup: true,
             });
             return { restartRequired: true };
         } finally {
             this.installing = null;
         }
+    }
+
+    /** 在调用 npm 前验证配置，并生成不会丢失现有插件选择的候选内容。 */
+    private prepareConfig(type: "adapter" | "protocol", name: string, source?: string) {
+        const currentSource = source ?? fs.readFileSync(this.configPath, "utf8");
+        const config = parseRuntimeConfig(currentSource);
+        const currentSelection = getRuntimePluginSelection(config) ?? {
+            adapters: [],
+            protocols: [],
+        };
+        const selection = {
+            adapters: [...currentSelection.adapters],
+            protocols: [...currentSelection.protocols],
+        };
+        const key = type === "adapter" ? "adapters" : "protocols";
+        if (!selection[key].includes(name)) selection[key].push(name);
+        setRuntimePluginSelection(config, selection);
+        return {
+            source: currentSource,
+            content: yaml.dump(config, { noRefs: true }),
+        };
     }
 
     private readSelection() {
