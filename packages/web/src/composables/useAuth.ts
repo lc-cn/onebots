@@ -166,8 +166,13 @@ export const logout = async () => {
     clearAuth()
     return
   }
-  await authFetch(buildApiUrl('/api/auth/logout'), { method: 'POST' }).catch(() => {})
-  clearAuth()
+  try {
+    await authFetch(buildApiUrl('/api/auth/logout'), authenticationRequestInit({ method: 'POST' }))
+  } catch {
+    // 服务端不可达或请求超时时仍应完成本地退出。
+  } finally {
+    clearAuth()
+  }
 }
 
 export const refresh = async (signal?: AbortSignal | null): Promise<RefreshResult> => {

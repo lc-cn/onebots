@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authFetch, getToken, login, loginWithToken, refresh, setToken } from "./useAuth.js";
+import {
+    authFetch,
+    getToken,
+    login,
+    loginWithToken,
+    logout,
+    refresh,
+    setToken,
+} from "./useAuth.js";
 
 function memoryStorage(): Storage {
     const values = new Map<string, string>();
@@ -112,5 +120,19 @@ describe("Web 鉴权码登录", () => {
         expect(response.status).toBe(401);
         expect(getToken()).toBe("expired-token");
         expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
+    it("登出使用有界请求，并在服务端不可达时仍清理本地会话", async () => {
+        setToken("session-token", Date.now() + 60_000, "refresh-token");
+        const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+            expect(init?.signal).toBeInstanceOf(AbortSignal);
+            throw new DOMException("timeout", "TimeoutError");
+        });
+        vi.stubGlobal("fetch", fetcher);
+
+        await expect(logout()).resolves.toBeUndefined();
+
+        expect(getToken()).toBeNull();
+        expect(fetcher).toHaveBeenCalledOnce();
     });
 });
