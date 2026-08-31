@@ -48,6 +48,15 @@ onebots 目前支持以下平台适配器：
 
 启动 Web 管理端后，可在「机器人管理」点击「能力概览」，按适配器查看上述四类声明。选择器同时显示平台展示名与内部标识，详情保留注册说明。概览数字只统计原生和模拟能力，明确标记为不支持的项目仍会保留在列表中；权限、场景和上下文限制也会随条目展示。这里展示的是当前进程实际加载的运行时清单，因此比静态平台列表更适合确认一次部署的能力边界。
 
+无需启动账号也可以从 CLI 导出所选适配器注册的默认清单：
+
+```bash
+onebots capabilities -c config.yaml
+onebots capabilities -c config.yaml --json
+```
+
+命令复用 `plugins.adapters`，也接受 `-r` 按类别覆盖；它只加载适配器入口，不连接平台，也不加载协议。JSON 报告包含包名、版本、真实入口、四类统计与完整清单，适合选型比较和 CI 留档。插件加载失败会保留在 `errors` 并返回退出码 `2`；适配器未注册默认能力清单时 `complete` 为 `false` 并返回退出码 `1`。账号权限、订阅配置产生的覆写只能在服务启动后通过 `/api/adapters` 或 Web 能力面板确认。
+
 ### 平台原生动作
 
 标准协议没有覆盖的平台能力统一通过 `adapter.callAction(accountId, action, params)` 调用。每个适配器包同时导出闭合的动作集合、动作联合类型和底层执行器；以 QQ 为例，分别是 `QQ_PLATFORM_ACTIONS`、`QQPlatformAction` 与 `executeQQPlatformAction()`。集合的 `has()` 接受动态字符串并完成类型收窄，因此插件无需复制动作名，也不需要把原生 SDK 客户端擦成通用类型。

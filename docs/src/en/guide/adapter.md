@@ -39,6 +39,15 @@ Explicit event subscriptions are also account capability boundaries. QQ/Discord 
 
 In the Web console, open **Capability overview** from **Bots** to inspect all four categories for each loaded adapter. The selector shows both the display name and internal platform identifier, while the details retain the registered description. Summary counts include native and emulated capabilities, while explicitly unsupported entries remain visible. Permission, scene, and context restrictions appear on each item. Because this view consumes the runtime manifest, it describes the adapters loaded in the current deployment rather than a static platform catalog.
 
+The CLI can export each selected adapter's registered default manifest without starting an account:
+
+```bash
+onebots capabilities -c config.yaml
+onebots capabilities -c config.yaml --json
+```
+
+The command reuses `plugins.adapters`, with `-r` as a category-level override. It loads adapter entries without connecting to a platform or loading protocols. JSON includes package names, versions, real entry paths, category counts, and complete manifests for selection reviews and CI evidence. Plugin load failures remain in `errors` and return exit code `2`; an adapter without a registered default manifest sets `complete` to `false` and returns exit code `1`. Account permission and subscription overrides remain available after startup through `/api/adapters` and the Web capability panel.
+
 ### Native platform actions
 
 Capabilities outside the common protocol surface are called through `adapter.callAction(accountId, action, params)`. Each adapter package also exports a closed action set, its inferred action union, and a low-level executor. For QQ these are `QQ_PLATFORM_ACTIONS`, `QQPlatformAction`, and `executeQQPlatformAction()`. The set's `has()` accepts a dynamic string and narrows its type, so integrations do not need to duplicate action names or erase the native client type.

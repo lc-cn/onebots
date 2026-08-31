@@ -8,6 +8,11 @@ import { preflightServiceRuntime, type ServicePreflightSpec } from "../service-p
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
 import { getRuntimePluginSelection } from "../runtime-plugin-selection.js";
 import { parseRuntimeConfig } from "../runtime-config-validator.js";
+import { getLoadedPlugins, type LoadedPluginInfo } from "../plugin-loader.js";
+import {
+    buildAdapterCapabilityReport,
+    formatAdapterCapabilityReport,
+} from "../capability-report.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
 export interface CommandResult {
@@ -53,6 +58,41 @@ export function resolveConfiguredRuntimeOptions(options: RuntimeOptions) {
 /** 将 `--system` 标志转换为服务 scope。 */
 export function scopeFrom(options: ScopeOptions): ServiceScope {
     return options.system ? "system" : "user";
+}
+
+interface CapabilityCommandDependencies {
+    loadPlugins(adapters: string[], protocols: string[]): Promise<string[]>;
+    getLoadedPlugins(): LoadedPluginInfo[];
+}
+
+/** 无连接加载适配器入口，并导出实际安装包注册的默认能力契约。 */
+export async function showCapabilities(
+    options: RuntimeOptions & { json: boolean },
+    dependencies?: CapabilityCommandDependencies,
+): Promise<CommandResult> {
+    const runtime = resolveConfiguredRuntimeOptions(options);
+    const resolved =
+        dependencies ??
+        ({
+            loadPlugins: async (adapters: string[], protocols: string[]) => {
+                const { loadPlugins } = await import("../runtime.js");
+                return loadPlugins(adapters, protocols);
+            },
+            getLoadedPlugins,
+        } satisfies CapabilityCommandDependencies);
+    const failures = await resolved.loadPlugins(runtime.adapters, []);
+    const selected = new Set(runtime.adapters);
+    const report = buildAdapterCapabilityReport(
+        resolved
+            .getLoadedPlugins()
+            .filter(plugin => plugin.type === "adapter" && selected.has(plugin.name)),
+        failures,
+    );
+    return {
+        output: formatAdapterCapabilityReport(report, options.json),
+        raw: options.json,
+        exitCode: failures.length ? 2 : report.complete ? undefined : 1,
+    };
 }
 
 /** 使用与裸 `onebots` 相同的 runtime module 前台运行桥接服务。 */
