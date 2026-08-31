@@ -17,9 +17,18 @@ describe("Docker healthcheck", () => {
         ).toBe("http://127.0.0.1:9000/custom-ready");
     });
 
-    it("accepts only a successful response declaring ready=true", async () => {
+    it("accepts only readiness evidence owned by a concrete OneBots instance", async () => {
         const fetcher = vi.fn(
-            async () => new Response(JSON.stringify({ ready: true }), { status: 200 }),
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        ready: true,
+                        application: "onebots",
+                        version: "1.2.3",
+                        instance_id: "container-instance",
+                    }),
+                    { status: 200 },
+                ),
         );
 
         await expect(
@@ -51,6 +60,29 @@ describe("Docker healthcheck", () => {
                 fetcher: async () => new Response('{"status":"ok"}', { status: 200 }),
             }),
         ).rejects.toThrow(/ready=true/);
+
+        await expect(
+            checkReadiness({
+                config: {},
+                env: {},
+                fetcher: async () =>
+                    new Response('{"ready":true,"application":"onebots","version":"1.2.3"}', {
+                        status: 200,
+                    }),
+            }),
+        ).rejects.toThrow(/instance_id/);
+
+        await expect(
+            checkReadiness({
+                config: {},
+                env: {},
+                fetcher: async () =>
+                    new Response(
+                        '{"ready":true,"application":"other","version":"1.2.3","instance_id":"instance"}',
+                        { status: 200 },
+                    ),
+            }),
+        ).rejects.toThrow(/onebots 应用身份/);
 
         await expect(
             checkReadiness({

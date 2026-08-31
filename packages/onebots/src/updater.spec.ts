@@ -279,7 +279,15 @@ describe("post-update service safety", () => {
         let healthAttempts = 0;
         const fetcher = vi.fn<typeof fetch>(async input => {
             if (String(input).endsWith("/ready")) {
-                return new Response(JSON.stringify({ ready: true }), { status: 200 });
+                return new Response(
+                    JSON.stringify({
+                        ready: true,
+                        application: "onebots",
+                        version: "1.3.0",
+                        instance_id: "updated-instance",
+                    }),
+                    { status: 200 },
+                );
             }
             healthAttempts += 1;
             return new Response(
@@ -332,7 +340,15 @@ describe("post-update service safety", () => {
         const spec = temporaryServiceSpec();
         const fetcher = vi.fn<typeof fetch>(async input =>
             String(input).endsWith("/ready")
-                ? new Response(JSON.stringify({ ready: true }), { status: 200 })
+                ? new Response(
+                      JSON.stringify({
+                          ready: true,
+                          application: "onebots",
+                          version: "1.3.0",
+                          instance_id: "old-instance",
+                      }),
+                      { status: 200 },
+                  )
                 : new Response(
                       JSON.stringify({
                           status: "ok",
@@ -357,7 +373,15 @@ describe("post-update service safety", () => {
         const spec = temporaryServiceSpec();
         const fetcher = vi.fn<typeof fetch>(async input =>
             String(input).endsWith("/ready")
-                ? new Response(JSON.stringify({ ready: true }), { status: 200 })
+                ? new Response(
+                      JSON.stringify({
+                          ready: true,
+                          application: "onebots",
+                          version: "1.3.0",
+                          instance_id: "new-instance",
+                      }),
+                      { status: 200 },
+                  )
                 : new Response(
                       JSON.stringify({
                           status: "ok",
@@ -377,7 +401,15 @@ describe("post-update service safety", () => {
         const spec = temporaryServiceSpec();
         const fetcher = vi.fn<typeof fetch>(async input =>
             String(input).endsWith("/ready")
-                ? new Response(JSON.stringify({ ready: true }), { status: 200 })
+                ? new Response(
+                      JSON.stringify({
+                          ready: true,
+                          application: "onebots",
+                          version: "1.3.0",
+                          instance_id: "new-instance",
+                      }),
+                      { status: 200 },
+                  )
                 : new Response(
                       JSON.stringify({
                           status: "ok",

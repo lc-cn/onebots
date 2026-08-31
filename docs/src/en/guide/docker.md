@@ -58,7 +58,7 @@ The repository includes `.env.example`. For environment authentication, copy it 
 
 ### Container health status
 
-The official image includes a health check, and the Compose example enables the same probe explicitly. It reads `port` and `path` from `/data/config.yaml`, requests the matching `/ready` endpoint, and requires both a successful HTTP status and an explicit `ready: true` response. Inspect the status and recent failures with:
+The official image includes a health check, and the Compose example enables the same probe explicitly. It reads `port` and `path` from `/data/config.yaml`, requests the matching `/ready` endpoint, and requires a successful HTTP status, an explicit `ready: true` result, the `onebots` application identity, a runtime version, and a non-empty `instance_id`. Inspect the status and recent failures with:
 
 ```bash
 docker compose ps

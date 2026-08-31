@@ -178,6 +178,11 @@ describe("application readiness", () => {
             status: 503,
             body: {
                 ready: false,
+                application: "onebots",
+                version: "1.2.3",
+                core_version: "1.1.0",
+                instance_id: getRuntimeProcessIdentity().instanceId,
+                started_at: getRuntimeProcessIdentity().startedAt,
                 config: { status: "drifted", in_sync: false },
             },
         });
@@ -200,6 +205,10 @@ describe("application readiness", () => {
         expect(healthContext.body).toMatchObject({
             instance_id: getRuntimeProcessIdentity().instanceId,
             started_at: getRuntimeProcessIdentity().startedAt,
+        });
+        expect(readyContext.body).toMatchObject({
+            instance_id: (healthContext.body as Record<string, unknown>).instance_id,
+            started_at: (healthContext.body as Record<string, unknown>).started_at,
         });
         const secondHealthContext: Record<string, unknown> = {};
         handlers.get("/health")?.(secondHealthContext);

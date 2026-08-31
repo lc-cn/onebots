@@ -42,6 +42,13 @@ export async function checkReadiness({
         throw new Error(`${url} 未返回 JSON`);
     }
     if (payload?.ready !== true) throw new Error(`${url} 未声明 ready=true`);
+    if (payload?.application !== "onebots") throw new Error(`${url} 未声明 onebots 应用身份`);
+    if (typeof payload?.version !== "string" || !payload.version.trim()) {
+        throw new Error(`${url} 未声明运行版本`);
+    }
+    if (typeof payload?.instance_id !== "string" || !payload.instance_id.trim()) {
+        throw new Error(`${url} 未声明 instance_id`);
+    }
 }
 
 const isMain = process.argv[1]

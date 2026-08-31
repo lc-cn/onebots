@@ -331,6 +331,9 @@ describe("doctor health probes", () => {
                 new Response(
                     JSON.stringify({
                         ready: true,
+                        application: "onebots",
+                        version: "1.2.8",
+                        instance_id: "doctor-instance",
                         configured: false,
                         adapters: {},
                         summary: { total_accounts: 0, online_accounts: 0 },
@@ -344,7 +347,43 @@ describe("doctor health probes", () => {
         ).resolves.toEqual({
             name: "ready",
             level: "warning",
-            message: "ready: HTTP 200；未配置账号；账号 0/0 在线",
+            message:
+                "ready: HTTP 200；onebots@1.2.8；实例 doctor-instance；未配置账号；账号 0/0 在线",
+        });
+    });
+
+    it("rejects readiness that cannot identify a concrete OneBots instance", async () => {
+        const missingInstance = vi.fn(
+            async () =>
+                new Response(
+                    JSON.stringify({ ready: true, application: "onebots", version: "1.2.8" }),
+                    { status: 200 },
+                ),
+        );
+        const wrongApplication = vi.fn(
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        ready: true,
+                        application: "other",
+                        version: "1.2.8",
+                        instance_id: "other-instance",
+                    }),
+                    { status: 200 },
+                ),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "ready", missingInstance),
+        ).resolves.toMatchObject({
+            level: "error",
+            message: expect.stringContaining("instance_id"),
+        });
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "ready", wrongApplication),
+        ).resolves.toMatchObject({
+            level: "error",
+            message: expect.stringContaining("在线应用 other 不是 onebots"),
         });
     });
 

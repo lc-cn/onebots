@@ -23,6 +23,11 @@ interface ReadinessSummary {
 
 interface ReadinessPayload {
     ready: boolean;
+    application: string;
+    version: string;
+    core_version: string;
+    instance_id: string;
+    started_at: string;
     configured: boolean;
     server: boolean;
     reloading: boolean;
@@ -106,7 +111,7 @@ export async function probeReadiness(
             return {
                 state: "warning",
                 label: "待配置",
-                detail: "服务可管理，尚未配置机器人账号",
+                detail: `服务可管理，尚未配置机器人账号；${formatReadinessIdentity(payload)}`,
             };
         }
         return {
@@ -125,6 +130,7 @@ export async function probeReadiness(
 function formatReadinessDetail(payload: ReadinessPayload): string {
     const { summary } = payload;
     const parts = [
+        formatReadinessIdentity(payload),
         `账号 ${summary.online_accounts}/${summary.total_accounts} 在线`,
         `协议出口 ${summary.ready_protocols}/${summary.total_protocols} 就绪`,
     ];
@@ -137,10 +143,23 @@ function formatReadinessDetail(payload: ReadinessPayload): string {
     return parts.join("，");
 }
 
+function formatReadinessIdentity(payload: ReadinessPayload): string {
+    return `OneBots ${payload.version}，实例 ${payload.instance_id}`;
+}
+
 function isReadinessPayload(value: unknown): value is ReadinessPayload {
     if (!isRecord(value) || !isRecord(value.config) || !isRecord(value.summary)) return false;
     if (
         typeof value.ready !== "boolean" ||
+        value.application !== "onebots" ||
+        typeof value.version !== "string" ||
+        !value.version.trim() ||
+        typeof value.core_version !== "string" ||
+        !value.core_version.trim() ||
+        typeof value.instance_id !== "string" ||
+        !value.instance_id.trim() ||
+        typeof value.started_at !== "string" ||
+        !value.started_at.trim() ||
         typeof value.configured !== "boolean" ||
         typeof value.server !== "boolean" ||
         typeof value.reloading !== "boolean" ||

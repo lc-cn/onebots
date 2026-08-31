@@ -16,6 +16,11 @@ function readiness(
     return new Response(
         JSON.stringify({
             ready,
+            application: "onebots",
+            version: "1.2.3",
+            core_version: "1.2.1",
+            instance_id: "instance-ready",
+            started_at: "2026-08-31T00:00:00.000Z",
             configured: options.configured ?? true,
             server: true,
             reloading: false,
@@ -91,7 +96,7 @@ describe("Web semantic service probes", () => {
         expect(result).toEqual({
             state: "warning",
             label: "待配置",
-            detail: "服务可管理，尚未配置机器人账号",
+            detail: "服务可管理，尚未配置机器人账号；OneBots 1.2.3，实例 instance-ready",
         });
     });
 
@@ -99,7 +104,7 @@ describe("Web semantic service probes", () => {
         await expect(probeReadiness(vi.fn(async () => readiness(true)))).resolves.toEqual({
             state: "success",
             label: "生产就绪",
-            detail: "账号 1/1 在线，协议出口 1/1 就绪",
+            detail: "OneBots 1.2.3，实例 instance-ready，账号 1/1 在线，协议出口 1/1 就绪",
         });
     });
 
@@ -142,6 +147,24 @@ describe("Web semantic service probes", () => {
                         onlineAccounts: 2,
                     }),
                 ),
+            ),
+        ).resolves.toMatchObject({ state: "danger", label: "证据无效" });
+    });
+
+    it("requires readiness to identify the serving OneBots instance", async () => {
+        const missingIdentity = await readiness(true).json();
+        delete missingIdentity.instance_id;
+        const wrongApplication = await readiness(true).json();
+        wrongApplication.application = "other";
+
+        await expect(
+            probeReadiness(
+                vi.fn(async () => new Response(JSON.stringify(missingIdentity), { status: 200 })),
+            ),
+        ).resolves.toMatchObject({ state: "danger", label: "证据无效" });
+        await expect(
+            probeReadiness(
+                vi.fn(async () => new Response(JSON.stringify(wrongApplication), { status: 200 })),
             ),
         ).resolves.toMatchObject({ state: "danger", label: "证据无效" });
     });

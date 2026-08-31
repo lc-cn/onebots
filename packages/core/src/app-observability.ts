@@ -72,6 +72,14 @@ export interface ReadinessSnapshot {
     };
 }
 
+export interface ReadinessResponse extends ReadinessSnapshot {
+    application: string;
+    version: string;
+    core_version: string;
+    instance_id: string;
+    started_at: string;
+}
+
 /** 生成与 HTTP 无关的就绪快照，便于部署探针和测试共享同一判定。 */
 export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
     const adapters: Record<string, AdapterReadinessCounts> = {};
@@ -207,8 +215,16 @@ export function registerObservabilityEndpoints(
 
     app.router.get("/ready", ctx => {
         const snapshot = getReadinessSnapshot(app);
+        const processIdentity = getRuntimeProcessIdentity();
         ctx.status = snapshot.ready ? 200 : 503;
-        ctx.body = snapshot;
+        ctx.body = {
+            ...snapshot,
+            application: identity.name,
+            version: identity.version,
+            core_version: identity.coreVersion,
+            instance_id: processIdentity.instanceId,
+            started_at: processIdentity.startedAt,
+        } satisfies ReadinessResponse;
     });
 
     app.router.get("/metrics", ctx => {

@@ -80,7 +80,12 @@ describe("service status", () => {
                               version: packageMetadata.version,
                               core_version: "1.2.5",
                           }
-                        : { ready: true },
+                        : {
+                              ready: true,
+                              application: "onebots",
+                              version: packageMetadata.version,
+                              instance_id: "status-instance",
+                          },
                 ),
                 { status: 200 },
             );
@@ -89,7 +94,7 @@ describe("service status", () => {
         const result = await serviceStatus({ system: false }, fetcher);
 
         expect(result).toEqual({
-            output: `运行中，已就绪\n进程管理器: active\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200`,
+            output: `运行中，已就绪\n进程管理器: active\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance`,
             exitCode: undefined,
         });
         expect(fetcher).toHaveBeenCalledWith(
@@ -113,6 +118,9 @@ describe("service status", () => {
                 : new Response(
                       JSON.stringify({
                           ready: true,
+                          application: "onebots",
+                          version: packageMetadata.version,
+                          instance_id: "status-instance",
                           configured: false,
                           summary: { online_accounts: 0, total_accounts: 0 },
                       }),
@@ -124,7 +132,9 @@ describe("service status", () => {
 
         expect(result.exitCode).toBeUndefined();
         expect(result.output).toContain("运行中，待配置");
-        expect(result.output).toContain("ready: HTTP 200；未配置账号；账号 0/0 在线");
+        expect(result.output).toContain(
+            `ready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance；未配置账号；账号 0/0 在线`,
+        );
     });
 
     it("returns exit code 1 when the running service version differs from the current CLI", async () => {
@@ -139,7 +149,15 @@ describe("service status", () => {
                       }),
                       { status: 200 },
                   )
-                : new Response(JSON.stringify({ ready: true }), { status: 200 }),
+                : new Response(
+                      JSON.stringify({
+                          ready: true,
+                          application: "onebots",
+                          version: packageMetadata.version,
+                          instance_id: "status-instance",
+                      }),
+                      { status: 200 },
+                  ),
         );
 
         const result = await serviceStatus({ system: false }, fetcher);

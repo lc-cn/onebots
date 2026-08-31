@@ -58,7 +58,7 @@ docker compose down
 
 ### 容器健康状态
 
-官方镜像内置健康检查，Compose 示例也显式启用同一探针。探针读取 `/data/config.yaml` 的 `port` 与 `path`，请求对应的 `/ready`，并要求 HTTP 成功且响应明确包含 `ready: true`。可用以下命令查看状态与最近失败原因：
+官方镜像内置健康检查，Compose 示例也显式启用同一探针。探针读取 `/data/config.yaml` 的 `port` 与 `path`，请求对应的 `/ready`，并要求 HTTP 成功、响应明确包含 `ready: true`，且声明 `onebots` 应用身份、运行版本与非空 `instance_id`。可用以下命令查看状态与最近失败原因：
 
 ```bash
 docker compose ps
