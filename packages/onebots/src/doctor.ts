@@ -26,6 +26,10 @@ import {
     inspectRuntimeDataDirectory,
 } from "./runtime-data-directory.js";
 import { inspectConfiguredDatabase } from "./doctor-database.js";
+import {
+    inspectDoctorServiceMetadata,
+    type DoctorServiceMetadataInspection,
+} from "./doctor-service-metadata.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import {
     compareDoctorEndpointIdentities,
@@ -49,7 +53,7 @@ export interface DoctorTarget {
     workingDirectory: string;
     service: {
         scope: ServiceScope;
-        mode: "managed" | "standalone" | "uninstalled";
+        mode: "invalid" | "managed" | "standalone" | "uninstalled";
     };
     plugins: {
         adapters: DoctorPluginTarget;
@@ -82,6 +86,8 @@ export interface DoctorOptions {
     environmentPort?: string;
     /** 测试或嵌入场景可显式提供扩展运行目录。 */
     extensionRoot?: string;
+    /** CLI 已读取的服务元数据，避免诊断入口重复解析并保留同一份证据。 */
+    serviceMetadata?: DoctorServiceMetadataInspection;
 }
 
 export type DoctorPluginSource = "cli" | "config" | "service" | "none";
@@ -181,7 +187,17 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
 
     const useInstalledService = options.useInstalledService !== false;
     const controller = new ServiceController(options.scope);
-    const spec = useInstalledService ? controller.readSpec() : null;
+    const serviceMetadata = useInstalledService
+        ? (options.serviceMetadata ?? inspectDoctorServiceMetadata(controller))
+        : { spec: null, error: null };
+    const spec = serviceMetadata.spec;
+    if (serviceMetadata.error) {
+        checks.push({
+            name: "service-metadata",
+            level: "error",
+            message: `${serviceMetadata.error}；请重新执行 onebots install 生成服务定义`,
+        });
+    }
     const selection = resolveDoctorPluginSelection(options, configuredPlugins, spec);
     checks.push({
         name: "plugin-selection",
@@ -248,21 +264,30 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         }
     }
 
-    const status = useInstalledService ? controller.status() : null;
+    const status =
+        useInstalledService && !serviceMetadata.error
+            ? controller.status(serviceMetadata.spec)
+            : null;
     checks.push(
-        useInstalledService
+        serviceMetadata.error
             ? {
                   name: "service",
-                  level: status?.installed && status.running ? "ok" : "warning",
-                  message: status?.installed
-                      ? `服务${status.running ? "正在运行" : "已安装但未运行"}`
-                      : "服务未安装",
+                  level: "error",
+                  message: "服务元数据无效，无法验证安装与运行状态",
               }
-            : {
-                  name: "service",
-                  level: "ok",
-                  message: "按显式配置独立诊断，未读取或修改已安装服务定义",
-              },
+            : useInstalledService
+              ? {
+                    name: "service",
+                    level: status?.installed && status.running ? "ok" : "warning",
+                    message: status?.installed
+                        ? `服务${status.running ? "正在运行" : "已安装但未运行"}`
+                        : "服务未安装",
+                }
+              : {
+                    name: "service",
+                    level: "ok",
+                    message: "按显式配置独立诊断，未读取或修改已安装服务定义",
+                },
     );
     if (spec) {
         const stateDirectory = controller.paths().stateDir;
@@ -364,7 +389,13 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             workingDirectory: path.resolve(selection.workingDirectory),
             service: {
                 scope: options.scope,
-                mode: useInstalledService ? (spec ? "managed" : "uninstalled") : "standalone",
+                mode: useInstalledService
+                    ? serviceMetadata.error
+                        ? "invalid"
+                        : spec
+                          ? "managed"
+                          : "uninstalled"
+                    : "standalone",
             },
             plugins: {
                 adapters: {

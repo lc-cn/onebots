@@ -273,8 +273,8 @@ export class ServiceController {
         await this.start();
     }
 
-    status(): ServiceStatus {
-        if (!this.readSpec())
+    status(spec: ServiceSpec | null = this.readSpec()): ServiceStatus {
+        if (!spec)
             return { installed: false, running: false, scope: this.scope, detail: "服务未安装" };
         try {
             let detail = "";

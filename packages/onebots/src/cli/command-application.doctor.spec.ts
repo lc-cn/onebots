@@ -91,6 +91,58 @@ describe("doctor configuration scope", () => {
         });
     });
 
+    it("returns a redacted JSON report when managed-service metadata is corrupted", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-metadata-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        const metadataPath = path.join(directory, "state", "service.json");
+        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+        fs.writeFileSync(
+            path.join(directory, "package.json"),
+            JSON.stringify({ name: "onebots", version: packageMetadata.version }),
+        );
+        vi.stubEnv("ONEBOTS_EXTENSION_ROOT", directory);
+        vi.spyOn(process, "cwd").mockReturnValue(directory);
+        const readSpec = vi
+            .spyOn(ServiceController.prototype, "readSpec")
+            .mockImplementation(() => {
+                throw new SyntaxError('Unexpected token near "secret-service-token"');
+            });
+        vi.spyOn(ServiceController.prototype, "paths").mockReturnValue({
+            stateDir: path.dirname(metadataPath),
+            definition: path.join(directory, "state", "service.plist"),
+            metadata: metadataPath,
+        });
+        const status = vi.spyOn(ServiceController.prototype, "status");
+
+        const result = await diagnose({
+            register: [],
+            protocol: [],
+            system: false,
+            fix: false,
+            json: true,
+        });
+        const report = JSON.parse(result.output || "{}") as {
+            target: { service: { mode: string } };
+            checks: Array<{ name: string; level: string; message: string }>;
+        };
+
+        expect(result.exitCode).toBe(1);
+        expect(report.target.service.mode).toBe("invalid");
+        expect(report.checks.find(check => check.name === "service-metadata")).toEqual({
+            name: "service-metadata",
+            level: "error",
+            message: `服务元数据无法读取或结构无效: ${metadataPath}；请重新执行 onebots install 生成服务定义`,
+        });
+        expect(result.output).not.toContain("secret-service-token");
+        expect(report.checks.find(check => check.name === "service")).toMatchObject({
+            level: "error",
+        });
+        expect(readSpec).toHaveBeenCalledTimes(1);
+        expect(status).not.toHaveBeenCalled();
+    });
+
     it("diagnoses an explicit candidate config independently from another installed service", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-candidate-"));
         temporaryDirectories.push(directory);
@@ -166,8 +218,10 @@ describe("doctor configuration scope", () => {
             binPath: process.argv[1],
             workingDirectory: process.cwd(),
         };
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(installed);
-        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+        const readSpec = vi
+            .spyOn(ServiceController.prototype, "readSpec")
+            .mockReturnValue(installed);
+        const status = vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
             installed: true,
             running: false,
             scope: "user",
@@ -203,6 +257,8 @@ describe("doctor configuration scope", () => {
             service: { mode: "managed" },
             plugins: { adapters: { source: "service", names: ["service-missing"] } },
         });
+        expect(readSpec).toHaveBeenCalledTimes(1);
+        expect(status).toHaveBeenCalledWith(installed);
         expect(report.checks.some(check => check.name === "adapter:service-missing")).toBe(true);
         expect(report.checks.some(check => check.name === "adapter:config-missing")).toBe(false);
         expect(report.checks.some(check => check.name === "gateway-address")).toBe(false);

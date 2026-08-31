@@ -27,6 +27,7 @@ import {
     type ManagementFetch,
 } from "../management-credential.js";
 import type { UpdateRunResult } from "../updater.js";
+import { inspectDoctorServiceMetadata } from "../doctor-service-metadata.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
 export interface CommandResult {
@@ -359,7 +360,8 @@ export async function diagnose(
     options: RuntimeOptions & ScopeOptions & { fix: boolean; json: boolean; strict?: boolean },
 ): Promise<CommandResult> {
     const scope = scopeFrom(options);
-    const serviceSpec = new ServiceController(scope).readSpec();
+    const serviceMetadata = inspectDoctorServiceMetadata(new ServiceController(scope));
+    const serviceSpec = serviceMetadata.spec;
     const configPath = options.config
         ? path.resolve(options.config)
         : (serviceSpec?.configPath ?? path.resolve("config.yaml"));
@@ -377,6 +379,7 @@ export async function diagnose(
         fix: options.fix,
         strict: options.strict,
         useInstalledService,
+        serviceMetadata,
     });
     return {
         output: formatDoctorReport(report, options.json),
