@@ -11,6 +11,7 @@
             <UiAlert v-if="restarting" variant="warning">
                 服务正在重启，页面会在恢复后自动刷新，请勿关闭。
             </UiAlert>
+            <UiAlert v-if="restartMessage" variant="warning">{{ restartMessage }}</UiAlert>
             <UiAlert v-if="errorMessage" variant="danger">{{ errorMessage }}</UiAlert>
             <UiAlert v-if="catalogErrorMessage" variant="danger">
                 {{ catalogErrorMessage }}。扩展安装已禁用；现有运行时插件仍可继续配置和使用。
@@ -216,6 +217,7 @@ import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.j
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
 import {
     getExtensionInstallRequestRecovery,
+    getExtensionInstallCompletion,
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
@@ -229,6 +231,7 @@ const searchKeyword = ref("");
 const installingId = ref("");
 const restarting = ref(false);
 const errorMessage = ref("");
+const restartMessage = ref("");
 let installationRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let installationRefreshAttempts = 0;
 let isMounted = false;
@@ -350,6 +353,16 @@ async function resumeDisconnectedInstallation(): Promise<void> {
         return;
     }
 
+    const completion = getExtensionInstallCompletion({
+        restartRequired: true,
+        restartSupported: refreshed?.restartSupported,
+    });
+    if (!completion.restart) {
+        restartMessage.value =
+            completion.message ?? "扩展已安装；当前进程不会自动拉起，请手动重启 OneBots 后继续配置";
+        return;
+    }
+
     recoveringDisconnectedInstallation = true;
     try {
         await restartAfterInstallation();
@@ -366,6 +379,7 @@ async function install(extension: ExtensionInfo): Promise<void> {
     const previousOperationId = extension.lastInstallation?.operationId ?? null;
     installingId.value = extension.id;
     errorMessage.value = "";
+    restartMessage.value = "";
     try {
         let shouldRestart = false;
         try {
@@ -373,11 +387,22 @@ async function install(extension: ExtensionInfo): Promise<void> {
                 buildApiUrl(`/api/extensions/${encodeURIComponent(extension.id)}/install`),
                 { method: "POST" },
             );
-            const result = (await response.json()) as { success: boolean; message?: string };
+            const result = (await response.json()) as {
+                success: boolean;
+                restartRequired?: boolean;
+                restartSupported?: boolean;
+                message?: string;
+            };
             if (!response.ok || !result.success) {
                 throw new Error(result.message || "扩展安装失败");
             }
-            shouldRestart = true;
+            const completion = getExtensionInstallCompletion(result);
+            shouldRestart = completion.restart;
+            if (!completion.restart) {
+                await loadExtensions();
+                restartMessage.value = completion.message ?? "扩展安装完成";
+                return;
+            }
         } catch (error) {
             const requestMessage = error instanceof Error ? error.message : String(error);
             await loadExtensions();

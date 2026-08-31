@@ -23,6 +23,29 @@ export type ExtensionInstallRequestRecovery =
     | { status: "failed"; message: string }
     | { status: "unknown" };
 
+export interface ExtensionInstallCompletion {
+    restart: boolean;
+    message: string | null;
+}
+
+/** 新服务端显式声明监督能力；旧服务端保持原有自动重启行为。 */
+export function getExtensionInstallCompletion(result: {
+    restartRequired?: boolean;
+    restartSupported?: boolean;
+    message?: string;
+}): ExtensionInstallCompletion {
+    if (result.restartRequired === false)
+        return { restart: false, message: result.message ?? null };
+    if (result.restartSupported === false) {
+        return {
+            restart: false,
+            message:
+                result.message ?? "扩展已安装；当前进程不会自动拉起，请手动重启 OneBots 后继续配置",
+        };
+    }
+    return { restart: true, message: null };
+}
+
 /** 长安装请求断线后，只接受当前活动操作或本次请求产生的新终态作为恢复证据。 */
 export function getExtensionInstallRequestRecovery(
     previousOperationId: string | null,
@@ -76,9 +99,16 @@ function buildInstallationEvidence(operationId: string, timestamp: string): stri
 export function getExtensionInstallationAction(
     extension: Pick<
         ExtensionInfo,
-        "catalogError" | "enabled" | "installed" | "loaded" | "targetVersion" | "versionAligned"
+        | "catalogError"
+        | "enabled"
+        | "installed"
+        | "loaded"
+        | "restartSupported"
+        | "targetVersion"
+        | "versionAligned"
     >,
 ): ExtensionInstallationAction {
+    const restartLabel = extension.restartSupported === false ? "并在完成后手动重启" : "并重启";
     if (extension.catalogError) {
         return { visible: true, available: false, label: "目录校验失败" };
     }
@@ -89,21 +119,27 @@ export function getExtensionInstallationAction(
         return {
             visible: true,
             available: true,
-            label: `安装 v${extension.targetVersion} 并重启`,
+            label: `安装 v${extension.targetVersion} ${restartLabel}`,
         };
     }
     if (!extension.versionAligned) {
         return {
             visible: true,
             available: true,
-            label: `切换至 v${extension.targetVersion} 并重启`,
+            label: `切换至 v${extension.targetVersion} ${restartLabel}`,
         };
     }
     if (!extension.enabled) {
-        return { visible: true, available: true, label: "启用并重启" };
+        return {
+            visible: true,
+            available: true,
+            label: extension.restartSupported === false ? "启用并在完成后手动重启" : "启用并重启",
+        };
     }
     if (!extension.loaded) {
-        return { visible: true, available: true, label: "重启以加载" };
+        return extension.restartSupported === false
+            ? { visible: true, available: false, label: "请手动重启以加载" }
+            : { visible: true, available: true, label: "重启以加载" };
     }
     return { visible: false, available: false, label: "已加载" };
 }

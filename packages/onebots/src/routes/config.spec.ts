@@ -11,7 +11,7 @@ type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
 const originalConfigDir = BaseApp.configDir;
 const directories: string[] = [];
 
-function setup(reload: App["reload"], isReloading = false) {
+function setup(reload: App["reload"], isReloading = false, restartSupported = true) {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-config-route-"));
     directories.push(directory);
     BaseApp.configDir = directory;
@@ -52,6 +52,7 @@ function setup(reload: App["reload"], isReloading = false) {
             appliedAt: "2026-08-31T09:00:00.000Z",
             message: "磁盘配置与当前进程最近应用的版本一致",
         },
+        restartSupported,
     } as unknown as App;
     registerConfigRoutes(app, router as never);
     return {
@@ -88,11 +89,40 @@ describe("configuration route", () => {
             application: "onebots",
             instance_id: "instance-current",
             scheduled: true,
+            restart_supported: true,
         });
         expect(app.preflightRestart).toHaveBeenCalledOnce();
         expect(app.stop).toHaveBeenCalledOnce();
         expect(exit).toHaveBeenCalledWith(75);
         vi.useRealTimers();
+    });
+
+    it("前台进程没有监督器时拒绝退出并要求人工重启", async () => {
+        vi.useFakeTimers();
+        const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+        const { app, restartHandler } = setup(
+            vi.fn(async () => undefined) as App["reload"],
+            false,
+            false,
+        );
+        const ctx = {
+            request: { body: { instance_id: "instance-current" } },
+        } as RouterContext;
+
+        await restartHandler(ctx);
+        await vi.runAllTimersAsync();
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toMatchObject({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-current",
+            restart_supported: false,
+            message: expect.stringContaining("请手动重启 OneBots"),
+        });
+        expect(app.preflightRestart).not.toHaveBeenCalled();
+        expect(app.stop).not.toHaveBeenCalled();
+        expect(exit).not.toHaveBeenCalled();
     });
 
     it("实例已切换时在预检和调度前拒绝过期的重启请求", async () => {
@@ -182,6 +212,7 @@ describe("configuration route", () => {
                 status: "in_sync",
                 appliedAt: "2026-08-31T09:00:00.000Z",
             },
+            restartSupported: true,
             plugins: [
                 {
                     type: "adapter",

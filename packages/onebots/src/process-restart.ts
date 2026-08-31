@@ -12,6 +12,14 @@ export interface ProcessRestartOptions {
     exit?: (code: number) => void;
 }
 
+/** 只有守护服务内部入口或部署方显式声明时，进程退出才可视为可恢复的重启。 */
+export function isProcessRestartSupported(
+    argv: readonly string[] = process.argv,
+    env: NodeJS.ProcessEnv = process.env,
+): boolean {
+    return env.ONEBOTS_RESTARTABLE === "1" || argv.includes("--service-runtime");
+}
+
 const scheduledApplications = new WeakSet<object>();
 
 /** 响应返回后只调度一次重启，先释放运行资源，并用超时保证守护进程最终可以接管。 */

@@ -10,6 +10,8 @@ services:
       - "${PANEL_APP_PORT_HTTP}:6727"
     volumes:
       - ./data:/data
+    environment:
+      - ONEBOTS_RESTARTABLE=1
     labels:
       createdBy: "Apps"
 

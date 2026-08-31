@@ -1,11 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { scheduleProcessRestart } from "./process-restart.js";
+import { isProcessRestartSupported, scheduleProcessRestart } from "./process-restart.js";
 
 afterEach(() => {
     vi.useRealTimers();
 });
 
 describe("process restart coordination", () => {
+    it("requires a managed runtime entry or explicit deployment contract", () => {
+        expect(isProcessRestartSupported(["node", "onebots"], {})).toBe(false);
+        expect(isProcessRestartSupported(["node", "onebots", "--service-runtime", "run"], {})).toBe(
+            true,
+        );
+        expect(isProcessRestartSupported(["node", "onebots"], { ONEBOTS_RESTARTABLE: "1" })).toBe(
+            true,
+        );
+    });
+
     it("stops application resources before exiting with the supervisor restart code", async () => {
         vi.useFakeTimers();
         const order: string[] = [];

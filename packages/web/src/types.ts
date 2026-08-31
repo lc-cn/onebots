@@ -56,6 +56,8 @@ export interface SystemInfo {
     plugins: LoadedPluginInfo[];
     /** 当前磁盘配置与进程最近成功应用版本的关系。 */
     configState: RuntimeConfigState;
+    /** 当前进程退出后是否有守护器或编排器负责拉起新实例。 */
+    restartSupported?: boolean;
 }
 
 export interface RuntimeConfigState {
@@ -143,6 +145,8 @@ export interface ExtensionInfo {
     installed: boolean;
     enabled: boolean;
     loaded: boolean;
+    /** 当前服务实例能否在退出后由监督器自动拉起。 */
+    restartSupported?: boolean;
     installing: boolean;
     /** 当前服务端安装操作；旧版服务端可能不返回该字段。 */
     installation?: {

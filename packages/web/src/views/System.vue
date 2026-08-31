@@ -19,7 +19,16 @@
                         <IconUpload v-if="!backupLoading" :size="16" />
                         备份到仓库
                     </UiButton>
-                    <UiButton variant="danger" :loading="restartLoading" @click="handleRestart">
+                    <UiButton
+                        variant="danger"
+                        :loading="restartLoading"
+                        :disabled="!systemInfo || systemInfo.restartSupported === false"
+                        :title="
+                            systemInfo?.restartSupported === false
+                                ? '当前进程没有自动拉起监督器，请在宿主环境中手动重启'
+                                : '重启服务'
+                        "
+                        @click="handleRestart">
                         <IconRefresh v-if="!restartLoading" :size="16" />
                         重启服务
                     </UiButton>
@@ -122,6 +131,27 @@
                         <dt class="w-24 shrink-0 text-sm text-fg-secondary">Core 版本</dt>
                         <dd class="min-w-0 text-fg">
                             @onebots/core v{{ systemInfo.core_version || systemInfo.sdk_version }}
+                        </dd>
+                    </div>
+                    <div class="flex items-baseline gap-3 md:col-span-2">
+                        <dt class="w-24 shrink-0 text-sm text-fg-secondary">自动重启</dt>
+                        <dd>
+                            <UiBadge
+                                :variant="
+                                    systemInfo.restartSupported === true
+                                        ? 'success'
+                                        : systemInfo.restartSupported === false
+                                          ? 'warning'
+                                          : 'neutral'
+                                ">
+                                {{
+                                    systemInfo.restartSupported === true
+                                        ? "监督器已验证"
+                                        : systemInfo.restartSupported === false
+                                          ? "需在宿主环境手动重启"
+                                          : "当前服务端未声明"
+                                }}
+                            </UiBadge>
                         </dd>
                     </div>
                     <div class="flex items-baseline gap-3 md:col-span-2">
@@ -399,6 +429,10 @@ const refreshDashboard = dashboardRefresh.refreshAll;
 const refreshServiceStatus = dashboardRefresh.refreshServiceStatus;
 
 async function handleRestart() {
+    if (systemInfo.value?.restartSupported === false) {
+        toast.warning("当前进程没有自动拉起监督器，请在宿主环境中手动重启");
+        return;
+    }
     const confirmed = await confirm({
         title: "重启服务",
         message:

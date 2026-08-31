@@ -62,6 +62,7 @@ import {
     isManagementSpaPath,
     renderManagementIndexHtml,
 } from "./management-index.js";
+import { isProcessRestartSupported } from "./process-restart.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -90,6 +91,8 @@ export class App extends BaseApp {
     public terminalClients: Set<WebSocket> = new Set();
     private readonly runtimeConfigStateTracker: RuntimeConfigStateTracker;
     public readonly extensionManager: ExtensionManager;
+    /** 退出码 75 后是否有守护器或编排器负责拉起新实例。 */
+    public readonly restartSupported = isProcessRestartSupported();
 
     private static readonly DEFAULT_TOKEN_EXPIRATION_MS = 12 * 60 * 60 * 1000;
     private static readonly REFRESH_TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000;

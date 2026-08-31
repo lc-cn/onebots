@@ -15,6 +15,8 @@ services:
       - ./data:/data
     environment:
       - NODE_ENV=production
+      # 与 restart 策略成对声明，允许 Web 在预检后安全请求实例切换
+      - ONEBOTS_RESTARTABLE=1
       # 可选：从同目录 .env 注入，适合无法直接读取 /data/config.yaml 的部署
       - ONEBOTS_ACCESS_TOKEN=${ONEBOTS_ACCESS_TOKEN:-}
     healthcheck:

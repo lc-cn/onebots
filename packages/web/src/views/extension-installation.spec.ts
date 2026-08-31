@@ -1,10 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
+    getExtensionInstallCompletion,
     getExtensionInstallRequestRecovery,
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
 } from "./extension-installation.js";
+
+describe("extension install completion", () => {
+    it("keeps automatic restart for managed and legacy servers", () => {
+        expect(
+            getExtensionInstallCompletion({ restartRequired: true, restartSupported: true }),
+        ).toEqual({ restart: true, message: null });
+        expect(getExtensionInstallCompletion({ restartRequired: true })).toEqual({
+            restart: true,
+            message: null,
+        });
+    });
+
+    it("preserves the foreground process and returns a manual restart instruction", () => {
+        expect(
+            getExtensionInstallCompletion({
+                restartRequired: true,
+                restartSupported: false,
+                message: "请手动重启 OneBots",
+            }),
+        ).toEqual({ restart: false, message: "请手动重启 OneBots" });
+    });
+});
 
 const base = {
     catalogError: null,
@@ -44,6 +67,23 @@ describe("extension installation action", () => {
             available: true,
             label: "切换至 v1.2.3 并重启",
         });
+    });
+
+    it("makes the manual restart boundary visible before foreground installation", () => {
+        expect(getExtensionInstallationAction({ ...base, restartSupported: false })).toEqual({
+            visible: true,
+            available: true,
+            label: "安装 v1.2.3 并在完成后手动重启",
+        });
+        expect(
+            getExtensionInstallationAction({
+                ...base,
+                installed: true,
+                enabled: true,
+                versionAligned: true,
+                restartSupported: false,
+            }),
+        ).toEqual({ visible: true, available: false, label: "请手动重启以加载" });
     });
 
     it("distinguishes enabling an installed package from restarting an enabled one", () => {

@@ -10,7 +10,10 @@ import {
 
 export function registerExtensionRoutes(app: App, router: Router): void {
     router.get("/api/extensions", (ctx: RouterContext) => {
-        ctx.body = app.extensionManager.list(app.pluginInfos);
+        ctx.body = app.extensionManager.list(app.pluginInfos).map(extension => ({
+            ...extension,
+            restartSupported: app.restartSupported,
+        }));
     });
 
     router.post("/api/extensions/:id/install", async (ctx: RouterContext) => {
@@ -19,7 +22,10 @@ export function registerExtensionRoutes(app: App, router: Router): void {
             ctx.body = {
                 success: true,
                 ...result,
-                message: "扩展已安装并写入启动配置，重启后即可配置账号",
+                restartSupported: app.restartSupported,
+                message: app.restartSupported
+                    ? "扩展已安装并写入启动配置，重启后即可配置账号"
+                    : "扩展已安装并写入启动配置；当前进程不会自动拉起，请手动重启 OneBots 后继续配置",
             };
         } catch (error) {
             const message = formatExtensionInstallationError(error);

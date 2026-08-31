@@ -49,6 +49,7 @@ export function registerConfigRoutes(app: App, router: Router): void {
             dataDir: BaseApp.dataDir,
             plugins: app.pluginInfos,
             configState: app.runtimeConfigState,
+            restartSupported: app.restartSupported,
         };
     });
 
@@ -95,6 +96,18 @@ export function registerConfigRoutes(app: App, router: Router): void {
             };
             return;
         }
+        if (!app.restartSupported) {
+            ctx.status = 409;
+            ctx.body = {
+                success: false,
+                application,
+                instance_id: instanceId,
+                restart_supported: false,
+                message:
+                    "当前进程没有可验证的重启监督器，未停止服务；请手动重启 OneBots，或以守护服务运行",
+            };
+            return;
+        }
         try {
             await app.preflightRestart();
             const scheduled = scheduleProcessRestart(app, { exitCode: 75 });
@@ -102,6 +115,7 @@ export function registerConfigRoutes(app: App, router: Router): void {
                 success: true,
                 application,
                 instance_id: instanceId,
+                restart_supported: true,
                 scheduled,
                 message: scheduled ? "重启预检通过，服务即将重启" : "服务重启已在进行中",
             };

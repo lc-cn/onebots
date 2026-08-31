@@ -29,6 +29,8 @@ services:
       - ./data:/data
     environment:
       - NODE_ENV=production
+      # 与 restart 策略成对声明，允许 Web 安全触发实例切换
+      - ONEBOTS_RESTARTABLE=1
       # 可选：从同目录 .env 注入，适合无法直接读取 /data/config.yaml 的部署
       - ONEBOTS_ACCESS_TOKEN=${ONEBOTS_ACCESS_TOKEN:-}
     healthcheck:
@@ -52,7 +54,7 @@ docker compose logs -f onebots
 docker compose down
 ```
 
-首次运行会在当前目录下创建 `./data`，并在其中生成默认 `config.yaml`。默认文件不包含平台账号，因此不会用空凭据连接外部平台；若没有环境鉴权或文件凭据，容器会把随机 256 位 `access_token` 写入该配置，但不会把鉴权码输出到容器日志。从 `./data/config.yaml` 读取鉴权码登录 Web 管理端。若部署环境不能直接读取挂载文件，可把高熵鉴权码作为 Secret 注入 `ONEBOTS_ACCESS_TOKEN`；它优先于文件 token，且不会被写入配置或日志。添加账号、设置协议访问令牌后，“保存并应用”会立即热重载账号与协议。只有端口、路径、数据库等宿主参数变更时，页面才会明确提示执行 `docker compose restart`。
+首次运行会在当前目录下创建 `./data`，并在其中生成默认 `config.yaml`。默认文件不包含平台账号，因此不会用空凭据连接外部平台；若没有环境鉴权或文件凭据，容器会把随机 256 位 `access_token` 写入该配置，但不会把鉴权码输出到容器日志。从 `./data/config.yaml` 读取鉴权码登录 Web 管理端。若部署环境不能直接读取挂载文件，可把高熵鉴权码作为 Secret 注入 `ONEBOTS_ACCESS_TOKEN`；它优先于文件 token，且不会被写入配置或日志。添加账号、设置协议访问令牌后，“保存并应用”会立即热重载账号与协议。Compose 示例把 `ONEBOTS_RESTARTABLE=1` 与 `restart: unless-stopped` 成对配置，因此 Web 安装扩展后可以安全切换实例；没有可验证监督器的前台进程会保留在线并要求人工重启。只有端口、路径、数据库等宿主参数变更时，页面才会明确提示执行 `docker compose restart`。
 
 仓库提供 `.env.example`。需要环境鉴权时复制为 `.env`，填写由密码管理器或 `openssl rand -hex 32` 生成的值，再执行 `docker compose up -d`；`.env` 已被 Git 忽略。修改后必须重启容器。
 
@@ -75,6 +77,8 @@ docker inspect --format '{{json .State.Health}}' onebots
 # 使用官方镜像并运行（务必 -v 挂载以持久化用户 config）
 docker run -d \
   --name onebots \
+  --restart unless-stopped \
+  -e ONEBOTS_RESTARTABLE=1 \
   -p 6727:6727 \
   -v $(pwd)/data:/data \
   ghcr.io/lc-cn/onebots:master
@@ -101,6 +105,8 @@ docker pull ghcr.io/lc-cn/onebots:master
 # 运行
 docker run -d \
   --name onebots \
+  --restart unless-stopped \
+  -e ONEBOTS_RESTARTABLE=1 \
   -p 6727:6727 \
   -v $(pwd)/data:/data \
   ghcr.io/lc-cn/onebots:master
@@ -129,6 +135,8 @@ docker run -d \
 ```bash
 docker run -d \
   --name onebots \
+  --restart unless-stopped \
+  -e ONEBOTS_RESTARTABLE=1 \
   -p 6727:6727 \
   -v $(pwd)/data:/data \
   onebots \

@@ -9,13 +9,17 @@ import { registerExtensionRoutes } from "./extensions.js";
 
 type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
 
-function setup(install = vi.fn(async () => ({ restartRequired: true as const }))) {
+function setup(
+    install = vi.fn(async () => ({ restartRequired: true as const })),
+    restartSupported = true,
+) {
     const gets = new Map<string, RouteHandler>();
     const posts = new Map<string, RouteHandler>();
     const app = {
         pluginInfos: [],
         extensionManager: { list: vi.fn(() => [{ id: "adapter:slack" }]), install },
         logger: { error: vi.fn() },
+        restartSupported,
     } as unknown as App;
     registerExtensionRoutes(app, {
         get: vi.fn((route: string, handler: RouteHandler) => gets.set(route, handler)),
@@ -31,7 +35,7 @@ describe("extension routes", () => {
 
         gets.get("/api/extensions")!(ctx);
 
-        expect(ctx.body).toEqual([{ id: "adapter:slack" }]);
+        expect(ctx.body).toEqual([{ id: "adapter:slack", restartSupported: true }]);
     });
 
     it("安装固定扩展并明确要求重启", async () => {
@@ -41,7 +45,25 @@ describe("extension routes", () => {
         await posts.get("/api/extensions/:id/install")!(ctx);
 
         expect(install).toHaveBeenCalledWith("adapter:slack");
-        expect(ctx.body).toMatchObject({ success: true, restartRequired: true });
+        expect(ctx.body).toMatchObject({
+            success: true,
+            restartRequired: true,
+            restartSupported: true,
+        });
+    });
+
+    it("前台运行时完成安装但要求用户手动重启", async () => {
+        const { posts } = setup(undefined, false);
+        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+
+        await posts.get("/api/extensions/:id/install")!(ctx);
+
+        expect(ctx.body).toMatchObject({
+            success: true,
+            restartRequired: true,
+            restartSupported: false,
+            message: expect.stringContaining("请手动重启 OneBots"),
+        });
     });
 
     it("并发安装返回 409", async () => {
