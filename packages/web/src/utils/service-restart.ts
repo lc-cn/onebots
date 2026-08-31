@@ -39,16 +39,23 @@ async function probeHealthInstance(fetcher: typeof fetch): Promise<HealthProbeRe
     }
 }
 
-/** 重启前尽力记录当前实例；旧端点缺少身份时返回 null，重启后仍会要求新端点提供身份。 */
-export async function readCurrentServiceInstanceId(fetcher: typeof fetch = fetch) {
-    return (await probeHealthInstance(fetcher)).instanceId;
+/** 重启前记录可信的当前实例；证据不足时拒绝发送无法验证结果的重启请求。 */
+export async function readCurrentServiceInstanceId(fetcher: typeof fetch = fetch): Promise<string> {
+    const probe = await probeHealthInstance(fetcher);
+    if (!probe.instanceId) {
+        throw new Error(`无法在重启前确认当前 OneBots 实例（${probe.evidence}），未发送重启请求`);
+    }
+    return probe.instanceId;
 }
 
 /** 等待管理端恢复，并证明响应来自不同的新 OneBots 进程。 */
 export async function waitForServiceRestart(
-    previousInstanceId: string | null,
+    previousInstanceId: string,
     options: RestartWaitOptions = {},
 ): Promise<string> {
+    if (!previousInstanceId.trim()) {
+        throw new Error("无法验证服务重启：缺少重启前的实例身份");
+    }
     const fetcher = options.fetcher ?? fetch;
     const attempts = options.attempts ?? 40;
     const initialDelayMs = options.initialDelayMs ?? 2_500;

@@ -14,6 +14,19 @@ describe("Web service restart verification", () => {
         );
     });
 
+    it.each([
+        [
+            "不可达",
+            vi.fn(async () => Promise.reject(new Error("connection refused"))),
+            /health 不可达/,
+        ],
+        ["错误应用", vi.fn(async () => health("old", "not-onebots")), /未声明 onebots 应用身份/],
+        ["缺少身份", vi.fn(async () => health()), /未声明 instance_id/],
+    ])("refuses restart when the current endpoint is %s", async (_name, fetcher, evidence) => {
+        await expect(readCurrentServiceInstanceId(fetcher)).rejects.toThrow(evidence);
+        await expect(readCurrentServiceInstanceId(fetcher)).rejects.toThrow(/未发送重启请求/);
+    });
+
     it("waits until a different OneBots instance owns the health endpoint", async () => {
         const fetcher = vi
             .fn<typeof fetch>()
@@ -47,5 +60,17 @@ describe("Web service restart verification", () => {
                 intervalMs: 0,
             }),
         ).rejects.toThrow(/未观察到新实例.*health 未声明 onebots 应用身份/);
+    });
+
+    it("refuses to wait without a trusted previous process identity", async () => {
+        const fetcher = vi.fn<typeof fetch>();
+
+        await expect(
+            waitForServiceRestart("", {
+                fetcher,
+                initialDelayMs: 0,
+            }),
+        ).rejects.toThrow(/缺少重启前的实例身份/);
+        expect(fetcher).not.toHaveBeenCalled();
     });
 });
