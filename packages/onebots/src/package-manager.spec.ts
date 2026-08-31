@@ -6,6 +6,7 @@ import {
     buildExtensionInstallInvocation,
     buildExtensionRestoreInvocation,
     buildPackageManagerInvocation,
+    buildPackageRemovalInvocation,
     buildPackageUpdateInvocation,
     detectRuntimePackageManager,
     sanitizeNpmEnvironment,
@@ -166,6 +167,22 @@ describe("runtime package manager", () => {
         expect(buildPackageUpdateInvocation(root, ["onebots@latest"], null, "linux", {})).toEqual({
             executable: "pnpm",
             args: ["add", "--global", "onebots@latest"],
+            cwd: root,
+            environment: {},
+        });
+        expect(
+            buildPackageRemovalInvocation(root, ["@onebots/adapter-slack"], root, "linux", {}),
+        ).toEqual({
+            executable: "pnpm",
+            args: ["remove", "@onebots/adapter-slack"],
+            cwd: root,
+            environment: {},
+        });
+        expect(
+            buildPackageRemovalInvocation(root, ["@onebots/adapter-slack"], null, "linux", {}),
+        ).toEqual({
+            executable: "pnpm",
+            args: ["remove", "--global", "@onebots/adapter-slack"],
             cwd: root,
             environment: {},
         });

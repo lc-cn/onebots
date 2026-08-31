@@ -147,3 +147,27 @@ export function buildPackageUpdateInvocation(
     );
     return { ...invocation, cwd: projectRoot ?? runtimeRoot };
 }
+
+/** 生成项目或全局运行时的批量依赖移除调用，用于更新事务恢复。 */
+export function buildPackageRemovalInvocation(
+    runtimeRoot: string,
+    packageNames: string[],
+    projectRoot: string | null,
+    platform: NodeJS.Platform = process.platform,
+    environment: NodeJS.ProcessEnv = process.env,
+): PackageUpdateInvocation {
+    const manager = detectRuntimePackageManager(runtimeRoot);
+    const invocation = buildPackageManagerInvocation(
+        manager,
+        manager === "pnpm"
+            ? ["remove", ...(projectRoot ? [] : ["--global"]), ...packageNames]
+            : [
+                  "uninstall",
+                  ...(projectRoot ? ["--save", "--omit=dev"] : ["--global"]),
+                  ...packageNames,
+              ],
+        platform,
+        environment,
+    );
+    return { ...invocation, cwd: projectRoot ?? runtimeRoot };
+}

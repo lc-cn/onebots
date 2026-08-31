@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
 import { execFileSync } from "node:child_process";
@@ -18,6 +17,18 @@ import {
     detectRuntimePackageManager,
 } from "./package-manager.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
+import {
+    assertUpdatedPackageVersions,
+    rollbackUpdatedPackages,
+    type PackageUpdateEvidence,
+} from "./update-package-transaction.js";
+import {
+    loadTargetExtensionVersionCatalog as loadVersionCatalog,
+    resolveVerifiedUpdateTargets,
+    type ExtensionVersionCatalogSnapshot,
+} from "./update-extension-catalog.js";
+
+export { resolveVerifiedUpdateTargets } from "./update-extension-catalog.js";
 
 export interface UpdateOptions {
     adapters: string[];
@@ -25,11 +36,6 @@ export interface UpdateOptions {
     scope: ServiceScope;
     check?: boolean;
     yes?: boolean;
-}
-
-interface PackageUpdateEvidence {
-    name: string;
-    target: string;
 }
 
 export interface PackageUpdateChange extends PackageUpdateEvidence {
@@ -40,11 +46,6 @@ export type UpdateRunResult =
     | { status: "current"; changes: [] }
     | { status: "updates_available" | "updated" | "cancelled"; changes: PackageUpdateChange[] };
 
-interface ExtensionVersionCatalogSnapshot {
-    schemaVersion?: unknown;
-    packages?: unknown;
-}
-
 /** 将 adapter/protocol 短名转换为可更新的 npm 包名列表。 */
 export function packageNamesFor(adapters: string[], protocols: string[]): string[] {
     return [
@@ -54,26 +55,6 @@ export function packageNamesFor(adapters: string[], protocols: string[]): string
             ...protocols.map(name => `@onebots/protocol-${name}`),
         ]),
     ];
-}
-
-/** 使用目标 OneBots 随包发布的目录解析一组共同验证过的精确更新版本。 */
-export function resolveVerifiedUpdateTargets(
-    packageNames: readonly string[],
-    onebotsVersion: string,
-    snapshot: ExtensionVersionCatalogSnapshot,
-): PackageUpdateEvidence[] {
-    if (snapshot.schemaVersion !== 2 || !isRecord(snapshot.packages)) {
-        throw new Error("目标 OneBots 的扩展版本目录格式无效");
-    }
-    return packageNames.map(name => {
-        if (name === "onebots") return { name, target: onebotsVersion };
-        const entry = snapshot.packages[name];
-        const version = isRecord(entry) ? entry.version : undefined;
-        if (typeof version !== "string" || !/^[0-9A-Za-z][0-9A-Za-z.+_-]*$/u.test(version)) {
-            throw new Error(`目标 OneBots 的扩展版本目录缺少 ${name}`);
-        }
-        return { name, target: version };
-    });
 }
 
 /** 显式更新参数优先，其次使用当前配置，最后兼容旧服务保存的启动快照。 */
@@ -161,7 +142,11 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
         env: invocation.environment,
         stdio: "inherit",
     });
-    assertUpdatedPackageVersions(updates, runtimeRoot);
+    try {
+        assertUpdatedPackageVersions(updates, runtimeRoot, resolveInstalledPackageVersion);
+    } catch (error) {
+        rollbackPackagesBeforeServiceSwitch(updates, runtimeRoot, projectRoot, error);
+    }
     if (spec) {
         const result = await refreshServiceAfterUpdate(
             controller,
@@ -173,6 +158,13 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             {
                 expectedVersion: targetOnebotsVersion,
                 yes: options.yes,
+                recoverPreflightFailure: () =>
+                    rollbackUpdatedPackages(
+                        updates,
+                        runtimeRoot,
+                        projectRoot,
+                        resolveInstalledPackageVersion,
+                    ),
             },
         );
         if (result.wasRunning && !result.restarted) {
@@ -184,21 +176,21 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     return { status: "updated", changes: changed };
 }
 
-/** 包管理器成功退出后，逐包确认实际清单版本，再允许服务预检与切换。 */
-export function assertUpdatedPackageVersions(
-    updates: readonly PackageUpdateEvidence[],
+function rollbackPackagesBeforeServiceSwitch(
+    changes: readonly PackageUpdateChange[],
     runtimeRoot: string,
-    resolveVersion: (name: string, root: string) => string | null = resolveInstalledPackageVersion,
-): void {
-    const mismatches = updates.flatMap(item => {
-        const actual = resolveVersion(item.name, runtimeRoot);
-        return actual === item.target ? [] : [{ ...item, actual }];
-    });
-    if (!mismatches.length) return;
-    const evidence = mismatches
-        .map(item => `${item.name} 期望 ${item.target}，实际 ${item.actual ?? "未安装"}`)
-        .join("；");
-    throw new Error(`包更新版本校验失败：${evidence}。服务预检、定义改写与重启均未执行`);
+    projectRoot: string | null,
+    originalError: unknown,
+): never {
+    try {
+        rollbackUpdatedPackages(changes, runtimeRoot, projectRoot, resolveInstalledPackageVersion);
+    } catch (rollbackError) {
+        throw packageRollbackAggregate(originalError, rollbackError);
+    }
+    throw new Error(
+        `包更新版本校验失败，已恢复更新前依赖；服务定义与当前运行实例保持不变：${errorMessage(originalError)}`,
+        { cause: originalError instanceof Error ? originalError : undefined },
+    );
 }
 
 interface UpdateServiceController {
@@ -221,6 +213,7 @@ interface RefreshServiceDependencies {
 interface RefreshServiceOptions {
     expectedVersion: string;
     yes?: boolean;
+    recoverPreflightFailure?: () => void | Promise<void>;
     dependencies?: RefreshServiceDependencies;
 }
 
@@ -247,8 +240,15 @@ export async function refreshServiceAfterUpdate(
     try {
         await dependencies.preflight(spec);
     } catch (error) {
+        if (options.recoverPreflightFailure) {
+            try {
+                await options.recoverPreflightFailure();
+            } catch (rollbackError) {
+                throw packageRollbackAggregate(error, rollbackError);
+            }
+        }
         throw new Error(
-            `软件包已更新，但新运行环境预检失败；服务定义与当前运行实例保持不变：${error instanceof Error ? error.message : String(error)}`,
+            `${options.recoverPreflightFailure ? "新运行环境预检失败，已恢复更新前依赖" : "软件包已更新，但新运行环境预检失败"}；服务定义与当前运行实例保持不变：${errorMessage(error)}`,
             { cause: error instanceof Error ? error : undefined },
         );
     }
@@ -268,6 +268,17 @@ export async function refreshServiceAfterUpdate(
         );
     }
     return { wasRunning, restarted: true, onlineVerified: true };
+}
+
+function packageRollbackAggregate(originalError: unknown, rollbackError: unknown): AggregateError {
+    return new AggregateError(
+        [originalError, rollbackError],
+        `软件包更新失败且依赖恢复失败：更新错误：${errorMessage(originalError)}；恢复错误：${errorMessage(rollbackError)}；服务定义与当前运行实例保持不变`,
+    );
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 /** 使用更新后的 Node/CLI 路径，在服务实际工作目录中运行隔离预检。 */
@@ -351,97 +362,13 @@ export function loadTargetExtensionVersionCatalog(
     onebotsVersion: string,
 ): ExtensionVersionCatalogSnapshot {
     const installedVersion = resolveInstalledPackageVersion("onebots", runtimeRoot);
-    const installedCatalog = findInstalledOnebotsCatalog(runtimeRoot);
-    if (installedVersion === onebotsVersion && installedCatalog) {
-        return readExtensionVersionCatalog(installedCatalog);
-    }
-
-    const stagingRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-update-catalog-"));
-    try {
-        fs.writeFileSync(
-            path.join(stagingRoot, "package.json"),
-            '{"name":"onebots-update-catalog","private":true}\n',
-            "utf8",
-        );
-        const invocation = buildPackageManagerInvocation(
-            manager,
-            manager === "pnpm"
-                ? ["add", "--ignore-scripts", "--save-prod", `onebots@${onebotsVersion}`]
-                : [
-                      "install",
-                      "--ignore-scripts",
-                      "--no-save",
-                      "--omit=dev",
-                      `onebots@${onebotsVersion}`,
-                  ],
-        );
-        execFileSync(invocation.executable, invocation.args, {
-            cwd: stagingRoot,
-            env: invocation.environment,
-            encoding: "utf8",
-            stdio: ["ignore", "pipe", "pipe"],
-            timeout: 10 * 60 * 1000,
-            maxBuffer: 4 * 1024 * 1024,
-        });
-        return readExtensionVersionCatalog(
-            path.join(
-                stagingRoot,
-                "node_modules",
-                "onebots",
-                "lib",
-                "extension-capability-catalog.json",
-            ),
-        );
-    } catch (error) {
-        const detail =
-            error && typeof error === "object" && "stderr" in error
-                ? String(error.stderr).trim()
-                : error instanceof Error
-                  ? error.message
-                  : String(error);
-        throw new Error(`无法读取 onebots@${onebotsVersion} 的扩展版本目录：${detail}`, {
-            cause: error instanceof Error ? error : undefined,
-        });
-    } finally {
-        fs.rmSync(stagingRoot, { recursive: true, force: true });
-    }
-}
-
-function findInstalledOnebotsCatalog(runtimeRoot: string): string | null {
-    const candidates = [runtimeRoot];
-    if (process.argv[1]) candidates.push(path.dirname(path.resolve(process.argv[1])));
-    const visited = new Set<string>();
-    for (const origin of candidates) {
-        let current = path.resolve(origin);
-        while (!visited.has(current)) {
-            visited.add(current);
-            for (const candidate of [
-                path.join(
-                    current,
-                    "node_modules",
-                    "onebots",
-                    "lib",
-                    "extension-capability-catalog.json",
-                ),
-                path.join(current, "lib", "extension-capability-catalog.json"),
-            ]) {
-                if (fs.existsSync(candidate)) return candidate;
-            }
-            const parent = path.dirname(current);
-            if (parent === current) break;
-            current = parent;
-        }
-    }
-    return null;
-}
-
-function readExtensionVersionCatalog(file: string): ExtensionVersionCatalogSnapshot {
-    if (!fs.existsSync(file)) throw new Error(`扩展版本目录不存在: ${file}`);
-    return JSON.parse(fs.readFileSync(file, "utf8")) as ExtensionVersionCatalogSnapshot;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-    return value !== null && typeof value === "object" && !Array.isArray(value);
+    return loadVersionCatalog(
+        manager,
+        runtimeRoot,
+        onebotsVersion,
+        installedVersion,
+        process.argv[1],
+    );
 }
 
 function latestVersion(manager: "npm" | "pnpm", name: string): string | null {

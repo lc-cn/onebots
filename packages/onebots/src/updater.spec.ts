@@ -4,7 +4,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ServiceSpec } from "./service-manager.js";
 import {
-    assertUpdatedPackageVersions,
     loadTargetExtensionVersionCatalog,
     packageNamesFor,
     refreshServiceAfterUpdate,
@@ -230,22 +229,6 @@ EOF
         );
     });
 
-    it("verifies every selected package from the runtime installation before service preflight", () => {
-        const spec = temporaryServiceSpec();
-        writePackageManifest(spec.workingDirectory, "onebots", "1.3.0");
-        writePackageManifest(spec.workingDirectory, "@onebots/adapter-mock", "2.4.0");
-
-        expect(() =>
-            assertUpdatedPackageVersions(
-                [
-                    { name: "onebots", target: "1.3.0" },
-                    { name: "@onebots/adapter-mock", target: "2.4.0" },
-                ],
-                spec.workingDirectory,
-            ),
-        ).not.toThrow();
-    });
-
     it("falls back to packages beside the current OneBots installation for a global CLI", () => {
         const spec = temporaryServiceSpec();
         const globalRoot = path.join(spec.workingDirectory, "global");
@@ -263,35 +246,17 @@ EOF
         ).toBe("1.2.5");
     });
 
-    it("reports every missing or mismatched package before the service can switch", () => {
-        const versions = new Map([
-            ["onebots", "1.2.9"],
-            ["@onebots/adapter-mock", null],
-        ]);
-
-        expect(() =>
-            assertUpdatedPackageVersions(
-                [
-                    { name: "onebots", target: "1.3.0" },
-                    { name: "@onebots/adapter-mock", target: "2.4.0" },
-                ],
-                "/runtime",
-                name => versions.get(name) ?? null,
-            ),
-        ).toThrow(
-            "包更新版本校验失败：onebots 期望 1.3.0，实际 1.2.9；@onebots/adapter-mock 期望 2.4.0，实际 未安装。服务预检、定义改写与重启均未执行",
-        );
-    });
-
     it("does not rewrite or restart the service when the updated runtime fails preflight", async () => {
         const controller = fakeController(true);
         const spec = temporaryServiceSpec();
         const confirmRestart = vi.fn(async () => true);
+        const recoverPreflightFailure = vi.fn(async () => undefined);
 
         await expect(
             refreshServiceAfterUpdate(controller, spec, {
                 expectedVersion: "1.3.0",
                 yes: true,
+                recoverPreflightFailure,
                 dependencies: refreshDependencies({
                     preflight: async () => {
                         throw new Error("updated plugin failed");
@@ -299,10 +264,32 @@ EOF
                     confirmRestart,
                 }),
             }),
-        ).rejects.toThrow(/软件包已更新.*服务定义与当前运行实例保持不变.*updated plugin failed/);
+        ).rejects.toThrow(/预检失败，已恢复更新前依赖.*updated plugin failed/);
+        expect(recoverPreflightFailure).toHaveBeenCalledOnce();
         expect(controller.install).not.toHaveBeenCalled();
         expect(controller.restart).not.toHaveBeenCalled();
         expect(confirmRestart).not.toHaveBeenCalled();
+    });
+
+    it("新运行环境预检与依赖恢复都失败时保留双方证据", async () => {
+        const controller = fakeController(true);
+
+        await expect(
+            refreshServiceAfterUpdate(controller, temporaryServiceSpec(), {
+                expectedVersion: "1.3.0",
+                yes: true,
+                recoverPreflightFailure: async () => {
+                    throw new Error("lockfile is read-only");
+                },
+                dependencies: refreshDependencies({
+                    preflight: async () => {
+                        throw new Error("updated plugin failed");
+                    },
+                }),
+            }),
+        ).rejects.toThrow(/updated plugin failed.*lockfile is read-only/);
+        expect(controller.install).not.toHaveBeenCalled();
+        expect(controller.restart).not.toHaveBeenCalled();
     });
 
     it("rewrites and restarts a running service only after preflight succeeds", async () => {
