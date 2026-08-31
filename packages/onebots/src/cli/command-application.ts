@@ -15,6 +15,7 @@ import {
 } from "../capability-report.js";
 import packageMetadata from "../../package.json" with { type: "json" };
 import { readServiceInstanceId, verifyServiceOnline } from "../service-online-verification.js";
+import { verifyServiceStopped } from "../service-offline-verification.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
 export interface CommandResult {
@@ -169,10 +170,30 @@ export async function startService(
     return { output: "OneBots 服务已启动并通过在线验证" };
 }
 
-/** 停止当前 scope 中已安装的服务。 */
-export async function stopService(options: ScopeOptions): Promise<CommandResult> {
-    await new ServiceController(scopeFrom(options)).stop();
-    return { output: "OneBots 服务已停止" };
+export interface ServiceDeactivationDependencies {
+    verifyStopped(controller: ServiceController): Promise<void>;
+}
+
+const serviceDeactivationDependencies: ServiceDeactivationDependencies = {
+    verifyStopped: controller => verifyServiceStopped(() => controller.status()),
+};
+
+/** 停止当前 scope 中已安装的服务，并确认进程管理器不再报告运行。 */
+export async function stopService(
+    options: ScopeOptions,
+    dependencies: ServiceDeactivationDependencies = serviceDeactivationDependencies,
+): Promise<CommandResult> {
+    const controller = new ServiceController(scopeFrom(options));
+    await controller.stop();
+    try {
+        await dependencies.verifyStopped(controller);
+    } catch (error) {
+        throw new CliError(
+            `服务停止命令已执行，但状态验证失败：${error instanceof Error ? error.message : String(error)}；请运行 onebots status 并检查服务日志`,
+            1,
+        );
+    }
+    return { output: "OneBots 服务已停止并通过状态验证" };
 }
 
 /** 重启当前 scope 中已安装的服务，并确认实例身份已经切换。 */

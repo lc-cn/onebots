@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { installService, restartService, startService } from "./command-application.js";
+import {
+    installService,
+    restartService,
+    startService,
+    stopService,
+} from "./command-application.js";
 import { ServiceController, type ServiceSpec } from "../service-manager.js";
 
 const temporaryDirectories: string[] = [];
@@ -191,5 +196,37 @@ describe("service install preflight", () => {
             exitCode: 1,
         });
         expect(restart).toHaveBeenCalledOnce();
+    });
+
+    it("reports stop success only after the process manager confirms it", async () => {
+        const stop = vi.spyOn(ServiceController.prototype, "stop").mockResolvedValue();
+        const verifyStopped = vi.fn(async () => undefined);
+
+        await expect(stopService({ system: false }, { verifyStopped })).resolves.toEqual({
+            output: "OneBots 服务已停止并通过状态验证",
+        });
+        expect(stop).toHaveBeenCalledOnce();
+        expect(verifyStopped).toHaveBeenCalledOnce();
+    });
+
+    it("preserves process-manager evidence when stop verification fails", async () => {
+        const stop = vi.spyOn(ServiceController.prototype, "stop").mockResolvedValue();
+
+        await expect(
+            stopService(
+                { system: false },
+                {
+                    verifyStopped: async () => {
+                        throw new Error("launchd 仍报告运行中");
+                    },
+                },
+            ),
+        ).rejects.toMatchObject({
+            message: expect.stringMatching(
+                /服务停止命令已执行，但状态验证失败.*launchd 仍报告运行中.*onebots status/,
+            ),
+            exitCode: 1,
+        });
+        expect(stop).toHaveBeenCalledOnce();
     });
 });

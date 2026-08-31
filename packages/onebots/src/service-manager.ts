@@ -251,7 +251,7 @@ export class ServiceController {
             );
         } else if (this.host.platform === "darwin") {
             const target = `${this.launchdDomain()}/${LAUNCHD_LABEL}`;
-            this.host.exec("launchctl", ["kill", "SIGTERM", target], {
+            this.host.exec("launchctl", ["bootout", target], {
                 inherit: true,
                 ignoreError: ignoreMissing,
             });
@@ -383,9 +383,6 @@ export class ServiceController {
                 ignoreError: true,
             });
         } else if (this.host.platform === "darwin") {
-            this.host.exec("launchctl", ["bootout", this.launchdDomain(), paths.definition], {
-                ignoreError: true,
-            });
             if (fs.existsSync(paths.definition)) fs.unlinkSync(paths.definition);
         } else if (this.scope === "user") {
             this.host.exec("schtasks.exe", ["/Delete", "/F", "/TN", WINDOWS_TASK_NAME], {

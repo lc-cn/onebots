@@ -140,4 +140,40 @@ describe("service definition", () => {
         expect(fs.existsSync(userConfig)).toBe(true);
         expect(controller.status().installed).toBe(false);
     });
+
+    it("removes a stopped macOS service from launchd before bootstrapping it again", async () => {
+        const home = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-launchd-test-"));
+        temporaryDirectories.push(home);
+        const commands: string[] = [];
+        const host: ServiceHost = {
+            platform: "darwin",
+            homedir: home,
+            uid: 501,
+            env: {},
+            exec(file, args) {
+                commands.push([file, ...args].join(" "));
+                return "";
+            },
+            async spawn() {
+                return 0;
+            },
+        };
+        const controller = new ServiceController("user", host);
+        await controller.install(spec);
+
+        await controller.restart();
+
+        const definition = path.join(
+            home,
+            "Library",
+            "LaunchAgents",
+            "com.onebots.onebots-gateway.plist",
+        );
+        expect(commands).toEqual([
+            "launchctl bootout gui/501/com.onebots.onebots-gateway",
+            `launchctl bootstrap gui/501 ${definition}`,
+            "launchctl kickstart -k gui/501/com.onebots.onebots-gateway",
+        ]);
+        expect(commands.some(command => command.includes("launchctl kill"))).toBe(false);
+    });
 });
