@@ -20,6 +20,7 @@ import {
     getRuntimePluginSelection,
     setRuntimePluginSelection,
 } from "./runtime-plugin-selection.js";
+import { ensureRuntimeDataDirectory } from "./runtime-data-directory.js";
 
 export interface SetupOptions {
     force?: boolean;
@@ -137,10 +138,10 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
 
     await validateConfig(config);
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
     writeConfigFileAtomic(configPath, yaml.dump(config, { noRefs: true }), {
         backup: exists,
     });
-    fs.mkdirSync(path.join(path.dirname(configPath), "data"), { recursive: true });
     writeCliOutput(`配置已就绪: ${configPath}`);
     if (managementCredentials.generated) {
         writeCliOutput("已生成管理端鉴权码并安全写入配置文件的 access_token 字段。");

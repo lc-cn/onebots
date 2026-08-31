@@ -16,6 +16,18 @@ afterEach(() => {
 });
 
 describe("createOnebots config parsing", () => {
+    it("前台启动在生成默认配置前拒绝冲突的数据路径", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-app-data-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        const dataPath = path.join(directory, "data");
+        fs.writeFileSync(dataPath, "keep this mount evidence");
+
+        expect(() => createOnebots(configPath)).toThrow(`数据存储路径不是目录: ${dataPath}`);
+        expect(fs.existsSync(configPath)).toBe(false);
+        expect(fs.readFileSync(dataPath, "utf8")).toBe("keep this mount evidence");
+    });
+
     it("前台创建入口不把损坏 YAML 附近的凭据带入错误", () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-app-config-"));
         temporaryDirectories.push(directory);

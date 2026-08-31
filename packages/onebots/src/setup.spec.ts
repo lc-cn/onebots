@@ -54,6 +54,33 @@ describe("setup workflow", () => {
         expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
     });
 
+    it("rejects a colliding data path before writing a first-run config", async () => {
+        const configPath = temporaryConfigPath();
+        const dataPath = path.join(path.dirname(configPath), "data");
+        fs.writeFileSync(dataPath, "keep this mount evidence");
+
+        await expect(runSetup(configPath)).rejects.toThrow(`数据存储路径不是目录: ${dataPath}`);
+
+        expect(fs.existsSync(configPath)).toBe(false);
+        expect(fs.readFileSync(dataPath, "utf8")).toBe("keep this mount evidence");
+    });
+
+    it("rejects a colliding data path before backing up or changing a forced config", async () => {
+        const configPath = temporaryConfigPath();
+        const dataPath = path.join(path.dirname(configPath), "data");
+        const original = "port: 7000\nlog_level: info\ntimeout: 30\ngeneral: {}\n";
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+        fs.writeFileSync(dataPath, "keep this mount evidence");
+
+        await expect(runSetup(configPath, { force: true })).rejects.toThrow(
+            `数据存储路径不是目录: ${dataPath}`,
+        );
+
+        expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect(fs.readFileSync(dataPath, "utf8")).toBe("keep this mount evidence");
+    });
+
     it("atomically backs up an existing config before a forced update", async () => {
         const configPath = temporaryConfigPath();
         const original = "port: 7000\nlog_level: info\ntimeout: 30\ngeneral: {}\n";

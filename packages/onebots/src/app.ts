@@ -63,6 +63,7 @@ import {
     renderManagementIndexHtml,
 } from "./management-index.js";
 import { isProcessRestartSupported } from "./process-restart.js";
+import { ensureRuntimeDataDirectory } from "./runtime-data-directory.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -504,6 +505,10 @@ export function createOnebots(config: BaseApp.Config | string = "config.yaml") {
         BaseApp.configDir = path.dirname(config);
     }
     if (!existsSync(BaseApp.configDir)) mkdirSync(BaseApp.configDir);
+    const dataDirectory = ensureRuntimeDataDirectory(BaseApp.dataDir);
+    if (dataDirectory.created) {
+        writeCliOutput(`[onebots] 已创建并验证数据存储目录: ${BaseApp.dataDir}`);
+    }
     if (!existsSync(BaseApp.configPath) && isStartWithConfigFile) {
         writeConfigFileAtomic(
             BaseApp.configPath,
@@ -514,10 +519,6 @@ export function createOnebots(config: BaseApp.Config | string = "config.yaml") {
     if (!isStartWithConfigFile) {
         writeConfigFileAtomic(BaseApp.configPath, yaml.dump(config));
         writeCliOutput(`[onebots] 已自动保存配置到: ${BaseApp.configPath}`);
-    }
-    if (!existsSync(BaseApp.dataDir)) {
-        mkdirSync(BaseApp.dataDir);
-        writeCliOutput(`[onebots] 已创建数据存储目录: ${BaseApp.dataDir}`);
     }
     config = parseRuntimeConfig(readFileSync(BaseApp.configPath, "utf8")) as BaseApp.Config;
     const managementCredentials = ensureManagementCredentials(config as Record<string, unknown>);
