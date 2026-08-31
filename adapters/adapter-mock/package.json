@@ -30,7 +30,7 @@
         "tsc-alias": "latest",
         "typescript": "catalog:"
     },
-    "dependencies": {
+    "peerDependencies": {
         "onebots": "workspace:*"
     },
     "repository": {

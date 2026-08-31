@@ -185,6 +185,54 @@ describe("plugin loader", () => {
         expect(result).toMatchObject({ loaded: true });
     });
 
+    it.each(["onebots", "@onebots/core"] as const)(
+        "rejects a second %s runtime before the plugin module can initialize",
+        async packageName => {
+            const pluginName =
+                packageName === "onebots" ? "isolated-onebots-adapter" : "isolated-core-adapter";
+            const directory = createImportOnlyPlugin(
+                pluginName,
+                "globalThis.__onebotsIsolatedPluginExecuted = true;\n",
+            );
+            const nestedRuntime = path.join(
+                directory,
+                "node_modules",
+                pluginName,
+                "node_modules",
+                ...packageName.split("/"),
+            );
+            fs.mkdirSync(nestedRuntime, { recursive: true });
+            fs.writeFileSync(
+                path.join(nestedRuntime, "package.json"),
+                JSON.stringify({ name: packageName, type: "module", main: "index.js" }),
+            );
+            fs.writeFileSync(path.join(nestedRuntime, "index.js"), "export {};\n");
+            const globals = globalThis as typeof globalThis & {
+                __onebotsIsolatedPluginExecuted?: boolean;
+            };
+
+            try {
+                const result = await tryLoadPlugin(
+                    "适配器",
+                    "isolated",
+                    [pluginName],
+                    createRequire(path.join(directory, "package.json")),
+                );
+
+                expect(result).toMatchObject({
+                    loaded: false,
+                    message: expect.stringContaining(`解析到了独立的 ${packageName} 运行时`),
+                });
+                expect(result.loaded === false ? result.message : "").toContain(
+                    `请将 ${packageName} 声明为 peerDependency`,
+                );
+                expect(globals.__onebotsIsolatedPluginExecuted).toBeUndefined();
+            } finally {
+                delete globals.__onebotsIsolatedPluginExecuted;
+            }
+        },
+    );
+
     it("selects the import condition instead of a conflicting require entry", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
         temporaryDirectories.push(directory);

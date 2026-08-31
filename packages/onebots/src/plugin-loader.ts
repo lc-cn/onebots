@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
     AdapterRegistry,
     ProtocolRegistry,
@@ -106,6 +107,14 @@ async function tryLoadPluginUnlocked(
             message: `加载${kind} ${name} 失败：已找到 ${inspection.candidate}，但入口无法加载（${inspection.reason}）${suggestion}`,
         };
     }
+    const runtimeMismatch = findExtensionRuntimeMismatch(inspection.entryPath);
+    if (runtimeMismatch) {
+        return {
+            loaded: false,
+            inspection,
+            message: `加载${kind} ${name} 失败：${inspection.candidate} 解析到了独立的 ${runtimeMismatch.packageName} 运行时（插件: ${runtimeMismatch.pluginPackageJson}；网关: ${runtimeMismatch.hostPackageJson}）；请将 ${runtimeMismatch.packageName} 声明为 peerDependency，由同一安装根目录提供，并删除插件内的重复副本`,
+        };
+    }
     const registryState = captureExtensionRegistryState();
     try {
         await import(pathToFileURL(inspection.entryPath).href);
@@ -208,6 +217,45 @@ interface PackageManifest {
     main?: unknown;
     module?: unknown;
     exports?: unknown;
+}
+
+interface ExtensionRuntimeMismatch {
+    packageName: "onebots" | "@onebots/core";
+    pluginPackageJson: string;
+    hostPackageJson: string;
+}
+
+/** 阻止插件绑定到另一套静态 Registry；这类插件即使完成初始化也不会注册到当前网关。 */
+function findExtensionRuntimeMismatch(entryPath: string): ExtensionRuntimeMismatch | undefined {
+    const pluginRequire = createRequire(entryPath);
+    const hostRequire = createRequire(import.meta.url);
+    const hostPackages: ReadonlyArray<readonly [ExtensionRuntimeMismatch["packageName"], string?]> =
+        [
+            ["onebots", fileURLToPath(new URL("../package.json", import.meta.url))],
+            ["@onebots/core", resolvePackageJson("@onebots/core", hostRequire)],
+        ];
+
+    for (const [packageName, hostPackageJson] of hostPackages) {
+        if (!hostPackageJson) continue;
+        const pluginPackageJson = resolvePackageJson(packageName, pluginRequire);
+        if (!pluginPackageJson) continue;
+        if (realPath(pluginPackageJson) !== realPath(hostPackageJson)) {
+            return {
+                packageName,
+                pluginPackageJson,
+                hostPackageJson,
+            };
+        }
+    }
+    return undefined;
+}
+
+function realPath(file: string): string {
+    try {
+        return fs.realpathSync(file);
+    } catch {
+        return path.resolve(file);
+    }
 }
 
 function resolvePackageJson(
