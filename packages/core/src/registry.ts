@@ -27,6 +27,7 @@ export class ProtocolRegistry {
     private static protocols: Map<string, Map<string, Protocol.Factory>> = new Map();
     private static metadata: Map<string, Protocol.Metadata> = new Map();
     private static schemas: Map<string, Schema> = new Map();
+    private static schemaSnapshots = new WeakMap<Schema, Schema>();
 
     /**
      * Register a protocol implementation
@@ -79,14 +80,16 @@ export class ProtocolRegistry {
         assertSchemaFormContract(schema);
         const registeredSchema = this.schemas.get(key);
         if (registeredSchema) {
-            if (registeredSchema === schema) {
+            if (this.schemaSnapshots.get(schema) === registeredSchema) {
                 return;
             }
             throw new ValidationError(`协议配置 Schema ${key} 已由其他实现注册`, {
                 context: { key },
             });
         }
-        this.schemas.set(key, schema);
+        const snapshot = this.schemaSnapshots.get(schema) ?? createImmutableSchemaSnapshot(schema);
+        this.schemaSnapshots.set(schema, snapshot);
+        this.schemas.set(key, snapshot);
     }
 
     /**
@@ -253,6 +256,7 @@ export class AdapterRegistry {
     private static adapters: Map<string, Adapter.Factory> = new Map();
     private static metadata: Map<string, Adapter.Metadata> = new Map();
     private static schemas: Map<string, Schema> = new Map();
+    private static schemaSnapshots = new WeakMap<Schema, Schema>();
 
     /**
      * Register an adapter implementation
@@ -299,14 +303,16 @@ export class AdapterRegistry {
         assertSchemaFormContract(schema);
         const registeredSchema = this.schemas.get(name);
         if (registeredSchema) {
-            if (registeredSchema === schema) {
+            if (this.schemaSnapshots.get(schema) === registeredSchema) {
                 return;
             }
             throw new ValidationError(`适配器配置 Schema ${name} 已由其他实现注册`, {
                 context: { name },
             });
         }
-        this.schemas.set(name, schema);
+        const snapshot = this.schemaSnapshots.get(schema) ?? createImmutableSchemaSnapshot(schema);
+        this.schemaSnapshots.set(schema, snapshot);
+        this.schemas.set(name, snapshot);
     }
 
     /**
@@ -429,4 +435,110 @@ export function captureExtensionRegistryState(): ExtensionRegistryState {
 export function restoreExtensionRegistryState(state: ExtensionRegistryState): void {
     AdapterRegistry.restoreState(state.adapters);
     ProtocolRegistry.restoreState(state.protocols);
+}
+
+/** Schema 是插件与宿主共享的长期契约；复制并冻结容器，避免注册后的外部改写。 */
+function createImmutableSchemaSnapshot(schema: Schema): Schema {
+    return snapshotSchemaValue(schema, new Map<object, unknown>()) as Schema;
+}
+
+function snapshotSchemaValue(value: unknown, seen: Map<object, unknown>): unknown {
+    if (typeof value !== "object" || value === null) return value;
+    const existing = seen.get(value);
+    if (existing !== undefined) return existing;
+    if (value instanceof RegExp) {
+        const snapshot = new RegExp(value.source, value.flags);
+        seen.set(value, snapshot);
+        return Object.freeze(snapshot);
+    }
+    if (value instanceof Date) {
+        const target = new Date(value.getTime());
+        const snapshot = createReadonlyDate(target);
+        seen.set(value, snapshot);
+        Object.freeze(target);
+        return snapshot;
+    }
+    if (Array.isArray(value)) {
+        const snapshot: unknown[] = [];
+        seen.set(value, snapshot);
+        snapshot.push(...value.map(entry => snapshotSchemaValue(entry, seen)));
+        return Object.freeze(snapshot);
+    }
+    if (value instanceof Map) {
+        const target = new Map<unknown, unknown>();
+        const snapshot = createReadonlyMap(target);
+        seen.set(value, snapshot);
+        for (const [key, entry] of value) {
+            target.set(snapshotSchemaValue(key, seen), snapshotSchemaValue(entry, seen));
+        }
+        Object.freeze(target);
+        return snapshot;
+    }
+    if (value instanceof Set) {
+        const target = new Set<unknown>();
+        const snapshot = createReadonlySet(target);
+        seen.set(value, snapshot);
+        for (const entry of value) target.add(snapshotSchemaValue(entry, seen));
+        Object.freeze(target);
+        return snapshot;
+    }
+    const snapshot: Record<string, unknown> = {};
+    seen.set(value, snapshot);
+    for (const [key, entry] of Object.entries(value)) {
+        snapshot[key] = snapshotSchemaValue(entry, seen);
+    }
+    return Object.freeze(snapshot);
+}
+
+function createReadonlyMap(target: Map<unknown, unknown>): Map<unknown, unknown> {
+    return new Proxy(target, {
+        get(map, property) {
+            if (property === "set" || property === "delete" || property === "clear") {
+                return rejectSchemaMutation;
+            }
+            const value: unknown = Reflect.get(map, property, map);
+            return typeof value === "function" ? value.bind(map) : value;
+        },
+        set: rejectSchemaPropertyMutation,
+        defineProperty: rejectSchemaPropertyMutation,
+        deleteProperty: rejectSchemaPropertyMutation,
+    });
+}
+
+function createReadonlySet(target: Set<unknown>): Set<unknown> {
+    return new Proxy(target, {
+        get(set, property) {
+            if (property === "add" || property === "delete" || property === "clear") {
+                return rejectSchemaMutation;
+            }
+            const value: unknown = Reflect.get(set, property, set);
+            return typeof value === "function" ? value.bind(set) : value;
+        },
+        set: rejectSchemaPropertyMutation,
+        defineProperty: rejectSchemaPropertyMutation,
+        deleteProperty: rejectSchemaPropertyMutation,
+    });
+}
+
+function createReadonlyDate(target: Date): Date {
+    return new Proxy(target, {
+        get(date, property) {
+            if (typeof property === "string" && property.startsWith("set")) {
+                return rejectSchemaMutation;
+            }
+            const value: unknown = Reflect.get(date, property, date);
+            return typeof value === "function" ? value.bind(date) : value;
+        },
+        set: rejectSchemaPropertyMutation,
+        defineProperty: rejectSchemaPropertyMutation,
+        deleteProperty: rejectSchemaPropertyMutation,
+    });
+}
+
+function rejectSchemaMutation(): never {
+    throw new TypeError("注册后的配置 Schema 不可修改");
+}
+
+function rejectSchemaPropertyMutation(): false {
+    return false;
 }

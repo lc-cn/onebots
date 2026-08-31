@@ -7,7 +7,7 @@ import {
     captureExtensionRegistryState,
     restoreExtensionRegistryState,
 } from "./registry.js";
-import type { Schema } from "./config-validator.js";
+import { ConfigValidator, type Schema, type ValidationRule } from "./config-validator.js";
 
 const schema: Schema = {};
 const anotherSchema: Schema = {
@@ -110,6 +110,8 @@ describe("extension registries", () => {
     it("rejects schema replacement and preserves the original contract", () => {
         AdapterRegistry.registerSchema("mock", schema);
         ProtocolRegistry.registerSchema("test.v1", schema);
+        const adapterSnapshot = AdapterRegistry.getSchema("mock");
+        const protocolSnapshot = ProtocolRegistry.getSchema("test.v1");
 
         expect(() => AdapterRegistry.registerSchema("mock", anotherSchema)).toThrowError(
             ValidationError,
@@ -117,8 +119,55 @@ describe("extension registries", () => {
         expect(() => ProtocolRegistry.registerSchema("test.v1", anotherSchema)).toThrowError(
             ValidationError,
         );
-        expect(AdapterRegistry.getSchema("mock")).toBe(schema);
-        expect(ProtocolRegistry.getSchema("test.v1")).toBe(schema);
+        expect(adapterSnapshot).not.toBe(schema);
+        expect(protocolSnapshot).not.toBe(schema);
+        expect(AdapterRegistry.getSchema("mock")).toBe(adapterSnapshot);
+        expect(ProtocolRegistry.getSchema("test.v1")).toBe(protocolSnapshot);
+    });
+
+    it("stores an immutable schema snapshot and clones container defaults for each config", () => {
+        const mutableSchema: Schema = {
+            endpoint: {
+                required: true,
+                type: "string",
+                default: "https://example.com",
+                pattern: /^https:\/\//u,
+                label: "端点",
+                ui: { section: "transport" },
+            },
+            scopes: {
+                required: true,
+                type: "array",
+                default: ["messages"],
+                label: "权限",
+                ui: { section: "transport" },
+            },
+        };
+        const sourceEndpointRule = mutableSchema.endpoint as ValidationRule<string>;
+        const sourceScopesRule = mutableSchema.scopes as ValidationRule<string[]>;
+        AdapterRegistry.registerSchema("immutable", mutableSchema);
+        const registered = AdapterRegistry.getSchema("immutable")!;
+        const registeredEndpointRule = registered.endpoint as ValidationRule<string>;
+        const registeredScopesRule = registered.scopes as ValidationRule<string[]>;
+        expect(AdapterRegistry.getAllSchemas().immutable).toBe(registered);
+
+        sourceEndpointRule.label = "已篡改";
+        (sourceScopesRule.default as string[]).push("admin");
+        expect(registeredEndpointRule.label).toBe("端点");
+        expect(registeredScopesRule.default).toEqual(["messages"]);
+        expect(registeredEndpointRule.pattern).not.toBe(sourceEndpointRule.pattern);
+        expect(Object.isFrozen(registered)).toBe(true);
+        expect(Object.isFrozen(registeredEndpointRule)).toBe(true);
+        expect(Object.isFrozen(registeredScopesRule.default)).toBe(true);
+        expect(() => {
+            registeredEndpointRule.label = "运行时篡改";
+        }).toThrow(TypeError);
+
+        const first = ConfigValidator.validate<Record<string, unknown>>({}, registered);
+        const second = ConfigValidator.validate<Record<string, unknown>>({}, registered);
+        expect(first).toEqual({ endpoint: "https://example.com", scopes: ["messages"] });
+        expect(Object.isFrozen(first.scopes)).toBe(false);
+        expect(first.scopes).not.toBe(second.scopes);
     });
 
     it("removes related schemas when an extension is unregistered", () => {
@@ -139,6 +188,8 @@ describe("extension registries", () => {
         AdapterRegistry.registerSchema("existing", schema);
         ProtocolRegistry.register("test", "v1", protocolFactory, { displayName: "Test" });
         ProtocolRegistry.registerSchema("test.v1", schema);
+        const existingAdapterSchema = AdapterRegistry.getSchema("existing");
+        const existingProtocolSchema = ProtocolRegistry.getSchema("test.v1");
         const state = captureExtensionRegistryState();
 
         AdapterRegistry.unregister("existing");
@@ -151,11 +202,11 @@ describe("extension registries", () => {
 
         expect(AdapterRegistry.get("existing")).toBe(adapterFactory);
         expect(AdapterRegistry.getMetadata("existing")?.displayName).toBe("Existing");
-        expect(AdapterRegistry.getSchema("existing")).toBe(schema);
+        expect(AdapterRegistry.getSchema("existing")).toBe(existingAdapterSchema);
         expect(AdapterRegistry.has("partial")).toBe(false);
         expect(AdapterRegistry.getSchema("partial")).toBeUndefined();
         expect(ProtocolRegistry.get("test", "v1")).toBe(protocolFactory);
-        expect(ProtocolRegistry.getSchema("test.v1")).toBe(schema);
+        expect(ProtocolRegistry.getSchema("test.v1")).toBe(existingProtocolSchema);
         expect(ProtocolRegistry.has("test", "v2")).toBe(false);
         expect(ProtocolRegistry.getSchema("test.v2")).toBeUndefined();
         expect(ProtocolRegistry.getMetadata("test")?.versions).toEqual(["v1"]);

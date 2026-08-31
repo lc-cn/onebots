@@ -204,7 +204,7 @@ export class ConfigValidator {
                     result[key] =
                         typeof validationRule.default === "function"
                             ? validationRule.default()
-                            : validationRule.default;
+                            : cloneConfigDefault(validationRule.default);
                     continue;
                 }
                 errors.push(`${currentPath} is required`);
@@ -216,7 +216,7 @@ export class ConfigValidator {
                 result[key] =
                     typeof validationRule.default === "function"
                         ? validationRule.default()
-                        : validationRule.default;
+                        : cloneConfigDefault(validationRule.default);
                 continue;
             }
 
@@ -334,6 +334,46 @@ export class ConfigValidator {
     ): T {
         return this.validate(config as T, schema);
     }
+}
+
+function cloneConfigDefault<T>(value: T): T {
+    return cloneConfigDefaultValue(value, new Map<object, unknown>()) as T;
+}
+
+function cloneConfigDefaultValue(value: unknown, seen: Map<object, unknown>): unknown {
+    if (typeof value !== "object" || value === null) return value;
+    const existing = seen.get(value);
+    if (existing !== undefined) return existing;
+    if (value instanceof Date) return new Date(value.getTime());
+    if (value instanceof RegExp) return new RegExp(value.source, value.flags);
+    if (Array.isArray(value)) {
+        const clone: unknown[] = [];
+        seen.set(value, clone);
+        clone.push(...value.map(entry => cloneConfigDefaultValue(entry, seen)));
+        return clone;
+    }
+    if (value instanceof Map) {
+        const clone = new Map<unknown, unknown>();
+        seen.set(value, clone);
+        for (const [key, entry] of value) {
+            clone.set(cloneConfigDefaultValue(key, seen), cloneConfigDefaultValue(entry, seen));
+        }
+        return clone;
+    }
+    if (value instanceof Set) {
+        const clone = new Set<unknown>();
+        seen.set(value, clone);
+        for (const entry of value) clone.add(cloneConfigDefaultValue(entry, seen));
+        return clone;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return value;
+    const clone: Record<string, unknown> = {};
+    seen.set(value, clone);
+    for (const [key, entry] of Object.entries(value)) {
+        clone[key] = cloneConfigDefaultValue(entry, seen);
+    }
+    return clone;
 }
 
 /**
