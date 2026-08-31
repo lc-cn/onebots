@@ -245,6 +245,7 @@ export * from "./official-business-account-types.js";
 export {
     isWhatsAppMarketingMessageAction,
     WhatsAppMarketingMessages,
+    type WhatsAppMarketingMessageAction,
 } from "./marketing-messages.js";
 export * from "./marketing-message-types.js";
 export {

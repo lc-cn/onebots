@@ -1,10 +1,5 @@
 import type { WhatsAppTemplateJson } from "./message-template-types.js";
 
-export const WHATSAPP_MARKETING_MESSAGE_ACTIONS = Object.freeze([
-    "send_marketing_message",
-] as const);
-export type WhatsAppMarketingMessageAction = (typeof WHATSAPP_MARKETING_MESSAGE_ACTIONS)[number];
-
 export const WHATSAPP_MARKETING_PRODUCT_POLICIES = Object.freeze([
     "CLOUD_API_FALLBACK",
     "STRICT",

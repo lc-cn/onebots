@@ -1,4 +1,5 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import {
@@ -6,10 +7,8 @@ import {
     normalizeTemplateJsonRecord,
 } from "./message-template-json.js";
 import {
-    WHATSAPP_MARKETING_MESSAGE_ACTIONS,
     WHATSAPP_MARKETING_MESSAGE_STATUSES,
     WHATSAPP_MARKETING_PRODUCT_POLICIES,
-    type WhatsAppMarketingMessageAction,
     type WhatsAppMarketingMessageRequest,
     type WhatsAppMarketingMessageResponse,
     type WhatsAppMarketingMessageStatus,
@@ -20,12 +19,6 @@ import {
 } from "./marketing-message-types.js";
 
 export * from "./marketing-message-types.js";
-
-export function isWhatsAppMarketingMessageAction(
-    action: string,
-): action is WhatsAppMarketingMessageAction {
-    return (WHATSAPP_MARKETING_MESSAGE_ACTIONS as readonly string[]).includes(action);
-}
 
 /** 专用 Marketing Messages 端点；与普通 messages 模板发送保持语义隔离。 */
 export class WhatsAppMarketingMessages {
@@ -48,23 +41,27 @@ export class WhatsAppMarketingMessages {
             }),
         );
     }
-
-    execute(
-        _action: WhatsAppMarketingMessageAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        rejectUnknown(params, ["message"]);
-        return this.send(marketingRequest(params.message));
-    }
 }
 
-export const WHATSAPP_MARKETING_MESSAGE_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_MARKETING_MESSAGE_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.marketingMessages.execute(action, params),
-    ]),
-) as Record<WhatsAppMarketingMessageAction, PlatformActionHandler<WhatsAppClient>>;
+const MARKETING_MESSAGE_ACTION_HANDLERS = {
+    send_marketing_message: (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
+        client.marketingMessages.send(marketingRequest(params.message)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Marketing Message 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_MARKETING_MESSAGE_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    MARKETING_MESSAGE_ACTION_HANDLERS,
+    { send_marketing_message: ["message"] },
+);
+
+export type WhatsAppMarketingMessageAction =
+    keyof typeof WHATSAPP_MARKETING_MESSAGE_ACTION_HANDLERS;
+
+export function isWhatsAppMarketingMessageAction(
+    action: string,
+): action is WhatsAppMarketingMessageAction {
+    return Object.hasOwn(WHATSAPP_MARKETING_MESSAGE_ACTION_HANDLERS, action);
+}
 
 function marketingRequest(value: unknown): WhatsAppMarketingMessageRequest {
     const source = inputRecord(value, "message");

@@ -93,6 +93,18 @@ describe("WhatsAppMarketingMessages", () => {
         ).resolves.toMatchObject({ messages: [{ message_status: "accepted" }] });
     });
 
+    it("Marketing Message 动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "send_marketing_message", {
+                to: "16315552222",
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "send_marketing_message", parameter: "to" },
+        });
+    });
+
     it.each([
         ["缺少 message", {}],
         [
