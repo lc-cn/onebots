@@ -3,9 +3,9 @@
  * 防止 API 滥用，保护服务器资源
  */
 
-import type { Context, Next } from 'koa';
-import { createLogger } from '../logger.js';
-import { logRateLimit } from './security-audit.js';
+import type { Context, Next } from "koa";
+import { createLogger } from "../logger.js";
+import { logRateLimit } from "./security-audit.js";
 
 interface RateLimitConfig {
     /** 时间窗口（毫秒） */
@@ -43,14 +43,18 @@ class MemoryStore {
 
     constructor() {
         // 每 5 分钟清理一次过期记录
-        this.cleanupInterval = setInterval(() => {
-            const now = Date.now();
-            for (const key in this.store) {
-                if (this.store[key].resetTime < now) {
-                    delete this.store[key];
+        this.cleanupInterval = setInterval(
+            () => {
+                const now = Date.now();
+                for (const key in this.store) {
+                    if (this.store[key].resetTime < now) {
+                        delete this.store[key];
+                    }
                 }
-            }
-        }, 5 * 60 * 1000);
+            },
+            5 * 60 * 1000,
+        );
+        this.cleanupInterval.unref();
     }
 
     /**
@@ -61,13 +65,13 @@ class MemoryStore {
         if (!record) {
             return null;
         }
-        
+
         // 如果已过期，删除记录
         if (record.resetTime < Date.now()) {
             delete this.store[key];
             return null;
         }
-        
+
         return record;
     }
 
@@ -77,7 +81,7 @@ class MemoryStore {
     increment(key: string, windowMs: number): { count: number; resetTime: number } {
         const now = Date.now();
         const record = this.store[key];
-        
+
         if (!record || record.resetTime < now) {
             // 创建新记录
             this.store[key] = {
@@ -86,7 +90,7 @@ class MemoryStore {
             };
             return this.store[key];
         }
-        
+
         // 增加计数
         record.count++;
         return record;
@@ -121,9 +125,9 @@ class MemoryStore {
  * 创建速率限制中间件
  */
 export function createRateLimit(config: RateLimitConfig) {
-    const logger = createLogger('RateLimit');
+    const logger = createLogger("RateLimit");
     const store = new MemoryStore();
-    
+
     const {
         windowMs = 60 * 1000, // 默认 1 分钟
         max = 100, // 默认 100 次请求
@@ -131,10 +135,10 @@ export function createRateLimit(config: RateLimitConfig) {
         skipFailedRequests = false,
         keyGenerator = (ctx: Context) => {
             // 默认使用 IP 地址作为键
-            return ctx.ip || ctx.request.ip || 'unknown';
+            return ctx.ip || ctx.request.ip || "unknown";
         },
         skip = () => false,
-        message = 'Too many requests, please try again later.',
+        message = "Too many requests, please try again later.",
         statusCode = 429,
     } = config;
 
@@ -146,37 +150,37 @@ export function createRateLimit(config: RateLimitConfig) {
 
         // 生成键
         const key = keyGenerator(ctx);
-        
+
         // 获取当前记录
         const record = store.get(key);
-        
+
         if (record) {
             // 检查是否超过限制
             if (record.count >= max) {
-                logger.warn('Rate limit exceeded', {
+                logger.warn("Rate limit exceeded", {
                     key,
                     count: record.count,
                     max,
                     path: ctx.path,
                     method: ctx.method,
                 });
-                
+
                 // 记录安全审计日志
                 logRateLimit(ctx, key, record.count, max);
-                
+
                 ctx.status = statusCode;
                 ctx.body = {
-                    error: 'RateLimitExceeded',
+                    error: "RateLimitExceeded",
                     message,
                     retryAfter: Math.ceil((record.resetTime - Date.now()) / 1000),
                 };
-                
+
                 // 设置响应头
-                ctx.set('X-RateLimit-Limit', String(max));
-                ctx.set('X-RateLimit-Remaining', '0');
-                ctx.set('X-RateLimit-Reset', String(Math.ceil(record.resetTime / 1000)));
-                ctx.set('Retry-After', String(Math.ceil((record.resetTime - Date.now()) / 1000)));
-                
+                ctx.set("X-RateLimit-Limit", String(max));
+                ctx.set("X-RateLimit-Remaining", "0");
+                ctx.set("X-RateLimit-Reset", String(Math.ceil(record.resetTime / 1000)));
+                ctx.set("Retry-After", String(Math.ceil((record.resetTime - Date.now()) / 1000)));
+
                 return;
             }
         }
@@ -185,18 +189,18 @@ export function createRateLimit(config: RateLimitConfig) {
         await next();
 
         // 根据配置决定是否记录
-        const shouldSkip = 
+        const shouldSkip =
             (skipSuccessfulRequests && ctx.status < 400) ||
             (skipFailedRequests && ctx.status >= 400);
 
         if (!shouldSkip) {
             // 增加计数
             const newRecord = store.increment(key, windowMs);
-            
+
             // 设置响应头
-            ctx.set('X-RateLimit-Limit', String(max));
-            ctx.set('X-RateLimit-Remaining', String(Math.max(0, max - newRecord.count)));
-            ctx.set('X-RateLimit-Reset', String(Math.ceil(newRecord.resetTime / 1000)));
+            ctx.set("X-RateLimit-Limit", String(max));
+            ctx.set("X-RateLimit-Remaining", String(Math.max(0, max - newRecord.count)));
+            ctx.set("X-RateLimit-Reset", String(Math.ceil(newRecord.resetTime / 1000)));
         }
     };
 }
@@ -207,6 +211,5 @@ export function createRateLimit(config: RateLimitConfig) {
 export const defaultRateLimit = createRateLimit({
     windowMs: 60 * 1000, // 1 分钟
     max: 100, // 100 次请求
-    message: 'Too many requests, please try again later.',
+    message: "Too many requests, please try again later.",
 });
-

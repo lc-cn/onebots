@@ -3,10 +3,10 @@
  * 支持令牌过期、刷新、轮换等功能
  */
 
-import { createLogger } from '../logger.js';
-import crypto from 'crypto';
+import { createLogger } from "../logger.js";
+import crypto from "crypto";
 
-const logger = createLogger('TokenManager');
+const logger = createLogger("TokenManager");
 
 export interface TokenInfo {
     token: string;
@@ -47,8 +47,8 @@ export class TokenManager {
      * 生成新令牌
      */
     generateToken(metadata?: Record<string, unknown>): TokenInfo {
-        const token = crypto.randomBytes(32).toString('hex');
-        const refreshToken = crypto.randomBytes(32).toString('hex');
+        const token = crypto.randomBytes(32).toString("hex");
+        const refreshToken = crypto.randomBytes(32).toString("hex");
         const now = Date.now();
 
         const tokenInfo: TokenInfo = {
@@ -60,14 +60,14 @@ export class TokenManager {
         };
 
         this.tokens.set(token, tokenInfo);
-        
+
         // 如果设置了刷新令牌，也存储
         if (refreshToken) {
             this.tokens.set(`refresh:${refreshToken}`, tokenInfo);
         }
 
-        logger.debug('Token generated', {
-            tokenPrefix: token.substring(0, 10) + '...',
+        logger.debug("Token generated", {
+            tokenPrefix: token.substring(0, 10) + "...",
             expiresAt: new Date(tokenInfo.expiresAt!).toISOString(),
         });
 
@@ -79,7 +79,7 @@ export class TokenManager {
      */
     validateToken(token: string): { valid: boolean; expired?: boolean; info?: TokenInfo } {
         const info = this.tokens.get(token);
-        
+
         if (!info) {
             return { valid: false };
         }
@@ -98,8 +98,8 @@ export class TokenManager {
         if (this.options.autoRefresh && info.expiresAt) {
             const timeUntilExpiry = info.expiresAt - Date.now();
             if (timeUntilExpiry < this.options.refreshThreshold) {
-                logger.debug('Token needs refresh', {
-                    tokenPrefix: token.substring(0, 10) + '...',
+                logger.debug("Token needs refresh", {
+                    tokenPrefix: token.substring(0, 10) + "...",
                     timeUntilExpiry,
                 });
             }
@@ -114,7 +114,7 @@ export class TokenManager {
     refreshToken(refreshToken: string): TokenInfo | null {
         const key = `refresh:${refreshToken}`;
         const info = this.tokens.get(key);
-        
+
         if (!info) {
             return null;
         }
@@ -130,14 +130,14 @@ export class TokenManager {
 
         // 生成新令牌
         const newToken = this.generateToken(info.metadata);
-        
+
         // 删除旧令牌
         this.tokens.delete(info.token);
         this.tokens.delete(key);
 
-        logger.info('Token refreshed', {
-            oldTokenPrefix: info.token.substring(0, 10) + '...',
-            newTokenPrefix: newToken.token.substring(0, 10) + '...',
+        logger.info("Token refreshed", {
+            oldTokenPrefix: info.token.substring(0, 10) + "...",
+            newTokenPrefix: newToken.token.substring(0, 10) + "...",
         });
 
         return newToken;
@@ -148,7 +148,7 @@ export class TokenManager {
      */
     revokeToken(token: string): boolean {
         const info = this.tokens.get(token);
-        
+
         if (!info) {
             return false;
         }
@@ -158,8 +158,8 @@ export class TokenManager {
             this.tokens.delete(`refresh:${info.refreshToken}`);
         }
 
-        logger.info('Token revoked', {
-            tokenPrefix: token.substring(0, 10) + '...',
+        logger.info("Token revoked", {
+            tokenPrefix: token.substring(0, 10) + "...",
         });
 
         return true;
@@ -180,7 +180,7 @@ export class TokenManager {
         let cleaned = 0;
 
         for (const [key, info] of this.tokens.entries()) {
-            const expired = 
+            const expired =
                 (info.expiresAt && now > info.expiresAt) ||
                 (info.refreshExpiresAt && now > info.refreshExpiresAt);
 
@@ -233,12 +233,16 @@ let globalTokenManager: TokenManager | null = null;
  */
 export function initTokenManager(options?: TokenManagerOptions): TokenManager {
     globalTokenManager = new TokenManager(options);
-    
+
     // 定期清理过期令牌（每 5 分钟）
-    setInterval(() => {
-        globalTokenManager?.cleanup();
-    }, 5 * 60 * 1000);
-    
+    const cleanupTimer = setInterval(
+        () => {
+            globalTokenManager?.cleanup();
+        },
+        5 * 60 * 1000,
+    );
+    cleanupTimer.unref();
+
     return globalTokenManager;
 }
 
@@ -248,4 +252,3 @@ export function initTokenManager(options?: TokenManagerOptions): TokenManager {
 export function getTokenManager(): TokenManager | null {
     return globalTokenManager;
 }
-
