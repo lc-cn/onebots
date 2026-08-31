@@ -4,8 +4,32 @@ import { probeDoctorManagement } from "./doctor-management.js";
 describe("doctor management probes", () => {
     it("verifies anonymous rejection and authenticated access with a configured token", async () => {
         const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
-            expect(input).toBe("http://127.0.0.1:6727/gateway/api/auth/me");
             const authorization = new Headers(init?.headers).get("authorization");
+            if (input.endsWith("/api/adapters")) {
+                expect(authorization).toBe("Bearer secret");
+                return new Response(
+                    JSON.stringify([
+                        {
+                            platform: "mock",
+                            accounts: [
+                                {
+                                    uin: "bot",
+                                    status: "online",
+                                    protocols: [
+                                        {
+                                            name: "onebot",
+                                            version: "v11",
+                                            lifecycleStatus: "ready",
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ]),
+                    { status: 200 },
+                );
+            }
+            expect(input).toBe("http://127.0.0.1:6727/gateway/api/auth/me");
             return authorization
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response("Unauthorized", { status: 401 });
@@ -23,9 +47,13 @@ describe("doctor management probes", () => {
         expect(checks.map(check => [check.name, check.level])).toEqual([
             ["management-http-anonymous", "ok"],
             ["management-http-authenticated", "ok"],
+            ["management-runtime", "ok"],
             ["management-ws-anonymous", "ok"],
             ["management-ws-authenticated", "ok"],
         ]);
+        expect(checks.find(check => check.name === "management-runtime")?.message).toBe(
+            "运行态已验证: 1 个账号，1 个协议出口均就绪",
+        );
         expect(upgrade).toHaveBeenNthCalledWith(1, "http://127.0.0.1:6727/");
         expect(upgrade).toHaveBeenNthCalledWith(2, "http://127.0.0.1:6727/", "secret");
     });
@@ -40,6 +68,7 @@ describe("doctor management probes", () => {
                 return new Response(JSON.stringify({ token: "session-token" }), { status: 200 });
             }
             if (input.endsWith("/api/auth/logout")) return new Response(null, { status: 200 });
+            if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
             return new Headers(init?.headers).has("authorization")
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response(null, { status: 401 });
@@ -70,8 +99,10 @@ describe("doctor management probes", () => {
     });
 
     it("fails when either anonymous management boundary is exposed", async () => {
-        const fetcher = vi.fn(
-            async () => new Response(JSON.stringify({ success: true }), { status: 200 }),
+        const fetcher = vi.fn(async (input: string) =>
+            input.endsWith("/api/adapters")
+                ? new Response("[]", { status: 200 })
+                : new Response(JSON.stringify({ success: true }), { status: 200 }),
         );
         const upgrade = vi.fn(async () => ({ upgraded: true, status: 101 }));
 
@@ -104,8 +135,61 @@ describe("doctor management probes", () => {
         expect(checks.map(check => [check.name, check.level])).toEqual([
             ["management-http-anonymous", "ok"],
             ["management-http-authenticated", "warning"],
+            ["management-runtime", "warning"],
             ["management-ws-anonymous", "ok"],
             ["management-ws-authenticated", "warning"],
         ]);
+    });
+
+    it("identifies the exact account and protocol outlet behind readiness failure", async () => {
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/adapters")) {
+                expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret");
+                return new Response(
+                    JSON.stringify([
+                        {
+                            platform: "kook",
+                            accounts: [
+                                {
+                                    uin: "primary",
+                                    status: "offline",
+                                    protocols: [
+                                        {
+                                            name: "onebot",
+                                            version: "v11",
+                                            lifecycleStatus: "failed",
+                                        },
+                                    ],
+                                },
+                                { uin: "orphan", status: "online", protocols: [] },
+                            ],
+                        },
+                    ]),
+                    { status: 200 },
+                );
+            }
+            return new Headers(init?.headers).has("authorization")
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "secret" },
+            {
+                fetcher,
+                upgrade: async (_url, token) => ({
+                    upgraded: Boolean(token),
+                    status: token ? 101 : 401,
+                }),
+            },
+        );
+
+        expect(checks.find(check => check.name === "management-runtime")).toEqual({
+            name: "management-runtime",
+            level: "error",
+            message:
+                "运行态未就绪: kook.primary 账号状态 offline；kook.primary/onebot.v11 协议状态 failed；kook.orphan 无协议出口",
+        });
     });
 });

@@ -25,26 +25,41 @@
             <!-- 依赖 -->
             <div v-if="bot.dependency" class="flex items-center gap-3 text-sm">
                 <span class="w-12 shrink-0 text-xs text-fg-tertiary">依赖</span>
-                <span class="truncate font-mono text-xs text-fg-secondary">{{ bot.dependency }}</span>
+                <span class="truncate font-mono text-xs text-fg-secondary">{{
+                    bot.dependency
+                }}</span>
             </div>
 
-            <!-- 接入点 -->
-            <template v-if="bot.urls && bot.urls.length">
+            <!-- 协议出口 -->
+            <template v-if="bot.protocols && bot.protocols.length">
                 <div class="mt-1 flex items-center gap-2">
-                    <span class="text-xs text-fg-tertiary">接入点</span>
+                    <span class="text-xs text-fg-tertiary">协议出口</span>
                     <span class="h-px flex-1 bg-border"></span>
                 </div>
                 <div class="flex flex-col gap-1.5">
-                    <a
-                        v-for="url in bot.urls"
-                        :key="url"
-                        :href="getFullUrl(url)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="flex items-center gap-1.5 break-all font-mono text-xs text-accent hover:underline">
-                        <IconLink :size="12" class="shrink-0" />
-                        {{ url }}
-                    </a>
+                    <div
+                        v-for="protocol in bot.protocols"
+                        :key="`${protocol.name}.${protocol.version}:${protocol.path}`"
+                        class="rounded-control border border-border bg-surface px-2.5 py-2">
+                        <div class="mb-1 flex items-center justify-between gap-2">
+                            <span class="font-mono text-xs text-fg-secondary">
+                                {{ protocol.name }}.{{ protocol.version }}
+                            </span>
+                            <UiBadge
+                                :variant="protocolStatusMeta(protocol.lifecycleStatus).variant"
+                                dot>
+                                {{ protocolStatusMeta(protocol.lifecycleStatus).label }}
+                            </UiBadge>
+                        </div>
+                        <a
+                            :href="getFullUrl(protocol.path)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="flex items-center gap-1.5 break-all font-mono text-xs text-accent hover:underline">
+                            <IconLink :size="12" class="shrink-0" />
+                            {{ protocol.path }}
+                        </a>
+                    </div>
                 </div>
             </template>
         </div>
@@ -53,7 +68,10 @@
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1">
                     <RouterLink
-                        :to="{ path: '/config', query: { tab: 'accounts', highlight: `${bot.platform}.${bot.uin}` } }"
+                        :to="{
+                            path: '/config',
+                            query: { tab: 'accounts', highlight: `${bot.platform}.${bot.uin}` },
+                        }"
                         title="编辑配置"
                         class="inline-flex h-8 w-8 items-center justify-center rounded-control text-fg-tertiary transition-colors hover:bg-surface-raised hover:text-fg">
                         <IconSettings :size="15" />
@@ -96,14 +114,20 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
-import { RouterLink } from 'vue-router';
-import { IconLink, IconPlayerPlay, IconPlayerPause, IconSettings, IconFileText } from '@tabler/icons-vue';
-import UiAvatar from '../ui/UiAvatar.vue';
-import UiBadge from '../ui/UiBadge.vue';
-import UiButton from '../ui/UiButton.vue';
-import UiCard from '../ui/UiCard.vue';
-import type { AccountInfo } from '../types';
+import { computed } from "vue";
+import { RouterLink } from "vue-router";
+import {
+    IconLink,
+    IconPlayerPlay,
+    IconPlayerPause,
+    IconSettings,
+    IconFileText,
+} from "@tabler/icons-vue";
+import UiAvatar from "../ui/UiAvatar.vue";
+import UiBadge from "../ui/UiBadge.vue";
+import UiButton from "../ui/UiButton.vue";
+import UiCard from "../ui/UiCard.vue";
+import type { AccountInfo } from "../types";
 
 interface Props {
     bot: AccountInfo;
@@ -119,19 +143,36 @@ const emit = defineEmits<{
 
 const statusMeta = computed(() => {
     switch (props.bot.status) {
-        case 'online':
-            return { variant: 'success' as const, label: '在线' };
-        case 'pending':
-            return { variant: 'warning' as const, label: '连接中' };
+        case "online":
+            return { variant: "success" as const, label: "在线" };
+        case "pending":
+            return { variant: "warning" as const, label: "连接中" };
         default:
-            return { variant: 'neutral' as const, label: '离线' };
+            return { variant: "neutral" as const, label: "离线" };
     }
 });
+
+const protocolStatusMeta = (status: AccountInfo["protocols"][number]["lifecycleStatus"]) => {
+    switch (status) {
+        case "ready":
+            return { variant: "success" as const, label: "就绪" };
+        case "starting":
+            return { variant: "warning" as const, label: "启动中" };
+        case "stopping":
+            return { variant: "warning" as const, label: "停止中" };
+        case "failed":
+            return { variant: "danger" as const, label: "失败" };
+        case "stopped":
+            return { variant: "neutral" as const, label: "已停止" };
+        default:
+            return { variant: "neutral" as const, label: "等待启动" };
+    }
+};
 
 // 使用当前页同源，协议地址可直接复制使用（HF/Docker/反向代理下端口正确）
 const getFullUrl = (url: string) => {
     const base = import.meta.env.VITE_API_BASE || window.location.origin;
-    const path = url.startsWith('/') ? url : `/${url}`;
-    return `${base.replace(/\/$/, '')}${path}`;
+    const path = url.startsWith("/") ? url : `/${url}`;
+    return `${base.replace(/\/$/, "")}${path}`;
 };
 </script>

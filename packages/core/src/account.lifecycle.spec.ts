@@ -33,6 +33,30 @@ function protocol(overrides: Partial<Protocol> = {}): Protocol {
 }
 
 describe("Account lifecycle", () => {
+    it("在账号摘要中公开每个协议出口的身份、路径与生命周期", () => {
+        const account = createAccount();
+        account.protocols = [
+            protocol({
+                name: "onebot",
+                version: "v11",
+                path: "/mock/bot/onebot/v11",
+                lifecycleStatus: "failed",
+            }),
+        ];
+
+        expect(account.info).toMatchObject({
+            urls: ["/mock/bot/onebot/v11"],
+            protocols: [
+                {
+                    name: "onebot",
+                    version: "v11",
+                    path: "/mock/bot/onebot/v11",
+                    lifecycleStatus: "failed",
+                },
+            ],
+        });
+    });
+
     it("等待账号启动监听器完成后才启动协议", async () => {
         const account = createAccount();
         const order: string[] = [];

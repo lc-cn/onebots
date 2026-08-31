@@ -35,12 +35,18 @@ export async function probeDoctorManagement(
     const credential = await acquireDoctorManagementCredential(base, config, fetcher);
     if (credential.token) {
         checks.push(await probeAuthenticatedManagementHttp(base, credential.token, fetcher));
+        checks.push(await probeAuthenticatedRuntime(base, credential.token, fetcher));
     } else {
         checks.push({
             name: "management-http-authenticated",
             level: credential.error ? "error" : "warning",
             message:
                 credential.error ?? "配置未提供 access_token 或用户名/密码，无法验证合法管理凭据",
+        });
+        checks.push({
+            name: "management-runtime",
+            level: "warning",
+            message: "未获得管理令牌，无法定位账号与协议出口运行态",
         });
     }
 
@@ -61,6 +67,102 @@ export async function probeDoctorManagement(
         checks.push(await revokeDoctorManagementSession(base, credential.token, fetcher));
     }
     return checks;
+}
+
+interface RuntimeProtocolSummary {
+    name?: unknown;
+    version?: unknown;
+    lifecycleStatus?: unknown;
+}
+
+interface RuntimeAccountSummary {
+    uin?: unknown;
+    status?: unknown;
+    protocols?: unknown;
+}
+
+interface RuntimeAdapterSummary {
+    platform?: unknown;
+    accounts?: unknown;
+}
+
+/** 通过受保护的管理 API 定位公开 readiness 聚合背后的具体故障出口。 */
+async function probeAuthenticatedRuntime(
+    base: string,
+    token: string,
+    fetcher: DoctorFetch,
+): Promise<DoctorCheck> {
+    try {
+        const response = await fetcher(`${base}/api/adapters`, {
+            headers: { authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(2_000),
+        });
+        const payload: unknown = await response.json();
+        if (!response.ok || !Array.isArray(payload)) {
+            return {
+                name: "management-runtime",
+                level: "error",
+                message: `管理运行态响应无效: HTTP ${response.status}`,
+            };
+        }
+
+        const issues: string[] = [];
+        let accountCount = 0;
+        let protocolCount = 0;
+        for (const adapter of payload as RuntimeAdapterSummary[]) {
+            if (!Array.isArray(adapter.accounts)) {
+                return invalidRuntimeContract("适配器缺少 accounts 数组");
+            }
+            const platform = runtimeLabel(adapter.platform, "unknown");
+            for (const account of adapter.accounts as RuntimeAccountSummary[]) {
+                accountCount++;
+                const accountId = runtimeLabel(account.uin, "unknown");
+                const accountTarget = `${platform}.${accountId}`;
+                const accountStatus = runtimeLabel(account.status, "unknown");
+                if (accountStatus !== "online") {
+                    issues.push(`${accountTarget} 账号状态 ${accountStatus}`);
+                }
+                if (!Array.isArray(account.protocols)) {
+                    return invalidRuntimeContract(`${accountTarget} 缺少 protocols 生命周期数组`);
+                }
+                if (account.protocols.length === 0) {
+                    issues.push(`${accountTarget} 无协议出口`);
+                }
+                for (const protocol of account.protocols as RuntimeProtocolSummary[]) {
+                    protocolCount++;
+                    const name = runtimeLabel(protocol.name, "unknown");
+                    const version = runtimeLabel(protocol.version, "unknown");
+                    const status = runtimeLabel(protocol.lifecycleStatus, "unknown");
+                    if (status !== "ready") {
+                        issues.push(`${accountTarget}/${name}.${version} 协议状态 ${status}`);
+                    }
+                }
+            }
+        }
+
+        return {
+            name: "management-runtime",
+            level: issues.length === 0 ? "ok" : "error",
+            message:
+                issues.length === 0
+                    ? `运行态已验证: ${accountCount} 个账号，${protocolCount} 个协议出口均就绪`
+                    : `运行态未就绪: ${issues.join("；")}`,
+        };
+    } catch (error) {
+        return failedManagementCheck("management-runtime", "管理运行态", error);
+    }
+}
+
+function invalidRuntimeContract(detail: string): DoctorCheck {
+    return {
+        name: "management-runtime",
+        level: "error",
+        message: `管理运行态契约无效: ${detail}`,
+    };
+}
+
+function runtimeLabel(value: unknown, fallback: string): string {
+    return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
 async function probeAnonymousManagementHttp(

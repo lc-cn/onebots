@@ -3,9 +3,16 @@ import { deepClone, deepMerge } from "./utils.js";
 import { Adapter } from "./adapter.js";
 import { Logger } from "log4js";
 import { ProtocolRegistry } from "./registry.js";
-import { Protocol } from "./protocol.js";
+import { Protocol, type ProtocolLifecycleStatus } from "./protocol.js";
 import { CommonEvent } from "./types.js";
 import { emitAllAwaited, FailureCollector } from "./async-utils.js";
+
+export interface ProtocolRuntimeInfo {
+    name: string;
+    version: string;
+    path: string;
+    lifecycleStatus: ProtocolLifecycleStatus;
+}
 
 export class NotFoundError extends Error {
     message = "不支持的API";
@@ -45,6 +52,14 @@ export class Account<
             nickname: this.nickname,
             dependency: this.dependency,
             urls: this.protocols.map(protocol => protocol.path),
+            protocols: this.protocols.map(
+                (protocol): ProtocolRuntimeInfo => ({
+                    name: protocol.name,
+                    version: protocol.version,
+                    path: protocol.path,
+                    lifecycleStatus: protocol.lifecycleStatus,
+                }),
+            ),
         };
     }
     get protocolConfigs(): Protocol.FullConfig<C>[] {

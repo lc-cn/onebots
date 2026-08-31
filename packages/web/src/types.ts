@@ -8,6 +8,14 @@ export interface AccountInfo {
     nickname: string;
     dependency?: string;
     urls: string[];
+    protocols: ProtocolRuntimeInfo[];
+}
+
+export interface ProtocolRuntimeInfo {
+    name: string;
+    version: string;
+    path: string;
+    lifecycleStatus: "pending" | "starting" | "ready" | "stopping" | "stopped" | "failed";
 }
 
 export type CPUInfo = {
