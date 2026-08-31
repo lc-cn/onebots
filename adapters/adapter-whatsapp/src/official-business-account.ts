@@ -1,10 +1,9 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import {
-    WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_ACTIONS,
     WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_STATUSES,
-    type WhatsAppOfficialBusinessAccountAction,
     type WhatsAppOfficialBusinessAccountApplication,
     type WhatsAppOfficialBusinessAccountApplicationResponse,
     type WhatsAppOfficialBusinessAccountStatus,
@@ -12,12 +11,6 @@ import {
 } from "./official-business-account-types.js";
 
 export * from "./official-business-account-types.js";
-
-export function isWhatsAppOfficialBusinessAccountAction(
-    action: string,
-): action is WhatsAppOfficialBusinessAccountAction {
-    return (WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_ACTIONS as readonly string[]).includes(action);
-}
 
 /** 当前 Phone Number 的 OBA 审核状态与申请提交边界。 */
 export class WhatsAppOfficialBusinessAccount {
@@ -43,29 +36,36 @@ export class WhatsAppOfficialBusinessAccount {
             }),
         );
     }
-
-    execute(
-        action: WhatsAppOfficialBusinessAccountAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "get_official_business_account_status":
-                rejectUnknown(params, []);
-                return this.getStatus();
-            case "submit_official_business_account_application":
-                rejectUnknown(params, ["application"]);
-                return this.submitApplication(applicationRequest(params.application));
-        }
-    }
 }
 
-export const WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.officialBusinessAccount.execute(action, params),
-    ]),
-) as Record<WhatsAppOfficialBusinessAccountAction, PlatformActionHandler<WhatsAppClient>>;
+type OfficialBusinessAccountActionParams = Readonly<Record<string, unknown>>;
+
+const OFFICIAL_BUSINESS_ACCOUNT_ACTION_HANDLERS = {
+    get_official_business_account_status: (client: WhatsAppClient) =>
+        client.officialBusinessAccount.getStatus(),
+    submit_official_business_account_application: (
+        client: WhatsAppClient,
+        params: OfficialBusinessAccountActionParams,
+    ) => client.officialBusinessAccount.submitApplication(applicationRequest(params.application)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Official Business Account 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    OFFICIAL_BUSINESS_ACCOUNT_ACTION_HANDLERS,
+    {
+        get_official_business_account_status: [],
+        submit_official_business_account_application: ["application"],
+    },
+);
+
+export type WhatsAppOfficialBusinessAccountAction =
+    keyof typeof WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_ACTION_HANDLERS;
+
+export function isWhatsAppOfficialBusinessAccountAction(
+    action: string,
+): action is WhatsAppOfficialBusinessAccountAction {
+    return Object.hasOwn(WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_ACTION_HANDLERS, action);
+}
 
 function applicationRequest(value: unknown): WhatsAppOfficialBusinessAccountApplication {
     const source = inputRecord(value, "application");

@@ -239,6 +239,7 @@ export * from "./schedule-types.js";
 export {
     isWhatsAppOfficialBusinessAccountAction,
     WhatsAppOfficialBusinessAccount,
+    type WhatsAppOfficialBusinessAccountAction,
 } from "./official-business-account.js";
 export * from "./official-business-account-types.js";
 export {

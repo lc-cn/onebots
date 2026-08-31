@@ -1,10 +1,3 @@
-export const WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_ACTIONS = Object.freeze([
-    "get_official_business_account_status",
-    "submit_official_business_account_application",
-] as const);
-export type WhatsAppOfficialBusinessAccountAction =
-    (typeof WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_ACTIONS)[number];
-
 export const WHATSAPP_OFFICIAL_BUSINESS_ACCOUNT_STATUSES = Object.freeze([
     "PENDING",
     "APPROVED",

@@ -71,6 +71,21 @@ describe("WhatsAppOfficialBusinessAccount", () => {
         ).resolves.toEqual(status);
     });
 
+    it("OBA 动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "get_official_business_account_status", {
+                fields: ["oba_status"],
+            }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: {
+                action: "get_official_business_account_status",
+                parameter: "fields",
+            },
+        });
+    });
+
     it.each([
         ["缺少申请", {}],
         [
