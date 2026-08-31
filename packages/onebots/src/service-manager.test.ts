@@ -6,6 +6,8 @@ import {
     buildServiceArgs,
     renderLaunchdPlist,
     renderSystemdUnit,
+    renderWindowsCommand,
+    renderWindowsScriptOptions,
     renderWindowsTaskXml,
     type ServiceSpec,
     ServiceController,
@@ -86,6 +88,22 @@ describe("service definition", () => {
         expect(xml).toContain("<RestartOnFailure>");
         expect(xml).toContain("<Interval>PT5S</Interval>");
         expect(xml).toContain("C:\\One Bots\\runner.cmd");
+    });
+
+    it("separates the Windows executable command from node-windows script options", () => {
+        const windowsSpec: ServiceSpec = {
+            ...spec,
+            nodePath: "C:\\Program Files\\nodejs\\node.exe",
+            binPath: "C:\\One Bots\\bin.js",
+            configPath: "C:\\One Bots\\config.yaml",
+        };
+
+        expect(renderWindowsCommand(windowsSpec)).toBe(
+            '"C:\\Program Files\\nodejs\\node.exe" "C:\\One Bots\\bin.js" --service-runtime run -c "C:\\One Bots\\config.yaml" -r qq -r kook -p onebot-v11',
+        );
+        expect(renderWindowsScriptOptions(windowsSpec)).toBe(
+            '--service-runtime run -c "C:\\One Bots\\config.yaml" -r qq -r kook -p onebot-v11',
+        );
     });
 
     it("installs without starting and keeps user data when uninstalled", async () => {
