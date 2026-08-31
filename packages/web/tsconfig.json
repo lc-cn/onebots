@@ -4,6 +4,7 @@
     "module": "ESNext",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "moduleResolution": "bundler",
+    "types": ["vite/client"],
     "declaration": true,
     "declarationMap": true,
     "outDir": "./lib",
@@ -19,4 +20,3 @@
   "include": ["src/**/*"],
   "exclude": ["node_modules", "lib"]
 }
-
