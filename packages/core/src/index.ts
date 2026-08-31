@@ -7,6 +7,7 @@ export * from "./api-path.js";
 export * from "./async-utils.js";
 export * from "./json-fingerprint.js";
 export * from "./base-app.js";
+export * from "./app-reload.js";
 export * from "./router.js";
 export * from "./types.js";
 export * from "./utils.js";

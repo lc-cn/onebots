@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertHostConfigReloadable, resolveListenPort } from "./app-reload.js";
+import {
+    assertHostConfigReloadable,
+    HostConfigRestartRequiredError,
+    resolveListenPort,
+} from "./app-reload.js";
 import { BaseApp } from "./base-app.js";
 
 const config = {
@@ -47,6 +51,16 @@ describe("BaseApp reload boundary", () => {
             ).toThrow(`宿主配置需要重启进程后生效: ${key}`);
         },
     );
+
+    it("以结构化错误公开需要重启的宿主字段", () => {
+        try {
+            assertHostConfigReloadable(config, { ...config, port: 7000, path: "gateway" });
+            throw new Error("预期宿主配置检查失败");
+        } catch (error) {
+            expect(error).toBeInstanceOf(HostConfigRestartRequiredError);
+            expect((error as HostConfigRestartRequiredError).changed).toEqual(["port", "path"]);
+        }
+    });
 
     it("将 PORT 环境变量解析为 TCP 端口并拒绝非数字值", () => {
         expect(resolveListenPort(6727, "8080")).toBe(8080);

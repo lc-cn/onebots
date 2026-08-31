@@ -56,7 +56,9 @@ See [Platform Configuration](/en/config/platform) for platform-specific configur
 
 Before connecting to a platform or starting protocol transports, OneBots validates the complete configuration against the schemas registered by plugins loaded with `-r` and `-p`. This covers required platform credentials, field types and choices, adapter and protocol references, at least one loaded protocol outlet per account, and the effective protocol configuration after account values inherit from `general`.
 
-Errors identify the complete path, such as `qq.my_bot.appid` or `qq.my_bot.onebot.v11.use_http`; a missing outlet identifies the account path itself, such as `qq.my_bot`. Referencing an unloaded adapter or protocol also stops startup instead of silently omitting the account. Web console saves, setup, doctor, and hot reload use the same validator, so invalid content is not written to the configuration file.
+Errors identify the complete path, such as `qq.my_bot.appid` or `qq.my_bot.onebot.v11.use_http`; a missing outlet identifies the account path itself, such as `qq.my_bot`. Referencing an unloaded adapter or protocol also stops startup instead of silently omitting the account. The Web console, setup, doctor, and hot reload use the same validator, so invalid content is not written to the configuration file.
+
+**Save and apply** in the Web console atomically saves the file and then hot reloads accounts and protocols. If runtime application fails, both the file and runtime return to the previous configuration. Host settings such as the port, path, and database remain saved and the response lists which fields require a restart. A concurrent save or reload returns HTTP 409 without overwriting the configuration being applied.
 
 Run the same check before deployment with the service's plugin selection:
 

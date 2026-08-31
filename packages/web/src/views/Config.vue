@@ -49,6 +49,7 @@ const formModel = reactive<Record<string, unknown>>({});
 
 const accounts = ref<AccountRow[]>([]);
 const accountEmptyText = ref("暂无账号");
+const saving = ref(false);
 
 const staticTabRef = ref<InstanceType<typeof ConfigStaticTab>>();
 const accountWizardRef = ref<InstanceType<typeof AccountWizard>>();
@@ -114,7 +115,7 @@ const loadSchema = async () => {
 };
 
 const handleReload = () => {
-    toast.info("正在重载配置...");
+    toast.info("正在重新读取配置...");
     loadSchema();
     loadConfig();
 };
@@ -138,6 +139,8 @@ const handleDownloadConfig = async () => {
 };
 
 const handleSave = async () => {
+    if (saving.value) return;
+    saving.value = true;
     try {
         if (activeTab.value === "schema") {
             const configObject = (yaml.load(config.value) || {}) as Record<string, unknown>;
@@ -170,7 +173,8 @@ const handleSave = async () => {
         });
         if (response.ok) {
             const result = await response.json();
-            toast.success(result.message || "配置已保存");
+            if (result.restartRequired) toast.warning(result.message || "配置已保存，需要重启");
+            else toast.success(result.message || "配置已保存并生效");
         } else {
             const result = await response.json();
             toast.error(result.message || "保存失败");
@@ -178,6 +182,8 @@ const handleSave = async () => {
     } catch (error) {
         console.error("保存配置失败:", error);
         toast.error("保存配置失败");
+    } finally {
+        saving.value = false;
     }
 };
 
@@ -232,11 +238,11 @@ watch(activeTab, name => {
                     </UiButton>
                     <UiButton variant="secondary" @click="handleReload">
                         <IconRefresh :size="16" aria-hidden="true" />
-                        重载配置
+                        重新读取
                     </UiButton>
-                    <UiButton variant="primary" @click="handleSave">
+                    <UiButton variant="primary" :disabled="saving" @click="handleSave">
                         <IconCheck :size="16" aria-hidden="true" />
-                        保存配置
+                        {{ saving ? "正在应用…" : "保存并应用" }}
                     </UiButton>
                 </div>
             </header>
