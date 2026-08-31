@@ -140,6 +140,12 @@ export interface ExtensionInfo {
     enabled: boolean;
     loaded: boolean;
     installing: boolean;
+    /** 当前服务端安装操作；旧版服务端可能不返回该字段。 */
+    installation?: {
+        operationId: string;
+        phase: "installing_package" | "preflighting";
+        startedAt: string;
+    } | null;
     /** 适配器能力来自已加载插件的运行时契约，或安装前可见的版本化目录快照。 */
     capability: ExtensionCapabilityInfo | null;
 }

@@ -340,8 +340,12 @@ describe("ExtensionManager", () => {
     it("同一扩展的并发请求复用安装、预检与配置写入结果", async () => {
         const { root, configPath } = fixture();
         let releaseInstall: (() => void) | undefined;
+        let releasePreflight: (() => void) | undefined;
         const installGate = new Promise<void>(resolve => {
             releaseInstall = resolve;
+        });
+        const preflightGate = new Promise<void>(resolve => {
+            releasePreflight = resolve;
         });
         const install = vi.fn(
             async (packageName: string, packageVersion: string, runtimeRoot: string) => {
@@ -349,7 +353,9 @@ describe("ExtensionManager", () => {
                 installFixturePackage(packageName, packageVersion, runtimeRoot);
             },
         );
-        const preflight = vi.fn(successfulPreflight);
+        const preflight = vi.fn(async () => {
+            await preflightGate;
+        });
         const manager = new ExtensionManager({
             runtimeRoot: root,
             configPath,
@@ -359,8 +365,22 @@ describe("ExtensionManager", () => {
 
         const first = manager.install("adapter:slack");
         const retry = manager.install("adapter:slack");
-        expect(manager.list([]).find(item => item.id === "adapter:slack")?.installing).toBe(true);
+        const installing = manager.list([]).find(item => item.id === "adapter:slack");
+        expect(installing?.installing).toBe(true);
+        expect(installing?.installation).toEqual({
+            operationId: expect.any(String),
+            phase: "installing_package",
+            startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+        });
+        const operationId = installing?.installation?.operationId;
         releaseInstall?.();
+
+        await vi.waitFor(() => {
+            expect(
+                manager.list([]).find(item => item.id === "adapter:slack")?.installation,
+            ).toEqual(expect.objectContaining({ operationId, phase: "preflighting" }));
+        });
+        releasePreflight?.();
 
         await expect(Promise.all([first, retry])).resolves.toEqual([
             { restartRequired: true },
@@ -368,7 +388,9 @@ describe("ExtensionManager", () => {
         ]);
         expect(install).toHaveBeenCalledOnce();
         expect(preflight).toHaveBeenCalledOnce();
-        expect(manager.list([]).find(item => item.id === "adapter:slack")?.installing).toBe(false);
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toEqual(
+            expect.objectContaining({ installing: false, installation: null }),
+        );
     });
 
     it("不同扩展继续互斥，失败后同一扩展可以重新安装", async () => {

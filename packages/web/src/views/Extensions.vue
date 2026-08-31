@@ -82,6 +82,10 @@
                             配置入口不可用：{{ extension.configurationError }}
                         </UiAlert>
 
+                        <UiAlert v-if="installationProgress(extension)" variant="warning">
+                            {{ installationProgress(extension)?.label }}
+                        </UiAlert>
+
                         <ExtensionCapabilities
                             v-if="extension.capability"
                             :capability="extension.capability" />
@@ -167,6 +171,7 @@ import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.j
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
 import {
     getExtensionInstallationAction,
+    getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
 } from "./extension-installation.js";
 
@@ -199,6 +204,8 @@ watch(
 const configurationAction = (extension: ExtensionInfo) =>
     getExtensionConfigurationAction(extension);
 const installationAction = (extension: ExtensionInfo) => getExtensionInstallationAction(extension);
+const installationProgress = (extension: ExtensionInfo) =>
+    getExtensionInstallationProgress(extension);
 const runtimeStatus = (extension: ExtensionInfo) => getExtensionRuntimeStatus(extension);
 
 const catalogErrorMessage = computed(

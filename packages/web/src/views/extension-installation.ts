@@ -11,6 +11,23 @@ export interface ExtensionRuntimeStatus {
     label: string;
 }
 
+export interface ExtensionInstallationProgress {
+    label: string;
+}
+
+export function getExtensionInstallationProgress(
+    extension: Pick<ExtensionInfo, "installing" | "installation">,
+): ExtensionInstallationProgress | null {
+    if (!extension.installing) return null;
+    if (extension.installation?.phase === "installing_package") {
+        return { label: "正在安装并核验依赖" };
+    }
+    if (extension.installation?.phase === "preflighting") {
+        return { label: "正在执行隔离预检" };
+    }
+    return { label: "正在安装扩展" };
+}
+
 export function getExtensionInstallationAction(
     extension: Pick<
         ExtensionInfo,

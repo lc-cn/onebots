@@ -60,6 +60,14 @@ export interface ExtensionConfigPreflightRequest {
 
 export type ExtensionConfigPreflight = (request: ExtensionConfigPreflightRequest) => Promise<void>;
 
+export type ExtensionInstallationPhase = "installing_package" | "preflighting";
+
+export interface ExtensionInstallationStatus {
+    operationId: string;
+    phase: ExtensionInstallationPhase;
+    startedAt: string;
+}
+
 export class ExtensionNotFoundError extends Error {}
 export class ExtensionInstallConflictError extends Error {}
 export class ExtensionCatalogIntegrityError extends Error {}
@@ -73,6 +81,9 @@ export class ExtensionManager {
     private readonly catalogIssues: () => string[];
     private installation: {
         id: string;
+        operationId: string;
+        phase: ExtensionInstallationPhase;
+        startedAt: string;
         promise: Promise<{ restartRequired: true }>;
     } | null = null;
 
@@ -114,6 +125,14 @@ export class ExtensionManager {
                 entry.type === "adapter"
                     ? getExtensionCapabilityCatalogEntry(entry.name)
                     : undefined;
+            const installation =
+                this.installation?.id === entry.id
+                    ? {
+                          operationId: this.installation.operationId,
+                          phase: this.installation.phase,
+                          startedAt: this.installation.startedAt,
+                      }
+                    : null;
             return {
                 ...entry,
                 catalogError,
@@ -129,7 +148,8 @@ export class ExtensionManager {
                     : selection.protocols
                 ).includes(entry.name),
                 loaded,
-                installing: this.installation?.id === entry.id,
+                installing: installation !== null,
+                installation,
                 capability:
                     entry.type !== "adapter"
                         ? null
@@ -173,8 +193,15 @@ export class ExtensionManager {
         this.assertRuntimeRoot();
         const preparedConfig = this.prepareConfig(entry.type, entry.name);
         const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
-        const promise = (async (): Promise<{ restartRequired: true }> => {
-            if (this.installedVersion(entry.packageName) !== packageCatalog.packageVersion) {
+        const packageNeedsInstall =
+            this.installedVersion(entry.packageName) !== packageCatalog.packageVersion;
+        let startInstallation: (() => void) | undefined;
+        const startGate = new Promise<void>(resolve => {
+            startInstallation = resolve;
+        });
+        const operationId = randomUUID();
+        const promise = startGate.then(async (): Promise<{ restartRequired: true }> => {
+            if (packageNeedsInstall) {
                 await this.installer.install(
                     entry.packageName,
                     packageCatalog.packageVersion,
@@ -187,6 +214,7 @@ export class ExtensionManager {
                     );
                 }
             }
+            this.setInstallationPhase(operationId, "preflighting");
             let candidate = preparedConfig;
             for (let attempt = 0; attempt < 3; attempt++) {
                 const latestSource = fs.readFileSync(this.configPath, "utf8");
@@ -206,13 +234,24 @@ export class ExtensionManager {
             throw new ExtensionInstallConflictError(
                 "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
             );
-        })();
-        this.installation = { id, promise };
+        });
+        this.installation = {
+            id,
+            operationId,
+            phase: packageNeedsInstall ? "installing_package" : "preflighting",
+            startedAt: new Date().toISOString(),
+            promise,
+        };
+        startInstallation?.();
         try {
             return await promise;
         } finally {
             if (this.installation?.promise === promise) this.installation = null;
         }
+    }
+
+    private setInstallationPhase(operationId: string, phase: ExtensionInstallationPhase): void {
+        if (this.installation?.operationId === operationId) this.installation.phase = phase;
     }
 
     /** 在调用包管理器前验证配置，并生成不会丢失现有插件选择的候选内容。 */

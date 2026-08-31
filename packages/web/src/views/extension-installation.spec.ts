@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     getExtensionInstallationAction,
+    getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
 } from "./extension-installation.js";
 
@@ -65,6 +66,47 @@ describe("extension installation action", () => {
                 versionAligned: true,
             }),
         ).toEqual({ visible: false, available: false, label: "已加载" });
+    });
+});
+
+describe("extension installation progress", () => {
+    it.each([
+        [{ installing: true, installation: undefined }, { label: "正在安装扩展" }],
+        [
+            {
+                installing: true,
+                installation: {
+                    operationId: "operation-1",
+                    phase: "installing_package" as const,
+                    startedAt: "2026-08-31T00:00:00.000Z",
+                },
+            },
+            { label: "正在安装并核验依赖" },
+        ],
+        [
+            {
+                installing: true,
+                installation: {
+                    operationId: "operation-1",
+                    phase: "preflighting" as const,
+                    startedAt: "2026-08-31T00:00:00.000Z",
+                },
+            },
+            { label: "正在执行隔离预检" },
+        ],
+        [
+            {
+                installing: false,
+                installation: {
+                    operationId: "operation-1",
+                    phase: "preflighting" as const,
+                    startedAt: "2026-08-31T00:00:00.000Z",
+                },
+            },
+            null,
+        ],
+    ])("maps %j to an observable label", (extension, expected) => {
+        expect(getExtensionInstallationProgress(extension)).toEqual(expected);
     });
 });
 
