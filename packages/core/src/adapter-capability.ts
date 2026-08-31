@@ -76,6 +76,20 @@ export function defineAdapterCapabilities(
     return Object.freeze(manifest);
 }
 
+/** 在不信任的插件边界校验并复制能力清单，阻止调用方后续修改已发布契约。 */
+export function normalizeAdapterCapabilities(
+    manifest: AdapterCapabilityManifest,
+): AdapterCapabilityManifest {
+    assertAdapterCapabilities(manifest);
+    if (manifest === EMPTY_ADAPTER_CAPABILITIES) return manifest;
+    return defineAdapterCapabilities({
+        actions: manifest.actions,
+        events: manifest.events,
+        segments: manifest.segments,
+        transports: manifest.transports,
+    });
+}
+
 export type UnavailableEventNote =
     | string
     | ((event: string, descriptor: CapabilityDescriptor) => string);
@@ -160,15 +174,29 @@ export function listSupportedActions(manifest: AdapterCapabilityManifest): strin
  * 契约测试与注册阶段共用的清单断言。
  * 保持为无测试框架依赖的函数，使所有适配器都能直接复用。
  */
-export function assertAdapterCapabilities(manifest: AdapterCapabilityManifest): void {
+export function assertAdapterCapabilities(
+    manifest: unknown,
+): asserts manifest is AdapterCapabilityManifest {
+    if (!isRecord(manifest)) {
+        throw new ValidationError("适配器能力清单必须是对象");
+    }
+    const unexpectedRoot = Object.keys(manifest).find(
+        field => !["version", "actions", "events", "segments", "transports"].includes(field),
+    );
+    if (unexpectedRoot) {
+        throw new ValidationError("适配器能力清单包含未知字段 " + unexpectedRoot);
+    }
     if (manifest.version !== ADAPTER_CAPABILITY_MANIFEST_VERSION) {
         throw new ValidationError(`不支持的适配器能力清单版本: ${manifest.version}`);
     }
 
-    validateDescriptorMap("actions", manifest.actions);
-    validateDescriptorMap("events", manifest.events);
-    validateDescriptorMap("segments", manifest.segments);
-    validateDescriptorMap("transports", manifest.transports);
+    for (const category of ["actions", "events", "segments", "transports"] as const) {
+        const descriptors = manifest[category];
+        if (!isRecord(descriptors)) {
+            throw new ValidationError("适配器能力清单 " + category + " 必须是对象");
+        }
+        validateDescriptorMap(category, descriptors);
+    }
 }
 
 export interface AdapterCapabilityProvider {
@@ -258,19 +286,80 @@ function validateDescriptorMap(
         AdapterCapabilityManifest,
         "actions" | "events" | "segments" | "transports"
     >,
-    descriptors: Readonly<Record<string, CapabilityDescriptor>>,
+    descriptors: Readonly<Record<string, unknown>>,
 ): void {
     for (const [name, descriptor] of Object.entries(descriptors)) {
         if (!name.trim()) {
             throw new ValidationError(`适配器能力清单 ${category} 包含空名称`);
         }
-        if (!(["native", "emulated", "unsupported"] as const).includes(descriptor.support)) {
+        if (!isRecord(descriptor)) {
+            throw new ValidationError("适配器能力 " + category + "." + name + " 必须是对象");
+        }
+        const categoryFields =
+            category === "segments" ? ["direction"] : category === "transports" ? ["mode"] : [];
+        const allowedFields = new Set([
+            "support",
+            "availability",
+            "scenes",
+            "permissions",
+            "note",
+            ...categoryFields,
+        ]);
+        const unexpected = Object.keys(descriptor).find(field => !allowedFields.has(field));
+        if (unexpected) {
+            throw new ValidationError(
+                "适配器能力 " + category + "." + name + " 包含未知字段 " + unexpected,
+            );
+        }
+        if (!isOneOf(descriptor.support, ["native", "emulated", "unsupported"] as const)) {
             throw new ValidationError(`适配器能力 ${category}.${name} 的 support 无效`);
         }
-        if (descriptor.permissions) {
+        if (
+            descriptor.availability !== undefined &&
+            !isOneOf(descriptor.availability, ["always", "permission", "context"] as const)
+        ) {
+            throw new ValidationError(
+                "适配器能力 " + category + "." + name + " 的 availability 无效",
+            );
+        }
+        validateStringArray(category, name, "scenes", descriptor.scenes, [
+            "private",
+            "group",
+            "channel",
+            "direct",
+        ]);
+        if (descriptor.note !== undefined && typeof descriptor.note !== "string") {
+            throw new ValidationError(
+                "适配器能力 " + category + "." + name + " 的 note 必须是字符串",
+            );
+        }
+        if (
+            category === "segments" &&
+            !isOneOf(descriptor.direction, ["send", "receive", "both"] as const)
+        ) {
+            throw new ValidationError("适配器能力 " + category + "." + name + " 的 direction 无效");
+        }
+        if (
+            category === "transports" &&
+            !isOneOf(descriptor.mode, [
+                "webhook",
+                "websocket",
+                "reverse_websocket",
+                "polling",
+                "sse",
+                "native",
+            ] as const)
+        ) {
+            throw new ValidationError("适配器能力 " + category + "." + name + " 的 mode 无效");
+        }
+        if (descriptor.permissions !== undefined) {
             if (
+                !Array.isArray(descriptor.permissions) ||
                 descriptor.permissions.length === 0 ||
-                descriptor.permissions.some(permission => !permission.trim())
+                descriptor.permissions.some(
+                    (permission: unknown) => typeof permission !== "string" || !permission.trim(),
+                ) ||
+                new Set(descriptor.permissions).size !== descriptor.permissions.length
             ) {
                 throw new ValidationError(
                     `适配器能力 ${category}.${name} 的 permissions 必须为非空权限名`,
@@ -278,4 +367,39 @@ function validateDescriptorMap(
             }
         }
     }
+}
+
+function validateStringArray(
+    category: string,
+    name: string,
+    field: string,
+    value: unknown,
+    allowed: readonly string[],
+): void {
+    if (value === undefined) return;
+    if (
+        !Array.isArray(value) ||
+        value.length === 0 ||
+        value.some(item => typeof item !== "string" || !item.trim()) ||
+        new Set(value).size !== value.length ||
+        value.some(item => !allowed.includes(item))
+    ) {
+        throw new ValidationError(
+            "适配器能力 " +
+                category +
+                "." +
+                name +
+                " 的 " +
+                field +
+                " 必须为不重复的非空有效字符串",
+        );
+    }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isOneOf<T extends string>(value: unknown, values: readonly T[]): value is T {
+    return typeof value === "string" && values.includes(value as T);
 }

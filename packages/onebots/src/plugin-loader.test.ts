@@ -116,6 +116,46 @@ describe("plugin loader", () => {
         }
     });
 
+    it("rolls back earlier registrations when capability validation rejects a plugin", async () => {
+        const directory = createImportOnlyPlugin(
+            "malformed-capability-adapter",
+            "globalThis.__onebotsRegisterMalformedCapabilities();\n",
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterMalformedCapabilities?: () => void;
+        };
+        globals.__onebotsRegisterMalformedCapabilities = () => {
+            AdapterRegistry.register("leaked", (() => undefined) as never);
+            AdapterRegistry.register("malformed", (() => undefined) as never, {
+                capabilities: {
+                    version: 1,
+                    actions: {},
+                    events: {},
+                    segments: { text: { support: "native" } },
+                    transports: {},
+                } as never,
+            });
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "adapter",
+                "malformed",
+                ["malformed-capability-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({
+                loaded: false,
+                message: expect.stringContaining("direction 无效"),
+            });
+            expect(AdapterRegistry.has("leaked")).toBe(false);
+            expect(AdapterRegistry.has("malformed")).toBe(false);
+        } finally {
+            delete globals.__onebotsRegisterMalformedCapabilities;
+        }
+    });
+
     it("loads a pure ESM plugin that uses top-level await", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
         temporaryDirectories.push(directory);

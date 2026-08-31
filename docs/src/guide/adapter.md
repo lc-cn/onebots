@@ -40,6 +40,8 @@ onebots 目前支持以下平台适配器：
 
 需要额外权限或会话上下文的能力还会声明 `permissions`、`availability` 和适用 `scenes`。调用 `adapter.describeCapabilities(accountId)` 可取得完整清单；调用 `adapter.getSupportedActions(accountId)` 可取得当前可调用动作。OneBots 会校验清单中的动作确有具体实现，防止能力声明与运行时漂移。
 
+能力清单是带版本的闭合运行时契约，不只依赖 TypeScript 类型。适配器注册与实例化都会校验四个分类、支持级别、可用性、场景、权限、消息方向、传输模式以及未知字段，并保存深度不可变的副本。第三方 JavaScript 插件即使绕过编译检查，也不能注册畸形或随后可变的清单；注册失败会进入插件事务回滚，而不会把错误能力发布给管理 API。
+
 管理 API 与 Web 能力面板会实际调用 `describeCapabilities(accountId)`。为避免重复传输，`/api/adapters` 的 `capabilities` 保存适配器默认清单，`accountCapabilities` 只包含与默认对象不同的账号级覆写；Web 选择账号后会明确标记“账号专属清单”或“沿用适配器默认清单”。适配器可据账号 token、套餐或稳定权限信息返回不同清单，但不要把瞬时网络故障伪装成平台能力变化。
 
 显式事件订阅也属于账号能力边界：QQ/Discord 的 intents、Telegram 的 `allowed_updates`、Zulip 的 `event_types` 会投影为当前账号真正可达的 canonical 事件。Webhook、反向 WebSocket、manual 等仅改变接入方式而没有本地事件白名单时，能力清单不会凭空推断上游平台配置。

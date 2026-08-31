@@ -9,6 +9,7 @@ import {
     restrictAdapterEventCapabilities,
     isCanonicalAdapterAction,
     listSupportedActions,
+    normalizeAdapterCapabilities,
 } from "./adapter-capability.js";
 import { ValidationError } from "./errors.js";
 import { Adapter } from "./adapter.js";
@@ -54,6 +55,16 @@ const introspectionManifest = defineAdapterCapabilities({
 class IntrospectionAdapter extends Adapter {
     describeCapabilities() {
         return introspectionManifest;
+    }
+
+    createAccount(): never {
+        throw new Error("测试不创建账号");
+    }
+}
+
+class CapabilityBoundaryAdapter extends Adapter {
+    constructor(manifest: Parameters<typeof normalizeAdapterCapabilities>[0]) {
+        super({ db: { create: () => undefined } } as never, "mock", manifest);
     }
 
     createAccount(): never {
@@ -177,6 +188,144 @@ describe("adapter capability manifest", () => {
                 transports: {},
             }),
         ).toThrow(ValidationError);
+    });
+
+    it.each([
+        {
+            label: "未知顶层字段",
+            manifest: {
+                version: 1,
+                actions: {},
+                events: {},
+                segments: {},
+                transports: {},
+                extra: true,
+            },
+            message: "能力清单包含未知字段 extra",
+        },
+        {
+            label: "缺少分类",
+            manifest: { version: 1, actions: {}, events: {}, segments: {} },
+            message: "transports 必须是对象",
+        },
+        {
+            label: "未知字段",
+            manifest: {
+                version: 1,
+                actions: { send: { support: "native", typo: true } },
+                events: {},
+                segments: {},
+                transports: {},
+            },
+            message: "包含未知字段 typo",
+        },
+        {
+            label: "非法可用性",
+            manifest: {
+                version: 1,
+                actions: { send: { support: "native", availability: "sometimes" } },
+                events: {},
+                segments: {},
+                transports: {},
+            },
+            message: "availability 无效",
+        },
+        {
+            label: "非法场景",
+            manifest: {
+                version: 1,
+                actions: { send: { support: "native", scenes: ["thread"] } },
+                events: {},
+                segments: {},
+                transports: {},
+            },
+            message: "scenes 必须为不重复的非空有效字符串",
+        },
+        {
+            label: "非法权限类型",
+            manifest: {
+                version: 1,
+                actions: { send: { support: "native", permissions: false } },
+                events: {},
+                segments: {},
+                transports: {},
+            },
+            message: "permissions 必须为非空权限名",
+        },
+        {
+            label: "缺少消息方向",
+            manifest: {
+                version: 1,
+                actions: {},
+                events: {},
+                segments: { text: { support: "native" } },
+                transports: {},
+            },
+            message: "direction 无效",
+        },
+        {
+            label: "非法传输模式",
+            manifest: {
+                version: 1,
+                actions: {},
+                events: {},
+                segments: {},
+                transports: { gateway: { support: "native", mode: "tcp" } },
+            },
+            message: "mode 无效",
+        },
+    ])("运行时拒绝第三方插件的畸形能力清单: $label", ({ manifest, message }) => {
+        expect(() => assertAdapterCapabilities(manifest)).toThrow(message);
+    });
+
+    it("规范化能力清单会创建不可变快照", () => {
+        const source = {
+            version: 1,
+            actions: {
+                send: {
+                    support: "native",
+                    permissions: ["message.send"],
+                },
+            },
+            events: {},
+            segments: {},
+            transports: {},
+        };
+        const normalized = normalizeAdapterCapabilities(source as never);
+
+        source.actions.send.support = "unsupported";
+        source.actions.send.permissions.push("admin");
+
+        expect(normalized.actions.send).toEqual({
+            support: "native",
+            permissions: ["message.send"],
+        });
+        expect(Object.isFrozen(normalized)).toBe(true);
+        expect(Object.isFrozen(normalized.actions.send.permissions)).toBe(true);
+    });
+
+    it("Adapter 实例边界拒绝畸形清单并保存规范化快照", () => {
+        expect(
+            () =>
+                new CapabilityBoundaryAdapter({
+                    version: 1,
+                    actions: {},
+                    events: {},
+                    segments: { text: { support: "native" } },
+                    transports: {},
+                } as never),
+        ).toThrow("direction 无效");
+
+        const source = {
+            version: 1,
+            actions: { ping: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        };
+        const adapter = new CapabilityBoundaryAdapter(source as never);
+        source.actions.ping.support = "unsupported";
+        expect(adapter.describeCapabilities().actions.ping.support).toBe("native");
     });
 
     it("契约断言会发现查询结果与清单漂移", async () => {

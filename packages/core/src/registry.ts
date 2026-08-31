@@ -4,6 +4,7 @@ import { BaseApp } from "./base-app.js";
 import { Account } from "./account.js";
 import { assertSchemaFormContract, type Schema } from "./config-validator.js";
 import { ValidationError } from "./errors.js";
+import { normalizeAdapterCapabilities } from "./adapter-capability.js";
 
 export interface ExtensionRegistryState {
     readonly adapters: {
@@ -273,6 +274,9 @@ export class AdapterRegistry {
                 context: { name },
             });
         }
+        const capabilities = metadata?.capabilities
+            ? normalizeAdapterCapabilities(metadata.capabilities)
+            : undefined;
         this.adapters.set(name, factory);
         // Store or update metadata
         if (!this.metadata.has(name)) {
@@ -283,7 +287,7 @@ export class AdapterRegistry {
                 icon: metadata?.icon || "",
                 homepage: metadata?.homepage,
                 author: metadata?.author,
-                capabilities: metadata?.capabilities,
+                capabilities,
             });
         }
     }

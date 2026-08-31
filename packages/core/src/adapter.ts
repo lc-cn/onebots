@@ -10,6 +10,7 @@ import {
     EMPTY_ADAPTER_CAPABILITIES,
     isCanonicalAdapterAction,
     listSupportedActions,
+    normalizeAdapterCapabilities,
     type AdapterCapabilityManifest,
 } from "./adapter-capability.js";
 import { UnsupportedCapabilityError, type UnsupportedCapabilityReason } from "./errors.js";
@@ -25,6 +26,7 @@ export abstract class Adapter<
 > extends AdapterActionDefaults {
     accounts: Map<string, Account<T, C>> = new Map<string, Account<T, C>>();
     #logger: Logger;
+    readonly #capabilityManifest: AdapterCapabilityManifest;
     icon: string;
 
     get db(): SqliteDB {
@@ -38,9 +40,10 @@ export abstract class Adapter<
     protected constructor(
         public app: I,
         public platform: T,
-        private readonly capabilityManifest: AdapterCapabilityManifest = EMPTY_ADAPTER_CAPABILITIES,
+        capabilityManifest: AdapterCapabilityManifest = EMPTY_ADAPTER_CAPABILITIES,
     ) {
         super();
+        this.#capabilityManifest = normalizeAdapterCapabilities(capabilityManifest);
         this.db.create(this.tableName, {
             string: SqliteDB.Column("TEXT"),
             number: SqliteDB.Column("INTEGER", { unique: true }),
@@ -63,7 +66,7 @@ export abstract class Adapter<
 
     /** 返回当前适配器对外声明的能力；账号级动态能力可由子类覆写。 */
     describeCapabilities(_uin?: string): AdapterCapabilityManifest {
-        return this.capabilityManifest;
+        return this.#capabilityManifest;
     }
 
     unsupported(

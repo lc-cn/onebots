@@ -47,6 +47,40 @@ describe("extension registries", () => {
         expect(AdapterRegistry.get("mock")).toBe(adapterFactory);
     });
 
+    it("rejects malformed adapter capabilities before mutating the registry", () => {
+        expect(() =>
+            AdapterRegistry.register("broken", adapterFactory, {
+                capabilities: {
+                    version: 1,
+                    actions: {},
+                    events: {},
+                    segments: { text: { support: "native" } },
+                    transports: {},
+                } as never,
+            }),
+        ).toThrow("direction 无效");
+        expect(AdapterRegistry.has("broken")).toBe(false);
+        expect(AdapterRegistry.getMetadata("broken")).toBeUndefined();
+    });
+
+    it("stores an immutable capability snapshot instead of caller-owned metadata", () => {
+        const capabilities = {
+            version: 1,
+            actions: { ping: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        };
+
+        AdapterRegistry.register("mock", adapterFactory, { capabilities: capabilities as never });
+        capabilities.actions.ping.support = "unsupported";
+
+        const registered = AdapterRegistry.getMetadata("mock")?.capabilities;
+        expect(registered?.actions.ping.support).toBe("native");
+        expect(Object.isFrozen(registered)).toBe(true);
+        expect(Object.isFrozen(registered?.actions.ping)).toBe(true);
+    });
+
     it("keeps repeated protocol registration with the same factory idempotent", () => {
         ProtocolRegistry.register("test", "v1", protocolFactory, { displayName: "Test" });
 
