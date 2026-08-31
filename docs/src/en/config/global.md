@@ -60,6 +60,8 @@ Errors identify the complete path, such as `qq.my_bot.appid` or `qq.my_bot.onebo
 
 **Save and apply** in the Web console atomically saves the file and then hot reloads accounts and protocols. If runtime application fails, both the file and runtime return to the previous configuration. Host settings such as the port, path, and database remain saved and the response lists which fields require a restart. A concurrent save or reload returns HTTP 409 without overwriting the configuration being applied.
 
+Integrations that still use the root management WebSocket may send `{ "action": "system.saveConfig", "data": "...", "echo": "request-id" }` or `system.reload`. Both actions use the same transaction and concurrency lock and return `{ "event": "system.config.result", "echo": "request-id", "data": ... }`. Failure codes are `CONFIG_INVALID`, `CONFIG_CONFLICT`, and `CONFIG_APPLY_FAILED`. `system.reload` only reapplies the file from disk; it neither rewrites the file nor creates a backup.
+
 Run the same check before deployment with the service's plugin selection:
 
 ```bash

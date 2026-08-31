@@ -34,12 +34,33 @@ export async function saveAndApplyRuntimeConfig(
     content: string,
     configPath = BaseApp.configPath,
 ): Promise<RuntimeConfigApplicationResult> {
+    return runExclusiveRuntimeConfigApplication(host, () =>
+        saveAndApplyRuntimeConfigUnlocked(host, content, configPath),
+    );
+}
+
+/** 从磁盘重新读取并应用配置，与保存操作共享同一并发边界。 */
+export async function applyRuntimeConfigFile(
+    host: RuntimeConfigApplicationHost,
+    configPath = BaseApp.configPath,
+): Promise<RuntimeConfigApplicationResult> {
+    return runExclusiveRuntimeConfigApplication(host, async () => {
+        const config = parseRuntimeConfig(fs.readFileSync(configPath, "utf8"));
+        validateRuntimeConfig(config);
+        return reloadRuntimeConfig(host, config as BaseApp.Config);
+    });
+}
+
+async function runExclusiveRuntimeConfigApplication<T>(
+    host: RuntimeConfigApplicationHost,
+    operation: () => Promise<T>,
+): Promise<T> {
     if (host.isReloading || activeApplications.has(host)) {
         throw new RuntimeConfigApplicationConflictError();
     }
     activeApplications.add(host);
     try {
-        return await saveAndApplyRuntimeConfigUnlocked(host, content, configPath);
+        return await operation();
     } finally {
         activeApplications.delete(host);
     }
@@ -57,16 +78,8 @@ async function saveAndApplyRuntimeConfigUnlocked(
     writeConfigFileAtomic(configPath, content, { backup: true });
 
     try {
-        await host.reload(config as BaseApp.Config);
-        return { applied: true, restartRequired: false, changedHostFields: [] };
+        return await reloadRuntimeConfig(host, config as BaseApp.Config);
     } catch (error) {
-        if (error instanceof HostConfigRestartRequiredError) {
-            return {
-                applied: false,
-                restartRequired: true,
-                changedHostFields: error.changed,
-            };
-        }
         try {
             if (previousContent === undefined) fs.rmSync(configPath, { force: true });
             else writeConfigFileAtomic(configPath, previousContent);
@@ -75,6 +88,25 @@ async function saveAndApplyRuntimeConfigUnlocked(
                 [error, rollbackError],
                 "配置应用失败，且无法恢复磁盘上的上一版本",
             );
+        }
+        throw error;
+    }
+}
+
+async function reloadRuntimeConfig(
+    host: RuntimeConfigApplicationHost,
+    config: BaseApp.Config,
+): Promise<RuntimeConfigApplicationResult> {
+    try {
+        await host.reload(config);
+        return { applied: true, restartRequired: false, changedHostFields: [] };
+    } catch (error) {
+        if (error instanceof HostConfigRestartRequiredError) {
+            return {
+                applied: false,
+                restartRequired: true,
+                changedHostFields: error.changed,
+            };
         }
         throw error;
     }

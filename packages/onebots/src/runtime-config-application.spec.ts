@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HostConfigRestartRequiredError } from "@onebots/core";
 import {
+    applyRuntimeConfigFile,
     RuntimeConfigApplicationConflictError,
     saveAndApplyRuntimeConfig,
 } from "./runtime-config-application.js";
@@ -98,5 +99,37 @@ describe("runtime config application", () => {
 
         releaseReload?.();
         await first;
+    });
+
+    it("从磁盘重新读取配置且不产生新的备份", async () => {
+        const file = configFile("access_token: disk-token\n");
+        const host = { isReloading: false, reload: vi.fn(async () => undefined) };
+
+        await expect(applyRuntimeConfigFile(host, file)).resolves.toEqual({
+            applied: true,
+            restartRequired: false,
+            changedHostFields: [],
+        });
+        expect(host.reload).toHaveBeenCalledWith({ access_token: "disk-token" });
+        expect(fs.existsSync(`${file}.bak`)).toBe(false);
+    });
+
+    it("保存与磁盘重载共享同一个并发锁", async () => {
+        const file = configFile();
+        let releaseReload: (() => void) | undefined;
+        const reloadPending = new Promise<void>(resolve => {
+            releaseReload = resolve;
+        });
+        const host = { isReloading: false, reload: vi.fn(() => reloadPending) };
+
+        const save = saveAndApplyRuntimeConfig(host, "access_token: next-token\n", file);
+        await vi.waitFor(() => expect(host.reload).toHaveBeenCalledOnce());
+        await expect(applyRuntimeConfigFile(host, file)).rejects.toBeInstanceOf(
+            RuntimeConfigApplicationConflictError,
+        );
+
+        releaseReload?.();
+        await save;
+        expect(host.reload).toHaveBeenCalledOnce();
     });
 });

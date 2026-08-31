@@ -103,4 +103,19 @@ describe("configuration route", () => {
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe("access_token: old-token\n");
         expect(reload).not.toHaveBeenCalled();
     });
+
+    it("可选远端备份异常不会把已生效配置误报为失败", async () => {
+        const reload = vi.fn(async () => undefined) as App["reload"];
+        const { app, handler } = setup(reload);
+        vi.mocked(app.backupDataToHf).mockRejectedValue(new Error("HF unavailable"));
+        const ctx = { request: { body: "access_token: next-token\n" } } as RouterContext;
+
+        await handler(ctx);
+
+        expect(ctx.status).toBeUndefined();
+        expect(ctx.body).toMatchObject({ success: true, applied: true });
+        expect(app.logger.warn).toHaveBeenCalledWith("配置已保存并生效，但自动备份失败", {
+            error: expect.objectContaining({ message: "HF unavailable" }),
+        });
+    });
 });
