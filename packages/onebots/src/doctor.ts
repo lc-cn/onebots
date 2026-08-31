@@ -342,7 +342,8 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
               >
             | undefined;
         const details: string[] = [];
-        if (payload.configured === false) details.push("未配置账号");
+        if (payload.reloading === true) details.push("配置重载中");
+        else if (payload.configured === false) details.push("未配置账号");
         if (summary) {
             details.push(
                 `账号 ${Number(summary.online_accounts ?? 0)}/${Number(summary.total_accounts ?? 0)} 在线`,
@@ -387,7 +388,8 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
 
 function isConfigurationPending(body: string): boolean {
     try {
-        return (JSON.parse(body) as Record<string, unknown>).configured === false;
+        const payload = JSON.parse(body) as Record<string, unknown>;
+        return payload.configured === false && payload.reloading !== true;
     } catch {
         return false;
     }

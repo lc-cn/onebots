@@ -64,6 +64,28 @@ describe.runIf(process.platform !== "win32")("doctor config permissions", () => 
 });
 
 describe("doctor health probes", () => {
+    it("明确报告配置重载中的暂时不可用", async () => {
+        const fetcher = vi.fn(
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        ready: false,
+                        reloading: true,
+                        configured: false,
+                        summary: { total_accounts: 0, online_accounts: 0 },
+                    }),
+                    { status: 503 },
+                ),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "ready", fetcher),
+        ).resolves.toMatchObject({
+            level: "error",
+            message: "ready: HTTP 503；配置重载中；账号 0/0 在线",
+        });
+    });
+
     it("fails readiness when any configured account is offline and reports the platform", async () => {
         const fetcher = vi.fn(
             async () =>

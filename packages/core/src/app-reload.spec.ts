@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -68,6 +68,24 @@ describe("BaseApp reload boundary", () => {
             const router = app.router;
             const middlewareCount = app.middleware.length;
             const resourceCount = app.lifecycle.getResourceCount();
+            const address = app.httpServer.address();
+            const port = address && typeof address === "object" ? address.port : 0;
+
+            app.isReloading = true;
+            const [health, readiness, metrics] = await Promise.all([
+                fetch(`http://127.0.0.1:${port}/health`),
+                fetch(`http://127.0.0.1:${port}/ready`),
+                fetch(`http://127.0.0.1:${port}/metrics`),
+            ]);
+            expect(health.status).toBe(200);
+            expect(readiness.status).toBe(503);
+            await expect(readiness.json()).resolves.toMatchObject({
+                ready: false,
+                server: true,
+                reloading: true,
+            });
+            await expect(metrics.text()).resolves.toContain("onebots_reloading 1");
+            app.isReloading = false;
 
             await app.reload({ ...app.config, access_token: "next-token", log_level: "debug" });
 
@@ -77,6 +95,7 @@ describe("BaseApp reload boundary", () => {
             expect(app.middleware).toHaveLength(middlewareCount);
             expect(app.lifecycle.getResourceCount()).toBe(resourceCount);
             expect(app.config.access_token).toBe("next-token");
+            expect(app.isReloading).toBe(false);
 
             const middlewareAfterReload = app.middleware.length;
             await app.start();
@@ -90,5 +109,62 @@ describe("BaseApp reload boundary", () => {
             else process.env.PORT = originalPort;
             rmSync(directory, { recursive: true, force: true });
         }
+    });
+
+    it("重载全程撤销 readiness 并拒绝并发配置覆盖", async () => {
+        let releaseStop: (() => void) | undefined;
+        const stopPending = new Promise<void>(resolve => {
+            releaseStop = resolve;
+        });
+        const app = {
+            config,
+            isReloading: false,
+            isStarted: true,
+            adapters: new Map(),
+            logger: { level: "info" },
+            enhancedLogger: { setLevel: vi.fn() },
+            stopAdapters: vi.fn(() => stopPending),
+            initAdapters: vi.fn(),
+            startAdapters: vi.fn(),
+        } as unknown as BaseApp;
+
+        const firstReload = BaseApp.prototype.reload.call(app, {
+            ...config,
+            access_token: "next-token",
+        });
+        await vi.waitFor(() => expect(app.isReloading).toBe(true));
+        await expect(BaseApp.prototype.reload.call(app, config)).rejects.toThrow("配置正在重载");
+
+        releaseStop?.();
+        await firstReload;
+        expect(app.isReloading).toBe(false);
+        expect(app.config.access_token).toBe("next-token");
+    });
+
+    it("重载失败回滚后恢复 readiness 状态", async () => {
+        const initAdapters = vi
+            .fn()
+            .mockImplementationOnce(() => {
+                throw new Error("新配置初始化失败");
+            })
+            .mockImplementationOnce(() => undefined);
+        const app = {
+            config,
+            isReloading: false,
+            isStarted: false,
+            adapters: new Map(),
+            logger: { level: "info" },
+            enhancedLogger: { setLevel: vi.fn() },
+            stopAdapters: vi.fn(async () => undefined),
+            initAdapters,
+            startAdapters: vi.fn(),
+        } as unknown as BaseApp;
+
+        await expect(
+            BaseApp.prototype.reload.call(app, { ...config, access_token: "next-token" }),
+        ).rejects.toThrow("新配置初始化失败");
+        expect(app.isReloading).toBe(false);
+        expect(app.config.access_token).toBe("token");
+        expect(initAdapters).toHaveBeenCalledTimes(2);
     });
 });

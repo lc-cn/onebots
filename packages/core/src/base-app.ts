@@ -48,6 +48,8 @@ export class BaseApp extends Koa {
     public config: Required<BaseApp.Config>;
     public httpServer: Server;
     isStarted: boolean = false;
+    /** 热重载期间保持 HTTP 存活，但 readiness 必须拒绝流量。 */
+    isReloading: boolean = false;
     isDisposed: boolean = false;
     public logger: Logger;
     public enhancedLogger: EnhancedLogger;
@@ -360,6 +362,9 @@ export class BaseApp extends Koa {
         }
     }
     async reload(config: BaseApp.Config) {
+        if (this.isReloading) {
+            throw new ConfigError("OneBots 配置正在重载，请等待当前操作完成");
+        }
         const merged = deepMerge(deepClone(BaseApp.defaultConfig), config);
         const next = ConfigValidator.validateWithDefaults(
             merged as Partial<Required<BaseApp.Config>>,
@@ -369,10 +374,11 @@ export class BaseApp extends Koa {
 
         const previous = this.config;
         const wasStarted = this.isStarted;
-        await this.stopAdapters();
-        this.adapters.clear();
+        this.isReloading = true;
 
         try {
+            await this.stopAdapters();
+            this.adapters.clear();
             this.config = next;
             this.logger.level = next.log_level;
             this.enhancedLogger.setLevel(next.log_level);
@@ -387,6 +393,8 @@ export class BaseApp extends Koa {
             this.initAdapters();
             if (wasStarted) await this.startAdapters();
             throw ErrorHandler.wrap(error, { operation: "reload" });
+        } finally {
+            this.isReloading = false;
         }
     }
     async stop() {

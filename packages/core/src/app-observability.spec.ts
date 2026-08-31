@@ -4,9 +4,11 @@ import { formatProtocolReadinessMetrics, getReadinessSnapshot } from "./app-obse
 function observableApp(
     accounts: Array<{ status: string; protocols: Array<{ lifecycleStatus: string }> }>,
     isStarted = true,
+    isReloading = false,
 ) {
     return {
         isStarted,
+        isReloading,
         adapters: new Map([
             [
                 "mock",
@@ -83,6 +85,18 @@ describe("application readiness", () => {
         const snapshot = getReadinessSnapshot(observableApp([]));
 
         expect(snapshot).toMatchObject({ ready: true, configured: false });
+    });
+
+    it("rejects readiness while configuration is reloading", () => {
+        const snapshot = getReadinessSnapshot(
+            observableApp(
+                [{ status: "online", protocols: [{ lifecycleStatus: "ready" }] }],
+                true,
+                true,
+            ),
+        );
+
+        expect(snapshot).toMatchObject({ ready: false, server: true, reloading: true });
     });
 
     it("exports protocol readiness with safe Prometheus labels", () => {

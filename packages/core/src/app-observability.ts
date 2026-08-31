@@ -6,6 +6,7 @@ interface ObservableApp {
     readonly router: Router;
     readonly adapters: ReadonlyMap<keyof Adapter.Configs, Adapter>;
     readonly isStarted: boolean;
+    readonly isReloading: boolean;
 }
 
 interface ProtocolReadinessCounts {
@@ -26,6 +27,7 @@ export interface ReadinessSnapshot {
     ready: boolean;
     timestamp: string;
     server: boolean;
+    reloading: boolean;
     configured: boolean;
     adapters: Record<string, AdapterReadinessCounts>;
     summary: {
@@ -93,9 +95,10 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
     }
 
     return {
-        ready: allReady && app.isStarted,
+        ready: allReady && app.isStarted && !app.isReloading,
         timestamp: new Date().toISOString(),
         server: app.isStarted,
+        reloading: app.isReloading,
         configured: totalAccounts > 0,
         adapters,
         summary: {
@@ -168,6 +171,9 @@ export function registerObservabilityEndpoints(app: ObservableApp, version: stri
             "# HELP onebots_started Whether the application is started",
             "# TYPE onebots_started gauge",
             `onebots_started ${app.isStarted ? 1 : 0}`,
+            "# HELP onebots_reloading Whether the application is reloading configuration",
+            "# TYPE onebots_reloading gauge",
+            `onebots_reloading ${app.isReloading ? 1 : 0}`,
             "# HELP onebots_memory_bytes Memory usage in bytes",
             "# TYPE onebots_memory_bytes gauge",
             `onebots_memory_bytes{type="rss"} ${memory.rss}`,
