@@ -37,9 +37,11 @@
                                 :variant="extension.type === 'adapter' ? 'success' : 'neutral'">
                                 {{ extension.type === "adapter" ? "平台" : "协议" }}
                             </UiBadge>
-                            <UiBadge v-if="extension.loaded" variant="success" dot>已启用</UiBadge>
-                            <UiBadge v-else-if="extension.installed" variant="warning" dot>
-                                等待重启
+                            <UiBadge
+                                v-if="runtimeStatus(extension)"
+                                :variant="runtimeStatus(extension)?.variant"
+                                dot>
+                                {{ runtimeStatus(extension)?.label }}
                             </UiBadge>
                         </div>
                     </template>
@@ -129,7 +131,7 @@
                                 </UiButton>
                             </RouterLink>
                             <UiButton
-                                v-if="!extension.loaded || !extension.versionAligned"
+                                v-if="installationAction(extension).visible"
                                 variant="primary"
                                 :loading="installingId === extension.id || extension.installing"
                                 :disabled="
@@ -159,7 +161,10 @@ import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiSpinner } from "../ui";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
-import { getExtensionInstallationAction } from "./extension-installation.js";
+import {
+    getExtensionInstallationAction,
+    getExtensionRuntimeStatus,
+} from "./extension-installation.js";
 
 const route = useRoute();
 const extensions = ref<ExtensionInfo[]>([]);
@@ -185,6 +190,7 @@ watch(
 const configurationAction = (extension: ExtensionInfo) =>
     getExtensionConfigurationAction(extension);
 const installationAction = (extension: ExtensionInfo) => getExtensionInstallationAction(extension);
+const runtimeStatus = (extension: ExtensionInfo) => getExtensionRuntimeStatus(extension);
 
 const catalogErrorMessage = computed(
     () => extensions.value.find(extension => extension.catalogError)?.catalogError ?? "",
