@@ -183,6 +183,8 @@ Run `onebots doctor --json` as an automated gate after deployment or upgrades. W
 
 Doctor also loads the selected plugins and validates the complete account and protocol configuration against their registered schemas. When checking a configuration that is not installed as a service, pass the same `-r` / `-p` arguments used by the run command. If a plugin entry exists but initialization fails, doctor preserves the first underlying error line, including duplicate registration conflicts and missing runtime dependencies, instead of reducing it to a generic initialization failure.
 
+`onebots install -c config.yaml -r <adapter> -p <protocol>` performs the same plugin loading and configuration validation before writing an operating-system service definition. Import-only entries, top-level `await`, schema validation, and initialization failures therefore follow foreground startup semantics; a failed preflight leaves no service that is certain to fail at startup. A successful install still does not start the service, so you can inspect its definition before running `onebots start`.
+
 **Kubernetes Configuration Example**:
 
 ```yaml

@@ -1,7 +1,6 @@
 /** OneBots CLI 命令背后的无路由 application module。 */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { createRequire } from "node:module";
 import yaml from "js-yaml";
 import type { Account, Protocol } from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "../service-manager.js";
@@ -53,8 +52,22 @@ export async function installService(
     const runtime = normalizeRuntimeOptions(options);
     if (!fs.existsSync(runtime.configPath))
         throw new CliError(`配置文件不存在: ${runtime.configPath}`, 2);
-    const missing = findMissingPlugins(runtime.adapters, runtime.protocols, process.cwd());
-    if (missing.length) throw new CliError(`插件未安装: ${missing.join(", ")}`, 2);
+    const { loadPlugins } = await import("../runtime.js");
+    const failures = await loadPlugins(runtime.adapters, runtime.protocols);
+    if (failures.length) {
+        throw new CliError(`服务安装预检失败：无法加载插件 ${failures.join(", ")}`, 2);
+    }
+    try {
+        const { parseRuntimeConfig, validateRuntimeConfig } =
+            await import("../runtime-config-validator.js");
+        const config = parseRuntimeConfig(fs.readFileSync(runtime.configPath, "utf8"));
+        validateRuntimeConfig(config);
+    } catch (error) {
+        throw new CliError(
+            `服务安装预检失败：${error instanceof Error ? error.message : String(error)}`,
+            2,
+        );
+    }
     const scope = scopeFrom(options);
     const spec: ServiceSpec = {
         scope,
@@ -333,29 +346,6 @@ function isMcpStdioModule(value: unknown): value is {
         "startStdioTransport" in value &&
         typeof value.startStdioTransport === "function"
     );
-}
-
-function findMissingPlugins(adapters: string[], protocols: string[], cwd: string): string[] {
-    const require = createRequire(path.join(cwd, "package.json"));
-    const groups = [
-        ...adapters.map(name => [`@onebots/adapter-${name}`, `onebots-adapter-${name}`, name]),
-        ...protocols.map(name => [`@onebots/protocol-${name}`, `onebots-protocol-${name}`, name]),
-    ];
-    return groups
-        .filter(
-            candidates =>
-                !candidates.some(candidate => {
-                    try {
-                        require.resolve(candidate);
-                        return true;
-                    } catch (error) {
-                        // 候选包解析失败是插件探测的预期分支，继续尝试下一个名称。
-                        void error;
-                        return false;
-                    }
-                }),
-        )
-        .map(candidates => candidates[0]);
 }
 
 function readConfig(file: string): Record<string, unknown> {
