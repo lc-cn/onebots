@@ -81,7 +81,11 @@ describe("plugin loader", () => {
         fs.mkdirSync(packageDirectory, { recursive: true });
         fs.writeFileSync(
             path.join(packageDirectory, "package.json"),
-            JSON.stringify({ name: "async-adapter", type: "module", main: "index.js" }),
+            JSON.stringify({
+                name: "async-adapter",
+                type: "module",
+                exports: { ".": { import: "./index.js" } },
+            }),
         );
         fs.writeFileSync(
             path.join(packageDirectory, "index.js"),
@@ -96,5 +100,40 @@ describe("plugin loader", () => {
         );
 
         expect(result).toMatchObject({ loaded: true });
+    });
+
+    it("selects the import condition instead of a conflicting require entry", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
+        temporaryDirectories.push(directory);
+        fs.writeFileSync(path.join(directory, "package.json"), JSON.stringify({ type: "module" }));
+        const packageDirectory = path.join(directory, "node_modules", "conditional-adapter");
+        fs.mkdirSync(packageDirectory, { recursive: true });
+        fs.writeFileSync(
+            path.join(packageDirectory, "package.json"),
+            JSON.stringify({
+                name: "conditional-adapter",
+                type: "module",
+                exports: {
+                    ".": { import: "./index.js", require: "./index.cjs" },
+                },
+            }),
+        );
+        fs.writeFileSync(path.join(packageDirectory, "index.js"), "export const loaded = true;");
+        fs.writeFileSync(
+            path.join(packageDirectory, "index.cjs"),
+            'throw new Error("require branch must not execute");',
+        );
+
+        const result = await tryLoadPlugin(
+            "适配器",
+            "conditional",
+            ["conditional-adapter"],
+            createRequire(path.join(directory, "package.json")),
+        );
+
+        expect(result).toMatchObject({
+            loaded: true,
+            inspection: { entryPath: path.join(packageDirectory, "index.js") },
+        });
     });
 });

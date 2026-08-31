@@ -18,26 +18,40 @@ export function inspectPlugin(
     runtimeRequire: NodeJS.Require,
 ): PluginInspection {
     for (const candidate of candidates) {
+        let requireEntry: string | undefined;
         try {
-            return { status: "ready", candidate, entryPath: runtimeRequire.resolve(candidate) };
-        } catch (resolveError) {
-            const packageJsonPath = resolvePackageJson(candidate, runtimeRequire);
-            if (!packageJsonPath) continue;
-            const packageJson = readPackageJson(packageJsonPath);
-            const main = typeof packageJson.main === "string" ? packageJson.main : "index.js";
-            const entryPath = path.resolve(path.dirname(packageJsonPath), main);
-            const reason = fs.existsSync(entryPath)
-                ? firstLine(resolveError)
-                : `构建产物不存在: ${entryPath}`;
+            requireEntry = runtimeRequire.resolve(candidate);
+        } catch {
+            // 纯 ESM 包可能只暴露 exports.import，继续从 package.json 解析。
+        }
+
+        const packageJsonPath = resolvePackageJson(candidate, runtimeRequire, requireEntry);
+        if (packageJsonPath) {
+            const entryPath = resolvePackageEntry(candidate, packageJsonPath);
+            if (!entryPath) {
+                return {
+                    status: "broken",
+                    candidate,
+                    reason: "package.json 未提供可导入的插件入口",
+                    buildCommand: candidate.startsWith("@onebots/")
+                        ? `pnpm --filter ${candidate} build`
+                        : undefined,
+                };
+            }
+            if (fs.existsSync(entryPath)) {
+                return { status: "ready", candidate, entryPath };
+            }
             return {
                 status: "broken",
                 candidate,
-                reason,
+                reason: `构建产物不存在: ${entryPath}`,
                 buildCommand: candidate.startsWith("@onebots/")
                     ? `pnpm --filter ${candidate} build`
                     : undefined,
             };
         }
+
+        if (requireEntry) return { status: "ready", candidate, entryPath: requireEntry };
     }
     return { status: "missing", candidates };
 }
@@ -92,20 +106,102 @@ export async function loadPlugin(
     return result.loaded;
 }
 
-function resolvePackageJson(candidate: string, runtimeRequire: NodeJS.Require): string | undefined {
-    try {
-        return runtimeRequire.resolve(`${candidate}/package.json`);
-    } catch {
-        return undefined;
-    }
+interface PackageManifest {
+    name?: unknown;
+    main?: unknown;
+    module?: unknown;
+    exports?: unknown;
 }
 
-function readPackageJson(file: string): { main?: unknown } {
+function resolvePackageJson(
+    candidate: string,
+    runtimeRequire: NodeJS.Require,
+    requireEntry?: string,
+): string | undefined {
+    const packageName = parsePackageName(candidate);
+    if (!packageName) return undefined;
+
+    for (const searchPath of runtimeRequire.resolve.paths(packageName) ?? []) {
+        const packageJsonPath = path.join(searchPath, packageName, "package.json");
+        if (fs.existsSync(packageJsonPath)) return packageJsonPath;
+    }
+
+    if (requireEntry) {
+        let directory = path.dirname(requireEntry);
+        while (directory !== path.dirname(directory)) {
+            const packageJsonPath = path.join(directory, "package.json");
+            if (fs.existsSync(packageJsonPath)) {
+                const manifest = readPackageJson(packageJsonPath);
+                if (manifest.name === packageName) return packageJsonPath;
+            }
+            directory = path.dirname(directory);
+        }
+    }
+    return undefined;
+}
+
+function readPackageJson(file: string): PackageManifest {
     try {
-        return JSON.parse(fs.readFileSync(file, "utf8")) as { main?: unknown };
+        return JSON.parse(fs.readFileSync(file, "utf8")) as PackageManifest;
     } catch {
         return {};
     }
+}
+
+function resolvePackageEntry(candidate: string, packageJsonPath: string): string | undefined {
+    const manifest = readPackageJson(packageJsonPath);
+    const packageName = parsePackageName(candidate);
+    if (!packageName) return undefined;
+    const subpath = candidate === packageName ? "." : `.${candidate.slice(packageName.length)}`;
+    const exported = resolveExportTarget(manifest.exports, subpath);
+    const usesExports = manifest.exports !== undefined;
+    const target =
+        exported ??
+        (!usesExports && typeof manifest.module === "string" ? manifest.module : undefined) ??
+        (!usesExports && typeof manifest.main === "string" ? manifest.main : undefined) ??
+        (!usesExports ? "index.js" : undefined);
+    if (!target || (usesExports && !target.startsWith("./")) || path.isAbsolute(target)) {
+        return undefined;
+    }
+
+    const packageDirectory = path.dirname(packageJsonPath);
+    const entryPath = path.resolve(packageDirectory, target);
+    const relative = path.relative(packageDirectory, entryPath);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
+    return entryPath;
+}
+
+function resolveExportTarget(exportsValue: unknown, subpath: string): string | undefined {
+    if (typeof exportsValue === "string") return subpath === "." ? exportsValue : undefined;
+    if (Array.isArray(exportsValue)) {
+        for (const option of exportsValue) {
+            const target = resolveExportTarget(option, subpath);
+            if (target) return target;
+        }
+        return undefined;
+    }
+    if (!exportsValue || typeof exportsValue !== "object") return undefined;
+
+    const exportsMap = exportsValue as Record<string, unknown>;
+    const hasSubpaths = Object.keys(exportsMap).some(key => key.startsWith("."));
+    if (hasSubpaths) return resolveExportTarget(exportsMap[subpath], ".");
+    if (subpath !== ".") return undefined;
+    for (const condition of ["import", "node", "default", "require"] as const) {
+        const target = resolveExportTarget(exportsMap[condition], ".");
+        if (target) return target;
+    }
+    return undefined;
+}
+
+function parsePackageName(candidate: string): string | undefined {
+    if (candidate.startsWith(".") || candidate.startsWith("/") || candidate.startsWith("file:")) {
+        return undefined;
+    }
+    const parts = candidate.split("/");
+    if (candidate.startsWith("@")) {
+        return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : undefined;
+    }
+    return parts[0] || undefined;
 }
 
 function firstLine(error: unknown): string {
