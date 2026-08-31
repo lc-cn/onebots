@@ -113,7 +113,7 @@ flowchart LR
 docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots ghcr.io/lc-cn/onebots:master
 ```
 
-首次运行后会在 `./data` 生成一个不含平台账号的安全起步配置，避免用空凭据连接外部平台；管理端初始凭据会写入启动日志。登录后再添加账号并设置协议访问令牌。详见 **[文档：Docker 部署](https://onebots.pages.dev/guide/docker)**（含 Hugging Face Spaces）。
+首次运行后会在 `./data` 生成一个不含平台账号的安全起步配置，避免用空凭据连接外部平台；随机管理鉴权码只写入 `./data/config.yaml`，不会输出到日志。无法读取配置文件的托管平台可预先通过 Secret 设置 `ONEBOTS_ACCESS_TOKEN`。登录后再添加账号并设置协议访问令牌。详见 **[文档：Docker 部署](https://onebots.pages.dev/guide/docker)**（含 Hugging Face Spaces）。
 
 ### 方式 B：npm 安装（Mock 试跑）
 

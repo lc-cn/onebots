@@ -113,6 +113,8 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     if (managementCredentials.generated) {
         writeCliOutput("已生成管理端鉴权码并安全写入配置文件的 access_token 字段。");
         writeCliOutput("鉴权码不会写入服务日志；首次登录时请从配置文件读取。");
+    } else if (managementCredentials.source === "environment") {
+        writeCliOutput("管理端将使用 ONEBOTS_ACCESS_TOKEN 环境变量，不会生成新的配置鉴权码。");
     }
     writeCliOutput(`前台启动: ${formatSetupCommand(configPath, adapters, protocols)}`);
 }

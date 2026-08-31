@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -7,8 +7,11 @@ import { runSetup } from "./setup.js";
 
 const temporaryDirectories: string[] = [];
 
+beforeEach(() => vi.stubEnv("ONEBOTS_ACCESS_TOKEN", ""));
+
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -60,5 +63,19 @@ describe("setup workflow", () => {
             port: 7000,
             general: {},
         });
+    });
+
+    it("keeps the first-run config secret-free when deployment auth is supplied", async () => {
+        vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "space-secret");
+        const configPath = temporaryConfigPath();
+        const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+        await runSetup(configPath);
+
+        const config = yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+        expect(config).not.toHaveProperty("access_token");
+        const renderedOutput = output.mock.calls.map(call => String(call[0])).join("");
+        expect(renderedOutput).toContain("ONEBOTS_ACCESS_TOKEN");
+        expect(renderedOutput).not.toContain("space-secret");
     });
 });

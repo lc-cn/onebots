@@ -3,15 +3,20 @@ import { randomBytes } from "node:crypto";
 export interface EnsuredManagementCredentials {
     config: Record<string, unknown>;
     generated: boolean;
+    source: "config" | "environment" | "generated";
 }
 
 /** 为没有完整管理凭据的配置生成高熵静态鉴权码。 */
 export function ensureManagementCredentials(
     config: Record<string, unknown>,
     generateToken: () => string = () => randomBytes(32).toString("hex"),
+    environmentToken: string | undefined = process.env.ONEBOTS_ACCESS_TOKEN,
 ): EnsuredManagementCredentials {
+    if (hasText(environmentToken)) {
+        return { config, generated: false, source: "environment" };
+    }
     if (hasText(config.access_token) || (hasText(config.username) && hasText(config.password))) {
-        return { config, generated: false };
+        return { config, generated: false, source: "config" };
     }
 
     const accessToken = generateToken().trim();
@@ -19,6 +24,7 @@ export function ensureManagementCredentials(
     return {
         config: { ...config, access_token: accessToken },
         generated: true,
+        source: "generated",
     };
 }
 

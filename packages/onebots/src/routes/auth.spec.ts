@@ -1,5 +1,5 @@
 import type { IncomingMessage } from "node:http";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TokenManager, type RouterContext } from "@onebots/core";
 import type { App } from "../app.js";
 import { registerAuthRoutes } from "./auth.js";
@@ -48,6 +48,9 @@ function apiContext(token?: string): RouterContext {
 }
 
 describe("management HTTP authentication", () => {
+    beforeEach(() => vi.stubEnv("ONEBOTS_ACCESS_TOKEN", ""));
+    afterEach(() => vi.unstubAllEnvs());
+
     it("登录处理器在配置热重载后立即使用新凭据", async () => {
         const { app, login } = setup();
         const oldLogin = loginContext({ username: "old-user", password: "old-password" });

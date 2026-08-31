@@ -5,6 +5,9 @@
 **/data
 **/config.yaml
 onebots.log
+.env
+.env.*
+!.env.example
 **/tsconfig.tsbuildinfo
 /docs/.vitepress/cache
 /docs/.vitepress/.temp

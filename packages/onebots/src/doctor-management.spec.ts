@@ -1,7 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { probeDoctorManagement } from "./doctor-management.js";
 
 describe("doctor management probes", () => {
+    beforeEach(() => vi.stubEnv("ONEBOTS_ACCESS_TOKEN", ""));
+    afterEach(() => vi.unstubAllEnvs());
+
     it("verifies anonymous rejection and authenticated access with a configured token", async () => {
         const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
             const authorization = new Headers(init?.headers).get("authorization");
@@ -191,5 +194,33 @@ describe("doctor management probes", () => {
             message:
                 "运行态未就绪: kook.primary 账号状态 offline；kook.primary/onebot.v11 协议状态 failed；kook.orphan 无协议出口",
         });
+    });
+
+    it("uses the same deployment token precedence as the running gateway", async () => {
+        vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "deployment-token");
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
+            return new Headers(init?.headers).get("authorization") === "Bearer deployment-token"
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "file-token" },
+            {
+                fetcher,
+                upgrade: async (_url, token) => ({
+                    upgraded: token === "deployment-token",
+                    status: token === "deployment-token" ? 101 : 401,
+                }),
+            },
+        );
+
+        expect(checks.every(check => check.level === "ok")).toBe(true);
+        expect(fetcher).not.toHaveBeenCalledWith(
+            expect.any(String),
+            expect.objectContaining({ headers: { authorization: "Bearer file-token" } }),
+        );
     });
 });

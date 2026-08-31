@@ -37,7 +37,7 @@ general:
 | `access_token` | string | Bearer token for the Web console, management API, and root management WebSocket | generated when no complete credentials exist |
 | `username` / `password` | string | Alternative Web console credentials; both fields must be configured together | none |
 
-Setup and the runtime generate a random 256-bit `access_token` when neither a token nor a complete username/password pair exists. The token is stored in the restricted configuration file and is never printed to service logs.
+`ONEBOTS_ACCESS_TOKEN` is a deployment-level override for the file-based `access_token`. It is intended for containers and hosted platforms where the configuration file cannot be read directly. While it is set, setup and the runtime do not generate a competing file token, and the environment value is never written to the configuration or logs. Restart the process after rotating it. Without this override, setup and the runtime generate a random 256-bit `access_token` when neither a token nor a complete username/password pair exists; that token is stored in the restricted configuration file and never printed to service logs.
 
 ## General Configuration
 

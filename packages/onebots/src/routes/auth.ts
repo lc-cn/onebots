@@ -14,8 +14,8 @@ import {
  * Computes auth state from app.config rather than relying on start() closure variables.
  * The middleware registered here protects all /api/* routes except login and refresh.
  *
- * A note on the access token: it can come from config.access_token or the environment
- * variable ONEBOTS_ACCESS_TOKEN.  The access token path skips the per-session token
+ * A note on the access token: ONEBOTS_ACCESS_TOKEN is a deployment-level override,
+ * followed by config.access_token. The access token path skips the per-session token
  * manager and is validated by direct comparison.  The username/password path generates
  * managed tokens via app.tokenManager.
  */
@@ -46,9 +46,7 @@ export function registerAuthRoutes(app: App, router: Router): void {
             return;
         }
 
-        if (
-            !managementCredentialsMatch(app.config, body.username, body.password)
-        ) {
+        if (!managementCredentialsMatch(app.config, body.username, body.password)) {
             ctx.status = 401;
             ctx.body = { success: false, message: "用户名或密码错误" };
             return;
@@ -87,7 +85,7 @@ export function registerAuthRoutes(app: App, router: Router): void {
 
     /**
      * API auth middleware — protects all /api/* paths EXCEPT login & refresh.
-     * Access-token paths (config.access_token / env ONEBOTS_ACCESS_TOKEN) short-circuit
+     * Access-token paths (env ONEBOTS_ACCESS_TOKEN / config.access_token) short-circuit
      * the per-session token-manager check.  All other paths go through authValidator
      * which validates the Bearer token issued by the login endpoint.
      */

@@ -368,6 +368,8 @@ export function createOnebots(config: BaseApp.Config | string = "config.yaml") {
         writeCliError("[onebots] 已生成管理端鉴权码并写入配置文件的 access_token 字段。");
         writeCliError("[onebots] 鉴权码不会写入日志；首次登录时请从以下文件读取：");
         writeCliError(`  配置文件: ${BaseApp.configPath}`);
+    } else if (managementCredentials.source === "environment") {
+        writeCliOutput("[onebots] 管理端使用 ONEBOTS_ACCESS_TOKEN 环境变量鉴权。");
     }
     configure({
         appenders: {

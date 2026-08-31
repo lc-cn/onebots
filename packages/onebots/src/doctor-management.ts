@@ -193,8 +193,8 @@ async function acquireDoctorManagementCredential(
     fetcher: DoctorFetch,
 ): Promise<DoctorManagementCredential> {
     const accessToken =
-        stringConfigValue(config.access_token) ??
-        stringConfigValue(process.env.ONEBOTS_ACCESS_TOKEN);
+        stringConfigValue(process.env.ONEBOTS_ACCESS_TOKEN) ??
+        stringConfigValue(config.access_token);
     if (accessToken) return { token: accessToken, session: false };
 
     const username = stringConfigValue(config.username);

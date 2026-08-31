@@ -69,9 +69,7 @@ export function managementCredentialsMatch(
 }
 
 export function configuredManagementAccessToken(config: BaseApp.Config): string | undefined {
-    return (
-        config.access_token?.trim() || process.env.ONEBOTS_ACCESS_TOKEN?.trim() || undefined
-    );
+    return process.env.ONEBOTS_ACCESS_TOKEN?.trim() || config.access_token?.trim() || undefined;
 }
 
 export function managementAccessTokenMatches(
@@ -90,7 +88,7 @@ export function managementCredentialsChanged(
     return (
         previous.username !== next.username ||
         previous.password !== next.password ||
-        previous.access_token?.trim() !== next.access_token?.trim()
+        configuredManagementAccessToken(previous) !== configuredManagementAccessToken(next)
     );
 }
 

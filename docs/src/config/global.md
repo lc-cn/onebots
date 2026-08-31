@@ -60,12 +60,14 @@ general:
 
 - **类型**: `string`
 - **说明**: Web 管理端与 `/api`、根管理 WebSocket 的认证材料。推荐使用高熵 `access_token`；也可以配置完整的 `username` 与 `password`。
-- **首次启动**: 三项均未形成有效凭据时，setup 或运行时会生成 256 位随机 `access_token` 并写入权限受限的配置文件，鉴权码不会输出到服务日志。
+- **部署覆盖**: `ONEBOTS_ACCESS_TOKEN` 环境变量优先于配置文件中的 `access_token`，适合无法直接读取配置文件的容器与托管平台。环境变量生效时不会生成新的配置鉴权码，也不会把环境值写入文件或日志；轮换后需要重启进程。
+- **首次启动**: 没有环境变量且三项均未形成有效凭据时，setup 或运行时会生成 256 位随机 `access_token` 并写入权限受限的配置文件，鉴权码不会输出到服务日志。
 
 ## 配置优先级
 
 ```
 账号协议配置 > general 默认配置
+ONEBOTS_ACCESS_TOKEN > config.yaml 的 access_token
 ```
 
 ## 启动前校验

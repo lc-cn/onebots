@@ -29,6 +29,8 @@ services:
       - ./data:/data
     environment:
       - NODE_ENV=production
+      # 可选：从同目录 .env 注入，适合无法直接读取 /data/config.yaml 的部署
+      - ONEBOTS_ACCESS_TOKEN=${ONEBOTS_ACCESS_TOKEN:-}
     healthcheck:
       test: ["CMD", "node", "/app/scripts/docker-healthcheck.mjs"]
       interval: 30s
@@ -50,7 +52,9 @@ docker compose logs -f onebots
 docker compose down
 ```
 
-首次运行会在当前目录下创建 `./data`，并在其中生成默认 `config.yaml`。默认文件不包含平台账号，因此不会用空凭据连接外部平台；若尚无管理凭据，容器会把随机 256 位 `access_token` 写入该配置，但不会把鉴权码输出到容器日志。从 `./data/config.yaml` 读取鉴权码登录 Web 管理端，添加账号、设置协议访问令牌后，“保存并应用”会立即热重载账号与协议。只有端口、路径、数据库等宿主参数变更时，页面才会明确提示执行 `docker compose restart`。
+首次运行会在当前目录下创建 `./data`，并在其中生成默认 `config.yaml`。默认文件不包含平台账号，因此不会用空凭据连接外部平台；若没有环境鉴权或文件凭据，容器会把随机 256 位 `access_token` 写入该配置，但不会把鉴权码输出到容器日志。从 `./data/config.yaml` 读取鉴权码登录 Web 管理端。若部署环境不能直接读取挂载文件，可把高熵鉴权码作为 Secret 注入 `ONEBOTS_ACCESS_TOKEN`；它优先于文件 token，且不会被写入配置或日志。添加账号、设置协议访问令牌后，“保存并应用”会立即热重载账号与协议。只有端口、路径、数据库等宿主参数变更时，页面才会明确提示执行 `docker compose restart`。
+
+仓库提供 `.env.example`。需要环境鉴权时复制为 `.env`，填写由密码管理器或 `openssl rand -hex 32` 生成的值，再执行 `docker compose up -d`；`.env` 已被 Git 忽略。修改后必须重启容器。
 
 ### 容器健康状态
 
@@ -154,9 +158,12 @@ docker run -d \
 2. 在 Space 仓库中放入以下两个文件（可从本仓库复制）：
    - **Dockerfile**：复制自仓库的 `Dockerfile.hf`（或把 `Dockerfile.hf` 重命名为 `Dockerfile`）。
    - **docker-entrypoint-hf.sh**：与 `Dockerfile.hf` 同目录的入口脚本。
-3. 如需持久化配置与数据，见下方「HF 上持久化并查看 /data」。
+3. 在 Space → **Settings** → **Secrets** 中新增 `ONEBOTS_ACCESS_TOKEN`，值使用密码管理器或 `openssl rand -hex 32` 生成。部署完成后用该值登录管理端；不要放在公开的 Variables 中。
+4. 如需持久化配置与数据，见下方「HF 上持久化并查看 /data」。
 
 `Dockerfile.hf` 基于官方镜像 `ghcr.io/lc-cn/onebots:master`，仅增加 HF 的端口与入口脚本，构建快且不需要 GitHub Packages 的 build secret。
+
+`ONEBOTS_ACCESS_TOKEN` 是部署级覆盖项，即使恢复的 `config.yaml` 已含旧 `access_token`，管理端仍使用 Secret 中的值。修改 Secret 后需要重启 Space。启动日志只会说明环境鉴权已启用，不会输出鉴权码。
 
 ### HF 上挂载并查看持久化的 /data
 
@@ -166,7 +173,7 @@ docker run -d \
   3. 若当前账号/区域未提供持久化存储，重启或重建 Space 后 `/data` 内的内容会丢失；可将重要配置备份到 [Dataset](https://huggingface.co/docs/hub/spaces-storage#dataset-storage) 或外部存储。
 
 - **查看**：HF 不提供“在网页上浏览容器内 `/data` 文件”的功能；Space 的 **Files** 页只显示仓库（Dockerfile、脚本等），不显示运行时卷里的内容。  
-  - 若需查看或备份：可通过 OneBots 自带的 Web 管理端（若有）查看配置与状态，或自行在应用里加只读 API（如列出 `/data` 下的文件、下载 `config.yaml`）。  
+  - 使用 `ONEBOTS_ACCESS_TOKEN` 登录后，可在 OneBots 的「配置管理」页面查看或下载当前配置。
   - 首次运行且未挂载持久化卷时，入口脚本会在 `/data` 下生成默认 `config.yaml`，仅当启用持久化后该文件才会在重启后保留。
 
 ### HF 免付费：用 Space 仓库备份整个 data 目录
