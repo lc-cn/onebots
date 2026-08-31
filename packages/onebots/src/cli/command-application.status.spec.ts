@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { serviceStatus } from "./command-application.js";
 import { ServiceController, type ServiceSpec } from "../service-manager.js";
+import packageMetadata from "../../package.json" with { type: "json" };
 
 const temporaryDirectories: string[] = [];
 
@@ -71,7 +72,16 @@ describe("service status", () => {
         const fetcher = vi.fn<typeof fetch>(async input => {
             const endpoint = String(input).endsWith("/health") ? "health" : "ready";
             return new Response(
-                JSON.stringify(endpoint === "health" ? { status: "ok" } : { ready: true }),
+                JSON.stringify(
+                    endpoint === "health"
+                        ? {
+                              status: "ok",
+                              application: "onebots",
+                              version: packageMetadata.version,
+                              core_version: "1.2.5",
+                          }
+                        : { ready: true },
+                ),
                 { status: 200 },
             );
         });
@@ -79,7 +89,7 @@ describe("service status", () => {
         const result = await serviceStatus({ system: false }, fetcher);
 
         expect(result).toEqual({
-            output: "运行中，已就绪\n进程管理器: active\nhealth: HTTP 200；状态 ok\nready: HTTP 200",
+            output: `运行中，已就绪\n进程管理器: active\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200`,
             exitCode: undefined,
         });
         expect(fetcher).toHaveBeenCalledWith(
@@ -92,7 +102,14 @@ describe("service status", () => {
         mockInstalledService(true);
         const fetcher = vi.fn<typeof fetch>(async input =>
             String(input).endsWith("/health")
-                ? new Response(JSON.stringify({ status: "ok" }), { status: 200 })
+                ? new Response(
+                      JSON.stringify({
+                          status: "ok",
+                          application: "onebots",
+                          version: packageMetadata.version,
+                      }),
+                      { status: 200 },
+                  )
                 : new Response(
                       JSON.stringify({
                           ready: true,
@@ -110,11 +127,42 @@ describe("service status", () => {
         expect(result.output).toContain("ready: HTTP 200；未配置账号；账号 0/0 在线");
     });
 
+    it("returns exit code 1 when the running service version differs from the current CLI", async () => {
+        mockInstalledService(true);
+        const fetcher = vi.fn<typeof fetch>(async input =>
+            String(input).endsWith("/health")
+                ? new Response(
+                      JSON.stringify({
+                          status: "ok",
+                          application: "onebots",
+                          version: "0.0.0",
+                      }),
+                      { status: 200 },
+                  )
+                : new Response(JSON.stringify({ ready: true }), { status: 200 }),
+        );
+
+        const result = await serviceStatus({ system: false }, fetcher);
+
+        expect(result.exitCode).toBe(1);
+        expect(result.output).toContain("运行中，版本未验证");
+        expect(result.output).toContain(
+            `在线 OneBots 0.0.0 与当前 CLI ${packageMetadata.version} 不一致`,
+        );
+    });
+
     it("returns exit code 1 when the process runs but readiness fails", async () => {
         mockInstalledService(true);
         const fetcher = vi.fn<typeof fetch>(async input =>
             String(input).endsWith("/health")
-                ? new Response(JSON.stringify({ status: "ok" }), { status: 200 })
+                ? new Response(
+                      JSON.stringify({
+                          status: "ok",
+                          application: "onebots",
+                          version: packageMetadata.version,
+                      }),
+                      { status: 200 },
+                  )
                 : new Response(
                       JSON.stringify({
                           ready: false,

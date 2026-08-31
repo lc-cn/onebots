@@ -13,6 +13,7 @@ import {
     buildAdapterCapabilityReport,
     formatAdapterCapabilityReport,
 } from "../capability-report.js";
+import packageMetadata from "../../package.json" with { type: "json" };
 
 /** 路由组件可渲染的稳定命令结果。 */
 export interface CommandResult {
@@ -178,19 +179,27 @@ export async function serviceStatus(
         const base = resolveGatewayBaseUrl(config);
         const checks = await Promise.all(
             (["health", "ready"] as const).map(endpoint =>
-                probeDoctorEndpoint(base, endpoint, fetcher),
+                probeDoctorEndpoint(
+                    base,
+                    endpoint,
+                    fetcher,
+                    endpoint === "health" ? packageMetadata.version : undefined,
+                ),
             ),
         );
         const hasError = checks.some(check => check.level === "error");
         const hasWarning = checks.some(check => check.level === "warning");
+        const runtimeVersionUnverified = checks[0]?.level === "warning";
         const summary = hasError
             ? "运行中，不可用"
-            : hasWarning
-              ? "运行中，待配置"
-              : "运行中，已就绪";
+            : runtimeVersionUnverified
+              ? "运行中，版本未验证"
+              : hasWarning
+                ? "运行中，待配置"
+                : "运行中，已就绪";
         return {
             output: [summary, ...detail, ...checks.map(check => check.message)].join("\n"),
-            exitCode: hasError ? 1 : undefined,
+            exitCode: hasError || runtimeVersionUnverified ? 1 : undefined,
         };
     } catch (error) {
         return {
