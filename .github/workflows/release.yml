@@ -56,6 +56,9 @@ jobs:
       - name: Verify publish tarballs
         run: pnpm packages:pack:check
 
+      - name: Verify README capability matrix
+        run: pnpm readme:capabilities:check
+
       - name: Test
         run: pnpm test
 

@@ -27,6 +27,8 @@
     "create:adapter": "node scripts/create-adapter.mjs",
     "catalog:capabilities": "node scripts/generate-extension-capability-catalog.mjs",
     "catalog:capabilities:check": "node scripts/generate-extension-capability-catalog.mjs --check",
+    "readme:capabilities": "node scripts/generate-readme-api-matrix.mjs",
+    "readme:capabilities:check": "node scripts/generate-readme-api-matrix.mjs --check",
     "packages:pack:check": "node scripts/verify-publish-packages.mjs",
     "changeset": "changeset",
     "changeset:version": "changeset version && pnpm catalog:capabilities",
