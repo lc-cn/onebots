@@ -189,6 +189,8 @@ Doctor also loads the selected plugins and validates the complete account and pr
 
 After startup, `onebots status` reports both the process-manager state and the semantic results of `/health` and `/ready`. It distinguishes **running and ready**, **running but awaiting configuration**, and **running but unavailable**. An installed but stopped service or any failed probe returns exit code `1`; a missing installation returns `2`. CI/CD can therefore use `onebots status` as a lightweight deployment gate and reserve `onebots doctor --json` for full configuration and plugin diagnostics.
 
+After its package-manager step, `onebots update` launches the updated CLI in the service `workingDirectory` and runs a connection-free preflight with the saved plugin list. It rewrites the service definition and optionally restarts only after every plugin loads and the configuration validates. A failed preflight leaves the current process running and preserves the existing service definition. Dependency files have already changed at that point, so fix the reported dependency problem or roll versions back with npm/pnpm before the next start, then rerun the preflight or update.
+
 **Kubernetes Configuration Example**:
 
 ```yaml

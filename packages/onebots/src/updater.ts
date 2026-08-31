@@ -3,7 +3,12 @@ import * as path from "node:path";
 import * as readline from "node:readline/promises";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { ServiceController, type ServiceScope } from "./service-manager.js";
+import {
+    buildServiceArgs,
+    ServiceController,
+    type ServiceScope,
+    type ServiceSpec,
+} from "./service-manager.js";
 import { writeCliOutput } from "./cli-output.js";
 
 export interface UpdateOptions {
@@ -89,17 +94,72 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
         });
     }
     if (spec) {
-        const wasRunning = controller.status().running;
-        await controller.install({
-            ...spec,
-            nodePath: process.execPath,
-            binPath: path.resolve(process.argv[1]),
-        });
-        if (wasRunning) {
-            if (options.yes || (await confirmRestart())) await controller.restart();
-        }
+        await refreshServiceAfterUpdate(
+            controller,
+            {
+                ...spec,
+                nodePath: process.execPath,
+                binPath: path.resolve(process.argv[1]),
+            },
+            options.yes,
+        );
     }
     writeCliOutput("OneBots 及插件更新完成");
+}
+
+interface UpdateServiceController {
+    status(): { running: boolean };
+    install(spec: ServiceSpec): Promise<void>;
+    restart(): Promise<void>;
+}
+
+interface RefreshServiceDependencies {
+    preflight(spec: ServiceSpec): void | Promise<void>;
+    confirmRestart(): Promise<boolean>;
+}
+
+/** 软件包更新后先用新 CLI 子进程预检，再改写服务定义和选择性重启。 */
+export async function refreshServiceAfterUpdate(
+    controller: UpdateServiceController,
+    spec: ServiceSpec,
+    yes = false,
+    dependencies: RefreshServiceDependencies = {
+        preflight: runUpdatedServicePreflight,
+        confirmRestart,
+    },
+): Promise<void> {
+    const wasRunning = controller.status().running;
+    try {
+        await dependencies.preflight(spec);
+    } catch (error) {
+        throw new Error(
+            `软件包已更新，但新运行环境预检失败；服务定义与当前运行实例保持不变：${error instanceof Error ? error.message : String(error)}`,
+            { cause: error instanceof Error ? error : undefined },
+        );
+    }
+    await controller.install(spec);
+    if (wasRunning && (yes || (await dependencies.confirmRestart()))) {
+        await controller.restart();
+    }
+}
+
+/** 使用更新后的 Node/CLI 路径，在服务实际工作目录中运行隔离预检。 */
+export function runUpdatedServicePreflight(spec: ServiceSpec): void {
+    try {
+        execFileSync(spec.nodePath, buildServiceArgs(spec, "preflight"), {
+            cwd: spec.workingDirectory,
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "pipe"],
+        });
+    } catch (error) {
+        const stderr =
+            error && typeof error === "object" && "stderr" in error
+                ? String(error.stderr).trim()
+                : "";
+        throw new Error(stderr || (error instanceof Error ? error.message : String(error)), {
+            cause: error instanceof Error ? error : undefined,
+        });
+    }
 }
 
 function detectPackageManager(runtimeRoot: string): "npm" | "pnpm" {

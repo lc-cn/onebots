@@ -16,8 +16,17 @@ export async function runCli(argv = process.argv): Promise<void> {
         if (invocation.kind === "unknown") throw new CliError(`未知命令: ${invocation.command}`, 2);
         if (invocation.kind === "invalid") throw new CliError(invocation.message, 2);
         if (invocation.kind === "service-runtime") {
-            const { runBridge } = await import("./runtime.js");
-            await runBridge(parseServiceRuntimeOptions(invocation.argv));
+            const runtime = parseServiceRuntimeInvocation(invocation.argv);
+            if (runtime.command === "preflight") {
+                const { preflightServiceRuntime } = await import("./service-preflight.js");
+                await preflightServiceRuntime({
+                    ...runtime.options,
+                    workingDirectory: process.cwd(),
+                });
+            } else {
+                const { runBridge } = await import("./runtime.js");
+                await runBridge(runtime.options);
+            }
             return;
         }
         if (requiresHeadlessPresentation(invocation.argv)) {
@@ -60,14 +69,15 @@ function runHeadlessCli(argv: string[]): Promise<number> {
     });
 }
 
-function parseServiceRuntimeOptions(argv: string[]) {
+export function parseServiceRuntimeInvocation(argv: string[]) {
     const options = {
         configPath: path.resolve("config.yaml"),
         adapters: [] as string[],
         protocols: [] as string[],
     };
     const args = argv.slice(2);
-    if (args[0] === "run") args.shift();
+    const command = args[0] === "preflight" ? "preflight" : "run";
+    if (args[0] === "run" || args[0] === "preflight") args.shift();
     for (let index = 0; index < args.length; index++) {
         const token = args[index];
         if (token === "-c" || token === "--config")
@@ -84,7 +94,7 @@ function parseServiceRuntimeOptions(argv: string[]) {
             options.protocols.push(token.slice("--protocol=".length));
         else throw new CliError(`无效的服务运行参数: ${token}`, 2);
     }
-    return options;
+    return { command, options } as const;
 }
 
 function requireValue(args: string[], index: number, option: string): string {
