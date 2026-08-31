@@ -1,10 +1,10 @@
 import type { PlatformActionHandler } from "onebots";
+import { defineWhatsAppActionHandlers } from "./action-contract.js";
 import type { WhatsAppClient } from "./client.js";
 import { WhatsAppApiError } from "./errors.js";
 import { parseWhatsAppPaging } from "./graph-paging.js";
 import {
     WHATSAPP_BUSINESS_PHONE_NUMBER_ACCOUNT_MODES,
-    WHATSAPP_BUSINESS_PHONE_NUMBER_ACTIONS,
     WHATSAPP_BUSINESS_PHONE_NUMBER_CERT_STATUSES,
     WHATSAPP_BUSINESS_PHONE_NUMBER_FIELDS,
     WHATSAPP_BUSINESS_PHONE_NUMBER_HOST_PLATFORMS,
@@ -13,7 +13,6 @@ import {
     WHATSAPP_BUSINESS_PHONE_NUMBER_SORTS,
     WHATSAPP_BUSINESS_PHONE_NUMBER_STATUSES,
     type WhatsAppBusinessPhoneNumber,
-    type WhatsAppBusinessPhoneNumberAction,
     type WhatsAppBusinessPhoneNumberCreateRequest,
     type WhatsAppBusinessPhoneNumberCreateResponse,
     type WhatsAppBusinessPhoneNumberField,
@@ -21,12 +20,6 @@ import {
     type WhatsAppBusinessPhoneNumbersQuery,
     type WhatsAppBusinessPhoneNumbersResponse,
 } from "./business-phone-number-types.js";
-
-export function isWhatsAppBusinessPhoneNumberAction(
-    action: string,
-): action is WhatsAppBusinessPhoneNumberAction {
-    return (WHATSAPP_BUSINESS_PHONE_NUMBER_ACTIONS as readonly string[]).includes(action);
-}
 
 /** WABA 号码资产清单与入驻创建；不承载当前运行号码的注册和验证码生命周期。 */
 export class WhatsAppBusinessPhoneNumbers {
@@ -63,29 +56,41 @@ export class WhatsAppBusinessPhoneNumbers {
             }),
         );
     }
-
-    execute(
-        action: WhatsAppBusinessPhoneNumberAction,
-        params: Readonly<Record<string, unknown>>,
-    ): Promise<unknown> {
-        switch (action) {
-            case "list_business_phone_numbers":
-                rejectUnknown(params, ["query"]);
-                return this.list(params.query === undefined ? {} : queryInput(params.query));
-            case "create_business_phone_number":
-                rejectUnknown(params, ["request"]);
-                return this.create(createRequest(params.request));
-        }
-    }
 }
 
-export const WHATSAPP_BUSINESS_PHONE_NUMBER_ACTION_HANDLERS = Object.fromEntries(
-    WHATSAPP_BUSINESS_PHONE_NUMBER_ACTIONS.map(action => [
-        action,
-        (client: WhatsAppClient, params: Readonly<Record<string, unknown>>) =>
-            client.businessPhoneNumbers.execute(action, params),
-    ]),
-) as Record<WhatsAppBusinessPhoneNumberAction, PlatformActionHandler<WhatsAppClient>>;
+type BusinessPhoneNumberActionParams = Readonly<Record<string, unknown>>;
+
+const BUSINESS_PHONE_NUMBER_ACTION_HANDLERS = {
+    list_business_phone_numbers: (
+        client: WhatsAppClient,
+        params: BusinessPhoneNumberActionParams,
+    ) =>
+        client.businessPhoneNumbers.list(
+            params.query === undefined ? {} : queryInput(params.query),
+        ),
+    create_business_phone_number: (
+        client: WhatsAppClient,
+        params: BusinessPhoneNumberActionParams,
+    ) => client.businessPhoneNumbers.create(createRequest(params.request)),
+} satisfies Readonly<Record<string, PlatformActionHandler<WhatsAppClient>>>;
+
+/** Business Phone Number 动作的执行与参数契约单一来源。 */
+export const WHATSAPP_BUSINESS_PHONE_NUMBER_ACTION_HANDLERS = defineWhatsAppActionHandlers(
+    BUSINESS_PHONE_NUMBER_ACTION_HANDLERS,
+    {
+        list_business_phone_numbers: ["query"],
+        create_business_phone_number: ["request"],
+    },
+);
+
+export type WhatsAppBusinessPhoneNumberAction =
+    keyof typeof WHATSAPP_BUSINESS_PHONE_NUMBER_ACTION_HANDLERS;
+
+export function isWhatsAppBusinessPhoneNumberAction(
+    action: string,
+): action is WhatsAppBusinessPhoneNumberAction {
+    return Object.hasOwn(WHATSAPP_BUSINESS_PHONE_NUMBER_ACTION_HANDLERS, action);
+}
 
 function queryInput(value: unknown): WhatsAppBusinessPhoneNumbersQuery {
     const source = inputRecord(value, "query");

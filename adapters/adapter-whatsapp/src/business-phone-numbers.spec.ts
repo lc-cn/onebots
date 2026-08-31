@@ -120,6 +120,16 @@ describe("WhatsAppBusinessPhoneNumbers", () => {
         });
     });
 
+    it("号码资产动作拒绝契约外顶层字段并保留动作上下文", async () => {
+        const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
+        await expect(
+            executeWhatsAppPlatformAction(client, "list_business_phone_numbers", { limit: 10 }),
+        ).rejects.toMatchObject({
+            code: "WHATSAPP_UNEXPECTED_ACTION_PARAMETER",
+            details: { action: "list_business_phone_numbers", parameter: "limit" },
+        });
+    });
+
     it.each([
         ["空字段", "list_business_phone_numbers", { query: { fields: [] } }],
         ["未知字段", "list_business_phone_numbers", { query: { fields: ["token"] } }],
@@ -157,7 +167,6 @@ describe("WhatsAppBusinessPhoneNumbers", () => {
             "create_business_phone_number",
             { request: { phone_number: "16315551000", verified_name: "OneBots", cc: "44" } },
         ],
-        ["未知动作参数", "list_business_phone_numbers", { limit: 10 }],
     ])("拒绝%s", async (_label, action, params) => {
         const client = new WhatsAppClient(config, vi.fn<typeof fetch>());
         await expect(executeWhatsAppPlatformAction(client, action, params)).rejects.toMatchObject({

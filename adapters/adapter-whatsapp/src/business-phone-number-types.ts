@@ -1,12 +1,5 @@
 import type { WhatsAppPaging } from "./types.js";
 
-export const WHATSAPP_BUSINESS_PHONE_NUMBER_ACTIONS = Object.freeze([
-    "list_business_phone_numbers",
-    "create_business_phone_number",
-] as const);
-export type WhatsAppBusinessPhoneNumberAction =
-    (typeof WHATSAPP_BUSINESS_PHONE_NUMBER_ACTIONS)[number];
-
 export const WHATSAPP_BUSINESS_PHONE_NUMBER_FIELDS = Object.freeze([
     "id",
     "display_phone_number",

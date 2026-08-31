@@ -227,6 +227,7 @@ export * from "./business-account-types.js";
 export {
     isWhatsAppBusinessPhoneNumberAction,
     WhatsAppBusinessPhoneNumbers,
+    type WhatsAppBusinessPhoneNumberAction,
 } from "./business-phone-numbers.js";
 export * from "./business-phone-number-types.js";
 export { isWhatsAppScheduleAction, WhatsAppSchedules } from "./schedules.js";
