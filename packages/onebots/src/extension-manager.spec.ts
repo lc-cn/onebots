@@ -13,6 +13,7 @@ import {
 } from "./extension-manager.js";
 import type { ServicePreflightSpec } from "./service-preflight.js";
 import { getExtensionPackageCatalogEntry } from "./extension-capability-catalog.js";
+import packageMetadata from "../package.json" with { type: "json" };
 
 const directories: string[] = [];
 const successfulPreflight: ExtensionConfigPreflight = async () => undefined;
@@ -43,7 +44,11 @@ afterEach(() => {
 function fixture() {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-extensions-"));
     directories.push(root);
-    fs.writeFileSync(path.join(root, "package.json"), '{"private":true}\n');
+    fs.writeFileSync(
+        path.join(root, "package.json"),
+        `${JSON.stringify({ private: true, dependencies: { onebots: packageMetadata.version } })}\n`,
+    );
+    installFixturePackage("onebots", packageMetadata.version, root);
     const configPath = path.join(root, "config.yaml");
     fs.writeFileSync(
         configPath,
@@ -312,6 +317,45 @@ describe("ExtensionManager", () => {
             enabled: true,
             loaded: false,
         });
+    });
+
+    it("在读取配置或调用包管理器前拒绝无关项目目录", async () => {
+        const { root, configPath } = fixture();
+        fs.writeFileSync(
+            path.join(root, "package.json"),
+            `${JSON.stringify({ name: "unrelated-project", private: true })}\n`,
+        );
+        const originalConfig = fs.readFileSync(configPath, "utf8");
+        const install = vi.fn();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight: successfulPreflight,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow(
+            "扩展运行目录未声明 onebots 依赖",
+        );
+        expect(install).not.toHaveBeenCalled();
+        expect(fs.readFileSync(configPath, "utf8")).toBe(originalConfig);
+    });
+
+    it("拒绝由不同 OneBots 版本管理扩展运行目录", async () => {
+        const { root, configPath } = fixture();
+        installFixturePackage("onebots", "0.0.0", root);
+        const install = vi.fn();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight: successfulPreflight,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow(
+            `扩展运行目录中的 onebots@0.0.0 与当前进程 onebots@${packageMetadata.version} 不一致`,
+        );
+        expect(install).not.toHaveBeenCalled();
     });
 
     it("不把目录中自报为另一包名的依赖视为已安装", () => {
