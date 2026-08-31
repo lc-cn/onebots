@@ -7,6 +7,7 @@ import type { Context, Next } from 'koa';
 import { createLogger } from '../logger.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import { createSecretLogEvidence } from './secret-log-evidence.js';
 
 interface SecurityEvent {
     timestamp: number;
@@ -223,7 +224,7 @@ export function logInvalidToken(ctx: Context, token?: string): void {
         method: ctx.method,
         userAgent: ctx.get('user-agent'),
         details: {
-            tokenPrefix: token ? token.substring(0, 10) + '...' : 'missing',
+            token: createSecretLogEvidence(token),
         },
     });
 }

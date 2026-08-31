@@ -3,7 +3,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { Context } from "koa";
 import { afterEach, describe, expect, it } from "vitest";
-import { closeSecurityAudit, initSecurityAudit, securityAudit } from "./security-audit.js";
+import {
+    closeSecurityAudit,
+    initSecurityAudit,
+    logInvalidToken,
+    securityAudit,
+} from "./security-audit.js";
 
 const directories: string[] = [];
 
@@ -53,5 +58,24 @@ describe("security audit shutdown", () => {
         fs.rmSync(directory, { recursive: true, force: true });
 
         await expect(closeSecurityAudit()).rejects.toMatchObject({ code: "ENOENT" });
+    });
+
+    it("无效令牌审计只保留进程内指纹，不保存任何明文前缀", async () => {
+        const directory = fixture();
+        const token = "super-secret-token-value";
+        initSecurityAudit(directory);
+
+        logInvalidToken(requestContext(), token);
+        await closeSecurityAudit();
+
+        const file = path.join(directory, fs.readdirSync(directory)[0]);
+        const content = fs.readFileSync(file, "utf8");
+        expect(content).not.toContain(token);
+        expect(content).not.toContain(token.slice(0, 10));
+        const event = JSON.parse(content) as { details: { token: Record<string, unknown> } };
+        expect(event.details.token).toEqual({
+            present: true,
+            fingerprint: expect.stringMatching(/^[a-f0-9]{16}$/u),
+        });
     });
 });

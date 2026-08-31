@@ -35,6 +35,8 @@ OneBots 提供了完整的生产级功能，包括安全性、稳定性和可观
 
 **自动启用**: 已在 `BaseApp` 中自动集成
 
+无效令牌审计与令牌生成、刷新、撤销日志不会保存 token 原文或明文前缀。需要关联同一进程内的事件时，日志只记录使用进程随机密钥生成的 16 位 HMAC 指纹；密钥不会写盘，进程重启后指纹会变化。该值只用于排障关联，不能作为令牌身份或鉴权证据。
+
 ### 管理面鉴权边界
 
 `/api/*`、根管理 WebSocket `/` 与终端 WebSocket `/api/terminal` 使用同一组动态认证规则。请求可以携带顶层 `access_token`，也可以使用用户名密码登录后签发的会话 token；WebSocket 可通过 `Authorization: Bearer <token>` 或 `?access_token=<token>` 传递。未授权 WebSocket 会在协议升级前返回 HTTP 401，不会先建立连接再关闭，因此无法收到包含完整配置的 `system.sync`。

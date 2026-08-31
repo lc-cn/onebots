@@ -4,7 +4,8 @@
  */
 
 import { createLogger } from "../logger.js";
-import crypto from "crypto";
+import { randomBytes } from "node:crypto";
+import { createSecretLogEvidence } from "./secret-log-evidence.js";
 
 const logger = createLogger("TokenManager");
 
@@ -47,8 +48,8 @@ export class TokenManager {
      * 生成新令牌
      */
     generateToken(metadata?: Record<string, unknown>): TokenInfo {
-        const token = crypto.randomBytes(32).toString("hex");
-        const refreshToken = crypto.randomBytes(32).toString("hex");
+        const token = randomBytes(32).toString("hex");
+        const refreshToken = randomBytes(32).toString("hex");
         const now = Date.now();
 
         const tokenInfo: TokenInfo = {
@@ -67,7 +68,7 @@ export class TokenManager {
         }
 
         logger.debug("Token generated", {
-            tokenPrefix: token.substring(0, 10) + "...",
+            token: createSecretLogEvidence(token),
             expiresAt: new Date(tokenInfo.expiresAt!).toISOString(),
         });
 
@@ -99,7 +100,7 @@ export class TokenManager {
             const timeUntilExpiry = info.expiresAt - Date.now();
             if (timeUntilExpiry < this.options.refreshThreshold) {
                 logger.debug("Token needs refresh", {
-                    tokenPrefix: token.substring(0, 10) + "...",
+                    token: createSecretLogEvidence(token),
                     timeUntilExpiry,
                 });
             }
@@ -136,8 +137,8 @@ export class TokenManager {
         this.tokens.delete(key);
 
         logger.info("Token refreshed", {
-            oldTokenPrefix: info.token.substring(0, 10) + "...",
-            newTokenPrefix: newToken.token.substring(0, 10) + "...",
+            oldToken: createSecretLogEvidence(info.token),
+            newToken: createSecretLogEvidence(newToken.token),
         });
 
         return newToken;
@@ -159,7 +160,7 @@ export class TokenManager {
         }
 
         logger.info("Token revoked", {
-            tokenPrefix: token.substring(0, 10) + "...",
+            token: createSecretLogEvidence(token),
         });
 
         return true;

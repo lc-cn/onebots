@@ -35,6 +35,8 @@ Records all security-related events to meet compliance requirements.
 
 **Auto-Enabled**: Automatically integrated in `BaseApp`
 
+Invalid-token audits and token creation, refresh, and revocation logs never retain token plaintext or plaintext prefixes. When events from the same process need correlation, logs contain only a 16-character HMAC fingerprint produced with a random process key. The key is never persisted, so fingerprints change after restart. This value is diagnostic correlation only and is not token identity or authentication evidence.
+
 ### Management authentication boundary
 
 `/api/*`, the root management WebSocket `/`, and the terminal WebSocket `/api/terminal` use the same dynamic authentication rules. Requests may use the top-level `access_token` or a session token issued after username/password login. WebSocket clients can send either `Authorization: Bearer <token>` or `?access_token=<token>`. Unauthorized WebSocket requests receive HTTP 401 before protocol upgrade, so they cannot establish a connection or receive `system.sync`, which contains the complete configuration.
