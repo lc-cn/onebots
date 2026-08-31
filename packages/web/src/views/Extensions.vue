@@ -129,16 +129,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
 import type { ExtensionInfo } from "../types";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
 import { readCurrentServiceInstanceId, waitForServiceRestart } from "../utils/service-restart";
 import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiSpinner } from "../ui";
+import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
 
-type ExtensionFilter = "all" | "adapter" | "protocol";
-
+const route = useRoute();
 const extensions = ref<ExtensionInfo[]>([]);
 const loading = ref(true);
 const filter = ref<ExtensionFilter>("all");
@@ -150,6 +151,14 @@ const filters: Array<{ value: ExtensionFilter; label: string }> = [
     { value: "adapter", label: "平台适配器" },
     { value: "protocol", label: "开放协议" },
 ];
+
+watch(
+    () => route.query.type,
+    value => {
+        filter.value = parseExtensionFilter(value);
+    },
+    { immediate: true },
+);
 
 function installActionLabel(extension: ExtensionInfo): string {
     if (!extension.installed) return `安装 v${extension.targetVersion} 并重启`;

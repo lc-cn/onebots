@@ -22,7 +22,11 @@
                 <div class="mt-2 flex flex-wrap justify-center gap-2">
                     <UiButton size="sm" @click="capabilitiesOpen = true">比较平台能力</UiButton>
                     <RouterLink v-slot="{ navigate }" custom :to="onboarding.route">
-                        <UiButton size="sm" variant="primary" @click="navigate">
+                        <UiButton
+                            size="sm"
+                            variant="primary"
+                            :disabled="onboarding.actionDisabled"
+                            @click="navigate">
                             {{ onboarding.actionLabel }}
                         </UiButton>
                     </RouterLink>
@@ -63,6 +67,7 @@ import AdapterCapabilitiesDrawer from "../components/AdapterCapabilitiesDrawer.v
 import type { AccountInfo, ExtensionInfo } from "../types";
 import { mergeCapabilityAdapters } from "../components/capability-presentation.js";
 import { getBotOnboardingState } from "./bot-onboarding.js";
+import type { ProtocolInventoryState } from "./bot-onboarding.js";
 
 const { adapters, totalBotCount, startBot, stopBot } = useApi();
 const toast = useToast();
@@ -70,17 +75,31 @@ const toast = useToast();
 const loadingBots = ref<Set<string>>(new Set());
 const capabilitiesOpen = ref(false);
 const extensions = ref<ExtensionInfo[]>([]);
+const extensionInventoryStatus = ref<"loading" | "ready" | "unavailable">("loading");
 const capabilityAdapters = computed(() =>
     mergeCapabilityAdapters(adapters.value, extensions.value),
 );
-const onboarding = computed(() => getBotOnboardingState(adapters.value.length > 0));
+const protocolInventory = computed<ProtocolInventoryState>(() => {
+    if (extensionInventoryStatus.value === "loading") return "loading";
+    if (extensionInventoryStatus.value === "unavailable") return "unavailable";
+    return extensions.value.some(extension => extension.type === "protocol" && extension.loaded)
+        ? "available"
+        : "missing";
+});
+const onboarding = computed(() =>
+    getBotOnboardingState(adapters.value.length > 0, protocolInventory.value),
+);
 
 onMounted(async () => {
     try {
         const response = await authFetch(buildApiUrl("/api/extensions"));
         if (!response.ok) throw new Error("无法读取适配器能力目录");
-        extensions.value = await response.json();
+        const payload: unknown = await response.json();
+        if (!Array.isArray(payload)) throw new Error("功能扩展目录响应格式无效");
+        extensions.value = payload as ExtensionInfo[];
+        extensionInventoryStatus.value = "ready";
     } catch (error) {
+        extensionInventoryStatus.value = "unavailable";
         reportClientError("获取适配器能力目录失败", error);
     }
 });
