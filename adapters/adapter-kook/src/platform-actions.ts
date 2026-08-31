@@ -14,6 +14,7 @@ import { KOOK_INVITE_PLATFORM_ACTIONS } from "./platform-actions-invite.js";
 import { KOOK_MESSAGE_PLATFORM_ACTIONS } from "./platform-actions-message.js";
 import { KOOK_PERMISSION_PLATFORM_ACTIONS } from "./platform-actions-permission.js";
 import { KOOK_TEMPLATE_PLATFORM_ACTIONS } from "./platform-actions-template.js";
+import { KOOK_VOICE_PLATFORM_ACTIONS } from "./platform-actions-voice.js";
 
 interface ActionRoute {
     path: string;
@@ -46,16 +47,6 @@ const ROUTES: Readonly<Record<string, ActionRoute>> = {
     list_threads: { path: "/v3/thread/list", method: "GET" },
     delete_thread_item: { path: "/v3/thread/delete", method: "POST" },
     list_thread_posts: { path: "/v3/thread/post", method: "GET" },
-    move_voice_user: { path: "/v3/channel/move-user", method: "POST" },
-    kick_voice_user: { path: "/v3/channel/kickout", method: "POST" },
-    get_joined_voice_channel: { path: "/v3/channel-user/get-joined-channel", method: "GET" },
-    join_voice_channel: { path: "/v3/voice/join", method: "POST" },
-    list_joined_voice_channels: { path: "/v3/voice/list", method: "GET" },
-    leave_voice_channel: { path: "/v3/voice/leave", method: "POST" },
-    keep_voice_channel_alive: { path: "/v3/voice/keep-alive", method: "POST" },
-    set_bot_online: { path: "/v3/user/online", method: "POST" },
-    set_bot_offline: { path: "/v3/user/offline", method: "POST" },
-    get_bot_online_status: { path: "/v3/user/get-online-status", method: "GET" },
 };
 
 const ROUTE_HANDLERS = Object.fromEntries(
@@ -148,6 +139,7 @@ const PLATFORM_ACTIONS = definePlatformActions(
         ...KOOK_MESSAGE_PLATFORM_ACTIONS,
         ...KOOK_PERMISSION_PLATFORM_ACTIONS,
         ...KOOK_TEMPLATE_PLATFORM_ACTIONS,
+        ...KOOK_VOICE_PLATFORM_ACTIONS,
         ...ROUTE_HANDLERS,
     },
     action =>

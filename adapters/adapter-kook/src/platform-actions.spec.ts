@@ -171,7 +171,7 @@ describe("KOOK 平台扩展动作", () => {
             content: "{{ data.text }}",
             msgtype: 1,
         });
-        await executeKookPlatformAction(bot, "list_joined_voice_channels", { page: 2 });
+        await executeKookPlatformAction(bot, "list_joined_voice_channels", {});
         await executeKookPlatformAction(bot, "join_voice_channel", {
             channel_id: "voice-1",
             audio_ssrc: "1111",
@@ -186,7 +186,7 @@ describe("KOOK 平台扩展动作", () => {
             body: { title: "发布通知", content: "{{ data.text }}", msgtype: 1 },
         });
         expect(callApi).toHaveBeenNthCalledWith(2, "/v3/voice/list", {
-            query: { page: 2 },
+            query: {},
         });
         expect(callApi).toHaveBeenNthCalledWith(3, "/v3/voice/join", {
             method: "POST",
@@ -196,6 +196,48 @@ describe("KOOK 平台扩展动作", () => {
             method: "POST",
             body: { channel_id: "voice-1" },
         });
+    });
+
+    test("语音动作严格校验布尔值、用户数组与无参数状态接口", async () => {
+        const callApi = vi.fn().mockResolvedValue({});
+        const bot = { callApi } as never;
+
+        await executeKookPlatformAction(bot, "move_voice_user", {
+            target_id: "voice-target",
+            user_ids: ["user-1", "user-2"],
+        });
+        await executeKookPlatformAction(bot, "join_voice_channel", {
+            channel_id: "voice-1",
+            rtcp_mux: false,
+        });
+
+        expect(callApi).toHaveBeenNthCalledWith(1, "/v3/channel/move-user", {
+            method: "POST",
+            body: {
+                target_id: "voice-target",
+                user_ids: ["user-1", "user-2"],
+            },
+        });
+        expect(callApi).toHaveBeenNthCalledWith(2, "/v3/voice/join", {
+            method: "POST",
+            body: { channel_id: "voice-1", rtcp_mux: false },
+        });
+
+        await expect(
+            executeKookPlatformAction(bot, "move_voice_user", {
+                target_id: "voice-target",
+                user_ids: [],
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+        await expect(
+            executeKookPlatformAction(bot, "join_voice_channel", {
+                channel_id: "voice-1",
+                rtcp_mux: "false",
+            }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_INVALID" });
+        await expect(
+            executeKookPlatformAction(bot, "set_bot_online", { force: true }),
+        ).rejects.toMatchObject({ code: "KOOK_ACTION_PARAM_UNKNOWN" });
     });
 
     test("消息模板动作严格校验官方必填字段与枚举", async () => {

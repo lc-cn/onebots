@@ -20,17 +20,46 @@ export interface KookIntegerParamRule {
     default?: number;
 }
 
-export type KookActionParamRule = KookStringParamRule | KookIntegerParamRule;
+export interface KookBooleanParamRule {
+    type: "boolean";
+    required?: boolean;
+    default?: boolean;
+}
 
-export interface KookActionRouteContract {
+export interface KookStringArrayParamRule {
+    type: "string_array";
+    required?: boolean;
+    minItems?: number;
+    maxItems?: number;
+}
+
+export type KookActionParamRule =
+    | KookStringParamRule
+    | KookIntegerParamRule
+    | KookBooleanParamRule
+    | KookStringArrayParamRule;
+
+type KookQueryParamRule = Exclude<KookActionParamRule, KookStringArrayParamRule>;
+
+interface KookActionRouteContractBase {
     path: string;
-    method: "GET" | "POST";
-    params: Readonly<Record<string, KookActionParamRule>>;
     /** 每个字段组都必须至少提供一项，用于表达官方 one-of 参数约束。 */
     atLeastOne?: readonly (readonly string[])[];
 }
 
-type KookActionValue = string | number;
+export interface KookGetActionRouteContract extends KookActionRouteContractBase {
+    method: "GET";
+    params: Readonly<Record<string, KookQueryParamRule>>;
+}
+
+export interface KookPostActionRouteContract extends KookActionRouteContractBase {
+    method: "POST";
+    params: Readonly<Record<string, KookActionParamRule>>;
+}
+
+export type KookActionRouteContract = KookGetActionRouteContract | KookPostActionRouteContract;
+
+type KookActionValue = string | number | boolean | string[];
 
 /**
  * 将 KOOK 官方端点声明编译成平台动作处理器。
@@ -48,7 +77,9 @@ export function defineKookActionRoutes(
             validateAtLeastOne(action, values, route.atLeastOne);
             return bot.callApi(
                 route.path,
-                route.method === "GET" ? { query: values } : { method: "POST", body: values },
+                route.method === "GET"
+                    ? { query: toQueryParams(action, values) }
+                    : { method: "POST", body: values },
             );
         };
     }
@@ -89,7 +120,7 @@ function validateParams(
     for (const [key, rule] of Object.entries(rules)) {
         const value = params[key];
         if (value === undefined) {
-            if (rule.default !== undefined) {
+            if ("default" in rule && rule.default !== undefined) {
                 result[key] = validateValue(action, key, rule.default, rule);
                 continue;
             }
@@ -125,6 +156,21 @@ function validateValue(
         }
         return value;
     }
+    if (rule.type === "boolean") {
+        if (typeof value !== "boolean") throw invalidValue(action, key, value, rule);
+        return value;
+    }
+    if (rule.type === "string_array") {
+        if (
+            !Array.isArray(value) ||
+            value.some(item => typeof item !== "string" || !item) ||
+            (rule.minItems !== undefined && value.length < rule.minItems) ||
+            (rule.maxItems !== undefined && value.length > rule.maxItems)
+        ) {
+            throw invalidValue(action, key, value, rule);
+        }
+        return value;
+    }
     if (
         typeof value !== "number" ||
         !Number.isInteger(value) ||
@@ -135,6 +181,24 @@ function validateValue(
         throw invalidValue(action, key, value, rule);
     }
     return value;
+}
+
+function toQueryParams(
+    action: string,
+    values: Readonly<Record<string, KookActionValue>>,
+): Record<string, string | number | boolean> {
+    const query: Record<string, string | number | boolean> = {};
+    for (const [key, value] of Object.entries(values)) {
+        if (Array.isArray(value)) {
+            throw KookError.configuration(
+                `KOOK 动作 ${action} 的 GET 契约不能声明数组参数 ${key}`,
+                "KOOK_ACTION_CONTRACT_INVALID",
+                { action, key },
+            );
+        }
+        query[key] = value;
+    }
+    return query;
 }
 
 function isAllowed<T extends string | number>(value: T, values?: readonly T[]): boolean {
