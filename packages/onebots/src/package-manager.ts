@@ -13,24 +13,36 @@ export interface PackageUpdateInvocation extends PackageInstallInvocation {
     cwd: string;
 }
 
-/** 根据运行目录自己的清单和锁文件选择包管理器，避免被启动 OneBots 的外层命令误导。 */
+/**
+ * 根据运行目录及其最近项目根的清单和锁文件选择包管理器。
+ *
+ * pnpm workspace 成员通常没有自己的锁文件或 packageManager；即使由 `node` 直接启动，
+ * 也必须沿目录向上识别 workspace，避免把含 workspace:/catalog: 的项目交给 npm。
+ */
 export function detectRuntimePackageManager(runtimeRoot: string): SupportedPackageManager {
-    if (
-        fs.existsSync(path.join(runtimeRoot, "pnpm-lock.yaml")) ||
-        fs.existsSync(path.join(runtimeRoot, "pnpm-workspace.yaml"))
-    ) {
-        return "pnpm";
-    }
-    if (fs.existsSync(path.join(runtimeRoot, "package-lock.json"))) return "npm";
+    let directory = path.resolve(runtimeRoot);
+    while (true) {
+        if (
+            fs.existsSync(path.join(directory, "pnpm-lock.yaml")) ||
+            fs.existsSync(path.join(directory, "pnpm-workspace.yaml"))
+        ) {
+            return "pnpm";
+        }
+        if (fs.existsSync(path.join(directory, "package-lock.json"))) return "npm";
 
-    try {
-        const manifest = JSON.parse(
-            fs.readFileSync(path.join(runtimeRoot, "package.json"), "utf8"),
-        ) as { packageManager?: string };
-        if (manifest.packageManager?.startsWith("pnpm@")) return "pnpm";
-        if (manifest.packageManager?.startsWith("npm@")) return "npm";
-    } catch {
-        // 调用方会单独校验 package.json；这里只回退到启动环境和 npm。
+        try {
+            const manifest = JSON.parse(
+                fs.readFileSync(path.join(directory, "package.json"), "utf8"),
+            ) as { packageManager?: string };
+            if (manifest.packageManager?.startsWith("pnpm@")) return "pnpm";
+            if (manifest.packageManager?.startsWith("npm@")) return "npm";
+        } catch {
+            // 当前层没有可用清单时继续查找最近的项目根。
+        }
+
+        const parent = path.dirname(directory);
+        if (parent === directory) break;
+        directory = parent;
     }
 
     return process.env.npm_execpath?.includes("pnpm") ? "pnpm" : "npm";

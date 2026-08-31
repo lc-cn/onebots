@@ -89,6 +89,30 @@ describe("runtime package manager", () => {
         expect(detectRuntimePackageManager(root)).toBe("pnpm");
     });
 
+    it("从 workspace 成员目录直接启动时沿目录向上识别 pnpm", () => {
+        const root = fixture({ packageManager: "pnpm@9.15.9" });
+        fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages: ['apps/*']\n");
+        const member = path.join(root, "apps", "gateway");
+        fs.mkdirSync(member, { recursive: true });
+        fs.writeFileSync(
+            path.join(member, "package.json"),
+            `${JSON.stringify({ dependencies: { onebots: "workspace:*" } })}\n`,
+        );
+
+        const invocation = buildExtensionInstallInvocation(
+            member,
+            "@onebots/adapter-slack@3.0.8",
+            "darwin",
+            {},
+        );
+
+        expect(invocation).toEqual({
+            executable: "pnpm",
+            args: ["add", "--save-prod", "@onebots/adapter-slack@3.0.8"],
+            environment: {},
+        });
+    });
+
     it("转调 npm 时移除 pnpm 专用配置并保留凭据和标准 npm 配置", () => {
         const source = {
             NODE_AUTH_TOKEN: "secret",
