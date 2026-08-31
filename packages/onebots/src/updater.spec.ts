@@ -8,6 +8,7 @@ import {
     refreshServiceAfterUpdate,
     resolveUpdatePluginSelection,
     runUpdatedServicePreflight,
+    verifyUpdatedServiceOnline,
 } from "./updater.js";
 
 const temporaryDirectories: string[] = [];
@@ -40,6 +41,20 @@ function fakeController(running: boolean) {
         status: vi.fn(() => ({ running })),
         install: vi.fn(async (_spec: ServiceSpec) => undefined),
         restart: vi.fn(async () => undefined),
+    };
+}
+
+function refreshDependencies(
+    overrides: {
+        preflight?: () => void | Promise<void>;
+        confirmRestart?: () => Promise<boolean>;
+        verifyOnline?: (spec: ServiceSpec, expectedVersion: string) => Promise<void>;
+    } = {},
+) {
+    return {
+        preflight: overrides.preflight ?? vi.fn(async () => undefined),
+        confirmRestart: overrides.confirmRestart ?? vi.fn(async () => true),
+        verifyOnline: overrides.verifyOnline ?? vi.fn(async () => undefined),
     };
 }
 
@@ -101,11 +116,15 @@ describe("post-update service safety", () => {
         const confirmRestart = vi.fn(async () => true);
 
         await expect(
-            refreshServiceAfterUpdate(controller, spec, true, {
-                preflight: async () => {
-                    throw new Error("updated plugin failed");
-                },
-                confirmRestart,
+            refreshServiceAfterUpdate(controller, spec, {
+                expectedVersion: "1.3.0",
+                yes: true,
+                dependencies: refreshDependencies({
+                    preflight: async () => {
+                        throw new Error("updated plugin failed");
+                    },
+                    confirmRestart,
+                }),
             }),
         ).rejects.toThrow(/软件包已更新.*服务定义与当前运行实例保持不变.*updated plugin failed/);
         expect(controller.install).not.toHaveBeenCalled();
@@ -124,14 +143,111 @@ describe("post-update service safety", () => {
             order.push("restart");
         });
 
-        await refreshServiceAfterUpdate(controller, spec, true, {
-            preflight: async () => {
-                order.push("preflight");
-            },
-            confirmRestart: vi.fn(async () => false),
+        const result = await refreshServiceAfterUpdate(controller, spec, {
+            expectedVersion: "1.3.0",
+            yes: true,
+            dependencies: refreshDependencies({
+                preflight: async () => {
+                    order.push("preflight");
+                },
+                confirmRestart: vi.fn(async () => false),
+                verifyOnline: async (_spec, version) => {
+                    order.push(`verify:${version}`);
+                },
+            }),
         });
 
-        expect(order).toEqual(["preflight", "install", "restart"]);
+        expect(order).toEqual(["preflight", "install", "restart", "verify:1.3.0"]);
+        expect(result).toEqual({ wasRunning: true, restarted: true, onlineVerified: true });
+    });
+
+    it("keeps the old process explicit when restart is deferred", async () => {
+        const controller = fakeController(true);
+        const verifyOnline = vi.fn(async () => undefined);
+
+        const result = await refreshServiceAfterUpdate(controller, temporaryServiceSpec(), {
+            expectedVersion: "1.3.0",
+            dependencies: refreshDependencies({
+                confirmRestart: vi.fn(async () => false),
+                verifyOnline,
+            }),
+        });
+
+        expect(result).toEqual({ wasRunning: true, restarted: false, onlineVerified: false });
+        expect(controller.install).toHaveBeenCalledOnce();
+        expect(controller.restart).not.toHaveBeenCalled();
+        expect(verifyOnline).not.toHaveBeenCalled();
+    });
+
+    it("fails after restart when the target version cannot be proven online", async () => {
+        const controller = fakeController(true);
+
+        await expect(
+            refreshServiceAfterUpdate(controller, temporaryServiceSpec(), {
+                expectedVersion: "1.3.0",
+                yes: true,
+                dependencies: refreshDependencies({
+                    verifyOnline: async () => {
+                        throw new Error("still running 1.2.9");
+                    },
+                }),
+            }),
+        ).rejects.toThrow(/服务也已重启，但在线验证失败.*still running 1\.2\.9.*onebots status/);
+        expect(controller.restart).toHaveBeenCalledOnce();
+    });
+
+    it("waits through the old process and accepts the target version once ready", async () => {
+        const spec = temporaryServiceSpec();
+        fs.writeFileSync(spec.configPath, "port: 7788\npath: gateway\n", "utf8");
+        let healthAttempts = 0;
+        const fetcher = vi.fn<typeof fetch>(async input => {
+            if (String(input).endsWith("/ready")) {
+                return new Response(JSON.stringify({ ready: true }), { status: 200 });
+            }
+            healthAttempts += 1;
+            return new Response(
+                JSON.stringify({
+                    status: "ok",
+                    application: "onebots",
+                    version: healthAttempts === 1 ? "1.2.9" : "1.3.0",
+                }),
+                { status: 200 },
+            );
+        });
+        const sleep = vi.fn(async () => undefined);
+
+        await expect(
+            verifyUpdatedServiceOnline(spec, "1.3.0", {
+                fetcher,
+                attempts: 2,
+                intervalMs: 1,
+                sleep,
+            }),
+        ).resolves.toBeUndefined();
+        expect(sleep).toHaveBeenCalledOnce();
+        expect(fetcher).toHaveBeenCalledWith(
+            "http://127.0.0.1:7788/gateway/health",
+            expect.anything(),
+        );
+    });
+
+    it("preserves the final health and readiness evidence when verification times out", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(async input =>
+            String(input).endsWith("/health")
+                ? new Response(
+                      JSON.stringify({ status: "ok", application: "onebots", version: "1.2.9" }),
+                      { status: 200 },
+                  )
+                : new Response(JSON.stringify({ ready: false }), { status: 503 }),
+        );
+
+        await expect(
+            verifyUpdatedServiceOnline(spec, "1.3.0", {
+                fetcher,
+                attempts: 1,
+            }),
+        ).rejects.toThrow(/目标版本 1\.3\.0.*在线 OneBots 1\.2\.9.*ready: HTTP 503/);
     });
 
     it("launches the saved updated CLI in the service working directory", () => {

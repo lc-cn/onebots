@@ -13,6 +13,7 @@ import { writeCliOutput } from "./cli-output.js";
 import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import { detectRuntimePackageManager } from "./package-manager.js";
+import { probeDoctorEndpoint, resolveGatewayBaseUrl } from "./doctor.js";
 
 export interface UpdateOptions {
     adapters: string[];
@@ -119,15 +120,22 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
         });
     }
     if (spec) {
-        await refreshServiceAfterUpdate(
+        const result = await refreshServiceAfterUpdate(
             controller,
             {
                 ...spec,
                 nodePath: process.execPath,
                 binPath: path.resolve(process.argv[1]),
             },
-            options.yes,
+            {
+                expectedVersion: updates.find(item => item.name === "onebots")!.latest!,
+                yes: options.yes,
+            },
         );
+        if (result.wasRunning && !result.restarted) {
+            writeCliOutput("软件包已更新，但运行中的旧实例尚未重启；请执行 onebots restart");
+            return;
+        }
     }
     writeCliOutput("OneBots 及插件更新完成");
 }
@@ -141,18 +149,39 @@ interface UpdateServiceController {
 interface RefreshServiceDependencies {
     preflight(spec: ServiceSpec): void | Promise<void>;
     confirmRestart(): Promise<boolean>;
+    verifyOnline(spec: ServiceSpec, expectedVersion: string): Promise<void>;
+}
+
+interface RefreshServiceOptions {
+    expectedVersion: string;
+    yes?: boolean;
+    dependencies?: RefreshServiceDependencies;
+}
+
+export interface RefreshServiceResult {
+    wasRunning: boolean;
+    restarted: boolean;
+    onlineVerified: boolean;
+}
+
+interface OnlineVerificationDependencies {
+    fetcher?: typeof fetch;
+    attempts?: number;
+    intervalMs?: number;
+    sleep?: (milliseconds: number) => Promise<void>;
 }
 
 /** 软件包更新后先用新 CLI 子进程预检，再改写服务定义和选择性重启。 */
 export async function refreshServiceAfterUpdate(
     controller: UpdateServiceController,
     spec: ServiceSpec,
-    yes = false,
-    dependencies: RefreshServiceDependencies = {
+    options: RefreshServiceOptions,
+): Promise<RefreshServiceResult> {
+    const dependencies = options.dependencies ?? {
         preflight: runUpdatedServicePreflight,
         confirmRestart,
-    },
-): Promise<void> {
+        verifyOnline: verifyUpdatedServiceOnline,
+    };
     const wasRunning = controller.status().running;
     try {
         await dependencies.preflight(spec);
@@ -163,9 +192,50 @@ export async function refreshServiceAfterUpdate(
         );
     }
     await controller.install(spec);
-    if (wasRunning && (yes || (await dependencies.confirmRestart()))) {
-        await controller.restart();
+    if (!wasRunning) return { wasRunning, restarted: false, onlineVerified: false };
+    if (!options.yes && !(await dependencies.confirmRestart())) {
+        return { wasRunning, restarted: false, onlineVerified: false };
     }
+    await controller.restart();
+    try {
+        await dependencies.verifyOnline(spec, options.expectedVersion);
+    } catch (error) {
+        throw new Error(
+            `软件包与服务定义已更新，服务也已重启，但在线验证失败：${error instanceof Error ? error.message : String(error)}；请运行 onebots status 并检查服务日志`,
+            { cause: error instanceof Error ? error : undefined },
+        );
+    }
+    return { wasRunning, restarted: true, onlineVerified: true };
+}
+
+/** 等待服务切换到目标 OneBots 版本，并确认其运行状态至少可继续首次配置。 */
+export async function verifyUpdatedServiceOnline(
+    spec: ServiceSpec,
+    expectedVersion: string,
+    dependencies: OnlineVerificationDependencies = {},
+): Promise<void> {
+    const fetcher = dependencies.fetcher ?? fetch;
+    const attempts = dependencies.attempts ?? 10;
+    const intervalMs = dependencies.intervalMs ?? 500;
+    const sleep =
+        dependencies.sleep ??
+        ((milliseconds: number) =>
+            new Promise(resolve => {
+                setTimeout(resolve, milliseconds);
+            }));
+    const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
+    const base = resolveGatewayBaseUrl(config);
+    let lastEvidence = "服务尚未响应";
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+        const checks = await Promise.all([
+            probeDoctorEndpoint(base, "health", fetcher, expectedVersion),
+            probeDoctorEndpoint(base, "ready", fetcher),
+        ]);
+        if (checks[0].level === "ok" && checks[1].level !== "error") return;
+        lastEvidence = checks.map(check => check.message).join("；");
+        if (attempt < attempts - 1) await sleep(intervalMs);
+    }
+    throw new Error(`目标版本 ${expectedVersion} 未在重试窗口内就绪（${lastEvidence}）`);
 }
 
 /** 使用更新后的 Node/CLI 路径，在服务实际工作目录中运行隔离预检。 */

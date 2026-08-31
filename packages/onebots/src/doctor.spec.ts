@@ -181,9 +181,14 @@ describe("doctor health probes", () => {
     it("warns when the online process version differs from the current CLI", async () => {
         const fetcher = vi.fn(
             async () =>
-                new Response(JSON.stringify({ status: "ok", version: "1.2.7" }), {
-                    status: 200,
-                }),
+                new Response(
+                    JSON.stringify({
+                        status: "ok",
+                        application: "onebots",
+                        version: "1.2.7",
+                    }),
+                    { status: 200 },
+                ),
         );
 
         await expect(
@@ -207,6 +212,44 @@ describe("doctor health probes", () => {
             name: "health",
             level: "warning",
             message: "health: HTTP 200；状态 ok；响应未声明运行版本（当前 CLI 1.2.8）",
+        });
+    });
+
+    it("warns when a health response cannot prove the running application identity", async () => {
+        const fetcher = vi.fn<typeof fetch>(
+            async () =>
+                new Response(JSON.stringify({ status: "ok", version: "1.2.8" }), { status: 200 }),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "health", fetcher, "1.2.8"),
+        ).resolves.toEqual({
+            name: "health",
+            level: "warning",
+            message: "health: HTTP 200；状态 ok；onebots@1.2.8；响应未声明运行应用身份",
+        });
+    });
+
+    it("rejects a same-version process that is not the OneBots application", async () => {
+        const fetcher = vi.fn<typeof fetch>(
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        status: "ok",
+                        application: "embedded-gateway",
+                        version: "1.2.8",
+                    }),
+                    { status: 200 },
+                ),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "health", fetcher, "1.2.8"),
+        ).resolves.toEqual({
+            name: "health",
+            level: "warning",
+            message:
+                "health: HTTP 200；状态 ok；embedded-gateway@1.2.8；在线应用 embedded-gateway 不是 onebots",
         });
     });
 

@@ -549,6 +549,12 @@ function validateHealthVersion(body: string, expectedVersion: string): string | 
     const payload = JSON.parse(body) as Record<string, unknown>;
     const runningVersion = typeof payload.version === "string" ? payload.version.trim() : "";
     if (!runningVersion) return `响应未声明运行版本（当前 CLI ${expectedVersion}）`;
+    const runningApplication =
+        typeof payload.application === "string" ? payload.application.trim() : "";
+    if (!runningApplication) return "响应未声明运行应用身份";
+    if (runningApplication !== packageMetadata.name) {
+        return `在线应用 ${runningApplication} 不是 ${packageMetadata.name}`;
+    }
     if (runningVersion !== expectedVersion) {
         return `在线 OneBots ${runningVersion} 与当前 CLI ${expectedVersion} 不一致；请重启或核对运行入口`;
     }
