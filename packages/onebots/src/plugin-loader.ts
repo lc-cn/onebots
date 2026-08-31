@@ -40,6 +40,7 @@ export interface LoadedPluginInfo {
 
 let pluginRegistrationTail = Promise.resolve();
 const loadedPlugins = new Map<string, LoadedPluginInfo>();
+const rejectedPluginImportAttempts = new Map<string, number>();
 
 /** 返回当前进程已通过注册契约校验的扩展，顺序不受 CLI 参数顺序影响。 */
 export function getLoadedPlugins(): LoadedPluginInfo[] {
@@ -55,6 +56,7 @@ export function getLoadedPlugins(): LoadedPluginInfo[] {
 /** @internal 仅供隔离测试进程级插件状态。 */
 export function clearLoadedPlugins(): void {
     loadedPlugins.clear();
+    rejectedPluginImportAttempts.clear();
 }
 
 /** 所有 CLI 路径共享同一组插件包名候选，避免运行、doctor 与服务预检规则漂移。 */
@@ -165,11 +167,12 @@ async function tryLoadPluginUnlocked(
     const registryState = captureExtensionRegistryState();
     try {
         await runWithExtensionRegistrationScope(
-            () => import(pathToFileURL(inspection.entryPath).href),
+            () => import(pluginImportUrl(inspection.entryPath)),
         );
         return { loaded: true, inspection };
     } catch (error) {
         restoreExtensionRegistryState(registryState);
+        markPluginImportRejected(inspection.entryPath);
         return {
             loaded: false,
             inspection,
@@ -212,12 +215,31 @@ export async function tryLoadRegisteredPlugin(
             return result;
         }
         restoreExtensionRegistryState(registryState);
+        markPluginImportRejected(result.inspection.entryPath);
         return {
             loaded: false,
             inspection: result.inspection,
             message: `加载${kind} ${name} 失败：${result.inspection.candidate} 已初始化，但${contractError}`,
         };
     });
+}
+
+/**
+ * Node 会缓存已经成功求值的 ESM。若宿主随后因注册契约拒绝该事务，下一次加载必须使用
+ * 新的模块标识才能重新执行入口；通过验收后则继续复用同一标识，保留重复加载的幂等性。
+ */
+function pluginImportUrl(entryPath: string): string {
+    const resolvedEntry = realPath(entryPath);
+    const attempt = rejectedPluginImportAttempts.get(resolvedEntry) ?? 0;
+    const url = pathToFileURL(entryPath);
+    if (attempt > 0) url.searchParams.set("onebots_retry", String(attempt));
+    return url.href;
+}
+
+function markPluginImportRejected(entryPath: string): void {
+    const resolvedEntry = realPath(entryPath);
+    const attempt = rejectedPluginImportAttempts.get(resolvedEntry) ?? 0;
+    rejectedPluginImportAttempts.set(resolvedEntry, attempt + 1);
 }
 
 /** 注册表是进程级共享状态；串行化导入，避免一个失败事务回滚另一个并发插件。 */

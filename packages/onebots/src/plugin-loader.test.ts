@@ -451,6 +451,59 @@ throw new Error("初始化失败");
         }
     });
 
+    it("re-executes an ESM entry after a rejected registration contract", async () => {
+        const directory = createImportOnlyPlugin(
+            "retryable-adapter",
+            "globalThis.__onebotsRegisterRetryableAdapter();\n",
+        );
+        let registrations = 0;
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterRetryableAdapter?: () => void;
+        };
+        globals.__onebotsRegisterRetryableAdapter = () => {
+            registrations += 1;
+            AdapterRegistry.register("retryable", (() => undefined) as never);
+            if (registrations > 1) AdapterRegistry.registerSchema("retryable", {});
+        };
+        const runtimeRequire = createRequire(path.join(directory, "package.json"));
+
+        try {
+            await expect(
+                tryLoadRegisteredPlugin(
+                    "adapter",
+                    "retryable",
+                    ["retryable-adapter"],
+                    runtimeRequire,
+                ),
+            ).resolves.toMatchObject({
+                loaded: false,
+                message: expect.stringContaining("没有注册适配器配置 Schema retryable"),
+            });
+            await expect(
+                tryLoadRegisteredPlugin(
+                    "adapter",
+                    "retryable",
+                    ["retryable-adapter"],
+                    runtimeRequire,
+                ),
+            ).resolves.toMatchObject({ loaded: true });
+            await expect(
+                tryLoadRegisteredPlugin(
+                    "adapter",
+                    "retryable",
+                    ["retryable-adapter"],
+                    runtimeRequire,
+                ),
+            ).resolves.toMatchObject({ loaded: true });
+
+            expect(registrations).toBe(2);
+            expect(AdapterRegistry.has("retryable")).toBe(true);
+            expect(AdapterRegistry.getSchema("retryable")).toBeDefined();
+        } finally {
+            delete globals.__onebotsRegisterRetryableAdapter;
+        }
+    });
+
     it("rolls back an adapter plugin that registers identities outside its CLI promise", async () => {
         const directory = createImportOnlyPlugin(
             "overreaching-adapter",
