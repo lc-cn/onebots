@@ -101,6 +101,7 @@ export function getExtensionInstallationAction(
         ExtensionInfo,
         | "catalogError"
         | "runtimeError"
+        | "packageManagerError"
         | "runtimeConfigError"
         | "enabled"
         | "installed"
@@ -116,6 +117,9 @@ export function getExtensionInstallationAction(
     }
     if (extension.runtimeError) {
         return { visible: true, available: false, label: "运行目录不可用" };
+    }
+    if (extension.packageManagerError) {
+        return { visible: true, available: false, label: "包管理器不可用" };
     }
     if (extension.runtimeConfigError) {
         return { visible: true, available: false, label: "启动配置不可用" };

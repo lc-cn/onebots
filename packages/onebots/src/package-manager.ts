@@ -13,13 +13,23 @@ export interface PackageUpdateInvocation extends PackageInstallInvocation {
     cwd: string;
 }
 
+export interface RuntimePackageManagerInspection {
+    manager: SupportedPackageManager;
+    executable: string;
+    resolvedPath: string | null;
+    error: string | null;
+}
+
 /**
  * 根据运行目录及其最近项目根的清单和锁文件选择包管理器。
  *
  * pnpm workspace 成员通常没有自己的锁文件或 packageManager；即使由 `node` 直接启动，
  * 也必须沿目录向上识别 workspace，避免把含 workspace:/catalog: 的项目交给 npm。
  */
-export function detectRuntimePackageManager(runtimeRoot: string): SupportedPackageManager {
+export function detectRuntimePackageManager(
+    runtimeRoot: string,
+    environment: NodeJS.ProcessEnv = process.env,
+): SupportedPackageManager {
     let directory = path.resolve(runtimeRoot);
     while (true) {
         if (
@@ -45,7 +55,56 @@ export function detectRuntimePackageManager(runtimeRoot: string): SupportedPacka
         directory = parent;
     }
 
-    return process.env.npm_execpath?.includes("pnpm") ? "pnpm" : "npm";
+    return environment.npm_execpath?.includes("pnpm") ? "pnpm" : "npm";
+}
+
+/** 验证运行目录选出的包管理器能由当前进程实际启动。 */
+export function inspectRuntimePackageManager(
+    runtimeRoot: string,
+    environment: NodeJS.ProcessEnv = process.env,
+    platform: NodeJS.Platform = process.platform,
+    access: (target: string, mode: number) => void = fs.accessSync,
+): RuntimePackageManagerInspection {
+    const manager = detectRuntimePackageManager(runtimeRoot, environment);
+    const executable = platform === "win32" ? `${manager}.cmd` : manager;
+    const searchPath = getEnvironmentPath(environment, platform);
+    const mode = platform === "win32" ? fs.constants.F_OK : fs.constants.X_OK;
+
+    const delimiter = platform === "win32" ? ";" : ":";
+    for (const entry of searchPath.split(delimiter)) {
+        const directory = unquotePathEntry(entry) || ".";
+        const candidate = path.resolve(runtimeRoot, directory, executable);
+        try {
+            access(candidate, mode);
+            return { manager, executable, resolvedPath: candidate, error: null };
+        } catch {
+            // 与 execFile 相同，继续搜索 PATH 中的下一个入口。
+        }
+    }
+
+    const remedy =
+        manager === "pnpm"
+            ? "请安装 pnpm 或通过 corepack 激活后重启 OneBots。"
+            : "请安装包含 npm 的 Node.js 发行版后重启 OneBots。";
+    return {
+        manager,
+        executable,
+        resolvedPath: null,
+        error: `扩展运行目录需要 ${manager}，但当前进程的 PATH 中找不到可执行入口。${remedy}`,
+    };
+}
+
+function getEnvironmentPath(environment: NodeJS.ProcessEnv, platform: NodeJS.Platform): string {
+    const pathEntry = Object.entries(environment).find(
+        ([key]) => key.toLowerCase() === "path",
+    )?.[1];
+    if (pathEntry !== undefined) return pathEntry;
+    return platform === "win32" ? "" : "/usr/bin:/bin";
+}
+
+function unquotePathEntry(entry: string): string {
+    const trimmed = entry.trim();
+    return trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1) : trimmed;
 }
 
 const PNPM_ONLY_NPM_CONFIGS = new Set([
@@ -93,7 +152,7 @@ export function buildExtensionInstallInvocation(
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
 ): PackageInstallInvocation {
-    const manager = detectRuntimePackageManager(runtimeRoot);
+    const manager = detectRuntimePackageManager(runtimeRoot, environment);
     return buildPackageManagerInvocation(
         manager,
         manager === "pnpm"
@@ -119,7 +178,7 @@ export function buildExtensionRestoreInvocation(
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
 ): PackageInstallInvocation {
-    const manager = detectRuntimePackageManager(runtimeRoot);
+    const manager = detectRuntimePackageManager(runtimeRoot, environment);
     const workspaceRoot =
         manager === "pnpm" && fs.existsSync(path.join(runtimeRoot, "pnpm-workspace.yaml"))
             ? ["--workspace-root"]
@@ -142,7 +201,7 @@ export function buildPackageUpdateInvocation(
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
 ): PackageUpdateInvocation {
-    const manager = detectRuntimePackageManager(runtimeRoot);
+    const manager = detectRuntimePackageManager(runtimeRoot, environment);
     const invocation = buildPackageManagerInvocation(
         manager,
         manager === "pnpm"
@@ -168,7 +227,7 @@ export function buildPackageRemovalInvocation(
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
 ): PackageUpdateInvocation {
-    const manager = detectRuntimePackageManager(runtimeRoot);
+    const manager = detectRuntimePackageManager(runtimeRoot, environment);
     const invocation = buildPackageManagerInvocation(
         manager,
         manager === "pnpm"

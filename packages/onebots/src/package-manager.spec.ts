@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     buildExtensionInstallInvocation,
     buildExtensionRestoreInvocation,
@@ -9,6 +9,7 @@ import {
     buildPackageRemovalInvocation,
     buildPackageUpdateInvocation,
     detectRuntimePackageManager,
+    inspectRuntimePackageManager,
     sanitizeNpmEnvironment,
 } from "./package-manager.js";
 
@@ -28,6 +29,54 @@ function fixture(manifest: object = { private: true }): string {
 }
 
 describe("runtime package manager", () => {
+    it("证明运行目录选出的包管理器在 PATH 中具有可执行入口", () => {
+        const root = fixture({ packageManager: "pnpm@9.15.9" });
+        const access = vi.fn((target: string) => {
+            if (target !== path.join(root, "tools", "pnpm")) throw new Error("ENOENT");
+        });
+
+        expect(
+            inspectRuntimePackageManager(root, { PATH: "missing:tools" }, "linux", access),
+        ).toEqual({
+            manager: "pnpm",
+            executable: "pnpm",
+            resolvedPath: path.join(root, "tools", "pnpm"),
+            error: null,
+        });
+        expect(access).toHaveBeenLastCalledWith(
+            path.join(root, "tools", "pnpm"),
+            fs.constants.X_OK,
+        );
+    });
+
+    it("缺少所选包管理器时返回可操作诊断", () => {
+        const root = fixture({ packageManager: "pnpm@9.15.9" });
+
+        expect(
+            inspectRuntimePackageManager(root, { PATH: "missing" }, "linux", () => {
+                throw new Error("ENOENT");
+            }),
+        ).toEqual({
+            manager: "pnpm",
+            executable: "pnpm",
+            resolvedPath: null,
+            error: "扩展运行目录需要 pnpm，但当前进程的 PATH 中找不到可执行入口。请安装 pnpm 或通过 corepack 激活后重启 OneBots。",
+        });
+    });
+
+    it("Windows 使用大小写不敏感的 Path 和 cmd 入口", () => {
+        const root = fixture({ packageManager: "npm@11.17.0" });
+
+        expect(
+            inspectRuntimePackageManager(root, { Path: '"C:/Node"' }, "win32", () => undefined),
+        ).toMatchObject({
+            manager: "npm",
+            executable: "npm.cmd",
+            resolvedPath: path.resolve(root, "C:/Node", "npm.cmd"),
+            error: null,
+        });
+    });
+
     it("在 OneBots pnpm workspace 中安装扩展时不调用会解析 catalog: 的 npm", () => {
         const invocation = buildExtensionInstallInvocation(
             process.cwd(),

@@ -32,6 +32,7 @@ describe("extension install completion", () => {
 const base = {
     catalogError: null,
     runtimeError: null,
+    packageManagerError: null,
     runtimeConfigError: null,
     enabled: false,
     installed: false,
@@ -65,6 +66,15 @@ describe("extension installation action", () => {
                 runtimeError: "扩展运行目录未声明 onebots 依赖",
             }),
         ).toEqual({ visible: true, available: false, label: "运行目录不可用" });
+    });
+
+    it("单独标记缺少包管理器且不混淆运行目录身份错误", () => {
+        expect(
+            getExtensionInstallationAction({
+                ...base,
+                packageManagerError: "当前进程的 PATH 中找不到 pnpm",
+            }),
+        ).toEqual({ visible: true, available: false, label: "包管理器不可用" });
     });
 
     it("keeps capability browsing but blocks installation when startup config is unreadable", () => {

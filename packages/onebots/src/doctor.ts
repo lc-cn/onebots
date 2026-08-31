@@ -13,6 +13,7 @@ import { writeCliOutput } from "./cli-output.js";
 import { probeDoctorManagement } from "./doctor-management.js";
 import { inspectExtensionCatalog } from "./doctor-extension-catalog.js";
 import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
+import { inspectRuntimePackageManager } from "./package-manager.js";
 import {
     inspectNodeRuntime,
     MINIMUM_NODE_MAJOR,
@@ -179,6 +180,18 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         message:
             extensionRuntime.error ??
             `扩展运行目录已验证: ${extensionRuntime.root}（onebots@${extensionRuntime.version}）`,
+    });
+    const packageManager = extensionRuntime.error
+        ? null
+        : inspectRuntimePackageManager(extensionRoot);
+    checks.push({
+        name: "package-manager",
+        level: packageManager?.error || extensionRuntime.error ? "error" : "ok",
+        message:
+            packageManager?.error ??
+            (packageManager
+                ? `扩展包管理器可用: ${packageManager.manager}（${packageManager.resolvedPath}）`
+                : "扩展运行目录未通过验证，无法确定安全的包管理器"),
     });
     const runtimeRequire = createRequire(path.join(selection.workingDirectory, "package.json"));
     let pluginsReady = true;

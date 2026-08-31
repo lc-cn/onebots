@@ -17,6 +17,7 @@ const temporaryDirectories: string[] = [];
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -628,6 +629,43 @@ describe("doctor persisted plugin selection", () => {
         expect(report.checks.find(check => check.name === "extension-root")).toMatchObject({
             level: "error",
             message: expect.stringContaining("扩展运行目录未声明 onebots 依赖"),
+        });
+        expect(report.checks.find(check => check.name === "package-manager")).toMatchObject({
+            level: "error",
+            message: "扩展运行目录未通过验证，无法确定安全的包管理器",
+        });
+    });
+
+    it("将缺失的扩展包管理器作为部署失败证据", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-manager-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+        const extensionRoot = createExtensionRuntimeRoot();
+        fs.writeFileSync(
+            path.join(extensionRoot, "package.json"),
+            JSON.stringify({
+                private: true,
+                packageManager: "pnpm@9.15.9",
+                dependencies: { onebots: packageMetadata.version },
+            }),
+        );
+        vi.stubEnv("PATH", "");
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            useInstalledService: false,
+            extensionRoot,
+        });
+
+        expect(report.ok).toBe(false);
+        expect(report.checks.find(check => check.name === "package-manager")).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("PATH 中找不到可执行入口"),
         });
     });
 

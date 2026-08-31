@@ -138,6 +138,8 @@ export interface ExtensionInfo {
     catalogError: string | null;
     /** 当前运行目录不能安全安装扩展时提供可操作原因；旧版服务端可能不返回。 */
     runtimeError?: string | null;
+    /** 需要修改依赖但当前进程找不到所选包管理器时提供原因。 */
+    packageManagerError?: string | null;
     /** 启动配置无法安全读取时提供脱敏原因；能力目录仍可浏览。 */
     runtimeConfigError?: string | null;
     targetVersion: string | null;

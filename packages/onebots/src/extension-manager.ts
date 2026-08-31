@@ -21,6 +21,7 @@ import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 import {
     buildExtensionInstallInvocation,
     buildExtensionRestoreInvocation,
+    inspectRuntimePackageManager,
 } from "./package-manager.js";
 import { validateExtensionConfigurationTarget } from "./extension-configuration-target.js";
 import { validateExtensionCatalogIntegrity } from "./extension-catalog-integrity.js";
@@ -168,7 +169,10 @@ export class ExtensionManager {
         const catalogError = catalogIssues.length
             ? `扩展目录完整性校验失败：${catalogIssues.join("；")}`
             : null;
-        const runtimeError = inspectExtensionRuntimeRoot(this.runtimeRoot).error;
+        const runtimeRootError = inspectExtensionRuntimeRoot(this.runtimeRoot).error;
+        const packageManagerError = runtimeRootError
+            ? null
+            : inspectRuntimePackageManager(this.runtimeRoot).error;
         const adapterCapabilities = new Map(
             buildAdapterCapabilityReport(loadedPlugins).adapters.map(adapter => [
                 adapter.name,
@@ -185,6 +189,8 @@ export class ExtensionManager {
             const packageCatalog = getExtensionPackageCatalogEntry(entry.packageName);
             const installedPackage = this.inspectInstalledPackage(entry.packageName);
             const installedVersion = installedPackage.version;
+            const versionAligned =
+                packageCatalog !== undefined && installedVersion === packageCatalog.packageVersion;
             const loaded = loadedPlugins.some(
                 plugin => plugin.type === entry.type && plugin.name === entry.name,
             );
@@ -203,15 +209,14 @@ export class ExtensionManager {
             return {
                 ...entry,
                 catalogError,
-                runtimeError,
+                runtimeError: runtimeRootError,
+                packageManagerError: versionAligned ? null : packageManagerError,
                 runtimeConfigError,
                 configurationError: validateExtensionConfigurationTarget(entry),
                 targetVersion: packageCatalog?.packageVersion ?? null,
                 installedVersion,
                 installedError: installedPackage.error,
-                versionAligned:
-                    packageCatalog !== undefined &&
-                    installedVersion === packageCatalog.packageVersion,
+                versionAligned,
                 installed: installedVersion !== null,
                 enabled: (entry.type === "adapter"
                     ? selection.adapters
@@ -262,10 +267,11 @@ export class ExtensionManager {
         }
         this.assertCatalogIntegrity();
         this.assertRuntimeRoot();
-        const preparedConfig = this.prepareConfig(entry.type, entry.name);
         const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
         const previousVersion = this.inspectInstalledPackage(entry.packageName).version;
         const packageNeedsInstall = previousVersion !== packageCatalog.packageVersion;
+        if (packageNeedsInstall) this.assertPackageManager();
+        const preparedConfig = this.prepareConfig(entry.type, entry.name);
         let startInstallation: (() => void) | undefined;
         const startGate = new Promise<void>(resolve => {
             startInstallation = resolve;
@@ -472,6 +478,11 @@ export class ExtensionManager {
 
     private assertRuntimeRoot(): void {
         const error = inspectExtensionRuntimeRoot(this.runtimeRoot).error;
+        if (error) throw new Error(error);
+    }
+
+    private assertPackageManager(): void {
+        const error = inspectRuntimePackageManager(this.runtimeRoot).error;
         if (error) throw new Error(error);
     }
 }

@@ -36,6 +36,7 @@ describe("formatExtensionInstallationError", () => {
 
 afterEach(() => {
     AdapterRegistry.clear();
+    vi.unstubAllEnvs();
     for (const directory of directories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -85,6 +86,55 @@ function removeFixturePackage(packageName: string, runtimeRoot: string): void {
 }
 
 describe("ExtensionManager", () => {
+    it("只在扩展确实需要修改依赖时要求包管理器可执行", async () => {
+        const { root, configPath } = fixture();
+        fs.writeFileSync(
+            path.join(root, "package.json"),
+            `${JSON.stringify({
+                private: true,
+                packageManager: "pnpm@9.15.9",
+                dependencies: { onebots: packageMetadata.version },
+            })}\n`,
+        );
+        vi.stubEnv("PATH", "");
+        const originalConfig = fs.readFileSync(configPath, "utf8");
+        const install = vi.fn();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight: successfulPreflight,
+        });
+
+        expect(
+            manager.list([]).find(item => item.id === "adapter:slack")?.packageManagerError,
+        ).toContain("PATH 中找不到可执行入口");
+        await expect(manager.install("adapter:slack")).rejects.toThrow("PATH 中找不到可执行入口");
+        expect(install).not.toHaveBeenCalled();
+        expect(fs.readFileSync(configPath, "utf8")).toBe(originalConfig);
+
+        installFixturePackage(
+            "@onebots/adapter-slack",
+            catalogVersion("@onebots/adapter-slack"),
+            root,
+        );
+        const installedManager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight: successfulPreflight,
+        });
+
+        expect(
+            installedManager.list([]).find(item => item.id === "adapter:slack")
+                ?.packageManagerError,
+        ).toBeNull();
+        await expect(installedManager.install("adapter:slack")).resolves.toEqual({
+            restartRequired: true,
+        });
+        expect(install).not.toHaveBeenCalled();
+    });
+
     it("向已加载适配器发布注册表中的权威能力清单", () => {
         const { root, configPath } = fixture();
         const capabilities = defineAdapterCapabilities({
