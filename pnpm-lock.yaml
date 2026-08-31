@@ -171,6 +171,25 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  adapters/adapter-facebook-messenger:
+    dependencies:
+      '@onebots/meta':
+        specifier: workspace:*
+        version: link:../../packages/meta
+      onebots:
+        specifier: workspace:*
+        version: link:../../packages/onebots
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.12.0
+      tsc-alias:
+        specifier: latest
+        version: 1.9.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   adapters/adapter-feishu:
     dependencies:
       '@larksuiteoapi/node-sdk':
@@ -713,6 +732,22 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
+      tsc-alias:
+        specifier: latest
+        version: 1.9.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/meta:
+    dependencies:
+      '@onebots/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.12.0
       tsc-alias:
         specifier: latest
         version: 1.9.2

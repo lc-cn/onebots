@@ -3,12 +3,12 @@
  *
  * 字符串条目表示协议 API 与 Adapter 能力同名；二元组用于名称不同的投影；
  * null 表示协议层自身即可完成，不依赖平台能力；anyOf 表示任一能力可实现该 API，
- * allOf 表示完整实现该 API 需要全部能力。
+ * allOf 表示完整实现该 API 需要全部能力；action + scene 用于区分协议中拆分的私聊/群聊 API。
  */
 
 const oneBotV11 = [
-    ["send_private_msg", "send_message"],
-    ["send_group_msg", "send_message"],
+    ["send_private_msg", { action: "send_message", scene: "direct" }],
+    ["send_group_msg", { action: "send_message", scene: "group" }],
     ["send_msg", "send_message"],
     ["delete_msg", "delete_message"],
     ["get_msg", "get_message"],
@@ -109,10 +109,10 @@ const satoriV1 = [
 ];
 
 const milkyV1 = [
-    ["send_private_message", "send_message"],
-    ["send_group_message", "send_message"],
-    ["recall_private_message", "delete_message"],
-    ["recall_group_message", "delete_message"],
+    ["send_private_message", { action: "send_message", scene: "direct" }],
+    ["send_group_message", { action: "send_message", scene: "group" }],
+    ["recall_private_message", { action: "delete_message", scene: "direct" }],
+    ["recall_group_message", { action: "delete_message", scene: "group" }],
     "get_message",
     ["get_history_messages", "get_message_history"],
     "get_resource_temp_url",
@@ -151,10 +151,10 @@ const milkyV1 = [
     ["reject_group_invitation", "handle_group_request"],
     ["accept_friend_request", "handle_friend_request"],
     ["reject_friend_request", "handle_friend_request"],
-    ["upload_private_file", "upload_file"],
-    ["upload_group_file", "upload_file"],
-    ["get_private_file_download_url", "get_file_download_url"],
-    ["get_group_file_download_url", "get_file_download_url"],
+    ["upload_private_file", { action: "upload_file", scene: "direct" }],
+    ["upload_group_file", { action: "upload_file", scene: "group" }],
+    ["get_private_file_download_url", { action: "get_file_download_url", scene: "direct" }],
+    ["get_group_file_download_url", { action: "get_file_download_url", scene: "group" }],
     "get_group_files",
     "move_group_file",
     "rename_group_file",
@@ -194,3 +194,30 @@ export const PROTOCOL_API_CAPABILITY_MAP = [
     { key: "satori-v1", title: "Satori v1", apis: normalize(satoriV1) },
     { key: "milky-v1", title: "Milky v1", apis: normalize(milkyV1) },
 ];
+
+export function resolveCapabilityStatus(manifest, requirement) {
+    if (requirement === null) return "builtin";
+    if (typeof requirement === "string") return descriptorStatus(manifest, requirement);
+    if (requirement.action) {
+        return descriptorStatus(manifest, requirement.action, requirement.scene);
+    }
+    const actions = requirement.anyOf ?? requirement.allOf;
+    const statuses = actions.map(action => descriptorStatus(manifest, action));
+    if (requirement.allOf) {
+        if (statuses.includes("unsupported")) return "unsupported";
+        if (statuses.includes("emulated")) return "emulated";
+        return "native";
+    }
+    if (statuses.includes("native")) return "native";
+    if (statuses.includes("emulated")) return "emulated";
+    return "unsupported";
+}
+
+function descriptorStatus(manifest, action, scene) {
+    const descriptor = manifest.actions[action];
+    if (!descriptor || descriptor.support === "unsupported") return "unsupported";
+    if (scene && descriptor.scenes?.length && !descriptor.scenes.includes(scene)) {
+        return "unsupported";
+    }
+    return descriptor.support;
+}

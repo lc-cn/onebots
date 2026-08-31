@@ -67,6 +67,34 @@ const genericSetup: ExtensionSetupStep[] = [
 
 export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
     adapter(
+        "facebook-messenger",
+        "Facebook Messenger",
+        "连接 Messenger Platform、Graph API、Webhook 与已有事件入口。",
+        [
+            {
+                title: "创建 Meta App 与 Page 身份",
+                description:
+                    "为目标 Facebook Page 启用 Messenger，准备 Page ID、Page Access Token、App Secret 与自定义 Verify Token。",
+                url: "https://www.postman.com/meta/messenger-platform-api/overview",
+            },
+            {
+                title: "配置 Webhook 或已有入口",
+                description:
+                    "Webhook 使用公开 HTTPS callback 并保留精确 raw body；已有 Host、队列或 consumer 选择 manual。",
+            },
+            {
+                title: "选择订阅字段和事件",
+                description:
+                    "安装并重启后，Web 表单可动态增减 webhook fields、canonical 事件和已授权 permissions。",
+            },
+            {
+                title: "授权并核对账号能力",
+                description:
+                    "按实际动作授予 Page permissions；Utility Messaging 另需 page_utility_messaging，并受地区和模板规则约束。",
+            },
+        ],
+    ),
+    adapter(
         "google-chat",
         "Google Chat",
         "连接 Google Chat REST v1、Interaction HTTPS 与 Workspace Events。",

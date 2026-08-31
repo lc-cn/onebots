@@ -10,6 +10,9 @@
     "@onebots/adapter-email": {
       "version": "3.0.8"
     },
+    "@onebots/adapter-facebook-messenger": {
+      "version": "0.1.0"
+    },
     "@onebots/adapter-feishu": {
       "version": "3.0.8"
     },
@@ -1202,6 +1205,351 @@
             "support": "native",
             "mode": "native",
             "note": "通过 EmailClient.ingest() 投递外部已解析邮件"
+          }
+        }
+      }
+    },
+    "facebook-messenger": {
+      "packageName": "@onebots/adapter-facebook-messenger",
+      "packageVersion": "0.1.0",
+      "manifest": {
+        "version": 1,
+        "actions": {
+          "send_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG",
+            "scenes": [
+              "direct"
+            ]
+          },
+          "get_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging",
+              "pages_manage_metadata",
+              "pages_read_engagement"
+            ],
+            "scenes": [
+              "direct"
+            ]
+          },
+          "get_message_history": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging",
+              "pages_manage_metadata",
+              "pages_read_engagement"
+            ],
+            "scenes": [
+              "direct"
+            ]
+          },
+          "mark_message_as_read": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG",
+            "scenes": [
+              "direct"
+            ]
+          },
+          "get_login_info": {
+            "support": "native"
+          },
+          "get_user_info": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "upload_file": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG",
+            "scenes": [
+              "direct"
+            ]
+          },
+          "can_send_image": {
+            "support": "native"
+          },
+          "can_send_record": {
+            "support": "native"
+          },
+          "get_version": {
+            "support": "native"
+          },
+          "get_status": {
+            "support": "native"
+          },
+          "get_supported_actions": {
+            "support": "native"
+          },
+          "call_facebook_messenger_api": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Graph edge 要求的 Page permission"
+            ]
+          },
+          "send_facebook_messenger_native": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "send_facebook_messenger_sender_action": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "list_facebook_messenger_conversations": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging",
+              "pages_manage_metadata",
+              "pages_read_engagement"
+            ]
+          },
+          "find_facebook_messenger_conversation": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging",
+              "pages_manage_metadata",
+              "pages_read_engagement"
+            ]
+          },
+          "get_facebook_messenger_conversation": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging",
+              "pages_manage_metadata",
+              "pages_read_engagement"
+            ]
+          },
+          "get_facebook_messenger_profile": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "set_facebook_messenger_profile": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "delete_facebook_messenger_profile": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "upload_facebook_messenger_attachment": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "subscribe_facebook_messenger_page": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_manage_metadata"
+            ]
+          },
+          "get_facebook_messenger_subscribed_apps": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_manage_metadata"
+            ]
+          },
+          "moderate_facebook_messenger_conversation": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "pass_facebook_messenger_thread_control": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "take_facebook_messenger_thread_control": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "request_facebook_messenger_thread_control": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "get_facebook_messenger_secondary_receivers": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "pages_messaging"
+            ],
+            "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG"
+          },
+          "search_facebook_messenger_template_library": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "page_utility_messaging"
+            ]
+          },
+          "list_facebook_messenger_utility_templates": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "page_utility_messaging"
+            ]
+          },
+          "create_facebook_messenger_utility_template": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "page_utility_messaging"
+            ]
+          },
+          "send_facebook_messenger_utility_template": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "page_utility_messaging"
+            ]
+          }
+        },
+        "events": {
+          "message": {
+            "support": "native",
+            "scenes": [
+              "direct"
+            ]
+          },
+          "message_updated": {
+            "support": "native"
+          },
+          "message_status": {
+            "support": "native"
+          },
+          "reaction_added": {
+            "support": "native"
+          },
+          "reaction_removed": {
+            "support": "native"
+          },
+          "interaction": {
+            "support": "native"
+          },
+          "custom": {
+            "support": "native",
+            "note": "referral、opt-in、handover、policy、feedback、standby 与 Page change 完整保留"
+          }
+        },
+        "segments": {
+          "text": {
+            "support": "native",
+            "direction": "both"
+          },
+          "reply": {
+            "support": "native",
+            "direction": "both"
+          },
+          "image": {
+            "support": "native",
+            "direction": "both"
+          },
+          "video": {
+            "support": "native",
+            "direction": "both"
+          },
+          "audio": {
+            "support": "native",
+            "direction": "both"
+          },
+          "file": {
+            "support": "native",
+            "direction": "both"
+          },
+          "location": {
+            "support": "native",
+            "direction": "receive"
+          },
+          "messenger_quick_replies": {
+            "support": "native",
+            "direction": "send"
+          },
+          "messenger_quick_reply": {
+            "support": "native",
+            "direction": "receive"
+          },
+          "messenger_referral": {
+            "support": "native",
+            "direction": "receive"
+          },
+          "facebook_messenger": {
+            "support": "native",
+            "direction": "send"
+          },
+          "messenger_attachment": {
+            "support": "native",
+            "direction": "receive"
+          }
+        },
+        "transports": {
+          "webhook": {
+            "support": "native",
+            "mode": "webhook",
+            "note": "GET challenge、精确 raw-body SHA256、batch 展开与可靠去重"
+          },
+          "manual": {
+            "support": "native",
+            "mode": "native",
+            "note": "ingest(rawEvent) 与已有 Host 共用 Client 和事件投影"
           }
         }
       }

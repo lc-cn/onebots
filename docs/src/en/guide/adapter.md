@@ -26,6 +26,7 @@ onebots currently supports the following platform adapters:
 | **Zulip** | ✅ Implemented | `@onebots/adapter-zulip` | Supports Zulip streams and private messages |
 | **Matrix** | ✅ Implemented | `@onebots/adapter-matrix` | Client-Server API, AppService, and manual ingress |
 | **Google Chat** | ✅ Implemented | `@onebots/adapter-google-chat` | Interaction HTTPS, Workspace Events, and manual ingress |
+| **Facebook Messenger** | ✅ Implemented | `@onebots/adapter-facebook-messenger` | Messenger Platform, Graph API, webhook, and manual ingress |
 
 ## Capability manifests
 
@@ -103,6 +104,7 @@ Plugin import and contract verification run as one serialized registry transacti
 - [Zulip Adapter Documentation](/en/platform/zulip)
 - [Matrix Adapter Documentation](/en/platform/matrix)
 - [Google Chat Adapter Documentation](/en/platform/google-chat)
+- [Facebook Messenger Adapter Documentation](/en/platform/facebook-messenger)
 
 ## Installation
 

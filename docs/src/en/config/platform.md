@@ -178,6 +178,7 @@ For configuration details of other platforms, see:
 - [Microsoft Teams Platform](/en/platform/teams)
 - [Matrix Platform](/en/platform/matrix)
 - [Google Chat Platform](/en/platform/google-chat)
+- [Facebook Messenger Platform](/en/platform/facebook-messenger)
 
 ## Related Links
 

@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import { PROTOCOL_API_CAPABILITY_MAP } from "./protocol-api-capability-map.mjs";
+import {
+    PROTOCOL_API_CAPABILITY_MAP,
+    resolveCapabilityStatus,
+} from "./protocol-api-capability-map.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const readmePath = process.env.ONEBOTS_README_PATH
@@ -18,6 +21,7 @@ const platformLabels = {
     discord: "Discord",
     email: "邮件",
     feishu: "飞书",
+    "facebook-messenger": "Messenger",
     "google-chat": "Google Chat",
     heychat: "黑盒",
     icqq: "ICQQ",
@@ -200,27 +204,6 @@ function assertMappingsCurrent() {
     }
 }
 
-function descriptorStatus(manifest, action) {
-    const descriptor = manifest.actions[action];
-    if (!descriptor || descriptor.support === "unsupported") return "unsupported";
-    return descriptor.support;
-}
-
-function resolveStatus(manifest, requirement) {
-    if (requirement === null) return "builtin";
-    if (typeof requirement === "string") return descriptorStatus(manifest, requirement);
-    const actions = requirement.anyOf ?? requirement.allOf;
-    const statuses = actions.map(action => descriptorStatus(manifest, action));
-    if (requirement.allOf) {
-        if (statuses.includes("unsupported")) return "unsupported";
-        if (statuses.includes("emulated")) return "emulated";
-        return "native";
-    }
-    if (statuses.includes("native")) return "native";
-    if (statuses.includes("emulated")) return "emulated";
-    return "unsupported";
-}
-
 function statusSymbol(status) {
     if (status === "builtin") return "◆";
     if (status === "native") return "✅";
@@ -252,7 +235,9 @@ function renderMatrix(catalog) {
         const rows = protocol.apis.map(entry => [
             `\`${entry.api}\``,
             ...platforms.map(platform =>
-                statusSymbol(resolveStatus(catalog.adapters[platform].manifest, entry.requirement)),
+                statusSymbol(
+                    resolveCapabilityStatus(catalog.adapters[platform].manifest, entry.requirement),
+                ),
             ),
         ]);
         const table = [header, separator, ...rows].map(row => `| ${row.join(" | ")} |`).join("\n");
