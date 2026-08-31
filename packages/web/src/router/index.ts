@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
-import { isAuthenticated, hasExpiredFlag, clearExpiredFlag, setToken } from '../composables/useAuth'
+import { isAuthenticated, hasExpiredFlag, clearExpiredFlag, loginWithToken } from '../composables/useAuth'
+import { resolveQueryTokenNavigation } from './query-token-navigation.js'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -65,16 +66,13 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   if (to.meta?.public) return true
-  // 支持通过 URL ?access_token= 传入鉴权码，写入本地后去掉 query 避免泄露
-  const queryToken = to.query.access_token
-  if (queryToken && typeof queryToken === 'string') {
-    setToken(queryToken.trim(), null, null)
-    const q = { ...to.query }
-    delete q.access_token
-    return { path: to.path, query: q, replace: true }
-  }
+  const tokenNavigation = await resolveQueryTokenNavigation(to, {
+    authenticate: loginWithToken,
+    hasExistingSession: isAuthenticated
+  })
+  if (tokenNavigation) return tokenNavigation
   if (isAuthenticated()) return true
   const expired = hasExpiredFlag()
   if (expired) clearExpiredFlag()

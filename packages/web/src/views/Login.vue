@@ -95,6 +95,10 @@ onMounted(() => {
         toast.warning("登录已过期，请重新登录");
     } else if (reason === "unauthorized") {
         toast.warning("请先登录");
+    } else if (reason === "invalid_token") {
+        toast.error("链接中的鉴权码无效，未写入本地会话");
+    } else if (reason === "token_unavailable") {
+        toast.warning("暂时无法验证链接中的鉴权码，请手动登录");
     }
 });
 
