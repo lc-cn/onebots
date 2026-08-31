@@ -461,7 +461,7 @@ pnpm changeset:publish      # 发布到 npm
 | `pnpm test:watch` | vitest 监听模式 |
 | `pnpm test:ui` | vitest UI 模式 |
 | `pnpm test:coverage` | 带覆盖率报告的测试 |
-| `pnpm packages:pack:check` | 真实打包全部发布包，校验生产入口并拒绝测试、源码和依赖目录泄漏 |
+| `pnpm packages:pack:check` | 真实打包全部发布包，校验生产入口与最终依赖版本，并拒绝测试、源码、依赖目录及 `catalog:` / `workspace:` 等本地协议泄漏 |
 | `pnpm changeset` | 创建变更集（发版用） |
 | `pnpm changeset:version` | 应用变更集版本 |
 | `pnpm changeset:publish` | 发布到 npm |

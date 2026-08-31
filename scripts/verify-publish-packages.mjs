@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { publishedManifestErrors } from "./publish-package-manifest.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const packageManager = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -31,6 +32,14 @@ function archiveEntries(archivePath) {
         .split(/\r?\n/u)
         .map(entry => entry.trim())
         .filter(Boolean);
+}
+
+function archiveManifest(archivePath) {
+    return JSON.parse(
+        execFileSync(archiveTool, ["-xOf", archivePath, "package/package.json"], {
+            encoding: "utf8",
+        }),
+    );
 }
 
 function normalizedPackagePath(file) {
@@ -89,13 +98,19 @@ try {
                 throw new Error(`期望生成 1 个 tarball，实际 ${archives.length} 个`);
             }
             const entries = archiveEntries(archives[0]);
+            const publishedManifest = archiveManifest(archives[0]);
             const forbidden = entries.filter(isForbiddenEntry);
-            const missing = requiredEntries(manifest).filter(entry => !entries.includes(entry));
+            const missing = requiredEntries(publishedManifest).filter(
+                entry => !entries.includes(entry),
+            );
             if (forbidden.length) {
                 errors.push(`${manifest.name}: 包含非生产文件 ${forbidden.join(", ")}`);
             }
             if (missing.length) {
                 errors.push(`${manifest.name}: 缺少声明入口 ${missing.join(", ")}`);
+            }
+            for (const error of publishedManifestErrors(manifest, publishedManifest)) {
+                errors.push(`${manifest.name}: ${error}`);
             }
             verified++;
             totalEntries += entries.length;
