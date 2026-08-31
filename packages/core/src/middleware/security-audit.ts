@@ -22,6 +22,8 @@ class SecurityAuditLogger {
     private logger = createLogger('SecurityAudit');
     private auditLogFile: string;
     private writeStream?: fs.WriteStream;
+    private closePromise?: Promise<void>;
+    private streamError?: Error;
 
     constructor(auditLogDir: string) {
         // 确保目录存在
@@ -35,6 +37,13 @@ class SecurityAuditLogger {
         
         // 创建写入流
         this.writeStream = fs.createWriteStream(this.auditLogFile, { flags: 'a', encoding: 'utf-8' });
+        this.writeStream.on('error', error => {
+            this.streamError ??= error;
+            this.logger.error('安全审计日志写入失败', {
+                error: error.message,
+                file: this.auditLogFile,
+            });
+        });
     }
 
     /**
@@ -77,11 +86,25 @@ class SecurityAuditLogger {
     /**
      * 关闭写入流
      */
-    close(): void {
-        if (this.writeStream) {
-            this.writeStream.end();
-            this.writeStream = undefined;
-        }
+    close(): Promise<void> {
+        if (this.closePromise) return this.closePromise;
+        const stream = this.writeStream;
+        this.writeStream = undefined;
+        if (!stream) return Promise.resolve();
+
+        this.closePromise = new Promise<void>((resolve, reject) => {
+            const complete = () => {
+                if (this.streamError) reject(this.streamError);
+                else resolve();
+            };
+            if (stream.closed) {
+                complete();
+                return;
+            }
+            stream.once('close', complete);
+            stream.end();
+        });
+        return this.closePromise;
     }
 }
 
@@ -249,10 +272,8 @@ export function logRateLimit(ctx: Context, key: string, count: number, max: numb
 /**
  * 关闭审计日志
  */
-export function closeSecurityAudit(): void {
-    if (auditLogger) {
-        auditLogger.close();
-        auditLogger = null;
-    }
+export function closeSecurityAudit(): Promise<void> {
+    const logger = auditLogger;
+    auditLogger = null;
+    return logger?.close() ?? Promise.resolve();
 }
-

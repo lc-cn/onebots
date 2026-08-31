@@ -455,9 +455,7 @@ export class BaseApp extends Koa {
         await failures.capture(() => this.stopAdapters(true));
         this.adapters.clear();
         await failures.capture(() => this.lifecycle.cleanup({ throwOnFailure: true }));
-        await failures.capture(() => {
-            closeSecurityAudit();
-        });
+        await failures.capture(() => closeSecurityAudit());
         await failures.capture(() => emitAllAwaited(this, "close"));
 
         this.isStarted = false;
