@@ -126,16 +126,20 @@ say "正在创建安全配置并安装用户级常驻服务…"
     wait_for_service || fail "服务启动后未通过在线验证；请运行 onebots status 并检查服务日志"
 )
 
-token=$(awk '$1 == "access_token:" { print $2; exit }' "$CONFIG_FILE" | tr -d "'\"")
 port=$(awk '$1 == "port:" { print $2; exit }' "$CONFIG_FILE")
 [ -n "$port" ] || port=6727
 
 say "安装完成。"
 say "管理地址：http://127.0.0.1:$port"
-if [ -n "$token" ]; then
-    say "首次登录鉴权码：$token"
-    say "请登录后立即保存到密码管理器；该鉴权码不会再次显示。"
+if [ "$config_exists" = false ]; then
+    token=$(awk '$1 == "access_token:" { print $2; exit }' "$CONFIG_FILE" | tr -d "'\"")
+    if [ -n "$token" ]; then
+        say "首次登录鉴权码：$token"
+        say "请登录后立即保存到密码管理器；后续重复安装不会提取或显示已有鉴权码。"
+    else
+        say "请使用配置文件中的管理凭据登录：$CONFIG_FILE"
+    fi
 else
-    say "请使用配置文件中的管理凭据登录：$CONFIG_FILE"
+    say "已保留现有管理凭据且未显示；如需登录，请从配置文件读取：$CONFIG_FILE"
 fi
 say "以后可直接在 Web 的“功能扩展”页面安装 Slack、Telegram 等平台。"

@@ -102,13 +102,19 @@ $Port = 6727
 $Token = ""
 foreach ($Line in Get-Content $ConfigFile) {
     if ($Line -match '^port:\s*(\d+)') { $Port = $Matches[1] }
-    if ($Line -match '^access_token:\s*["'']?([^"'']+)["'']?') { $Token = $Matches[1].Trim() }
+    if (-not $ConfigExists) {
+        if ($Line -match '^access_token:\s*["'']?([^"'']+)["'']?') { $Token = $Matches[1].Trim() }
+    }
 }
 
 Write-Step "安装完成。"
 Write-Step "管理地址：http://127.0.0.1:$Port"
-if ($Token) {
+if (-not $ConfigExists -and $Token) {
     Write-Step "首次登录鉴权码：$Token"
-    Write-Step "请登录后立即保存到密码管理器；该鉴权码不会再次显示。"
+    Write-Step "请登录后立即保存到密码管理器；后续重复安装不会提取或显示已有鉴权码。"
+} elseif ($ConfigExists) {
+    Write-Step "已保留现有管理凭据且未显示；如需登录，请从配置文件读取：$ConfigFile"
+} else {
+    Write-Step "请使用配置文件中的管理凭据登录：$ConfigFile"
 }
 Write-Step "以后可直接在 Web 的“功能扩展”页面安装 Slack、Telegram 等平台。"

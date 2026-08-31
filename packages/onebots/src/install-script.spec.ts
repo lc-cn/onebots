@@ -109,9 +109,10 @@ describe("one-command installer", () => {
         const runtime = createFakeRuntime();
         const configPath = path.join(runtime.home, ".onebots", "config.yaml");
 
-        runInstaller(runtime);
+        const firstOutput = runInstaller(runtime);
 
         const firstCommands = fs.readFileSync(runtime.log, "utf8");
+        expect(firstOutput).toContain("首次登录鉴权码：first-token");
         expect(firstCommands).toContain("onebots setup -c");
         expect(firstCommands).not.toContain("setup --force");
         expect(firstCommands).toContain("onebots install -c");
@@ -134,6 +135,9 @@ slack.production:
 
         expect(fs.readFileSync(configPath, "utf8")).toBe(customized);
         expect(output).toContain("检测到已有配置，保留账号、凭据和插件选择");
+        expect(output).toContain("已保留现有管理凭据且未显示");
+        expect(output).not.toContain("preserved-token");
+        expect(output).not.toContain("首次登录鉴权码：");
         const secondCommands = fs.readFileSync(runtime.log, "utf8");
         expect(secondCommands).not.toContain("onebots setup");
         expect(secondCommands).toContain("onebots install -c");
@@ -153,6 +157,11 @@ slack.production:
         expect(source).toContain('Invoke-Checked -FilePath $OneBots -Arguments @("start")');
         expect(source).toContain("function Wait-OneBotsReady");
         expect(source).toContain("Wait-OneBotsReady -OneBotsCommand $OneBots");
+        expect(source).toMatch(
+            /if \(-not \$ConfigExists\) \{\s+if \(\$Line -match '\^access_token/,
+        );
+        expect(source).toContain("if (-not $ConfigExists -and $Token)");
+        expect(source).toContain("已保留现有管理凭据且未显示");
     });
 
     it("在线状态始终失败时不会宣告安装完成", () => {
