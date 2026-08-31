@@ -51,6 +51,9 @@ export function getExtensionInstallationProgress(
         if (extension.installation?.phase === "preflighting") {
             return { variant: "warning", label: "正在执行隔离预检", detail };
         }
+        if (extension.installation?.phase === "restoring_package") {
+            return { variant: "warning", label: "正在恢复安装前依赖", detail };
+        }
         return { variant: "warning", label: "正在安装扩展", detail };
     }
     if (extension.lastInstallation?.status === "failed") {

@@ -108,6 +108,21 @@ describe("extension installation progress", () => {
         ],
         [
             {
+                installing: true,
+                installation: {
+                    operationId: "operation-1",
+                    phase: "restoring_package" as const,
+                    startedAt: "2026-08-31T00:00:00.000Z",
+                },
+            },
+            {
+                variant: "warning",
+                label: "正在恢复安装前依赖",
+                detail: "操作 operatio · 2026-08-31T00:00:00.000Z",
+            },
+        ],
+        [
+            {
                 installing: false,
                 installation: {
                     operationId: "operation-1",

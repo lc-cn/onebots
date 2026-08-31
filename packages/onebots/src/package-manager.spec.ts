@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
     buildExtensionInstallInvocation,
+    buildExtensionRestoreInvocation,
     buildPackageManagerInvocation,
     buildPackageUpdateInvocation,
     detectRuntimePackageManager,
@@ -51,6 +52,33 @@ describe("runtime package manager", () => {
             "--omit=dev",
             "@onebots/adapter-slack@3.0.8",
         ]);
+    });
+
+    it("按原状态生成扩展恢复命令", () => {
+        const npmRoot = fixture({ packageManager: "npm@11.17.0" });
+        expect(
+            buildExtensionRestoreInvocation(
+                npmRoot,
+                "@onebots/adapter-slack",
+                "3.0.7",
+                "darwin",
+                {},
+            ),
+        ).toEqual({
+            executable: "npm",
+            args: ["install", "--save", "--omit=dev", "@onebots/adapter-slack@3.0.7"],
+            environment: {},
+        });
+
+        const pnpmRoot = fixture({ packageManager: "pnpm@9.15.9" });
+        fs.writeFileSync(path.join(pnpmRoot, "pnpm-workspace.yaml"), "packages: []\n");
+        expect(
+            buildExtensionRestoreInvocation(pnpmRoot, "@onebots/adapter-slack", null, "linux", {}),
+        ).toEqual({
+            executable: "pnpm",
+            args: ["remove", "--workspace-root", "@onebots/adapter-slack"],
+            environment: {},
+        });
     });
 
     it("锁文件优先于启动进程环境决定运行目录的包管理器", () => {

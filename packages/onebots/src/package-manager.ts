@@ -99,6 +99,29 @@ export function buildExtensionInstallInvocation(
     );
 }
 
+/** 生成扩展安装失败后的反向恢复命令；旧版本为空时移除新依赖。 */
+export function buildExtensionRestoreInvocation(
+    runtimeRoot: string,
+    packageName: string,
+    previousVersion: string | null,
+    platform: NodeJS.Platform = process.platform,
+    environment: NodeJS.ProcessEnv = process.env,
+): PackageInstallInvocation {
+    const manager = detectRuntimePackageManager(runtimeRoot);
+    const workspaceRoot =
+        manager === "pnpm" && fs.existsSync(path.join(runtimeRoot, "pnpm-workspace.yaml"))
+            ? ["--workspace-root"]
+            : [];
+    const args = previousVersion
+        ? manager === "pnpm"
+            ? ["add", "--save-prod", ...workspaceRoot, `${packageName}@${previousVersion}`]
+            : ["install", "--save", "--omit=dev", `${packageName}@${previousVersion}`]
+        : manager === "pnpm"
+          ? ["remove", ...workspaceRoot, packageName]
+          : ["uninstall", "--save", "--omit=dev", packageName];
+    return buildPackageManagerInvocation(manager, args, platform, environment);
+}
+
 /** 生成项目或全局运行时的批量更新调用；项目更新不恢复开发依赖。 */
 export function buildPackageUpdateInvocation(
     runtimeRoot: string,

@@ -145,7 +145,7 @@ export interface ExtensionInfo {
     /** 当前服务端安装操作；旧版服务端可能不返回该字段。 */
     installation?: {
         operationId: string;
-        phase: "installing_package" | "preflighting";
+        phase: "installing_package" | "preflighting" | "restoring_package";
         startedAt: string;
     } | null;
     /** 当前服务实例内最近一次安装终态；开始下一次安装或服务重启后更新/清空。 */

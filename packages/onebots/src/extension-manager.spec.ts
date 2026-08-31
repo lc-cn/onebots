@@ -67,6 +67,13 @@ function installFixturePackage(packageName: string, version: string, runtimeRoot
     );
 }
 
+function removeFixturePackage(packageName: string, runtimeRoot: string): void {
+    fs.rmSync(path.join(runtimeRoot, "node_modules", ...packageName.split("/")), {
+        recursive: true,
+        force: true,
+    });
+}
+
 describe("ExtensionManager", () => {
     it("向已加载适配器发布注册表中的权威能力清单", () => {
         const { root, configPath } = fixture();
@@ -576,10 +583,18 @@ describe("ExtensionManager", () => {
         const preflight = vi.fn(async () => {
             throw new Error("插件没有注册配置 Schema");
         });
-        const manager = new ExtensionManager({
+        let manager: ExtensionManager;
+        let restorePhase: string | undefined;
+        const restore = vi.fn(async (packageName: string, previousVersion: string | null) => {
+            expect(previousVersion).toBeNull();
+            restorePhase = manager.list([]).find(item => item.id === "adapter:slack")
+                ?.installation?.phase;
+            removeFixturePackage(packageName, root);
+        });
+        manager = new ExtensionManager({
             runtimeRoot: root,
             configPath,
-            installer: { install },
+            installer: { install, restore },
             preflight,
         });
 
@@ -594,6 +609,66 @@ describe("ExtensionManager", () => {
             }),
         );
         expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", null, root);
+        expect(restorePhase).toBe("restoring_package");
+        expect(manager.list([]).find(item => item.id === "adapter:slack")?.installed).toBe(false);
+    });
+
+    it("升级后的候选预检失败时恢复原扩展版本", async () => {
+        const { root, configPath } = fixture();
+        installFixturePackage("@onebots/adapter-slack", "3.0.7", root);
+        const restore = vi.fn(
+            async (packageName: string, previousVersion: string | null, runtimeRoot: string) => {
+                if (!previousVersion) throw new Error("测试缺少原版本");
+                installFixturePackage(packageName, previousVersion, runtimeRoot);
+            },
+        );
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: {
+                install: async (packageName, packageVersion, runtimeRoot) => {
+                    installFixturePackage(packageName, packageVersion, runtimeRoot);
+                },
+                restore,
+            },
+            preflight: async () => {
+                throw new Error("候选版本无法加载");
+            },
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow("候选版本无法加载");
+
+        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", "3.0.7", root);
+        expect(manager.list([]).find(item => item.id === "adapter:slack")?.installedVersion).toBe(
+            "3.0.7",
+        );
+    });
+
+    it("依赖恢复失败时同时保留原错误与恢复错误", async () => {
+        const { root, configPath } = fixture();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: {
+                install: async (packageName, packageVersion, runtimeRoot) => {
+                    installFixturePackage(packageName, packageVersion, runtimeRoot);
+                },
+                restore: async () => {
+                    throw new Error("锁文件只读");
+                },
+            },
+            preflight: async () => {
+                throw new Error("插件入口损坏");
+            },
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow(
+            /扩展安装失败且依赖恢复失败.*插件入口损坏.*锁文件只读/,
+        );
+        expect(
+            manager.list([]).find(item => item.id === "adapter:slack")?.lastInstallation?.message,
+        ).toMatch(/插件入口损坏.*锁文件只读/);
     });
 
     it("候选预检期间配置变化时重新合并并验证", async () => {

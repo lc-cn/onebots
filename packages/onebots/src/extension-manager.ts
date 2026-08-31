@@ -18,7 +18,10 @@ import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
-import { buildExtensionInstallInvocation } from "./package-manager.js";
+import {
+    buildExtensionInstallInvocation,
+    buildExtensionRestoreInvocation,
+} from "./package-manager.js";
 import { validateExtensionConfigurationTarget } from "./extension-configuration-target.js";
 import { validateExtensionCatalogIntegrity } from "./extension-catalog-integrity.js";
 
@@ -26,6 +29,11 @@ const execFileAsync = promisify(execFile);
 
 export interface ExtensionInstaller {
     install(packageName: string, packageVersion: string, runtimeRoot: string): Promise<void>;
+    restore?(
+        packageName: string,
+        previousVersion: string | null,
+        runtimeRoot: string,
+    ): Promise<void>;
 }
 
 class RuntimeExtensionInstaller implements ExtensionInstaller {
@@ -33,6 +41,24 @@ class RuntimeExtensionInstaller implements ExtensionInstaller {
         const invocation = buildExtensionInstallInvocation(
             runtimeRoot,
             `${packageName}@${packageVersion}`,
+        );
+        await execFileAsync(invocation.executable, invocation.args, {
+            cwd: runtimeRoot,
+            env: invocation.environment,
+            timeout: 10 * 60 * 1000,
+            maxBuffer: 4 * 1024 * 1024,
+        });
+    }
+
+    async restore(
+        packageName: string,
+        previousVersion: string | null,
+        runtimeRoot: string,
+    ): Promise<void> {
+        const invocation = buildExtensionRestoreInvocation(
+            runtimeRoot,
+            packageName,
+            previousVersion,
         );
         await execFileAsync(invocation.executable, invocation.args, {
             cwd: runtimeRoot,
@@ -60,7 +86,10 @@ export interface ExtensionConfigPreflightRequest {
 
 export type ExtensionConfigPreflight = (request: ExtensionConfigPreflightRequest) => Promise<void>;
 
-export type ExtensionInstallationPhase = "installing_package" | "preflighting";
+export type ExtensionInstallationPhase =
+    | "installing_package"
+    | "preflighting"
+    | "restoring_package";
 
 export interface ExtensionInstallationStatus {
     operationId: string;
@@ -217,8 +246,8 @@ export class ExtensionManager {
         this.assertRuntimeRoot();
         const preparedConfig = this.prepareConfig(entry.type, entry.name);
         const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
-        const packageNeedsInstall =
-            this.installedVersion(entry.packageName) !== packageCatalog.packageVersion;
+        const previousVersion = this.installedVersion(entry.packageName);
+        const packageNeedsInstall = previousVersion !== packageCatalog.packageVersion;
         let startInstallation: (() => void) | undefined;
         const startGate = new Promise<void>(resolve => {
             startInstallation = resolve;
@@ -226,39 +255,53 @@ export class ExtensionManager {
         const operationId = randomUUID();
         const startedAt = new Date().toISOString();
         const promise = startGate.then(async (): Promise<{ restartRequired: true }> => {
-            if (packageNeedsInstall) {
-                await this.installer.install(
-                    entry.packageName,
-                    packageCatalog.packageVersion,
-                    this.runtimeRoot,
+            let packageInstallCompleted = false;
+            try {
+                if (packageNeedsInstall) {
+                    await this.installer.install(
+                        entry.packageName,
+                        packageCatalog.packageVersion,
+                        this.runtimeRoot,
+                    );
+                    packageInstallCompleted = true;
+                    const installedVersion = this.installedVersion(entry.packageName);
+                    if (installedVersion !== packageCatalog.packageVersion) {
+                        throw new Error(
+                            `扩展安装版本校验失败：${entry.packageName} 期望 ${packageCatalog.packageVersion}，实际 ${installedVersion ?? "未安装"}`,
+                        );
+                    }
+                }
+                this.setInstallationPhase(operationId, "preflighting");
+                let candidate = preparedConfig;
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    const latestSource = fs.readFileSync(this.configPath, "utf8");
+                    if (latestSource !== candidate.source) {
+                        candidate = this.prepareConfig(entry.type, entry.name, latestSource);
+                    }
+                    await this.preflight({
+                        content: candidate.content,
+                        selection: candidate.selection,
+                        runtimeRoot: this.runtimeRoot,
+                        configPath: this.configPath,
+                    });
+                    if (fs.readFileSync(this.configPath, "utf8") !== candidate.source) continue;
+                    writeConfigFileAtomic(this.configPath, candidate.content, { backup: true });
+                    return { restartRequired: true };
+                }
+                throw new ExtensionInstallConflictError(
+                    "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
                 );
-                const installedVersion = this.installedVersion(entry.packageName);
-                if (installedVersion !== packageCatalog.packageVersion) {
-                    throw new Error(
-                        `扩展安装版本校验失败：${entry.packageName} 期望 ${packageCatalog.packageVersion}，实际 ${installedVersion ?? "未安装"}`,
+            } catch (error) {
+                if (packageInstallCompleted && this.installer.restore) {
+                    this.setInstallationPhase(operationId, "restoring_package");
+                    await this.restorePackageAfterFailure(
+                        entry.packageName,
+                        previousVersion,
+                        error,
                     );
                 }
+                throw error;
             }
-            this.setInstallationPhase(operationId, "preflighting");
-            let candidate = preparedConfig;
-            for (let attempt = 0; attempt < 3; attempt++) {
-                const latestSource = fs.readFileSync(this.configPath, "utf8");
-                if (latestSource !== candidate.source) {
-                    candidate = this.prepareConfig(entry.type, entry.name, latestSource);
-                }
-                await this.preflight({
-                    content: candidate.content,
-                    selection: candidate.selection,
-                    runtimeRoot: this.runtimeRoot,
-                    configPath: this.configPath,
-                });
-                if (fs.readFileSync(this.configPath, "utf8") !== candidate.source) continue;
-                writeConfigFileAtomic(this.configPath, candidate.content, { backup: true });
-                return { restartRequired: true };
-            }
-            throw new ExtensionInstallConflictError(
-                "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
-            );
         });
         this.installation = {
             id,
@@ -295,6 +338,29 @@ export class ExtensionManager {
 
     private setInstallationPhase(operationId: string, phase: ExtensionInstallationPhase): void {
         if (this.installation?.operationId === operationId) this.installation.phase = phase;
+    }
+
+    private async restorePackageAfterFailure(
+        packageName: string,
+        previousVersion: string | null,
+        originalError: unknown,
+    ): Promise<void> {
+        try {
+            await this.installer.restore!(packageName, previousVersion, this.runtimeRoot);
+            const restoredVersion = this.installedVersion(packageName);
+            if (restoredVersion !== previousVersion) {
+                throw new Error(
+                    `${packageName} 期望恢复为 ${previousVersion ?? "未安装"}，实际 ${restoredVersion ?? "未安装"}`,
+                );
+            }
+        } catch (restoreError) {
+            const installMessage = formatExtensionInstallationError(originalError);
+            const restoreMessage = formatExtensionInstallationError(restoreError);
+            throw new AggregateError(
+                [originalError, restoreError],
+                `扩展安装失败且依赖恢复失败：安装错误：${installMessage}；恢复错误：${restoreMessage}`,
+            );
+        }
     }
 
     /** 在调用包管理器前验证配置，并生成不会丢失现有插件选择的候选内容。 */
