@@ -146,6 +146,14 @@ export interface ExtensionInfo {
         phase: "installing_package" | "preflighting";
         startedAt: string;
     } | null;
+    /** 当前服务实例内最近一次安装终态；开始下一次安装或服务重启后更新/清空。 */
+    lastInstallation?: {
+        operationId: string;
+        status: "succeeded" | "failed";
+        startedAt: string;
+        completedAt: string;
+        message: string | null;
+    } | null;
     /** 适配器能力来自已加载插件的运行时契约，或安装前可见的版本化目录快照。 */
     capability: ExtensionCapabilityInfo | null;
 }

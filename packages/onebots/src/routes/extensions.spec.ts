@@ -69,4 +69,21 @@ describe("extension routes", () => {
         expect(ctx.status).toBe(503);
         expect(ctx.body).toEqual({ success: false, message: "扩展目录完整性校验失败" });
     });
+
+    it("响应与日志共用脱敏后的安装错误", async () => {
+        const install = vi.fn(async () => {
+            throw new Error("fetch https://user:secret@registry.example/pkg?token=secret");
+        });
+        const { app, posts } = setup(install);
+        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+
+        await posts.get("/api/extensions/:id/install")!(ctx);
+
+        const message = "fetch https://***@registry.example/pkg?token=***";
+        expect(ctx.status).toBe(500);
+        expect(ctx.body).toEqual({ success: false, message });
+        expect(app.logger.error).toHaveBeenCalledWith("管理端安装扩展失败", {
+            error: message,
+        });
+    });
 });

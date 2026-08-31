@@ -82,8 +82,15 @@
                             配置入口不可用：{{ extension.configurationError }}
                         </UiAlert>
 
-                        <UiAlert v-if="installationProgress(extension)" variant="warning">
-                            {{ installationProgress(extension)?.label }}
+                        <UiAlert
+                            v-if="installationProgress(extension)"
+                            :variant="installationProgress(extension)?.variant">
+                            <p>{{ installationProgress(extension)?.label }}</p>
+                            <p
+                                v-if="installationProgress(extension)?.detail"
+                                class="mt-1 font-mono text-xs opacity-75">
+                                {{ installationProgress(extension)?.detail }}
+                            </p>
                         </UiAlert>
 
                         <ExtensionCapabilities

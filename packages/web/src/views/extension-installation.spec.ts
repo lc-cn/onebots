@@ -71,7 +71,10 @@ describe("extension installation action", () => {
 
 describe("extension installation progress", () => {
     it.each([
-        [{ installing: true, installation: undefined }, { label: "正在安装扩展" }],
+        [
+            { installing: true, installation: undefined },
+            { variant: "warning", label: "正在安装扩展", detail: null },
+        ],
         [
             {
                 installing: true,
@@ -81,7 +84,11 @@ describe("extension installation progress", () => {
                     startedAt: "2026-08-31T00:00:00.000Z",
                 },
             },
-            { label: "正在安装并核验依赖" },
+            {
+                variant: "warning",
+                label: "正在安装并核验依赖",
+                detail: "操作 operatio · 2026-08-31T00:00:00.000Z",
+            },
         ],
         [
             {
@@ -92,7 +99,11 @@ describe("extension installation progress", () => {
                     startedAt: "2026-08-31T00:00:00.000Z",
                 },
             },
-            { label: "正在执行隔离预检" },
+            {
+                variant: "warning",
+                label: "正在执行隔离预检",
+                detail: "操作 operatio · 2026-08-31T00:00:00.000Z",
+            },
         ],
         [
             {
@@ -101,6 +112,38 @@ describe("extension installation progress", () => {
                     operationId: "operation-1",
                     phase: "preflighting" as const,
                     startedAt: "2026-08-31T00:00:00.000Z",
+                },
+            },
+            null,
+        ],
+        [
+            {
+                installing: false,
+                installation: null,
+                lastInstallation: {
+                    operationId: "failed-operation",
+                    status: "failed" as const,
+                    startedAt: "2026-08-31T00:00:00.000Z",
+                    completedAt: "2026-08-31T00:01:00.000Z",
+                    message: "registry timeout",
+                },
+            },
+            {
+                variant: "danger",
+                label: "上次安装失败：registry timeout",
+                detail: "操作 failed-o · 2026-08-31T00:01:00.000Z",
+            },
+        ],
+        [
+            {
+                installing: false,
+                installation: null,
+                lastInstallation: {
+                    operationId: "successful-operation",
+                    status: "succeeded" as const,
+                    startedAt: "2026-08-31T00:00:00.000Z",
+                    completedAt: "2026-08-31T00:01:00.000Z",
+                    message: null,
                 },
             },
             null,

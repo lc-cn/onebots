@@ -6,6 +6,7 @@ import yaml from "js-yaml";
 import { AdapterRegistry, defineAdapterCapabilities, type Adapter } from "@onebots/core";
 import {
     ExtensionManager,
+    formatExtensionInstallationError,
     preflightExtensionConfig,
     type ExtensionConfigPreflight,
     type ExtensionInstaller,
@@ -15,6 +16,22 @@ import { getExtensionPackageCatalogEntry } from "./extension-capability-catalog.
 
 const directories: string[] = [];
 const successfulPreflight: ExtensionConfigPreflight = async () => undefined;
+
+describe("formatExtensionInstallationError", () => {
+    it("脱敏包管理器错误中的常见凭据并限制诊断长度", () => {
+        const message = formatExtensionInstallationError(
+            new Error(
+                `fetch https://user:secret@registry.example/pkg?token=secret Bearer abc ${"x".repeat(5_000)}`,
+            ),
+        );
+
+        expect(message).toContain("https://***@registry.example/pkg?token=***");
+        expect(message).toContain("Bearer ***");
+        expect(message).not.toContain("secret");
+        expect(message).toHaveLength(4_000);
+        expect(message.endsWith("…")).toBe(true);
+    });
+});
 
 afterEach(() => {
     AdapterRegistry.clear();
@@ -389,7 +406,15 @@ describe("ExtensionManager", () => {
         expect(install).toHaveBeenCalledOnce();
         expect(preflight).toHaveBeenCalledOnce();
         expect(manager.list([]).find(item => item.id === "adapter:slack")).toEqual(
-            expect.objectContaining({ installing: false, installation: null }),
+            expect.objectContaining({
+                installing: false,
+                installation: null,
+                lastInstallation: expect.objectContaining({
+                    operationId,
+                    status: "succeeded",
+                    message: null,
+                }),
+            }),
         );
     });
 
@@ -421,11 +446,28 @@ describe("ExtensionManager", () => {
             expect.objectContaining({ status: "rejected", reason: expect.any(Error) }),
         ]);
         expect(install).toHaveBeenCalledOnce();
+        const failedResult = manager
+            .list([])
+            .find(item => item.id === "adapter:slack")?.lastInstallation;
+        expect(failedResult).toEqual({
+            operationId: expect.any(String),
+            status: "failed",
+            startedAt: expect.any(String),
+            completedAt: expect.any(String),
+            message: "registry timeout",
+        });
 
         await expect(manager.install("adapter:slack")).resolves.toEqual({
             restartRequired: true,
         });
         expect(install).toHaveBeenCalledTimes(2);
+        const successfulResult = manager
+            .list([])
+            .find(item => item.id === "adapter:slack")?.lastInstallation;
+        expect(successfulResult).toEqual(
+            expect.objectContaining({ status: "succeeded", message: null }),
+        );
+        expect(successfulResult?.operationId).not.toBe(failedResult?.operationId);
     });
 
     it("已安装版本偏离目录时切换到当前 OneBots 验证版本", async () => {

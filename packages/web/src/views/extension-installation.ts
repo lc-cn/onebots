@@ -12,20 +12,44 @@ export interface ExtensionRuntimeStatus {
 }
 
 export interface ExtensionInstallationProgress {
+    variant: "warning" | "danger";
     label: string;
+    detail: string | null;
 }
 
 export function getExtensionInstallationProgress(
-    extension: Pick<ExtensionInfo, "installing" | "installation">,
+    extension: Pick<ExtensionInfo, "installing" | "installation" | "lastInstallation">,
 ): ExtensionInstallationProgress | null {
-    if (!extension.installing) return null;
-    if (extension.installation?.phase === "installing_package") {
-        return { label: "正在安装并核验依赖" };
+    if (extension.installing) {
+        const detail = extension.installation
+            ? buildInstallationEvidence(
+                  extension.installation.operationId,
+                  extension.installation.startedAt,
+              )
+            : null;
+        if (extension.installation?.phase === "installing_package") {
+            return { variant: "warning", label: "正在安装并核验依赖", detail };
+        }
+        if (extension.installation?.phase === "preflighting") {
+            return { variant: "warning", label: "正在执行隔离预检", detail };
+        }
+        return { variant: "warning", label: "正在安装扩展", detail };
     }
-    if (extension.installation?.phase === "preflighting") {
-        return { label: "正在执行隔离预检" };
+    if (extension.lastInstallation?.status === "failed") {
+        return {
+            variant: "danger",
+            label: `上次安装失败：${extension.lastInstallation.message ?? "未知错误"}`,
+            detail: buildInstallationEvidence(
+                extension.lastInstallation.operationId,
+                extension.lastInstallation.completedAt,
+            ),
+        };
     }
-    return { label: "正在安装扩展" };
+    return null;
+}
+
+function buildInstallationEvidence(operationId: string, timestamp: string): string {
+    return `操作 ${operationId.slice(0, 8)} · ${timestamp}`;
 }
 
 export function getExtensionInstallationAction(

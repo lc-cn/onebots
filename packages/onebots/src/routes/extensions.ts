@@ -5,6 +5,7 @@ import {
     ExtensionCatalogIntegrityError,
     ExtensionInstallConflictError,
     ExtensionNotFoundError,
+    formatExtensionInstallationError,
 } from "../extension-manager.js";
 
 export function registerExtensionRoutes(app: App, router: Router): void {
@@ -21,7 +22,7 @@ export function registerExtensionRoutes(app: App, router: Router): void {
                 message: "扩展已安装并写入启动配置，重启后即可配置账号",
             };
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message = formatExtensionInstallationError(error);
             ctx.status =
                 error instanceof ExtensionInstallConflictError
                     ? 409
@@ -31,7 +32,7 @@ export function registerExtensionRoutes(app: App, router: Router): void {
                         ? 503
                         : 500;
             ctx.body = { success: false, message };
-            app.logger.error("管理端安装扩展失败", { error });
+            app.logger.error("管理端安装扩展失败", { error: message });
         }
     });
 }

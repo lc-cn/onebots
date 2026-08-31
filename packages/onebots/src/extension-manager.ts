@@ -68,6 +68,28 @@ export interface ExtensionInstallationStatus {
     startedAt: string;
 }
 
+export interface ExtensionInstallationResult {
+    operationId: string;
+    status: "succeeded" | "failed";
+    startedAt: string;
+    completedAt: string;
+    message: string | null;
+}
+
+const MAX_INSTALLATION_ERROR_LENGTH = 4_000;
+
+/** 避免把包管理器输出中的常见凭据带回管理端，并限制单条诊断占用。 */
+export function formatExtensionInstallationError(error: unknown): string {
+    const raw = (error instanceof Error ? error.message : String(error)).trim() || "未知错误";
+    const redacted = raw
+        .replace(/(https?:\/\/)[^/@\s]+@/gi, "$1***@")
+        .replace(/((?:_authToken|access_token|password|token)=)[^\s&]+/gi, "$1***")
+        .replace(/(Bearer\s+)[^\s]+/gi, "$1***");
+    return redacted.length <= MAX_INSTALLATION_ERROR_LENGTH
+        ? redacted
+        : `${redacted.slice(0, MAX_INSTALLATION_ERROR_LENGTH - 1)}…`;
+}
+
 export class ExtensionNotFoundError extends Error {}
 export class ExtensionInstallConflictError extends Error {}
 export class ExtensionCatalogIntegrityError extends Error {}
@@ -86,6 +108,7 @@ export class ExtensionManager {
         startedAt: string;
         promise: Promise<{ restartRequired: true }>;
     } | null = null;
+    private readonly lastInstallations = new Map<string, ExtensionInstallationResult>();
 
     constructor(options: ExtensionManagerOptions = {}) {
         this.runtimeRoot = path.resolve(
@@ -150,6 +173,7 @@ export class ExtensionManager {
                 loaded,
                 installing: installation !== null,
                 installation,
+                lastInstallation: this.lastInstallations.get(entry.id) ?? null,
                 capability:
                     entry.type !== "adapter"
                         ? null
@@ -200,6 +224,7 @@ export class ExtensionManager {
             startInstallation = resolve;
         });
         const operationId = randomUUID();
+        const startedAt = new Date().toISOString();
         const promise = startGate.then(async (): Promise<{ restartRequired: true }> => {
             if (packageNeedsInstall) {
                 await this.installer.install(
@@ -239,12 +264,30 @@ export class ExtensionManager {
             id,
             operationId,
             phase: packageNeedsInstall ? "installing_package" : "preflighting",
-            startedAt: new Date().toISOString(),
+            startedAt,
             promise,
         };
+        this.lastInstallations.delete(id);
         startInstallation?.();
         try {
-            return await promise;
+            const result = await promise;
+            this.lastInstallations.set(id, {
+                operationId,
+                status: "succeeded",
+                startedAt,
+                completedAt: new Date().toISOString(),
+                message: null,
+            });
+            return result;
+        } catch (error) {
+            this.lastInstallations.set(id, {
+                operationId,
+                status: "failed",
+                startedAt,
+                completedAt: new Date().toISOString(),
+                message: formatExtensionInstallationError(error),
+            });
+            throw error;
         } finally {
             if (this.installation?.promise === promise) this.installation = null;
         }
