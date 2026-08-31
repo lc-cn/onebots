@@ -225,7 +225,7 @@ describe("ExtensionManager", () => {
         expect(install).not.toHaveBeenCalled();
     });
 
-    it("已安装依赖只启用配置，不重复调用 npm", async () => {
+    it("已安装依赖只启用配置，不重复调用包管理器", async () => {
         const { root, configPath } = fixture();
         const packageDirectory = path.join(root, "node_modules", "@onebots", "adapter-slack");
         fs.mkdirSync(packageDirectory, { recursive: true });

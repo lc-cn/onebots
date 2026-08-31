@@ -15,6 +15,7 @@ import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
+import { buildExtensionInstallInvocation } from "./package-manager.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -22,13 +23,15 @@ export interface ExtensionInstaller {
     install(packageName: string, runtimeRoot: string): Promise<void>;
 }
 
-class NpmExtensionInstaller implements ExtensionInstaller {
+class RuntimeExtensionInstaller implements ExtensionInstaller {
     async install(packageName: string, runtimeRoot: string): Promise<void> {
-        await execFileAsync(
-            process.platform === "win32" ? "npm.cmd" : "npm",
-            ["install", "--save", "--omit=dev", `${packageName}@latest`],
-            { cwd: runtimeRoot, timeout: 10 * 60 * 1000, maxBuffer: 4 * 1024 * 1024 },
-        );
+        const invocation = buildExtensionInstallInvocation(runtimeRoot, packageName);
+        await execFileAsync(invocation.executable, invocation.args, {
+            cwd: runtimeRoot,
+            env: invocation.environment,
+            timeout: 10 * 60 * 1000,
+            maxBuffer: 4 * 1024 * 1024,
+        });
     }
 }
 
@@ -64,7 +67,7 @@ export class ExtensionManager {
             options.runtimeRoot ?? process.env.ONEBOTS_EXTENSION_ROOT ?? process.cwd(),
         );
         this.configPath = options.configPath ?? BaseApp.configPath;
-        this.installer = options.installer ?? new NpmExtensionInstaller();
+        this.installer = options.installer ?? new RuntimeExtensionInstaller();
         this.preflight = options.preflight ?? preflightExtensionConfig;
     }
 
@@ -166,7 +169,7 @@ export class ExtensionManager {
         }
     }
 
-    /** 在调用 npm 前验证配置，并生成不会丢失现有插件选择的候选内容。 */
+    /** 在调用包管理器前验证配置，并生成不会丢失现有插件选择的候选内容。 */
     private prepareConfig(type: "adapter" | "protocol", name: string, source?: string) {
         const currentSource = source ?? fs.readFileSync(this.configPath, "utf8");
         const config = parseRuntimeConfig(currentSource);

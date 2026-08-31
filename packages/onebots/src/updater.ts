@@ -12,6 +12,7 @@ import {
 import { writeCliOutput } from "./cli-output.js";
 import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
+import { detectRuntimePackageManager } from "./package-manager.js";
 
 export interface UpdateOptions {
     adapters: string[];
@@ -60,7 +61,7 @@ export async function runUpdate(options: UpdateOptions): Promise<void> {
     const { adapters, protocols } = resolveUpdatePluginSelection(options, spec);
     const packages = packageNamesFor(adapters, protocols);
     const runtimeRoot = spec?.workingDirectory ?? process.cwd();
-    const manager = detectPackageManager(runtimeRoot);
+    const manager = detectRuntimePackageManager(runtimeRoot);
     const updates = packages.map(name => ({
         name,
         current: installedVersion(name, runtimeRoot),
@@ -184,12 +185,6 @@ export function runUpdatedServicePreflight(spec: ServiceSpec): void {
             cause: error instanceof Error ? error : undefined,
         });
     }
-}
-
-function detectPackageManager(runtimeRoot: string): "npm" | "pnpm" {
-    if (process.env.npm_execpath?.includes("pnpm")) return "pnpm";
-    if (fs.existsSync(path.join(runtimeRoot, "pnpm-lock.yaml"))) return "pnpm";
-    return "npm";
 }
 
 function installedVersion(name: string, runtimeRoot: string): string | null {
