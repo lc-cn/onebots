@@ -4,6 +4,7 @@ import * as path from "node:path";
 import yaml from "js-yaml";
 import type { Account, Protocol } from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "../service-manager.js";
+import { preflightServiceRuntime, type ServicePreflightSpec } from "../service-preflight.js";
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
@@ -50,24 +51,6 @@ export async function installService(
     options: RuntimeOptions & ScopeOptions,
 ): Promise<CommandResult> {
     const runtime = normalizeRuntimeOptions(options);
-    if (!fs.existsSync(runtime.configPath))
-        throw new CliError(`配置文件不存在: ${runtime.configPath}`, 2);
-    const { loadPlugins } = await import("../runtime.js");
-    const failures = await loadPlugins(runtime.adapters, runtime.protocols);
-    if (failures.length) {
-        throw new CliError(`服务安装预检失败：无法加载插件 ${failures.join(", ")}`, 2);
-    }
-    try {
-        const { parseRuntimeConfig, validateRuntimeConfig } =
-            await import("../runtime-config-validator.js");
-        const config = parseRuntimeConfig(fs.readFileSync(runtime.configPath, "utf8"));
-        validateRuntimeConfig(config);
-    } catch (error) {
-        throw new CliError(
-            `服务安装预检失败：${error instanceof Error ? error.message : String(error)}`,
-            2,
-        );
-    }
     const scope = scopeFrom(options);
     const spec: ServiceSpec = {
         scope,
@@ -78,6 +61,7 @@ export async function installService(
         binPath: path.resolve(process.argv[1]),
         workingDirectory: process.cwd(),
     };
+    await preflightService(spec, "安装");
     await new ServiceController(scope).install(spec);
     const suffix = scope === "system" ? " --system" : "";
     return {
@@ -87,7 +71,9 @@ export async function installService(
 
 /** 启动当前 scope 中已安装的服务。 */
 export async function startService(options: ScopeOptions): Promise<CommandResult> {
-    await new ServiceController(scopeFrom(options)).start();
+    const controller = new ServiceController(scopeFrom(options));
+    await preflightInstalledService(controller, "启动");
+    await controller.start();
     return { output: "OneBots 服务已启动" };
 }
 
@@ -99,7 +85,9 @@ export async function stopService(options: ScopeOptions): Promise<CommandResult>
 
 /** 重启当前 scope 中已安装的服务。 */
 export async function restartService(options: ScopeOptions): Promise<CommandResult> {
-    await new ServiceController(scopeFrom(options)).restart();
+    const controller = new ServiceController(scopeFrom(options));
+    await preflightInstalledService(controller, "重启");
+    await controller.restart();
     return { output: "OneBots 服务已重启" };
 }
 
@@ -346,6 +334,26 @@ function isMcpStdioModule(value: unknown): value is {
         "startStdioTransport" in value &&
         typeof value.startStdioTransport === "function"
     );
+}
+
+async function preflightInstalledService(
+    controller: ServiceController,
+    action: "启动" | "重启",
+): Promise<void> {
+    const spec = controller.readSpec();
+    if (!spec) throw new CliError("OneBots 服务尚未安装", 2);
+    await preflightService(spec, action);
+}
+
+async function preflightService(spec: ServicePreflightSpec, action: string): Promise<void> {
+    try {
+        await preflightServiceRuntime(spec);
+    } catch (error) {
+        throw new CliError(
+            `服务${action}预检失败：${error instanceof Error ? error.message : String(error)}`,
+            2,
+        );
+    }
 }
 
 function readConfig(file: string): Record<string, unknown> {

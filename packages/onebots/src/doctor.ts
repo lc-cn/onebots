@@ -3,7 +3,7 @@ import * as path from "node:path";
 import * as net from "node:net";
 import { createRequire } from "node:module";
 import { ServiceController, type ServiceScope } from "./service-manager.js";
-import { tryLoadPlugin } from "./plugin-loader.js";
+import { pluginCandidates, tryLoadPlugin } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { writeCliOutput } from "./cli-output.js";
 
@@ -108,14 +108,10 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         ["protocol", protocols],
     ] as const) {
         for (const name of names) {
-            const candidates =
-                kind === "adapter"
-                    ? [`@onebots/adapter-${name}`, `onebots-adapter-${name}`, name]
-                    : [`@onebots/protocol-${name}`, `onebots-protocol-${name}`, name];
             const result = await tryLoadPlugin(
                 kind === "adapter" ? "适配器" : "协议",
                 name,
-                candidates,
+                pluginCandidates(kind, name),
                 runtimeRequire,
             );
             pluginsReady &&= result.loaded;

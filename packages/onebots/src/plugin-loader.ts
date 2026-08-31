@@ -12,6 +12,14 @@ export type PluginLoadResult =
     | { loaded: true; inspection: Extract<PluginInspection, { status: "ready" }> }
     | { loaded: false; inspection: PluginInspection; message: string };
 
+export type PluginType = "adapter" | "protocol";
+
+/** 所有 CLI 路径共享同一组插件包名候选，避免运行、doctor 与服务预检规则漂移。 */
+export function pluginCandidates(type: PluginType, name: string): string[] {
+    const prefix = type === "adapter" ? "adapter" : "protocol";
+    return [`@onebots/${prefix}-${name}`, `onebots-${prefix}-${name}`, name];
+}
+
 /** 区分插件未安装与 workspace 包存在但构建入口缺失。 */
 export function inspectPlugin(
     candidates: string[],

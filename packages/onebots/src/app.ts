@@ -27,7 +27,7 @@ import koaStatic from "koa-static";
 import { copyFileSync, existsSync, writeFileSync, mkdirSync, readFileSync } from "fs";
 import type { WsServer, Dict } from "@onebots/core";
 import { randomBytes } from "node:crypto";
-import { loadPlugin } from "./plugin-loader.js";
+import { loadPlugin, pluginCandidates } from "./plugin-loader.js";
 import { writeCliError, writeCliOutput } from "./cli-output.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { getAdapterInfo } from "./adapter-info.js";
@@ -303,13 +303,13 @@ export namespace App {
     }
     export async function loadAdapterFactory(
         platform: string,
-        maybeNames = [`@onebots/adapter-${platform}`, `onebots-adapter-${platform}`, platform],
+        maybeNames = pluginCandidates("adapter", platform),
     ): Promise<boolean> {
         return loadPlugin("适配器", platform, maybeNames, require);
     }
     export async function loadProtocolFactory(
         name: string,
-        maybeNames = [`@onebots/protocol-${name}`, `onebots-protocol-${name}`, `${name}`],
+        maybeNames = pluginCandidates("protocol", name),
     ): Promise<boolean> {
         return loadPlugin("协议", name, maybeNames, require);
     }
