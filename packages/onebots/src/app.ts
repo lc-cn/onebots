@@ -503,6 +503,7 @@ export function createOnebots(config: BaseApp.Config | string = "config.yaml") {
     if (isStartWithConfigFile) {
         config = path.resolve(process.cwd(), config as string);
         BaseApp.configDir = path.dirname(config);
+        BaseApp.configFileName = path.basename(config);
     }
     if (!existsSync(BaseApp.configDir)) mkdirSync(BaseApp.configDir);
     const dataDirectory = ensureRuntimeDataDirectory(BaseApp.dataDir);

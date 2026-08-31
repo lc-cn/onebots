@@ -75,7 +75,7 @@ export class BaseApp extends Koa {
     public enhancedLogger: EnhancedLogger;
     public lifecycle: LifecycleManager;
     static get configPath() {
-        return path.join(BaseApp.configDir, "config.yaml");
+        return path.join(BaseApp.configDir, BaseApp.configFileName);
     }
     static get dataDir() {
         return path.join(BaseApp.configDir, "data");
@@ -571,4 +571,6 @@ export namespace BaseApp {
     };
 
     export let configDir = path.join(os.homedir(), ".onebots");
+    /** 当前运行时配置文件名；与 configDir 分开保存，以保持自定义 -c 路径身份。 */
+    export let configFileName = "config.yaml";
 }

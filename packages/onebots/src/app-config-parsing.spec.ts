@@ -7,9 +7,11 @@ import { createOnebots } from "./app.js";
 
 const temporaryDirectories: string[] = [];
 const originalConfigDir = BaseApp.configDir;
+const originalConfigFileName = BaseApp.configFileName;
 
 afterEach(() => {
     BaseApp.configDir = originalConfigDir;
+    BaseApp.configFileName = originalConfigFileName;
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -31,7 +33,8 @@ describe("createOnebots config parsing", () => {
     it("前台创建入口不把损坏 YAML 附近的凭据带入错误", () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-app-config-"));
         temporaryDirectories.push(directory);
-        const configPath = path.join(directory, "config.yaml");
+        const configPath = path.join(directory, "production.custom.yaml");
+        const defaultConfigPath = path.join(directory, "config.yaml");
         fs.writeFileSync(configPath, "access_token: secret-never-return\nplugins: [\n");
 
         let error: unknown;
@@ -45,5 +48,7 @@ describe("createOnebots config parsing", () => {
         expect((error as Error).message).not.toContain("secret-never-return");
         expect((error as Error).message).not.toContain("plugins: [");
         expect((error as Error).message).not.toContain("\n");
+        expect(BaseApp.configPath).toBe(configPath);
+        expect(fs.existsSync(defaultConfigPath)).toBe(false);
     });
 });
