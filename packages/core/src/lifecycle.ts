@@ -3,10 +3,10 @@
  * 提供资源管理和优雅关闭机制
  */
 
-import { EventEmitter } from 'node:events';
-import { ResourceError } from './errors.js';
-import type { Dispose } from './types.js';
-import { FailureCollector } from './async-utils.js';
+import { EventEmitter } from "node:events";
+import { ResourceError } from "./errors.js";
+import type { Dispose } from "./types.js";
+import { FailureCollector } from "./async-utils.js";
 
 export interface LifecycleHook {
     /** 初始化钩子 */
@@ -17,6 +17,11 @@ export interface LifecycleHook {
     onStop?(): void | Promise<void>;
     /** 清理钩子 */
     onCleanup?(): void | Promise<void>;
+}
+
+export interface LifecycleCleanupOptions {
+    /** 完成全部清理后传播钩子、资源与事件监听器错误。 */
+    throwOnFailure?: boolean;
 }
 
 /**
@@ -66,26 +71,26 @@ export class LifecycleManager extends EventEmitter {
      * 初始化所有钩子
      */
     async init(): Promise<void> {
-        this.emit('beforeInit');
+        this.emit("beforeInit");
         for (const hook of this.hooks) {
             if (hook.onInit) {
                 await hook.onInit();
             }
         }
-        this.emit('afterInit');
+        this.emit("afterInit");
     }
 
     /**
      * 启动所有钩子
      */
     async start(): Promise<void> {
-        this.emit('beforeStart');
+        this.emit("beforeStart");
         for (const hook of this.hooks) {
             if (hook.onStart) {
                 await hook.onStart();
             }
         }
-        this.emit('afterStart');
+        this.emit("afterStart");
     }
 
     /**
@@ -94,7 +99,7 @@ export class LifecycleManager extends EventEmitter {
     async stop(): Promise<void> {
         const failures = new FailureCollector();
         await failures.capture(() => {
-            this.emit('beforeStop');
+            this.emit("beforeStop");
         });
         for (const hook of this.hooks) {
             if (hook.onStop) {
@@ -102,31 +107,36 @@ export class LifecycleManager extends EventEmitter {
             }
         }
         await failures.capture(() => {
-            this.emit('afterStop');
+            this.emit("afterStop");
         });
         failures.throwIfAny(`${failures.size} 个生命周期停止操作失败`);
     }
 
     /**
      * 清理所有资源
+     * 默认保持尽力清理兼容行为；宿主停机应启用 throwOnFailure 以获得可验证结果。
      */
-    async cleanup(): Promise<void> {
+    async cleanup(options: LifecycleCleanupOptions = {}): Promise<void> {
         if (this.isShuttingDown) {
             return;
         }
 
         this.isShuttingDown = true;
-        this.emit('beforeCleanup');
+        const failures = new FailureCollector();
+        await failures.capture(
+            () => {
+                this.emit("beforeCleanup");
+            },
+            error => this.emit("cleanupError", { phase: "beforeCleanup", error }),
+        );
 
         // 执行清理钩子
         for (const hook of this.hooks) {
             if (hook.onCleanup) {
-                try {
-                    await hook.onCleanup();
-                } catch (error) {
-                    this.emit('cleanupError', { hook: 'onCleanup', error });
-                    // 继续执行，不抛出错误
-                }
+                await failures.capture(
+                    () => hook.onCleanup!(),
+                    error => this.emit("cleanupError", { hook: "onCleanup", error }),
+                );
             }
         }
 
@@ -135,15 +145,15 @@ export class LifecycleManager extends EventEmitter {
         for (const [name, dispose] of this.resources.entries()) {
             cleanupPromises.push(
                 (async () => {
-                    try {
-                        const result = dispose();
-                        if (result instanceof Promise) {
-                            await result;
-                        }
-                    } catch (error) {
-                        this.emit('cleanupError', { name, error });
-                        // 继续执行，不抛出错误
-                    }
+                    await failures.capture(
+                        async () => {
+                            const result = dispose();
+                            if (result instanceof Promise) {
+                                await result;
+                            }
+                        },
+                        error => this.emit("cleanupError", { name, error }),
+                    );
                 })(),
             );
         }
@@ -152,7 +162,15 @@ export class LifecycleManager extends EventEmitter {
         this.resources.clear();
         this.hooks = [];
 
-        this.emit('afterCleanup');
+        await failures.capture(
+            () => {
+                this.emit("afterCleanup");
+            },
+            error => this.emit("cleanupError", { phase: "afterCleanup", error }),
+        );
+        if (options.throwOnFailure) {
+            failures.throwIfAny(`${failures.size} 个生命周期清理操作失败`);
+        }
     }
 
     /**
@@ -163,13 +181,13 @@ export class LifecycleManager extends EventEmitter {
             return;
         }
 
-        this.emit('shutdown', signal);
+        this.emit("shutdown", signal);
 
         // 设置超时
         let timeout: NodeJS.Timeout | null = null;
         if (this.shutdownTimeout > 0) {
             timeout = setTimeout(() => {
-                this.emit('shutdownTimeout');
+                this.emit("shutdownTimeout");
                 if (options?.exitOnTimeout !== false) {
                     process.exit(1);
                 }
@@ -178,15 +196,15 @@ export class LifecycleManager extends EventEmitter {
 
         const failures = new FailureCollector();
         await failures.capture(() => this.stop());
-        await failures.capture(() => this.cleanup());
+        await failures.capture(() => this.cleanup({ throwOnFailure: true }));
         if (timeout) {
             clearTimeout(timeout);
         }
         try {
             failures.throwIfAny(`${failures.size} 个优雅关闭操作失败`);
-            this.emit('shutdownComplete');
+            this.emit("shutdownComplete");
         } catch (error) {
-            this.emit('shutdownError', error);
+            this.emit("shutdownError", error);
             throw error;
         }
     }

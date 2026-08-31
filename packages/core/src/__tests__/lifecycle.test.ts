@@ -54,6 +54,32 @@ describe("Lifecycle Manager", () => {
             expect(errorHandler).toHaveBeenCalled();
         });
 
+        it("should report strict cleanup failures after attempting every stage", async () => {
+            const secondHook = vi.fn();
+            const secondResource = vi.fn();
+            const afterCleanup = vi.fn();
+            lifecycle.addHook({
+                onCleanup: () => {
+                    throw new Error("hook cleanup failed");
+                },
+            });
+            lifecycle.addHook({ onCleanup: secondHook });
+            lifecycle.register("failed-resource", () => {
+                throw new Error("resource cleanup failed");
+            });
+            lifecycle.register("healthy-resource", secondResource);
+            lifecycle.on("afterCleanup", afterCleanup);
+
+            await expect(lifecycle.cleanup({ throwOnFailure: true })).rejects.toThrow(
+                "2 个生命周期清理操作失败",
+            );
+
+            expect(secondHook).toHaveBeenCalledOnce();
+            expect(secondResource).toHaveBeenCalledOnce();
+            expect(afterCleanup).toHaveBeenCalledOnce();
+            expect(lifecycle.getResourceCount()).toBe(0);
+        });
+
         it("should unregister resource", () => {
             lifecycle.register("resource1", () => {});
             lifecycle.register("resource2", () => {});
@@ -179,9 +205,30 @@ describe("Lifecycle Manager", () => {
                 lifecycle.gracefulShutdown("SIGTERM", { exitOnTimeout: false }),
             ).rejects.toThrow("stop failed");
             expect(cleanupHook).toHaveBeenCalledOnce();
-            expect(shutdownError).toHaveBeenCalledWith(expect.objectContaining({
-                message: "stop failed",
-            }));
+            expect(shutdownError).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: "stop failed",
+                }),
+            );
+        });
+
+        it("should emit shutdownError when a lifecycle resource cannot be released", async () => {
+            const healthyResource = vi.fn();
+            const shutdownError = vi.fn();
+            lifecycle.register("failed-resource", () => {
+                throw new Error("resource cleanup failed");
+            });
+            lifecycle.register("healthy-resource", healthyResource);
+            lifecycle.on("shutdownError", shutdownError);
+
+            await expect(
+                lifecycle.gracefulShutdown("SIGTERM", { exitOnTimeout: false }),
+            ).rejects.toThrow("resource cleanup failed");
+
+            expect(healthyResource).toHaveBeenCalledOnce();
+            expect(shutdownError).toHaveBeenCalledWith(
+                expect.objectContaining({ message: "resource cleanup failed" }),
+            );
         });
 
         it("should handle shutdown timeout", async () => {
