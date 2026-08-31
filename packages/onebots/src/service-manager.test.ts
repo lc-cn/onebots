@@ -14,7 +14,8 @@ import {
 
 const temporaryDirectories: string[] = [];
 afterEach(() => {
-    for (const directory of temporaryDirectories.splice(0)) fs.rmSync(directory, { recursive: true, force: true });
+    for (const directory of temporaryDirectories.splice(0))
+        fs.rmSync(directory, { recursive: true, force: true });
 });
 
 const spec: ServiceSpec = {
@@ -44,15 +45,37 @@ describe("service definition", () => {
         ]);
     });
 
+    it("builds preflight arguments from the same service contract", () => {
+        expect(buildServiceArgs(spec, "preflight")).toEqual([
+            "/opt/onebots/bin.js",
+            "--service-runtime",
+            "preflight",
+            "-c",
+            "/tmp/one bots/配置.yaml",
+            "-r",
+            "qq",
+            "-r",
+            "kook",
+            "-p",
+            "onebot-v11",
+        ]);
+    });
+
     it("quotes systemd paths without losing arguments", () => {
         const unit = renderSystemdUnit(spec);
-        expect(unit).toContain('ExecStart="/opt/node js/bin/node" "/opt/onebots/bin.js" "--service-runtime" "run" "-c" "/tmp/one bots/配置.yaml"');
+        expect(unit).toContain(
+            'ExecStart="/opt/node js/bin/node" "/opt/onebots/bin.js" "--service-runtime" "run" "-c" "/tmp/one bots/配置.yaml"',
+        );
         expect(unit).toContain("Restart=on-failure");
         expect(unit).toContain("TimeoutStopSec=30");
     });
 
     it("escapes launchd XML values", () => {
-        const plist = renderLaunchdPlist({ ...spec, configPath: "/tmp/a&b/config.yaml" }, "/tmp/out.log", "/tmp/error.log");
+        const plist = renderLaunchdPlist(
+            { ...spec, configPath: "/tmp/a&b/config.yaml" },
+            "/tmp/out.log",
+            "/tmp/error.log",
+        );
         expect(plist).toContain("/tmp/a&amp;b/config.yaml");
         expect(plist).toContain("<key>SuccessfulExit</key>");
         expect(plist).not.toContain("<string>gateway</string>");
@@ -70,16 +93,28 @@ describe("service definition", () => {
         temporaryDirectories.push(home);
         const commands: string[] = [];
         const host: ServiceHost = {
-            platform: "linux", homedir: home, uid: 501, env: {},
-            exec(file, args) { commands.push([file, ...args].join(" ")); return args.includes("is-active") ? "inactive\n" : ""; },
-            async spawn() { return 0; },
+            platform: "linux",
+            homedir: home,
+            uid: 501,
+            env: {},
+            exec(file, args) {
+                commands.push([file, ...args].join(" "));
+                return args.includes("is-active") ? "inactive\n" : "";
+            },
+            async spawn() {
+                return 0;
+            },
         };
         const controller = new ServiceController("user", host);
         const userConfig = path.join(home, "bridge", "config.yaml");
         fs.mkdirSync(path.dirname(userConfig), { recursive: true });
         fs.writeFileSync(userConfig, "port: 6727\n");
 
-        await controller.install({ ...spec, configPath: userConfig, workingDirectory: path.dirname(userConfig) });
+        await controller.install({
+            ...spec,
+            configPath: userConfig,
+            workingDirectory: path.dirname(userConfig),
+        });
         expect(commands.some(command => command.endsWith("enable onebots-gateway"))).toBe(true);
         expect(commands.some(command => command.endsWith("start onebots-gateway"))).toBe(false);
 
