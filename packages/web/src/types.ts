@@ -1,3 +1,5 @@
+import type { AdapterCapabilityManifest } from "@onebots/core";
+
 export interface AccountInfo {
     uin: string;
     status: string;
@@ -43,6 +45,7 @@ export interface SystemInfo {
 export interface AdapterInfo {
     platform: string;
     icon: string;
+    capabilities: AdapterCapabilityManifest;
     accounts: AccountInfo[];
 }
 

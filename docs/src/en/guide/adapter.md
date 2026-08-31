@@ -31,9 +31,13 @@ Every adapter exports and registers one runtime capability manifest. It describe
 
 Use `adapter.describeCapabilities(accountId)` for the complete manifest and `adapter.getSupportedActions(accountId)` for callable actions. OneBots verifies that every advertised action has a concrete adapter implementation, preventing capability metadata from drifting away from runtime behavior.
 
+In the Web console, open **Capability overview** from **Bots** to inspect all four categories for each loaded adapter. Summary counts include native and emulated capabilities, while explicitly unsupported entries remain visible. Permission, scene, and context restrictions appear on each item. Because this view consumes the runtime manifest, it describes the adapters loaded in the current deployment rather than a static platform catalog.
+
 ### Native platform actions
 
 Capabilities outside the common protocol surface are called through `adapter.callAction(accountId, action, params)`. Each adapter package also exports a closed action set, its inferred action union, and a low-level executor. For QQ these are `QQ_PLATFORM_ACTIONS`, `QQPlatformAction`, and `executeQQPlatformAction()`. The set's `has()` accepts a dynamic string and narrows its type, so integrations do not need to duplicate action names or erase the native client type.
+
+Named actions must declare their complete field allowlist, types, required relationships, and HTTP locations; APIs that combine query parameters with a JSON body model both separately. Only explicitly low-level entries such as `call_*_api` may carry a platform-native object. Typos, stale fields, and invalid types therefore fail with structured errors before a network request is sent instead of being forwarded silently.
 
 ```ts
 import {
@@ -49,6 +53,8 @@ async function callQQ(client: QQClient, action: string, params: Record<string, u
 ```
 
 The Web console only lists adapters and protocols actually loaded with `-r` / `-p`. A plugin's registered schema is the single source for runtime validation, form sections, sensitive fields, and dynamic lists; the application does not maintain a second field catalog.
+
+Adapter names and protocol name-version pairs are unique within a process. The same implementation may register repeatedly so plugin loading remains idempotent. A different implementation cannot claim an occupied identifier: the registry throws a `ValidationError` instead of silently replacing the implementation while retaining stale metadata. Unregistering an implementation also removes its schema.
 
 ### Quick Links
 

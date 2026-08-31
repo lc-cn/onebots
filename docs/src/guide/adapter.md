@@ -40,9 +40,13 @@ onebots 目前支持以下平台适配器：
 
 需要额外权限或会话上下文的能力还会声明 `permissions`、`availability` 和适用 `scenes`。调用 `adapter.describeCapabilities(accountId)` 可取得完整清单；调用 `adapter.getSupportedActions(accountId)` 可取得当前可调用动作。OneBots 会校验清单中的动作确有具体实现，防止能力声明与运行时漂移。
 
+启动 Web 管理端后，可在「机器人管理」点击「能力概览」，按适配器查看上述四类声明。概览数字只统计原生和模拟能力，明确标记为不支持的项目仍会保留在列表中；权限、场景和上下文限制也会随条目展示。这里展示的是当前进程实际加载的运行时清单，因此比静态平台列表更适合确认一次部署的能力边界。
+
 ### 平台原生动作
 
 标准协议没有覆盖的平台能力统一通过 `adapter.callAction(accountId, action, params)` 调用。每个适配器包同时导出闭合的动作集合、动作联合类型和底层执行器；以 QQ 为例，分别是 `QQ_PLATFORM_ACTIONS`、`QQPlatformAction` 与 `executeQQPlatformAction()`。集合的 `has()` 接受动态字符串并完成类型收窄，因此插件无需复制动作名，也不需要把原生 SDK 客户端擦成通用类型。
+
+具名动作应声明完整的字段白名单、类型、必填关系和 HTTP 位置；官方接口同时使用 query 与 JSON body 时也必须分别建模。只有 `call_*_api` 这类明确命名的底层入口允许携带平台原始对象。这样拼写错误、过期字段和错误类型会在发出网络请求前以结构化错误失败，而不会被静默透传。
 
 ```ts
 import {
@@ -58,6 +62,8 @@ async function callQQ(client: QQClient, action: string, params: Record<string, u
 ```
 
 Web 管理端只展示启动时通过 `-r` / `-p` 实际加载的适配器和协议。插件自己的注册 Schema 是运行时校验、表单分区、敏感字段与动态列表的唯一来源；主程序不维护第二份配置字段清单。
+
+适配器名称以及“协议名称 + 版本”是进程内唯一标识。同一实现可以重复注册，以兼容插件加载器的幂等调用；不同实现不能占用已有标识，注册表会立即抛出 `ValidationError`，避免后加载的插件静默替换实现并沿用旧元数据。插件卸载实现时，注册表也会一并移除对应 Schema。
 
 ### 快速链接
 
