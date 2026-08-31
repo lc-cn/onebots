@@ -24,7 +24,7 @@ import {
 } from "./package-manager.js";
 import { validateExtensionConfigurationTarget } from "./extension-configuration-target.js";
 import { validateExtensionCatalogIntegrity } from "./extension-catalog-integrity.js";
-import packageMetadata from "../package.json" with { type: "json" };
+import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -161,7 +161,7 @@ export class ExtensionManager {
         const catalogError = catalogIssues.length
             ? `扩展目录完整性校验失败：${catalogIssues.join("；")}`
             : null;
-        const runtimeError = this.getRuntimeRootError();
+        const runtimeError = inspectExtensionRuntimeRoot(this.runtimeRoot).error;
         const adapterCapabilities = new Map(
             buildAdapterCapabilityReport(loadedPlugins).adapters.map(adapter => [
                 adapter.name,
@@ -456,60 +456,9 @@ export class ExtensionManager {
     }
 
     private assertRuntimeRoot(): void {
-        const error = this.getRuntimeRootError();
+        const error = inspectExtensionRuntimeRoot(this.runtimeRoot).error;
         if (error) throw new Error(error);
     }
-
-    private getRuntimeRootError(): string | null {
-        const manifestPath = path.join(this.runtimeRoot, "package.json");
-        if (!fs.existsSync(manifestPath)) {
-            return `扩展运行目录缺少 package.json：${this.runtimeRoot}。请使用官方安装脚本部署，或设置 ONEBOTS_EXTENSION_ROOT。`;
-        }
-        let manifest: {
-            name?: unknown;
-            version?: unknown;
-            dependencies?: unknown;
-            devDependencies?: unknown;
-            optionalDependencies?: unknown;
-        };
-        try {
-            manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as typeof manifest;
-        } catch {
-            return `扩展运行目录的 package.json 不是有效 JSON：${manifestPath}`;
-        }
-
-        if (manifest.name === packageMetadata.name) {
-            if (manifest.version !== packageMetadata.version) {
-                return `扩展运行目录声明 ${packageMetadata.name}@${String(manifest.version ?? "未声明")}，与当前进程 ${packageMetadata.name}@${packageMetadata.version} 不一致`;
-            }
-            return null;
-        }
-        if (!declaresOnebotsDependency(manifest)) {
-            return `扩展运行目录未声明 onebots 依赖：${this.runtimeRoot}。请将 ONEBOTS_EXTENSION_ROOT 指向当前 OneBots 项目。`;
-        }
-
-        const installed = this.inspectInstalledPackage(packageMetadata.name);
-        if (installed.error || !installed.version) {
-            return `扩展运行目录无法验证 onebots 安装身份：${installed.error ?? "未安装"}。请先在该目录安装 OneBots。`;
-        }
-        if (installed.version !== packageMetadata.version) {
-            return `扩展运行目录中的 onebots@${installed.version} 与当前进程 onebots@${packageMetadata.version} 不一致。请从该目录启动 OneBots 后重试。`;
-        }
-        return null;
-    }
-}
-
-function declaresOnebotsDependency(manifest: {
-    dependencies?: unknown;
-    devDependencies?: unknown;
-    optionalDependencies?: unknown;
-}): boolean {
-    return [manifest.dependencies, manifest.devDependencies, manifest.optionalDependencies].some(
-        dependencies =>
-            typeof dependencies === "object" &&
-            dependencies !== null &&
-            Object.hasOwn(dependencies, packageMetadata.name),
-    );
 }
 
 /** @internal 使用正式重启的隔离预检，并确保含凭据的临时文件被清理。 */

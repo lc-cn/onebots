@@ -8,6 +8,7 @@ import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-vali
 import { writeCliOutput } from "./cli-output.js";
 import { probeDoctorManagement } from "./doctor-management.js";
 import { inspectExtensionCatalog } from "./doctor-extension-catalog.js";
+import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
 import {
     inspectNodeRuntime,
     MINIMUM_NODE_MAJOR,
@@ -43,6 +44,8 @@ export interface DoctorOptions {
     useInstalledService?: boolean;
     /** 测试或嵌入场景可显式提供当前进程的端口覆盖。 */
     environmentPort?: string;
+    /** 测试或嵌入场景可显式提供扩展运行目录。 */
+    extensionRoot?: string;
 }
 
 export type DoctorPluginSource = "cli" | "config" | "service" | "none";
@@ -162,6 +165,16 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         name: "plugin-selection",
         level: selection.adapters.length || selection.protocols.length ? "ok" : "warning",
         message: formatDoctorPluginSelection(selection),
+    });
+    const extensionRoot =
+        options.extensionRoot ?? process.env.ONEBOTS_EXTENSION_ROOT ?? selection.workingDirectory;
+    const extensionRuntime = inspectExtensionRuntimeRoot(extensionRoot);
+    checks.push({
+        name: "extension-root",
+        level: extensionRuntime.error ? "error" : "ok",
+        message:
+            extensionRuntime.error ??
+            `扩展运行目录已验证: ${extensionRuntime.root}（onebots@${extensionRuntime.version}）`,
     });
     const runtimeRequire = createRequire(path.join(selection.workingDirectory, "package.json"));
     let pluginsReady = true;

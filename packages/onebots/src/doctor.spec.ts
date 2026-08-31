@@ -11,6 +11,7 @@ import {
     runDoctor,
 } from "./doctor.js";
 import { ServiceController, type ServiceSpec } from "./service-manager.js";
+import packageMetadata from "../package.json" with { type: "json" };
 
 const temporaryDirectories: string[] = [];
 
@@ -547,6 +548,7 @@ describe("doctor persisted plugin selection", () => {
         const configPath = path.join(directory, "config.yaml");
         fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
         fs.mkdirSync(path.join(directory, "data"));
+        const extensionRoot = createExtensionRuntimeRoot();
 
         const normal = await runDoctor({
             configPath,
@@ -554,6 +556,7 @@ describe("doctor persisted plugin selection", () => {
             protocols: [],
             scope: "user",
             useInstalledService: false,
+            extensionRoot,
         });
         const strict = await runDoctor({
             configPath,
@@ -562,12 +565,41 @@ describe("doctor persisted plugin selection", () => {
             scope: "user",
             strict: true,
             useInstalledService: false,
+            extensionRoot,
         });
 
         expect(normal).toMatchObject({ ok: true, strict: false });
         expect(strict).toMatchObject({ ok: false, strict: true });
         expect(strict.checks.find(check => check.name === "plugin-selection")).toMatchObject({
             level: "warning",
+        });
+        expect(normal.checks.find(check => check.name === "extension-root")).toMatchObject({
+            level: "ok",
+            message: expect.stringContaining(`onebots@${packageMetadata.version}`),
+        });
+    });
+
+    it("将错误的扩展运行目录作为部署失败证据", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-extension-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+        fs.writeFileSync(path.join(directory, "package.json"), '{"name":"unrelated"}\n');
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            useInstalledService: false,
+            extensionRoot: directory,
+        });
+
+        expect(report.ok).toBe(false);
+        expect(report.checks.find(check => check.name === "extension-root")).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("扩展运行目录未声明 onebots 依赖"),
         });
     });
 
@@ -682,4 +714,19 @@ function createConfigFile(mode: number): string {
     fs.writeFileSync(configPath, "general: {}\n", { mode });
     fs.chmodSync(configPath, mode);
     return configPath;
+}
+
+function createExtensionRuntimeRoot(): string {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-extension-root-"));
+    temporaryDirectories.push(directory);
+    fs.mkdirSync(path.join(directory, "node_modules", "onebots"), { recursive: true });
+    fs.writeFileSync(
+        path.join(directory, "package.json"),
+        JSON.stringify({ private: true, dependencies: { onebots: packageMetadata.version } }),
+    );
+    fs.writeFileSync(
+        path.join(directory, "node_modules", "onebots", "package.json"),
+        JSON.stringify({ name: "onebots", version: packageMetadata.version }),
+    );
+    return directory;
 }

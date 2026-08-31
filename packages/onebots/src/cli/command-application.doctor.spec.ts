@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { diagnose } from "./command-application.js";
 import { ServiceController, type ServiceSpec } from "../service-manager.js";
+import packageMetadata from "../../package.json" with { type: "json" };
 
 const temporaryDirectories: string[] = [];
 
@@ -22,6 +23,11 @@ describe("doctor configuration scope", () => {
         const configPath = path.join(directory, "config.yaml");
         fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
         fs.mkdirSync(path.join(directory, "data"));
+        fs.writeFileSync(
+            path.join(directory, "package.json"),
+            JSON.stringify({ name: "onebots", version: packageMetadata.version }),
+        );
+        vi.stubEnv("ONEBOTS_EXTENSION_ROOT", directory);
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
 
         const result = await diagnose({
@@ -42,6 +48,9 @@ describe("doctor configuration scope", () => {
         expect(result.exitCode).toBe(1);
         expect(report).toMatchObject({ ok: false, strict: true });
         expect(report.checks.find(check => check.name === "extension-catalog")).toMatchObject({
+            level: "ok",
+        });
+        expect(report.checks.find(check => check.name === "extension-root")).toMatchObject({
             level: "ok",
         });
         expect(report.checks.find(check => check.name === "plugin-selection")).toMatchObject({
