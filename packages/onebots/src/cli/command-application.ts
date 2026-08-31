@@ -12,6 +12,7 @@ import { getLoadedPlugins, type LoadedPluginInfo } from "../plugin-loader.js";
 import {
     buildAdapterCapabilityReport,
     formatAdapterCapabilityReport,
+    getCatalogCapabilityPlatforms,
 } from "../capability-report.js";
 import packageMetadata from "../../package.json" with { type: "json" };
 import { readServiceInstanceId, verifyServiceOnline } from "../service-online-verification.js";
@@ -90,6 +91,7 @@ export async function showCapabilities(
             .getLoadedPlugins()
             .filter(plugin => plugin.type === "adapter" && selected.has(plugin.name)),
         failures,
+        runtime.adapters.length ? runtime.adapters : getCatalogCapabilityPlatforms(),
     );
     return {
         output: formatAdapterCapabilityReport(report, options.json),

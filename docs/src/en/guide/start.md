@@ -176,6 +176,8 @@ curl --fail http://localhost:6727/ready
 
 Doctor first verifies that every extension catalog **Configure** target matches its adapter or protocol identity. Deployment scripts and CI can inspect the `extension-catalog` check in `--json` output; any drift lists every affected catalog entry and its reason. Before an account is configured, `/ready` keeps the management surface reachable and reports `configured: false`; doctor presents this as a warning. `/ready` returns HTTP 503 when an account is offline, a protocol outlet fails to start, or any account has no protocol outlet configured.
 
+Before selecting an adapter, installing a plugin, or creating an account, `onebots capabilities --json` exports the complete platform capability catalog shipped with the current OneBots version. Catalog entries use `source: "catalog"` and `entryPath: null`. Once configuration or `-r` selects adapters, the command loads their plugins without connecting accounts and gives the registered `source: "runtime"` manifests precedence. A load failure still returns an error exit code while retaining any available catalog snapshot for troubleshooting and platform selection.
+
 ## Next Steps
 
 - 📖 Read the [Architecture Guide](/en/guide/architecture) to understand the system structure

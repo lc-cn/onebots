@@ -48,6 +48,7 @@ describe("adapter capability report", () => {
             errors: [],
             adapters: [
                 {
+                    source: "runtime",
                     name: "example",
                     displayName: "示例平台",
                     packageName: "@onebots/adapter-example",
@@ -70,6 +71,52 @@ describe("adapter capability report", () => {
             "动作 2/3（原生 1，模拟 1，不支持 1）",
         );
         expect(JSON.parse(formatAdapterCapabilityReport(report, true))).toEqual(report);
+    });
+
+    it("exports versioned catalog snapshots without loading an adapter", () => {
+        const report = buildAdapterCapabilityReport([], [], ["slack"]);
+
+        expect(report).toMatchObject({
+            complete: true,
+            errors: [],
+            adapters: [
+                {
+                    source: "catalog",
+                    name: "slack",
+                    displayName: "Slack",
+                    packageName: "@onebots/adapter-slack",
+                    packageVersion: expect.any(String),
+                    entryPath: null,
+                    declared: true,
+                    capabilities: expect.any(Object),
+                },
+            ],
+        });
+        expect(formatAdapterCapabilityReport(report)).toContain("目录快照");
+        expect(formatAdapterCapabilityReport(report)).toContain("不代表适配器已安装或账号已授权");
+    });
+
+    it("gives a loaded runtime manifest precedence over its catalog snapshot", () => {
+        const capabilities = defineAdapterCapabilities({
+            actions: {},
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        AdapterRegistry.register("slack", (() => undefined) as unknown as Adapter.Factory, {
+            capabilities,
+        });
+        AdapterRegistry.registerSchema("slack", schema);
+
+        const report = buildAdapterCapabilityReport([plugin("slack")], [], ["slack"]);
+
+        expect(report.adapters).toHaveLength(1);
+        expect(report.adapters[0]).toMatchObject({
+            source: "runtime",
+            packageVersion: "1.2.3",
+            entryPath: "/runtime/slack/index.js",
+            capabilities,
+        });
     });
 
     it("makes an undeclared third-party boundary machine visible", () => {

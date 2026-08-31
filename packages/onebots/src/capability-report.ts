@@ -1,4 +1,9 @@
 import { AdapterRegistry, type AdapterCapabilityManifest } from "@onebots/core";
+import {
+    getExtensionCapabilityCatalogEntry,
+    getExtensionCapabilityCatalogPlatforms,
+} from "./extension-capability-catalog.js";
+import { getExtensionCatalogEntry } from "./extension-catalog.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
 
 export type CapabilityCategory = "actions" | "events" | "segments" | "transports";
@@ -12,12 +17,13 @@ export interface CapabilityCategorySummary {
 }
 
 export interface AdapterCapabilityReportItem {
+    source: "catalog" | "runtime";
     name: string;
     displayName: string;
     description: string;
     packageName: string;
     packageVersion: string | null;
-    entryPath: string;
+    entryPath: string | null;
     declared: boolean;
     summary: Record<CapabilityCategory, CapabilityCategorySummary> | null;
     capabilities: AdapterCapabilityManifest | null;
@@ -35,13 +41,15 @@ const CATEGORIES: CapabilityCategory[] = ["actions", "events", "segments", "tran
 export function buildAdapterCapabilityReport(
     loadedPlugins: readonly LoadedPluginInfo[],
     errors: readonly string[] = [],
+    catalogPlatforms: readonly string[] = [],
 ): AdapterCapabilityReport {
-    const adapters = loadedPlugins
+    const runtimeAdapters = loadedPlugins
         .filter(plugin => plugin.type === "adapter")
         .map(plugin => {
             const metadata = AdapterRegistry.getMetadata(plugin.name);
             const capabilities = metadata?.capabilities ?? null;
             return {
+                source: "runtime" as const,
                 name: plugin.name,
                 displayName: metadata?.displayName || plugin.name,
                 description: metadata?.description || "",
@@ -52,8 +60,32 @@ export function buildAdapterCapabilityReport(
                 summary: capabilities ? summarizeManifest(capabilities) : null,
                 capabilities,
             } satisfies AdapterCapabilityReportItem;
-        })
-        .sort((left, right) => left.name.localeCompare(right.name));
+        });
+    const runtimeNames = new Set(runtimeAdapters.map(adapter => adapter.name));
+    const catalogAdapters = [...new Set(catalogPlatforms)]
+        .filter(platform => !runtimeNames.has(platform))
+        .flatMap(platform => {
+            const capability = getExtensionCapabilityCatalogEntry(platform);
+            if (!capability) return [];
+            const extension = getExtensionCatalogEntry(`adapter:${platform}`);
+            return [
+                {
+                    source: "catalog" as const,
+                    name: platform,
+                    displayName: extension?.displayName || platform,
+                    description: extension?.description || "",
+                    packageName: capability.packageName,
+                    packageVersion: capability.packageVersion,
+                    entryPath: null,
+                    declared: true,
+                    summary: summarizeManifest(capability.manifest),
+                    capabilities: capability.manifest,
+                } satisfies AdapterCapabilityReportItem,
+            ];
+        });
+    const adapters = [...runtimeAdapters, ...catalogAdapters].sort((left, right) =>
+        left.name.localeCompare(right.name),
+    );
     return {
         complete: errors.length === 0 && adapters.every(adapter => adapter.declared),
         errors: [...errors],
@@ -84,7 +116,10 @@ export function formatAdapterCapabilityReport(
                 ? adapter.name
                 : `${adapter.displayName} (${adapter.name})`;
         const version = adapter.packageVersion ? `@${adapter.packageVersion}` : "";
-        lines.push(`${adapter.declared ? "✓" : "✗"} ${title} · ${adapter.packageName}${version}`);
+        const source = adapter.source === "catalog" ? "目录快照" : "运行时清单";
+        lines.push(
+            `${adapter.declared ? "✓" : "✗"} ${title} · ${adapter.packageName}${version} · ${source}`,
+        );
         if (!adapter.summary) {
             lines.push("  未声明默认能力清单，无法在启动账号前验证平台边界");
             continue;
@@ -97,12 +132,20 @@ export function formatAdapterCapabilityReport(
                 }).join("；"),
         );
     }
-    if (report.adapters.length) {
+    if (report.adapters.some(adapter => adapter.source === "runtime")) {
         lines.push(
             "默认清单来自插件注册元数据；账号权限与订阅造成的覆写请在服务启动后查询 /api/adapters。",
         );
     }
+    if (report.adapters.some(adapter => adapter.source === "catalog")) {
+        lines.push("目录快照随当前 OneBots 版本发布，不代表适配器已安装或账号已授权。");
+    }
     return lines.join("\n");
+}
+
+/** 返回当前 OneBots 随包发布的全部平台能力目录。 */
+export function getCatalogCapabilityPlatforms(): string[] {
+    return getExtensionCapabilityCatalogPlatforms();
 }
 
 export function summarizeManifest(

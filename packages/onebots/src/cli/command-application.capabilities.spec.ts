@@ -16,6 +16,40 @@ afterEach(() => {
 });
 
 describe("capabilities command", () => {
+    it("exports the complete catalog without installing an adapter or creating an account", async () => {
+        const calls: Array<{ adapters: string[]; protocols: string[] }> = [];
+
+        const result = await showCapabilities(
+            { register: [], protocol: [], json: true },
+            {
+                loadPlugins: async (adapters, protocols) => {
+                    calls.push({ adapters, protocols });
+                    return [];
+                },
+                getLoadedPlugins: () => [],
+            },
+        );
+        const report = JSON.parse(result.output || "{}") as {
+            complete: boolean;
+            adapters: Array<{
+                source: string;
+                name: string;
+                entryPath: string | null;
+                capabilities: unknown;
+            }>;
+        };
+
+        expect(calls).toEqual([{ adapters: [], protocols: [] }]);
+        expect(result).toMatchObject({ raw: true, exitCode: undefined });
+        expect(report.complete).toBe(true);
+        expect(report.adapters.length).toBeGreaterThan(0);
+        expect(report.adapters.find(adapter => adapter.name === "slack")).toMatchObject({
+            source: "catalog",
+            entryPath: null,
+            capabilities: expect.any(Object),
+        });
+    });
+
     it("reuses persisted adapter defaults and emits raw JSON without loading protocols", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-capabilities-"));
         directories.push(directory);
@@ -95,6 +129,30 @@ describe("capabilities command", () => {
             complete: false,
             errors: ["adapter:missing"],
             adapters: [],
+        });
+    });
+
+    it("keeps a built-in catalog snapshot visible when its runtime plugin fails to load", async () => {
+        const result = await showCapabilities(
+            { register: ["slack"], protocol: [], json: true },
+            {
+                loadPlugins: async () => ["adapter:slack: 构建产物不存在"],
+                getLoadedPlugins: () => [],
+            },
+        );
+
+        expect(result).toMatchObject({ raw: true, exitCode: 2 });
+        expect(JSON.parse(result.output || "{}")).toMatchObject({
+            complete: false,
+            errors: ["adapter:slack: 构建产物不存在"],
+            adapters: [
+                {
+                    name: "slack",
+                    source: "catalog",
+                    entryPath: null,
+                    declared: true,
+                },
+            ],
         });
     });
 });
