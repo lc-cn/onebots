@@ -49,10 +49,13 @@ function setup(reload: App["reload"], isReloading = false) {
         app,
         handler: posts.get("/api/config")!,
         systemHandler: gets.get("/api/system")!,
+        restartHandler: posts.get("/api/system/restart")!,
     };
 }
 
 afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
     BaseApp.configDir = originalConfigDir;
     for (const directory of directories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
@@ -60,6 +63,20 @@ afterEach(() => {
 });
 
 describe("configuration route", () => {
+    it("以可被守护服务识别的失败码触发重启", async () => {
+        vi.useFakeTimers();
+        const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+        const { restartHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
+        const ctx = {} as RouterContext;
+
+        restartHandler(ctx);
+        await vi.runAllTimersAsync();
+
+        expect(ctx.body).toMatchObject({ success: true });
+        expect(exit).toHaveBeenCalledWith(75);
+        vi.useRealTimers();
+    });
+
     it("系统信息公开当前进程已验证的插件清单", () => {
         const { systemHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
         const ctx = {} as RouterContext;

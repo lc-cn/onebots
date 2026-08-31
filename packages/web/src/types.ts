@@ -86,6 +86,26 @@ export interface ProtocolInfo {
     versions: string[];
 }
 
+export interface ExtensionSetupStep {
+    title: string;
+    description: string;
+    url?: string;
+}
+
+export interface ExtensionInfo {
+    id: string;
+    type: "adapter" | "protocol";
+    name: string;
+    displayName: string;
+    description: string;
+    packageName: string;
+    setup: ExtensionSetupStep[];
+    installed: boolean;
+    enabled: boolean;
+    loaded: boolean;
+    installing: boolean;
+}
+
 /** 验证请求展示块（Web 按 type 通用渲染） */
 export type VerificationBlock =
     | { type: "image"; base64: string; alt?: string }

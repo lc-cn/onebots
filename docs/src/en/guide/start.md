@@ -1,5 +1,21 @@
 # Quick Start
 
+## One-command installation (recommended)
+
+On Linux and macOS, the installer checks the runtime, installs an isolated Node.js 24 when needed, installs OneBots with the Web console and OneBot v11, creates a secure configuration, and registers a persistent user service:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lc-cn/onebots/master/install.sh | sh
+```
+
+After the first login, use **Extensions** in the Web console to install platform adapters such as Slack or Telegram, follow the credential setup guide, and apply the account configuration without returning to the command line. Files are stored in `~/.onebots` by default; set `ONEBOTS_HOME` before running the script to change the location.
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/lc-cn/onebots/master/install.ps1 | iex
+```
+
 This guide will help you quickly deploy the onebots service.
 
 ## What is onebots?

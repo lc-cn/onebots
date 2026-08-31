@@ -1,0 +1,56 @@
+import { describe, expect, it, vi } from "vitest";
+import type { RouterContext } from "@onebots/core";
+import type { App } from "../app.js";
+import { ExtensionInstallConflictError } from "../extension-manager.js";
+import { registerExtensionRoutes } from "./extensions.js";
+
+type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
+
+function setup(install = vi.fn(async () => ({ restartRequired: true as const }))) {
+    const gets = new Map<string, RouteHandler>();
+    const posts = new Map<string, RouteHandler>();
+    const app = {
+        pluginInfos: [],
+        extensionManager: { list: vi.fn(() => [{ id: "adapter:slack" }]), install },
+        logger: { error: vi.fn() },
+    } as unknown as App;
+    registerExtensionRoutes(app, {
+        get: vi.fn((route: string, handler: RouteHandler) => gets.set(route, handler)),
+        post: vi.fn((route: string, handler: RouteHandler) => posts.set(route, handler)),
+    } as never);
+    return { app, gets, posts, install };
+}
+
+describe("extension routes", () => {
+    it("返回带安装状态的白名单目录", () => {
+        const { gets } = setup();
+        const ctx = {} as RouterContext;
+
+        gets.get("/api/extensions")!(ctx);
+
+        expect(ctx.body).toEqual([{ id: "adapter:slack" }]);
+    });
+
+    it("安装固定扩展并明确要求重启", async () => {
+        const { posts, install } = setup();
+        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+
+        await posts.get("/api/extensions/:id/install")!(ctx);
+
+        expect(install).toHaveBeenCalledWith("adapter:slack");
+        expect(ctx.body).toMatchObject({ success: true, restartRequired: true });
+    });
+
+    it("并发安装返回 409", async () => {
+        const install = vi.fn(async () => {
+            throw new ExtensionInstallConflictError("正在安装");
+        });
+        const { posts } = setup(install);
+        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+
+        await posts.get("/api/extensions/:id/install")!(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({ success: false, message: "正在安装" });
+    });
+});

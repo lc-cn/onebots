@@ -1,10 +1,13 @@
 /** OneBots CLI 的 Pastel 路由入口与无 TTY 服务运行入口。 */
 import * as path from "node:path";
+import * as fs from "node:fs";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { prepareCliInvocation } from "./cli-invocation.js";
 import { CliError } from "./cli/command-application.js";
 import { writeCliError } from "./cli-output.js";
+import { parseRuntimeConfig } from "./runtime-config-validator.js";
+import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
 
 const packageVersion = (createRequire(import.meta.url)("../package.json") as { version: string })
     .version;
@@ -16,7 +19,11 @@ export async function runCli(argv = process.argv): Promise<void> {
         if (invocation.kind === "unknown") throw new CliError(`未知命令: ${invocation.command}`, 2);
         if (invocation.kind === "invalid") throw new CliError(invocation.message, 2);
         if (invocation.kind === "service-runtime") {
-            const runtime = parseServiceRuntimeInvocation(invocation.argv);
+            const parsedRuntime = parseServiceRuntimeInvocation(invocation.argv);
+            const runtime = {
+                ...parsedRuntime,
+                options: resolveServiceRuntimeOptions(parsedRuntime.options),
+            };
             if (runtime.command === "preflight") {
                 const { preflightServiceRuntime } = await import("./service-preflight.js");
                 await preflightServiceRuntime({
@@ -46,6 +53,20 @@ export async function runCli(argv = process.argv): Promise<void> {
         writeCliError(`[onebots] ${normalized.message}`);
         process.exitCode = normalized instanceof CliError ? normalized.exitCode : 1;
     }
+}
+
+/** 服务定义只保存兼容旧配置的启动快照；一旦配置声明 plugins，始终以配置为准。 */
+export function resolveServiceRuntimeOptions(options: {
+    configPath: string;
+    adapters: string[];
+    protocols: string[];
+}) {
+    if (!fs.existsSync(options.configPath)) return options;
+    const source = fs.readFileSync(options.configPath, "utf8");
+    const selection = getRuntimePluginSelection(parseRuntimeConfig(source));
+    return selection
+        ? { ...options, adapters: selection.adapters, protocols: selection.protocols }
+        : options;
 }
 
 function requiresHeadlessPresentation(argv: string[]): boolean {

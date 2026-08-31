@@ -219,6 +219,7 @@ import {
     IconTerminal2,
     IconFileText,
     IconBug,
+    IconPackage,
     IconBell,
     IconSun,
     IconMoon,
@@ -275,6 +276,7 @@ watch(
 
 const menuItems = [
     { to: '/bots', label: '机器人管理', icon: IconRobot },
+    { to: '/extensions', label: '功能扩展', icon: IconPackage },
     { to: '/config', label: '配置管理', icon: IconSettings },
     { to: '/system', label: '系统信息', icon: IconChartBar },
     { to: '/terminal', label: 'Web 控制台', icon: IconTerminal2 },

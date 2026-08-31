@@ -21,6 +21,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '机器人管理', icon: 'Monitor' }
       },
       {
+        path: 'extensions',
+        name: 'Extensions',
+        component: () => import('../views/Extensions.vue'),
+        meta: { title: '功能扩展', icon: 'Package' }
+      },
+      {
         path: 'config',
         name: 'Config',
         component: () => import('../views/Config.vue'),

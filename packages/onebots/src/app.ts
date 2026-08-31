@@ -17,6 +17,7 @@ import { registerVerificationRoutes } from "./routes/verification.js";
 import { registerTerminalRoutes } from "./routes/terminal.js";
 import { registerPublicStaticRoutes } from "./routes/public-static.js";
 import { registerMessageDebugRoutes } from "./routes/message-debug.js";
+import { registerExtensionRoutes } from "./routes/extensions.js";
 import { LogCacheManager } from "./log-cache.js";
 import { VerificationManager } from "./verification-manager.js";
 import { HfBackupService } from "./hf-backup.js";
@@ -46,6 +47,7 @@ import {
     getRuntimePluginSelection,
     type RuntimePluginSelection,
 } from "./runtime-plugin-selection.js";
+import { ExtensionManager } from "./extension-manager.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -73,6 +75,7 @@ export class App extends BaseApp {
     public ptyTerminal: ReturnType<typeof import("@karinjs/node-pty").spawn> | null = null;
     public terminalClients: Set<WebSocket> = new Set();
     private readonly runtimeConfigStateTracker: RuntimeConfigStateTracker;
+    public readonly extensionManager: ExtensionManager;
 
     private static readonly DEFAULT_TOKEN_EXPIRATION_MS = 12 * 60 * 60 * 1000;
     private static readonly REFRESH_TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -102,6 +105,7 @@ export class App extends BaseApp {
     constructor(config: App.Config) {
         super(config);
         this.runtimeConfigStateTracker = new RuntimeConfigStateTracker(BaseApp.configPath);
+        this.extensionManager = new ExtensionManager({ configPath: BaseApp.configPath });
 
         if (client) this.logger.info(`使用 Web 前端目录: ${client}`);
         else this.logger.warn("未找到 @onebots/web/dist，管理端页面将不可用");
@@ -202,6 +206,7 @@ export class App extends BaseApp {
         registerTerminalRoutes(this, this.router);
         registerPublicStaticRoutes(this, this.router);
         registerMessageDebugRoutes(this, this.router);
+        registerExtensionRoutes(this, this.router);
 
         if (!existsSync(BaseApp.logFile)) {
             const dir = path.dirname(BaseApp.logFile);
@@ -309,7 +314,7 @@ export class App extends BaseApp {
 
         if (fs.existsSync(client)) {
             this.use(koaStatic(client));
-            const spaPathRegex = /^\/(login|bots|config|system|terminal|logs)(\/.*)?$/;
+            const spaPathRegex = /^\/(login|bots|extensions|config|system|terminal|logs)(\/.*)?$/;
             this.use(async (ctx, next) => {
                 if (ctx.method !== "HEAD" && ctx.method !== "GET") return next();
                 const p = ctx.path;

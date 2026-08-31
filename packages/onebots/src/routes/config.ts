@@ -68,12 +68,12 @@ export function registerConfigRoutes(app: App, router: Router): void {
         }
     });
 
-    /** 重启服务：进程退出后由 Docker 的 restart 策略自动拉起容器；非 Docker 需手动重新启动 */
+    /** 以临时失败码退出，让 systemd、launchd、Windows 服务或容器策略重新拉起。 */
     router.post("/api/system/restart", (ctx: RouterContext) => {
         ctx.body = { success: true, message: "服务即将重启" };
         setImmediate(() => {
             setTimeout(() => {
-                process.exit(0);
+                process.exit(75);
             }, 1500);
         });
     });

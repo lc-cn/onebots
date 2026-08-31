@@ -226,12 +226,12 @@ const handleSubmit = async () => {
     }
 };
 
-const openAdd = () => {
+const openAdd = (platform = "") => {
     dialogTitle.value = "新增账号";
     isEdit.value = false;
     accountOriginalConfig.value = {};
-    accountForm.value = { platform: "", account_id: "" };
-    buildAdapterFields("");
+    accountForm.value = { platform, account_id: "" };
+    buildAdapterFields(platform);
     syncFormModel({});
     currentStep.value = 0;
     activeProtocolTab.value = protocolGroups.value[0]?.key ?? "";

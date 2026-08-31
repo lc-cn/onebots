@@ -1,5 +1,23 @@
 # 快速开始
 
+## 一键安装（推荐）
+
+Linux 和 macOS 可以运行官方安装脚本。脚本会检查 Node.js 版本，在独立目录安装 Node.js 24、OneBots、Web 管理端和默认 OneBot v11 协议，创建安全配置，并注册为用户级常驻服务：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lc-cn/onebots/master/install.sh | sh
+```
+
+安装完成后，终端只需用于查看首次登录地址和鉴权码。后续可在 Web 管理端的“功能扩展”页面安装 Slack、Telegram 等平台适配器；安装完成后服务会自动重启，并通过分步说明引导准备平台凭据和填写账号配置。
+
+默认文件保存在 `~/.onebots`。可在运行脚本前设置 `ONEBOTS_HOME` 更改位置。
+
+Windows PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/lc-cn/onebots/master/install.ps1 | iex
+```
+
 本指南将帮助你快速部署 onebots 服务。
 
 ## 什么是 onebots？

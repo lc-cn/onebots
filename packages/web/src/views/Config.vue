@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { IconSettings, IconRefresh, IconCheck, IconPlus, IconDownload } from "@tabler/icons-vue";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
@@ -32,6 +33,8 @@ import {
 
 const toast = useToast();
 const { confirm } = useConfirm();
+const route = useRoute();
+const router = useRouter();
 
 const tabs = [
     { key: "schema", label: "表单" },
@@ -209,8 +212,17 @@ const handleRemoveAccount = async (row: AccountRow) => {
     }
 };
 
-onMounted(() => {
-    loadSchema().finally(loadConfig);
+onMounted(async () => {
+    await loadSchema();
+    await loadConfig();
+    const requestedPlatform = route.query.add;
+    if (typeof requestedPlatform === "string" && schema.value?.adapters?.[requestedPlatform]) {
+        activeTab.value = "accounts";
+        accountWizardRef.value?.openAdd(requestedPlatform);
+        const query = { ...route.query };
+        delete query.add;
+        await router.replace({ query });
+    }
 });
 
 watch(activeTab, name => {
