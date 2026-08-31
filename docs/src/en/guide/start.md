@@ -60,7 +60,7 @@ pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
 pnpm exec onebots setup -c config.yaml -r mock -p onebot-v11
 ```
 
-Setup does not create placeholder platform accounts. It generates defaults only for protocols selected with `-p` and prints a shell-safe foreground command. Open `http://localhost:6727`, sign in with the initial credentials from the startup log, then add an account in **Configuration** and select at least one loaded protocol for it. An account without a protocol outlet is rejected before saving or startup. In non-interactive environments an existing file is preserved unless `--force` is explicit; forced updates create a `.bak` backup.
+Setup does not create placeholder platform accounts. It generates defaults only for protocols selected with `-p` and prints a shell-safe foreground command. If the configuration has no management credentials, setup creates a random 256-bit `access_token`, writes it only to the mode-`0600` configuration file, and never prints the token to service logs. Open `http://localhost:6727`, read `access_token` from the configuration file to sign in, then add an account in **Configuration** and select at least one loaded protocol for it. An account without a protocol outlet is rejected before saving or startup. In non-interactive environments an existing file is preserved unless `--force` is explicit; forced updates create a `.bak` backup.
 
 ## How It Works
 
@@ -79,6 +79,7 @@ Create a `config.yaml` file in the project root:
 port: 6727              # HTTP server port
 log_level: info         # Log level: trace, debug, info, warn, error
 timeout: 30             # Login timeout (seconds)
+access_token: "replace-with-a-long-random-token" # Web console and management API token
 
 # The starting file references no unloaded protocol and contacts no platform
 general: {}

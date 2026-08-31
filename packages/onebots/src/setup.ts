@@ -5,6 +5,7 @@ import yaml from "js-yaml";
 import { ProtocolRegistry, writeConfigFileAtomic } from "@onebots/core";
 import { writeCliOutput } from "./cli-output.js";
 import { validateRuntimeConfig } from "./runtime-config-validator.js";
+import { ensureManagementCredentials } from "./management-credentials.js";
 import {
     createBaseSetupConfig,
     createProtocolDefaults,
@@ -99,6 +100,8 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     if (!exists) {
         config.general = createProtocolDefaults(ProtocolRegistry.getAllSchemas());
     }
+    const managementCredentials = ensureManagementCredentials(config);
+    config = managementCredentials.config;
 
     await validateConfig(config);
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -107,6 +110,10 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     });
     fs.mkdirSync(path.join(path.dirname(configPath), "data"), { recursive: true });
     writeCliOutput(`配置已就绪: ${configPath}`);
+    if (managementCredentials.generated) {
+        writeCliOutput("已生成管理端鉴权码并安全写入配置文件的 access_token 字段。");
+        writeCliOutput("鉴权码不会写入服务日志；首次登录时请从配置文件读取。");
+    }
     writeCliOutput(`前台启动: ${formatSetupCommand(configPath, adapters, protocols)}`);
 }
 

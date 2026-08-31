@@ -12,5 +12,6 @@ describe("default configuration sample", () => {
         expect(accountKeys).toEqual([]);
         expect(config.port).toBe(6727);
         expect(config.general).toEqual({});
+        expect(config).not.toHaveProperty("access_token");
     });
 });

@@ -189,7 +189,7 @@ scrape_configs:
 
 部署或更新后可运行 `onebots doctor --json` 作为自动化门禁。配置端口可连接时，无论网关以前台、Docker 还是托管服务方式运行，doctor 都会同时探测这两个端点；非 2xx、非 JSON、`status` 不是 `ok` 或 `ready` 不是 `true` 都会让检查失败。`/ready` 失败时，报告会列出在线账号、就绪协议数量、对应的未就绪平台以及缺少协议出口的账号，避免只看到一个没有上下文的 HTTP 503。Prometheus 可通过 `onebots_accounts_without_protocols` 为这类配置缺口设置告警。
 
-同一次在线诊断还会验证管理面安全边界：匿名请求必须从 `/api/auth/me` 得到 HTTP 401，匿名根 WebSocket 必须在升级前得到 HTTP 401；随后使用配置中的 `access_token`（也支持 `ONEBOTS_ACCESS_TOKEN`）或用户名密码确认合法 HTTP 请求和 WebSocket 握手仍然可用。用户名密码探测生成的临时会话会立即注销。如果运行实例只使用启动时自动生成、未写入配置的凭据，doctor 仍验证匿名拒绝，但把两项合法凭据探测标为警告。
+同一次在线诊断还会验证管理面安全边界：匿名请求必须从 `/api/auth/me` 得到 HTTP 401，匿名根 WebSocket 必须在升级前得到 HTTP 401；随后使用配置中的 `access_token`（也支持 `ONEBOTS_ACCESS_TOKEN`）或用户名密码确认合法 HTTP 请求和 WebSocket 握手仍然可用。用户名密码探测生成的临时会话会立即注销。若自定义宿主只在内存中提供凭据、doctor 无法从配置或环境取得，匿名拒绝仍会验证，两项合法凭据探测则标为警告。
 
 doctor 还会实际加载服务选用的插件，并使用它们注册的 Schema 校验完整账号和协议配置。直接诊断未安装为服务的配置时，应传入与启动命令相同的 `-r` / `-p` 参数。
 

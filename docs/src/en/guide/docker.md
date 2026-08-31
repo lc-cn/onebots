@@ -50,7 +50,7 @@ docker compose logs -f onebots
 docker compose down
 ```
 
-On first run, a `./data` directory and a default `config.yaml` are created. The default contains no platform accounts, so it cannot attempt external connections with empty credentials. Initial Web console credentials are printed to the startup log. Add accounts and protocol access tokens in the Web console, then run `docker compose restart` to apply changes.
+On first run, a `./data` directory and a default `config.yaml` are created. The default contains no platform accounts, so it cannot attempt external connections with empty credentials. If no management credentials exist, the container writes a random 256-bit `access_token` to that file without printing the token to container logs. Read it from `./data/config.yaml`, sign in to the Web console, and add accounts and protocol access tokens. **Save and apply** hot reloads account and protocol changes immediately; only host settings such as the port, path, and database require `docker compose restart`.
 
 ### Container health status
 

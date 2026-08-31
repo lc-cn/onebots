@@ -9,6 +9,7 @@ Global configuration is the top-level configuration in `config.yaml`, which appl
 port: 6727              # HTTP server port
 log_level: info         # Log level: trace, debug, info, warn, error
 timeout: 30             # Login timeout (seconds)
+access_token: "replace-with-a-long-random-token" # Management token (sensitive)
 
 # General configuration (protocol default configuration)
 general:
@@ -33,6 +34,10 @@ general:
 | `port` | number | HTTP server port | `6727` |
 | `log_level` | string | Log level: `trace`, `debug`, `info`, `warn`, `error` | `info` |
 | `timeout` | number | Login timeout in seconds | `30` |
+| `access_token` | string | Bearer token for the Web console, management API, and root management WebSocket | generated when no complete credentials exist |
+| `username` / `password` | string | Alternative Web console credentials; both fields must be configured together | none |
+
+Setup and the runtime generate a random 256-bit `access_token` when neither a token nor a complete username/password pair exists. The token is stored in the restricted configuration file and is never printed to service logs.
 
 ## General Configuration
 

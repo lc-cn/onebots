@@ -17,6 +17,7 @@ onebots 使用 YAML 格式的配置文件，默认读取运行目录下的 `conf
 port: 6727              # HTTP 服务器端口
 log_level: info         # 日志级别
 timeout: 30             # 登录超时时间(秒)
+access_token: "replace-with-a-long-random-token" # 管理端鉴权码（敏感）
 
 # 通用配置（协议默认配置）
 general:
@@ -54,6 +55,12 @@ general:
 - **默认值**: `30`
 - **单位**: 秒
 - **说明**: 账号登录超时时间
+
+### access_token / username / password
+
+- **类型**: `string`
+- **说明**: Web 管理端与 `/api`、根管理 WebSocket 的认证材料。推荐使用高熵 `access_token`；也可以配置完整的 `username` 与 `password`。
+- **首次启动**: 三项均未形成有效凭据时，setup 或运行时会生成 256 位随机 `access_token` 并写入权限受限的配置文件，鉴权码不会输出到服务日志。
 
 ## 配置优先级
 
