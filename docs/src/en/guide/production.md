@@ -149,7 +149,7 @@ Standard format metrics export, can be directly integrated with Prometheus + Gra
 **Metrics Include**:
 - Application information (version, uptime)
 - Memory usage (RSS, heap memory)
-- Adapter and account status
+- Adapter, account, and protocol outlet status
 - HTTP request metrics (request count, response time, error rate)
 
 **Usage Example**:
@@ -175,9 +175,11 @@ Supports Kubernetes deployment probes.
 
 **Features**:
 - `/health`: Basic health check
-- `/ready`: Checks if all adapters and accounts are ready
+- `/ready`: Checks whether the server, accounts, and every protocol outlet are ready
 
-Run `onebots doctor --json` as an automated gate after deployment or upgrades. When the configured port is reachable, doctor probes both endpoints whether the gateway runs in the foreground, in Docker, or as a managed service. It exits non-zero if either returns a non-2xx response. A failed `/ready` check includes the online account count and the platforms that are not ready, instead of reporting an unexplained HTTP 503.
+The `/ready` summary includes account and protocol instance totals together with their online or ready counts. Each platform also reports protocol `ready`, `unavailable`, and `total` values. An online platform account therefore cannot hide a failed protocol `start()`; the endpoint returns HTTP 503 while any protocol outlet is unavailable. A fresh gateway with no accounts remains HTTP 200 so its management surface is reachable, but returns `configured: false`, which doctor presents as a warning.
+
+Run `onebots doctor --json` as an automated gate after deployment or upgrades. When the configured port is reachable, doctor probes both endpoints whether the gateway runs in the foreground, in Docker, or as a managed service. A non-2xx response, invalid JSON, a health status other than `ok`, or readiness other than `true` fails the check. A failed `/ready` check includes online account and ready protocol counts together with the affected platforms, instead of reporting an unexplained HTTP 503.
 
 Doctor also loads the selected plugins and validates the complete account and protocol configuration against their registered schemas. When checking a configuration that is not installed as a service, pass the same `-r` / `-p` arguments used by the run command. If a plugin entry exists but initialization fails, doctor preserves the first underlying error line, including duplicate registration conflicts and missing runtime dependencies, instead of reducing it to a generic initialization failure.
 

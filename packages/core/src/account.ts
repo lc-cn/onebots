@@ -110,14 +110,30 @@ export class Account<
         this.logger.info(`Starting account ${this.account_id}`);
         await emitAllAwaited(this, "start");
         for (const protocol of this.protocols) {
-            await protocol.start();
+            protocol.lifecycleStatus = "starting";
+            try {
+                await protocol.start();
+                protocol.lifecycleStatus = "ready";
+            } catch (error) {
+                protocol.lifecycleStatus = "failed";
+                throw error;
+            }
         }
     }
 
     async stop(force?: boolean): Promise<void> {
         const failures = new FailureCollector();
         for (const protocol of this.protocols) {
-            await failures.capture(() => protocol.stop(force));
+            await failures.capture(async () => {
+                protocol.lifecycleStatus = "stopping";
+                try {
+                    await protocol.stop(force);
+                    protocol.lifecycleStatus = "stopped";
+                } catch (error) {
+                    protocol.lifecycleStatus = "failed";
+                    throw error;
+                }
+            });
         }
         try {
             await failures.capture(() => emitAllAwaited(this, "stop"));

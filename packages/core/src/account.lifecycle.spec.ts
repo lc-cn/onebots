@@ -25,6 +25,7 @@ function protocol(overrides: Partial<Protocol> = {}): Protocol {
     return {
         name: "test",
         version: "v1",
+        lifecycleStatus: "pending",
         start: vi.fn(async () => undefined),
         stop: vi.fn(async () => undefined),
         ...overrides,
@@ -57,6 +58,7 @@ describe("Account lifecycle", () => {
         release?.();
         await starting;
         expect(order).toEqual(["account:start", "account:ready", "protocol:start"]);
+        expect(account.protocols[0].lifecycleStatus).toBe("ready");
     });
 
     it("启动监听器失败时向调用方传播且不启动协议", async () => {
@@ -69,6 +71,22 @@ describe("Account lifecycle", () => {
 
         await expect(account.start()).rejects.toThrow("account failed");
         expect(start).not.toHaveBeenCalled();
+        expect(account.protocols[0].lifecycleStatus).toBe("pending");
+    });
+
+    it("协议启动失败时标记失败并阻止后续协议误报就绪", async () => {
+        const account = createAccount();
+        const failed = protocol({
+            start: vi.fn(async () => {
+                throw new Error("protocol failed");
+            }),
+        });
+        const pending = protocol();
+        account.protocols = [failed, pending];
+
+        await expect(account.start()).rejects.toThrow("protocol failed");
+        expect(failed.lifecycleStatus).toBe("failed");
+        expect(pending.lifecycleStatus).toBe("pending");
     });
 
     it("停止时尝试全部协议与账号监听器并在最后汇总失败", async () => {
@@ -89,5 +107,6 @@ describe("Account lifecycle", () => {
         expect(secondStop).toHaveBeenCalledOnce();
         expect(accountStop).toHaveBeenCalledOnce();
         expect(account.listenerCount("stop")).toBe(0);
+        expect(account.protocols.map(item => item.lifecycleStatus)).toEqual(["failed", "stopped"]);
     });
 });

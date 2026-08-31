@@ -16,6 +16,8 @@ import {
  */
 export abstract class Protocol<V extends string = string, C = unknown> extends EventEmitter {
     readonly #eventFilter: EventFilterPredicate;
+    /** 由 Account 生命周期编排维护，供 readiness 与运维诊断使用。 */
+    public lifecycleStatus: ProtocolLifecycleStatus = "pending";
     public abstract readonly name: string;
     public abstract readonly version: V;
     get app() {
@@ -75,6 +77,14 @@ export abstract class Protocol<V extends string = string, C = unknown> extends E
      */
     abstract apply(action: string, params?: unknown): Promise<unknown>;
 }
+
+export type ProtocolLifecycleStatus =
+    | "pending"
+    | "starting"
+    | "ready"
+    | "stopping"
+    | "stopped"
+    | "failed";
 
 export namespace Protocol {
     /**

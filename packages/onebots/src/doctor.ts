@@ -234,10 +234,14 @@ export async function probeDoctorEndpoint(
         });
         const body = await response.text();
         const detail = summarizeEndpointBody(endpoint, body);
+        const semanticError = response.ok ? validateEndpointBody(endpoint, body) : undefined;
+        const configurationPending =
+            endpoint === "ready" && response.ok && !semanticError && isConfigurationPending(body);
         return {
             name: endpoint,
-            level: response.ok ? "ok" : "error",
-            message: `${endpoint}: HTTP ${response.status}${detail}`,
+            level:
+                response.ok && !semanticError ? (configurationPending ? "warning" : "ok") : "error",
+            message: `${endpoint}: HTTP ${response.status}${detail}${semanticError ? `；${semanticError}` : ""}`,
         };
     } catch (error) {
         return {
@@ -257,13 +261,27 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
         }
         const summary = payload.summary as Record<string, unknown> | undefined;
         const adapters = payload.adapters as
-            | Record<string, { online?: unknown; total?: unknown; offline?: unknown }>
+            | Record<
+                  string,
+                  {
+                      online?: unknown;
+                      total?: unknown;
+                      offline?: unknown;
+                      protocols?: { ready?: unknown; total?: unknown; unavailable?: unknown };
+                  }
+              >
             | undefined;
         const details: string[] = [];
+        if (payload.configured === false) details.push("未配置账号");
         if (summary) {
             details.push(
                 `账号 ${Number(summary.online_accounts ?? 0)}/${Number(summary.total_accounts ?? 0)} 在线`,
             );
+            if (Number(summary.total_protocols ?? 0) > 0) {
+                details.push(
+                    `协议 ${Number(summary.ready_protocols ?? 0)}/${Number(summary.total_protocols ?? 0)} 就绪`,
+                );
+            }
         }
         const unavailable = Object.entries(adapters ?? {})
             .filter(([, state]) => Number(state.offline ?? 0) > 0)
@@ -272,10 +290,42 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
                     `${platform}(${Number(state.online ?? 0)}/${Number(state.total ?? 0)})`,
             );
         if (unavailable.length > 0) details.push(`未就绪: ${unavailable.join(", ")}`);
+        const unavailableProtocols = Object.entries(adapters ?? {})
+            .filter(([, state]) => Number(state.protocols?.unavailable ?? 0) > 0)
+            .map(
+                ([platform, state]) =>
+                    `${platform}(${Number(state.protocols?.ready ?? 0)}/${Number(state.protocols?.total ?? 0)})`,
+            );
+        if (unavailableProtocols.length > 0) {
+            details.push(`协议未就绪: ${unavailableProtocols.join(", ")}`);
+        }
         return details.length > 0 ? `；${details.join("；")}` : "";
     } catch {
         const singleLine = body.replace(/\s+/gu, " ").trim();
         return singleLine ? `；响应 ${singleLine.slice(0, 160)}` : "";
+    }
+}
+
+function isConfigurationPending(body: string): boolean {
+    try {
+        return (JSON.parse(body) as Record<string, unknown>).configured === false;
+    } catch {
+        return false;
+    }
+}
+
+function validateEndpointBody(endpoint: DoctorEndpoint, body: string): string | undefined {
+    try {
+        const payload = JSON.parse(body) as Record<string, unknown>;
+        if (endpoint === "health" && payload.status !== "ok") {
+            return "响应未声明 status: ok";
+        }
+        if (endpoint === "ready" && payload.ready !== true) {
+            return "响应未声明 ready: true";
+        }
+        return undefined;
+    } catch {
+        return "响应不是有效 JSON";
     }
 }
 
