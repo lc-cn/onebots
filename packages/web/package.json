@@ -3,6 +3,7 @@
     "version": "1.0.13",
     "description": "IMHelper Web 管理界面",
     "type": "module",
+    "files": ["/dist/**"],
     "scripts": {
         "dev": "vite",
         "build": "pnpm typecheck && vite build",

@@ -24,7 +24,10 @@
   },
   "files": [
     "/lib/**/*.js",
-    "/lib/**/*.d.ts"
+    "/lib/**/*.d.ts",
+    "!lib/**/*.spec.*",
+    "!lib/**/*.test.*",
+    "!lib/**/__tests__/**"
   ],
   "devDependencies": {
     "@types/node": "^24.0.0",

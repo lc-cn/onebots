@@ -105,6 +105,7 @@ pnpm format           # prettier --check
 pnpm format:fix       # prettier --write（ts/js/md）
 pnpm docs:dev         # 文档站点（端口 8989）
 pnpm web:dev          # Web 管理端前端开发
+pnpm packages:pack:check # 校验全部 npm tarball 的入口和生产文件边界
 pnpm changeset        # 创建变更集（发版必需）
 ```
 

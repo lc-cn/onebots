@@ -52,7 +52,10 @@
   },
   "files": [
     "/lib/**/*.js",
-    "/lib/**/*.d.ts"
+    "/lib/**/*.d.ts",
+    "!lib/**/*.spec.*",
+    "!lib/**/*.test.*",
+    "!lib/**/__tests__/**"
   ],
   "dependencies": {
     "@koa/router": "^15.1.0",

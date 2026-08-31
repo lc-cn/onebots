@@ -27,6 +27,7 @@
     "create:adapter": "node scripts/create-adapter.mjs",
     "catalog:capabilities": "node scripts/generate-extension-capability-catalog.mjs",
     "catalog:capabilities:check": "node scripts/generate-extension-capability-catalog.mjs --check",
+    "packages:pack:check": "node scripts/verify-publish-packages.mjs",
     "changeset": "changeset",
     "changeset:version": "changeset version && pnpm catalog:capabilities",
     "changeset:publish": "changeset publish",

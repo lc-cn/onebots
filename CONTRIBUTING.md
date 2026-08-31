@@ -419,7 +419,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
    分支命名参考：`feat/adapter-xxx`、`fix/xxx-bug`、`refactor/xxx`。
 
-2. **开发**：在分支上完成代码修改，确保通过 `pnpm build`、`pnpm lint` 和 `pnpm test`（与 CI 门禁一致）。
+2. **开发**：在分支上完成代码修改，确保通过 `pnpm build`、`pnpm packages:pack:check`、`pnpm lint` 和 `pnpm test`（与 CI 门禁一致）。
 
 3. **变更集**：如果涉及包版本变更（新功能或修复），使用 `pnpm changeset` 生成变更集（选择变动的包和版本类型）。
 
@@ -461,6 +461,7 @@ pnpm changeset:publish      # 发布到 npm
 | `pnpm test:watch` | vitest 监听模式 |
 | `pnpm test:ui` | vitest UI 模式 |
 | `pnpm test:coverage` | 带覆盖率报告的测试 |
+| `pnpm packages:pack:check` | 真实打包全部发布包，校验生产入口并拒绝测试、源码和依赖目录泄漏 |
 | `pnpm changeset` | 创建变更集（发版用） |
 | `pnpm changeset:version` | 应用变更集版本 |
 | `pnpm changeset:publish` | 发布到 npm |

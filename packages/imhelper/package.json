@@ -19,7 +19,10 @@
   "license": "MIT",
   "files": [
     "/lib/**/*.js",
-    "/lib/**/*.d.ts"
+    "/lib/**/*.d.ts",
+    "!lib/**/*.spec.*",
+    "!lib/**/*.test.*",
+    "!lib/**/__tests__/**"
   ],
   "dependencies": {
     "eventsource": "^4.1.0",
