@@ -8,6 +8,7 @@ import {
     extractManagementToken,
     validateManagementToken,
 } from "../management-auth.js";
+import { startManagementAuthorizationMonitor } from "../management-authorization-monitor.js";
 import { scheduleProcessRestart } from "../process-restart.js";
 
 /** SSE 心跳间隔（毫秒） */
@@ -30,6 +31,9 @@ export function registerTerminalRoutes(app: App, router: Router): void {
     });
     terminalWs.on("connection", (client, request) => {
         const managementToken = extractManagementToken(request);
+        const stopAuthorizationMonitor = startManagementAuthorizationMonitor(app, managementToken, {
+            onUnauthorized: () => client.close(1008, "Unauthorized"),
+        });
         // 创建 PTY 终端实例（如果不存在）
         if (!app.ptyTerminal) {
             const shell = process.platform === "win32" ? "powershell.exe" : "bash";
@@ -92,6 +96,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
 
         // 监听客户端断开
         client.on("close", () => {
+            stopAuthorizationMonitor();
             app.terminalClients.delete(client);
             // 如果没有客户端了，关闭 PTY
             if (app.terminalClients.size === 0 && app.ptyTerminal) {
@@ -131,15 +136,26 @@ export function registerTerminalRoutes(app: App, router: Router): void {
             app.logger.error("读取日志缓存失败:", error);
         }
 
-        // 定时发送心跳
-        const heartbeat = setInterval(() => {
-            try {
-                ctx.res.write(": heartbeat\n\n");
-            } catch {
-                app.removeLogClient(ctx.res);
-            }
-        }, SSE_HEARTBEAT_INTERVAL_MS);
-        app.registerLogClient(ctx.res, () => clearInterval(heartbeat));
+        const stopAuthorizationMonitor = startManagementAuthorizationMonitor(
+            app,
+            ctx.state.token as string | undefined,
+            {
+                intervalMs: SSE_HEARTBEAT_INTERVAL_MS,
+                onAuthorized: () => {
+                    try {
+                        ctx.res.write(": heartbeat\n\n");
+                    } catch (error) {
+                        app.logger.error("发送日志流心跳失败", { error });
+                        app.removeLogClient(ctx.res);
+                    }
+                },
+                onUnauthorized: () => {
+                    app.removeLogClient(ctx.res);
+                    ctx.res.end();
+                },
+            },
+        );
+        app.registerLogClient(ctx.res, stopAuthorizationMonitor);
 
         // 监听连接关闭
         ctx.req.on("close", () => {

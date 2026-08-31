@@ -45,6 +45,8 @@ The Web entry still accepts `?access_token=` for guided login, but it validates 
 
 After **Save and apply** rotates `username`, `password`, or `access_token`, HTTP login and WebSocket upgrades immediately use the new values. All existing access and refresh tokens are revoked, and connected root-management and terminal WebSockets close with a policy-violation status. Log, account-verification, and message-debug SSE also stop their heartbeats and end their responses, so a revoked session cannot continue receiving sensitive events. The Web client reconnects with its current local credential and returns to login after the old credential is explicitly rejected. Changes limited to accounts, protocols, or logging do not interrupt management sessions. Normal shutdown and failed-start rollback use the same management-stream registry to release every timer and response. One cleanup failure does not prevent the other streams from closing, and the final error aggregates the retained failure evidence.
 
+When a username/password session token expires naturally, established root-management and terminal WebSockets plus log, account-verification, and message-debug SSE cannot continue receiving passive data indefinitely. The server revalidates long-lived connection credentials every 30 seconds and stops heartbeats and closes the connection by the next check. Deployment-level tokens supplied by configuration or `ONEBOTS_ACCESS_TOKEN` have no session expiry, so their connections remain active until credential rotation, service shutdown, or network disconnection.
+
 ### Token Management
 
 Complete token lifecycle management.

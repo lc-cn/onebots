@@ -1,6 +1,7 @@
 import { RouterContext } from "@onebots/core";
 import type { Router, Adapter } from "@onebots/core";
 import type { App } from "../app.js";
+import { startManagementAuthorizationMonitor } from "../management-authorization-monitor.js";
 
 /**
  * Register verification-related routes for adapter login flows (device lock, SMS, etc.).
@@ -31,14 +32,25 @@ export function registerVerificationRoutes(app: App, router: Router): void {
         ctx.status = 200;
         ctx.respond = false;
 
-        const heartbeat = setInterval(() => {
-            try {
-                ctx.res.write(": heartbeat\n\n");
-            } catch {
-                app.removeVerificationClient(ctx.res);
-            }
-        }, 30000);
-        app.registerVerificationClient(ctx.res, () => clearInterval(heartbeat));
+        const stopAuthorizationMonitor = startManagementAuthorizationMonitor(
+            app,
+            ctx.state.token as string | undefined,
+            {
+                onAuthorized: () => {
+                    try {
+                        ctx.res.write(": heartbeat\n\n");
+                    } catch (error) {
+                        app.logger.error("发送账号验证流心跳失败", { error });
+                        app.removeVerificationClient(ctx.res);
+                    }
+                },
+                onUnauthorized: () => {
+                    app.removeVerificationClient(ctx.res);
+                    ctx.res.end();
+                },
+            },
+        );
+        app.registerVerificationClient(ctx.res, stopAuthorizationMonitor);
 
         ctx.req.on("close", () => {
             app.removeVerificationClient(ctx.res);

@@ -45,6 +45,7 @@ import {
     managementCredentialsChanged,
     validateManagementToken,
 } from "./management-auth.js";
+import { startManagementAuthorizationMonitor } from "./management-authorization-monitor.js";
 import type { WebSocket } from "ws";
 import type { ServerResponse } from "node:http";
 import { ensureManagementCredentials } from "./management-credentials.js";
@@ -315,6 +316,14 @@ export class App extends BaseApp {
 
         this.ws.on("connection", async (client, request) => {
             const managementToken = extractManagementToken(request);
+            const stopAuthorizationMonitor = startManagementAuthorizationMonitor(
+                this,
+                managementToken,
+                {
+                    onUnauthorized: () => client.close(1008, "Unauthorized"),
+                },
+            );
+            client.once("close", stopAuthorizationMonitor);
             client.send(
                 JSON.stringify({
                     event: "system.sync",
