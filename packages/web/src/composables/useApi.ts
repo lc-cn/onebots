@@ -3,22 +3,22 @@ import type { AdapterInfo, SystemInfo } from "../types";
 import { buildApiUrl } from "../config";
 import { authFetch, appendAuthQuery } from "./useAuth";
 import { reportClientError } from "../client-diagnostics";
+import {
+    pendingReadinessProbe,
+    probeReadiness,
+    type ServiceProbeResult,
+} from "../utils/service-probes.js";
 
 export function useApi() {
     const adapters = ref<AdapterInfo[]>([]);
     const systemInfo = ref<SystemInfo | null>(null);
     const logs = ref<string[]>([]);
+    const readinessProbe = ref<ServiceProbeResult>(pendingReadinessProbe());
 
     let logsEventSource: EventSource | null = null;
 
     const totalBotCount = computed(() => {
         return adapters.value.reduce((acc, adapter) => acc + adapter.accounts.length, 0);
-    });
-
-    const onlineBotCount = computed(() => {
-        return adapters.value.reduce((acc, adapter) => {
-            return acc + adapter.accounts.filter(bot => bot.status === "online").length;
-        }, 0);
     });
 
     const fetchAdapters = async () => {
@@ -41,6 +41,10 @@ export function useApi() {
         } catch (error) {
             reportClientError("获取系统信息失败", error);
         }
+    };
+
+    const fetchReadiness = async () => {
+        readinessProbe.value = await probeReadiness();
     };
 
     const startLogsSSE = () => {
@@ -102,7 +106,10 @@ export function useApi() {
 
     const startAdapterPolling = () => {
         stopAdapterPolling();
-        adapterPollTimer = setInterval(fetchAdapters, ADAPTER_POLL_INTERVAL);
+        adapterPollTimer = setInterval(() => {
+            void fetchAdapters();
+            void fetchReadiness();
+        }, ADAPTER_POLL_INTERVAL);
     };
 
     const stopAdapterPolling = () => {
@@ -118,8 +125,9 @@ export function useApi() {
     };
 
     onMounted(() => {
-        fetchAdapters();
-        fetchSystemInfo();
+        void fetchAdapters();
+        void fetchSystemInfo();
+        void fetchReadiness();
         startAdapterPolling();
     });
 
@@ -130,11 +138,12 @@ export function useApi() {
     return {
         adapters,
         systemInfo,
+        readinessProbe,
         logs,
         totalBotCount,
-        onlineBotCount,
         fetchAdapters,
         fetchSystemInfo,
+        fetchReadiness,
         startBot,
         stopBot,
         startLogsSSE,

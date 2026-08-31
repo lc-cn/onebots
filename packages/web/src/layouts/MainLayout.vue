@@ -148,7 +148,11 @@
                     <h1 class="truncate text-sm font-medium text-fg">{{ route.meta.title }}</h1>
                 </div>
                 <div class="flex shrink-0 items-center gap-3">
-                    <UiBadge variant="success" dot>在线 {{ onlineBotCount }}</UiBadge>
+                    <RouterLink to="/system" :title="readinessProbe.detail">
+                        <UiBadge :variant="readinessProbe.state" dot>
+                            {{ readinessProbe.label }}
+                        </UiBadge>
+                    </RouterLink>
                     <button
                         type="button"
                         title="待处理验证"
@@ -210,8 +214,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
     IconRobot,
     IconSettings,
@@ -228,39 +232,39 @@ import {
     IconLayoutSidebarLeftExpand,
     IconMenu2,
     IconX,
-} from '@tabler/icons-vue';
-import { useTheme } from '../composables/useTheme';
-import { useApi } from '../composables/useApi';
-import { useVerification } from '../composables/useVerification';
-import { logout } from '../composables/useAuth';
-import UiBadge from '../ui/UiBadge.vue';
-import UiAlert from '../ui/UiAlert.vue';
-import VerificationPanel from '../components/VerificationPanel.vue';
+} from "@tabler/icons-vue";
+import { useTheme } from "../composables/useTheme";
+import { useApi } from "../composables/useApi";
+import { useVerification } from "../composables/useVerification";
+import { logout } from "../composables/useAuth";
+import UiBadge from "../ui/UiBadge.vue";
+import UiAlert from "../ui/UiAlert.vue";
+import VerificationPanel from "../components/VerificationPanel.vue";
 
 const route = useRoute();
 const router = useRouter();
 
 const { isDark, toggleTheme } = useTheme();
-const { onlineBotCount, systemInfo } = useApi();
+const { readinessProbe, systemInfo } = useApi();
 const verification = useVerification();
 const verificationPending = computed(() => verification.pending.value);
 const verificationShouldOpen = computed(() => verification.shouldOpenDrawer.value);
 
-const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024);
+const windowWidth = ref(typeof window !== "undefined" ? window.innerWidth : 1024);
 const isMobile = computed(() => windowWidth.value < 768);
 const mobileMenuOpen = ref(false);
-const isCollapse = ref(typeof window !== 'undefined' && window.innerWidth < 768);
+const isCollapse = ref(typeof window !== "undefined" && window.innerWidth < 768);
 
 let onResize: (() => void) | undefined;
 onMounted(() => {
     onResize = () => {
         windowWidth.value = window.innerWidth;
     };
-    window.addEventListener('resize', onResize);
+    window.addEventListener("resize", onResize);
 });
 onUnmounted(() => {
     if (onResize) {
-        window.removeEventListener('resize', onResize);
+        window.removeEventListener("resize", onResize);
     }
 });
 
@@ -275,19 +279,19 @@ watch(
 );
 
 const menuItems = [
-    { to: '/bots', label: '机器人管理', icon: IconRobot },
-    { to: '/extensions', label: '功能扩展', icon: IconPackage },
-    { to: '/config', label: '配置管理', icon: IconSettings },
-    { to: '/system', label: '系统信息', icon: IconChartBar },
-    { to: '/terminal', label: 'Web 控制台', icon: IconTerminal2 },
-    { to: '/logs', label: '系统日志', icon: IconFileText },
-    { to: '/message-debug', label: '消息调试', icon: IconBug },
+    { to: "/bots", label: "机器人管理", icon: IconRobot },
+    { to: "/extensions", label: "功能扩展", icon: IconPackage },
+    { to: "/config", label: "配置管理", icon: IconSettings },
+    { to: "/system", label: "系统信息", icon: IconChartBar },
+    { to: "/terminal", label: "Web 控制台", icon: IconTerminal2 },
+    { to: "/logs", label: "系统日志", icon: IconFileText },
+    { to: "/message-debug", label: "消息调试", icon: IconBug },
 ];
 
 const isActive = (path: string) => route.path === path || route.path.startsWith(`${path}/`);
 
 const handleLogout = async () => {
     await logout();
-    router.replace('/login');
+    router.replace("/login");
 };
 </script>

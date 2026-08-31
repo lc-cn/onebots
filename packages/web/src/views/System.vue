@@ -238,24 +238,32 @@
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div class="flex items-center gap-2.5">
                         <IconCircleCheckFilled
-                            v-if="healthStatus.ok"
+                            v-if="healthStatus.state === 'success'"
                             :size="20"
                             class="text-success" />
+                        <IconInfoCircle
+                            v-else-if="healthStatus.state === 'warning'"
+                            :size="20"
+                            class="text-warning" />
                         <IconCircleXFilled v-else :size="20" class="text-danger" />
                         <span class="flex-1 text-sm text-fg-secondary">/health（存活）</span>
-                        <UiBadge :variant="healthStatus.ok ? 'success' : 'danger'" dot>
-                            {{ healthStatus.ok ? "正常" : healthStatus.error || "异常" }}
+                        <UiBadge :variant="healthStatus.state" :title="healthStatus.detail" dot>
+                            {{ healthStatus.label }}
                         </UiBadge>
                     </div>
                     <div class="flex items-center gap-2.5">
                         <IconCircleCheckFilled
-                            v-if="readyStatus.ok"
+                            v-if="readyStatus.state === 'success'"
                             :size="20"
                             class="text-success" />
+                        <IconInfoCircle
+                            v-else-if="readyStatus.state === 'warning'"
+                            :size="20"
+                            class="text-warning" />
                         <IconCircleXFilled v-else :size="20" class="text-danger" />
                         <span class="flex-1 text-sm text-fg-secondary">/ready（就绪）</span>
-                        <UiBadge :variant="readyStatus.ok ? 'success' : 'danger'" dot>
-                            {{ readyStatus.ok ? "正常" : readyStatus.error || "异常" }}
+                        <UiBadge :variant="readyStatus.state" :title="readyStatus.detail" dot>
+                            {{ readyStatus.label }}
                         </UiBadge>
                     </div>
                 </div>
@@ -287,13 +295,23 @@ import { authFetch } from "../composables/useAuth";
 import { formatSize, formatTime } from "../utils";
 import { buildApiUrl } from "../config";
 import { readCurrentServiceInstanceId, waitForServiceRestart } from "../utils/service-restart";
+import {
+    pendingReadinessProbe,
+    probeHealth,
+    probeReadiness,
+    type ServiceProbeResult,
+} from "../utils/service-probes.js";
 
 const { systemInfo, fetchSystemInfo } = useApi();
 const toast = useToast();
 const { confirm } = useConfirm();
 
-const healthStatus = ref<{ ok: boolean; error?: string }>({ ok: false });
-const readyStatus = ref<{ ok: boolean; error?: string }>({ ok: false });
+const healthStatus = ref<ServiceProbeResult>({
+    state: "warning",
+    label: "检查中",
+    detail: "正在读取服务存活证据",
+});
+const readyStatus = ref<ServiceProbeResult>(pendingReadinessProbe());
 const healthLoading = ref(false);
 const restartLoading = ref(false);
 const backupLoading = ref(false);
@@ -358,23 +376,8 @@ async function handleBackup() {
 
 async function checkHealth() {
     healthLoading.value = true;
-    healthStatus.value = { ok: false };
-    readyStatus.value = { ok: false };
-    try {
-        const healthRes = await fetch(buildApiUrl("/health") || "/health");
-        healthStatus.value = healthRes.ok
-            ? { ok: true }
-            : { ok: false, error: `HTTP ${healthRes.status}` };
-        const readyRes = await fetch(buildApiUrl("/ready") || "/ready");
-        readyStatus.value = readyRes.ok
-            ? { ok: true }
-            : { ok: false, error: `HTTP ${readyRes.status}` };
-    } catch (error) {
-        healthStatus.value = { ok: false, error: (error as Error).message };
-        readyStatus.value = { ok: false, error: (error as Error).message };
-    } finally {
-        healthLoading.value = false;
-    }
+    [healthStatus.value, readyStatus.value] = await Promise.all([probeHealth(), probeReadiness()]);
+    healthLoading.value = false;
 }
 
 async function handleRestart() {
