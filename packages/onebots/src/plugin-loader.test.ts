@@ -203,6 +203,95 @@ describe("plugin loader", () => {
         }
     });
 
+    it("rejects registry mutations scheduled after a successful plugin transaction", async () => {
+        const directory = createImportOnlyPlugin(
+            "late-adapter",
+            `globalThis.__onebotsRegisterOnTime();
+setTimeout(() => {
+    try {
+        globalThis.__onebotsRegisterLate();
+    } catch (error) {
+        globalThis.__onebotsLateRegistrationError = error instanceof Error ? error.message : String(error);
+    }
+}, 0);
+`,
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterOnTime?: () => void;
+            __onebotsRegisterLate?: () => void;
+            __onebotsLateRegistrationError?: string;
+        };
+        globals.__onebotsRegisterOnTime = () => {
+            AdapterRegistry.register("late", (() => undefined) as never);
+            AdapterRegistry.registerSchema("late", {});
+        };
+        globals.__onebotsRegisterLate = () => {
+            AdapterRegistry.register("hidden", (() => undefined) as never);
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "adapter",
+                "late",
+                ["late-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(result).toMatchObject({ loaded: true });
+            expect(AdapterRegistry.has("late")).toBe(true);
+            expect(AdapterRegistry.has("hidden")).toBe(false);
+            expect(globals.__onebotsLateRegistrationError).toBe(
+                "插件注册事务已结束，拒绝迟到的注册表修改",
+            );
+        } finally {
+            delete globals.__onebotsRegisterOnTime;
+            delete globals.__onebotsRegisterLate;
+            delete globals.__onebotsLateRegistrationError;
+        }
+    });
+
+    it("keeps a failed plugin closed to delayed registry mutations after rollback", async () => {
+        const directory = createImportOnlyPlugin(
+            "failed-late-adapter",
+            `setTimeout(() => {
+    try {
+        globalThis.__onebotsRegisterAfterFailure();
+    } catch (error) {
+        globalThis.__onebotsFailedLateRegistrationError = error instanceof Error ? error.message : String(error);
+    }
+}, 0);
+throw new Error("初始化失败");
+`,
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterAfterFailure?: () => void;
+            __onebotsFailedLateRegistrationError?: string;
+        };
+        globals.__onebotsRegisterAfterFailure = () => {
+            ProtocolRegistry.register("hidden", "v1", (() => undefined) as never);
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "adapter",
+                "failed-late",
+                ["failed-late-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(result).toMatchObject({ loaded: false });
+            expect(ProtocolRegistry.has("hidden", "v1")).toBe(false);
+            expect(globals.__onebotsFailedLateRegistrationError).toBe(
+                "插件注册事务已结束，拒绝迟到的注册表修改",
+            );
+        } finally {
+            delete globals.__onebotsRegisterAfterFailure;
+            delete globals.__onebotsFailedLateRegistrationError;
+        }
+    });
+
     it("loads a pure ESM plugin that uses top-level await", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
         temporaryDirectories.push(directory);

@@ -7,6 +7,7 @@ import {
     ProtocolRegistry,
     captureExtensionRegistryState,
     restoreExtensionRegistryState,
+    runWithExtensionRegistrationScope,
     type ExtensionRegistryState,
 } from "@onebots/core";
 import { writeCliError } from "./cli-output.js";
@@ -163,7 +164,9 @@ async function tryLoadPluginUnlocked(
     }
     const registryState = captureExtensionRegistryState();
     try {
-        await import(pathToFileURL(inspection.entryPath).href);
+        await runWithExtensionRegistrationScope(
+            () => import(pathToFileURL(inspection.entryPath).href),
+        );
         return { loaded: true, inspection };
     } catch (error) {
         restoreExtensionRegistryState(registryState);

@@ -9,6 +9,37 @@ import {
     normalizeAdapterCapabilities,
 } from "./adapter-capability.js";
 import { isDeepStrictEqual } from "node:util";
+import { AsyncLocalStorage } from "node:async_hooks";
+
+interface ExtensionRegistrationScope {
+    open: boolean;
+}
+
+const extensionRegistrationScope = new AsyncLocalStorage<ExtensionRegistrationScope>();
+
+/**
+ * 将一次插件导入标记为唯一可写的注册时段。
+ *
+ * 插件在导入期间创建的定时器和 Promise 会继承同一上下文；导入完成后关闭共享标记，
+ * 这些异步后代再尝试修改注册表时会被拒绝，避免迟到注册逃出宿主的验收与回滚边界。
+ */
+export async function runWithExtensionRegistrationScope<T>(
+    operation: () => Promise<T>,
+): Promise<T> {
+    const scope: ExtensionRegistrationScope = { open: true };
+    try {
+        return await extensionRegistrationScope.run(scope, operation);
+    } finally {
+        scope.open = false;
+    }
+}
+
+function assertExtensionRegistryMutationOpen(): void {
+    const scope = extensionRegistrationScope.getStore();
+    if (scope && !scope.open) {
+        throw new ValidationError("插件注册事务已结束，拒绝迟到的注册表修改");
+    }
+}
 
 export interface ExtensionRegistryState {
     readonly adapters: {
@@ -46,6 +77,7 @@ export class ProtocolRegistry {
         factory: Protocol.Factory,
         metadata?: Partial<Protocol.Metadata>,
     ): void {
+        assertExtensionRegistryMutationOpen();
         if (!this.protocols.has(name)) {
             this.protocols.set(name, new Map());
         }
@@ -87,6 +119,7 @@ export class ProtocolRegistry {
      * Register a protocol config schema (key format: name.version)
      */
     static registerSchema(key: string, schema: Schema): void {
+        assertExtensionRegistryMutationOpen();
         assertSchemaFormContract(schema);
         const registeredSchema = this.schemas.get(key);
         if (registeredSchema) {
@@ -188,6 +221,7 @@ export class ProtocolRegistry {
      * Unregister a protocol version
      */
     static unregister(name: string, version?: string): boolean {
+        assertExtensionRegistryMutationOpen();
         if (!version) {
             // Unregister all versions
             this.protocols.delete(name);
@@ -228,6 +262,7 @@ export class ProtocolRegistry {
      * Clear all registered protocols
      */
     static clear(): void {
+        assertExtensionRegistryMutationOpen();
         this.protocols.clear();
         this.metadata.clear();
         this.schemas.clear();
@@ -246,6 +281,7 @@ export class ProtocolRegistry {
 
     /** @internal 恢复插件加载前的精确注册状态。 */
     static restoreState(state: ExtensionRegistryState["protocols"]): void {
+        assertExtensionRegistryMutationOpen();
         this.protocols = new Map(
             [...state.factories].map(([name, versions]) => [name, new Map(versions)]),
         );
@@ -276,6 +312,7 @@ export class AdapterRegistry {
         factory: Adapter.Factory,
         metadata?: Partial<Adapter.Metadata>,
     ): void {
+        assertExtensionRegistryMutationOpen();
         const registeredFactory = this.adapters.get(name);
         if (registeredFactory) {
             if (registeredFactory === factory) {
@@ -310,6 +347,7 @@ export class AdapterRegistry {
      * Register an adapter config schema
      */
     static registerSchema(name: string, schema: Schema): void {
+        assertExtensionRegistryMutationOpen();
         assertSchemaFormContract(schema);
         const registeredSchema = this.schemas.get(name);
         if (registeredSchema) {
@@ -407,6 +445,7 @@ export class AdapterRegistry {
      * Unregister an adapter
      */
     static unregister(name: string): boolean {
+        assertExtensionRegistryMutationOpen();
         this.metadata.delete(name);
         this.schemas.delete(name);
         return this.adapters.delete(name);
@@ -416,6 +455,7 @@ export class AdapterRegistry {
      * Clear all registered adapters
      */
     static clear(): void {
+        assertExtensionRegistryMutationOpen();
         this.adapters.clear();
         this.metadata.clear();
         this.schemas.clear();
@@ -432,6 +472,7 @@ export class AdapterRegistry {
 
     /** @internal 恢复插件加载前的精确注册状态。 */
     static restoreState(state: ExtensionRegistryState["adapters"]): void {
+        assertExtensionRegistryMutationOpen();
         this.adapters = new Map(state.factories);
         this.metadata = new Map(
             [...state.metadata].map(([name, metadata]) => [name, freezeAdapterMetadata(metadata)]),
