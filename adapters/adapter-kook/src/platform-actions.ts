@@ -9,55 +9,16 @@ import type { KookBot } from "./bot.js";
 import { KookError } from "./errors.js";
 import type { KookApiRequestOptions, KookOAuthScope } from "./types.js";
 import { KOOK_FRIEND_PLATFORM_ACTIONS } from "./platform-actions-friend.js";
+import { KOOK_EMOJI_PLATFORM_ACTIONS } from "./platform-actions-emoji.js";
+import { KOOK_GAME_PLATFORM_ACTIONS } from "./platform-actions-game.js";
 import { KOOK_GUILD_PLATFORM_ACTIONS } from "./platform-actions-guild.js";
 import { KOOK_INVITE_PLATFORM_ACTIONS } from "./platform-actions-invite.js";
 import { KOOK_MESSAGE_PLATFORM_ACTIONS } from "./platform-actions-message.js";
 import { KOOK_PERMISSION_PLATFORM_ACTIONS } from "./platform-actions-permission.js";
 import { KOOK_TEMPLATE_PLATFORM_ACTIONS } from "./platform-actions-template.js";
+import { KOOK_THREAD_PLATFORM_ACTIONS } from "./platform-actions-thread.js";
+import { KOOK_USER_PLATFORM_ACTIONS } from "./platform-actions-user.js";
 import { KOOK_VOICE_PLATFORM_ACTIONS } from "./platform-actions-voice.js";
-
-interface ActionRoute {
-    path: string;
-    method: "GET" | "POST";
-}
-
-const ROUTES: Readonly<Record<string, ActionRoute>> = {
-    list_user_chats: { path: "/v3/user-chat/list", method: "GET" },
-    get_user_chat: { path: "/v3/user-chat/view", method: "GET" },
-    create_user_chat: { path: "/v3/user-chat/create", method: "POST" },
-    delete_user_chat: { path: "/v3/user-chat/delete", method: "POST" },
-    list_guild_emojis: { path: "/v3/guild-emoji/list", method: "GET" },
-    update_guild_emoji: { path: "/v3/guild-emoji/update", method: "POST" },
-    delete_guild_emoji: { path: "/v3/guild-emoji/delete", method: "POST" },
-    get_intimacy: { path: "/v3/intimacy/index", method: "GET" },
-    update_intimacy: { path: "/v3/intimacy/update", method: "POST" },
-    list_games: { path: "/v3/game", method: "GET" },
-    create_game: { path: "/v3/game/create", method: "POST" },
-    update_game: { path: "/v3/game/update", method: "POST" },
-    delete_game: { path: "/v3/game/delete", method: "POST" },
-    set_game_activity: { path: "/v3/game/activity", method: "POST" },
-    delete_game_activity: { path: "/v3/game/delete-activity", method: "POST" },
-    list_thread_categories: { path: "/v3/category/list", method: "GET" },
-    create_thread: { path: "/v3/thread/create", method: "POST" },
-    reply_thread: { path: "/v3/thread/reply", method: "POST" },
-    get_thread: { path: "/v3/thread/view", method: "GET" },
-    list_threads: { path: "/v3/thread/list", method: "GET" },
-    delete_thread_item: { path: "/v3/thread/delete", method: "POST" },
-    list_thread_posts: { path: "/v3/thread/post", method: "GET" },
-};
-
-const ROUTE_HANDLERS = Object.fromEntries(
-    Object.entries(ROUTES).map(([action, route]) => [
-        action,
-        (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
-            bot.callApi(
-                route.path,
-                route.method === "GET"
-                    ? { query: scalarParams(params) }
-                    : { method: "POST", body: { ...params } },
-            ),
-    ]),
-) satisfies Readonly<Record<string, PlatformActionHandler<KookBot>>>;
 
 const SPECIAL_ACTION_HANDLERS = {
     call_kook_api: (bot: KookBot, params: Readonly<Record<string, unknown>>) =>
@@ -130,14 +91,17 @@ const SPECIAL_ACTIONS = definePlatformActionHandlers(
 const PLATFORM_ACTIONS = definePlatformActions(
     {
         ...SPECIAL_ACTIONS,
+        ...KOOK_EMOJI_PLATFORM_ACTIONS,
         ...KOOK_FRIEND_PLATFORM_ACTIONS,
+        ...KOOK_GAME_PLATFORM_ACTIONS,
         ...KOOK_GUILD_PLATFORM_ACTIONS,
         ...KOOK_INVITE_PLATFORM_ACTIONS,
         ...KOOK_MESSAGE_PLATFORM_ACTIONS,
         ...KOOK_PERMISSION_PLATFORM_ACTIONS,
         ...KOOK_TEMPLATE_PLATFORM_ACTIONS,
+        ...KOOK_THREAD_PLATFORM_ACTIONS,
+        ...KOOK_USER_PLATFORM_ACTIONS,
         ...KOOK_VOICE_PLATFORM_ACTIONS,
-        ...ROUTE_HANDLERS,
     },
     action =>
         KookError.invalid(`未实现 KOOK 平台动作: ${action}`, "KOOK_ACTION_UNKNOWN", {

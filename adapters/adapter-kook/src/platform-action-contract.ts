@@ -5,6 +5,7 @@ import { KookError } from "./errors.js";
 export interface KookStringParamRule {
     type: "string";
     required?: boolean;
+    allowEmpty?: boolean;
     values?: readonly string[];
     default?: string;
     minLength?: number;
@@ -45,6 +46,14 @@ interface KookActionRouteContractBase {
     path: string;
     /** 每个字段组都必须至少提供一项，用于表达官方 one-of 参数约束。 */
     atLeastOne?: readonly (readonly string[])[];
+    /** 当某个枚举字段取指定值时，补充该分支的必填字段。 */
+    requiredWhen?: readonly KookConditionalRequirement[];
+}
+
+export interface KookConditionalRequirement {
+    param: string;
+    equals: string | number | boolean;
+    required: readonly string[];
 }
 
 export interface KookGetActionRouteContract extends KookActionRouteContractBase {
@@ -75,6 +84,7 @@ export function defineKookActionRoutes(
         handlers[action] = (bot, params) => {
             const values = validateParams(action, params, route.params);
             validateAtLeastOne(action, values, route.atLeastOne);
+            validateConditionalRequirements(action, values, route.requiredWhen);
             return bot.callApi(
                 route.path,
                 route.method === "GET"
@@ -84,6 +94,23 @@ export function defineKookActionRoutes(
         };
     }
     return handlers;
+}
+
+function validateConditionalRequirements(
+    action: string,
+    values: Readonly<Record<string, KookActionValue>>,
+    requirements?: readonly KookConditionalRequirement[],
+): void {
+    for (const requirement of requirements || []) {
+        if (values[requirement.param] !== requirement.equals) continue;
+        const missing = requirement.required.filter(key => !Object.hasOwn(values, key));
+        if (missing.length === 0) continue;
+        throw KookError.invalid(
+            `KOOK 动作 ${action} 在 ${requirement.param}=${String(requirement.equals)} 时缺少参数 ${missing.join("、")}`,
+            "KOOK_ACTION_PARAM_REQUIRED",
+            { action, condition: requirement, missing },
+        );
+    }
 }
 
 function validateAtLeastOne(
@@ -147,7 +174,7 @@ function validateValue(
     if (rule.type === "string") {
         if (
             typeof value !== "string" ||
-            value.length === 0 ||
+            (!rule.allowEmpty && value.length === 0) ||
             (rule.minLength !== undefined && value.length < rule.minLength) ||
             (rule.maxLength !== undefined && value.length > rule.maxLength) ||
             !isAllowed(value, rule.values)
