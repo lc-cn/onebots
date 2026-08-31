@@ -7,6 +7,7 @@ import {
     ProtocolRegistry,
     captureExtensionRegistryState,
     restoreExtensionRegistryState,
+    type ExtensionRegistryState,
 } from "@onebots/core";
 import { writeCliError } from "./cli-output.js";
 
@@ -176,7 +177,13 @@ export async function tryLoadRegisteredPlugin(
             return result;
         }
 
-        const contractError = getRegistrationContractError(type, name);
+        const contractError = getRegistrationContractError(
+            type,
+            name,
+            registryState,
+            captureExtensionRegistryState(),
+            result.inspection,
+        );
         if (!contractError) {
             loadedPlugins.set(`${type}:${name}`, {
                 type,
@@ -226,24 +233,173 @@ export async function loadPlugin(
     return result.loaded;
 }
 
-function getRegistrationContractError(type: PluginType, name: string): string | undefined {
+function getRegistrationContractError(
+    type: PluginType,
+    name: string,
+    before: ExtensionRegistryState,
+    after: ExtensionRegistryState,
+    inspection: Extract<PluginInspection, { status: "ready" }>,
+): string | undefined {
+    const loadedKey = `${type}:${name}`;
+    const previousPlugin = loadedPlugins.get(loadedKey);
+    if (previousPlugin) {
+        if (
+            previousPlugin.packageName !== inspection.packageName ||
+            previousPlugin.entryPath !== realPath(inspection.entryPath)
+        ) {
+            return `扩展身份 ${loadedKey} 已由 ${previousPlugin.packageName}@${previousPlugin.version ?? "unknown"} 从 ${previousPlugin.entryPath} 加载`;
+        }
+    } else if (hasPromisedRegistration(type, name, before)) {
+        return `承诺的扩展身份 ${loadedKey} 在本次插件加载前已经存在，无法证明注册归属`;
+    }
+
     if (type === "adapter") {
         if (!AdapterRegistry.has(name)) return `没有注册适配器 ${name}`;
         if (!AdapterRegistry.getSchema(name)) return `没有注册适配器配置 Schema ${name}`;
-        return undefined;
+    } else {
+        const identity = parseProtocolIdentity(name);
+        if (!identity) return `协议插件名必须使用 <name>-<version> 格式（例如 onebot-v11）`;
+        const { protocol, version } = identity;
+        if (!ProtocolRegistry.has(protocol, version)) {
+            return `没有注册协议 ${protocol}/${version}`;
+        }
+        const schemaKey = `${protocol}.${version}`;
+        if (!ProtocolRegistry.getSchema(schemaKey)) {
+            return `没有注册协议配置 Schema ${schemaKey}`;
+        }
     }
 
-    const identity = parseProtocolIdentity(name);
-    if (!identity) return `协议插件名必须使用 <name>-<version> 格式（例如 onebot-v11）`;
-    const { protocol, version } = identity;
-    if (!ProtocolRegistry.has(protocol, version)) {
-        return `没有注册协议 ${protocol}/${version}`;
-    }
-    const schemaKey = `${protocol}.${version}`;
-    if (!ProtocolRegistry.getSchema(schemaKey)) {
-        return `没有注册协议配置 Schema ${schemaKey}`;
+    const allowed = promisedRegistryChangeKeys(type, name);
+    const unexpected = getRegistryChanges(before, after).filter(change => !allowed.has(change.key));
+    if (unexpected.length) {
+        return `修改了 CLI 名称未承诺的注册项：${unexpected.map(change => change.description).join("、")}；单个插件只能修改自身工厂、元数据与配置 Schema`;
     }
     return undefined;
+}
+
+function hasPromisedRegistration(
+    type: PluginType,
+    name: string,
+    state: ExtensionRegistryState,
+): boolean {
+    if (type === "adapter") {
+        return (
+            state.adapters.factories.has(name) ||
+            state.adapters.metadata.has(name) ||
+            state.adapters.schemas.has(name)
+        );
+    }
+    const identity = parseProtocolIdentity(name);
+    if (!identity) return false;
+    const { protocol, version } = identity;
+    const schemaKey = `${protocol}.${version}`;
+    return (
+        state.protocols.factories.get(protocol)?.has(version) === true ||
+        state.protocols.schemas.has(schemaKey)
+    );
+}
+
+interface RegistryChange {
+    key: string;
+    description: string;
+}
+
+function promisedRegistryChangeKeys(type: PluginType, name: string): Set<string> {
+    if (type === "adapter") {
+        return new Set([
+            `adapter.factory:${name}`,
+            `adapter.metadata:${name}`,
+            `adapter.schema:${name}`,
+        ]);
+    }
+    const identity = parseProtocolIdentity(name);
+    if (!identity) return new Set();
+    return new Set([
+        `protocol.factory:${identity.protocol}/${identity.version}`,
+        `protocol.metadata:${identity.protocol}`,
+        `protocol.schema:${identity.protocol}.${identity.version}`,
+    ]);
+}
+
+function getRegistryChanges(
+    before: ExtensionRegistryState,
+    after: ExtensionRegistryState,
+): RegistryChange[] {
+    const changes: RegistryChange[] = [];
+    appendMapChanges(
+        changes,
+        "adapter.factory",
+        "适配器工厂",
+        before.adapters.factories,
+        after.adapters.factories,
+    );
+    appendMapChanges(
+        changes,
+        "adapter.metadata",
+        "适配器元数据",
+        before.adapters.metadata,
+        after.adapters.metadata,
+        jsonEqual,
+    );
+    appendMapChanges(
+        changes,
+        "adapter.schema",
+        "适配器 Schema",
+        before.adapters.schemas,
+        after.adapters.schemas,
+    );
+    appendMapChanges(
+        changes,
+        "protocol.factory",
+        "协议工厂",
+        flattenProtocolFactories(before.protocols.factories),
+        flattenProtocolFactories(after.protocols.factories),
+    );
+    appendMapChanges(
+        changes,
+        "protocol.metadata",
+        "协议元数据",
+        before.protocols.metadata,
+        after.protocols.metadata,
+        jsonEqual,
+    );
+    appendMapChanges(
+        changes,
+        "protocol.schema",
+        "协议 Schema",
+        before.protocols.schemas,
+        after.protocols.schemas,
+    );
+    return changes.sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function appendMapChanges<T>(
+    target: RegistryChange[],
+    prefix: string,
+    label: string,
+    before: ReadonlyMap<string, T>,
+    after: ReadonlyMap<string, T>,
+    equal: (left: T | undefined, right: T | undefined) => boolean = Object.is,
+): void {
+    const keys = new Set([...before.keys(), ...after.keys()]);
+    for (const key of keys) {
+        if (before.has(key) === after.has(key) && equal(before.get(key), after.get(key))) continue;
+        target.push({ key: `${prefix}:${key}`, description: `${label} ${key}` });
+    }
+}
+
+function flattenProtocolFactories(
+    factories: ReadonlyMap<string, ReadonlyMap<string, unknown>>,
+): Map<string, unknown> {
+    return new Map(
+        [...factories].flatMap(([name, versions]) =>
+            [...versions].map(([version, factory]) => [`${name}/${version}`, factory] as const),
+        ),
+    );
+}
+
+function jsonEqual(left: unknown, right: unknown): boolean {
+    return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function parseProtocolIdentity(name: string): { protocol: string; version: string } | undefined {

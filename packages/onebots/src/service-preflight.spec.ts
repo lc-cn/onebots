@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { AdapterRegistry, ProtocolRegistry } from "@onebots/core";
+import { clearLoadedPlugins } from "./plugin-loader.js";
 import { preflightServiceRuntime, preflightServiceRuntimeIsolated } from "./service-preflight.js";
 
 const temporaryDirectories: string[] = [];
@@ -10,6 +11,7 @@ const temporaryDirectories: string[] = [];
 afterEach(() => {
     AdapterRegistry.clear();
     ProtocolRegistry.clear();
+    clearLoadedPlugins();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -93,21 +95,30 @@ describe("service runtime preflight", () => {
         );
         fs.writeFileSync(
             path.join(packageDirectory, "index.js"),
-            "await Promise.resolve(); export const loaded = true;\n",
+            "await Promise.resolve(); globalThis.__onebotsRegisterServiceAdapter(); export const loaded = true;\n",
         );
-        AdapterRegistry.register("custom-adapter", (() => undefined) as never);
-        AdapterRegistry.registerSchema("custom-adapter", {});
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterServiceAdapter?: () => void;
+        };
+        globals.__onebotsRegisterServiceAdapter = () => {
+            AdapterRegistry.register("custom-adapter", (() => undefined) as never);
+            AdapterRegistry.registerSchema("custom-adapter", {});
+        };
         const callerWorkingDirectory = process.cwd();
 
-        await expect(
-            preflightServiceRuntime({
-                configPath,
-                adapters: ["custom-adapter"],
-                protocols: [],
-                workingDirectory,
-            }),
-        ).resolves.toBeUndefined();
-        expect(process.cwd()).toBe(callerWorkingDirectory);
+        try {
+            await expect(
+                preflightServiceRuntime({
+                    configPath,
+                    adapters: ["custom-adapter"],
+                    protocols: [],
+                    workingDirectory,
+                }),
+            ).resolves.toBeUndefined();
+            expect(process.cwd()).toBe(callerWorkingDirectory);
+        } finally {
+            delete globals.__onebotsRegisterServiceAdapter;
+        }
     });
 
     it("rejects an importable plugin that does not fulfil its registration contract", async () => {

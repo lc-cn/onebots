@@ -322,6 +322,65 @@ describe("plugin loader", () => {
         }
     });
 
+    it("rolls back an adapter plugin that registers identities outside its CLI promise", async () => {
+        const directory = createImportOnlyPlugin(
+            "overreaching-adapter",
+            "globalThis.__onebotsRegisterOverreachingAdapter();\n",
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterOverreachingAdapter?: () => void;
+        };
+        globals.__onebotsRegisterOverreachingAdapter = () => {
+            AdapterRegistry.register("overreaching", (() => undefined) as never);
+            AdapterRegistry.registerSchema("overreaching", {});
+            AdapterRegistry.register("hidden", (() => undefined) as never);
+            ProtocolRegistry.register("hidden", "v1", (() => undefined) as never);
+            ProtocolRegistry.registerSchema("hidden.v1", {});
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "adapter",
+                "overreaching",
+                ["overreaching-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({ loaded: false });
+            const message = result.loaded === false ? result.message : "";
+            expect(message).toContain("CLI 名称未承诺的注册项");
+            expect(message).toContain("适配器工厂 hidden");
+            expect(message).toContain("协议工厂 hidden/v1");
+            expect(AdapterRegistry.has("overreaching")).toBe(false);
+            expect(AdapterRegistry.has("hidden")).toBe(false);
+            expect(ProtocolRegistry.has("hidden", "v1")).toBe(false);
+            expect(getLoadedPlugins()).toEqual([]);
+        } finally {
+            delete globals.__onebotsRegisterOverreachingAdapter;
+        }
+    });
+
+    it("does not attribute a pre-existing registry identity to an unrelated package", async () => {
+        const directory = createImportOnlyPlugin("identity-claim-adapter");
+        const existingFactory = (() => undefined) as never;
+        AdapterRegistry.register("identity-claim", existingFactory);
+        AdapterRegistry.registerSchema("identity-claim", {});
+
+        const result = await tryLoadRegisteredPlugin(
+            "adapter",
+            "identity-claim",
+            ["identity-claim-adapter"],
+            createRequire(path.join(directory, "package.json")),
+        );
+
+        expect(result).toMatchObject({
+            loaded: false,
+            message: expect.stringContaining("在本次插件加载前已经存在，无法证明注册归属"),
+        });
+        expect(AdapterRegistry.get("identity-claim")).toBe(existingFactory);
+        expect(getLoadedPlugins()).toEqual([]);
+    });
+
     it("serializes plugin transactions so a failed rollback cannot erase a concurrent success", async () => {
         const brokenDirectory = createImportOnlyPlugin(
             "queued-broken-adapter",
@@ -384,19 +443,94 @@ describe("plugin loader", () => {
         }
     });
 
-    it("accepts a protocol only when its name-version factory and schema are registered", async () => {
-        const directory = createImportOnlyPlugin("complete-protocol");
-        ProtocolRegistry.register("complete", "v1", (() => undefined) as never);
-        ProtocolRegistry.registerSchema("complete.v1", {});
-
-        const result = await tryLoadRegisteredPlugin(
-            "protocol",
-            "complete-v1",
-            ["complete-protocol"],
-            createRequire(path.join(directory, "package.json")),
+    it("accepts a protocol only when its own entry registers the promised factory and schema", async () => {
+        const directory = createImportOnlyPlugin(
+            "complete-protocol",
+            "globalThis.__onebotsRegisterCompleteProtocol();\n",
         );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterCompleteProtocol?: () => void;
+        };
+        globals.__onebotsRegisterCompleteProtocol = () => {
+            ProtocolRegistry.register("complete", "v1", (() => undefined) as never);
+            ProtocolRegistry.registerSchema("complete.v1", {});
+        };
 
-        expect(result).toMatchObject({ loaded: true });
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "protocol",
+                "complete-v1",
+                ["complete-protocol"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({ loaded: true });
+        } finally {
+            delete globals.__onebotsRegisterCompleteProtocol;
+        }
+    });
+
+    it("allows another promised version to update shared protocol metadata", async () => {
+        ProtocolRegistry.register("multi", "v1", (() => undefined) as never);
+        ProtocolRegistry.registerSchema("multi.v1", {});
+        const directory = createImportOnlyPlugin(
+            "multi-v2-protocol",
+            "globalThis.__onebotsRegisterMultiV2Protocol();\n",
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterMultiV2Protocol?: () => void;
+        };
+        globals.__onebotsRegisterMultiV2Protocol = () => {
+            ProtocolRegistry.register("multi", "v2", (() => undefined) as never);
+            ProtocolRegistry.registerSchema("multi.v2", {});
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "protocol",
+                "multi-v2",
+                ["multi-v2-protocol"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({ loaded: true });
+            expect(ProtocolRegistry.getVersions("multi")).toEqual(["v1", "v2"]);
+        } finally {
+            delete globals.__onebotsRegisterMultiV2Protocol;
+        }
+    });
+
+    it("rolls back a protocol plugin that also registers an adapter", async () => {
+        const directory = createImportOnlyPlugin(
+            "overreaching-protocol",
+            "globalThis.__onebotsRegisterOverreachingProtocol();\n",
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterOverreachingProtocol?: () => void;
+        };
+        globals.__onebotsRegisterOverreachingProtocol = () => {
+            ProtocolRegistry.register("overreaching", "v1", (() => undefined) as never);
+            ProtocolRegistry.registerSchema("overreaching.v1", {});
+            AdapterRegistry.register("hidden", (() => undefined) as never);
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "protocol",
+                "overreaching-v1",
+                ["overreaching-protocol"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({
+                loaded: false,
+                message: expect.stringContaining("适配器工厂 hidden"),
+            });
+            expect(ProtocolRegistry.has("overreaching", "v1")).toBe(false);
+            expect(AdapterRegistry.has("hidden")).toBe(false);
+        } finally {
+            delete globals.__onebotsRegisterOverreachingProtocol;
+        }
     });
 
     it("records package identity only after the promised registration contract succeeds", async () => {
@@ -439,6 +573,14 @@ describe("plugin loader", () => {
                 loaded: true,
                 inspection: { packageName: "inventory-adapter", version: "2.4.6" },
             });
+            await expect(
+                tryLoadRegisteredPlugin(
+                    "adapter",
+                    "inventory",
+                    ["inventory-adapter"],
+                    createRequire(path.join(directory, "package.json")),
+                ),
+            ).resolves.toMatchObject({ loaded: true });
             expect(getLoadedPlugins()).toEqual([
                 {
                     type: "adapter",
