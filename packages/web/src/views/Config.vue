@@ -18,6 +18,7 @@ import ConfigAccountsTab from "../components/config/ConfigAccountsTab.vue";
 import AccountWizard from "../components/config/AccountWizard.vue";
 
 import type { SchemaBundle, SchemaGroup, AccountRow } from "../components/config/types";
+import type { SchemaLoadStatus } from "../components/config/account-adapter-selection.js";
 import { isAccountWizardRequest } from "./bot-onboarding.js";
 import {
     getValueByPath,
@@ -47,6 +48,7 @@ const tabs = [
 const config = ref<string>("");
 const activeTab = ref<string>("schema");
 const schema = ref<SchemaBundle | null>(null);
+const schemaStatus = ref<SchemaLoadStatus>("loading");
 const schemaGroups = ref<SchemaGroup[]>([]);
 const activeGroups = ref<string[]>([]);
 const formModel = reactive<Record<string, unknown>>({});
@@ -107,13 +109,18 @@ const loadConfig = async () => {
 };
 
 const loadSchema = async () => {
+    schemaStatus.value = "loading";
     try {
         const response = await authFetch(buildApiUrl("/api/config/schema"));
-        if (response.ok) {
-            const rawSchema = await response.json();
-            schema.value = normalizeSchema(rawSchema);
+        if (!response.ok) {
+            schemaStatus.value = "error";
+            return;
         }
+        const rawSchema = await response.json();
+        schema.value = normalizeSchema(rawSchema);
+        schemaStatus.value = "ready";
     } catch (error) {
+        schemaStatus.value = "error";
         console.error("加载配置 Schema 失败:", error);
     }
 };
@@ -285,5 +292,10 @@ watch(activeTab, name => {
         </div>
     </div>
 
-    <AccountWizard ref="accountWizardRef" :schema="schema" @saved="loadConfig" />
+    <AccountWizard
+        ref="accountWizardRef"
+        :schema="schema"
+        :schema-status="schemaStatus"
+        @saved="loadConfig"
+        @reload-schema="loadSchema" />
 </template>

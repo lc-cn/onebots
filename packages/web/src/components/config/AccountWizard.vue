@@ -29,13 +29,19 @@ import {
 } from "./utils";
 import { buildProtocolFieldLayout } from "./protocol-layout";
 import { getAccountProtocolSelectionState } from "./account-protocol-selection.js";
+import {
+    getAccountAdapterSelectionState,
+    type SchemaLoadStatus,
+} from "./account-adapter-selection.js";
 
 const props = defineProps<{
     schema: SchemaBundle | null;
+    schemaStatus: SchemaLoadStatus;
 }>();
 
 const emit = defineEmits<{
     saved: [];
+    reloadSchema: [];
 }>();
 
 const toast = useToast();
@@ -81,6 +87,14 @@ const protocolLayouts = computed(() =>
 
 const platformOptions = computed(() =>
     Object.keys(props.schema?.adapters || {}).map(name => ({ label: name, value: name })),
+);
+
+const adapterSelection = computed(() =>
+    getAccountAdapterSelectionState(
+        props.schemaStatus,
+        platformOptions.value.map(option => option.value),
+        accountForm.value.platform,
+    ),
 );
 
 const buildProtocolGroups = () => {
@@ -142,6 +156,10 @@ const syncFormModel = (configObject: Record<string, unknown>) => {
 
 const goNextStep = () => {
     if (currentStep.value === 0) {
+        if (!adapterSelection.value.valid) {
+            toast.warning(adapterSelection.value.description);
+            return;
+        }
         if (!accountForm.value.platform) {
             toast.warning("请先选择平台");
             return;
@@ -164,6 +182,11 @@ const onSelectStep = (index: number) => {
 };
 
 const handleSubmit = async () => {
+    if (!adapterSelection.value.valid) {
+        currentStep.value = 0;
+        toast.warning(adapterSelection.value.description);
+        return;
+    }
     if (!accountForm.value.platform || !accountForm.value.account_id) {
         toast.warning("请填写平台与账号ID");
         return;
@@ -247,6 +270,15 @@ const goToProtocolExtensions = () => {
     void router.push("/extensions?type=protocol");
 };
 
+const handleAdapterAction = () => {
+    if (adapterSelection.value.action === "retry") {
+        emit("reloadSchema");
+        return;
+    }
+    dialogVisible.value = false;
+    void router.push("/extensions?type=adapter");
+};
+
 const openAdd = (platform = "") => {
     dialogTitle.value = "新增账号";
     isEdit.value = false;
@@ -305,6 +337,21 @@ defineExpose({ openAdd, openEdit });
 
             <!-- 第一步：平台与账号ID -->
             <div v-show="currentStep === 0" class="flex flex-col gap-4">
+                <UiAlert
+                    v-if="!adapterSelection.valid"
+                    :variant="adapterSelection.variant"
+                    :title="adapterSelection.title">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span>{{ adapterSelection.description }}</span>
+                        <UiButton
+                            v-if="adapterSelection.actionLabel"
+                            size="sm"
+                            variant="secondary"
+                            @click="handleAdapterAction">
+                            {{ adapterSelection.actionLabel }}
+                        </UiButton>
+                    </div>
+                </UiAlert>
                 <UiField
                     label="平台"
                     required
@@ -313,7 +360,7 @@ defineExpose({ openAdd, openEdit });
                         v-model="accountForm.platform"
                         :options="platformOptions"
                         placeholder="选择平台"
-                        :disabled="isEdit" />
+                        :disabled="isEdit || !adapterSelection.valid" />
                 </UiField>
                 <UiField label="账号ID" required hint="账号在本网关中的唯一标识，如 my_bot">
                     <UiInput
