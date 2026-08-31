@@ -30,6 +30,31 @@ const config = {
 } satisfies Required<BaseApp.Config>;
 
 describe("BaseApp reload boundary", () => {
+    it("首次启动保留失败诊断，而严格重载会在尝试全部适配器后传播失败", async () => {
+        const failedStart = vi.fn(async () => {
+            throw new Error("adapter failed");
+        });
+        const healthyStart = vi.fn(async () => undefined);
+        const app = {
+            adapters: new Map([
+                ["failed", { start: failedStart }],
+                ["healthy", { start: healthyStart }],
+            ]),
+            enhancedLogger: { error: vi.fn() },
+        };
+        const startAdapters = (
+            BaseApp.prototype as unknown as {
+                startAdapters(throwOnFailure?: boolean): Promise<void>;
+            }
+        ).startAdapters;
+
+        await expect(startAdapters.call(app)).resolves.toBeUndefined();
+        await expect(startAdapters.call(app, true)).rejects.toThrow("adapter failed");
+        expect(failedStart).toHaveBeenCalledTimes(2);
+        expect(healthyStart).toHaveBeenCalledTimes(2);
+        expect(app.enhancedLogger.error).toHaveBeenCalledTimes(2);
+    });
+
     it("允许账号、协议、凭据与日志配置热重载", () => {
         expect(() =>
             assertHostConfigReloadable(config, {
@@ -290,5 +315,98 @@ describe("BaseApp reload boundary", () => {
         expect(app.isReloading).toBe(false);
         expect(app.config.access_token).toBe("token");
         expect(initAdapters).toHaveBeenCalledTimes(2);
+    });
+
+    it("新适配器异步启动失败时恢复旧配置与旧适配器", async () => {
+        const stopAdapters = vi.fn(async () => undefined);
+        const startAdapters = vi
+            .fn()
+            .mockRejectedValueOnce(new Error("新适配器启动失败"))
+            .mockResolvedValueOnce(undefined);
+        const app = {
+            config,
+            isReloading: false,
+            isStarted: true,
+            adapters: new Map(),
+            logger: { level: "info" },
+            enhancedLogger: { setLevel: vi.fn() },
+            stopAdapters,
+            initAdapters: vi.fn(),
+            startAdapters,
+        } as unknown as BaseApp;
+
+        await expect(
+            BaseApp.prototype.reload.call(app, { ...config, access_token: "next-token" }),
+        ).rejects.toThrow("新适配器启动失败");
+        expect(app.config.access_token).toBe("token");
+        expect(app.isReloading).toBe(false);
+        expect(stopAdapters).toHaveBeenNthCalledWith(1, true);
+        expect(stopAdapters).toHaveBeenNthCalledWith(2, true);
+        expect(app.initAdapters).toHaveBeenCalledTimes(2);
+        expect(startAdapters).toHaveBeenNthCalledWith(1, true);
+        expect(startAdapters).toHaveBeenNthCalledWith(2, true);
+    });
+
+    it("旧适配器停止失败时不切换配置或构造新运行态", async () => {
+        const initAdapters = vi.fn();
+        const startAdapters = vi.fn();
+        const app = {
+            config,
+            isReloading: false,
+            isStarted: true,
+            adapters: new Map(),
+            logger: { level: "info" },
+            enhancedLogger: { setLevel: vi.fn() },
+            stopAdapters: vi.fn(async () => {
+                throw new Error("旧适配器停止失败");
+            }),
+            initAdapters,
+            startAdapters,
+        } as unknown as BaseApp;
+
+        await expect(
+            BaseApp.prototype.reload.call(app, { ...config, access_token: "next-token" }),
+        ).rejects.toMatchObject({
+            message: "旧适配器停止失败",
+            context: expect.objectContaining({ phase: "stop-previous" }),
+        });
+        expect(app.config.access_token).toBe("token");
+        expect(app.isReloading).toBe(false);
+        expect(initAdapters).not.toHaveBeenCalled();
+        expect(startAdapters).not.toHaveBeenCalled();
+    });
+
+    it("旧运行态恢复失败时同时保留新配置错误与回滚错误", async () => {
+        const startAdapters = vi
+            .fn()
+            .mockRejectedValueOnce(new Error("新适配器启动失败"))
+            .mockRejectedValueOnce(new Error("旧适配器恢复失败"));
+        const app = {
+            config,
+            isReloading: false,
+            isStarted: true,
+            adapters: new Map(),
+            logger: { level: "info" },
+            enhancedLogger: { setLevel: vi.fn() },
+            stopAdapters: vi.fn(async () => undefined),
+            initAdapters: vi.fn(),
+            startAdapters,
+        } as unknown as BaseApp;
+
+        const error = await BaseApp.prototype.reload
+            .call(app, { ...config, access_token: "next-token" })
+            .catch(value => value);
+
+        expect(error).toMatchObject({
+            message: "配置重载失败且运行态回滚未完整完成",
+            cause: expect.objectContaining({
+                errors: [
+                    expect.objectContaining({ message: "新适配器启动失败" }),
+                    expect.objectContaining({ message: "旧适配器恢复失败" }),
+                ],
+            }),
+        });
+        expect(app.config.access_token).toBe("token");
+        expect(app.isReloading).toBe(false);
     });
 });

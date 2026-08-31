@@ -339,15 +339,18 @@ export class BaseApp extends Koa {
         }
     }
 
-    private async startAdapters(): Promise<void> {
+    private async startAdapters(throwOnFailure = false): Promise<void> {
+        const failures = new FailureCollector();
         for (const [platform, adapter] of this.adapters) {
-            try {
-                await adapter.start();
-            } catch (error) {
-                const wrappedError = ErrorHandler.wrap(error, { platform });
-                this.enhancedLogger.error(wrappedError, { platform });
-            }
+            await failures.capture(
+                () => adapter.start(),
+                error => {
+                    const wrappedError = ErrorHandler.wrap(error, { platform });
+                    this.enhancedLogger.error(wrappedError, { platform });
+                },
+            );
         }
+        if (throwOnFailure) failures.throwIfAny(`${failures.size} 个适配器启动失败`);
     }
 
     private async stopAdapters(throwOnFailure = false): Promise<void> {
@@ -426,24 +429,45 @@ export class BaseApp extends Koa {
         const previous = this.config;
         const wasStarted = this.isStarted;
         this.isReloading = true;
+        let previousStopped = false;
 
         try {
-            await this.stopAdapters();
+            await this.stopAdapters(true);
+            previousStopped = true;
             this.adapters.clear();
             this.config = next;
             this.logger.level = next.log_level;
             this.enhancedLogger.setLevel(next.log_level);
             this.initAdapters();
-            if (wasStarted) await this.startAdapters();
+            if (wasStarted) await this.startAdapters(true);
         } catch (error) {
-            await this.stopAdapters();
+            if (!previousStopped) {
+                throw ErrorHandler.wrap(error, {
+                    operation: "reload",
+                    phase: "stop-previous",
+                });
+            }
+
+            const failures = new FailureCollector();
+            failures.add(error);
+            await failures.capture(() => this.stopAdapters(true));
             this.adapters.clear();
             this.config = previous;
             this.logger.level = previous.log_level;
-            this.enhancedLogger.setLevel(previous.log_level);
-            this.initAdapters();
-            if (wasStarted) await this.startAdapters();
-            throw ErrorHandler.wrap(error, { operation: "reload" });
+            await failures.capture(() => this.enhancedLogger.setLevel(previous.log_level));
+            let previousInitialized = false;
+            await failures.capture(() => {
+                this.initAdapters();
+                previousInitialized = true;
+            });
+            if (wasStarted && previousInitialized) {
+                await failures.capture(() => this.startAdapters(true));
+            }
+            try {
+                failures.throwIfAny("配置重载失败且运行态回滚未完整完成");
+            } catch (finalError) {
+                throw ErrorHandler.wrap(finalError, { operation: "reload" });
+            }
         } finally {
             this.isReloading = false;
         }
