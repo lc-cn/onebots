@@ -38,6 +38,10 @@ describe("setup workflow", () => {
         const renderedOutput = output.mock.calls.map(call => String(call[0])).join("");
         expect(renderedOutput).toContain("access_token");
         expect(renderedOutput).not.toContain(String(config.access_token));
+        expect(renderedOutput).toContain("尚未选择插件");
+        expect(renderedOutput).toContain(`onebots capabilities -c ${configPath}`);
+        expect(renderedOutput).toContain(`onebots doctor -c ${configPath}`);
+        expect(renderedOutput).toContain(`onebots install -c ${configPath}`);
     });
 
     it("does not overwrite an existing config in a non-interactive session", async () => {
@@ -95,6 +99,7 @@ describe("setup workflow", () => {
         });
         const renderedOutput = output.mock.calls.map(call => String(call[0])).join("");
         expect(renderedOutput).toContain("插件选择已写入配置");
+        expect(renderedOutput).toContain(`onebots capabilities -c ${configPath}`);
         expect(renderedOutput).toContain(`onebots doctor -c ${configPath}`);
         expect(renderedOutput).toContain(`onebots -c ${configPath}`);
         expect(renderedOutput).toContain(`onebots install -c ${configPath}`);

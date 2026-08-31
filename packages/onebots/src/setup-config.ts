@@ -23,26 +23,10 @@ export function normalizePluginNames(values: readonly string[]): string[] {
     return [...new Set(values.map(value => value.trim()).filter(Boolean))];
 }
 
-/** 输出可直接粘贴到 POSIX shell 的启动命令。 */
-export function formatSetupCommand(
-    configPath: string,
-    adapters: readonly string[],
-    protocols: readonly string[],
-): string {
-    const args = [
-        "onebots",
-        "-c",
-        configPath,
-        ...adapters.flatMap(value => ["-r", value]),
-        ...protocols.flatMap(value => ["-p", value]),
-    ];
-    return args.map(shellArgument).join(" ");
-}
-
-/** 插件选择已写入配置后，生成无需重复 -r/-p 的后续命令。 */
+/** 生成只依赖配置路径、可直接粘贴到 POSIX shell 的后续命令。 */
 export function formatConfiguredCommand(
     configPath: string,
-    command?: "doctor" | "install",
+    command?: "capabilities" | "doctor" | "install",
 ): string {
     const args = ["onebots", ...(command ? [command] : []), "-c", configPath];
     return args.map(shellArgument).join(" ");

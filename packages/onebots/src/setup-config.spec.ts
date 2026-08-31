@@ -4,7 +4,6 @@ import {
     createBaseSetupConfig,
     createProtocolDefaults,
     formatConfiguredCommand,
-    formatSetupCommand,
     normalizePluginNames,
 } from "./setup-config.js";
 
@@ -39,14 +38,14 @@ describe("setup configuration", () => {
         });
     });
 
-    it("deduplicates plugin names and emits a shell-safe startup command", () => {
+    it("deduplicates plugin names and emits shell-safe next-step commands", () => {
         expect(normalizePluginNames([" mock ", "mock", "", "one bot"])).toEqual([
             "mock",
             "one bot",
         ]);
-        expect(
-            formatSetupCommand("/tmp/one bots/config.yaml", ["mock"], ["custom; echo unsafe"]),
-        ).toBe("onebots -c '/tmp/one bots/config.yaml' -r mock -p 'custom; echo unsafe'");
+        expect(formatConfiguredCommand("/tmp/one bots/config.yaml", "capabilities")).toBe(
+            "onebots capabilities -c '/tmp/one bots/config.yaml'",
+        );
         expect(formatConfiguredCommand("/tmp/one bots/config.yaml", "doctor")).toBe(
             "onebots doctor -c '/tmp/one bots/config.yaml'",
         );

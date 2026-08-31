@@ -10,7 +10,6 @@ import {
     createBaseSetupConfig,
     createProtocolDefaults,
     formatConfiguredCommand,
-    formatSetupCommand,
     normalizePluginNames,
 } from "./setup-config.js";
 import {
@@ -131,12 +130,13 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     }
     if (config.plugins) {
         writeCliOutput("插件选择已写入配置，后续命令无需重复 -r/-p。");
-        writeCliOutput(`验证配置: ${formatConfiguredCommand(configPath, "doctor")}`);
-        writeCliOutput(`前台启动: ${formatConfiguredCommand(configPath)}`);
-        writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
     } else {
-        writeCliOutput(`前台启动: ${formatSetupCommand(configPath, adapters, protocols)}`);
+        writeCliOutput("尚未选择插件，可先比较平台能力，再通过 Web 扩展中心安装。");
     }
+    writeCliOutput(`比较平台能力: ${formatConfiguredCommand(configPath, "capabilities")}`);
+    writeCliOutput(`验证配置: ${formatConfiguredCommand(configPath, "doctor")}`);
+    writeCliOutput(`前台启动: ${formatConfiguredCommand(configPath)}`);
+    writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
 }
 
 function parsePromptValue(value: string, type: PromptRule["type"]): string | number | boolean {
