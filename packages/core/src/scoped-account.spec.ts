@@ -41,6 +41,121 @@ describe("scoped account factory contract", () => {
         expect(scope.close).toHaveBeenCalledOnce();
     });
 
+    it("拒绝账号工厂提前发布候选账号并恢复原账号集合", () => {
+        const adapter = adapterFixture();
+        const existing = accountFixture(adapter, { ...config, account_id: "existing" });
+        const candidate = accountFixture(adapter, config);
+        adapter.accounts.set("existing", existing);
+        vi.mocked(adapter.createAccount).mockImplementation(() => {
+            adapter.accounts.clear();
+            adapter.accounts.set(config.account_id, candidate);
+            return candidate;
+        });
+        const scope = scopeFixture();
+        const router = {
+            createRegistrationScope: vi.fn(() => scope),
+        } as unknown as Router;
+
+        expect(() => createAccountWithRouteScope({ router }, adapter, config)).toThrow(
+            "账号 example/primary 工厂不得修改适配器账号集合；账号只能由宿主在验证后提交",
+        );
+        expect([...adapter.accounts]).toEqual([["existing", existing]]);
+        expect(candidate.attachRouteScope).not.toHaveBeenCalled();
+        expect(scope.close).toHaveBeenCalledOnce();
+    });
+
+    it("账号工厂修改集合后抛错时恢复集合并保留原始错误", () => {
+        const adapter = adapterFixture();
+        const existing = accountFixture(adapter, { ...config, account_id: "existing" });
+        const factoryError = new Error("factory failed after mutation");
+        adapter.accounts.set("existing", existing);
+        vi.mocked(adapter.createAccount).mockImplementation(() => {
+            adapter.accounts.delete("existing");
+            throw factoryError;
+        });
+
+        let error: unknown;
+        try {
+            createAccountWithRouteScope({}, adapter, config);
+        } catch (caught) {
+            error = caught;
+        }
+
+        expect(error).toMatchObject({
+            message: "账号 example/primary 工厂不得修改适配器账号集合；账号只能由宿主在验证后提交",
+            cause: factoryError,
+        });
+        expect([...adapter.accounts]).toEqual([["existing", existing]]);
+    });
+
+    it("拒绝账号工厂替换账号集合引用并恢复宿主集合", () => {
+        const adapter = adapterFixture();
+        const originalAccounts = adapter.accounts;
+        const candidate = accountFixture(adapter, config);
+        vi.mocked(adapter.createAccount).mockImplementation(() => {
+            Reflect.set(adapter, "accounts", new Map([["hidden", candidate]]));
+            return candidate;
+        });
+
+        expect(() => createAccountWithRouteScope({}, adapter, config)).toThrow(
+            "账号 example/primary 工厂不得修改适配器账号集合",
+        );
+        expect(adapter.accounts).toBe(originalAccounts);
+        expect(adapter.accounts.size).toBe(0);
+    });
+
+    it("账号工厂安装异常访问器时无需读取它即可恢复宿主集合", () => {
+        const adapter = adapterFixture();
+        const originalAccounts = adapter.accounts;
+        const candidate = accountFixture(adapter, config);
+        vi.mocked(adapter.createAccount).mockImplementation(() => {
+            Object.defineProperty(adapter, "accounts", {
+                get: () => {
+                    throw new Error("malicious getter");
+                },
+                configurable: true,
+            });
+            return candidate;
+        });
+
+        expect(() => createAccountWithRouteScope({}, adapter, config)).toThrow(
+            "账号 example/primary 工厂不得修改适配器账号集合",
+        );
+        expect(adapter.accounts).toBe(originalAccounts);
+    });
+
+    it("账号集合引用被不可逆替换时同时保留越界与恢复错误", () => {
+        const adapter = adapterFixture();
+        const candidate = accountFixture(adapter, config);
+        vi.mocked(adapter.createAccount).mockImplementation(() => {
+            Object.defineProperty(adapter, "accounts", {
+                value: new Map([["hidden", candidate]]),
+                writable: false,
+                configurable: false,
+            });
+            return candidate;
+        });
+
+        let error: unknown;
+        try {
+            createAccountWithRouteScope({}, adapter, config);
+        } catch (caught) {
+            error = caught;
+        }
+
+        expect(error).toBeInstanceOf(AggregateError);
+        expect((error as AggregateError).message).toBe(
+            "账号 example/primary 工厂越过账号提交边界且账号集合无法恢复",
+        );
+        expect((error as AggregateError).errors).toEqual([
+            expect.objectContaining({
+                message:
+                    "账号 example/primary 工厂不得修改适配器账号集合；账号只能由宿主在验证后提交",
+            }),
+            expect.objectContaining({ message: "无法恢复适配器账号集合引用" }),
+        ]);
+    });
+
     it("拒绝被替换的账号实例或配置身份", () => {
         const adapter = adapterFixture();
         const wrongIdentity = accountFixture(adapter, {
@@ -136,6 +251,7 @@ describe("scoped account factory contract", () => {
 function adapterFixture(): Adapter {
     return {
         createAccount: vi.fn(),
+        accounts: new Map(),
     } as unknown as Adapter;
 }
 
