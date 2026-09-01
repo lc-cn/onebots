@@ -26,6 +26,8 @@ wechat-clawbot.{account_id}:
 See the adapter README for the full convention table (API root, CDN, `bot_type`, etc.).
 Polling recovers indefinitely and an account stop immediately aborts the active request.
 
+The complete account startup boundary is the larger of global `timeout` and `qr_login_timeout_ms` rounded up to seconds. The default QR window therefore remains 480 seconds instead of being cut off by the global 30-second default. A timeout or manual stop still cancels QR login, polling, and subsequent protocol startup.
+
 ## See also
 
 - [WeChat ClawBot platform](/en/platform/wechat-clawbot)

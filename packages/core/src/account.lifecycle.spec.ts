@@ -6,6 +6,9 @@ function createAccount(): Account {
     return new Account(
         {
             platform: "mock",
+            resolveAccountStartupTimeoutSeconds() {
+                return this.app.config.timeout ?? 30;
+            },
             app: {
                 config: { general: {}, timeout: 30 },
                 getLogger: () => ({
@@ -33,6 +36,22 @@ function protocol(overrides: Partial<Protocol> = {}): Protocol {
 }
 
 describe("Account lifecycle", () => {
+    it("公开适配器声明的有效启动窗口且不允许缩短全局边界", () => {
+        const account = createAccount();
+        account.adapter.resolveAccountStartupTimeoutSeconds = vi.fn(() => 480);
+        expect(account.startupTimeoutSeconds).toBe(480);
+        expect(account.info.startupTimeoutSeconds).toBe(480);
+
+        account.adapter.resolveAccountStartupTimeoutSeconds = vi.fn(() => 5);
+        expect(account.startupTimeoutSeconds).toBe(30);
+    });
+
+    it("拒绝扩展返回无法交给 Node 定时器的启动窗口", () => {
+        const account = createAccount();
+        account.adapter.resolveAccountStartupTimeoutSeconds = vi.fn(() => Number.POSITIVE_INFINITY);
+        expect(() => account.startupTimeoutSeconds).toThrow("启动超时必须是有效正数秒");
+    });
+
     it("在账号摘要中公开每个协议出口的身份、路径与生命周期", () => {
         const account = createAccount();
         account.protocols = [

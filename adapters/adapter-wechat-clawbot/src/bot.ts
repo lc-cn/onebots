@@ -27,6 +27,8 @@ export class WechatIlinkBot extends IlinkBot {
     private lifecycleGeneration = 0;
     private startPromise: Promise<void> | null = null;
     private loginAbort: AbortController | null = null;
+    private startSignal?: AbortSignal;
+    private startAbort?: () => void;
     private verificationCodeRequest:
         | { resolve(code: string): void; reject(error: unknown): void }
         | undefined;
@@ -176,10 +178,12 @@ export class WechatIlinkBot extends IlinkBot {
     }
 
     /** 加载会话、可选扫码登录，并按接收模式启动事件源。 */
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.startPromise) return this.startPromise;
         if (this.desiredRunning) return;
 
+        this.bindStartSignal(signal);
         this.desiredRunning = true;
         const generation = ++this.lifecycleGeneration;
         const controller = new AbortController();
@@ -189,6 +193,7 @@ export class WechatIlinkBot extends IlinkBot {
         promise = run.finally(() => {
             if (this.startPromise === promise) this.startPromise = null;
             if (this.loginAbort === controller) this.loginAbort = null;
+            if (!this.desiredRunning) this.unbindStartSignal();
         });
         this.startPromise = promise;
         return promise;
@@ -224,6 +229,7 @@ export class WechatIlinkBot extends IlinkBot {
 
     /** 立即中止长轮询并通知 iLink 会话下线。 */
     async stop(): Promise<void> {
+        this.unbindStartSignal();
         this.desiredRunning = false;
         this.lifecycleGeneration += 1;
         this.loginAbort?.abort(new DOMException("账号已停止", "AbortError"));
@@ -231,6 +237,27 @@ export class WechatIlinkBot extends IlinkBot {
         if (resolveWechatClawbotReceiveMode(this.cfg) === "polling") {
             await this.stopPolling();
         }
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error =>
+                this.emit("listener_error", { event: "start.abort", error }),
+            );
+        };
+        this.startSignal = signal;
+        this.startAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startAbort) {
+            this.startSignal.removeEventListener("abort", this.startAbort);
+        }
+        this.startSignal = undefined;
+        this.startAbort = undefined;
     }
 
     private isCurrentLifecycle(generation: number): boolean {

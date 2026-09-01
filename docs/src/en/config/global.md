@@ -38,7 +38,7 @@ general:
 |-------|------|-------------|---------|
 | `port` | number | HTTP server port | `6727` |
 | `log_level` | string | Log level: `trace`, `debug`, `info`, `warn`, `error` | `info` |
-| `timeout` | number | Maximum seconds for account login listeners and protocol outlets to start. On timeout OneBots aborts the signal passed to extensions, marks a starting protocol as failed, and continues with other accounts. Extensions should observe the signal and cancel pending network work. | `30` |
+| `timeout` | number | Global protection window for account login listeners and protocol outlets. An adapter may raise the window for a legitimate long login flow, but cannot shorten this value; WeChat ClawBot defaults to 480 seconds. On timeout OneBots aborts the signal passed to extensions, marks a starting protocol as failed, and continues with other accounts. | `30` |
 | `database` | non-empty string | SQLite file; relative paths resolve below the `data` directory, absolute paths remain unchanged, and a missing `.db` suffix is appended; requires restart | `onebots.db` |
 | `access_token` | string | Bearer token for the Web console, management API, and root management WebSocket | generated when no complete credentials exist |
 | `username` / `password` | string | Alternative Web console credentials; both fields must be configured together | none |
@@ -46,6 +46,8 @@ general:
 `ONEBOTS_ACCESS_TOKEN` is a deployment-level override for the file-based `access_token`. It is intended for containers and hosted platforms where the configuration file cannot be read directly. While it is set, setup and the runtime do not generate a competing file token, and the environment value is never written to the configuration or logs. Restart the process after rotating it. Without this override, setup and the runtime generate a random 256-bit `access_token` when neither a token nor a complete username/password pair exists; that token is stored in the restricted configuration file and never printed to service logs.
 
 `onebots doctor` validates the resolved database file and the directory SQLite needs for journal or WAL files. This covers absolute and escaping relative paths instead of assuming every database remains below the default data directory.
+
+Account summaries returned by the management API and bot cards in the Web console expose the effective `startupTimeoutSeconds`, so operators can verify the actual boundary before startup.
 
 ## General Configuration
 

@@ -214,6 +214,14 @@ export abstract class Adapter<
 
     abstract createAccount(config: Account.Config<T>): Account<T, C>;
 
+    /**
+     * 返回账号完整启动事务的有效超时秒数。适配器可为扫码等合法长登录流程抬高边界，
+     * 但不得缩短宿主配置的全局保护窗口。
+     */
+    resolveAccountStartupTimeoutSeconds(_config: Account.Config<T>): number {
+        return this.app.config.timeout ?? 30;
+    }
+
     async start(account_id?: string): Promise<void> {
         this.logger.info(`Starting adapter for platform ${this.platform}`);
         const startAccounts = [...this.accounts.values()].filter(account => {

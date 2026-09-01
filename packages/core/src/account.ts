@@ -15,6 +15,8 @@ export interface ProtocolRuntimeInfo {
     lifecycleStatus: ProtocolLifecycleStatus;
 }
 
+const MAX_TIMER_SECONDS = 2_147_483_647 / 1000;
+
 export class NotFoundError extends Error {
     message = "不支持的API";
 }
@@ -64,7 +66,24 @@ export class Account<
                     lifecycleStatus: protocol.lifecycleStatus,
                 }),
             ),
+            startupTimeoutSeconds: this.startupTimeoutSeconds,
         };
+    }
+
+    get startupTimeoutSeconds(): number {
+        const globalSeconds = this.app.config.timeout ?? 30;
+        const requestedSeconds = this.adapter.resolveAccountStartupTimeoutSeconds(this.config);
+        const effectiveSeconds = Math.max(globalSeconds, requestedSeconds);
+        if (
+            !Number.isFinite(effectiveSeconds) ||
+            effectiveSeconds <= 0 ||
+            effectiveSeconds > MAX_TIMER_SECONDS
+        ) {
+            throw new ResourceError(
+                `账号 ${this.platform}/${this.account_id} 的启动超时必须是有效正数秒`,
+            );
+        }
+        return effectiveSeconds;
     }
     get protocolConfigs(): Protocol.FullConfig<C>[] {
         const result: Protocol.FullConfig<C>[] = [];
@@ -137,7 +156,7 @@ export class Account<
         const generation = ++this.#startGeneration;
         const controller = new AbortController();
         this.#startController = controller;
-        const timeoutSeconds = this.app.config.timeout ?? 30;
+        const timeoutSeconds = this.startupTimeoutSeconds;
         let timeout: NodeJS.Timeout | undefined;
         const operation = this.#startAttempt(controller.signal, generation);
         const bounded = Promise.race([

@@ -29,6 +29,13 @@
                     bot.dependency
                 }}</span>
             </div>
+            <!-- 启动边界 -->
+            <div class="flex items-center gap-3 text-sm">
+                <span class="w-12 shrink-0 text-xs text-fg-tertiary">启动</span>
+                <span class="font-mono text-xs text-fg-secondary">
+                    最长 {{ bot.startupTimeoutSeconds }} 秒
+                </span>
+            </div>
 
             <!-- 协议出口 -->
             <template v-if="bot.protocols && bot.protocols.length">

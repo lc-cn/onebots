@@ -40,6 +40,19 @@ describe("WechatClawbotAdapter 身份契约", () => {
         await rm(`${databasePath}.db`, { force: true });
     });
 
+    it("扫码窗口自动抬高账号有效启动边界并公开到账号摘要", () => {
+        expect(adapter.resolveAccountStartupTimeoutSeconds(config)).toBe(480);
+        expect(
+            adapter.resolveAccountStartupTimeoutSeconds({
+                ...config,
+                qr_login_timeout_ms: 60_000,
+            }),
+        ).toBe(60);
+
+        const account = adapter.createAccount(config);
+        expect(account.info.startupTimeoutSeconds).toBe(480);
+    });
+
     it("恢复会话后登录信息与事件都使用真实 ilink_bot_id", async () => {
         const account = adapter.createAccount(config);
         adapter.accounts.set(config.account_id, account);

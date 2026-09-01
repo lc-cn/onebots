@@ -7,6 +7,7 @@ export interface AccountInfo {
     platform: string;
     nickname: string;
     dependency?: string;
+    startupTimeoutSeconds: number;
     urls: string[];
     protocols: ProtocolRuntimeInfo[];
 }

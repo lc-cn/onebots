@@ -240,6 +240,12 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         };
     }
 
+    override resolveAccountStartupTimeoutSeconds(config: Account.Config<"wechat-clawbot">): number {
+        const globalSeconds = super.resolveAccountStartupTimeoutSeconds(config);
+        const qrLoginSeconds = Math.ceil((config.qr_login_timeout_ms ?? 480_000) / 1000);
+        return Math.max(globalSeconds, qrLoginSeconds);
+    }
+
     createAccount(
         config: Account.Config<"wechat-clawbot">,
     ): Account<"wechat-clawbot", WechatIlinkBot> {
@@ -375,9 +381,9 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
             );
         });
 
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                await bot.start();
+                await bot.start(signal);
             } catch (error) {
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`[${this.platform}] ${config.account_id} 启动失败:`, error);

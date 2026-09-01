@@ -26,6 +26,8 @@ wechat-clawbot.{account_id}:
 API 根、CDN、`bot_type`、默认扫码登录等**不在 YAML 填写**，见适配器 README 中的约定表。
 长轮询永久恢复，账号停止时会中止当前请求，无需配置最大重试次数。
 
+账号完整启动边界取全局 `timeout` 与 `qr_login_timeout_ms`（向上换算为秒）中的较大值。默认扫码窗口因此是 480 秒，不会被全局默认的 30 秒提前中断；超时或人工停止仍会取消扫码、长轮询和后续协议启动。
+
 ## 相关文档
 
 - [微信 ClawBot 平台说明](/platform/wechat-clawbot)

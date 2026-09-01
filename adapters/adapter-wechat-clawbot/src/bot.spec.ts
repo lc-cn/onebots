@@ -69,6 +69,23 @@ describe("WechatIlinkBot 生命周期", () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it("平台就绪后仍保留账号启动信号以覆盖后续协议阶段", async () => {
+        const bot = new WechatIlinkBot(
+            { ...runtimeConfig(), receive_mode: "manual" },
+            { sessionStore: new MemoryCredentialStore() },
+        );
+        const stop = vi.spyOn(bot, "stop");
+        const controller = new AbortController();
+
+        await bot.start(controller.signal);
+        controller.abort();
+
+        await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
+        await vi.waitFor(() =>
+            expect((bot as unknown as { desiredRunning: boolean }).desiredRunning).toBe(false),
+        );
+    });
+
     it("manual 启动等待异步 ready 监听器完成", async () => {
         const bot = new WechatIlinkBot(
             { ...runtimeConfig(), receive_mode: "manual" },
