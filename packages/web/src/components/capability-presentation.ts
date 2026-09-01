@@ -48,6 +48,11 @@ export function parseAdapterCapabilityReport(value: unknown): AdapterCapabilityR
         !report.application.name.trim() ||
         typeof report.application.version !== "string" ||
         !report.application.version.trim() ||
+        typeof report.application.instanceId !== "string" ||
+        !report.application.instanceId.trim() ||
+        (report.application.runtimeContractId !== undefined &&
+            (typeof report.application.runtimeContractId !== "string" ||
+                !report.application.runtimeContractId.trim())) ||
         typeof report.complete !== "boolean" ||
         !Array.isArray(report.errors) ||
         !report.errors.every(error => typeof error === "string") ||

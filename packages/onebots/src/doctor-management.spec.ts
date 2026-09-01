@@ -64,7 +64,15 @@ describe("doctor management probes", () => {
         const checks = await probeDoctorManagement(
             "http://127.0.0.1:6727/gateway",
             { access_token: "secret" },
-            { fetcher, upgrade },
+            {
+                fetcher,
+                upgrade,
+                expectedIdentity: {
+                    application: "onebots",
+                    version: packageMetadata.version,
+                    instanceId: "instance-a",
+                },
+            },
         );
 
         expect(checks.map(check => [check.name, check.level])).toEqual([
@@ -84,6 +92,13 @@ describe("doctor management probes", () => {
         expect(checks.find(check => check.name === "management-capabilities")?.message).toBe(
             "能力证据已验证: 1 个适配器默认清单与 1 个账号能力均可信",
         );
+        expect(
+            checks.find(check => check.name === "management-capability-catalog")?.identity,
+        ).toEqual({
+            application: "onebots",
+            version: packageMetadata.version,
+            instanceId: "instance-a",
+        });
         expect(checks.find(check => check.name === "management-extensions")?.message).toBe(
             "扩展运行证据已验证: 0 个已启用，0 个已加载，版本均已收敛",
         );
@@ -729,7 +744,11 @@ function completeCapabilityCatalogResponse(): Response {
         JSON.stringify({
             schemaVersion: 1,
             generatedAt: "2026-09-01T00:00:00.000Z",
-            application: { name: packageMetadata.name, version: packageMetadata.version },
+            application: {
+                name: packageMetadata.name,
+                version: packageMetadata.version,
+                instanceId: "instance-a",
+            },
             ...buildAdapterCapabilityReport([], [], getInstallableAdapterNames()),
         }),
         { status: 200 },

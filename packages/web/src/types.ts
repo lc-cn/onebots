@@ -113,7 +113,12 @@ export interface AdapterCapabilityReportItem {
 export interface AdapterCapabilityReport {
     schemaVersion: 1;
     generatedAt: string;
-    application: { name: string; version: string };
+    application: {
+        name: string;
+        version: string;
+        instanceId: string;
+        runtimeContractId?: string;
+    };
     complete: boolean;
     errors: string[];
     adapters: AdapterCapabilityReportItem[];

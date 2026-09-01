@@ -91,7 +91,7 @@ const extensionInventoryStatus = ref<"loading" | "ready" | "unavailable">("loadi
 const capabilityReport = ref<AdapterCapabilityReport>({
     schemaVersion: 1,
     generatedAt: "",
-    application: { name: "", version: "" },
+    application: { name: "", version: "", instanceId: "" },
     complete: false,
     errors: [],
     adapters: [],

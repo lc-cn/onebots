@@ -16,6 +16,11 @@ describe("doctor management capability catalog", () => {
             name: "management-capability-catalog",
             level: "ok",
             message: `全平台能力目录已验证: ${report.adapters.length} 个官方适配器，0 个运行时清单，身份 ${packageMetadata.name}@${packageMetadata.version}`,
+            identity: {
+                application: packageMetadata.name,
+                version: packageMetadata.version,
+                instanceId: "instance-a",
+            },
         });
     });
 
@@ -27,6 +32,29 @@ describe("doctor management capability catalog", () => {
             level: "error",
             message: expect.stringContaining(
                 `应用身份必须为 ${packageMetadata.name}@${packageMetadata.version}`,
+            ),
+        });
+    });
+
+    it("rejects capability evidence cached from another process instance", () => {
+        const report = completeReport();
+
+        const check = inspectCapabilityCatalogPayload(report, {
+            application: packageMetadata.name,
+            version: packageMetadata.version,
+            instanceId: "instance-b",
+            runtimeContractId: "sha256:current",
+        });
+
+        expect(check).toMatchObject({
+            name: "management-capability-catalog",
+            level: "error",
+            message: expect.stringContaining(
+                "能力目录实例 onebots@" +
+                    packageMetadata.version +
+                    " 实例 instance-a 与公开探针 onebots@" +
+                    packageMetadata.version +
+                    " 实例 instance-b 契约 sha256:current 不一致",
             ),
         });
     });
@@ -82,6 +110,7 @@ describe("doctor management capability catalog", () => {
             "http://127.0.0.1:6727/gateway/api/adapter-capabilities",
             expect.objectContaining({
                 headers: { authorization: "Bearer secret" },
+                cache: "no-store",
                 signal: expect.any(AbortSignal),
             }),
         );
@@ -97,7 +126,11 @@ function completeReport() {
     return {
         schemaVersion: 1 as const,
         generatedAt: "2026-09-01T00:00:00.000Z",
-        application: { name: packageMetadata.name, version: packageMetadata.version },
+        application: {
+            name: packageMetadata.name,
+            version: packageMetadata.version,
+            instanceId: "instance-a",
+        },
         ...buildAdapterCapabilityReport([], [], getInstallableAdapterNames()),
     };
 }

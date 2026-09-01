@@ -247,8 +247,23 @@ export class App extends BaseApp {
             application: {
                 name: packageMetadata.name,
                 version: packageMetadata.version,
+                instanceId: this.info.instance_id,
+                ...(this.runtimeContractId ? { runtimeContractId: this.runtimeContractId } : {}),
             },
-            ...report,
+            complete: report.complete,
+            errors: report.errors,
+            adapters: report.adapters.map(adapter => ({
+                source: adapter.source,
+                status: adapter.status,
+                name: adapter.name,
+                displayName: adapter.displayName,
+                description: adapter.description,
+                packageName: adapter.packageName,
+                packageVersion: adapter.packageVersion,
+                declared: adapter.declared,
+                summary: adapter.summary,
+                capabilities: adapter.capabilities,
+            })),
         };
     }
 

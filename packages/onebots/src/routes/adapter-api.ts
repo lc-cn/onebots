@@ -26,6 +26,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
     });
 
     router.get("/api/adapter-capabilities", (ctx: RouterContext) => {
+        ctx.set("Cache-Control", "no-store");
         ctx.body = app.adapterCapabilityReport;
     });
 

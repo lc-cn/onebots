@@ -7,7 +7,7 @@ import {
     getExtensionPackageCatalogEntry,
 } from "./extension-capability-catalog.js";
 import { EXTENSION_CATALOG } from "./extension-catalog.js";
-import type { DoctorCheck } from "./doctor.js";
+import type { DoctorCheck, DoctorEndpointIdentity } from "./doctor.js";
 import type { ManagementFetch } from "./management-credential.js";
 import { readDoctorManagementJson } from "./doctor-management-response.js";
 
@@ -19,7 +19,6 @@ interface CapabilityInventoryItem {
     description?: unknown;
     packageName?: unknown;
     packageVersion?: unknown;
-    entryPath?: unknown;
     declared?: unknown;
     summary?: unknown;
     capabilities?: unknown;
@@ -30,24 +29,29 @@ export async function probeAuthenticatedCapabilityCatalog(
     base: string,
     token: string,
     fetcher: ManagementFetch,
+    expectedIdentity?: DoctorEndpointIdentity,
 ): Promise<DoctorCheck> {
     try {
         const response = await fetcher(`${base}/api/adapter-capabilities`, {
             headers: { authorization: `Bearer ${token}` },
+            cache: "no-store",
             signal: AbortSignal.timeout(2_000),
         });
         const payload = await readDoctorManagementJson(response);
         if (!response.ok) {
             return capabilityCatalogError(`在线能力目录响应无效: HTTP ${response.status}`);
         }
-        return inspectCapabilityCatalogPayload(payload);
+        return inspectCapabilityCatalogPayload(payload, expectedIdentity);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return capabilityCatalogError(`在线能力目录请求失败: ${message}`);
     }
 }
 
-export function inspectCapabilityCatalogPayload(payload: unknown): DoctorCheck {
+export function inspectCapabilityCatalogPayload(
+    payload: unknown,
+    expectedIdentity?: DoctorEndpointIdentity,
+): DoctorCheck {
     if (!isRecord(payload)) return capabilityCatalogError("响应必须是对象");
 
     const contractIssues: string[] = [];
@@ -55,12 +59,34 @@ export function inspectCapabilityCatalogPayload(payload: unknown): DoctorCheck {
     if (typeof payload.generatedAt !== "string" || Number.isNaN(Date.parse(payload.generatedAt))) {
         contractIssues.push("generatedAt 必须是有效时间");
     }
-    if (
-        !isRecord(payload.application) ||
-        payload.application.name !== packageMetadata.name ||
-        payload.application.version !== packageMetadata.version
+    const application = payload.application;
+    if (!isRecord(application)) {
+        contractIssues.push("application 必须是对象");
+    } else if (
+        application.name !== packageMetadata.name ||
+        application.version !== packageMetadata.version
     ) {
         contractIssues.push(`应用身份必须为 ${packageMetadata.name}@${packageMetadata.version}`);
+    } else {
+        if (typeof application.instanceId !== "string" || !application.instanceId.trim()) {
+            contractIssues.push("application.instanceId 必须是非空字符串");
+        }
+        if (
+            application.runtimeContractId !== undefined &&
+            (typeof application.runtimeContractId !== "string" ||
+                !application.runtimeContractId.trim())
+        ) {
+            contractIssues.push("application.runtimeContractId 必须是非空字符串");
+        }
+        if (
+            expectedIdentity &&
+            (application.instanceId !== expectedIdentity.instanceId ||
+                application.runtimeContractId !== expectedIdentity.runtimeContractId)
+        ) {
+            contractIssues.push(
+                `能力目录实例 ${identityLabel(application)} 与公开探针 ${identityLabel(expectedIdentity)} 不一致`,
+            );
+        }
     }
     if (typeof payload.complete !== "boolean") contractIssues.push("complete 必须是布尔值");
     if (
@@ -112,9 +138,6 @@ export function inspectCapabilityCatalogPayload(payload: unknown): DoctorCheck {
         ) {
             contractIssues.push(`${name} 的 packageVersion 无效`);
         }
-        if (adapter.entryPath !== null && typeof adapter.entryPath !== "string") {
-            contractIssues.push(`${name} 的 entryPath 无效`);
-        }
         if (typeof adapter.declared !== "boolean") contractIssues.push(`${name} 缺少 declared`);
 
         const hasManifest = adapter.capabilities !== null;
@@ -140,8 +163,6 @@ export function inspectCapabilityCatalogPayload(payload: unknown): DoctorCheck {
             contractIssues.push(`${name} 缺少版本绑定的已验证能力清单`);
         }
         if (adapter.source === "catalog") {
-            if (adapter.entryPath !== null)
-                contractIssues.push(`${name} 的目录快照不能包含入口路径`);
             const expected = expectedByName.get(name);
             if (!expected) {
                 contractIssues.push(`${name} 不是当前版本的官方适配器却标记为目录快照`);
@@ -163,9 +184,6 @@ export function inspectCapabilityCatalogPayload(payload: unknown): DoctorCheck {
             }
         } else if (adapter.source === "runtime") {
             runtimeCount++;
-            if (typeof adapter.entryPath !== "string" || !adapter.entryPath.trim()) {
-                contractIssues.push(`${name} 的运行时清单缺少入口路径`);
-            }
             const expected = expectedByName.get(name);
             if (expected && adapter.packageName !== expected.packageName) {
                 contractIssues.push(`${name} 的运行时包名应为 ${expected.packageName}`);
@@ -191,10 +209,24 @@ export function inspectCapabilityCatalogPayload(payload: unknown): DoctorCheck {
         return capabilityCatalogError(`证据不完整: ${reasons.join("；") || "未提供原因"}`);
     }
 
+    const verifiedApplication = application as {
+        name: string;
+        version: string;
+        instanceId: string;
+        runtimeContractId?: string;
+    };
     return {
         name: "management-capability-catalog",
         level: "ok",
         message: `全平台能力目录已验证: ${expectedEntries.length} 个官方适配器，${runtimeCount} 个运行时清单，身份 ${packageMetadata.name}@${packageMetadata.version}`,
+        identity: {
+            application: verifiedApplication.name,
+            version: verifiedApplication.version,
+            instanceId: verifiedApplication.instanceId,
+            ...(verifiedApplication.runtimeContractId
+                ? { runtimeContractId: verifiedApplication.runtimeContractId }
+                : {}),
+        },
     };
 }
 
@@ -210,6 +242,15 @@ function capabilityCatalogError(message: string): DoctorCheck {
 
 function boundedMessage(message: string): string {
     return message.replaceAll(/\s+/g, " ").trim().slice(0, 500);
+}
+
+function identityLabel(value: Record<string, unknown> | DoctorEndpointIdentity): string {
+    const application = "name" in value ? value.name : value.application;
+    const contract =
+        "runtimeContractId" in value && value.runtimeContractId
+            ? ` 契约 ${String(value.runtimeContractId)}`
+            : "";
+    return `${String(application)}@${String(value.version)} 实例 ${String(value.instanceId)}${contract}`;
 }
 
 function isEvidenceStatus(value: unknown): value is "verified" | "unknown" | "unavailable" {

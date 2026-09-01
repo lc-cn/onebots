@@ -38,20 +38,21 @@ describe("adapter account routes", () => {
         const report = {
             schemaVersion: 1 as const,
             generatedAt: "2026-09-01T00:00:00.000Z",
-            application: { name: "onebots", version: "1.2.8" },
+            application: { name: "onebots", version: "1.2.8", instanceId: "instance-a" },
             complete: true,
             errors: [],
             adapters: [{ name: "qq", source: "catalog", status: "verified" }],
         };
         const { gets } = setup({ adapterInfos, adapterCapabilityReport: report } as Partial<App>);
         const adaptersContext = {} as RouterContext;
-        const capabilitiesContext = {} as RouterContext;
+        const capabilitiesContext = { set: vi.fn() } as unknown as RouterContext;
 
         gets.get("/api/adapters")!(adaptersContext);
         gets.get("/api/adapter-capabilities")!(capabilitiesContext);
 
         expect(adaptersContext.body).toBe(adapterInfos);
         expect(capabilitiesContext.body).toBe(report);
+        expect(capabilitiesContext.set).toHaveBeenCalledWith("Cache-Control", "no-store");
     });
 
     it("账号配置事务冲突返回 409", async () => {

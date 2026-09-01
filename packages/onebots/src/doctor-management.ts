@@ -1,7 +1,7 @@
 import * as http from "node:http";
 import { randomBytes } from "node:crypto";
 import { assertAdapterCapabilities } from "@onebots/core";
-import type { DoctorCheck } from "./doctor.js";
+import type { DoctorCheck, DoctorEndpointIdentity } from "./doctor.js";
 import {
     acquireManagementCredential,
     revokeManagementSession,
@@ -21,6 +21,7 @@ export interface DoctorWebSocketUpgradeResult {
 export interface DoctorManagementProbeDependencies {
     fetcher?: DoctorFetch;
     upgrade?: (url: string, token?: string) => Promise<DoctorWebSocketUpgradeResult>;
+    expectedIdentity?: DoctorEndpointIdentity;
 }
 
 /** 验证运行中网关的管理面同时满足匿名拒绝与合法凭据可用。 */
@@ -42,7 +43,12 @@ export async function probeDoctorManagement(
               probeAuthenticatedManagementHttp(base, credential.token, fetcher),
               probeAuthenticatedConfigState(base, credential.token, fetcher),
               probeAuthenticatedExtensions(base, credential.token, fetcher),
-              probeAuthenticatedCapabilityCatalog(base, credential.token, fetcher),
+              probeAuthenticatedCapabilityCatalog(
+                  base,
+                  credential.token,
+                  fetcher,
+                  dependencies.expectedIdentity,
+              ),
               probeAuthenticatedRuntime(base, credential.token, fetcher),
               probeAuthenticatedManagementWebSocket(websocketUrl, credential.token, upgrade),
           ])

@@ -139,6 +139,12 @@ describe("capability presentation", () => {
     it("rejects malformed independent capability API responses", () => {
         expect(() => parseAdapterCapabilityReport(null)).toThrow("必须是对象");
         expect(() =>
+            parseAdapterCapabilityReport({
+                ...capabilityReport([]),
+                application: { name: "onebots", version: "1.2.8" },
+            }),
+        ).toThrow("响应结构无效");
+        expect(() =>
             parseAdapterCapabilityReport({ ...capabilityReport([]), adapters: [{}] }),
         ).toThrow("条目结构无效");
         expect(parseAdapterCapabilityReport(capabilityReport([]))).toEqual(capabilityReport([]));
@@ -191,7 +197,7 @@ function capabilityReport(adapters: ReturnType<typeof reportAdapter>[]): Adapter
     return {
         schemaVersion: 1,
         generatedAt: "2026-09-01T00:00:00.000Z",
-        application: { name: "onebots", version: "1.2.8" },
+        application: { name: "onebots", version: "1.2.8", instanceId: "instance-a" },
         complete: adapters.every(adapter => adapter.status === "verified"),
         errors: adapters.some(adapter => adapter.status === "unavailable")
             ? ["extension-catalog: invalid"]
