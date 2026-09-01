@@ -258,11 +258,46 @@ async function handleAccountLifecycleRequest(
     ctx: RouterContext,
     action: ManagementAccountLifecycleAction,
 ): Promise<void> {
+    setManagementEvidenceIdentity(app, ctx);
+    try {
+        assertManagementInstancePrecondition(
+            app,
+            ctx,
+            action === "bot.start" ? "账号上线" : "账号下线",
+        );
+    } catch (error) {
+        const mismatch = error instanceof ManagementInstanceMismatchError;
+        ctx.status = mismatch ? 409 : error instanceof ValidationError ? 400 : 500;
+        ctx.body = {
+            success: false,
+            application: app.info.application_name,
+            instance_id: app.info.instance_id,
+            code: mismatch
+                ? "ACCOUNT_INSTANCE_MISMATCH"
+                : error instanceof ValidationError
+                  ? "ACCOUNT_REQUEST_INVALID"
+                  : "ACCOUNT_LIFECYCLE_FAILED",
+            message: error instanceof Error ? error.message : "账号生命周期请求无效",
+        };
+        app.logger.error("管理端账号生命周期实例校验失败", { error, action });
+        return;
+    }
     const result = await executeManagementAccountLifecycle(app, action, ctx.request.body);
     if (result.success === true) {
-        ctx.body = { success: true, data: result.account };
+        ctx.body = {
+            success: true,
+            application: app.info.application_name,
+            instance_id: app.info.instance_id,
+            data: result.account,
+        };
         return;
     }
     ctx.status = result.status;
-    ctx.body = { success: false, code: result.code, message: result.message };
+    ctx.body = {
+        success: false,
+        application: app.info.application_name,
+        instance_id: app.info.instance_id,
+        code: result.code,
+        message: result.message,
+    };
 }

@@ -13,7 +13,7 @@ import {
     type ServiceProbeResult,
 } from "../utils/service-probes.js";
 import {
-    buildBotLifecycleActionRequest,
+    buildBotLifecycleActionRequestInit,
     parseBotLifecycleActionResponse,
     type BotLifecycleActionResult,
 } from "../bot-lifecycle-action.js";
@@ -111,21 +111,21 @@ export function useApi(resources: UseApiResources = {}) {
     };
 
     const startBot = async (platform: string, uin: string): Promise<BotLifecycleActionResult> => {
+        const identity = adapterInventoryIdentity.value;
+        if (!identity) {
+            return { success: false, message: "账号运行态身份不可用，请刷新页面后重试" };
+        }
         try {
-            const response = await authFetch(buildApiUrl("/api/bots/start"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(
-                    buildBotLifecycleActionRequest(
-                        platform,
-                        uin,
-                        adapterInventoryIdentity.value?.instanceId,
-                    ),
-                ),
-            });
+            const response = await authFetch(
+                buildApiUrl("/api/bots/start"),
+                buildBotLifecycleActionRequestInit(platform, uin, identity),
+            );
             const result = await parseBotLifecycleActionResponse(
                 response,
                 `启动机器人 ${uin} 失败`,
+                identity,
+                platform,
+                uin,
             );
             if (result.success) {
                 await fetchAdapters();
@@ -138,21 +138,21 @@ export function useApi(resources: UseApiResources = {}) {
     };
 
     const stopBot = async (platform: string, uin: string): Promise<BotLifecycleActionResult> => {
+        const identity = adapterInventoryIdentity.value;
+        if (!identity) {
+            return { success: false, message: "账号运行态身份不可用，请刷新页面后重试" };
+        }
         try {
-            const response = await authFetch(buildApiUrl("/api/bots/stop"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(
-                    buildBotLifecycleActionRequest(
-                        platform,
-                        uin,
-                        adapterInventoryIdentity.value?.instanceId,
-                    ),
-                ),
-            });
+            const response = await authFetch(
+                buildApiUrl("/api/bots/stop"),
+                buildBotLifecycleActionRequestInit(platform, uin, identity),
+            );
             const result = await parseBotLifecycleActionResponse(
                 response,
                 `停止机器人 ${uin} 失败`,
+                identity,
+                platform,
+                uin,
             );
             if (result.success) {
                 await fetchAdapters();

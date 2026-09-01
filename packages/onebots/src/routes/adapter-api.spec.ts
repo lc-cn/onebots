@@ -261,13 +261,15 @@ describe("adapter account routes", () => {
 
     it.each(["/api/bots/start", "/api/bots/stop"])("%s 缺少账号身份时返回 400", async route => {
         const { posts } = setup();
-        const ctx = { request: { body: { platform: "mock" } } } as RouterContext;
+        const ctx = lifecycleContext({ platform: "mock" });
 
         await posts.get(route)!(ctx);
 
         expect(ctx.status).toBe(400);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             code: "ACCOUNT_REQUEST_INVALID",
             message: "请求字段 uin 必须是非空字符串",
         });
@@ -275,39 +277,37 @@ describe("adapter account routes", () => {
 
     it("启动不存在的适配器时返回 404 而不是静默成功", async () => {
         const { posts } = setup();
-        const ctx = {
-            request: { body: { platform: "missing", uin: "demo" } },
-        } as RouterContext;
+        const ctx = lifecycleContext({ platform: "missing", uin: "demo" });
 
         await posts.get("/api/bots/start")!(ctx);
 
         expect(ctx.status).toBe(404);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             code: "ACCOUNT_TARGET_NOT_FOUND",
             message: "适配器 missing 不存在",
         });
     });
 
     it("拒绝由其他实例快照发起的账号操作", async () => {
-        const account = { info: { uin: "demo", status: "online" } };
+        const account = { info: { platform: "mock", uin: "demo", status: "online" } };
         const adapter = lifecycleAdapter(account);
         const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
-        const ctx = {
-            request: {
-                body: {
-                    platform: "mock",
-                    uin: "demo",
-                    expected_instance_id: "instance-before-restart",
-                },
-            },
-        } as RouterContext;
+        const ctx = lifecycleContext({
+            platform: "mock",
+            uin: "demo",
+            expected_instance_id: "instance-before-restart",
+        });
 
         await posts.get("/api/bots/start")!(ctx);
 
         expect(ctx.status).toBe(409);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             code: "ACCOUNT_INSTANCE_MISMATCH",
             message: "账号操作期望实例 instance-before-restart，当前已由实例 instance-a 接管",
         });
@@ -317,15 +317,15 @@ describe("adapter account routes", () => {
     it("停止不存在的账号时返回 404 且不调用适配器", async () => {
         const adapter = lifecycleAdapter(undefined);
         const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
-        const ctx = {
-            request: { body: { platform: "mock", uin: "missing" } },
-        } as RouterContext;
+        const ctx = lifecycleContext({ platform: "mock", uin: "missing" });
 
         await posts.get("/api/bots/stop")!(ctx);
 
         expect(ctx.status).toBe(404);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             code: "ACCOUNT_TARGET_NOT_FOUND",
             message: "账号 mock.missing 不存在",
         });
@@ -333,7 +333,7 @@ describe("adapter account routes", () => {
     });
 
     it("未实现手动生命周期控制时返回 501", async () => {
-        const account = { info: { uin: "demo", status: "offline" } };
+        const account = { info: { platform: "mock", uin: "demo", status: "offline" } };
         const adapter = lifecycleAdapter(account, {
             setOnline: vi.fn(async () => {
                 throw new UnsupportedCapabilityError({
@@ -343,9 +343,7 @@ describe("adapter account routes", () => {
             }),
         });
         const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
-        const ctx = {
-            request: { body: { platform: "mock", uin: "demo" } },
-        } as RouterContext;
+        const ctx = lifecycleContext({ platform: "mock", uin: "demo" });
 
         await posts.get("/api/bots/start")!(ctx);
 
@@ -358,18 +356,23 @@ describe("adapter account routes", () => {
     });
 
     it("真实生命周期操作完成后返回最新账号状态", async () => {
-        const account = { info: { uin: "demo", status: "online" } };
+        const account = { info: { platform: "mock", uin: "demo", status: "online" } };
         const adapter = lifecycleAdapter(account);
         const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
-        const ctx = {
-            request: { body: { platform: "mock", uin: "demo" } },
-        } as RouterContext;
+        const ctx = lifecycleContext({ platform: "mock", uin: "demo" }, "instance-a");
 
         await posts.get("/api/bots/start")!(ctx);
 
         expect(adapter.setOnline).toHaveBeenCalledWith("demo");
         expect(ctx.status).toBeUndefined();
-        expect(ctx.body).toEqual({ success: true, data: account.info });
+        expect(ctx.body).toEqual({
+            success: true,
+            application: "onebots",
+            instance_id: "instance-a",
+            data: account.info,
+        });
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
+        expect(ctx.set).toHaveBeenCalledWith("Cache-Control", "no-store");
     });
 
     it("同一账号的并发生命周期请求返回 409 且不交错调用插件", async () => {
@@ -377,15 +380,11 @@ describe("adapter account routes", () => {
         const gate = new Promise<void>(resolve => {
             release = resolve;
         });
-        const account = { info: { uin: "demo", status: "online" } };
+        const account = { info: { platform: "mock", uin: "demo", status: "online" } };
         const adapter = lifecycleAdapter(account, { setOnline: vi.fn(() => gate) });
         const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
-        const startCtx = {
-            request: { body: { platform: "mock", uin: "demo" } },
-        } as RouterContext;
-        const stopCtx = {
-            request: { body: { platform: "mock", uin: "demo" } },
-        } as RouterContext;
+        const startCtx = lifecycleContext({ platform: "mock", uin: "demo" });
+        const stopCtx = lifecycleContext({ platform: "mock", uin: "demo" });
 
         const starting = posts.get("/api/bots/start")!(startCtx);
         await vi.waitFor(() => expect(adapter.setOnline).toHaveBeenCalledOnce());
@@ -394,6 +393,8 @@ describe("adapter account routes", () => {
         expect(stopCtx.status).toBe(409);
         expect(stopCtx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             code: "ACCOUNT_LIFECYCLE_CONFLICT",
             message: "账号 mock.demo 正在执行上线操作，请稍后重试",
         });
@@ -401,7 +402,31 @@ describe("adapter account routes", () => {
 
         release();
         await starting;
-        expect(startCtx.body).toEqual({ success: true, data: account.info });
+        expect(startCtx.body).toEqual({
+            success: true,
+            application: "onebots",
+            instance_id: "instance-a",
+            data: account.info,
+        });
+    });
+
+    it("标准实例 header 在读取兼容正文和调用适配器前拒绝旧页面", async () => {
+        const account = { info: { platform: "mock", uin: "demo", status: "offline" } };
+        const adapter = lifecycleAdapter(account);
+        const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
+        const ctx = lifecycleContext("malformed", "instance-before-restart");
+
+        await posts.get("/api/bots/start")!(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-a",
+            code: "ACCOUNT_INSTANCE_MISMATCH",
+            message: "账号上线请求期望实例 instance-before-restart，当前已由实例 instance-a 接管",
+        });
+        expect(adapter.setOnline).not.toHaveBeenCalled();
     });
 
     it("实例切换后在读取账号和调用适配器前拒绝消息发送", async () => {
@@ -466,7 +491,7 @@ describe("adapter account routes", () => {
 });
 
 function lifecycleAdapter(
-    account: { info: { uin: string; status: string } } | undefined,
+    account: { info: { platform: string; uin: string; status: string } } | undefined,
     overrides: Record<string, unknown> = {},
 ) {
     return {
@@ -478,6 +503,15 @@ function lifecycleAdapter(
         setOnline: ReturnType<typeof vi.fn>;
         setOffline: ReturnType<typeof vi.fn>;
     };
+}
+
+function lifecycleContext(body: unknown, expectedInstanceId = ""): RouterContext {
+    return {
+        get: (name: string) =>
+            name === "X-OneBots-Expected-Instance-Id" ? expectedInstanceId : "",
+        set: vi.fn(),
+        request: { body },
+    } as unknown as RouterContext;
 }
 
 function sendAdapter() {
