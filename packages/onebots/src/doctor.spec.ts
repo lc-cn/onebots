@@ -850,6 +850,21 @@ describe("doctor persisted plugin selection", () => {
             nodePath: process.execPath,
             binPath: path.resolve(process.argv[1]),
         });
+
+        install.mockRejectedValueOnce(
+            new Error("systemctl failed with ONEBOTS_ACCESS_TOKEN=secret-token"),
+        );
+        const failedRepair = await runDoctor({ ...options, fix: true });
+        expect(failedRepair.ok).toBe(false);
+        const failedRuntimeCheck = failedRepair.checks.find(check => check.name === "service-node");
+        expect(failedRuntimeCheck).toMatchObject({ level: "error" });
+        expect(failedRuntimeCheck).not.toHaveProperty("fixed");
+        expect(failedRepair.checks.find(check => check.name === "service-definition")).toEqual({
+            name: "service-definition",
+            level: "error",
+            message: `用户级服务定义修复失败: ${path.join(directory, "service.plist")}`,
+        });
+        expect(JSON.stringify(failedRepair)).not.toContain("secret-token");
     });
 
     it("exposes category-level precedence and ignores service defaults in standalone mode", () => {

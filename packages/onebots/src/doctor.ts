@@ -37,6 +37,7 @@ import {
 import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
 import {
     inspectDoctorServiceDefinition,
+    repairDoctorUserService,
     type DoctorServiceDefinitionInspection,
 } from "./doctor-service-definition.js";
 import packageMetadata from "../package.json" with { type: "json" };
@@ -351,30 +352,18 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 nodePath: process.execPath,
                 binPath: path.resolve(process.argv[1]),
             };
-            await controller.install(repairedSpec);
-            const repairedRuntime = inspectServiceRuntime(process.execPath);
-            const repairedEntry = inspectEntry(path.resolve(process.argv[1]));
-            const repairedDefinition = inspectDefinition(controller, repairedSpec);
-            checks.push({
-                ...repairedRuntime.check,
-                ...(!serviceRuntime.supported || spec.nodePath !== process.execPath
-                    ? { fixed: true }
-                    : {}),
-            });
-            checks.push({
-                ...repairedEntry.check,
-                ...(!serviceEntry.valid || spec.binPath !== path.resolve(process.argv[1])
-                    ? { fixed: true }
-                    : {}),
-            });
-            checks.push({
-                name: "service-definition",
-                level: repairedDefinition.current ? "ok" : "error",
-                message: repairedDefinition.current
-                    ? "已重新生成并验证用户级服务定义"
-                    : (repairedDefinition.error ?? "重新生成后的服务定义仍与元数据不一致"),
-                ...(repairedDefinition.current ? { fixed: true } : {}),
-            });
+            checks.push(
+                ...(await repairDoctorUserService({
+                    controller,
+                    previousSpec: spec,
+                    repairedSpec,
+                    previousRuntime: serviceRuntime,
+                    previousEntry: serviceEntry,
+                    runtimeInspector: inspectServiceRuntime,
+                    entryInspector: inspectEntry,
+                    definitionInspector: inspectDefinition,
+                })),
+            );
         } else {
             checks.push(serviceRuntime.check);
             checks.push(serviceEntry.check);

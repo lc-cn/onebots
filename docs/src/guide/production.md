@@ -209,7 +209,7 @@ doctor 会分别验证当前 CLI 与守护服务定义中的 Node.js。对于服
 
 服务入口也不再以 `binPath` 存在作为充分证据。doctor 会解析符号链接后的真实文件，查找其所属 `package.json`，并确认包名是 `onebots`、版本与当前 CLI 一致且入口正是 manifest 声明的 `bin.onebots`。因此停止状态下仍能发现服务引用旧版安装、替代脚本或损坏清单；用户级 `--fix` 会改用当前 CLI 入口。
 
-systemd unit、launchd plist 等平台服务定义无法读取或比对时不会再让 doctor 中断；`service-definition` 会以不包含文件内容的路径诊断令门禁失败。用户级 `--fix` 写入定义后会再次读取并与新元数据比较，只有结果一致才标记为 `fixed`。
+systemd unit、launchd plist 等平台服务定义无法读取或比对时不会再让 doctor 中断；`service-definition` 会以不包含文件内容的路径诊断令门禁失败。用户级 `--fix` 写入定义后会再次读取并与新元数据比较，只有结果一致才标记为 `fixed`。若 systemctl、launchctl 或任务计划程序在修复期间失败，doctor 仍会返回完整报告，保留修复前的 Node 与入口证据，并以定义路径报告失败，不回显底层命令可能携带的环境或文件内容。
 
 账号管理摘要还会为每个协议出口返回 `name`、`version`、`path` 和 `lifecycleStatus`。机器人管理页会分别显示等待启动、启动中、就绪、停止中、已停止或失败，不再用账号 online 状态掩盖某个协议出口的启动失败。doctor 在验证合法管理凭据后会读取同一份受保护的运行态，直接报告 `平台.账号/协议.版本`；独立的 `management-capabilities` 检查会逐个验证适配器默认清单、账号级覆写和 `accountCapabilityErrors` 的闭合契约。仅声明 `capabilityDeclared` 却缺少有效清单、覆写不对应已配置账号、清单结构畸形、同一账号同时发布覆写与不可用诊断，或任一账号能力证据不可用，都会产生 `error`，使普通与 `--strict` 门禁失败，同时不掩盖账号和协议生命周期的独立结论。零账号时则明确报告已验证的适配器默认清单和“尚未配置账号”，不会用“0 个账号均可信”代替实际证据。公开的 `/ready` 仍只返回平台级聚合，不暴露账号标识。
 
