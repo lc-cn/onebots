@@ -15,6 +15,13 @@ const temporaryDirectories: string[] = [];
 
 beforeEach(() => {
     vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
+    vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
+    vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+        installed: false,
+        running: false,
+        scope: "user",
+        detail: "服务未安装",
+    });
 });
 
 afterEach(() => {
@@ -113,6 +120,100 @@ describe("service install preflight", () => {
         expect(install).toHaveBeenCalledWith(
             expect.objectContaining({ configPath: config, adapters: [], protocols: [] }),
         );
+    });
+
+    it("更新运行中的服务定义时明确要求重启应用新定义", async () => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const previous = { ...serviceSpec(config), protocols: ["onebot-v11"] };
+        vi.mocked(ServiceController.prototype.readSpec).mockReturnValue(previous);
+        vi.mocked(ServiceController.prototype.status).mockReturnValue({
+            installed: true,
+            running: true,
+            scope: "user",
+            detail: "active",
+        });
+        const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+
+        await expect(installService(options(config))).resolves.toEqual({
+            output: "已更新用户级 OneBots 服务定义（现有实例仍在运行）\n应用新定义: onebots restart",
+        });
+        expect(install).toHaveBeenCalledOnce();
+    });
+
+    it("幂等安装相同定义时不要求运行中的实例重启", async () => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const previous = serviceSpec(config);
+        vi.mocked(ServiceController.prototype.readSpec).mockReturnValue(previous);
+        vi.mocked(ServiceController.prototype.status).mockReturnValue({
+            installed: true,
+            running: true,
+            scope: "user",
+            detail: "active",
+        });
+        vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+
+        await expect(installService(options(config))).resolves.toEqual({
+            output: "已确认用户级 OneBots 服务定义未变化（现有实例继续运行）",
+        });
+    });
+
+    it("更新停止的服务定义时不会误报新实例已经运行", async () => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const previous = serviceSpec(config);
+        vi.mocked(ServiceController.prototype.readSpec).mockReturnValue(previous);
+        vi.mocked(ServiceController.prototype.status).mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "inactive",
+        });
+        vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+
+        await expect(installService(options(config))).resolves.toEqual({
+            output: "已更新用户级 OneBots 服务定义（服务当前已停止）\n启动: onebots start",
+        });
+    });
+
+    it("以安装后的权威状态报告平台替换造成的停止", async () => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const previous = { ...serviceSpec(config), protocols: ["onebot-v11"] };
+        vi.mocked(ServiceController.prototype.readSpec).mockReturnValue(previous);
+        vi.mocked(ServiceController.prototype.status)
+            .mockReturnValueOnce({
+                installed: true,
+                running: true,
+                scope: "system",
+                detail: "RUNNING",
+            })
+            .mockReturnValueOnce({
+                installed: true,
+                running: false,
+                scope: "system",
+                detail: "STOPPED",
+            });
+        vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+
+        await expect(installService({ ...options(config), system: true })).resolves.toEqual({
+            output: "已更新系统级 OneBots 服务定义（服务当前已停止）\n启动: onebots start --system",
+        });
+    });
+
+    it("安装前状态查询失败时不推断服务已停止", async () => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const previous = serviceSpec(config);
+        vi.mocked(ServiceController.prototype.readSpec).mockReturnValue(previous);
+        vi.mocked(ServiceController.prototype.status).mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "systemd bus unavailable",
+            error: "进程管理器状态查询失败",
+        });
+        vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+
+        await expect(installService(options(config))).resolves.toEqual({
+            output: "已更新用户级 OneBots 服务定义（当前运行状态需要验证）\n验证: onebots status",
+        });
     });
 
     it("installs the plugin selection persisted by setup without repeated flags", async () => {

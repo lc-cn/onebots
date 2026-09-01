@@ -30,6 +30,7 @@ import type { UpdateRunResult } from "../updater.js";
 import { inspectDoctorServiceMetadata } from "../doctor-service-metadata.js";
 import { assertInstalledServiceDefinitionCurrent } from "../service-definition-preflight.js";
 import { inspectServiceStatus } from "../service-status.js";
+import { createServiceRuntimeContractId } from "../service-runtime-contract.js";
 export type { ServiceStatusKind, ServiceStatusReport } from "../service-status.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
@@ -163,10 +164,46 @@ export async function installService(
         workingDirectory: process.cwd(),
     };
     await preflightService(spec, "安装");
-    await new ServiceController(scope).install(spec);
+    const controller = new ServiceController(scope);
+    const previousSpec = controller.readSpec();
+    const previousStatus = previousSpec ? controller.status(previousSpec) : null;
+    await controller.install(spec);
+    const currentStatus = controller.status(spec);
     const suffix = scope === "system" ? " --system" : "";
+    const scopeLabel = scope === "system" ? "系统级" : "用户级";
+    const actionLabel = previousSpec ? "已更新" : "已安装";
+    if (currentStatus.error || (currentStatus.running && previousStatus?.error)) {
+        return {
+            output: `${actionLabel}${scopeLabel} OneBots 服务定义（当前运行状态需要验证）\n验证: onebots status${suffix}`,
+        };
+    }
+    if (
+        currentStatus.running &&
+        previousStatus?.running &&
+        previousSpec &&
+        createServiceRuntimeContractId(previousSpec) !== createServiceRuntimeContractId(spec)
+    ) {
+        return {
+            output: `已更新${scopeLabel} OneBots 服务定义（现有实例仍在运行）\n应用新定义: onebots restart${suffix}`,
+        };
+    }
+    if (currentStatus.running && previousStatus?.running) {
+        return {
+            output: `已确认${scopeLabel} OneBots 服务定义未变化（现有实例继续运行）`,
+        };
+    }
+    if (currentStatus.running) {
+        return {
+            output: `${actionLabel}${scopeLabel} OneBots 服务定义（服务当前正在运行）\n验证: onebots status${suffix}`,
+        };
+    }
+    if (previousSpec) {
+        return {
+            output: `已更新${scopeLabel} OneBots 服务定义（服务当前已停止）\n启动: onebots start${suffix}`,
+        };
+    }
     return {
-        output: `已安装${scope === "system" ? "系统级" : "用户级"} OneBots 服务（未立即启动）\n启动: onebots start${suffix}`,
+        output: `已安装${scopeLabel} OneBots 服务（未立即启动）\n启动: onebots start${suffix}`,
     };
 }
 
