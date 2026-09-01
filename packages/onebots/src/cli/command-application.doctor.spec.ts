@@ -209,14 +209,25 @@ describe("doctor configuration scope", () => {
             { mode: 0o600 },
         );
         fs.mkdirSync(path.join(directory, "data"));
+        const binPath = path.join(directory, "lib", "bin.js");
+        fs.mkdirSync(path.dirname(binPath));
+        fs.writeFileSync(binPath, "");
+        fs.writeFileSync(
+            path.join(directory, "package.json"),
+            JSON.stringify({
+                name: "onebots",
+                version: packageMetadata.version,
+                bin: { onebots: "./lib/bin.js" },
+            }),
+        );
         const installed: ServiceSpec = {
             scope: "user",
             configPath,
             adapters: ["service-missing"],
             protocols: [],
             nodePath: process.execPath,
-            binPath: process.argv[1],
-            workingDirectory: process.cwd(),
+            binPath,
+            workingDirectory: directory,
         };
         const readSpec = vi
             .spyOn(ServiceController.prototype, "readSpec")
@@ -261,6 +272,9 @@ describe("doctor configuration scope", () => {
         expect(status).toHaveBeenCalledWith(installed);
         expect(report.checks.find(check => check.name === "service-node")?.message).toContain(
             process.version,
+        );
+        expect(report.checks.find(check => check.name === "service-entry")?.message).toContain(
+            `onebots@${packageMetadata.version}`,
         );
         expect(report.checks.some(check => check.name === "adapter:service-missing")).toBe(true);
         expect(report.checks.some(check => check.name === "adapter:config-missing")).toBe(false);

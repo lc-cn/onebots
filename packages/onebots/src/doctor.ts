@@ -34,6 +34,7 @@ import {
     inspectServiceNodeRuntime,
     type DoctorServiceRuntimeInspection,
 } from "./doctor-service-runtime.js";
+import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import {
     compareDoctorEndpointIdentities,
@@ -94,6 +95,8 @@ export interface DoctorOptions {
     serviceMetadata?: DoctorServiceMetadataInspection;
     /** 测试或嵌入场景可替换服务 Node 版本探测。 */
     serviceRuntimeInspector?: (nodePath: string) => DoctorServiceRuntimeInspection;
+    /** 测试或嵌入场景可替换服务入口身份探测。 */
+    serviceEntryInspector?: (binPath: string) => DoctorServiceEntryInspection;
 }
 
 export type DoctorPluginSource = "cli" | "config" | "service" | "none";
@@ -298,6 +301,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     if (spec) {
         const inspectServiceRuntime = options.serviceRuntimeInspector ?? inspectServiceNodeRuntime;
         const serviceRuntime = inspectServiceRuntime(spec.nodePath);
+        const inspectEntry = options.serviceEntryInspector ?? inspectServiceEntry;
+        const serviceEntry = inspectEntry(spec.binPath);
         const stateDirectory = controller.paths().stateDir;
         try {
             fs.accessSync(stateDirectory, fs.constants.R_OK | fs.constants.W_OK);
@@ -320,7 +325,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 options.protocols.join("\0") !== spec.protocols.join("\0"));
         const stale =
             !serviceRuntime.supported ||
-            !fs.existsSync(spec.binPath) ||
+            !serviceEntry.valid ||
             !fs.existsSync(spec.configPath) ||
             !fs.existsSync(spec.workingDirectory) ||
             spec.configPath !== options.configPath ||
@@ -335,9 +340,16 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 binPath: path.resolve(process.argv[1]),
             });
             const repairedRuntime = inspectServiceRuntime(process.execPath);
+            const repairedEntry = inspectEntry(path.resolve(process.argv[1]));
             checks.push({
                 ...repairedRuntime.check,
                 ...(!serviceRuntime.supported || spec.nodePath !== process.execPath
+                    ? { fixed: true }
+                    : {}),
+            });
+            checks.push({
+                ...repairedEntry.check,
+                ...(!serviceEntry.valid || spec.binPath !== path.resolve(process.argv[1])
                     ? { fixed: true }
                     : {}),
             });
@@ -349,6 +361,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             });
         } else {
             checks.push(serviceRuntime.check);
+            checks.push(serviceEntry.check);
             checks.push({
                 name: "service-definition",
                 level: stale ? "error" : "ok",

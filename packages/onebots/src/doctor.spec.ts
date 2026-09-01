@@ -813,6 +813,14 @@ describe("doctor persisted plugin selection", () => {
             scope: "user" as const,
             extensionRoot,
             serviceRuntimeInspector,
+            serviceEntryInspector: () => ({
+                valid: true,
+                check: {
+                    name: "service-entry",
+                    level: "ok" as const,
+                    message: "服务入口 onebots@current",
+                },
+            }),
         };
 
         const invalid = await runDoctor(options);
