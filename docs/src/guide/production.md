@@ -86,6 +86,10 @@ const tokenValidator = createManagedTokenValidator(tokenManager);
 - 时间安全比较
 - 防止重放攻击
 
+### 动态对象路径边界
+
+第三方扩展处理外部提供的字段路径时，可使用 `@onebots/core` 导出的 `getValueOfObj` 与 `setValueToObj`。两者只读取或穿过对象的自有属性，并拒绝空路径段以及 `__proto__`、`constructor`、`prototype` 等原型链保留名称。非法路径会抛出 `SyntaxError`，写操作不会修改目标对象；扩展应把该错误转换为面向调用方的参数校验失败，不要改用不受约束的动态属性遍历。
+
 ## 稳定性功能
 
 ### 熔断器模式

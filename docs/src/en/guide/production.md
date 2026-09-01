@@ -86,6 +86,10 @@ Prevents request tampering and replay attacks.
 - Time-safe comparison
 - Replay attack prevention
 
+### Dynamic object path boundary
+
+Third-party extensions that handle externally supplied field paths can use `getValueOfObj` and `setValueToObj` from `@onebots/core`. Both helpers read and traverse own properties only, and reject empty path segments plus prototype-chain names such as `__proto__`, `constructor`, and `prototype`. An invalid path throws `SyntaxError` without changing the target object. Extensions should translate that error into an input-validation failure instead of falling back to unrestricted dynamic property traversal.
+
 ## Stability Features
 
 ### Circuit Breaker Pattern

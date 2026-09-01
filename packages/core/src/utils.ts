@@ -196,31 +196,64 @@ export function getProperties(obj: object): string[] {
     return Object.getOwnPropertyNames(obj).concat(getProperties(Object.getPrototypeOf(obj)));
 }
 
+const RESERVED_OBJECT_PATH_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
+
+function parseObjectPath(key: string | string[]): string[] {
+    const keys = Array.isArray(key) ? [...key] : key.split(".");
+    if (keys.length === 0 || keys.some(part => typeof part !== "string" || !part.trim())) {
+        throw new SyntaxError("key contains an invalid path segment");
+    }
+    const reserved = keys.find(part => RESERVED_OBJECT_PATH_SEGMENTS.has(part));
+    if (reserved) {
+        throw new SyntaxError(`key contains reserved path segment: ${reserved}`);
+    }
+    return keys;
+}
+
+function resolveObjectPathParent(obj: Dict, keys: string[], operation: "get" | "set"): Dict {
+    for (const key of keys) {
+        if (!Object.hasOwn(obj, key)) {
+            throw new SyntaxError(
+                `can't ${operation} through inherited or missing property: ${key}`,
+            );
+        }
+        const next = Reflect.get(obj, key) as unknown;
+        if ((!next || typeof next !== "object") && typeof next !== "function") {
+            throw new SyntaxError(`can't ${operation} through non-object property: ${key}`);
+        }
+        obj = next as Dict;
+    }
+    return obj;
+}
+
+/** 沿自有属性路径写入值；不安全、缺失或不可遍历的路径会抛出 SyntaxError。 */
 export function setValueToObj(obj: Dict, keys: string[], value: unknown): boolean;
 export function setValueToObj(obj: Dict, key: string, value: unknown): boolean;
 export function setValueToObj(obj: Dict, key: string | string[], value: unknown) {
-    const keys = Array.isArray(key) ? key : key.split(".").filter(Boolean);
-    const lastKey = keys.pop();
-    if (!lastKey) throw new SyntaxError(`key is empty`);
-    while (keys.length) {
-        const k = keys.shift() as string;
-        obj = Reflect.get(obj, k) as Dict;
-        if (!obj) throw new SyntaxError(`can't set ${lastKey} to undefined`);
+    const keys = parseObjectPath(key);
+    const lastKey = keys.pop() as string;
+    const parent = resolveObjectPathParent(obj, keys, "set");
+    if (!Object.hasOwn(parent, lastKey)) {
+        return Reflect.defineProperty(parent, lastKey, {
+            configurable: true,
+            enumerable: true,
+            value,
+            writable: true,
+        });
     }
-    return Reflect.set(obj, lastKey, value);
+    return Reflect.set(parent, lastKey, value);
 }
+/** 沿自有属性路径读取值；不安全、缺失或不可遍历的路径会抛出 SyntaxError。 */
 export function getValueOfObj<T = unknown>(obj: Dict, key: string[]): T;
 export function getValueOfObj<T = unknown>(obj: Dict, key: string): T;
 export function getValueOfObj(obj: Dict, key: string | string[]) {
-    const keys = Array.isArray(key) ? key : key.split(".").filter(Boolean);
-    const lastKey = keys.pop();
-    if (!lastKey) throw new SyntaxError(`key is empty`);
-    while (keys.length) {
-        const k = keys.shift() as string;
-        obj = Reflect.get(obj, k) as Dict;
-        if (!obj) throw new SyntaxError(`can't set ${lastKey} to undefined`);
+    const keys = parseObjectPath(key);
+    const lastKey = keys.pop() as string;
+    const parent = resolveObjectPathParent(obj, keys, "get");
+    if (!Object.hasOwn(parent, lastKey)) {
+        throw new SyntaxError(`can't get inherited or missing property: ${lastKey}`);
     }
-    return Reflect.get(obj, lastKey);
+    return Reflect.get(parent, lastKey);
 }
 export function getDataKeyOfObj(data: unknown, obj: Dict) {
     const _get = (data: unknown, obj: Dict, prefix: string[]): string | undefined => {
