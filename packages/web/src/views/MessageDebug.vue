@@ -8,7 +8,7 @@
                 </h2>
                 <div class="flex items-center gap-2">
                     <UiBadge :variant="isConnected ? 'success' : 'danger'" dot>
-                        {{ isConnected ? '已连接' : '未连接' }}
+                        {{ isConnected ? "已连接" : "未连接" }}
                     </UiBadge>
                     <UiButton variant="secondary" size="sm" @click="clearEntries">
                         <IconTrash :size="14" />
@@ -19,17 +19,26 @@
 
             <div class="flex flex-wrap items-center gap-3">
                 <div class="w-40 shrink-0">
-                    <UiSelect v-model="platformFilter" :options="platformOptions" placeholder="全部平台" />
+                    <UiSelect
+                        v-model="platformFilter"
+                        :options="platformOptions"
+                        placeholder="全部平台" />
                 </div>
                 <div class="w-32 shrink-0">
-                    <UiSelect v-model="directionFilter" :options="directionOptions" placeholder="全部方向" />
+                    <UiSelect
+                        v-model="directionFilter"
+                        :options="directionOptions"
+                        placeholder="全部方向" />
                 </div>
                 <div class="relative w-56 shrink-0">
                     <IconSearch
                         :size="14"
-                        class="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 text-fg-tertiary"
-                    />
-                    <UiInput v-model="searchKeyword" placeholder="搜索账号 / 内容..." clearable class="[&_input]:pl-8" />
+                        class="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 text-fg-tertiary" />
+                    <UiInput
+                        v-model="searchKeyword"
+                        placeholder="搜索账号 / 内容..."
+                        clearable
+                        class="[&_input]:pl-8" />
                 </div>
                 <label class="ml-auto flex items-center gap-1.5 text-xs text-fg-tertiary">
                     <input v-model="autoScroll" type="checkbox" class="accent-accent" />
@@ -43,27 +52,25 @@
 
         <div
             ref="listContainer"
-            class="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-card border border-border bg-surface p-3"
-        >
-            <UiEmpty v-if="filteredEntries.length === 0" description="暂无消息，等待适配器收发消息…" />
+            class="min-h-0 flex-1 space-y-2 overflow-y-auto rounded-card border border-border bg-surface p-3">
+            <UiEmpty
+                v-if="filteredEntries.length === 0"
+                description="暂无消息，等待适配器收发消息…" />
 
             <div
                 v-for="entry in filteredEntries"
                 :key="entry.seq"
-                class="rounded-control border border-border bg-surface-raised"
-            >
+                class="rounded-control border border-border bg-surface-raised">
                 <button
                     type="button"
                     class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
-                    @click="toggleExpanded(entry.seq)"
-                >
+                    @click="toggleExpanded(entry.seq)">
                     <IconChevronRight
                         :size="14"
                         class="shrink-0 text-fg-tertiary transition-transform duration-150"
-                        :class="{ 'rotate-90': expanded.has(entry.seq) }"
-                    />
+                        :class="{ 'rotate-90': expanded.has(entry.seq) }" />
                     <UiBadge :variant="entry.direction === 'inbound' ? 'info' : 'success'">
-                        {{ entry.direction === 'inbound' ? '收到' : '下发' }}
+                        {{ entry.direction === "inbound" ? "收到" : "下发" }}
                     </UiBadge>
                     <UiBadge variant="neutral">{{ entry.platform }}</UiBadge>
                     <span class="truncate text-fg-secondary">{{ entry.account_id }}</span>
@@ -81,7 +88,10 @@
                             复制
                         </UiButton>
                     </div>
-                    <pre class="max-h-80 overflow-auto rounded-control bg-surface p-2.5 text-xs leading-relaxed text-fg-secondary">{{ formatPayload(entry.payload) }}</pre>
+                    <pre
+                        class="max-h-80 overflow-auto rounded-control bg-surface p-2.5 text-xs leading-relaxed text-fg-secondary"
+                        >{{ formatPayload(entry.payload) }}</pre
+                    >
                 </div>
             </div>
         </div>
@@ -89,28 +99,28 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue';
-import { IconBug, IconTrash, IconSearch, IconChevronRight, IconCopy } from '@tabler/icons-vue';
-import { UiButton, UiBadge, UiInput, UiSelect, UiEmpty } from '../ui/index';
-import { useToast } from '../ui/toast';
-import { buildApiUrl } from '../config';
-import { authFetch } from '../composables/useAuth';
-import { readManagementJsonResponse } from '../management-response.js';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
+import { IconBug, IconTrash, IconSearch, IconChevronRight, IconCopy } from "@tabler/icons-vue";
+import { UiButton, UiBadge, UiInput, UiSelect, UiEmpty } from "../ui/index";
+import { useToast } from "../ui/toast";
+import { buildApiUrl } from "../config";
+import { authFetch } from "../composables/useAuth";
 import {
     openAuthenticatedEventStream,
     type AuthenticatedEventStream,
-} from '../authenticated-event-stream.js';
-
-interface DebugEntry {
-    seq: number;
-    time: number;
-    direction: 'inbound' | 'outbound';
-    platform: string;
-    account_id: string;
-    protocol?: string;
-    version?: string;
-    payload: unknown;
-}
+} from "../authenticated-event-stream.js";
+import {
+    isMessageDebugEntry,
+    messageDebugClearHeaders,
+    parseMessageDebugStreamIdentity,
+    readMessageDebugClearReceipt,
+    readMessageDebugSnapshot,
+    type MessageDebugEntry as DebugEntry,
+} from "../message-debug-management.js";
+import {
+    sameManagementEvidenceIdentity,
+    type ManagementEvidenceIdentity,
+} from "../management-evidence-identity.js";
 
 /** 前端展示上限，超出后丢弃最旧的条目，避免长时间运行内存增长 */
 const MAX_ENTRIES = 300;
@@ -125,19 +135,23 @@ const listContainer = ref<HTMLElement>();
 
 const platformFilter = ref<string | undefined>(undefined);
 const directionFilter = ref<string | undefined>(undefined);
-const searchKeyword = ref('');
+const searchKeyword = ref("");
 
 let eventSource: AuthenticatedEventStream | null = null;
+let debugIdentity: ManagementEvidenceIdentity | null = null;
+let streamIdentityEstablished = false;
+let historyGeneration = 0;
+let clearedThroughSeq = 0;
 
 const platformOptions = computed(() => {
     const platforms = [...new Set(entries.value.map(e => e.platform))].sort();
-    return [{ label: '全部平台', value: '' }, ...platforms.map(p => ({ label: p, value: p }))];
+    return [{ label: "全部平台", value: "" }, ...platforms.map(p => ({ label: p, value: p }))];
 });
 
 const directionOptions = [
-    { label: '全部方向', value: '' },
-    { label: '收到', value: 'inbound' },
-    { label: '下发', value: 'outbound' },
+    { label: "全部方向", value: "" },
+    { label: "收到", value: "inbound" },
+    { label: "下发", value: "outbound" },
 ];
 
 const filteredEntries = computed(() => {
@@ -155,11 +169,15 @@ const filteredEntries = computed(() => {
 
 function formatTime(ms: number): string {
     const d = new Date(ms);
-    return d.toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+    return (
+        d.toLocaleTimeString("zh-CN", { hour12: false }) +
+        "." +
+        String(d.getMilliseconds()).padStart(3, "0")
+    );
 }
 
 function formatPayload(payload: unknown): string {
-    if (typeof payload === 'string') {
+    if (typeof payload === "string") {
         try {
             return JSON.stringify(JSON.parse(payload), null, 2);
         } catch {
@@ -176,11 +194,14 @@ function toggleExpanded(seq: number) {
 
 async function copyPayload(entry: DebugEntry) {
     await navigator.clipboard.writeText(formatPayload(entry.payload));
-    toastSuccess('已复制到剪贴板');
+    toastSuccess("已复制到剪贴板");
 }
 
 function pushEntry(entry: DebugEntry) {
+    if (entry.seq <= clearedThroughSeq || entries.value.some(item => item.seq === entry.seq))
+        return;
     entries.value.push(entry);
+    entries.value.sort((left, right) => left.seq - right.seq);
     if (entries.value.length > MAX_ENTRIES) {
         const removed = entries.value.shift();
         if (removed) expanded.delete(removed.seq);
@@ -195,50 +216,99 @@ function pushEntry(entry: DebugEntry) {
 }
 
 const clearEntries = async () => {
-    entries.value = [];
-    expanded.clear();
+    const identity = debugIdentity;
+    if (!identity) {
+        console.error("清空消息调试记录失败: 无法确认消息记录所属实例");
+        return;
+    }
     try {
-        await authFetch(buildApiUrl('/api/message-debug/clear'), { method: 'POST' });
+        const response = await authFetch(buildApiUrl("/api/message-debug/clear"), {
+            method: "POST",
+            headers: messageDebugClearHeaders(identity),
+            cache: "no-store",
+            redirect: "error",
+        });
+        const receipt = await readMessageDebugClearReceipt(response, identity);
+        if (!debugIdentity || !sameManagementEvidenceIdentity(debugIdentity, identity)) return;
+        clearedThroughSeq = Math.max(clearedThroughSeq, receipt.clearedThroughSeq);
+        entries.value = entries.value.filter(entry => entry.seq > clearedThroughSeq);
+        for (const seq of expanded) {
+            if (seq <= clearedThroughSeq) expanded.delete(seq);
+        }
     } catch (error) {
-        console.error('清空消息调试记录失败:', error);
+        console.error("清空消息调试记录失败:", error);
     }
 };
 
 async function loadHistory() {
+    const generation = ++historyGeneration;
     try {
-        const response = await authFetch(buildApiUrl('/api/message-debug/history'));
-        if (response.ok) {
-            entries.value = (await readManagementJsonResponse(response)) as DebugEntry[];
+        const response = await authFetch(buildApiUrl("/api/message-debug/history"), {
+            cache: "no-store",
+            redirect: "error",
+        });
+        const snapshot = await readMessageDebugSnapshot(response);
+        if (generation !== historyGeneration) return;
+        if (debugIdentity && !sameManagementEvidenceIdentity(debugIdentity, snapshot.identity)) {
+            throw new Error("消息调试历史与实时流来自不同 OneBots 实例");
         }
+        debugIdentity = snapshot.identity;
+        const liveEntries = entries.value;
+        entries.value = [];
+        for (const entry of [...snapshot.entries, ...liveEntries]) pushEntry(entry);
     } catch (error) {
-        console.error('获取消息调试历史失败:', error);
+        console.error("获取消息调试历史失败:", error);
     }
 }
 
 function connectSSE() {
     eventSource?.close();
-    eventSource = openAuthenticatedEventStream(buildApiUrl('/api/message-debug/stream'), {
+    eventSource = openAuthenticatedEventStream(buildApiUrl("/api/message-debug/stream"), {
         onOpen: () => {
             isConnected.value = true;
+            streamIdentityEstablished = false;
         },
         onMessage(data) {
             try {
-                pushEntry(JSON.parse(data));
+                const payload: unknown = JSON.parse(data);
+                const streamIdentity = parseMessageDebugStreamIdentity(payload);
+                if (streamIdentity) {
+                    const changed =
+                        debugIdentity !== null &&
+                        !sameManagementEvidenceIdentity(debugIdentity, streamIdentity);
+                    debugIdentity = streamIdentity;
+                    streamIdentityEstablished = true;
+                    historyGeneration += 1;
+                    if (changed) {
+                        entries.value = [];
+                        expanded.clear();
+                        clearedThroughSeq = 0;
+                    }
+                    void loadHistory();
+                    return;
+                }
+                if (!streamIdentityEstablished) {
+                    throw new Error("消息调试事件流尚未声明实例身份");
+                }
+                if (!isMessageDebugEntry(payload)) {
+                    throw new Error("消息调试事件流包含无效记录");
+                }
+                pushEntry(payload);
             } catch (error) {
-                console.error('解析消息调试数据失败:', error);
+                console.error("解析消息调试数据失败:", error);
             }
         },
         onError: error => {
             isConnected.value = false;
-            console.error('消息调试 SSE 连接错误:', error);
+            console.error("消息调试 SSE 连接错误:", error);
         },
         retryMs: 3_000,
     });
 }
 
-onMounted(async () => {
-    await loadHistory();
+onMounted(() => {
     connectSSE();
+    void loadHistory();
     nextTick(() => {
         if (listContainer.value) {
             listContainer.value.scrollTop = listContainer.value.scrollHeight;

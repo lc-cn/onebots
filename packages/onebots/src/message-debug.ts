@@ -18,6 +18,11 @@ export interface MessageDebugEntry {
     payload: unknown;
 }
 
+export interface MessageDebugClearReceipt {
+    clearedCount: number;
+    clearedThroughSeq: number;
+}
+
 export class MessageDebugManager {
     private static readonly MAX_ENTRIES = 300;
 
@@ -87,7 +92,10 @@ export class MessageDebugManager {
         return this.entries.slice();
     }
 
-    clear() {
+    clear(): MessageDebugClearReceipt {
+        const clearedCount = this.entries.length;
+        const clearedThroughSeq = this.seq;
         this.entries.length = 0;
+        return { clearedCount, clearedThroughSeq };
     }
 }
