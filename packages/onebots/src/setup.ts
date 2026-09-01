@@ -31,6 +31,23 @@ export interface SetupOptions {
     protocols?: string[];
 }
 
+interface SetupDependencies {
+    loadPlugins(adapters: string[], protocols: string[]): Promise<string[]>;
+}
+
+type SetupConfigSnapshot =
+    | { exists: false }
+    | {
+          exists: true;
+          source: string;
+          realPath: string;
+          device: number;
+          inode: number;
+          mode: number;
+          uid: number;
+          gid: number;
+      };
+
 interface PromptRule {
     type?: "string" | "number" | "boolean" | "object" | "array";
     label?: string;
@@ -43,8 +60,10 @@ export async function runSetup(
     configPath: string,
     options: SetupOptions = {},
     environmentPort: string | undefined = process.env.PORT,
+    dependencies?: SetupDependencies,
 ): Promise<void> {
-    const exists = fs.existsSync(configPath);
+    const initialConfig = captureSetupConfig(configPath);
+    const exists = initialConfig.exists;
     if (options.reset && !options.force) {
         throw new Error("--reset 会重建配置，必须同时使用 --force 以创建备份");
     }
@@ -56,7 +75,7 @@ export async function runSetup(
         writeCliOutput(`将备份现有配置至 ${configPath}.bak，并从安全默认值重建。`);
     } else if (exists) {
         try {
-            config = parseRuntimeConfig(fs.readFileSync(configPath, "utf8"));
+            config = parseRuntimeConfig(initialConfig.source);
         } catch (error) {
             const diagnostic = formatRuntimeConfigDiagnostic(error);
             if (!options.force) {
@@ -136,7 +155,12 @@ export async function runSetup(
             "非交互环境不会修改现有插件选择。请添加 --force 以备份配置并写入本次 -r/-p 选择。",
         );
     }
-    const { loadPlugins } = await import("./runtime.js");
+    const loadPlugins =
+        dependencies?.loadPlugins ??
+        (async (adapterNames: string[], protocolNames: string[]) => {
+            const runtime = await import("./runtime.js");
+            return runtime.loadPlugins(adapterNames, protocolNames);
+        });
     const failures = await loadPlugins(adapters, protocols);
     if (failures.length > 0) {
         throw new Error(`无法加载插件: ${failures.join(", ")}`);
@@ -150,6 +174,7 @@ export async function runSetup(
         }
         verifyPersistedCredentialPermissions(configPath, config);
         const managementUrls = formatSetupManagementUrls(config, environmentPort);
+        assertSetupConfigCurrent(configPath, initialConfig);
         ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
         writeCliOutput(`配置文件已存在并通过验证: ${configPath}`);
         writeCliOutput("非交互环境不会覆盖；如需更新请使用 --force。");
@@ -170,6 +195,7 @@ export async function runSetup(
         verifyPersistedCredentialPermissions(configPath, config);
     }
     const managementUrls = formatSetupManagementUrls(config, environmentPort);
+    assertSetupConfigCurrent(configPath, initialConfig);
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
     writeConfigFileAtomic(configPath, yaml.dump(config, { noRefs: true }), {
@@ -200,6 +226,62 @@ export async function runSetup(
     } else {
         writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
     }
+}
+
+function captureSetupConfig(configPath: string): SetupConfigSnapshot {
+    let descriptor: number | undefined;
+    try {
+        descriptor = fs.openSync(configPath, "r");
+        const stats = fs.fstatSync(descriptor);
+        if (!stats.isFile()) throw new Error("配置路径不是常规文件");
+        return {
+            exists: true,
+            source: fs.readFileSync(descriptor, "utf8"),
+            realPath: fs.realpathSync(configPath),
+            device: stats.dev,
+            inode: stats.ino,
+            mode: stats.mode & 0o777,
+            uid: stats.uid,
+            gid: stats.gid,
+        };
+    } catch (error) {
+        if (isFileSystemError(error, "ENOENT")) return { exists: false };
+        throw error;
+    } finally {
+        if (descriptor !== undefined) fs.closeSync(descriptor);
+    }
+}
+
+function assertSetupConfigCurrent(configPath: string, expected: SetupConfigSnapshot): void {
+    let current: SetupConfigSnapshot;
+    try {
+        current = captureSetupConfig(configPath);
+    } catch {
+        throw new Error("配置在 setup 验证期间变得无法读取，请重新执行 setup");
+    }
+    const unchanged =
+        current.exists === expected.exists &&
+        (!current.exists ||
+            (expected.exists &&
+                current.source === expected.source &&
+                current.realPath === expected.realPath &&
+                current.device === expected.device &&
+                current.inode === expected.inode &&
+                current.mode === expected.mode &&
+                current.uid === expected.uid &&
+                current.gid === expected.gid));
+    if (!unchanged) {
+        throw new Error("配置在 setup 验证期间发生变化，请重新执行 setup");
+    }
+}
+
+function isFileSystemError(error: unknown, code: string): boolean {
+    return (
+        error instanceof Error &&
+        "code" in error &&
+        typeof error.code === "string" &&
+        error.code === code
+    );
 }
 
 function hasSamePluginSelection(

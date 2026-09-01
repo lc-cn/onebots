@@ -94,6 +94,44 @@ describe("setup workflow", () => {
         expect(fs.existsSync(path.join(path.dirname(configPath), "data"))).toBe(false);
     });
 
+    it("拒绝覆盖插件加载期间由另一进程更新的配置", async () => {
+        const configPath = temporaryConfigPath();
+        const original = "port: 7000\naccess_token: configured-token\n";
+        const concurrent = "port: 7000\naccess_token: configured-token\nlog_level: debug\n";
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+
+        await expect(
+            runSetupWithEnvironment(configPath, { force: true }, "", {
+                loadPlugins: async () => {
+                    fs.writeFileSync(configPath, concurrent, { mode: 0o600 });
+                    return [];
+                },
+            }),
+        ).rejects.toThrow("配置在 setup 验证期间发生变化，请重新执行 setup");
+
+        expect(fs.readFileSync(configPath, "utf8")).toBe(concurrent);
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect(fs.existsSync(path.join(path.dirname(configPath), "data"))).toBe(false);
+    });
+
+    it("首次 setup 加载插件期间出现配置文件时拒绝替换", async () => {
+        const configPath = temporaryConfigPath();
+        const concurrent = "port: 7788\naccess_token: concurrent-token\n";
+
+        await expect(
+            runSetupWithEnvironment(configPath, {}, "", {
+                loadPlugins: async () => {
+                    fs.writeFileSync(configPath, concurrent, { mode: 0o600 });
+                    return [];
+                },
+            }),
+        ).rejects.toThrow("配置在 setup 验证期间发生变化，请重新执行 setup");
+
+        expect(fs.readFileSync(configPath, "utf8")).toBe(concurrent);
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect(fs.existsSync(path.join(path.dirname(configPath), "data"))).toBe(false);
+    });
+
     it("允许非交互 setup 幂等验证相同的插件集合", async () => {
         const configPath = temporaryConfigPath();
         const original = [
