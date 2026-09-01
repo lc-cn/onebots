@@ -28,6 +28,7 @@ function setup(
     install = vi.fn(async () => ({ restartRequired: true as const })),
     restartSupported = true,
     disable = vi.fn(async () => ({ restartRequired: true as const })),
+    uninstall = vi.fn(async () => ({ restartRequired: false as const })),
 ) {
     const gets = new Map<string, RouteHandler>();
     const posts = new Map<string, RouteHandler>();
@@ -43,6 +44,7 @@ function setup(
             })),
             install,
             disable,
+            uninstall,
         },
         logger: { error: vi.fn() },
         configPath,
@@ -58,7 +60,7 @@ function setup(
         get: vi.fn((route: string, handler: RouteHandler) => gets.set(route, handler)),
         post: vi.fn((route: string, handler: RouteHandler) => posts.set(route, handler)),
     } as never);
-    return { app, gets, posts, install, disable };
+    return { app, gets, posts, install, disable, uninstall };
 }
 
 describe("extension routes", () => {
@@ -167,6 +169,23 @@ describe("extension routes", () => {
             instance_id: "instance-a",
             config_revision: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
             message: expect.stringContaining("依赖仍保留"),
+        });
+    });
+
+    it("卸载已停用扩展的依赖且不要求再次重启", async () => {
+        const { app, posts, uninstall } = setup();
+        const ctx = postContext();
+
+        await posts.get("/api/extensions/:id/uninstall")!(ctx);
+
+        expect(uninstall).toHaveBeenCalledWith("adapter:slack", app.pluginInfos);
+        expect(ctx.body).toMatchObject({
+            success: true,
+            restartRequired: false,
+            application: "onebots",
+            instance_id: "instance-a",
+            config_revision: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+            message: expect.stringContaining("安全卸载"),
         });
     });
 

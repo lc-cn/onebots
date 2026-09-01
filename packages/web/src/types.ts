@@ -175,6 +175,8 @@ export interface ExtensionInfo {
     runtimeError?: string | null;
     /** 需要修改依赖但当前进程找不到所选包管理器时提供原因。 */
     packageManagerError?: string | null;
+    /** 卸载磁盘依赖所需包管理器不可用时提供原因。 */
+    dependencyRemovalError?: string | null;
     /** 启动配置无法安全读取时提供脱敏原因；能力目录仍可浏览。 */
     runtimeConfigError?: string | null;
     targetVersion: string | null;
@@ -219,6 +221,20 @@ export interface ExtensionInfo {
         completedAt: string;
         message: string | null;
     } | null;
+    /** 当前服务端依赖卸载操作；旧版服务端可能不返回该字段。 */
+    uninstalling?: boolean;
+    uninstallOperation?: {
+        operationId: string;
+        startedAt: string;
+    } | null;
+    /** 当前服务实例内最近一次依赖卸载终态。 */
+    lastUninstall?: {
+        operationId: string;
+        status: "succeeded" | "failed";
+        startedAt: string;
+        completedAt: string;
+        message: string | null;
+    } | null;
     /** 适配器能力来自已加载插件的运行时契约，或安装前可见的版本化目录快照。 */
     capability: ExtensionCapabilityInfo | null;
 }
@@ -228,7 +244,11 @@ export interface PackageMutationStatus {
     available: boolean;
     owner: {
         operationId: string;
-        operation: "extension_install" | "extension_disable" | "package_update";
+        operation:
+            | "extension_install"
+            | "extension_disable"
+            | "extension_uninstall"
+            | "package_update";
         extensionId: string | null;
         host: string;
         pid: number;

@@ -139,6 +139,7 @@ function parseExtension(value: unknown, index: number, ids: Set<string>): Extens
         !isNullableText(value.catalogError) ||
         !isOptionalNullableText(value.runtimeError) ||
         !isOptionalNullableText(value.packageManagerError) ||
+        !isOptionalNullableText(value.dependencyRemovalError) ||
         !isOptionalNullableText(value.runtimeConfigError) ||
         !isOptionalNullableText(value.installedError) ||
         !isNullableText(value.targetVersion) ||
@@ -195,6 +196,21 @@ function parseExtension(value: unknown, index: number, ids: Set<string>): Extens
     if (installation && disableOperation) {
         throw new Error(`扩展 ${value.id} 同时安装和停用`);
     }
+    if (value.uninstalling !== undefined && typeof value.uninstalling !== "boolean") {
+        throw new Error(`扩展 ${value.id} 的依赖卸载状态无效`);
+    }
+    const uninstallOperation = parseUninstallOperation(value.uninstallOperation, value.id);
+    const uninstalling = value.uninstalling ?? uninstallOperation !== null;
+    if (!uninstalling && uninstallOperation !== null) {
+        throw new Error(`扩展 ${value.id} 未卸载中却携带活动卸载操作`);
+    }
+    const lastUninstall = parseLastUninstall(value.lastUninstall, value.id);
+    if (uninstallOperation && lastUninstall) {
+        throw new Error(`扩展 ${value.id} 同时携带活动卸载与卸载终态`);
+    }
+    if ([installation, disableOperation, uninstallOperation].filter(Boolean).length > 1) {
+        throw new Error(`扩展 ${value.id} 同时执行多个变更操作`);
+    }
     const capability = parseExtensionCapability(value.capability, value.id);
     if (type === "protocol" && capability !== null) {
         throw new Error(`协议扩展 ${value.id} 不得携带适配器能力清单`);
@@ -231,6 +247,31 @@ function parseLastDisable(value: unknown, id: string): ExtensionInfo["lastDisabl
         throw new Error(`扩展 ${id} 的停用终态证据无效`);
     }
     return value as NonNullable<ExtensionInfo["lastDisable"]>;
+}
+
+function parseUninstallOperation(value: unknown, id: string): ExtensionInfo["uninstallOperation"] {
+    if (value === undefined || value === null) return null;
+    if (!isRecord(value) || !isText(value.operationId) || !isIsoTimestamp(value.startedAt)) {
+        throw new Error(`扩展 ${id} 的活动依赖卸载证据无效`);
+    }
+    return value as NonNullable<ExtensionInfo["uninstallOperation"]>;
+}
+
+function parseLastUninstall(value: unknown, id: string): ExtensionInfo["lastUninstall"] {
+    if (value === undefined || value === null) return null;
+    if (
+        !isRecord(value) ||
+        !isText(value.operationId) ||
+        !isOneOf(value.status, ["succeeded", "failed"] as const) ||
+        !isIsoTimestamp(value.startedAt) ||
+        !isIsoTimestamp(value.completedAt) ||
+        Date.parse(value.completedAt) < Date.parse(value.startedAt) ||
+        !isNullableText(value.message) ||
+        (value.status === "succeeded" && value.message !== null)
+    ) {
+        throw new Error(`扩展 ${id} 的依赖卸载终态证据无效`);
+    }
+    return value as NonNullable<ExtensionInfo["lastUninstall"]>;
 }
 
 function assertConfigurationTarget(
@@ -367,13 +408,16 @@ function parsePackageMutationOwner(value: unknown): PackageMutationStatus["owner
         !isOneOf(value.operation, [
             "extension_install",
             "extension_disable",
+            "extension_uninstall",
             "package_update",
         ] as const) ||
         !isText(value.host) ||
         !Number.isSafeInteger(value.pid) ||
         Number(value.pid) <= 0 ||
         !isIsoTimestamp(value.startedAt) ||
-        (value.operation === "extension_install" || value.operation === "extension_disable"
+        (value.operation === "extension_install" ||
+        value.operation === "extension_disable" ||
+        value.operation === "extension_uninstall"
             ? !isText(value.extensionId)
             : value.extensionId !== null)
     ) {

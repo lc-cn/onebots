@@ -173,6 +173,17 @@
                             </p>
                         </UiAlert>
 
+                        <UiAlert
+                            v-if="uninstallProgress(extension)"
+                            :variant="uninstallProgress(extension)?.variant">
+                            <p>{{ uninstallProgress(extension)?.label }}</p>
+                            <p
+                                v-if="uninstallProgress(extension)?.detail"
+                                class="mt-1 font-mono text-xs opacity-75">
+                                {{ uninstallProgress(extension)?.detail }}
+                            </p>
+                        </UiAlert>
+
                         <ExtensionCapabilities
                             v-if="extension.capability"
                             :capability="extension.capability"
@@ -230,6 +241,7 @@
                                     restarting ||
                                     Boolean(installingId) ||
                                     Boolean(disablingId) ||
+                                    Boolean(uninstallingId) ||
                                     Boolean(activeInstallation) ||
                                     !extensionSnapshotIdentity ||
                                     !extensionConfigRevision ||
@@ -240,6 +252,24 @@
                                 {{ disableAction(extension).label }}
                             </UiButton>
                             <UiButton
+                                v-if="uninstallAction(extension).visible"
+                                variant="danger"
+                                :loading="uninstallingId === extension.id || extension.uninstalling"
+                                :disabled="
+                                    restarting ||
+                                    Boolean(installingId) ||
+                                    Boolean(disablingId) ||
+                                    Boolean(uninstallingId) ||
+                                    Boolean(activeInstallation) ||
+                                    !extensionSnapshotIdentity ||
+                                    !extensionConfigRevision ||
+                                    packageMutationStatus?.available === false ||
+                                    !uninstallAction(extension).available
+                                "
+                                @click="uninstall(extension)">
+                                {{ uninstallAction(extension).label }}
+                            </UiButton>
+                            <UiButton
                                 v-if="installationAction(extension).visible"
                                 variant="primary"
                                 :loading="installingId === extension.id || extension.installing"
@@ -247,6 +277,7 @@
                                     restarting ||
                                     Boolean(installingId) ||
                                     Boolean(disablingId) ||
+                                    Boolean(uninstallingId) ||
                                     Boolean(activeInstallation) ||
                                     !extensionSnapshotIdentity ||
                                     !extensionConfigRevision ||
@@ -298,6 +329,9 @@ import {
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
+    getExtensionUninstallAction,
+    getExtensionUninstallProgress,
+    getExtensionUninstallRequestRecovery,
     hasExtensionRuntimeVersionDrift,
     shouldRefreshExtensionOperations,
 } from "./extension-installation.js";
@@ -313,6 +347,7 @@ const filter = ref<ExtensionFilter>("all");
 const searchKeyword = ref("");
 const installingId = ref("");
 const disablingId = ref("");
+const uninstallingId = ref("");
 const restarting = ref(false);
 const errorMessage = ref("");
 const restartMessage = ref("");
@@ -331,6 +366,12 @@ let disconnectedDisable: {
     requestMessage: string;
 } | null = null;
 let recoveringDisconnectedDisable = false;
+let disconnectedUninstall: {
+    id: string;
+    previousOperationId: string | null;
+    requestMessage: string;
+} | null = null;
+let recoveringDisconnectedUninstall = false;
 const INSTALLATION_REFRESH_INTERVAL_MS = 1_500;
 // 覆盖服务端 10 分钟包安装与最多 3 次、每次 60 秒的隔离预检，并留出观察余量。
 const INSTALLATION_STATUS_TIMEOUT_MS = 14 * 60 * 1_000;
@@ -356,6 +397,8 @@ const configurationAction = (extension: ExtensionInfo) =>
 const installationAction = (extension: ExtensionInfo) => getExtensionInstallationAction(extension);
 const disableAction = (extension: ExtensionInfo) => getExtensionDisableAction(extension);
 const disableProgress = (extension: ExtensionInfo) => getExtensionDisableProgress(extension);
+const uninstallAction = (extension: ExtensionInfo) => getExtensionUninstallAction(extension);
+const uninstallProgress = (extension: ExtensionInfo) => getExtensionUninstallProgress(extension);
 const installationProgress = (extension: ExtensionInfo) =>
     getExtensionInstallationProgress(extension);
 const runtimeStatus = (extension: ExtensionInfo) => getExtensionRuntimeStatus(extension);
@@ -369,6 +412,13 @@ const runtimeErrorMessage = computed(
 const packageManagerErrorMessage = computed(
     () =>
         extensions.value.find(extension => extension.packageManagerError)?.packageManagerError ??
+        extensions.value.find(
+            extension =>
+                extension.installed &&
+                !extension.enabled &&
+                !extension.loaded &&
+                extension.dependencyRemovalError,
+        )?.dependencyRemovalError ??
         "",
 );
 const runtimeConfigErrorMessage = computed(
@@ -390,9 +440,11 @@ const packageMutationMessage = computed(() => {
             ? `扩展 ${owner.extensionId} 安装`
             : owner?.operation === "extension_disable"
               ? `扩展 ${owner.extensionId} 停用`
-              : owner?.operation === "package_update"
-                ? "OneBots 软件包更新"
-                : "包变更";
+              : owner?.operation === "extension_uninstall"
+                ? `扩展 ${owner.extensionId} 依赖卸载`
+                : owner?.operation === "package_update"
+                  ? "OneBots 软件包更新"
+                  : "包变更";
     if (status.state === "recoverable") {
         return `检测到可回收的${operation}租约；下一次扩展变更会先安全回收。`;
     }
@@ -422,7 +474,9 @@ function scheduleInstallationRefresh(): void {
         !shouldRefreshExtensionOperations({
             extensions: extensions.value,
             packageMutationActive: packageMutationStatus.value?.state === "active",
-            disconnectedRequest: Boolean(disconnectedInstallation || disconnectedDisable),
+            disconnectedRequest: Boolean(
+                disconnectedInstallation || disconnectedDisable || disconnectedUninstall,
+            ),
         })
     ) {
         installationRefreshAttempts = 0;
@@ -478,6 +532,7 @@ async function loadExtensions(background = false): Promise<boolean> {
         if (loaded) {
             void resumeDisconnectedInstallation();
             void resumeDisconnectedDisable();
+            void resumeDisconnectedUninstall();
         }
     }
     return loaded;
@@ -570,6 +625,31 @@ async function resumeDisconnectedDisable(): Promise<void> {
         errorMessage.value = error instanceof Error ? error.message : String(error);
     } finally {
         recoveringDisconnectedDisable = false;
+    }
+}
+
+async function resumeDisconnectedUninstall(): Promise<void> {
+    if (!disconnectedUninstall || recoveringDisconnectedUninstall || !isMounted) return;
+    const pending = disconnectedUninstall;
+    const refreshed = extensions.value.find(item => item.id === pending.id);
+    const recovery = getExtensionUninstallRequestRecovery(pending.previousOperationId, refreshed);
+    if (recovery.status === "running") return;
+
+    disconnectedUninstall = null;
+    if (recovery.status === "failed") {
+        errorMessage.value = recovery.message;
+        return;
+    }
+    if (recovery.status === "unknown") {
+        errorMessage.value = pending.requestMessage;
+        return;
+    }
+    recoveringDisconnectedUninstall = true;
+    try {
+        await loadExtensions();
+        restartMessage.value = "扩展依赖已安全卸载";
+    } finally {
+        recoveringDisconnectedUninstall = false;
     }
 }
 
@@ -758,6 +838,88 @@ async function disable(extension: ExtensionInfo): Promise<void> {
         errorMessage.value = error instanceof Error ? error.message : String(error);
     } finally {
         disablingId.value = "";
+    }
+}
+
+async function uninstall(extension: ExtensionInfo): Promise<void> {
+    const expectedIdentity = extensionSnapshotIdentity.value;
+    const expectedConfigRevision = extensionConfigRevision.value;
+    if (!expectedIdentity || !expectedConfigRevision) {
+        errorMessage.value = "扩展管理快照尚未验证，请重新加载后再卸载依赖";
+        return;
+    }
+    const accepted = await confirm({
+        title: `卸载 ${extension.displayName} 的磁盘依赖？`,
+        message:
+            "这会从运行目录和依赖清单中移除扩展包。启动配置会保持停用；以后仍可从固定版本目录重新安装。",
+        confirmText: "卸载依赖",
+        danger: true,
+    });
+    if (!accepted) return;
+
+    const previousOperationId = extension.lastUninstall?.operationId ?? null;
+    uninstallingId.value = extension.id;
+    errorMessage.value = "";
+    restartMessage.value = "";
+    try {
+        try {
+            const response = await authFetch(
+                buildApiUrl(`/api/extensions/${encodeURIComponent(extension.id)}/uninstall`),
+                {
+                    method: "POST",
+                    headers: buildExtensionInstallRequestHeaders(
+                        expectedIdentity,
+                        expectedConfigRevision,
+                        "依赖卸载",
+                    ),
+                },
+            );
+            const result = (await readManagementJsonResponse(response)) as {
+                success: boolean;
+                message?: string;
+            };
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || "扩展依赖卸载失败");
+            }
+            extensionConfigRevision.value = assertExtensionInstallAcknowledgement(
+                response,
+                result,
+                expectedIdentity,
+                "依赖卸载",
+            );
+            await loadExtensions();
+            restartMessage.value = result.message ?? "扩展依赖已安全卸载";
+        } catch (error) {
+            const requestMessage = error instanceof Error ? error.message : String(error);
+            const loaded = await loadExtensions();
+            if (!loaded) {
+                disconnectedUninstall = {
+                    id: extension.id,
+                    previousOperationId,
+                    requestMessage,
+                };
+                scheduleInstallationRefresh();
+                return;
+            }
+            const refreshed = extensions.value.find(item => item.id === extension.id);
+            const recovery = getExtensionUninstallRequestRecovery(previousOperationId, refreshed);
+            if (recovery.status === "running") {
+                disconnectedUninstall = {
+                    id: extension.id,
+                    previousOperationId,
+                    requestMessage,
+                };
+                return;
+            }
+            if (recovery.status === "succeeded") {
+                restartMessage.value = "扩展依赖已安全卸载";
+            } else {
+                errorMessage.value =
+                    recovery.status === "failed" ? recovery.message : requestMessage;
+            }
+        }
+    } finally {
+        uninstallingId.value = "";
     }
 }
 

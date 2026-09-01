@@ -63,6 +63,11 @@ export interface ExtensionInstaller {
         runtimeRoot: string,
         options?: ExtensionRestoreOptions,
     ): Promise<void>;
+    uninstall?(
+        packageName: string,
+        runtimeRoot: string,
+        options?: ExtensionRestoreOptions,
+    ): Promise<void>;
 }
 
 class RuntimeExtensionInstaller implements ExtensionInstaller {
@@ -107,6 +112,14 @@ class RuntimeExtensionInstaller implements ExtensionInstaller {
             timeout: PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
             maxBuffer: 4 * 1024 * 1024,
         });
+    }
+
+    async uninstall(
+        packageName: string,
+        runtimeRoot: string,
+        options: ExtensionRestoreOptions = {},
+    ): Promise<void> {
+        await this.restore(packageName, null, runtimeRoot, options);
     }
 }
 
@@ -167,6 +180,14 @@ export interface ExtensionDisableResult {
     message: string | null;
 }
 
+export interface ExtensionUninstallResult {
+    operationId: string;
+    status: "succeeded" | "failed";
+    startedAt: string;
+    completedAt: string;
+    message: string | null;
+}
+
 /** 避免把包管理器输出中的常见凭据带回管理端，并限制单条诊断占用。 */
 export function formatExtensionInstallationError(error: unknown): string {
     return formatPackageManagerDiagnostic(error);
@@ -203,6 +224,13 @@ export class ExtensionManager {
         promise: Promise<{ restartRequired: true }>;
     } | null = null;
     private readonly lastDisables = new Map<string, ExtensionDisableResult>();
+    private uninstalling: {
+        id: string;
+        operationId: string;
+        startedAt: string;
+        promise: Promise<{ restartRequired: false }>;
+    } | null = null;
+    private readonly lastUninstalls = new Map<string, ExtensionUninstallResult>();
 
     constructor(options: ExtensionManagerOptions = {}) {
         this.runtimeRoot = path.resolve(
@@ -279,11 +307,19 @@ export class ExtensionManager {
                           startedAt: this.disabling.startedAt,
                       }
                     : null;
+            const uninstallOperation =
+                this.uninstalling?.id === entry.id
+                    ? {
+                          operationId: this.uninstalling.operationId,
+                          startedAt: this.uninstalling.startedAt,
+                      }
+                    : null;
             return {
                 ...entry,
                 catalogError,
                 runtimeError: runtimeRootError,
                 packageManagerError: versionAligned ? null : packageManagerError,
+                dependencyRemovalError: packageManagerError,
                 runtimeConfigError,
                 configurationError: validateExtensionConfigurationTarget(entry),
                 targetVersion: packageCatalog?.packageVersion ?? null,
@@ -303,6 +339,9 @@ export class ExtensionManager {
                 disabling: disableOperation !== null,
                 disableOperation,
                 lastDisable: this.lastDisables.get(entry.id) ?? null,
+                uninstalling: uninstallOperation !== null,
+                uninstallOperation,
+                lastUninstall: this.lastUninstalls.get(entry.id) ?? null,
                 capability:
                     entry.type !== "adapter"
                         ? null
@@ -352,6 +391,11 @@ export class ExtensionManager {
         if (this.disabling) {
             throw new ExtensionInstallConflictError(
                 `扩展 ${this.disabling.id} 正在停用，请等待停用完成后再安装扩展`,
+            );
+        }
+        if (this.uninstalling) {
+            throw new ExtensionInstallConflictError(
+                `扩展 ${this.uninstalling.id} 正在卸载依赖，请等待完成后再安装扩展`,
             );
         }
         this.assertCatalogIntegrity();
@@ -528,6 +572,11 @@ export class ExtensionManager {
                 `扩展 ${this.disabling.id} 正在停用，请稍后再试`,
             );
         }
+        if (this.uninstalling) {
+            throw new ExtensionInstallConflictError(
+                `扩展 ${this.uninstalling.id} 正在卸载依赖，请等待完成后再停用扩展`,
+            );
+        }
 
         let startDisable: (() => void) | undefined;
         const startGate = new Promise<void>(resolve => {
@@ -601,6 +650,153 @@ export class ExtensionManager {
         }
     }
 
+    /** 仅移除已经停用且不再由当前进程加载的扩展依赖。 */
+    async uninstall(
+        id: string,
+        loadedPlugins: readonly LoadedPluginInfo[],
+    ): Promise<{ restartRequired: false }> {
+        const entry = getTrustedExtensionCatalogEntry(id);
+        if (!entry) throw new ExtensionNotFoundError("扩展不存在或不允许从管理端卸载");
+        if (this.installation) {
+            throw new ExtensionInstallConflictError(
+                `扩展 ${this.installation.id} 正在安装，请等待完成后再卸载依赖`,
+            );
+        }
+        if (this.disabling) {
+            throw new ExtensionInstallConflictError(
+                `扩展 ${this.disabling.id} 正在停用，请等待完成并重启后再卸载依赖`,
+            );
+        }
+        if (this.uninstalling) {
+            if (this.uninstalling.id === id) return this.uninstalling.promise;
+            throw new ExtensionInstallConflictError(
+                `扩展 ${this.uninstalling.id} 正在卸载依赖，请稍后再试`,
+            );
+        }
+
+        let startUninstall: (() => void) | undefined;
+        const startGate = new Promise<void>(resolve => {
+            startUninstall = resolve;
+        });
+        const operationId = randomUUID();
+        const startedAt = new Date().toISOString();
+        const promise = startGate.then(async (): Promise<{ restartRequired: false }> => {
+            let packageLock;
+            try {
+                packageLock = acquirePackageMutationLock(this.runtimeRoot, {
+                    token: randomUUID(),
+                    operationId,
+                    operation: "extension_uninstall",
+                    extensionId: id,
+                });
+            } catch (error) {
+                if (error instanceof PackageMutationLockConflictError) {
+                    throw new ExtensionInstallConflictError(error.message, { cause: error });
+                }
+                throw error;
+            }
+
+            let previousPackage: InstalledPackageInspection = { version: null, error: null };
+            let packageMetadata: ReturnType<typeof capturePackageManagerMetadata> | null = null;
+            let packageManager: VerifiedPackageManager | null = null;
+            let uninstallAttempted = false;
+            try {
+                const selection = this.readSelectionForMutation();
+                const selected = (
+                    entry.type === "adapter" ? selection.adapters : selection.protocols
+                ).includes(entry.name);
+                if (selected) {
+                    throw new ExtensionStateConflictError(
+                        `扩展 ${entry.name} 仍在启动配置中启用，请先停用并完成重启`,
+                    );
+                }
+                if (
+                    loadedPlugins.some(
+                        plugin => plugin.type === entry.type && plugin.name === entry.name,
+                    )
+                ) {
+                    throw new ExtensionStateConflictError(
+                        `扩展 ${entry.name} 仍由当前进程加载，请先重启 OneBots 再卸载依赖`,
+                    );
+                }
+                previousPackage = this.inspectInstalledPackage(entry.packageName);
+                if (!previousPackage.version) {
+                    throw new ExtensionStateConflictError(
+                        previousPackage.error
+                            ? `扩展依赖无法安全卸载：${previousPackage.error}`
+                            : `扩展 ${entry.name} 的依赖尚未安装`,
+                    );
+                }
+                if (previousPackage.error) {
+                    throw new ExtensionStateConflictError(
+                        `扩展依赖无法安全卸载：${previousPackage.error}；请先修复到验证版本`,
+                    );
+                }
+                if (!this.installer.uninstall || !this.installer.restore) {
+                    throw new Error("当前扩展安装器不支持可恢复卸载");
+                }
+                this.assertRuntimeRoot();
+                packageManager = await this.assertPackageManager();
+                packageMetadata = capturePackageManagerMetadata(this.runtimeRoot);
+                uninstallAttempted = true;
+                await this.installer.uninstall(entry.packageName, this.runtimeRoot, {
+                    packageManager,
+                });
+                const removedPackage = this.inspectInstalledPackage(entry.packageName);
+                if (removedPackage.version || removedPackage.error) {
+                    throw new Error(
+                        `扩展依赖卸载校验失败：${removedPackage.error ?? `${entry.packageName} 仍为 ${removedPackage.version}`}`,
+                    );
+                }
+                return { restartRequired: false };
+            } catch (error) {
+                const packageChanged =
+                    uninstallAttempted &&
+                    (this.packageStateChanged(entry.packageName, previousPackage) ||
+                        (packageMetadata !== null &&
+                            hasPackageManagerMetadataChanged(packageMetadata)));
+                if (packageChanged && previousPackage.version && this.installer.restore) {
+                    await this.restorePackageAfterFailure(
+                        entry.packageName,
+                        previousPackage.version,
+                        error,
+                        packageMetadata,
+                        packageManager,
+                        "卸载",
+                    );
+                }
+                throw error;
+            } finally {
+                packageLock.release();
+            }
+        });
+        this.uninstalling = { id, operationId, startedAt, promise };
+        this.lastUninstalls.delete(id);
+        startUninstall?.();
+        try {
+            const result = await promise;
+            this.lastUninstalls.set(id, {
+                operationId,
+                status: "succeeded",
+                startedAt,
+                completedAt: new Date().toISOString(),
+                message: null,
+            });
+            return result;
+        } catch (error) {
+            this.lastUninstalls.set(id, {
+                operationId,
+                status: "failed",
+                startedAt,
+                completedAt: new Date().toISOString(),
+                message: formatExtensionInstallationError(error),
+            });
+            throw error;
+        } finally {
+            if (this.uninstalling?.promise === promise) this.uninstalling = null;
+        }
+    }
+
     private setInstallationPhase(operationId: string, phase: ExtensionInstallationPhase): void {
         if (this.installation?.operationId === operationId) this.installation.phase = phase;
     }
@@ -611,6 +807,7 @@ export class ExtensionManager {
         originalError: unknown,
         packageMetadata: ReturnType<typeof capturePackageManagerMetadata> | null,
         packageManager: VerifiedPackageManager | null,
+        operation = "安装",
     ): Promise<void> {
         try {
             await this.installer.restore!(packageName, previousVersion, this.runtimeRoot, {
@@ -631,7 +828,7 @@ export class ExtensionManager {
             const restoreMessage = formatExtensionInstallationError(restoreError);
             throw new AggregateError(
                 [originalError, restoreError],
-                `扩展安装失败且依赖恢复失败：安装错误：${installMessage}；恢复错误：${restoreMessage}`,
+                `扩展${operation}失败且依赖恢复失败：${operation}错误：${installMessage}；恢复错误：${restoreMessage}`,
             );
         }
     }
@@ -694,6 +891,16 @@ export class ExtensionManager {
     private readSelection() {
         if (!fs.existsSync(this.configPath)) return { adapters: [], protocols: [] };
         return this.readSelectionFromSource(fs.readFileSync(this.configPath, "utf8"));
+    }
+
+    private readSelectionForMutation(): RuntimePluginSelection {
+        try {
+            return this.readSelection();
+        } catch (error) {
+            throw new ExtensionRuntimeConfigError(formatExtensionRuntimeConfigError(error), {
+                cause: error,
+            });
+        }
     }
 
     private readSelectionFromSource(source: string) {

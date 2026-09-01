@@ -402,6 +402,17 @@ describe("package mutation response", () => {
                 },
             }),
         ).toMatchObject({ owner: { operation: "extension_disable", extensionId: "adapter:mock" } });
+        expect(
+            parsePackageMutationStatus({
+                ...active,
+                owner: {
+                    ...active.owner,
+                    operation: "extension_uninstall",
+                },
+            }),
+        ).toMatchObject({
+            owner: { operation: "extension_uninstall", extensionId: "adapter:mock" },
+        });
     });
 
     it("拒绝开放安装的活动租约、泄露 token 的所有者与无原因的无效状态", () => {

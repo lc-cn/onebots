@@ -16,6 +16,7 @@ import { getExtensionPackageCatalogEntry } from "./extension-capability-catalog.
 import { EXTENSION_CATALOG } from "./extension-catalog.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import { acquirePackageMutationLock } from "./package-mutation-lock.js";
+import type { LoadedPluginInfo } from "./plugin-loader.js";
 
 const directories: string[] = [];
 const successfulPreflight: ExtensionConfigPreflight = async () => undefined;
@@ -1604,5 +1605,114 @@ describe("ExtensionManager", () => {
                 message: null,
             },
         });
+    });
+
+    it("只为已停用且不再加载的扩展卸载磁盘依赖并发布终态", async () => {
+        const { root, configPath } = fixture();
+        const packageName = "@onebots/adapter-slack";
+        installFixturePackage(packageName, catalogVersion(packageName), root);
+        const uninstall = vi.fn(async (name: string, runtimeRoot: string) => {
+            removeFixturePackage(name, runtimeRoot);
+        });
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: vi.fn(), uninstall, restore: vi.fn() },
+            preflight: successfulPreflight,
+            packageManagerInspector: async () => ({
+                manager: "npm",
+                executable: "npm",
+                resolvedPath: "/verified/npm",
+                version: "11.0.0",
+                error: null,
+            }),
+        });
+
+        await expect(manager.uninstall("adapter:slack", [])).resolves.toEqual({
+            restartRequired: false,
+        });
+
+        expect(uninstall).toHaveBeenCalledWith(packageName, root, {
+            packageManager: { manager: "npm", resolvedPath: "/verified/npm" },
+        });
+        expect(fs.existsSync(path.join(root, "node_modules", "@onebots", "adapter-slack"))).toBe(
+            false,
+        );
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+            uninstalling: false,
+            uninstallOperation: null,
+            lastUninstall: { status: "succeeded", message: null },
+        });
+    });
+
+    it("拒绝卸载仍启用或仍由当前进程加载的扩展", async () => {
+        const { root, configPath } = fixture();
+        const packageName = "@onebots/adapter-slack";
+        installFixturePackage(packageName, catalogVersion(packageName), root);
+        const uninstall = vi.fn();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: vi.fn(), uninstall, restore: vi.fn() },
+            preflight: successfulPreflight,
+        });
+        fs.writeFileSync(
+            configPath,
+            "plugins:\n  adapters: [slack]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+        );
+        await expect(manager.uninstall("adapter:slack", [])).rejects.toThrow("仍在启动配置中启用");
+
+        fs.writeFileSync(
+            configPath,
+            "plugins:\n  adapters: []\n  protocols: [onebot-v11]\ngeneral: {}\n",
+        );
+        await expect(
+            manager.uninstall("adapter:slack", [
+                { type: "adapter", name: "slack" } as LoadedPluginInfo,
+            ]),
+        ).rejects.toThrow("仍由当前进程加载");
+        expect(uninstall).not.toHaveBeenCalled();
+    });
+
+    it("卸载命令部分改写后恢复原精确版本", async () => {
+        const { root, configPath } = fixture();
+        const packageName = "@onebots/adapter-slack";
+        const version = catalogVersion(packageName);
+        installFixturePackage(packageName, version, root);
+        const restore = vi.fn(
+            async (name: string, previousVersion: string, runtimeRoot: string) => {
+                installFixturePackage(name, previousVersion, runtimeRoot);
+            },
+        );
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: {
+                install: vi.fn(),
+                uninstall: async (name, runtimeRoot) => {
+                    removeFixturePackage(name, runtimeRoot);
+                    throw new Error("uninstall lifecycle failed");
+                },
+                restore,
+            },
+            preflight: successfulPreflight,
+            packageManagerInspector: async () => ({
+                manager: "npm",
+                executable: "npm",
+                resolvedPath: "/verified/npm",
+                version: "11.0.0",
+                error: null,
+            }),
+        });
+
+        await expect(manager.uninstall("adapter:slack", [])).rejects.toThrow(
+            "uninstall lifecycle failed",
+        );
+        expect(restore).toHaveBeenCalledWith(packageName, version, root, {
+            packageManager: { manager: "npm", resolvedPath: "/verified/npm" },
+        });
+        expect(manager.list([]).find(item => item.id === "adapter:slack")?.installedVersion).toBe(
+            version,
+        );
     });
 });

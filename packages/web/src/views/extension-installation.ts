@@ -12,6 +12,42 @@ export interface ExtensionDisableAction {
     label: string;
 }
 
+export type ExtensionUninstallAction = ExtensionDisableAction;
+
+/** 卸载依赖要求扩展已停用，并且当前进程已经通过重启停止加载它。 */
+export function getExtensionUninstallAction(
+    extension: Pick<
+        ExtensionInfo,
+        | "installed"
+        | "installedError"
+        | "enabled"
+        | "loaded"
+        | "runtimeError"
+        | "dependencyRemovalError"
+        | "runtimeConfigError"
+    >,
+): ExtensionUninstallAction {
+    if (!extension.installed || extension.enabled) {
+        return { visible: false, available: false, label: "卸载依赖" };
+    }
+    if (extension.loaded) {
+        return { visible: true, available: false, label: "请先重启以停止扩展" };
+    }
+    if (extension.installedError) {
+        return { visible: true, available: false, label: "请先修复依赖" };
+    }
+    if (extension.runtimeConfigError) {
+        return { visible: true, available: false, label: "启动配置不可用" };
+    }
+    if (extension.runtimeError) {
+        return { visible: true, available: false, label: "运行目录不可用" };
+    }
+    if (extension.dependencyRemovalError) {
+        return { visible: true, available: false, label: "包管理器不可用" };
+    }
+    return { visible: true, available: true, label: "卸载磁盘依赖" };
+}
+
 /** 停用只改写下一次启动选择；磁盘依赖会保留，前台进程需要人工重启。 */
 export function getExtensionDisableAction(
     extension: Pick<ExtensionInfo, "enabled" | "restartSupported" | "runtimeConfigError">,
@@ -45,6 +81,7 @@ export type ExtensionInstallRequestRecovery =
     | { status: "unknown" };
 
 export type ExtensionDisableRequestRecovery = ExtensionInstallRequestRecovery;
+export type ExtensionUninstallRequestRecovery = ExtensionInstallRequestRecovery;
 
 export interface ExtensionInstallCompletion {
     restart: boolean;
@@ -52,14 +89,16 @@ export interface ExtensionInstallCompletion {
 }
 
 export function shouldRefreshExtensionOperations(input: {
-    extensions: ReadonlyArray<Pick<ExtensionInfo, "installing" | "disabling">>;
+    extensions: ReadonlyArray<Pick<ExtensionInfo, "installing" | "disabling" | "uninstalling">>;
     packageMutationActive: boolean;
     disconnectedRequest: boolean;
 }): boolean {
     return Boolean(
         input.packageMutationActive ||
         input.disconnectedRequest ||
-        input.extensions.some(extension => extension.installing || extension.disabling),
+        input.extensions.some(
+            extension => extension.installing || extension.disabling || extension.uninstalling,
+        ),
     );
 }
 
@@ -116,6 +155,42 @@ export function getExtensionDisableRequestRecovery(
     if (!result || result.operationId === previousOperationId) return { status: "unknown" };
     if (result.status === "succeeded") return { status: "succeeded" };
     return { status: "failed", message: result.message ?? "扩展停用失败" };
+}
+
+export function getExtensionUninstallRequestRecovery(
+    previousOperationId: string | null,
+    extension: Pick<ExtensionInfo, "uninstallOperation" | "lastUninstall"> | null | undefined,
+): ExtensionUninstallRequestRecovery {
+    if (extension?.uninstallOperation) return { status: "running" };
+    const result = extension?.lastUninstall;
+    if (!result || result.operationId === previousOperationId) return { status: "unknown" };
+    if (result.status === "succeeded") return { status: "succeeded" };
+    return { status: "failed", message: result.message ?? "扩展依赖卸载失败" };
+}
+
+export function getExtensionUninstallProgress(
+    extension: Pick<ExtensionInfo, "uninstalling" | "uninstallOperation" | "lastUninstall">,
+): ExtensionInstallationProgress | null {
+    if (extension.uninstalling) {
+        const detail = extension.uninstallOperation
+            ? buildInstallationEvidence(
+                  extension.uninstallOperation.operationId,
+                  extension.uninstallOperation.startedAt,
+              )
+            : null;
+        return { variant: "warning", label: "正在卸载并核验磁盘依赖", detail };
+    }
+    if (extension.lastUninstall?.status === "failed") {
+        return {
+            variant: "danger",
+            label: `上次卸载失败：${extension.lastUninstall.message ?? "未知错误"}`,
+            detail: buildInstallationEvidence(
+                extension.lastUninstall.operationId,
+                extension.lastUninstall.completedAt,
+            ),
+        };
+    }
+    return null;
 }
 
 export function getExtensionDisableProgress(

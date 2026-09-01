@@ -130,6 +130,52 @@ export function registerExtensionRoutes(app: App, router: Router): void {
             app.logger.error("管理端停用扩展失败", { error: message });
         }
     });
+
+    router.post("/api/extensions/:id/uninstall", async (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
+        try {
+            assertManagementInstancePrecondition(app, ctx, "扩展依赖卸载");
+            assertManagementConfigRevisionPrecondition(ctx, "扩展依赖卸载", app.configPath);
+            const result = await app.extensionManager.uninstall(
+                String(ctx.params.id),
+                app.pluginInfos,
+            );
+            const configRevision = createManagementConfigRevision(
+                readFileSync(app.configPath, "utf8"),
+            );
+            ctx.body = {
+                success: true,
+                ...result,
+                application: app.info.application_name,
+                instance_id: app.info.instance_id,
+                config_revision: configRevision,
+                restartSupported: app.restartSupported,
+                message: "扩展依赖已安全卸载；启动配置保持停用状态",
+            };
+        } catch (error) {
+            const message = formatExtensionInstallationError(error);
+            ctx.status =
+                error instanceof ManagementInstanceMismatchError ||
+                error instanceof ManagementConfigRevisionMismatchError ||
+                error instanceof ExtensionInstallConflictError ||
+                error instanceof ExtensionStateConflictError
+                    ? 409
+                    : error instanceof ExtensionNotFoundError
+                      ? 404
+                      : error instanceof ExtensionRuntimeConfigError
+                        ? 422
+                        : error instanceof ValidationError
+                          ? 400
+                          : 500;
+            ctx.body = {
+                success: false,
+                application: app.info.application_name,
+                instance_id: app.info.instance_id,
+                message,
+            };
+            app.logger.error("管理端卸载扩展依赖失败", { error: message });
+        }
+    });
 }
 
 function tryReadConfigSource(app: App): string | null {

@@ -8,6 +8,9 @@ import {
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
+    getExtensionUninstallAction,
+    getExtensionUninstallProgress,
+    getExtensionUninstallRequestRecovery,
     hasExtensionRuntimeVersionDrift,
     shouldRefreshExtensionOperations,
 } from "./extension-installation.js";
@@ -145,6 +148,64 @@ describe("extension disable request recovery", () => {
                 },
             }),
         ).toMatchObject({ variant: "danger", label: "上次停用失败：账号仍在引用" });
+    });
+});
+
+describe("extension dependency uninstall", () => {
+    const base = {
+        installed: true,
+        installedError: null,
+        enabled: false,
+        loaded: false,
+        runtimeError: null,
+        dependencyRemovalError: null,
+        runtimeConfigError: null,
+    };
+    const terminal = {
+        operationId: "uninstall-1",
+        status: "succeeded" as const,
+        startedAt: "2026-09-02T00:00:00.000Z",
+        completedAt: "2026-09-02T00:01:00.000Z",
+        message: null,
+    };
+
+    it("只在扩展已停用且当前进程不再加载时允许卸载", () => {
+        expect(getExtensionUninstallAction(base)).toEqual({
+            visible: true,
+            available: true,
+            label: "卸载磁盘依赖",
+        });
+        expect(getExtensionUninstallAction({ ...base, loaded: true })).toEqual({
+            visible: true,
+            available: false,
+            label: "请先重启以停止扩展",
+        });
+        expect(getExtensionUninstallAction({ ...base, enabled: true }).visible).toBe(false);
+    });
+
+    it("恢复断线请求并展示活动或失败证据", () => {
+        expect(
+            getExtensionUninstallRequestRecovery(null, {
+                uninstallOperation: {
+                    operationId: "active",
+                    startedAt: "2026-09-02T00:00:00.000Z",
+                },
+                lastUninstall: null,
+            }),
+        ).toEqual({ status: "running" });
+        expect(
+            getExtensionUninstallRequestRecovery(null, {
+                uninstallOperation: null,
+                lastUninstall: terminal,
+            }),
+        ).toEqual({ status: "succeeded" });
+        expect(
+            getExtensionUninstallProgress({
+                uninstalling: false,
+                uninstallOperation: null,
+                lastUninstall: { ...terminal, status: "failed", message: "lockfile drift" },
+            }),
+        ).toMatchObject({ variant: "danger", label: "上次卸载失败：lockfile drift" });
     });
 });
 

@@ -77,6 +77,27 @@ describe("package mutation lock", () => {
         lock.release();
     });
 
+    it("公开扩展依赖卸载租约并保留扩展身份", () => {
+        const root = fixture();
+        const lock = acquirePackageMutationLock(root, {
+            token: "private-token",
+            operationId: "uninstall-operation",
+            operation: "extension_uninstall",
+            extensionId: "adapter:slack",
+        });
+
+        expect(inspectPackageMutationLock(root)).toMatchObject({
+            state: "active",
+            available: false,
+            owner: {
+                operationId: "uninstall-operation",
+                operation: "extension_uninstall",
+                extensionId: "adapter:slack",
+            },
+        });
+        lock.release();
+    });
+
     it("把同机已退出进程的租约标为可回收但不在读取时修改目录", () => {
         const root = fixture();
         acquirePackageMutationLock(root, {
