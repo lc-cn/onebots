@@ -75,7 +75,11 @@ import {
     createServiceRuntimeContractId,
     type ServiceRuntimeContract,
 } from "./service-runtime-contract.js";
-import { MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES } from "./management-websocket.js";
+import {
+    MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES,
+    sendManagementWebSocketJson,
+    type BoundedWebSocketSendResult,
+} from "./management-websocket.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -140,6 +144,46 @@ export class App extends BaseApp {
     }
     get messageDebug() {
         return this._messageDebug;
+    }
+
+    private sendManagementWebSocketMessage(
+        client: WebSocket,
+        payload: unknown,
+        context: string,
+    ): boolean {
+        const result = sendManagementWebSocketJson(client, payload, error => {
+            this.logger.error(`${context}发送失败`, { error });
+        });
+        return this.handleManagementWebSocketSendResult(result, context);
+    }
+
+    private handleManagementWebSocketSendResult(
+        result: BoundedWebSocketSendResult,
+        context: string,
+    ): boolean {
+        switch (result.status) {
+            case "sent":
+                return true;
+            case "not-open":
+                return false;
+            case "message-too-large":
+                this.logger.warn(`${context}超过管理 WebSocket 单消息上限，连接已关闭`, {
+                    bytes: result.bytes,
+                });
+                return false;
+            case "backpressure":
+                this.logger.warn(`${context}遇到慢客户端，管理 WebSocket 连接已关闭`, {
+                    bytes: result.bytes,
+                    bufferedBytes: result.bufferedBytes,
+                });
+                return false;
+            case "serialization-failed":
+                this.logger.error(`${context}序列化失败`, { error: result.error });
+                return false;
+            case "send-failed":
+                this.logger.error(`${context}发送失败`, { error: result.error });
+                return false;
+        }
     }
 
     constructor(config: App.Config, runtimeContract?: ServiceRuntimeContract) {
@@ -357,16 +401,35 @@ export class App extends BaseApp {
             if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
             writeFileSync(BaseApp.logFile, "", "utf8");
         }
+        let logBroadcastRunning = false;
+        let logBroadcastQueued = false;
+        const broadcastLatestLog = async (): Promise<void> => {
+            if (logBroadcastRunning) {
+                logBroadcastQueued = true;
+                return;
+            }
+            logBroadcastRunning = true;
+            try {
+                do {
+                    logBroadcastQueued = false;
+                    const data = await readLine(1, BaseApp.logFile);
+                    this.ws.clients.forEach(client => {
+                        this.sendManagementWebSocketMessage(
+                            client,
+                            { event: "system.log", data },
+                            "管理端日志事件",
+                        );
+                    });
+                } while (logBroadcastQueued);
+            } catch (error) {
+                this.logger.error("读取管理端 WebSocket 日志事件失败", { error });
+            } finally {
+                logBroadcastRunning = false;
+                if (logBroadcastQueued) void broadcastLatestLog();
+            }
+        };
         const fileListener = (eventType: string) => {
-            if (eventType === "change")
-                this.ws.clients.forEach(async client => {
-                    client.send(
-                        JSON.stringify({
-                            event: "system.log",
-                            data: await readLine(1, BaseApp.logFile),
-                        }),
-                    );
-                });
+            if (eventType === "change") void broadcastLatestLog();
         };
         const logWatcher = fs.watch(BaseApp.logFile, fileListener);
         let logWatcherClosed = false;
@@ -392,8 +455,9 @@ export class App extends BaseApp {
                 },
             );
             client.once("close", stopAuthorizationMonitor);
-            client.send(
-                JSON.stringify({
+            this.sendManagementWebSocketMessage(
+                client,
+                {
                     event: "system.sync",
                     data: {
                         config: fs.readFileSync(BaseApp.configPath, "utf8"),
@@ -407,7 +471,8 @@ export class App extends BaseApp {
                             ? await readLine(100, BaseApp.logFile)
                             : "",
                     },
-                }),
+                },
+                "管理端初始快照",
             );
             client.on("message", async raw => {
                 if (!validateManagementToken(this, managementToken).valid) {
@@ -422,24 +487,20 @@ export class App extends BaseApp {
                 }
                 const configResponse = await handleManagementConfigSocketAction(this, payload);
                 if (configResponse) {
-                    try {
-                        return client.send(JSON.stringify(configResponse));
-                    } catch (error) {
-                        this.logger.error("发送管理端配置回执失败", { error });
-                        return;
-                    }
+                    this.sendManagementWebSocketMessage(client, configResponse, "管理端配置回执");
+                    return;
                 }
                 const accountResponse = await handleManagementAccountLifecycleSocketAction(
                     this,
                     payload,
                 );
                 if (accountResponse) {
-                    try {
-                        return client.send(JSON.stringify(accountResponse));
-                    } catch (error) {
-                        this.logger.error("发送管理端账号生命周期回执失败", { error });
-                        return;
-                    }
+                    this.sendManagementWebSocketMessage(
+                        client,
+                        accountResponse,
+                        "管理端账号生命周期回执",
+                    );
+                    return;
                 }
                 switch (payload.action) {
                     case "system.input":

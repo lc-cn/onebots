@@ -10,7 +10,12 @@ import {
 } from "../management-auth.js";
 import { startManagementAuthorizationMonitor } from "../management-authorization-monitor.js";
 import { scheduleProcessRestart } from "../process-restart.js";
-import { TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES } from "../management-websocket.js";
+import {
+    TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES,
+    sendTerminalWebSocketJson,
+    type BoundedWebSocketSendResult,
+} from "../management-websocket.js";
+import type { WebSocket } from "ws";
 
 /** SSE 心跳间隔（毫秒） */
 const SSE_HEARTBEAT_INTERVAL_MS = 30000;
@@ -54,11 +59,8 @@ export function registerTerminalRoutes(app: App, router: Router): void {
             app.ptyTerminal.onData((data: string) => {
                 // 广播到所有连接的客户端
                 app.terminalClients.forEach(c => {
-                    try {
-                        c.send(JSON.stringify({ type: "output", data }));
-                    } catch {
+                    if (!sendTerminalMessage(app, c, { type: "output", data }, "终端输出"))
                         app.terminalClients.delete(c);
-                    }
                 });
             });
 
@@ -66,11 +68,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
             app.ptyTerminal.onExit(() => {
                 app.ptyTerminal = null;
                 app.terminalClients.forEach(c => {
-                    try {
-                        c.send(JSON.stringify({ type: "exit" }));
-                    } catch {
-                        // 客户端可能已断开，将在后续连接清理中移除
-                    }
+                    sendTerminalMessage(app, c, { type: "exit" }, "终端退出事件");
                 });
                 app.terminalClients.clear();
             });
@@ -94,8 +92,8 @@ export function registerTerminalRoutes(app: App, router: Router): void {
                 } else if (payload.type === "restart") {
                     void requestTerminalRestart(app);
                 }
-            } catch (e) {
-                app.logger.error("终端消息处理失败:", e);
+            } catch (error) {
+                app.logger.error("终端消息处理失败:", error);
             }
         });
 
@@ -193,10 +191,50 @@ async function requestTerminalRestart(app: App): Promise<void> {
 
 function broadcastTerminalOutput(app: App, data: string): void {
     app.terminalClients.forEach(client => {
-        try {
-            client.send(JSON.stringify({ type: "output", data }));
-        } catch {
-            // 客户端可能已断开，后续 close 事件会完成清理。
-        }
+        if (!sendTerminalMessage(app, client, { type: "output", data }, "终端状态事件"))
+            app.terminalClients.delete(client);
     });
+}
+
+function sendTerminalMessage(
+    app: App,
+    client: WebSocket,
+    payload: unknown,
+    context: string,
+): boolean {
+    const result = sendTerminalWebSocketJson(client, payload, error => {
+        app.terminalClients.delete(client);
+        app.logger.error(`${context}发送失败`, { error });
+    });
+    return handleTerminalSendResult(app, result, context);
+}
+
+function handleTerminalSendResult(
+    app: App,
+    result: BoundedWebSocketSendResult,
+    context: string,
+): boolean {
+    switch (result.status) {
+        case "sent":
+            return true;
+        case "not-open":
+            return false;
+        case "message-too-large":
+            app.logger.warn(`${context}超过终端 WebSocket 单消息上限，连接已关闭`, {
+                bytes: result.bytes,
+            });
+            return false;
+        case "backpressure":
+            app.logger.warn(`${context}遇到慢客户端，终端 WebSocket 连接已关闭`, {
+                bytes: result.bytes,
+                bufferedBytes: result.bufferedBytes,
+            });
+            return false;
+        case "serialization-failed":
+            app.logger.error(`${context}序列化失败`, { error: result.error });
+            return false;
+        case "send-failed":
+            app.logger.error(`${context}发送失败`, { error: result.error });
+            return false;
+    }
 }
