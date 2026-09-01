@@ -11,6 +11,7 @@ import {
     preflightCurrentPackagesOnlyRuntime,
     preflightPackagesOnlyUpdate,
     refreshServiceAfterUpdate,
+    requireUpdatePackageManager,
     resolveInstalledPackageVersion,
     resolvePackageUpdateProjectRoot,
     resolveUpdatePluginSelection,
@@ -85,6 +86,42 @@ function refreshDependencies(
 }
 
 describe("post-update service safety", () => {
+    it("在 registry 查询与依赖写入前拒绝过旧的实际包管理器", async () => {
+        const inspect = vi.fn(async () => ({
+            manager: "pnpm" as const,
+            executable: "pnpm",
+            resolvedPath: "/tools/pnpm",
+            version: "8.15.9",
+            error: "扩展包管理器版本过旧：pnpm 8.15.9，要求 >=9.12.0。",
+        }));
+
+        await expect(requireUpdatePackageManager("/runtime", inspect)).rejects.toThrow(
+            /更新包管理器不可用.*pnpm 8\.15\.9.*>=9\.12\.0/,
+        );
+        expect(inspect).toHaveBeenCalledWith("/runtime");
+    });
+
+    it("仅把带实际版本的已验证包管理器交给更新查询与事务", async () => {
+        await expect(
+            requireUpdatePackageManager("/runtime", async () => ({
+                manager: "npm",
+                executable: "npm",
+                resolvedPath: "/tools/npm",
+                version: "11.17.0",
+                error: null,
+            })),
+        ).resolves.toBe("npm");
+        await expect(
+            requireUpdatePackageManager("/runtime", async () => ({
+                manager: "npm",
+                executable: "npm",
+                resolvedPath: "/tools/npm",
+                version: null,
+                error: null,
+            })),
+        ).rejects.toThrow("无法确认实际版本");
+    });
+
     it("CLI 更新在同一运行目录中取得跨进程租约", () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-update-lock-"));
         temporaryDirectories.push(root);

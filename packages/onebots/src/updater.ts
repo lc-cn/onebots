@@ -16,9 +16,11 @@ import {
     buildPackageManagerInvocation,
     buildPackageUpdateInvocation,
     capturePackageManagerMetadata,
-    detectRuntimePackageManager,
     hasPackageManagerMetadataChanged,
+    inspectRuntimePackageManagerVersion,
     PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
+    type RuntimePackageManagerVersionInspection,
+    type SupportedPackageManager,
 } from "./package-manager.js";
 import { acquirePackageMutationLock } from "./package-mutation-lock.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
@@ -109,6 +111,20 @@ export function resolveUpdateRuntimeTarget(
           };
 }
 
+/** 更新查询与写事务必须使用已经执行并通过版本下限验证的包管理器入口。 */
+export async function requireUpdatePackageManager(
+    runtimeRoot: string,
+    inspect: (
+        target: string,
+    ) => Promise<RuntimePackageManagerVersionInspection> = inspectRuntimePackageManagerVersion,
+): Promise<SupportedPackageManager> {
+    const inspection = await inspect(runtimeRoot);
+    if (inspection.error || !inspection.manager || !inspection.version) {
+        throw new Error(`更新包管理器不可用：${inspection.error ?? "无法确认实际版本"}`);
+    }
+    return inspection.manager;
+}
+
 /** 检查并更新 OneBots 与当前服务使用的插件。 */
 export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult> {
     if (options.packagesOnly && (!options.configPath || !fs.existsSync(options.configPath))) {
@@ -123,7 +139,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
         options.packagesOnly ? options.configPath : undefined,
     );
     const packages = packageNamesFor(adapters, protocols);
-    const manager = detectRuntimePackageManager(runtimeRoot);
+    const manager = await requireUpdatePackageManager(runtimeRoot);
     const targetOnebotsVersion = latestVersion(manager, "onebots");
     if (!targetOnebotsVersion) throw new Error("无法查询包版本: onebots");
     const targetCatalog = loadTargetExtensionVersionCatalog(
