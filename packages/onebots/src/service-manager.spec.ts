@@ -19,6 +19,9 @@ describe.runIf(process.platform !== "win32")("service definition persistence", (
         temporaryDirectories.push(root);
         const host = linuxHost(root);
         const controller = new ServiceController("user", host);
+        const stateParent = path.dirname(controller.paths().stateDir);
+        fs.mkdirSync(stateParent, { recursive: true, mode: 0o755 });
+        fs.chmodSync(stateParent, 0o755);
         const spec: ServiceSpec = {
             scope: "user",
             configPath: path.join(root, "config.yaml"),
@@ -30,6 +33,9 @@ describe.runIf(process.platform !== "win32")("service definition persistence", (
         };
 
         await controller.install(spec);
+        expect(fs.statSync(stateParent).mode & 0o777).toBe(0o755);
+        expect(fs.statSync(controller.paths().stateDir).mode & 0o777).toBe(0o700);
+        expect(fs.statSync(controller.paths().metadata).mode & 0o777).toBe(0o600);
         const definition = controller.paths().definition;
         expect(fs.statSync(definition).mode & 0o777).toBe(0o644);
         expect(controller.definitionIsCurrent(spec)).toBe(true);

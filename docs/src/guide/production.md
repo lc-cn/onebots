@@ -219,6 +219,8 @@ Web 顶栏每 5 秒读取同一份 `/ready` 语义证据，区分「生产就绪
 
 若已安装服务的 `service.json` 被截断、无法读取或结构损坏，doctor 仍会生成完整 JSON 报告，将 `target.service.mode` 标记为 `invalid`，并以 `service-metadata` 错误阻止部署门禁通过。公开错误只包含元数据路径，不回显原始 JSON 片段；重新执行 `onebots install` 可按当前配置生成新的服务定义。在 POSIX 系统上，独立的 `service-metadata-mode` 还会验证这份运行契约没有向其他用户开放或允许同组修改；用户级 `--fix` 可恢复安装器约定的 `0600`，系统级元数据则只报告并交由管理员处理。
 
+首次安装服务时，最终状态目录以 `0700` 创建，父级 XDG、Library 或系统目录仍保留平台默认权限；`service.json` 继续使用 `0600`。该目录还包含 launchd、Windows runner 与服务日志，因此 doctor 的 `service-permissions` 会把其他用户可访问或同组可修改判为错误，用户级 `--fix` 可收紧为 `0700`。仅允许同组读取或遍历时保留警告且不会自动修改，兼容明确需要共享日志的服务组。
+
 doctor 会分别验证当前 CLI 与守护服务定义中的 Node.js。对于服务保存的 `nodePath`，检查会实际执行 `--version`，因此路径虽然存在但不可执行、不是 Node，或版本低于 24 时都会产生 `service-node` 错误；用户级服务可通过 `--fix` 改用当前 doctor 的 Node 并重新生成定义，系统级服务则需要以管理员权限重新安装。
 
 服务入口也不再以 `binPath` 存在作为充分证据。doctor 会解析符号链接后的真实文件，查找其所属 `package.json`，并确认包名是 `onebots`、版本与当前 CLI 一致且入口正是 manifest 声明的 `bin.onebots`。因此停止状态下仍能发现服务引用旧版安装、替代脚本或损坏清单；用户级 `--fix` 会改用当前 CLI 入口。

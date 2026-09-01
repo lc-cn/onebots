@@ -54,8 +54,25 @@ export function getServiceFiles(scope: ServiceScope, host: ServiceHost): Service
     };
 }
 
+/** 仅收紧最终状态目录，避免递归创建时把 XDG 等共享父目录也设为私有。 */
+export function ensurePrivateServiceDirectory(directory: string): void {
+    if (fs.existsSync(directory)) {
+        if (!fs.statSync(directory).isDirectory()) {
+            throw new Error(`服务状态路径不是目录: ${directory}`);
+        }
+        return;
+    }
+    fs.mkdirSync(path.dirname(directory), { recursive: true });
+    try {
+        fs.mkdirSync(directory, { mode: 0o700 });
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        if (!fs.statSync(directory).isDirectory()) throw error;
+    }
+}
+
 export function writePrivateJson(file: string, value: unknown): void {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
+    ensurePrivateServiceDirectory(path.dirname(file));
     const temporary = `${file}.${process.pid}.tmp`;
     try {
         fs.writeFileSync(temporary, JSON.stringify(value, null, 2) + "\n", {

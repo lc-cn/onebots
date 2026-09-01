@@ -44,6 +44,37 @@ describe("doctor service state directory", () => {
             message: `服务状态目录不可用: ${missing}`,
         });
     });
+
+    it.runIf(process.platform !== "win32")("拒绝公开权限，并仅在明确修复时收紧", () => {
+        const directory = createTemporaryDirectory();
+        fs.chmodSync(directory, 0o755);
+
+        expect(inspectDoctorServiceStateDirectory(directory)).toEqual({
+            name: "service-permissions",
+            level: "error",
+            message: "服务状态目录权限 755 允许其他用户访问或同组用户修改（--fix 可收紧为 0700）",
+        });
+        expect(fs.statSync(directory).mode & 0o777).toBe(0o755);
+        expect(inspectDoctorServiceStateDirectory(directory, true)).toEqual({
+            name: "service-permissions",
+            level: "ok",
+            message: "已将服务状态目录权限从 755 收紧为 0700",
+            fixed: true,
+        });
+        expect(fs.statSync(directory).mode & 0o777).toBe(0o700);
+    });
+
+    it.runIf(process.platform !== "win32")("保留有意配置的同组只读访问", () => {
+        const directory = createTemporaryDirectory();
+        fs.chmodSync(directory, 0o750);
+
+        expect(inspectDoctorServiceStateDirectory(directory, true)).toEqual({
+            name: "service-permissions",
+            level: "warning",
+            message: "服务状态目录权限 750 允许同组用户访问；请确认日志共享是部署所需",
+        });
+        expect(fs.statSync(directory).mode & 0o777).toBe(0o750);
+    });
 });
 
 function createTemporaryDirectory(): string {

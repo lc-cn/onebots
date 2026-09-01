@@ -382,7 +382,12 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             options.serviceDefinitionInspector ?? inspectDoctorServiceDefinition;
         const serviceDefinition = inspectDefinition(controller, spec);
         const stateDirectory = controller.paths().stateDir;
-        checks.push(inspectDoctorServiceStateDirectory(stateDirectory));
+        checks.push(
+            inspectDoctorServiceStateDirectory(
+                stateDirectory,
+                options.fix === true && options.scope === "user",
+            ),
+        );
         const requestedPluginsDiffer =
             (options.adapters.length > 0 &&
                 options.adapters.join("\0") !== spec.adapters.join("\0")) ||

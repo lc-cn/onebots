@@ -16,7 +16,12 @@ import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import { runServiceInstallTransaction } from "./service-install-transaction.js";
 import { verifyServiceStopped } from "./service-offline-verification.js";
 import { runServiceUninstallTransaction } from "./service-uninstall-transaction.js";
-import { getServiceFiles, writePrivateJson, writeServiceFile } from "./service-files.js";
+import {
+    ensurePrivateServiceDirectory,
+    getServiceFiles,
+    writePrivateJson,
+    writeServiceFile,
+} from "./service-files.js";
 import {
     WINDOWS_SYSTEM_SERVICE_ID,
     buildWindowsSystemServiceOptions,
@@ -169,7 +174,7 @@ export class ServiceController {
         ensureSystemPermission(this.scope, this.host);
         const normalized: ServiceSpec = { ...spec, scope: this.scope };
         const paths = this.paths();
-        fs.mkdirSync(paths.stateDir, { recursive: true });
+        ensurePrivateServiceDirectory(paths.stateDir);
         const previous = this.readValidSpecForRollback();
 
         await runServiceInstallTransaction({
