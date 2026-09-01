@@ -172,6 +172,8 @@ Automatically collects system performance metrics.
 
 **Auto-Enabled**: Automatically integrated in `BaseApp`
 
+Each `BaseApp` owns an independent `MetricsCollector`, so HTTP requests, durations, and error counts appear only in that instance's `/metrics`; stopping one embedded application does not reset another instance. An embedding host can inspect the instance data through `app.metrics`. When using the Koa middleware directly, pass a dedicated collector to `metricsCollector(collector)`. Omitting the argument continues to use the exported global `metrics` for compatibility with existing single-application integrations.
+
 ### Prometheus Metrics Export
 
 Standard format metrics export, can be directly integrated with Prometheus + Grafana.

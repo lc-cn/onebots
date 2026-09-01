@@ -26,6 +26,7 @@ import { Logger as EnhancedLogger, createLogger } from "./logger.js";
 import { createSecurityAudit, type SecurityAuditMiddleware } from "./middleware/security-audit.js";
 import { createDefaultRateLimit } from "./middleware/rate-limit.js";
 import { metricsCollector } from "./middleware/metrics-collector.js";
+import { MetricsCollector } from "./metrics.js";
 import {
     getRuntimeProcessIdentity,
     registerObservabilityEndpoints,
@@ -79,6 +80,7 @@ export class BaseApp extends Koa {
     public logger: Logger;
     public enhancedLogger: EnhancedLogger;
     public lifecycle: LifecycleManager;
+    public readonly metrics = new MetricsCollector();
     private securityAuditMiddleware?: SecurityAuditMiddleware;
     static get configPath() {
         return path.join(BaseApp.configDir, BaseApp.configFileName);
@@ -218,7 +220,7 @@ export class BaseApp extends Koa {
             }),
         )
             // 性能指标收集（最早执行，以便记录所有请求）
-            .use(metricsCollector())
+            .use(metricsCollector(this.metrics))
             // 安全审计日志
             .use(this.securityAuditMiddleware)
             // 速率限制（在认证之前，防止暴力破解）

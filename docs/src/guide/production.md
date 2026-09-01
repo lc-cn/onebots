@@ -172,6 +172,8 @@ try {
 
 **自动启用**: 已在 `BaseApp` 中自动集成
 
+每个 `BaseApp` 持有独立的 `MetricsCollector`，HTTP 请求、响应时间与错误计数只会出现在所属实例的 `/metrics`，停止一个嵌入式应用也不会重置其他实例。宿主可通过 `app.metrics` 读取该实例的性能数据。直接使用 Koa 中间件时，可把自建的 `MetricsCollector` 传给 `metricsCollector(collector)`；不传参数仍使用导出的全局 `metrics`，兼容原有单应用集成。
+
 ### Prometheus 指标导出
 
 标准格式的指标导出，可直接接入 Prometheus + Grafana。

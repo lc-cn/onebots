@@ -3,49 +3,54 @@
  * 自动收集请求数、响应时间、错误率等指标
  */
 
-import type { Context, Next } from 'koa';
-import { metrics } from '../metrics.js';
+import type { Context, Next } from "koa";
+import { metrics, type MetricsCollector } from "../metrics.js";
 
 /**
  * 性能指标收集中间件
  */
-export function metricsCollector() {
+export function metricsCollector(collector: MetricsCollector = metrics) {
+    let nextCleanupAt = Date.now() + 10 * 60 * 1000;
     return async (ctx: Context, next: Next) => {
         const startTime = Date.now();
+        if (startTime >= nextCleanupAt) {
+            collector.cleanup();
+            nextCleanupAt = startTime + 10 * 60 * 1000;
+        }
         const method = ctx.method;
         const path = ctx.path;
-        
+
         // 增加请求计数
-        metrics.increment('http_requests_total', 1, {
+        collector.increment("http_requests_total", 1, {
             method,
-            path: path.split('?')[0], // 移除查询参数
+            path: path.split("?")[0], // 移除查询参数
         });
-        
+
         try {
             await next();
-            
+
             const duration = Date.now() - startTime;
             const status = ctx.status;
-            
+
             // 记录响应时间
-            metrics.observe('http_request_duration_ms', duration, {
+            collector.observe("http_request_duration_ms", duration, {
                 method,
-                path: path.split('?')[0],
+                path: path.split("?")[0],
                 status: String(status),
             });
-            
+
             // 记录状态码
-            metrics.increment('http_responses_total', 1, {
+            collector.increment("http_responses_total", 1, {
                 method,
-                path: path.split('?')[0],
+                path: path.split("?")[0],
                 status: String(status),
             });
-            
+
             // 记录错误
             if (status >= 400) {
-                metrics.increment('http_errors_total', 1, {
+                collector.increment("http_errors_total", 1, {
                     method,
-                    path: path.split('?')[0],
+                    path: path.split("?")[0],
                     status: String(status),
                 });
             }
@@ -54,23 +59,22 @@ export function metricsCollector() {
             const status = ctx.status || 500;
 
             // 记录错误响应时间
-            metrics.observe('http_request_duration_ms', duration, {
+            collector.observe("http_request_duration_ms", duration, {
                 method,
-                path: path.split('?')[0],
+                path: path.split("?")[0],
                 status: String(status),
-                error: 'true',
+                error: "true",
             });
 
             // 记录错误
-            metrics.increment('http_errors_total', 1, {
+            collector.increment("http_errors_total", 1, {
                 method,
-                path: path.split('?')[0],
+                path: path.split("?")[0],
                 status: String(status),
-                error_type: error instanceof Error ? error.name : 'Unknown',
+                error_type: error instanceof Error ? error.name : "Unknown",
             });
-            
+
             throw error;
         }
     };
 }
-

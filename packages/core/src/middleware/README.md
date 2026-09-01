@@ -83,10 +83,14 @@ const managedValidator = createManagedTokenValidator(tokenManager);
 自动收集请求数、响应时间、错误率等指标。
 
 ```typescript
-import { metricsCollector, metrics } from '@onebots/core';
+import { MetricsCollector, metricsCollector, metrics } from '@onebots/core';
 
 // 使用中间件（在 BaseApp 中自动完成）
 app.use(metricsCollector());
+
+// 同一进程嵌入多个应用时，为每个应用注入独立收集器
+const appMetrics = new MetricsCollector();
+app.use(metricsCollector(appMetrics));
 
 // 访问指标
 const requestCount = metrics.getLatestValue('http_requests_total', { method: 'GET' });
@@ -96,6 +100,8 @@ const errorRate = metrics.getSum('http_errors_total', {}, 60000);
 // 导出 Prometheus 格式
 const prometheusMetrics = metrics.exportPrometheus();
 ```
+
+`BaseApp` 已自动使用实例级收集器，并通过 `app.metrics` 暴露；无参数形式和全局 `metrics` 保留给原有单应用集成。
 
 ## 在 BaseApp 中的自动集成
 
@@ -141,4 +147,3 @@ await app.start();
 ```
 
 日志格式为 JSON Lines，每行一个事件记录。
-

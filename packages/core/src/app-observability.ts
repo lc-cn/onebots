@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Adapter } from "./adapter.js";
-import { metrics } from "./metrics.js";
+import { metrics as globalMetrics, type MetricsCollector } from "./metrics.js";
 import type { Router } from "./router.js";
 import type { RuntimeOperation } from "./runtime-operation.js";
 
@@ -25,6 +25,8 @@ interface ObservableApp {
     readonly adapters: ReadonlyMap<keyof Adapter.Configs, Adapter>;
     readonly isStarted: boolean;
     readonly isReloading: boolean;
+    /** 当前应用的 HTTP 性能指标；旧的单全局宿主可省略。 */
+    readonly metrics?: MetricsCollector;
     /** 当前撤销 readiness 的运行态操作；嵌入式宿主可省略并得到 unknown。 */
     readonly runtimeOperation?: RuntimeOperation;
     /** OneBots 主应用提供磁盘配置状态；嵌入式 BaseApp 可不跟踪。 */
@@ -384,7 +386,7 @@ export function registerObservabilityEndpoints(
         lines.push(...formatProtocolReadinessMetrics(readiness));
         lines.push(...formatWebSocketCapacityMetrics(app.webSocketCapacity ?? []));
 
-        const performance = metrics.exportPrometheus().trim();
+        const performance = (app.metrics ?? globalMetrics).exportPrometheus().trim();
         if (performance) lines.push("", "# Performance metrics", performance);
         ctx.type = "text/plain; charset=utf-8";
         ctx.body = `${lines.join("\n")}\n`;
