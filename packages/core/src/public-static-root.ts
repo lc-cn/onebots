@@ -27,11 +27,24 @@ export function resolvePublicStaticRoot(
 
     try {
         fs.mkdirSync(absolute, { recursive: true });
-        if (!fs.statSync(absolute).isDirectory()) {
+        const resolved = fs.realpathSync(absolute);
+        if (!fs.statSync(resolved).isDirectory()) {
             logger.warn("public_static_dir 不是目录，已忽略", { absolute });
             return null;
         }
-        return absolute;
+        if (!path.isAbsolute(value)) {
+            const resolvedConfigDir = fs.realpathSync(root);
+            const relative = path.relative(resolvedConfigDir, resolved);
+            if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+                logger.warn("public_static_dir 的实际目录必须位于配置目录内，已忽略", {
+                    configured: value,
+                    resolved,
+                    configDir: resolvedConfigDir,
+                });
+                return null;
+            }
+        }
+        return resolved;
     } catch (error) {
         logger.warn("public_static_dir 无法创建或访问，静态托管已跳过", {
             absolute,
