@@ -249,6 +249,55 @@ export class ProtocolRegistry {
         return protocol;
     }
 
+    /** 验证第三方账号没有绕过注册表注入、遗漏或替换协议实例。 */
+    static assertAccountProtocols(
+        account: Account,
+        adapter: Adapter,
+        config: Account.Config,
+    ): void {
+        const label = `账号 ${config.platform}/${config.account_id}`;
+        const expected = Object.keys(config)
+            .map(key => key.split("."))
+            .filter(
+                (identity): identity is [string, string, ...string[]] =>
+                    Boolean(identity[0] && identity[1]) && this.has(identity[0]!, identity[1]!),
+            )
+            .map(([name, version]) => `${name}.${version}`)
+            .sort();
+        const actual = account.protocols.map(protocol => {
+            const name = typeof protocol?.name === "string" ? protocol.name.trim() : "";
+            const version = typeof protocol?.version === "string" ? protocol.version.trim() : "";
+            if (!name || !version) {
+                throw new ValidationError(`${label} 工厂返回了缺少有效身份的协议实例`, {
+                    context: { platform: config.platform, account_id: config.account_id },
+                });
+            }
+            if (!this.has(name, version)) {
+                throw new ValidationError(`${label} 工厂注入了未注册协议 ${name}/${version}`, {
+                    context: {
+                        platform: config.platform,
+                        account_id: config.account_id,
+                        name,
+                        version,
+                    },
+                });
+            }
+            assertProtocolFactoryContract(protocol, name, version, adapter, account);
+            return `${name}.${version}`;
+        });
+        actual.sort();
+        if (!isDeepStrictEqual(actual, expected)) {
+            throw new ValidationError(`${label} 工厂返回的协议集合与账号配置不一致`, {
+                context: {
+                    platform: config.platform,
+                    account_id: config.account_id,
+                    expected,
+                    actual,
+                },
+            });
+        }
+    }
+
     /**
      * Unregister a protocol version
      */

@@ -2,6 +2,7 @@ import type { Account } from "./account.js";
 import type { Adapter } from "./adapter.js";
 import type { Router } from "./router.js";
 import { assertAccountFactoryContract } from "./extension-factory-contract.js";
+import { ProtocolRegistry } from "./registry.js";
 
 interface ScopedAccountHost {
     /** 纯事务测试或嵌入式替身可以不提供 Router。 */
@@ -17,6 +18,7 @@ export function createAccountWithRouteScope(
     if (!host.router) {
         const account = adapter.createAccount(config);
         assertAccountFactoryContract(account, adapter, config);
+        ProtocolRegistry.assertAccountProtocols(account, adapter, config);
         return account;
     }
     const scope = host.router.createRegistrationScope({
@@ -26,6 +28,7 @@ export function createAccountWithRouteScope(
     try {
         const account = scope.run(() => adapter.createAccount(config));
         assertAccountFactoryContract(account, adapter, config);
+        ProtocolRegistry.assertAccountProtocols(account, adapter, config);
         account.attachRouteScope(scope);
         return account;
     } catch (error) {

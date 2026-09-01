@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Account } from "./account.js";
 import type { Adapter } from "./adapter.js";
+import type { Protocol } from "./protocol.js";
+import { ProtocolRegistry } from "./registry.js";
 import type { Router, RouterRegistrationScope } from "./router.js";
 import { createAccountWithRouteScope } from "./scoped-account.js";
 
@@ -72,6 +74,63 @@ describe("scoped account factory contract", () => {
             "账号 example/primary 工厂返回值缺少必需方法：stop",
         );
     });
+
+    it("拒绝账号注入未注册协议并撤销构造期路由", () => {
+        const adapter = adapterFixture();
+        const account = accountFixture(adapter, config);
+        account.protocols.push(protocolFixture(adapter, account, "ghost", "v1"));
+        vi.mocked(adapter.createAccount).mockReturnValue(account);
+        const scope = scopeFixture();
+        const router = {
+            createRegistrationScope: vi.fn(() => scope),
+        } as unknown as Router;
+
+        expect(() => createAccountWithRouteScope({ router }, adapter, config)).toThrow(
+            "账号 example/primary 工厂注入了未注册协议 ghost/v1",
+        );
+        expect(scope.close).toHaveBeenCalledOnce();
+    });
+
+    it("拒绝遗漏或重复账号配置中的已注册协议", () => {
+        const name = "scoped-account-contract";
+        ProtocolRegistry.register(name, "v1", vi.fn());
+        const adapter = adapterFixture();
+        const accountConfig = { ...config, [`${name}.v1`]: {} };
+        try {
+            const missing = accountFixture(adapter, accountConfig);
+            vi.mocked(adapter.createAccount).mockReturnValueOnce(missing);
+            expect(() => createAccountWithRouteScope({}, adapter, accountConfig)).toThrow(
+                "账号 example/primary 工厂返回的协议集合与账号配置不一致",
+            );
+
+            const duplicate = accountFixture(adapter, accountConfig);
+            duplicate.protocols.push(
+                protocolFixture(adapter, duplicate, name, "v1"),
+                protocolFixture(adapter, duplicate, name, "v1"),
+            );
+            vi.mocked(adapter.createAccount).mockReturnValueOnce(duplicate);
+            expect(() => createAccountWithRouteScope({}, adapter, accountConfig)).toThrow(
+                "账号 example/primary 工厂返回的协议集合与账号配置不一致",
+            );
+        } finally {
+            ProtocolRegistry.unregister(name, "v1");
+        }
+    });
+
+    it("接受与配置一一对应且归属当前账号的注册协议", () => {
+        const name = "scoped-account-valid";
+        ProtocolRegistry.register(name, "v1", vi.fn());
+        const adapter = adapterFixture();
+        const accountConfig = { ...config, [`${name}.v1`]: {} };
+        const account = accountFixture(adapter, accountConfig);
+        account.protocols.push(protocolFixture(adapter, account, name, "v1"));
+        vi.mocked(adapter.createAccount).mockReturnValue(account);
+        try {
+            expect(createAccountWithRouteScope({}, adapter, accountConfig)).toBe(account);
+        } finally {
+            ProtocolRegistry.unregister(name, "v1");
+        }
+    });
 });
 
 function adapterFixture(): Adapter {
@@ -105,4 +164,26 @@ function scopeFixture(): RouterRegistrationScope {
         run: vi.fn((operation: () => Account) => operation()),
         close: vi.fn(),
     } as unknown as RouterRegistrationScope;
+}
+
+function protocolFixture(
+    adapter: Adapter,
+    account: Account,
+    name: string,
+    version: string,
+): Protocol {
+    return {
+        adapter,
+        account,
+        name,
+        version,
+        config: { protocol: name, version },
+        start: vi.fn(async () => undefined),
+        stop: vi.fn(async () => undefined),
+        dispatch: vi.fn(async () => undefined),
+        format: vi.fn(),
+        apply: vi.fn(async () => undefined),
+        on: vi.fn(),
+        off: vi.fn(),
+    } as unknown as Protocol;
 }
