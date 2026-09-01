@@ -4,6 +4,8 @@ import * as fs from "fs";
 import * as readline from "readline";
 import packageJson from "../package.json" with { type: "json" };
 export const version = packageJson.version;
+const RESERVED_OBJECT_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 export function readLine(maxLen: number, ...params: Parameters<typeof fs.createReadStream>) {
     return new Promise<string>((resolve, reject) => {
         const result: string[] = [];
@@ -21,37 +23,61 @@ export function readLine(maxLen: number, ...params: Parameters<typeof fs.createR
         rl.on("error", reject);
     });
 }
-// 合并对象/数组
-export function deepMerge(
+
+function isObjectLike(value: unknown): value is object {
+    return (typeof value === "object" && value !== null) || typeof value === "function";
+}
+
+function validateMergeValue(value: unknown, seen: WeakSet<object>): void {
+    if (!isObjectLike(value) || seen.has(value)) return;
+    seen.add(value);
+    for (const key of Object.keys(value)) {
+        if (RESERVED_OBJECT_KEYS.has(key)) {
+            throw new SyntaxError(`can't merge reserved property: ${key}`);
+        }
+        validateMergeValue(Reflect.get(value, key), seen);
+    }
+}
+
+function mergeValidated(
     base: Record<string, unknown> | unknown[] | unknown,
-    ...from: unknown[]
+    from: unknown[],
 ): unknown {
     if (base === null || base === undefined) base = from.shift();
-    if (from.length === 0) {
-        return base;
-    }
-    if (typeof base !== "object") {
-        return base;
-    }
-    if (Array.isArray(base)) {
-        return Array.from(new Set(base.concat(...(from as unknown[][]))));
-    }
+    if (from.length === 0) return base;
+    if (typeof base !== "object") return base;
+    if (Array.isArray(base)) return Array.from(new Set(base.concat(...(from as unknown[][]))));
+
     const baseObj = base as Record<string, unknown>;
     for (const item of from) {
-        const itemObj = item as Record<string, unknown>;
-        for (const key in itemObj) {
-            if (baseObj.hasOwnProperty(key)) {
-                if (typeof baseObj[key] === "object") {
-                    baseObj[key] = deepMerge(baseObj[key] as Record<string, unknown>, itemObj[key]);
+        if (item === null || item === undefined) continue;
+        const itemObj = Object(item) as Record<string, unknown>;
+        for (const key of Object.keys(itemObj)) {
+            const itemValue = Reflect.get(itemObj, key) as unknown;
+            if (Object.hasOwn(baseObj, key)) {
+                const baseValue = Reflect.get(baseObj, key) as unknown;
+                if (baseValue && typeof baseValue === "object") {
+                    baseObj[key] = mergeValidated(baseValue, [itemValue]);
                 } else {
-                    baseObj[key] = itemObj[key];
+                    baseObj[key] = itemValue;
                 }
             } else {
-                baseObj[key] = itemObj[key];
+                baseObj[key] = itemValue;
             }
         }
     }
     return baseObj;
+}
+
+/** 深度合并对象并合并去重数组；继承字段和原型链保留名称不会进入结果。 */
+export function deepMerge(
+    base: Record<string, unknown> | unknown[] | unknown,
+    ...from: unknown[]
+): unknown {
+    const values = [base, ...from];
+    const seen = new WeakSet<object>();
+    values.forEach(value => validateMergeValue(value, seen));
+    return mergeValidated(base, from);
 }
 
 export function transformObj(
@@ -196,14 +222,12 @@ export function getProperties(obj: object): string[] {
     return Object.getOwnPropertyNames(obj).concat(getProperties(Object.getPrototypeOf(obj)));
 }
 
-const RESERVED_OBJECT_PATH_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
-
 function parseObjectPath(key: string | string[]): string[] {
     const keys = Array.isArray(key) ? [...key] : key.split(".");
     if (keys.length === 0 || keys.some(part => typeof part !== "string" || !part.trim())) {
         throw new SyntaxError("key contains an invalid path segment");
     }
-    const reserved = keys.find(part => RESERVED_OBJECT_PATH_SEGMENTS.has(part));
+    const reserved = keys.find(part => RESERVED_OBJECT_KEYS.has(part));
     if (reserved) {
         throw new SyntaxError(`key contains reserved path segment: ${reserved}`);
     }

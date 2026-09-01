@@ -90,6 +90,8 @@ const tokenValidator = createManagedTokenValidator(tokenManager);
 
 第三方扩展处理外部提供的字段路径时，可使用 `@onebots/core` 导出的 `getValueOfObj` 与 `setValueToObj`。两者只读取或穿过对象的自有属性，并拒绝空路径段以及 `__proto__`、`constructor`、`prototype` 等原型链保留名称。非法路径会抛出 `SyntaxError`，写操作不会修改目标对象；扩展应把该错误转换为面向调用方的参数校验失败，不要改用不受约束的动态属性遍历。
 
+合并外部配置时应使用同包导出的 `deepMerge`。它只合并来源对象的可枚举自有字段，并会在修改目标对象前递归拒绝上述原型链保留名称；数组仍按原有顺序合并去重。这样畸形的账号或协议配置会整体失败，不会留下部分合并结果。
+
 ## 稳定性功能
 
 ### 熔断器模式

@@ -90,6 +90,8 @@ Prevents request tampering and replay attacks.
 
 Third-party extensions that handle externally supplied field paths can use `getValueOfObj` and `setValueToObj` from `@onebots/core`. Both helpers read and traverse own properties only, and reject empty path segments plus prototype-chain names such as `__proto__`, `constructor`, and `prototype`. An invalid path throws `SyntaxError` without changing the target object. Extensions should translate that error into an input-validation failure instead of falling back to unrestricted dynamic property traversal.
 
+Use `deepMerge` from the same package when merging external configuration. It merges enumerable own properties only and recursively rejects the same prototype-chain names before changing the target; arrays retain their ordered deduplication behavior. A malformed account or protocol configuration therefore fails as a whole instead of leaving a partially merged result.
+
 ## Stability Features
 
 ### Circuit Breaker Pattern

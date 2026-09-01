@@ -1,5 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { getValueOfObj, setValueToObj } from "./utils.js";
+import { deepMerge, getValueOfObj, setValueToObj } from "./utils.js";
+
+describe("deepMerge", () => {
+    it("递归合并自有字段并保持数组去重语义", () => {
+        const base = { nested: { first: true }, list: ["a"] };
+        const result = deepMerge(base, {
+            nested: { second: true },
+            list: ["a", "b"],
+        });
+
+        expect(result).toBe(base);
+        expect(result).toEqual({
+            nested: { first: true, second: true },
+            list: ["a", "b"],
+        });
+    });
+
+    it("忽略来源对象的继承字段并支持覆盖 hasOwnProperty 配置键", () => {
+        const source = Object.create({ inherited: "hidden" }) as Record<string, unknown>;
+        source.visible = "shown";
+        const base = { hasOwnProperty: "configuration value" };
+
+        expect(deepMerge(base, source)).toEqual({
+            hasOwnProperty: "configuration value",
+            visible: "shown",
+        });
+    });
+
+    it.each(["__proto__", "constructor", "prototype"])(
+        "在写入前拒绝嵌套的原型链保留字段 %s",
+        reserved => {
+            const base = { safe: { unchanged: true } };
+            const source = JSON.parse(
+                `{"safe":{"accepted":true,"${reserved}":{"polluted":true}}}`,
+            ) as Record<string, unknown>;
+
+            expect(() => deepMerge(base, source)).toThrow(`reserved property: ${reserved}`);
+            expect(base).toEqual({ safe: { unchanged: true } });
+            expect(Object.prototype).not.toHaveProperty("polluted");
+        },
+    );
+});
 
 describe("对象路径工具", () => {
     it("读写自有嵌套字段且不修改调用方传入的路径", () => {
