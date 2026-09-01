@@ -28,6 +28,7 @@ import {
 } from "../management-credential.js";
 import type { UpdateRunResult } from "../updater.js";
 import { inspectDoctorServiceMetadata } from "../doctor-service-metadata.js";
+import { assertInstalledServiceDefinitionCurrent } from "../service-definition-preflight.js";
 import { inspectServiceStatus } from "../service-status.js";
 export type { ServiceStatusKind, ServiceStatusReport } from "../service-status.js";
 
@@ -616,6 +617,14 @@ async function preflightInstalledService(
     const spec = controller.readSpec();
     if (!spec) throw new CliError("OneBots 服务尚未安装", 2);
     await preflightService(spec, action);
+    try {
+        assertInstalledServiceDefinitionCurrent(controller, spec);
+    } catch (error) {
+        throw new CliError(
+            `服务${action}预检失败：${error instanceof Error ? error.message : String(error)}`,
+            2,
+        );
+    }
     return spec;
 }
 

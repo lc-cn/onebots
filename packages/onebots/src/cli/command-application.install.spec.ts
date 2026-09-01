@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -11,6 +11,10 @@ import {
 import { ServiceController, type ServiceSpec } from "../service-manager.js";
 
 const temporaryDirectories: string[] = [];
+
+beforeEach(() => {
+    vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
+});
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -149,6 +153,27 @@ describe("service install preflight", () => {
             exitCode: 2,
         });
         expect(restart).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["启动", startService, "start"],
+        ["重启", restartService, "restart"],
+    ] as const)("%s 前拒绝漂移的平台服务定义", async (action, command, method) => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const spec = serviceSpec(config);
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.mocked(ServiceController.prototype.definitionIsCurrent).mockReturnValue(false);
+        const control = vi.spyOn(ServiceController.prototype, method).mockResolvedValue();
+
+        await expect(command({ system: false })).rejects.toMatchObject({
+            message: expect.stringMatching(
+                new RegExp(
+                    `服务${action}预检失败.*服务平台定义与服务元数据不一致.*onebots install`,
+                ),
+            ),
+            exitCode: 2,
+        });
+        expect(control).not.toHaveBeenCalled();
     });
 
     it("reports start success only after the new instance is online", async () => {

@@ -64,6 +64,7 @@ import {
 } from "./management-index.js";
 import { isProcessRestartSupported } from "./process-restart.js";
 import { ensureRuntimeDataDirectory } from "./runtime-data-directory.js";
+import { assertManagedRuntimeDefinitionsCurrent } from "./service-definition-preflight.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -231,8 +232,17 @@ export class App extends BaseApp {
         if (configPath === BaseApp.configPath) this.runtimeConfigStateTracker.markApplied(source);
     }
 
-    /** 使用守护服务的真实解析目录验证磁盘配置和全部待启动插件。 */
+    /** 验证监督器启动契约，并使用真实解析目录检查磁盘配置和全部待启动插件。 */
     async preflightRestart(): Promise<void> {
+        if (process.argv.includes("--service-runtime")) {
+            if (!process.argv[1]) throw new Error("无法确定当前 OneBots 服务入口");
+            assertManagedRuntimeDefinitionsCurrent({
+                configPath: BaseApp.configPath,
+                nodePath: process.execPath,
+                binPath: path.resolve(process.argv[1]),
+                workingDirectory: process.cwd(),
+            });
+        }
         const config = parseRuntimeConfig(fs.readFileSync(BaseApp.configPath, "utf8"));
         const selection = getRuntimePluginSelection(config);
         const loadedPlugins = this.pluginInfos;
