@@ -72,6 +72,13 @@ export class TerminalWebSocketConnection {
         return true;
     }
 
+    /** 主动断开当前连接但保留稍后手动重连能力。 */
+    disconnect(): void {
+        if (this.disposed) return;
+        this.clearReconnectTimer();
+        this.releaseSocket();
+    }
+
     dispose(): void {
         if (this.disposed) return;
         this.disposed = true;

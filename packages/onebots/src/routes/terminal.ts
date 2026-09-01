@@ -16,7 +16,7 @@ import {
     sendTerminalWebSocketJson,
     type BoundedWebSocketSendResult,
 } from "../management-websocket.js";
-import type { WebSocket } from "ws";
+import { WebSocket } from "ws";
 import { parseTerminalClientMessage } from "../terminal-message.js";
 import { prepareManagementEventStream } from "../management-event-stream-response.js";
 import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
@@ -45,6 +45,11 @@ export function registerTerminalRoutes(app: App, router: Router): void {
         client.on("error", error => {
             app.logger.warn("终端 WebSocket 连接错误", { error });
         });
+        if (!sendTerminalIdentity(app, client)) {
+            if (client.readyState === WebSocket.OPEN)
+                client.close(1011, "Identity handshake failed");
+            return;
+        }
         const managementToken = extractManagementToken(request);
         const stopAuthorizationMonitor = startManagementAuthorizationMonitor(app, managementToken, {
             onUnauthorized: () => client.close(1008, "Unauthorized"),
@@ -195,6 +200,22 @@ export function handleTerminalProcessExit(app: App): void {
         client.close(1000, "Terminal exited");
     });
     app.terminalClients.clear();
+}
+
+/** 终端在创建 PTY 或接受命令前先声明实际处理进程。 */
+export function sendTerminalIdentity(app: App, client: WebSocket): boolean {
+    return sendTerminalMessage(
+        app,
+        client,
+        {
+            type: "identity",
+            application: app.info.application_name,
+            version: app.info.application_version,
+            instance_id: app.info.instance_id,
+            ...(app.runtimeContractId ? { runtime_contract_id: app.runtimeContractId } : {}),
+        },
+        "终端实例身份",
+    );
 }
 
 async function requestTerminalRestart(app: App): Promise<void> {

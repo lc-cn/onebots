@@ -91,6 +91,21 @@ describe("TerminalWebSocketConnection", () => {
         expect(onMessage).not.toHaveBeenCalled();
     });
 
+    it("disconnect closes the socket without scheduling retry and still permits manual reconnect", () => {
+        vi.useFakeTimers();
+        const sockets: FakeSocket[] = [];
+        const connection = createConnection(sockets);
+        connection.connect();
+
+        connection.disconnect();
+        vi.advanceTimersByTime(6000);
+
+        expect(sockets[0].close).toHaveBeenCalledOnce();
+        expect(sockets).toHaveLength(1);
+        connection.connect();
+        expect(sockets).toHaveLength(2);
+    });
+
     it("sends only through the current open socket", () => {
         const sockets: FakeSocket[] = [];
         const connection = createConnection(sockets);

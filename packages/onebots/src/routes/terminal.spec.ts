@@ -2,11 +2,38 @@ import { describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import type { Router, RouterContext } from "@onebots/core";
 import type { App } from "../app.js";
-import { handleTerminalProcessExit, registerTerminalRoutes } from "./terminal.js";
+import {
+    handleTerminalProcessExit,
+    registerTerminalRoutes,
+    sendTerminalIdentity,
+} from "./terminal.js";
 
 type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
 
 describe("terminal PTY lifecycle", () => {
+    it("在接受终端命令前发送完整实例身份", () => {
+        const connection = client();
+        const app = {
+            info: {
+                application_name: "onebots",
+                application_version: "1.2.8",
+                instance_id: "instance-a",
+            },
+            runtimeContractId: "sha256:contract-a",
+            terminalClients: new Set(),
+            logger: { error: vi.fn(), warn: vi.fn() },
+        } as unknown as App;
+
+        expect(sendTerminalIdentity(app, connection as unknown as WebSocket)).toBe(true);
+        expect(JSON.parse(connection.send.mock.calls[0][0])).toEqual({
+            type: "identity",
+            application: "onebots",
+            version: "1.2.8",
+            instance_id: "instance-a",
+            runtime_contract_id: "sha256:contract-a",
+        });
+    });
+
     it("notifies and closes every client when the PTY exits", () => {
         const first = client();
         const second = client();
