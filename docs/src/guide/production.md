@@ -203,7 +203,7 @@ Web 顶栏每 5 秒读取同一份 `/ready` 语义证据，区分「生产就绪
 
 部署或更新后可运行 `onebots doctor -c config.yaml --json --strict` 作为自动化门禁。JSON 使用带 `schemaVersion` 的稳定报告 envelope，并记录 `generatedAt`、当前 OneBots CLI 身份与版本，以及本次实际采用的配置路径、数据目录、解析后的数据库路径、扩展根、模块解析目录、服务范围和模式、适配器与协议列表及各自来源；CI 留档因此可以直接证明一次检查针对哪套安装和配置，无需解析人类可读消息。显式配置路径使前台或 Docker 部署执行独立配置诊断；若该路径就是托管服务保存的配置，doctor 仍会核验服务是否运行。独立诊断会像前台监听器一样让当前进程中非空的 `PORT` 覆盖 `config.port`，`onebots send` 也使用同一优先级，因此 Hugging Face 等托管环境不会探测或调用错误端口；无效的 `PORT` 会作为地址配置错误进入报告。已安装守护服务仍以保存的配置为准，不会把调用 doctor 时一次性的 shell 环境误认为服务定义。doctor 会把 `/health` 的在线主程序版本与当前 CLI 版本对比；不一致或旧端点无法证明版本时产生警告，严格模式会因此失败，能发现依赖已更新但旧进程尚未重启或命令入口指向另一套安装。默认模式仍允许首次配置流程继续，将未配置账号、服务未安装或已停止、无法完成合法管理凭据探测等状态保留为警告；`--strict` 会让任一警告同时令 JSON `ok` 为 `false` 并返回退出码 `1`。配置端口可连接时，doctor 会同时探测这两个端点；非 2xx、非 JSON、`status` 不是 `ok`、`ready` 不是 `true`，成功的 readiness 没有声明 OneBots 身份，或者两份探针来自不同应用版本或实例，都会让检查失败。独立的 `probe-instance` 检查在文本与 JSON 报告中保留成对身份结论。`/ready` 失败时，报告会列出在线账号、就绪协议数量、对应的未就绪平台以及缺少协议出口的账号，避免只看到一个没有上下文的 HTTP 503。Prometheus 可通过 `onebots_accounts_without_protocols` 为这类配置缺口设置告警。
 
-若已安装服务的 `service.json` 被截断、无法读取或结构损坏，doctor 仍会生成完整 JSON 报告，将 `target.service.mode` 标记为 `invalid`，并以 `service-metadata` 错误阻止部署门禁通过。公开错误只包含元数据路径，不回显原始 JSON 片段；重新执行 `onebots install` 可按当前配置生成新的服务定义。
+若已安装服务的 `service.json` 被截断、无法读取或结构损坏，doctor 仍会生成完整 JSON 报告，将 `target.service.mode` 标记为 `invalid`，并以 `service-metadata` 错误阻止部署门禁通过。公开错误只包含元数据路径，不回显原始 JSON 片段；重新执行 `onebots install` 可按当前配置生成新的服务定义。在 POSIX 系统上，独立的 `service-metadata-mode` 还会验证这份运行契约没有向其他用户开放或允许同组修改；用户级 `--fix` 可恢复安装器约定的 `0600`，系统级元数据则只报告并交由管理员处理。
 
 doctor 会分别验证当前 CLI 与守护服务定义中的 Node.js。对于服务保存的 `nodePath`，检查会实际执行 `--version`，因此路径虽然存在但不可执行、不是 Node，或版本低于 24 时都会产生 `service-node` 错误；用户级服务可通过 `--fix` 改用当前 doctor 的 Node 并重新生成定义，系统级服务则需要以管理员权限重新安装。
 

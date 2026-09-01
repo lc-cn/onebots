@@ -218,6 +218,17 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             message: `${serviceMetadata.error}；请重新执行 onebots install 生成服务定义`,
         });
     }
+    const serviceMetadataPath = controller.paths().metadata;
+    if (useInstalledService && process.platform !== "win32" && fs.existsSync(serviceMetadataPath)) {
+        checks.push(
+            inspectSensitiveFilePermissions(
+                serviceMetadataPath,
+                "service-metadata-mode",
+                "服务元数据",
+                options.fix === true && options.scope === "user",
+            ),
+        );
+    }
     const selection = resolveDoctorPluginSelection(options, configuredPlugins, spec);
     checks.push({
         name: "plugin-selection",

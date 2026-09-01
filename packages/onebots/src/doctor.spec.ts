@@ -785,6 +785,10 @@ describe("doctor persisted plugin selection", () => {
             definition: path.join(directory, "service.plist"),
             metadata: path.join(directory, "service.json"),
         });
+        const metadataPath = path.join(directory, "service.json");
+        if (process.platform !== "win32") {
+            fs.writeFileSync(metadataPath, JSON.stringify(spec), { mode: 0o644 });
+        }
         vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
         const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
         const serviceRuntimeInspector = vi.fn((nodePath: string) =>
@@ -831,7 +835,25 @@ describe("doctor persisted plugin selection", () => {
         expect(invalid.checks.find(check => check.name === "service-definition")).toMatchObject({
             level: "error",
         });
+        if (process.platform !== "win32") {
+            expect(
+                invalid.checks.find(check => check.name === "service-metadata-mode"),
+            ).toMatchObject({ level: "error" });
+            expect(fs.statSync(metadataPath).mode & 0o777).toBe(0o644);
+        }
         expect(install).not.toHaveBeenCalled();
+
+        if (process.platform !== "win32") {
+            const systemReport = await runDoctor({ ...options, scope: "system", fix: true });
+            expect(
+                systemReport.checks.find(check => check.name === "service-metadata-mode"),
+            ).toMatchObject({ level: "error" });
+            expect(
+                systemReport.checks.find(check => check.name === "service-metadata-mode"),
+            ).not.toHaveProperty("fixed");
+            expect(fs.statSync(metadataPath).mode & 0o777).toBe(0o644);
+            expect(install).not.toHaveBeenCalled();
+        }
 
         const repaired = await runDoctor({ ...options, fix: true });
         expect(repaired.checks.find(check => check.name === "service-node")).toEqual({
@@ -844,6 +866,12 @@ describe("doctor persisted plugin selection", () => {
             level: "ok",
             fixed: true,
         });
+        if (process.platform !== "win32") {
+            expect(
+                repaired.checks.find(check => check.name === "service-metadata-mode"),
+            ).toMatchObject({ level: "ok", fixed: true });
+            expect(fs.statSync(metadataPath).mode & 0o777).toBe(0o600);
+        }
         expect(install).toHaveBeenCalledWith({
             ...spec,
             configPath,
