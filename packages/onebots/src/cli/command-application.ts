@@ -2,7 +2,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import yaml from "js-yaml";
-import type { Account, Protocol } from "@onebots/core";
+import { writeConfigFileAtomic, type Account, type Protocol } from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "../service-manager.js";
 import { preflightServiceRuntime, type ServicePreflightSpec } from "../service-preflight.js";
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
@@ -471,7 +471,7 @@ export function setConfig(options: RuntimeOptions, key: string, value: string): 
               : Number.isNaN(numeric)
                 ? value
                 : numeric;
-    backupAndWriteConfig(file, data);
+    writeConfigFileAtomic(file, yaml.dump(data), { backup: true });
     return { output: `已设置 ${key}` };
 }
 
@@ -720,11 +720,4 @@ function readConfig(file: string): Record<string, unknown> {
     } catch (error) {
         throw new CliError(`配置文件无效: ${formatRuntimeConfigDiagnostic(error)}`, 2);
     }
-}
-
-function backupAndWriteConfig(file: string, data: Record<string, unknown>): void {
-    if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak`);
-    const temporary = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(temporary, yaml.dump(data), "utf8");
-    fs.renameSync(temporary, file);
 }
