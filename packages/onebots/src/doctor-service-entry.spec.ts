@@ -78,6 +78,15 @@ describe("doctor service entry", () => {
         expect(inspection.check.message).toContain(manifestPath);
         expect(inspection.check.message).not.toContain("secret-token");
     });
+
+    it("拒绝从超大 manifest 证明服务入口身份", () => {
+        const { entryPath, manifestPath } = servicePackage("1.2.8");
+        fs.writeFileSync(manifestPath, Buffer.alloc(1024 * 1024 + 1, 0x20));
+
+        const inspection = inspectServiceEntry(entryPath, "1.2.8");
+        expect(inspection).toMatchObject({ valid: false });
+        expect(inspection.check.message).toContain("package.json 超过 1048576 字节上限");
+    });
 });
 
 function servicePackage(version: string) {

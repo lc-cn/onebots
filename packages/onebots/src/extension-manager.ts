@@ -16,7 +16,8 @@ import {
     setRuntimePluginSelection,
 } from "./runtime-plugin-selection.js";
 import { formatRuntimeConfigDiagnostic, parseRuntimeConfig } from "./runtime-config-validator.js";
-import { inspectPackageManifest, inspectPlugin, type LoadedPluginInfo } from "./plugin-loader.js";
+import { inspectPlugin, type LoadedPluginInfo } from "./plugin-loader.js";
+import { inspectPackageManifest } from "./package-manifest.js";
 import type { ExtensionInstallOptions } from "./package-manager.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";

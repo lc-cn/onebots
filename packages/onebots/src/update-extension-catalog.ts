@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
 import { buildPackageManagerInvocation } from "./package-manager.js";
+import { inspectPackageManifest } from "./package-manifest.js";
 import type { PackageUpdateEvidence } from "./update-package-transaction.js";
 
 export interface ExtensionVersionCatalogSnapshot {
@@ -153,13 +154,9 @@ function readVerifiedOnebotsCatalog(
 }
 
 function readPackageIdentity(file: string): { name: string; version: string } {
-    let value: unknown;
-    try {
-        value = JSON.parse(fs.readFileSync(file, "utf8"));
-    } catch {
-        throw new Error(`包清单不是有效 JSON: ${file}`);
-    }
-    if (!isRecord(value)) return { name: "", version: "" };
+    const inspection = inspectPackageManifest(file);
+    if ("error" in inspection) throw new Error(`包清单无法验证: ${inspection.error}`);
+    const value = inspection.manifest;
     return {
         name: typeof value.name === "string" ? value.name.trim() : "",
         version: typeof value.version === "string" ? value.version.trim() : "",

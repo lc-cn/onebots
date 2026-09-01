@@ -31,6 +31,20 @@ function fixture(manifest: object = { private: true }): string {
 }
 
 describe("runtime package manager", () => {
+    it("在选择包管理器前拒绝超大项目清单", () => {
+        const root = fixture();
+        fs.writeFileSync(path.join(root, "package.json"), Buffer.alloc(1024 * 1024 + 1, 0x20));
+        const access = vi.fn();
+
+        expect(inspectRuntimePackageManager(root, { PATH: "tools" }, "linux", access)).toEqual({
+            manager: null,
+            executable: null,
+            resolvedPath: null,
+            error: expect.stringContaining("package.json 超过 1048576 字节上限"),
+        });
+        expect(access).not.toHaveBeenCalled();
+    });
+
     it("从 workspace 证据根捕获依赖声明与锁文件变化", () => {
         const root = fixture({ packageManager: "pnpm@9.15.9" });
         fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages: ['packages/*']\n");

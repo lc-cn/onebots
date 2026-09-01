@@ -31,6 +31,7 @@ import {
     resolveVerifiedUpdateTargets,
     type ExtensionVersionCatalogSnapshot,
 } from "./update-extension-catalog.js";
+import { inspectPackageManifest } from "./package-manifest.js";
 
 export { resolveVerifiedUpdateTargets } from "./update-extension-catalog.js";
 
@@ -499,19 +500,14 @@ export function resolveInstalledPackageVersion(
 
 function readPackageVersion(manifest: string, expectedName: string): string | null {
     if (!fs.existsSync(manifest)) return null;
-    try {
-        const parsed = JSON.parse(fs.readFileSync(manifest, "utf8")) as {
-            name?: unknown;
-            version?: unknown;
-        };
-        return parsed.name === expectedName &&
-            typeof parsed.version === "string" &&
-            parsed.version.trim()
-            ? parsed.version.trim()
-            : null;
-    } catch {
-        return null;
-    }
+    const inspection = inspectPackageManifest(manifest);
+    if ("error" in inspection) return null;
+    const parsed = inspection.manifest;
+    return parsed.name === expectedName &&
+        typeof parsed.version === "string" &&
+        parsed.version.trim()
+        ? parsed.version.trim()
+        : null;
 }
 
 /** 从当前安装或隔离暂存的目标 OneBots 包读取版本目录。 */
@@ -557,18 +553,16 @@ export function resolvePackageUpdateProjectRoot(from: string): string | null {
     while (true) {
         const manifest = path.join(current, "package.json");
         if (fs.existsSync(manifest)) {
-            try {
-                const parsed = JSON.parse(fs.readFileSync(manifest, "utf8")) as {
-                    name?: unknown;
-                    dependencies?: Record<string, string>;
-                    devDependencies?: Record<string, string>;
-                    optionalDependencies?: Record<string, string>;
-                };
+            const manifestInspection = inspectPackageManifest(manifest);
+            if ("error" in manifestInspection) {
+                invalidManifest ??= manifest;
+            } else {
+                const parsed = manifestInspection.manifest;
                 if (
                     parsed.name === "onebots" ||
-                    parsed.dependencies?.onebots ||
-                    parsed.devDependencies?.onebots ||
-                    parsed.optionalDependencies?.onebots
+                    declaresDependency(parsed.dependencies, "onebots") ||
+                    declaresDependency(parsed.devDependencies, "onebots") ||
+                    declaresDependency(parsed.optionalDependencies, "onebots")
                 ) {
                     const inspection = inspectExtensionRuntimeRoot(current);
                     if (inspection.error) {
@@ -576,12 +570,6 @@ export function resolvePackageUpdateProjectRoot(from: string): string | null {
                     }
                     return current;
                 }
-            } catch (error) {
-                if (error instanceof Error && error.message.startsWith("项目更新目录无法验证：")) {
-                    throw error;
-                }
-                invalidManifest ??= manifest;
-                // 子目录清单损坏时仍允许上层经验证的 OneBots 项目成为目标。
             }
         }
         const parent = path.dirname(current);
@@ -592,6 +580,10 @@ export function resolvePackageUpdateProjectRoot(from: string): string | null {
         throw new Error(`无法确定项目更新目录：package.json 无法读取或解析：${invalidManifest}`);
     }
     return null;
+}
+
+function declaresDependency(value: unknown, packageName: string): boolean {
+    return typeof value === "object" && value !== null && Object.hasOwn(value, packageName);
 }
 
 async function confirmRestart(): Promise<boolean> {

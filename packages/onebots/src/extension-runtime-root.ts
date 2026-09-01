@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import packageMetadata from "../package.json" with { type: "json" };
+import { inspectPackageManifest, type PackageManifest } from "./package-manifest.js";
 
 export interface ExtensionRuntimeRootInspection {
     root: string;
@@ -10,14 +11,6 @@ export interface ExtensionRuntimeRootInspection {
 
 export interface ExtensionRuntimeRootInspectionOptions {
     access?: (target: string, mode: number) => void;
-}
-
-interface RuntimeManifest {
-    name?: unknown;
-    version?: unknown;
-    dependencies?: unknown;
-    devDependencies?: unknown;
-    optionalDependencies?: unknown;
 }
 
 /** 验证扩展安装目录确实由当前 OneBots 进程管理。 */
@@ -34,12 +27,11 @@ export function inspectExtensionRuntimeRoot(
         );
     }
 
-    let manifest: RuntimeManifest;
-    try {
-        manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as RuntimeManifest;
-    } catch {
-        return invalid(root, `扩展运行目录的 package.json 不是有效 JSON：${manifestPath}`);
+    const manifestInspection = inspectPackageManifest(manifestPath);
+    if ("error" in manifestInspection) {
+        return invalid(root, `扩展运行目录清单无法验证：${manifestInspection.error}`);
     }
+    const manifest = manifestInspection.manifest;
 
     if (manifest.name === packageMetadata.name) {
         if (manifest.version !== packageMetadata.version) {
@@ -105,10 +97,11 @@ function inspectInstalledOnebots(root: string): { version: string | null; error:
         return { version: null, error: `${packageMetadata.name} 未安装` };
     }
     try {
-        const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
-            name?: unknown;
-            version?: unknown;
-        };
+        const manifestInspection = inspectPackageManifest(manifestPath);
+        if ("error" in manifestInspection) {
+            return { version: null, error: manifestInspection.error };
+        }
+        const manifest = manifestInspection.manifest;
         const actualName = typeof manifest.name === "string" ? manifest.name.trim() : "";
         if (actualName !== packageMetadata.name) {
             return {
@@ -128,7 +121,7 @@ function inspectInstalledOnebots(root: string): { version: string | null; error:
     }
 }
 
-function declaresOnebotsDependency(manifest: RuntimeManifest): boolean {
+function declaresOnebotsDependency(manifest: PackageManifest): boolean {
     return [manifest.dependencies, manifest.devDependencies, manifest.optionalDependencies].some(
         dependencies =>
             typeof dependencies === "object" &&

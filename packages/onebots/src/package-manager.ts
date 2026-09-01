@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
+import { inspectPackageManifest } from "./package-manifest.js";
 
 export type SupportedPackageManager = "npm" | "pnpm";
 
@@ -137,16 +138,11 @@ function inspectPackageManagerEvidence(directory: string): RuntimePackageManager
 
     const manifestPath = path.join(directory, "package.json");
     if (fs.existsSync(manifestPath)) {
-        let manifest: Record<string, unknown>;
-        try {
-            const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-                return { manager: null, error: `包管理器清单根节点无效: ${manifestPath}` };
-            }
-            manifest = parsed as Record<string, unknown>;
-        } catch {
-            return { manager: null, error: `包管理器清单无法读取或不是有效 JSON: ${manifestPath}` };
+        const manifestInspection = inspectPackageManifest(manifestPath);
+        if ("error" in manifestInspection) {
+            return { manager: null, error: `包管理器清单无法验证: ${manifestInspection.error}` };
         }
+        const manifest = manifestInspection.manifest;
         if ("packageManager" in manifest) {
             const declared = manifest.packageManager;
             if (typeof declared !== "string" || !declared.trim()) {

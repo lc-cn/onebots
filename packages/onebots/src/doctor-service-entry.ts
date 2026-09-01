@@ -2,16 +2,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { DoctorCheck } from "./doctor-endpoint.js";
 import packageMetadata from "../package.json" with { type: "json" };
+import { inspectPackageManifest } from "./package-manifest.js";
 
 export interface DoctorServiceEntryInspection {
     valid: boolean;
     check: DoctorCheck;
-}
-
-interface PackageManifest {
-    name?: unknown;
-    version?: unknown;
-    bin?: unknown;
 }
 
 /** 证明服务入口来自当前 OneBots 包，而不是只确认 binPath 处存在一个文件。 */
@@ -33,12 +28,11 @@ export function inspectServiceEntry(
     const manifestPath = findNearestManifest(path.dirname(entryPath));
     if (!manifestPath) return invalid(`服务入口不属于可识别的 npm 包: ${entryPath}`);
 
-    let manifest: PackageManifest;
-    try {
-        manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as PackageManifest;
-    } catch {
-        return invalid(`服务入口所属 package.json 无法读取或不是有效 JSON: ${manifestPath}`);
+    const manifestInspection = inspectPackageManifest(manifestPath);
+    if ("error" in manifestInspection) {
+        return invalid(`服务入口所属清单无法验证: ${manifestInspection.error}`);
     }
+    const manifest = manifestInspection.manifest;
     if (manifest.name !== packageMetadata.name) {
         return invalid(
             `服务入口包名错配，期望 ${packageMetadata.name}，实际 ${formatManifestValue(manifest.name)}: ${manifestPath}`,

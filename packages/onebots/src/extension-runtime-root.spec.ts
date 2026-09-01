@@ -31,6 +31,19 @@ describe("inspectExtensionRuntimeRoot", () => {
         expect(access).not.toHaveBeenCalledWith(path.join(root, "node_modules"), fs.constants.W_OK);
     });
 
+    it("在检查身份或写权限前拒绝超大运行目录清单", () => {
+        const root = createRuntimeRoot({ private: true });
+        fs.writeFileSync(path.join(root, "package.json"), Buffer.alloc(1024 * 1024 + 1, 0x20));
+        const access = vi.fn();
+
+        expect(inspectExtensionRuntimeRoot(root, { access })).toEqual({
+            root,
+            version: null,
+            error: expect.stringContaining("package.json 超过 1048576 字节上限"),
+        });
+        expect(access).not.toHaveBeenCalled();
+    });
+
     it("在运行目录不可写时拒绝安装目标", () => {
         const root = createRuntimeRoot({
             name: packageMetadata.name,
