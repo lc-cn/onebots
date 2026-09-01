@@ -43,11 +43,12 @@ import '@xterm/xterm/css/xterm.css';
 import { UiButton, UiBadge } from '../ui/index';
 import { buildWsUrl } from '../config';
 import { appendWebSocketAuthQuery } from '../composables/useAuth';
+import { TerminalWebSocketConnection } from '../terminal-websocket-connection';
 
 const terminalContainer = ref<HTMLElement>();
 let terminal: Terminal | null = null;
 let fitAddon: FitAddon | null = null;
-let ws: WebSocket | null = null;
+let connection: TerminalWebSocketConnection | null = null;
 const isConnected = ref(false);
 
 const clearTerminal = () => {
@@ -55,65 +56,61 @@ const clearTerminal = () => {
 };
 
 const reconnect = () => {
-    connectWebSocket();
+    connection?.connect();
 };
 
 const connectWebSocket = () => {
-    if (ws) {
-        ws.close();
-    }
-
-    ws = new WebSocket(appendWebSocketAuthQuery(buildWsUrl('/api/terminal')));
-
-    ws.onopen = () => {
-        isConnected.value = true;
-        console.log('终端已连接');
-    };
-
-    ws.onmessage = event => {
-        try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'output' && terminal) {
-                terminal.write(data.data);
-            } else if (data.type === 'exit') {
-                terminal?.writeln('\r\n\x1b[31m[终端已退出]\x1b[0m');
+    connection = new TerminalWebSocketConnection(
+        () => new WebSocket(appendWebSocketAuthQuery(buildWsUrl('/api/terminal'))),
+        {
+            onConnecting: () => {
                 isConnected.value = false;
-            } else if (data.type === 'error' && typeof data.message === 'string') {
-                terminal?.writeln(`\r\n\x1b[31m[${data.message}]\x1b[0m`);
+            },
+            onOpen: () => {
+                isConnected.value = true;
+                console.log('终端已连接');
+            },
+            onMessage: event => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'output' && terminal) {
+                        terminal.write(data.data);
+                    } else if (data.type === 'exit') {
+                        terminal?.writeln('\r\n\x1b[31m[终端已退出]\x1b[0m');
+                        isConnected.value = false;
+                    } else if (data.type === 'error' && typeof data.message === 'string') {
+                        terminal?.writeln(`\r\n\x1b[31m[${data.message}]\x1b[0m`);
+                    }
+                } catch (error) {
+                    console.error('解析终端数据失败:', error);
+                }
+            },
+            onError: error => {
+                console.error('WebSocket 错误:', error);
+            },
+            onClose: () => {
+                isConnected.value = false;
+                console.log('终端连接已关闭');
             }
-        } catch (error) {
-            console.error('解析终端数据失败:', error);
         }
-    };
-
-    ws.onerror = error => {
-        console.error('WebSocket 错误:', error);
-    };
-
-    ws.onclose = () => {
-        isConnected.value = false;
-        console.log('终端连接已关闭');
-        setTimeout(reconnect, 3000);
-    };
+    );
+    connection.connect();
 };
 
 const restartServer = () => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'restart' }));
+    if (connection?.sendJson({ type: 'restart' })) {
         terminal?.writeln('\r\n\x1b[33m[服务重启指令已发送]\x1b[0m');
     }
 };
 
 const handleResize = () => {
     fitAddon?.fit();
-    if (ws && ws.readyState === WebSocket.OPEN && terminal) {
-        ws.send(
-            JSON.stringify({
-                type: 'resize',
-                cols: terminal.cols,
-                rows: terminal.rows,
-            })
-        );
+    if (terminal) {
+        connection?.sendJson({
+            type: 'resize',
+            cols: terminal.cols,
+            rows: terminal.rows,
+        });
     }
 };
 
@@ -138,9 +135,7 @@ onMounted(() => {
 
         // 监听用户输入
         terminal.onData(data => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'input', data }));
-            }
+            connection?.sendJson({ type: 'input', data });
         });
 
         // 监听终端尺寸变化
@@ -152,7 +147,8 @@ onMounted(() => {
 
 onUnmounted(() => {
     window.removeEventListener('resize', handleResize);
-    ws?.close();
+    connection?.dispose();
+    connection = null;
     terminal?.dispose();
 });
 </script>

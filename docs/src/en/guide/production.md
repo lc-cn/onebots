@@ -63,6 +63,8 @@ Legacy clients may still submit one string line to process stdin through the roo
 
 `/api/terminal` parses a complete JSON contract before invoking the native PTY. Input must be a string of at most 64 KiB, and terminal columns and rows must be safe integers from `1` through `1000`. Malformed JSON, unknown actions, and invalid fields receive structured errors without reaching the native module. When the PTY exits naturally, the server sends `exit` to every terminal client and then closes those WebSockets normally. The Web console consequently follows its standard disconnect and reconnect path to create a new PTY instead of remaining attached to a socket whose terminal process no longer exists.
 
+The Web console terminal also uses one connection generation and one reconnect timer. Manual reconnect detaches the old socket callbacks before closing it, so a late `close` from that socket cannot create an extra connection. Leaving the terminal page cancels any pending reconnect and releases the current socket, preventing an orphan terminal session from appearing in the background three seconds later.
+
 ### Token Management
 
 Complete token lifecycle management.
