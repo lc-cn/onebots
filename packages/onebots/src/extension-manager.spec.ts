@@ -188,6 +188,27 @@ describe("ExtensionManager", () => {
         expect(fs.readFileSync(configPath, "utf8")).toBe(originalConfig);
     });
 
+    it("实际包管理器版本过旧时在下载依赖前拒绝安装", async () => {
+        const { root, configPath } = fixture();
+        const install = vi.fn();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight: successfulPreflight,
+            packageManagerInspector: async () => ({
+                manager: "pnpm",
+                executable: "pnpm",
+                resolvedPath: "/tools/pnpm",
+                version: "8.15.9",
+                error: "扩展包管理器版本过旧：pnpm 8.15.9，要求 >=9.12.0。",
+            }),
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow("要求 >=9.12.0");
+        expect(install).not.toHaveBeenCalled();
+    });
+
     it("向已加载适配器发布注册表中的权威能力清单", () => {
         const { root, configPath } = fixture();
         const capabilities = defineAdapterCapabilities({

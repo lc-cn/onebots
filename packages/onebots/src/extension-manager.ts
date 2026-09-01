@@ -21,7 +21,10 @@ import {
 import { formatRuntimeConfigDiagnostic, parseRuntimeConfig } from "./runtime-config-validator.js";
 import { inspectPlugin, type LoadedPluginInfo } from "./plugin-loader.js";
 import { inspectPackageManifest } from "./package-manifest.js";
-import type { ExtensionInstallOptions } from "./package-manager.js";
+import type {
+    ExtensionInstallOptions,
+    RuntimePackageManagerVersionInspection,
+} from "./package-manager.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 import {
@@ -30,6 +33,7 @@ import {
     capturePackageManagerMetadata,
     hasPackageManagerMetadataChanged,
     inspectRuntimePackageManager,
+    inspectRuntimePackageManagerVersion,
     PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
 } from "./package-manager.js";
 import {
@@ -104,6 +108,9 @@ export interface ExtensionManagerOptions {
     installer?: ExtensionInstaller;
     preflight?: ExtensionConfigPreflight;
     catalogIssues?: () => string[];
+    packageManagerInspector?: (
+        runtimeRoot: string,
+    ) => Promise<RuntimePackageManagerVersionInspection>;
 }
 
 interface InstalledPackageInspection {
@@ -165,6 +172,9 @@ export class ExtensionManager {
     private readonly installer: ExtensionInstaller;
     private readonly preflight: ExtensionConfigPreflight;
     private readonly catalogIssues: () => string[];
+    private readonly packageManagerInspector: (
+        runtimeRoot: string,
+    ) => Promise<RuntimePackageManagerVersionInspection>;
     private installation: {
         id: string;
         operationId: string;
@@ -182,6 +192,8 @@ export class ExtensionManager {
         this.installer = options.installer ?? new RuntimeExtensionInstaller();
         this.preflight = options.preflight ?? preflightExtensionConfig;
         this.catalogIssues = options.catalogIssues ?? validateExtensionCatalogIntegrity;
+        this.packageManagerInspector =
+            options.packageManagerInspector ?? inspectRuntimePackageManagerVersion;
     }
 
     list(loadedPlugins: readonly LoadedPluginInfo[]) {
@@ -341,7 +353,7 @@ export class ExtensionManager {
                     previousPackage.error !== null;
                 const packageNeedsInstall =
                     repairsCurrentVersion || previousVersion !== packageCatalog.packageVersion;
-                if (packageNeedsInstall) this.assertPackageManager();
+                if (packageNeedsInstall) await this.assertPackageManager();
                 packageMetadata = packageNeedsInstall
                     ? capturePackageManagerMetadata(this.runtimeRoot)
                     : null;
@@ -607,8 +619,8 @@ export class ExtensionManager {
         if (error) throw new Error(error);
     }
 
-    private assertPackageManager(): void {
-        const error = inspectRuntimePackageManager(this.runtimeRoot).error;
+    private async assertPackageManager(): Promise<void> {
+        const error = (await this.packageManagerInspector(this.runtimeRoot)).error;
         if (error) throw new Error(error);
     }
 }

@@ -1109,6 +1109,38 @@ describe("doctor persisted plugin selection", () => {
         });
     });
 
+    it("将过旧的扩展包管理器版本作为部署失败证据", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-manager-version-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+        const extensionRoot = createExtensionRuntimeRoot();
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            useInstalledService: false,
+            extensionRoot,
+            packageManagerInspector: async () => ({
+                manager: "pnpm",
+                executable: "pnpm",
+                resolvedPath: "/tools/pnpm",
+                version: "8.15.9",
+                error: "扩展包管理器版本过旧：pnpm 8.15.9，要求 >=9.12.0。",
+            }),
+        });
+
+        expect(report.ok).toBe(false);
+        expect(report.checks.find(check => check.name === "package-manager")).toEqual({
+            name: "package-manager",
+            level: "error",
+            message: "扩展包管理器版本过旧：pnpm 8.15.9，要求 >=9.12.0。",
+        });
+    });
+
     it("拒绝服务定义中的旧 Node，并用 --fix 切换到当前运行时", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-service-node-"));
         temporaryDirectories.push(directory);

@@ -12,6 +12,7 @@ import {
     detectRuntimePackageManager,
     hasPackageManagerMetadataChanged,
     inspectRuntimePackageManager,
+    inspectRuntimePackageManagerVersion,
     sanitizeNpmEnvironment,
 } from "./package-manager.js";
 
@@ -111,6 +112,92 @@ describe("runtime package manager", () => {
             resolvedPath: null,
             error: "扩展运行目录需要 pnpm，但当前进程的 PATH 中找不到可执行入口。请安装 pnpm 或通过 corepack 激活后重启 OneBots。",
         });
+    });
+
+    it("执行 PATH 中的实际入口并拒绝低于要求的 pnpm", async () => {
+        const root = fixture({ packageManager: "pnpm@9.15.9" });
+        const executable = path.join(root, "tools", "pnpm");
+        const runVersion = vi.fn(async () => "8.15.9\n");
+
+        const result = await inspectRuntimePackageManagerVersion(
+            root,
+            { PATH: "tools", npm_config_store_dir: "/tmp/store" },
+            "linux",
+            runVersion,
+            () => undefined,
+        );
+
+        expect(result).toMatchObject({
+            manager: "pnpm",
+            executable: "pnpm",
+            resolvedPath: executable,
+            version: "8.15.9",
+            error: expect.stringContaining("要求 >=9.12.0"),
+        });
+        expect(runVersion).toHaveBeenCalledWith(executable, root, {
+            PATH: "tools",
+            npm_config_store_dir: "/tmp/store",
+        });
+    });
+
+    it("验证 npm 版本时沿用净化后的凭据与注册表环境", async () => {
+        const root = fixture({ packageManager: "npm@11.17.0" });
+        const runVersion = vi.fn(async () => "11.17.0\n");
+
+        const result = await inspectRuntimePackageManagerVersion(
+            root,
+            {
+                PATH: "tools",
+                NODE_AUTH_TOKEN: "secret",
+                npm_config_registry: "https://registry.npmjs.org",
+                npm_config_recursive: "true",
+            },
+            "linux",
+            runVersion,
+            () => undefined,
+        );
+
+        expect(result).toMatchObject({ manager: "npm", version: "11.17.0", error: null });
+        expect(runVersion).toHaveBeenCalledWith(expect.any(String), root, {
+            PATH: "tools",
+            NODE_AUTH_TOKEN: "secret",
+            npm_config_registry: "https://registry.npmjs.org",
+        });
+    });
+
+    it("包管理器版本输出无效时不把存在的入口误报为可用", async () => {
+        const root = fixture({ packageManager: "npm@11.17.0" });
+
+        const result = await inspectRuntimePackageManagerVersion(
+            root,
+            { PATH: "tools" },
+            "linux",
+            async () => "not-a-version\n",
+            () => undefined,
+        );
+
+        expect(result).toMatchObject({
+            manager: "npm",
+            version: null,
+            error: expect.stringContaining("返回了无效版本"),
+        });
+    });
+
+    it("包管理器版本命令失败时不回显可能含凭据的输出", async () => {
+        const root = fixture({ packageManager: "npm@11.17.0" });
+
+        const result = await inspectRuntimePackageManagerVersion(
+            root,
+            { PATH: "tools" },
+            "linux",
+            async () => {
+                throw new Error("Bearer registry-secret");
+            },
+            () => undefined,
+        );
+
+        expect(result.error).toContain("无法读取扩展包管理器 npm 的版本");
+        expect(result.error).not.toContain("registry-secret");
     });
 
     it("Windows 使用大小写不敏感的 Path 和 cmd 入口", () => {

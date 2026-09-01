@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import { inspectPackageManifest } from "./package-manifest.js";
 
 export type SupportedPackageManager = "npm" | "pnpm";
@@ -28,6 +29,19 @@ export interface RuntimePackageManagerInspection {
     resolvedPath: string | null;
     error: string | null;
 }
+
+export interface RuntimePackageManagerVersionInspection extends RuntimePackageManagerInspection {
+    version: string | null;
+}
+
+export type PackageManagerVersionRunner = (
+    executable: string,
+    runtimeRoot: string,
+    environment: NodeJS.ProcessEnv,
+) => Promise<string>;
+
+export const MINIMUM_PACKAGE_MANAGER_VERSIONS: Readonly<Record<SupportedPackageManager, string>> =
+    Object.freeze({ npm: "7.0.0", pnpm: "9.12.0" });
 
 export interface PackageManagerMetadataSnapshot {
     root: string;
@@ -123,6 +137,96 @@ export function inspectRuntimePackageManager(
         resolvedPath: null,
         error: `扩展运行目录需要 ${manager}，但当前进程的 PATH 中找不到可执行入口。${remedy}`,
     };
+}
+
+/** 执行已解析的包管理器入口，并确认实际版本满足扩展安装命令所需下限。 */
+export async function inspectRuntimePackageManagerVersion(
+    runtimeRoot: string,
+    environment: NodeJS.ProcessEnv = process.env,
+    platform: NodeJS.Platform = process.platform,
+    runVersion: PackageManagerVersionRunner = runPackageManagerVersion,
+    access: (target: string, mode: number) => void = fs.accessSync,
+): Promise<RuntimePackageManagerVersionInspection> {
+    const inspection = inspectRuntimePackageManager(runtimeRoot, environment, platform, access);
+    if (inspection.error || !inspection.manager || !inspection.resolvedPath) {
+        return { ...inspection, version: null };
+    }
+    const manager = inspection.manager;
+    let output: string;
+    try {
+        output = await runVersion(
+            inspection.resolvedPath,
+            path.resolve(runtimeRoot),
+            buildPackageManagerInvocation(manager, [], platform, environment).environment,
+        );
+    } catch {
+        return {
+            ...inspection,
+            version: null,
+            error: `无法读取扩展包管理器 ${manager} 的版本；请确认 ${inspection.resolvedPath} 可以由 OneBots 服务账号执行。`,
+        };
+    }
+    const version = parsePackageManagerVersion(output);
+    if (!version) {
+        return {
+            ...inspection,
+            version: null,
+            error: `扩展包管理器 ${manager} 返回了无效版本；请修复 PATH 中的 ${inspection.resolvedPath}。`,
+        };
+    }
+    const minimum = MINIMUM_PACKAGE_MANAGER_VERSIONS[manager];
+    if (compareSemanticVersions(version, minimum) < 0) {
+        const remedy =
+            manager === "pnpm"
+                ? "请通过 corepack 激活项目声明的 pnpm 版本后重启 OneBots。"
+                : "请升级 Node.js 附带的 npm 后重启 OneBots。";
+        return {
+            ...inspection,
+            version,
+            error: `扩展包管理器版本过旧：${manager} ${version}，要求 >=${minimum}。${remedy}`,
+        };
+    }
+    return { ...inspection, version, error: null };
+}
+
+function runPackageManagerVersion(
+    executable: string,
+    runtimeRoot: string,
+    environment: NodeJS.ProcessEnv,
+): Promise<string> {
+    return new Promise((resolve, reject) => {
+        execFile(
+            executable,
+            ["--version"],
+            {
+                cwd: runtimeRoot,
+                env: environment,
+                timeout: 2_000,
+                maxBuffer: 64 * 1024,
+                encoding: "utf8",
+            },
+            (error, stdout) => {
+                if (error) reject(error);
+                else resolve(stdout);
+            },
+        );
+    });
+}
+
+function parsePackageManagerVersion(output: string): string | null {
+    const value = output.trim();
+    if (!/^\d+\.\d+\.\d+$/u.test(value)) return null;
+    return value.split(".").map(Number).every(Number.isSafeInteger) ? value : null;
+}
+
+function compareSemanticVersions(left: string, right: string): number {
+    const leftParts = left.split(".").map(Number);
+    const rightParts = right.split(".").map(Number);
+    for (let index = 0; index < 3; index++) {
+        const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+        if (difference !== 0) return difference;
+    }
+    return 0;
 }
 
 function inspectPackageManagerEvidence(directory: string): RuntimePackageManagerResolution {

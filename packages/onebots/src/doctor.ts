@@ -15,7 +15,10 @@ import { probeDoctorManagementSurface } from "./doctor-management-surface.js";
 import { hasManagementCredentials } from "./management-credentials.js";
 import { inspectExtensionCatalog } from "./doctor-extension-catalog.js";
 import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
-import { inspectRuntimePackageManager } from "./package-manager.js";
+import {
+    inspectRuntimePackageManagerVersion,
+    type RuntimePackageManagerVersionInspection,
+} from "./package-manager.js";
 import {
     inspectNodeRuntime,
     MINIMUM_NODE_MAJOR,
@@ -129,6 +132,10 @@ export interface DoctorOptions {
         controller: ServiceController,
         spec: ServiceSpec,
     ) => DoctorServiceDefinitionInspection;
+    /** 测试或嵌入场景可替换实际包管理器版本探测。 */
+    packageManagerInspector?: (
+        runtimeRoot: string,
+    ) => Promise<RuntimePackageManagerVersionInspection>;
 }
 
 export type DoctorPluginSource = "cli" | "config" | "service" | "none";
@@ -292,14 +299,16 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     });
     const packageManager = extensionRuntime.error
         ? null
-        : inspectRuntimePackageManager(extensionRoot);
+        : await (options.packageManagerInspector ?? inspectRuntimePackageManagerVersion)(
+              extensionRoot,
+          );
     checks.push({
         name: "package-manager",
         level: packageManager?.error || extensionRuntime.error ? "error" : "ok",
         message:
             packageManager?.error ??
             (packageManager
-                ? `扩展包管理器可用: ${packageManager.manager}（${packageManager.resolvedPath}）`
+                ? `扩展包管理器可用: ${packageManager.manager}@${packageManager.version}（${packageManager.resolvedPath}）`
                 : "扩展运行目录未通过验证，无法确定安全的包管理器"),
     });
     const runtimeRequire = createRequire(path.join(selection.workingDirectory, "package.json"));
