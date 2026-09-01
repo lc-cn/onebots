@@ -112,6 +112,51 @@ describe("management account lifecycle boundary", () => {
         expect(app.logger.error).toHaveBeenCalledOnce();
     });
 
+    it("rejects a concurrent operation on the same account across transports", async () => {
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const account = fakeAccount("demo", "online");
+        const adapter = fakeAdapter(account, {
+            setOnline: vi.fn(() => gate),
+        });
+        const app = host(adapter);
+        const first = executeManagementAccountLifecycle(app, "bot.start", {
+            platform: "mock",
+            uin: "demo",
+        });
+        await vi.waitFor(() => expect(adapter.setOnline).toHaveBeenCalledOnce());
+
+        const conflict = await handleManagementAccountLifecycleSocketAction(app, {
+            action: "bot.stop",
+            data: { platform: "mock", uin: "demo" },
+            echo: "parallel-stop",
+        });
+
+        expect(conflict).toEqual({
+            event: "bot.change.result",
+            echo: "parallel-stop",
+            data: {
+                success: false,
+                action: "bot.stop",
+                code: "ACCOUNT_LIFECYCLE_CONFLICT",
+                message: "账号 mock.demo 正在执行上线操作，请稍后重试",
+            },
+        });
+        expect(adapter.setOffline).not.toHaveBeenCalled();
+
+        release();
+        await expect(first).resolves.toMatchObject({ success: true });
+        await expect(
+            executeManagementAccountLifecycle(app, "bot.stop", {
+                platform: "mock",
+                uin: "demo",
+            }),
+        ).resolves.toMatchObject({ success: true });
+        expect(adapter.setOffline).toHaveBeenCalledOnce();
+    });
+
     it("ignores unrelated management messages", async () => {
         await expect(
             handleManagementAccountLifecycleSocketAction(host(), { action: "system.reload" }),

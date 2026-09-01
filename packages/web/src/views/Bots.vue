@@ -114,11 +114,11 @@ const handleBotStart = async (bot: AccountInfo) => {
     const key = botKey(bot);
     loadingBots.value.add(key);
     try {
-        const ok = await startBot(bot.platform, bot.uin);
-        if (ok) {
+        const result = await startBot(bot.platform, bot.uin);
+        if (result.success) {
             toast.success(`机器人 ${bot.uin} 已上线`);
         } else {
-            toast.error(`启动机器人 ${bot.uin} 失败`);
+            toast.error(result.message);
         }
     } finally {
         loadingBots.value.delete(key);
@@ -129,11 +129,11 @@ const handleBotStop = async (bot: AccountInfo) => {
     const key = botKey(bot);
     loadingBots.value.add(key);
     try {
-        const ok = await stopBot(bot.platform, bot.uin);
-        if (ok) {
+        const result = await stopBot(bot.platform, bot.uin);
+        if (result.success) {
             toast.warning(`机器人 ${bot.uin} 已下线`);
         } else {
-            toast.error(`停止机器人 ${bot.uin} 失败`);
+            toast.error(result.message);
         }
     } finally {
         loadingBots.value.delete(key);

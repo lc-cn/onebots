@@ -12,6 +12,10 @@ import {
     probeReadiness,
     type ServiceProbeResult,
 } from "../utils/service-probes.js";
+import {
+    parseBotLifecycleActionResponse,
+    type BotLifecycleActionResult,
+} from "../bot-lifecycle-action.js";
 
 export interface UseApiResources {
     adapters?: boolean;
@@ -76,39 +80,45 @@ export function useApi(resources: UseApiResources = {}) {
         });
     };
 
-    const startBot = async (platform: string, uin: string): Promise<boolean> => {
+    const startBot = async (platform: string, uin: string): Promise<BotLifecycleActionResult> => {
         try {
             const response = await authFetch(buildApiUrl("/api/bots/start"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ platform, uin }),
             });
-            if (response.ok) {
+            const result = await parseBotLifecycleActionResponse(
+                response,
+                `启动机器人 ${uin} 失败`,
+            );
+            if (result.success) {
                 await fetchAdapters();
-                return true;
             }
-            return false;
+            return result;
         } catch (error) {
             reportClientError("启动机器人失败", error);
-            return false;
+            return { success: false, message: `启动机器人 ${uin} 失败：服务不可达` };
         }
     };
 
-    const stopBot = async (platform: string, uin: string): Promise<boolean> => {
+    const stopBot = async (platform: string, uin: string): Promise<BotLifecycleActionResult> => {
         try {
             const response = await authFetch(buildApiUrl("/api/bots/stop"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ platform, uin }),
             });
-            if (response.ok) {
+            const result = await parseBotLifecycleActionResponse(
+                response,
+                `停止机器人 ${uin} 失败`,
+            );
+            if (result.success) {
                 await fetchAdapters();
-                return true;
             }
-            return false;
+            return result;
         } catch (error) {
             reportClientError("停止机器人失败", error);
-            return false;
+            return { success: false, message: `停止机器人 ${uin} 失败：服务不可达` };
         }
     };
 

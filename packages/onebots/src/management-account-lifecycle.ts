@@ -10,6 +10,7 @@ export type ManagementAccountLifecycleAction = "bot.start" | "bot.stop";
 export type ManagementAccountLifecycleErrorCode =
     | "ACCOUNT_REQUEST_INVALID"
     | "ACCOUNT_TARGET_NOT_FOUND"
+    | "ACCOUNT_LIFECYCLE_CONFLICT"
     | "ACCOUNT_LIFECYCLE_UNSUPPORTED"
     | "ACCOUNT_LIFECYCLE_FAILED";
 
@@ -17,7 +18,7 @@ export type ManagementAccountLifecycleResult =
     | { success: true; account: Account["info"] }
     | {
           success: false;
-          status: 400 | 404 | 500 | 501;
+          status: 400 | 404 | 409 | 500 | 501;
           code: ManagementAccountLifecycleErrorCode;
           message: string;
       };
@@ -42,6 +43,10 @@ export type ManagementAccountLifecycleSocketResponse =
       };
 
 type ManagementAccountLifecycleHost = Pick<BaseApp, "adapters" | "logger">;
+const activeOperations = new WeakMap<
+    ManagementAccountLifecycleHost,
+    Map<string, ManagementAccountLifecycleAction>
+>();
 
 /** HTTP 与旧管理 WebSocket 共用的账号生命周期执行边界。 */
 export async function executeManagementAccountLifecycle(
@@ -60,8 +65,10 @@ export async function executeManagementAccountLifecycle(
             throw new AccountLifecycleTargetNotFoundError(`账号 ${platform}.${uin} 不存在`);
         }
 
-        if (action === "bot.start") await adapter.setOnline(uin);
-        else await adapter.setOffline(uin);
+        await runAccountLifecycleOperation(host, platform, uin, action, async () => {
+            if (action === "bot.start") await adapter.setOnline(uin);
+            else await adapter.setOffline(uin);
+        });
         return { success: true, account: account.info };
     } catch (error) {
         host.logger.error(
@@ -126,6 +133,9 @@ function classifyLifecycleError(
     if (error instanceof AccountLifecycleTargetNotFoundError) {
         return { success: false, status: 404, code: "ACCOUNT_TARGET_NOT_FOUND", message };
     }
+    if (error instanceof AccountLifecycleConflictError) {
+        return { success: false, status: 409, code: "ACCOUNT_LIFECYCLE_CONFLICT", message };
+    }
     if (error instanceof UnsupportedCapabilityError) {
         return {
             success: false,
@@ -142,6 +152,38 @@ function lifecycleErrorMessage(error: unknown): string {
     return error.message.trim().replace(/\s+/gu, " ").slice(0, 500);
 }
 
+async function runAccountLifecycleOperation(
+    host: ManagementAccountLifecycleHost,
+    platform: string,
+    uin: string,
+    action: ManagementAccountLifecycleAction,
+    operation: () => Promise<void>,
+): Promise<void> {
+    let operations = activeOperations.get(host);
+    if (!operations) {
+        operations = new Map();
+        activeOperations.set(host, operations);
+    }
+    const key = `${platform}\0${uin}`;
+    const activeAction = operations.get(key);
+    if (activeAction) {
+        throw new AccountLifecycleConflictError(
+            `账号 ${platform}.${uin} 正在执行${actionLabel(activeAction)}操作，请稍后重试`,
+        );
+    }
+    operations.set(key, action);
+    try {
+        await operation();
+    } finally {
+        operations.delete(key);
+        if (operations.size === 0) activeOperations.delete(host);
+    }
+}
+
+function actionLabel(action: ManagementAccountLifecycleAction): string {
+    return action === "bot.start" ? "上线" : "下线";
+}
+
 function withEcho<T extends ManagementAccountLifecycleSocketResponse>(
     echo: unknown,
     response: T,
@@ -150,3 +192,4 @@ function withEcho<T extends ManagementAccountLifecycleSocketResponse>(
 }
 
 class AccountLifecycleTargetNotFoundError extends Error {}
+class AccountLifecycleConflictError extends Error {}

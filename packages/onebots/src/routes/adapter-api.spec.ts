@@ -186,6 +186,38 @@ describe("adapter account routes", () => {
         expect(ctx.status).toBeUndefined();
         expect(ctx.body).toEqual({ success: true, data: account.info });
     });
+
+    it("同一账号的并发生命周期请求返回 409 且不交错调用插件", async () => {
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const account = { info: { uin: "demo", status: "online" } };
+        const adapter = lifecycleAdapter(account, { setOnline: vi.fn(() => gate) });
+        const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
+        const startCtx = {
+            request: { body: { platform: "mock", uin: "demo" } },
+        } as RouterContext;
+        const stopCtx = {
+            request: { body: { platform: "mock", uin: "demo" } },
+        } as RouterContext;
+
+        const starting = posts.get("/api/bots/start")!(startCtx);
+        await vi.waitFor(() => expect(adapter.setOnline).toHaveBeenCalledOnce());
+        await posts.get("/api/bots/stop")!(stopCtx);
+
+        expect(stopCtx.status).toBe(409);
+        expect(stopCtx.body).toEqual({
+            success: false,
+            code: "ACCOUNT_LIFECYCLE_CONFLICT",
+            message: "账号 mock.demo 正在执行上线操作，请稍后重试",
+        });
+        expect(adapter.setOffline).not.toHaveBeenCalled();
+
+        release();
+        await starting;
+        expect(startCtx.body).toEqual({ success: true, data: account.info });
+    });
 });
 
 function lifecycleAdapter(
