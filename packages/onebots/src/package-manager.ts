@@ -145,6 +145,10 @@ function inspectPackageManagerEvidence(directory: string): RuntimePackageManager
             return { manager: null, error: `包管理器清单无法验证: ${manifestInspection.error}` };
         }
         const manifest = manifestInspection.manifest;
+        const catalogDependencies = findDependencyProtocolEntries(manifest, "catalog:");
+        if (catalogDependencies.length) {
+            pnpmEvidence.push(`catalog: 依赖（${catalogDependencies.join("、")}）`);
+        }
         if ("packageManager" in manifest) {
             const declared = manifest.packageManager;
             if (typeof declared !== "string" || !declared.trim()) {
@@ -175,6 +179,30 @@ function inspectPackageManagerEvidence(directory: string): RuntimePackageManager
     if (pnpmEvidence.length) return { manager: "pnpm", error: null };
     if (npmEvidence.length) return { manager: "npm", error: null };
     return { manager: null, error: null };
+}
+
+function findDependencyProtocolEntries(
+    manifest: Record<string, unknown>,
+    protocol: string,
+): string[] {
+    const matches: string[] = [];
+    for (const field of [
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies",
+    ]) {
+        const dependencies = manifest[field];
+        if (!dependencies || typeof dependencies !== "object" || Array.isArray(dependencies)) {
+            continue;
+        }
+        for (const [name, version] of Object.entries(dependencies)) {
+            if (typeof version === "string" && version.startsWith(protocol)) {
+                matches.push(`${field}.${name}`);
+            }
+        }
+    }
+    return matches;
 }
 
 function resolveInvokingPackageManager(

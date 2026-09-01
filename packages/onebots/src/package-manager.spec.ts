@@ -140,6 +140,44 @@ describe("runtime package manager", () => {
         });
     });
 
+    it("把 catalog: 依赖作为 pnpm 证据而不交给 npm 解析", () => {
+        const root = fixture({
+            dependencies: { onebots: "1.2.8" },
+            devDependencies: { typescript: "catalog:" },
+        });
+
+        expect(
+            buildExtensionInstallInvocation(root, "@onebots/protocol-mcp-v1@0.1.5", "darwin", {
+                npm_config_user_agent: "npm/11.0.0 node/v24.0.0",
+            }),
+        ).toMatchObject({
+            executable: "pnpm",
+            args: ["add", "--save-prod", "@onebots/protocol-mcp-v1@0.1.5"],
+        });
+    });
+
+    it("残留 npm 锁文件与 catalog: 依赖冲突时阻止启动包管理器", () => {
+        const root = fixture({
+            dependencies: { onebots: "1.2.8" },
+            optionalDependencies: { native: "catalog:native" },
+        });
+        fs.writeFileSync(path.join(root, "package-lock.json"), "{}\n");
+        const access = vi.fn();
+
+        expect(inspectRuntimePackageManager(root, { PATH: "tools" }, "linux", access)).toEqual({
+            manager: null,
+            executable: null,
+            resolvedPath: null,
+            error: expect.stringMatching(
+                /包管理器证据冲突.*package-lock\.json.*catalog: 依赖.*optionalDependencies\.native/,
+            ),
+        });
+        expect(access).not.toHaveBeenCalled();
+        expect(() =>
+            buildExtensionInstallInvocation(root, "@onebots/protocol-mcp-v1@0.1.5"),
+        ).toThrow(/包管理器证据冲突/);
+    });
+
     it("独立 npm 运行目录继续使用 npm 并省略开发依赖", () => {
         const root = fixture({ packageManager: "npm@11.17.0" });
         const invocation = buildExtensionInstallInvocation(root, "@onebots/adapter-slack@3.0.8");
