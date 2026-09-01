@@ -99,7 +99,7 @@ describe("service install preflight", () => {
 
     it("writes the service definition only after preflight succeeds", async () => {
         const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
-        const config = createConfig("general: {}\n");
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
 
         await expect(installService(options(config))).resolves.toMatchObject({
             output: expect.stringContaining("已安装用户级 OneBots 服务"),
@@ -113,7 +113,7 @@ describe("service install preflight", () => {
     it("installs the plugin selection persisted by setup without repeated flags", async () => {
         const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
         const config = createConfig(
-            "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+            "access_token: persisted-token\nplugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\ngeneral: {}\n",
         );
 
         await installService(options(config));
@@ -152,7 +152,7 @@ describe("service install preflight", () => {
     });
 
     it("reports start success only after the new instance is online", async () => {
-        const config = createConfig("general: {}\n");
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
         const spec = serviceSpec(config);
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
         vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
@@ -173,7 +173,7 @@ describe("service install preflight", () => {
     });
 
     it("does not start while the process manager cannot prove the current state", async () => {
-        const config = createConfig("general: {}\n");
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
         const spec = serviceSpec(config);
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
         vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
@@ -201,7 +201,7 @@ describe("service install preflight", () => {
     });
 
     it("keeps start idempotent when the installed service is already online", async () => {
-        const config = createConfig("general: {}\n");
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
         const spec = serviceSpec(config);
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
         vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
@@ -223,7 +223,7 @@ describe("service install preflight", () => {
     });
 
     it("reports restart failure after the control command when the instance does not switch", async () => {
-        const config = createConfig("general: {}\n");
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
         const spec = serviceSpec(config);
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
         const restart = vi.spyOn(ServiceController.prototype, "restart").mockResolvedValue();

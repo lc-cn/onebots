@@ -241,6 +241,8 @@ describe("setup workflow", () => {
         expect(config).not.toHaveProperty("access_token");
         const renderedOutput = output.mock.calls.map(call => String(call[0])).join("");
         expect(renderedOutput).toContain("ONEBOTS_ACCESS_TOKEN");
+        expect(renderedOutput).toContain("守护服务不会保存当前 shell");
+        expect(renderedOutput).not.toContain(`onebots install -c ${configPath}`);
         expect(renderedOutput).not.toContain("space-secret");
     });
 

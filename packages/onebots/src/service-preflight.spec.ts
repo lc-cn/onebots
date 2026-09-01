@@ -9,6 +9,7 @@ import { preflightServiceRuntime, preflightServiceRuntimeIsolated } from "./serv
 const temporaryDirectories: string[] = [];
 
 afterEach(() => {
+    vi.unstubAllEnvs();
     AdapterRegistry.clear();
     ProtocolRegistry.clear();
     clearLoadedPlugins();
@@ -81,7 +82,7 @@ describe("service runtime preflight", () => {
         const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cwd-"));
         temporaryDirectories.push(workingDirectory);
         const configPath = path.join(workingDirectory, "config.yaml");
-        fs.writeFileSync(configPath, "general: {}\n", "utf8");
+        fs.writeFileSync(configPath, "access_token: persisted-token\ngeneral: {}\n", "utf8");
 
         const packageDirectory = path.join(workingDirectory, "node_modules", "custom-adapter");
         fs.mkdirSync(packageDirectory, { recursive: true });
@@ -119,6 +120,42 @@ describe("service runtime preflight", () => {
         } finally {
             delete globals.__onebotsRegisterServiceAdapter;
         }
+    });
+
+    it("拒绝把当前 shell 的 Secret 当作守护服务持久化凭据", async () => {
+        const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cwd-"));
+        temporaryDirectories.push(workingDirectory);
+        const configPath = path.join(workingDirectory, "config.yaml");
+        fs.writeFileSync(configPath, "general: {}\n", "utf8");
+        vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "transient-shell-token");
+
+        await expect(
+            preflightServiceRuntime({
+                configPath,
+                adapters: [],
+                protocols: [],
+                workingDirectory,
+            }),
+        ).rejects.toThrow("守护服务不会保存当前 shell 的 ONEBOTS_ACCESS_TOKEN");
+    });
+
+    it.each([
+        "access_token: persisted-token\ngeneral: {}\n",
+        "username: operator\npassword: persisted-password\ngeneral: {}\n",
+    ])("接受配置文件中的完整管理凭据", async config => {
+        const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cwd-"));
+        temporaryDirectories.push(workingDirectory);
+        const configPath = path.join(workingDirectory, "config.yaml");
+        fs.writeFileSync(configPath, config, "utf8");
+
+        await expect(
+            preflightServiceRuntime({
+                configPath,
+                adapters: [],
+                protocols: [],
+                workingDirectory,
+            }),
+        ).resolves.toBeUndefined();
     });
 
     it("rejects an importable plugin that does not fulfil its registration contract", async () => {

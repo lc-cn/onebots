@@ -269,7 +269,7 @@ Adapter 与 Protocol 注册表会在 Schema 首次注册时复制并递归冻结
 
 插件入口存在但初始化失败时，doctor 会保留底层首行错误，例如重复注册冲突或缺少运行时依赖，而不是只报告笼统的“初始化失败”。这类错误应先修复插件安装或命名冲突，再重新执行诊断。
 
-使用 `onebots install -c config.yaml -r <adapter> -p <protocol>` 安装守护服务时，同一套插件加载与配置校验会在系统服务定义写入前执行。仅暴露 `exports.import` 的插件、顶层 `await`、Schema 校验和初始化异常都按前台启动语义处理；预检失败不会留下一个必然无法启动的服务。安装成功仍不会立即启动，可在审阅服务定义后执行 `onebots start`。
+使用 `onebots install -c config.yaml -r <adapter> -p <protocol>` 安装守护服务时，同一套插件加载与配置校验会在系统服务定义写入前执行。服务预检还要求配置文件自身包含 `access_token` 或完整的用户名密码；当前 shell 中临时设置的 `ONEBOTS_ACCESS_TOKEN` 不会被复制进 systemd、launchd 或 Windows 服务定义，因此不能作为守护服务的凭据证据。缺少持久化凭据时应将凭据写入配置，或先取消该环境变量，再执行 `onebots setup -c config.yaml --force` 安全生成并写入鉴权码。`onebots doctor` 的 `service-credentials` 检查会发布同一结论，但不会回显凭据。仅暴露 `exports.import` 的插件、顶层 `await`、Schema 校验和初始化异常都按前台启动语义处理；预检失败不会留下一个必然无法启动的服务。安装成功仍不会立即启动，可在审阅服务定义后执行 `onebots start`。
 
 `onebots start` 与 `onebots restart` 还会读取已保存的服务定义，以安装时的 `workingDirectory` 解析插件，并重新校验当前配置。这能捕获安装后被删除或损坏的插件与配置；启动预检失败时不会请求操作系统启动服务，重启预检失败时也不会先停止现有实例。操作系统命令执行后，CLI 会在有限窗口内轮询 `/health` 与 `/ready`，要求在线应用名和版本与当前 CLI 一致、readiness 成功或处于可继续配置的首次部署状态，并要求两端声明同一个 `instance_id`。`start` 对已经在线的服务保持幂等；服务原本未运行但端口已被占用时，以及执行 `restart` 时，验证后的实例身份还必须不同于操作前。旧实例继续占用端口、两个探针分属不同实例、目标进程未上线或身份字段缺失时，命令返回失败并保留最后的探针证据，不会提前宣告启动成功。
 

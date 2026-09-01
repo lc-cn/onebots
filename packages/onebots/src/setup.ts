@@ -173,7 +173,14 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     writeCliOutput(`比较平台能力: ${formatConfiguredCommand(configPath, "capabilities")}`);
     writeCliOutput(`验证配置: ${formatConfiguredCommand(configPath, "doctor")}`);
     writeCliOutput(`前台启动: ${formatConfiguredCommand(configPath)}`);
-    writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
+    if (managementCredentials.source === "environment") {
+        writeCliOutput(
+            "安装服务前请先把管理凭据写入配置；守护服务不会保存当前 shell 的 ONEBOTS_ACCESS_TOKEN。",
+        );
+        writeCliOutput("可取消该环境变量后使用 setup --force 自动生成持久化鉴权码。");
+    } else {
+        writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
+    }
 }
 
 function parsePromptValue(value: string, type: PromptRule["type"]): string | number | boolean {

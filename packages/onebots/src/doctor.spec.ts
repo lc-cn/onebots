@@ -832,6 +832,12 @@ describe("doctor persisted plugin selection", () => {
 
         const invalid = await runDoctor(options);
         expect(invalid.ok).toBe(false);
+        expect(invalid.checks.find(check => check.name === "service-credentials")).toEqual({
+            name: "service-credentials",
+            level: "error",
+            message:
+                "服务配置缺少持久化管理凭据；当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入服务定义，请将凭据写入配置或取消该环境变量后执行 onebots setup --force",
+        });
         expect(invalid.checks.find(check => check.name === "service-node")).toMatchObject({
             level: "error",
         });
@@ -911,6 +917,54 @@ describe("doctor persisted plugin selection", () => {
             message: `用户级服务定义修复失败: ${path.join(directory, "service.plist")}`,
         });
         expect(JSON.stringify(failedRepair)).not.toContain("secret-token");
+    });
+
+    it("不把临时环境 Secret 作为已安装服务的凭据证据", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-service-auth-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+        vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "transient-shell-token");
+        const spec: ServiceSpec = {
+            scope: "user",
+            configPath,
+            adapters: [],
+            protocols: [],
+            nodePath: process.execPath,
+            binPath: process.argv[1],
+            workingDirectory: process.cwd(),
+        };
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "inactive",
+        });
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+            extensionRoot: createExtensionRuntimeRoot(),
+            serviceRuntimeInspector: () => ({
+                supported: true,
+                check: { name: "service-node", level: "ok", message: "服务 Node.js 可用" },
+            }),
+            serviceEntryInspector: () => ({
+                valid: true,
+                check: { name: "service-entry", level: "ok", message: "服务入口可用" },
+            }),
+            serviceDefinitionInspector: () => ({ current: true, error: null }),
+        });
+
+        expect(report.checks.find(check => check.name === "service-credentials")).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入服务定义"),
+        });
+        expect(JSON.stringify(report)).not.toContain("transient-shell-token");
     });
 
     it("exposes category-level precedence and ignores service defaults in standalone mode", () => {
