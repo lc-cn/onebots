@@ -4,6 +4,7 @@
 # Runtime data
 **/data
 **/config.yaml
+.onebots-package-mutation.lock*
 onebots.log
 .env
 .env.*

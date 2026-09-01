@@ -731,6 +731,51 @@ describe("ExtensionManager", () => {
         );
     });
 
+    it("共享运行目录中的不同管理器不能交错修改依赖", async () => {
+        const { root, configPath } = fixture();
+        let releaseInstall: (() => void) | undefined;
+        const installGate = new Promise<void>(resolve => {
+            releaseInstall = resolve;
+        });
+        const firstInstall = vi.fn(
+            async (packageName: string, packageVersion: string, runtimeRoot: string) => {
+                await installGate;
+                installFixturePackage(packageName, packageVersion, runtimeRoot);
+            },
+        );
+        const secondInstall = vi.fn(
+            async (packageName: string, packageVersion: string, runtimeRoot: string) => {
+                installFixturePackage(packageName, packageVersion, runtimeRoot);
+            },
+        );
+        const firstManager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: firstInstall },
+            preflight: successfulPreflight,
+        });
+        const secondManager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: secondInstall },
+            preflight: successfulPreflight,
+        });
+
+        const first = firstManager.install("adapter:slack");
+        await vi.waitFor(() => expect(firstInstall).toHaveBeenCalledOnce());
+
+        await expect(secondManager.install("protocol:mcp-v1")).rejects.toThrow(
+            /adapter:slack.*进程.*安装事务.*请等待完成后重试/,
+        );
+        expect(secondInstall).not.toHaveBeenCalled();
+
+        releaseInstall?.();
+        await expect(first).resolves.toEqual({ restartRequired: true });
+        await expect(secondManager.install("protocol:mcp-v1")).resolves.toEqual({
+            restartRequired: true,
+        });
+    });
+
     it("不同扩展继续互斥，失败后同一扩展可以重新安装", async () => {
         const { root, configPath } = fixture();
         let attempt = 0;

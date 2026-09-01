@@ -28,6 +28,10 @@ import {
     hasPackageManagerMetadataChanged,
     inspectRuntimePackageManager,
 } from "./package-manager.js";
+import {
+    acquirePackageMutationLock,
+    PackageMutationLockConflictError,
+} from "./package-mutation-lock.js";
 import { validateExtensionConfigurationTarget } from "./extension-configuration-target.js";
 import { validateExtensionCatalogIntegrity } from "./extension-catalog-integrity.js";
 import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
@@ -294,17 +298,6 @@ export class ExtensionManager {
         this.assertCatalogIntegrity();
         this.assertRuntimeRoot();
         const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
-        const previousPackage = this.inspectInstalledPackage(entry.packageName);
-        const previousVersion = previousPackage.version;
-        const repairsCurrentVersion =
-            previousVersion === packageCatalog.packageVersion && previousPackage.error !== null;
-        const packageNeedsInstall =
-            repairsCurrentVersion || previousVersion !== packageCatalog.packageVersion;
-        if (packageNeedsInstall) this.assertPackageManager();
-        const packageMetadata = packageNeedsInstall
-            ? capturePackageManagerMetadata(this.runtimeRoot)
-            : null;
-        const preparedConfig = this.prepareConfig(entry.type, entry.name);
         let startInstallation: (() => void) | undefined;
         const startGate = new Promise<void>(resolve => {
             startInstallation = resolve;
@@ -312,9 +305,37 @@ export class ExtensionManager {
         const operationId = randomUUID();
         const startedAt = new Date().toISOString();
         const promise = startGate.then(async (): Promise<{ restartRequired: true }> => {
+            let packageLock;
+            try {
+                packageLock = acquirePackageMutationLock(this.runtimeRoot, {
+                    token: randomUUID(),
+                    operationId,
+                    extensionId: id,
+                });
+            } catch (error) {
+                if (error instanceof PackageMutationLockConflictError) {
+                    throw new ExtensionInstallConflictError(error.message, { cause: error });
+                }
+                throw error;
+            }
+            let previousPackage: InstalledPackageInspection = { version: null, error: null };
+            let previousVersion: string | null = null;
+            let packageMetadata: ReturnType<typeof capturePackageManagerMetadata> | null = null;
             let packageInstallAttempted = false;
             let packageInstallCompleted = false;
             try {
+                previousPackage = this.inspectInstalledPackage(entry.packageName);
+                previousVersion = previousPackage.version;
+                const repairsCurrentVersion =
+                    previousVersion === packageCatalog.packageVersion &&
+                    previousPackage.error !== null;
+                const packageNeedsInstall =
+                    repairsCurrentVersion || previousVersion !== packageCatalog.packageVersion;
+                if (packageNeedsInstall) this.assertPackageManager();
+                packageMetadata = packageNeedsInstall
+                    ? capturePackageManagerMetadata(this.runtimeRoot)
+                    : null;
+                const preparedConfig = this.prepareConfig(entry.type, entry.name);
                 if (packageNeedsInstall) {
                     packageInstallAttempted = true;
                     if (repairsCurrentVersion) {
@@ -389,12 +410,14 @@ export class ExtensionManager {
                     );
                 }
                 throw error;
+            } finally {
+                packageLock.release();
             }
         });
         this.installation = {
             id,
             operationId,
-            phase: packageNeedsInstall ? "installing_package" : "preflighting",
+            phase: "installing_package",
             startedAt,
             promise,
         };
