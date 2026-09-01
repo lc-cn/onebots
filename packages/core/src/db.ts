@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
-import * as fs from "fs";
 import * as path from "path";
+import { prepareSqliteStorage } from "./sqlite-storage.js";
 
 /** 按运行时约定解析数据库文件：相对路径以 data 目录为根，绝对路径保持不变。 */
 export function resolveDatabaseFilePath(dataDirectory: string, database: string): string {
@@ -20,12 +20,11 @@ export class SqliteDB {
         return typeof data;
     }
     constructor(private filePath: string) {
-        const dir = path.dirname(this.filePath);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        
         // Ensure file has .db extension
         if (!this.filePath.endsWith(".db")) this.filePath = this.filePath + ".db";
-        
+
+        prepareSqliteStorage(this.filePath);
+
         // Open or create database
         this.db = new DatabaseSync(this.filePath);
     }
