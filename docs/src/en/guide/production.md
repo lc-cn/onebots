@@ -59,6 +59,8 @@ After **Save and apply** rotates `username`, `password`, or `access_token`, HTTP
 
 When a username/password session token expires naturally, established root-management and terminal WebSockets plus log, account-verification, and message-debug SSE cannot continue receiving passive data indefinitely. The server revalidates long-lived connection credentials every 30 seconds and stops heartbeats and closes the connection by the next check. Deployment-level tokens supplied by configuration or `ONEBOTS_ACCESS_TOKEN` have no session expiry, so their connections remain active until credential rotation, service shutdown, or network disconnection.
 
+Legacy clients may still submit one string line to process stdin through the root management WebSocket's `system.input` action. The server returns a correlatable `system.input.result`, rejects non-string payloads, and does not synthesize a global stdin `end` event for an individual message. One connection can therefore submit repeated input without prematurely closing other stdin consumers in the process. The current Web console uses the isolated `/api/terminal` PTY and does not depend on this compatibility path.
+
 ### Token Management
 
 Complete token lifecycle management.

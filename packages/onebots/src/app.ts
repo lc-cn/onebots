@@ -45,6 +45,7 @@ import {
 } from "./extension-catalog-integrity.js";
 import { handleManagementConfigSocketAction } from "./management-config-socket.js";
 import { handleManagementAccountLifecycleSocketAction } from "./management-account-lifecycle.js";
+import { handleManagementStdinSocketAction } from "./management-stdin-socket.js";
 import {
     authorizeManagementUpgrade,
     extractManagementToken,
@@ -230,12 +231,9 @@ export class App extends BaseApp {
             this.sendManagementWebSocketMessage(client, accountResponse, "管理端账号生命周期回执");
             return;
         }
-        if (payload.action === "system.input") {
-            process.stdin.resume();
-            process.nextTick(() =>
-                process.stdin.emit("data", Buffer.from(payload.data + "\n", "utf8")),
-            );
-            process.nextTick(() => process.stdin.emit("end"));
+        const stdinResponse = handleManagementStdinSocketAction(payload);
+        if (stdinResponse) {
+            this.sendManagementWebSocketMessage(client, stdinResponse, "管理端输入回执");
         }
     }
 
