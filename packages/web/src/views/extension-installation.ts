@@ -121,6 +121,7 @@ export function getExtensionInstallationAction(
         | "loaded"
         | "restartSupported"
         | "targetVersion"
+        | "installedError"
         | "versionAligned"
     > &
         Partial<Pick<ExtensionInfo, "installedVersion" | "loadedVersion">>,
@@ -140,6 +141,13 @@ export function getExtensionInstallationAction(
     }
     if (!extension.targetVersion) {
         return { visible: true, available: false, label: "验证版本不可用" };
+    }
+    if (extension.installedError) {
+        return {
+            visible: true,
+            available: true,
+            label: `修复 v${extension.targetVersion} ${restartLabel}`,
+        };
     }
     if (!extension.installed) {
         return {

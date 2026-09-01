@@ -640,7 +640,9 @@ function resolvePackageEntry(candidate: string, packageJsonPath: string): string
     const packageDirectory = path.dirname(packageJsonPath);
     const entryPath = path.resolve(packageDirectory, target);
     const relative = path.relative(packageDirectory, entryPath);
-    if (relative.startsWith("..") || path.isAbsolute(relative)) return undefined;
+    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+        return undefined;
+    }
     return entryPath;
 }
 

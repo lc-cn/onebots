@@ -178,6 +178,16 @@ describe("extension installation action", () => {
         ).toEqual({ visible: false, available: false, label: "已加载" });
     });
 
+    it("为入口无法验证的固定版本提供明确修复操作", () => {
+        expect(
+            getExtensionInstallationAction({
+                ...base,
+                installed: true,
+                installedError: "插件入口解析到实际包目录外",
+            }),
+        ).toEqual({ visible: true, available: true, label: "修复 v1.2.3 并重启" });
+    });
+
     it("为磁盘与当前进程版本漂移提供明确切换操作", () => {
         const drifted = {
             ...base,

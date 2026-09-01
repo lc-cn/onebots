@@ -139,6 +139,30 @@ describe("runtime package manager", () => {
         ]);
     });
 
+    it("修复已安装但入口损坏的依赖时要求包管理器重新落盘", () => {
+        const npmRoot = fixture({ packageManager: "npm@11.17.0" });
+        expect(
+            buildExtensionInstallInvocation(
+                npmRoot,
+                "@onebots/adapter-slack@3.0.8",
+                "darwin",
+                {},
+                { force: true },
+            ).args,
+        ).toEqual(["install", "--save", "--omit=dev", "--force", "@onebots/adapter-slack@3.0.8"]);
+
+        const pnpmRoot = fixture({ packageManager: "pnpm@9.15.9" });
+        expect(
+            buildExtensionInstallInvocation(
+                pnpmRoot,
+                "@onebots/adapter-slack@3.0.8",
+                "darwin",
+                {},
+                { force: true },
+            ).args,
+        ).toEqual(["add", "--save-prod", "--force", "@onebots/adapter-slack@3.0.8"]);
+    });
+
     it("按原状态生成扩展恢复命令", () => {
         const npmRoot = fixture({ packageManager: "npm@11.17.0" });
         expect(

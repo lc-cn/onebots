@@ -10,6 +10,10 @@ export interface PackageInstallInvocation {
     environment: NodeJS.ProcessEnv;
 }
 
+export interface ExtensionInstallOptions {
+    force?: boolean;
+}
+
 export interface PackageUpdateInvocation extends PackageInstallInvocation {
     cwd: string;
 }
@@ -331,6 +335,7 @@ export function buildExtensionInstallInvocation(
     packageSpec: string,
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
+    options: ExtensionInstallOptions = {},
 ): PackageInstallInvocation {
     const manager = detectRuntimePackageManager(runtimeRoot, environment);
     return buildPackageManagerInvocation(
@@ -339,12 +344,19 @@ export function buildExtensionInstallInvocation(
             ? [
                   "add",
                   "--save-prod",
+                  ...(options.force ? ["--force"] : []),
                   ...(fs.existsSync(path.join(runtimeRoot, "pnpm-workspace.yaml"))
                       ? ["--workspace-root"]
                       : []),
                   packageSpec,
               ]
-            : ["install", "--save", "--omit=dev", packageSpec],
+            : [
+                  "install",
+                  "--save",
+                  "--omit=dev",
+                  ...(options.force ? ["--force"] : []),
+                  packageSpec,
+              ],
         platform,
         environment,
     );

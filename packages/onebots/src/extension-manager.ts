@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
+import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { BaseApp, writeConfigFileAtomic, yaml } from "@onebots/core";
 import { EXTENSION_CATALOG, getExtensionCatalogEntry } from "./extension-catalog.js";
@@ -15,7 +16,8 @@ import {
     setRuntimePluginSelection,
 } from "./runtime-plugin-selection.js";
 import { formatRuntimeConfigDiagnostic, parseRuntimeConfig } from "./runtime-config-validator.js";
-import type { LoadedPluginInfo } from "./plugin-loader.js";
+import { inspectPlugin, type LoadedPluginInfo } from "./plugin-loader.js";
+import type { ExtensionInstallOptions } from "./package-manager.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 import {
@@ -32,7 +34,12 @@ import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
 const execFileAsync = promisify(execFile);
 
 export interface ExtensionInstaller {
-    install(packageName: string, packageVersion: string, runtimeRoot: string): Promise<void>;
+    install(
+        packageName: string,
+        packageVersion: string,
+        runtimeRoot: string,
+        options?: ExtensionInstallOptions,
+    ): Promise<void>;
     restore?(
         packageName: string,
         previousVersion: string | null,
@@ -41,10 +48,18 @@ export interface ExtensionInstaller {
 }
 
 class RuntimeExtensionInstaller implements ExtensionInstaller {
-    async install(packageName: string, packageVersion: string, runtimeRoot: string): Promise<void> {
+    async install(
+        packageName: string,
+        packageVersion: string,
+        runtimeRoot: string,
+        options: ExtensionInstallOptions = {},
+    ): Promise<void> {
         const invocation = buildExtensionInstallInvocation(
             runtimeRoot,
             `${packageName}@${packageVersion}`,
+            process.platform,
+            process.env,
+            options,
         );
         await execFileAsync(invocation.executable, invocation.args, {
             cwd: runtimeRoot,
@@ -192,7 +207,9 @@ export class ExtensionManager {
             const installedPackage = this.inspectInstalledPackage(entry.packageName);
             const installedVersion = installedPackage.version;
             const versionAligned =
-                packageCatalog !== undefined && installedVersion === packageCatalog.packageVersion;
+                packageCatalog !== undefined &&
+                installedPackage.error === null &&
+                installedVersion === packageCatalog.packageVersion;
             const loadedPlugin = loadedPlugins.find(
                 plugin => plugin.type === entry.type && plugin.name === entry.name,
             );
@@ -274,7 +291,10 @@ export class ExtensionManager {
         const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
         const previousPackage = this.inspectInstalledPackage(entry.packageName);
         const previousVersion = previousPackage.version;
-        const packageNeedsInstall = previousVersion !== packageCatalog.packageVersion;
+        const repairsCurrentVersion =
+            previousVersion === packageCatalog.packageVersion && previousPackage.error !== null;
+        const packageNeedsInstall =
+            repairsCurrentVersion || previousVersion !== packageCatalog.packageVersion;
         if (packageNeedsInstall) this.assertPackageManager();
         const packageMetadata = packageNeedsInstall
             ? capturePackageManagerMetadata(this.runtimeRoot)
@@ -292,11 +312,28 @@ export class ExtensionManager {
             try {
                 if (packageNeedsInstall) {
                     packageInstallAttempted = true;
-                    await this.installer.install(
-                        entry.packageName,
-                        packageCatalog.packageVersion,
-                        this.runtimeRoot,
-                    );
+                    if (repairsCurrentVersion) {
+                        fs.rmSync(
+                            path.join(
+                                this.runtimeRoot,
+                                "node_modules",
+                                ...entry.packageName.split("/"),
+                            ),
+                            { recursive: true, force: true },
+                        );
+                        await this.installer.install(
+                            entry.packageName,
+                            packageCatalog.packageVersion,
+                            this.runtimeRoot,
+                            { force: true },
+                        );
+                    } else {
+                        await this.installer.install(
+                            entry.packageName,
+                            packageCatalog.packageVersion,
+                            this.runtimeRoot,
+                        );
+                    }
                     packageInstallCompleted = true;
                     const installedPackage = this.inspectInstalledPackage(entry.packageName);
                     if (
@@ -478,9 +515,29 @@ export class ExtensionManager {
                 typeof manifest.version === "string" && manifest.version.trim()
                     ? manifest.version.trim()
                     : null;
+            if (!version) {
+                return {
+                    version: null,
+                    error: `${packageName} 的 package.json 未声明有效版本`,
+                };
+            }
+            const inspection = inspectPlugin(
+                [packageName],
+                createRequire(path.join(this.runtimeRoot, "package.json")),
+            );
+            if (inspection.status !== "ready") {
+                const reason =
+                    inspection.status === "broken"
+                        ? inspection.reason
+                        : `无法从运行目录解析 ${packageName}`;
+                return {
+                    version,
+                    error: `${packageName} 的插件入口无法验证：${reason}`,
+                };
+            }
             return {
                 version,
-                error: version ? null : `${packageName} 的 package.json 未声明有效版本`,
+                error: null,
             };
         } catch {
             // 不回显解析器片段，避免损坏清单把不受信任的文件内容带到管理端。

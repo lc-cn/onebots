@@ -74,8 +74,9 @@ function installFixturePackage(
     fs.mkdirSync(packageDirectory, { recursive: true });
     fs.writeFileSync(
         path.join(packageDirectory, "package.json"),
-        `${JSON.stringify({ name: manifestName, version })}\n`,
+        `${JSON.stringify({ name: manifestName, version, main: "index.js" })}\n`,
     );
+    fs.writeFileSync(path.join(packageDirectory, "index.js"), "export const loaded = true;\n");
 }
 
 function removeFixturePackage(packageName: string, runtimeRoot: string): void {
@@ -492,6 +493,94 @@ describe("ExtensionManager", () => {
             versionAligned: false,
         });
     });
+
+    it("版本一致但构建入口缺失时不再标记为已对齐", () => {
+        const { root, configPath } = fixture();
+        const packageName = "@onebots/adapter-slack";
+        const targetVersion = catalogVersion(packageName);
+        installFixturePackage(packageName, targetVersion, root);
+        fs.rmSync(path.join(root, "node_modules", ...packageName.split("/"), "index.js"));
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            preflight: successfulPreflight,
+        });
+
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+            installed: true,
+            installedVersion: targetVersion,
+            installedError: expect.stringContaining("构建产物不存在"),
+            versionAligned: false,
+        });
+    });
+
+    it.skipIf(process.platform === "win32")(
+        "在扩展中心识别并强制修复版本一致但入口越界的依赖",
+        async () => {
+            const { root, configPath } = fixture();
+            const packageName = "@onebots/adapter-slack";
+            const targetVersion = catalogVersion(packageName);
+            installFixturePackage(packageName, targetVersion, root);
+            const packageDirectory = path.join(root, "node_modules", ...packageName.split("/"));
+            const externalEntry = path.join(root, "external-entry.js");
+            fs.writeFileSync(
+                externalEntry,
+                "globalThis.__onebotsExtensionManagerExternalEntry = true;\n",
+            );
+            fs.rmSync(path.join(packageDirectory, "index.js"));
+            fs.symlinkSync(externalEntry, path.join(packageDirectory, "index.js"));
+            const install = vi.fn(
+                async (
+                    installedName: string,
+                    version: string,
+                    runtimeRoot: string,
+                    options?: { force?: boolean },
+                ) => {
+                    expect(options).toEqual({ force: true });
+                    installFixturePackage(installedName, version, runtimeRoot);
+                },
+            );
+            const manager = new ExtensionManager({
+                runtimeRoot: root,
+                configPath,
+                installer: { install },
+                preflight: successfulPreflight,
+            });
+            const globals = globalThis as typeof globalThis & {
+                __onebotsExtensionManagerExternalEntry?: boolean;
+            };
+
+            try {
+                expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+                    installed: true,
+                    installedVersion: targetVersion,
+                    installedError: expect.stringContaining("插件入口解析到实际包目录外"),
+                    versionAligned: false,
+                });
+                expect(globals.__onebotsExtensionManagerExternalEntry).toBeUndefined();
+
+                await expect(manager.install("adapter:slack")).resolves.toEqual({
+                    restartRequired: true,
+                });
+
+                expect(install).toHaveBeenCalledWith(packageName, targetVersion, root, {
+                    force: true,
+                });
+                expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+                    installed: true,
+                    installedVersion: targetVersion,
+                    installedError: null,
+                    versionAligned: true,
+                });
+                expect(globals.__onebotsExtensionManagerExternalEntry).toBeUndefined();
+                expect(fs.readFileSync(externalEntry, "utf8")).toContain(
+                    "__onebotsExtensionManagerExternalEntry",
+                );
+            } finally {
+                delete globals.__onebotsExtensionManagerExternalEntry;
+            }
+        },
+    );
 
     it("安装器落盘错误包身份时回滚并保留明确诊断", async () => {
         const { root, configPath } = fixture();
