@@ -24,6 +24,8 @@ Web 管理端会按凭据、传输、投递、过滤与高级设置分区生成�
 
 客户端以 IMAP IDLE 接收新邮件。`poll_interval_ms` 是 IDLE 的兜底检查，默认 60000；设为 0 仅关闭兜底轮询。断线重连默认从 1 秒指数退避至 30 秒且不会停止，可通过 `retry_initial_delay_ms` 和 `retry_max_delay_ms` 调整。
 
+SMTP 校验、IMAP 首次连接和后续协议出口共用账号启动边界。达到全局 `timeout` 或取消热重载时，适配器会关闭正在验证的 SMTP、IMAP、轮询与重连任务，迟到连接不会重新把账号标记为就绪。
+
 `receive_mode: manual` 时可省略整个 `imap`，SMTP 发送仍可用。已有接收器应调用 `await client.ingest(email)`；raw、canonical 监听器和协议投影全部成功后才提交去重状态。
 
 ## TLS 与代理

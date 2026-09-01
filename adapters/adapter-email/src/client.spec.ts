@@ -82,6 +82,56 @@ describe("EmailClient", () => {
         await client.stop();
     });
 
+    it("账号启动取消会关闭进行中的 SMTP 校验且不误报停止失败", async () => {
+        let rejectVerify: ((error: unknown) => void) | undefined;
+        const verify = vi.fn(
+            () =>
+                new Promise<true>((_resolve, reject) => {
+                    rejectVerify = reject;
+                }),
+        );
+        const close = vi.fn(() =>
+            rejectVerify?.(new Error("SMTP socket closed after startup cancellation")),
+        );
+        const client = new EmailClient(
+            { ...config, receive_mode: "manual", imap: undefined },
+            { createSmtp: () => ({ ...smtp, verify, close }) },
+        );
+        const ready = vi.fn();
+        const clientError = vi.fn();
+        client.on("ready", ready);
+        client.on("client_error", clientError);
+        const controller = new AbortController();
+
+        const start = client.start(controller.signal);
+        await vi.waitFor(() => expect(verify).toHaveBeenCalledOnce());
+        controller.abort(new DOMException("账号启动超时", "AbortError"));
+
+        await expect(start).rejects.toMatchObject({ name: "AbortError" });
+        await vi.waitFor(() => expect(close).toHaveBeenCalled());
+        expect(client.status.started).toBe(false);
+        expect(ready).not.toHaveBeenCalled();
+        expect(clientError).not.toHaveBeenCalled();
+    });
+
+    it("SMTP 就绪后仍保留账号启动信号以覆盖协议启动阶段", async () => {
+        const close = vi.fn();
+        const client = new EmailClient(
+            { ...config, receive_mode: "manual", imap: undefined },
+            { createSmtp: () => ({ ...smtp, close }) },
+        );
+        const stop = vi.spyOn(client, "stop");
+        const controller = new AbortController();
+
+        await client.start(controller.signal);
+        expect(client.status.started).toBe(true);
+        controller.abort();
+
+        await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(client.status.started).toBe(false));
+        expect(close).toHaveBeenCalledOnce();
+    });
+
     it("IMAP 登出失败时仍关闭连接并传播结构化停止错误", async () => {
         const imap = new FakeImap();
         imap.logoutFailure = new Error("logout failed");

@@ -42,6 +42,8 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     private lifecycleAbort?: AbortController;
     private lifecycleGeneration = 0;
     private startRequest?: Promise<void>;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private reconnectRequest?: Promise<void>;
     private syncRequest?: Promise<void>;
     private syncAgain = false;
@@ -76,15 +78,18 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
     }
 
     /** 始终验证 SMTP；imap 模式启动并无限恢复接收连接，manual 模式不创建 IMAP。 */
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.startRequest) return this.startRequest;
         if (this.started) return;
+        this.bindStartSignal(signal);
         const request = this.initialize();
         this.startRequest = request;
         try {
             await request;
         } finally {
             if (this.startRequest === request) this.startRequest = undefined;
+            if (!this.started) this.unbindStartSignal();
         }
     }
 
@@ -109,17 +114,20 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
             if (!this.isCurrent(generation, controller.signal)) return;
             this.safeEmit("ready");
         } catch (error) {
+            const abortReason = controller.signal.aborted ? controller.signal.reason : undefined;
             controller.abort();
             this.started = false;
             this.lifecycleAbort = undefined;
             this.smtp?.close();
             this.smtp = undefined;
+            if (abortReason !== undefined) throw abortReason;
             throw EmailError.wrap(error, "EMAIL_START_FAILED", "start");
         }
     }
 
     /** 停止轮询、重连、IMAP 和 SMTP；重复调用安全。 */
     async stop(): Promise<void> {
+        this.unbindStartSignal();
         if (!this.started && !this.startRequest) return;
         const failures = new FailureCollector();
         this.started = false;
@@ -170,6 +178,27 @@ export class EmailClient extends EventEmitter<EmailClientEvents> {
         this.reconnectRequest = undefined;
         this.safeEmit("stop");
         failures.throwIfAny("邮件客户端停止失败");
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error =>
+                this.reportError(EmailError.wrap(error, "EMAIL_STOP_FAILED", "start.abort")),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
     }
 
     /** 发送完整邮件并返回 SMTP 接收与拒绝结果。 */

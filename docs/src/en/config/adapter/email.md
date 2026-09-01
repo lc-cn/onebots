@@ -19,6 +19,8 @@ The Web console groups these fields into credentials, transport, delivery, filte
 
 IMAP IDLE provides real-time delivery. `poll_interval_ms` is a fallback check and defaults to 60000; set it to 0 to disable only that fallback. Reconnection uses an unlimited exponential backoff bounded by `retry_initial_delay_ms` and `retry_max_delay_ms`.
 
+SMTP verification, the initial IMAP connection, and subsequent protocol outlets share the account startup boundary. When the global `timeout` expires or a hot reload is cancelled, the adapter closes pending SMTP verification, IMAP, polling, and reconnect work. A late connection cannot mark the account ready again.
+
 Set `receive_mode: manual` to omit the entire `imap` block while retaining SMTP. Existing receivers call `await client.ingest(email)`; deduplication is committed only after raw, canonical, and protocol delivery succeeds.
 
 TLS certificates are verified by default. Disable `reject_unauthorized` only for a controlled, self-signed server.

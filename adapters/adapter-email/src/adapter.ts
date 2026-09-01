@@ -169,9 +169,9 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
         client.on("client_error", error => {
             this.logger.error(`邮件账号 ${account.account_id} 错误`, error);
         });
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                await client.start();
+                await client.start(signal);
                 account.status = AccountStatus.Online;
                 account.nickname = config.display_name || config.address;
                 account.avatar = "";
