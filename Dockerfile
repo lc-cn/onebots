@@ -33,17 +33,21 @@ RUN pnpm prune --prod
 # ---------- 运行阶段 ----------
 FROM node:24-alpine
 
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+RUN apk add --no-cache su-exec \
+  && corepack enable \
+  && corepack prepare pnpm@9.15.9 --activate \
+  && mkdir -p /data/static \
+  && chown -R node:node /data
 WORKDIR /app
 
 # 从构建阶段复制产物
-COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/adapters ./adapters
-COPY --from=builder /app/protocols ./protocols
-COPY --from=builder /app/development ./development
-COPY scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs
+COPY --chown=node:node --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --chown=node:node --from=builder /app/node_modules ./node_modules
+COPY --chown=node:node --from=builder /app/packages ./packages
+COPY --chown=node:node --from=builder /app/adapters ./adapters
+COPY --chown=node:node --from=builder /app/protocols ./protocols
+COPY --chown=node:node --from=builder /app/development ./development
+COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs
 
 # 数据目录：挂载卷到 /data，配置文件为 /data/config.yaml
 EXPOSE 6727

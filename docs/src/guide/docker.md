@@ -58,6 +58,12 @@ docker compose down
 
 仓库提供 `.env.example`。需要环境鉴权时复制为 `.env`，填写由密码管理器或 `openssl rand -hex 32` 生成的值，再执行 `docker compose up -d`；`.env` 已被 Git 忽略。修改后必须重启容器。
 
+### 容器运行用户与卷权限
+
+官方镜像只在入口初始化阶段使用 `root` 创建或迁移 `/data`。配置权限收紧后，入口会把挂载卷交给镜像内置的 `node` 用户（uid/gid `1000`），再通过 `su-exec` 启动网关；平台适配器、协议和 Web 管理进程不会长期以 root 身份运行。升级旧镜像后的第一次启动会递归调整现有 `/data` 的属主，因此宿主机上看到的文件属主可能变为 `1000:1000`。
+
+若卷后端禁止修改属主，入口会明确报错并停止，避免以 root 身份静默降级运行。也可以用 Docker 的 `--user` 或 Compose 的 `user:` 显式指定运行身份；此时入口尊重该身份且不会执行 `chown`，但调用方必须预先保证该用户能读取 `/data/config.yaml` 并写入 `/data`。
+
 ### 容器健康状态
 
 官方镜像内置健康检查，Compose 示例也显式启用同一探针。探针读取 `/data/config.yaml` 的 `port` 与 `path`，请求对应的 `/ready`，并要求 HTTP 成功、`application/json` 媒体类型、响应明确包含 `ready: true`，且声明 `onebots` 应用身份、与镜像内主包完全一致的运行版本及非空 `instance_id`。探针禁用缓存与重定向，并把响应正文限制为 64 KiB；旧 OneBots 实例、错误代理、通用成功页或持续发送数据的本地进程不能充当容器就绪证据。可用以下命令查看状态与最近失败原因：

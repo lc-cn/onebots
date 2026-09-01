@@ -21,11 +21,35 @@ describe("Docker 构建上下文", () => {
         const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
 
         expect(dockerfile).toContain(
-            "COPY scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs",
+            "COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs",
         );
         expect(dockerfile).toContain(
             'HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "/app/scripts/docker-healthcheck.mjs"]',
         );
+    });
+
+    test("运行镜像以 node 用户持有应用文件，并在入口中降权", async () => {
+        const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
+
+        expect(dockerfile).toContain("apk add --no-cache su-exec");
+        expect(dockerfile).toContain("chown -R node:node /data");
+        expect(dockerfile).toContain("COPY --chown=node:node --from=builder");
+        expect(dockerfile).toContain(
+            "COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs",
+        );
+
+        for (const entrypoint of ["docker-entrypoint.sh", "docker-entrypoint-hf.sh"]) {
+            const source = await readFile(resolve(repositoryRoot, entrypoint), "utf8");
+            expect(source).toContain('if [ "$(id -u)" = "0" ]; then');
+            expect(source).toContain('if [ "$(id -u)" != "0" ] && [ ! -w /data ]; then');
+            expect(source).toContain("chown -R node:node /data");
+            expect(source).toContain(
+                'exec su-exec node:node node /app/packages/onebots/lib/bin.js "$@"',
+            );
+            expect(source.indexOf("chown -R node:node /data")).toBeLessThan(
+                source.indexOf("exec su-exec node:node"),
+            );
+        }
     });
 
     test.each(["docker-entrypoint.sh", "docker-entrypoint-hf.sh"])(

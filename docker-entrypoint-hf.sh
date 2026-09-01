@@ -6,6 +6,11 @@ set -e
 umask 077
 echo "[onebots] 入口脚本执行中 (Hugging Face) ..."
 
+if [ "$(id -u)" != "0" ] && [ ! -w /data ]; then
+  echo "[onebots] 错误: 当前容器用户无法写入 /data，请检查持久化存储权限"
+  exit 1
+fi
+
 # 从 development 目录启动，以便 require 能解析 workspace 的 node_modules（适配器、协议在此）
 cd /app/development
 # 便于排查：若 HF 报找不到适配器/协议，请清除 Space 构建缓存后重新部署，确保拉取到最新基础镜像
@@ -109,4 +114,16 @@ if [ "$HAS_CONFIG" = 0 ]; then
 fi
 
 # onebots 通过 process.cwd()/node_modules 解析适配器，故必须在 development 下执行
+if [ "$(id -u)" = "0" ]; then
+  if ! chown -R node:node /data; then
+    echo "[onebots] 错误: 无法将 /data 交给 node 用户，请检查持久化存储权限"
+    exit 1
+  fi
+  exec su-exec node:node node /app/packages/onebots/lib/bin.js "$@"
+fi
+
+if [ ! -r /data/config.yaml ] || [ ! -w /data ]; then
+  echo "[onebots] 错误: 当前容器用户无法读取 /data/config.yaml 或写入 /data"
+  exit 1
+fi
 exec node /app/packages/onebots/lib/bin.js "$@"
