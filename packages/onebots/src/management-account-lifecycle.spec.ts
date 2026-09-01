@@ -1,8 +1,9 @@
 import {
+    AccountMutationConflictError,
+    BaseApp,
     UnsupportedCapabilityError,
     type Account,
     type Adapter,
-    type BaseApp,
 } from "@onebots/core";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -110,6 +111,7 @@ describe("management account lifecycle boundary", () => {
         expect(result.message).toHaveLength(500);
         expect(result.message).not.toContain("\n");
         expect(app.logger.error).toHaveBeenCalledOnce();
+        expect(app.isReloading).toBe(false);
     });
 
     it("rejects a concurrent operation on the same account across transports", async () => {
@@ -127,6 +129,10 @@ describe("management account lifecycle boundary", () => {
             uin: "demo",
         });
         await vi.waitFor(() => expect(adapter.setOnline).toHaveBeenCalledOnce());
+        expect(app.isReloading).toBe(true);
+        await expect(
+            BaseApp.prototype.removeAccount.call(app, "mock", "demo"),
+        ).rejects.toBeInstanceOf(AccountMutationConflictError);
 
         const conflict = await handleManagementAccountLifecycleSocketAction(app, {
             action: "bot.stop",
@@ -148,6 +154,7 @@ describe("management account lifecycle boundary", () => {
 
         release();
         await expect(first).resolves.toMatchObject({ success: true });
+        expect(app.isReloading).toBe(false);
         await expect(
             executeManagementAccountLifecycle(app, "bot.stop", {
                 platform: "mock",
@@ -155,6 +162,63 @@ describe("management account lifecycle boundary", () => {
             }),
         ).resolves.toMatchObject({ success: true });
         expect(adapter.setOffline).toHaveBeenCalledOnce();
+    });
+
+    it("rejects lifecycle control while a configuration transaction owns the runtime", async () => {
+        const account = fakeAccount("demo", "online");
+        const adapter = fakeAdapter(account);
+        const app = host(adapter);
+        app.isReloading = true;
+
+        const result = await executeManagementAccountLifecycle(app, "bot.stop", {
+            platform: "mock",
+            uin: "demo",
+        });
+
+        expect(result).toEqual({
+            success: false,
+            status: 409,
+            code: "ACCOUNT_LIFECYCLE_CONFLICT",
+            message: "OneBots 配置正在变更，请稍后重试账号操作",
+        });
+        expect(adapter.setOffline).not.toHaveBeenCalled();
+        expect(app.isReloading).toBe(true);
+    });
+
+    it("keeps readiness withdrawn until parallel operations on different accounts finish", async () => {
+        let releaseFirst!: () => void;
+        let releaseSecond!: () => void;
+        const firstGate = new Promise<void>(resolve => {
+            releaseFirst = resolve;
+        });
+        const secondGate = new Promise<void>(resolve => {
+            releaseSecond = resolve;
+        });
+        const firstAccount = fakeAccount("first", "online");
+        const secondAccount = fakeAccount("second", "online");
+        const adapter = fakeAdapter([firstAccount, secondAccount], {
+            setOffline: vi.fn((uin: string) => (uin === "first" ? firstGate : secondGate)),
+        });
+        const app = host(adapter);
+
+        const first = executeManagementAccountLifecycle(app, "bot.stop", {
+            platform: "mock",
+            uin: "first",
+        });
+        const second = executeManagementAccountLifecycle(app, "bot.stop", {
+            platform: "mock",
+            uin: "second",
+        });
+        await vi.waitFor(() => expect(adapter.setOffline).toHaveBeenCalledTimes(2));
+        expect(app.isReloading).toBe(true);
+
+        releaseFirst();
+        await expect(first).resolves.toMatchObject({ success: true });
+        expect(app.isReloading).toBe(true);
+
+        releaseSecond();
+        await expect(second).resolves.toMatchObject({ success: true });
+        expect(app.isReloading).toBe(false);
     });
 
     it("ignores unrelated management messages", async () => {
@@ -167,8 +231,9 @@ describe("management account lifecycle boundary", () => {
 function host(adapter?: Adapter) {
     return {
         adapters: new Map(adapter ? [["mock", adapter]] : []),
+        isReloading: false,
         logger: { error: vi.fn() },
-    } as unknown as Pick<BaseApp, "adapters" | "logger"> & {
+    } as unknown as Pick<BaseApp, "adapters" | "isReloading" | "logger"> & {
         logger: { error: ReturnType<typeof vi.fn> };
     };
 }
@@ -177,9 +242,10 @@ function fakeAccount(uin: string, status: string) {
     return { info: { uin, status } } as unknown as Account;
 }
 
-function fakeAdapter(account: Account, overrides: Record<string, unknown> = {}) {
+function fakeAdapter(account: Account | Account[], overrides: Record<string, unknown> = {}) {
+    const accounts = Array.isArray(account) ? account : [account];
     return {
-        getAccount: vi.fn((uin: string) => (uin === account.info.uin ? account : undefined)),
+        getAccount: vi.fn((uin: string) => accounts.find(item => item.info.uin === uin)),
         setOnline: vi.fn(async () => undefined),
         setOffline: vi.fn(async () => undefined),
         ...overrides,

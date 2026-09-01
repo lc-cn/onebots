@@ -1,4 +1,5 @@
 import {
+    AccountMutationConflictError,
     ErrorHandler,
     UnsupportedCapabilityError,
     ValidationError,
@@ -42,7 +43,7 @@ export type ManagementAccountLifecycleSocketResponse =
           };
       };
 
-type ManagementAccountLifecycleHost = Pick<BaseApp, "adapters" | "logger">;
+type ManagementAccountLifecycleHost = Pick<BaseApp, "adapters" | "isReloading" | "logger">;
 const activeOperations = new WeakMap<
     ManagementAccountLifecycleHost,
     Map<string, ManagementAccountLifecycleAction>
@@ -136,6 +137,9 @@ function classifyLifecycleError(
     if (error instanceof AccountLifecycleConflictError) {
         return { success: false, status: 409, code: "ACCOUNT_LIFECYCLE_CONFLICT", message };
     }
+    if (error instanceof AccountMutationConflictError) {
+        return { success: false, status: 409, code: "ACCOUNT_LIFECYCLE_CONFLICT", message };
+    }
     if (error instanceof UnsupportedCapabilityError) {
         return {
             success: false,
@@ -161,8 +165,10 @@ async function runAccountLifecycleOperation(
 ): Promise<void> {
     let operations = activeOperations.get(host);
     if (!operations) {
+        if (host.isReloading) throw new AccountMutationConflictError();
         operations = new Map();
         activeOperations.set(host, operations);
+        host.isReloading = true;
     }
     const key = `${platform}\0${uin}`;
     const activeAction = operations.get(key);
@@ -176,7 +182,10 @@ async function runAccountLifecycleOperation(
         await operation();
     } finally {
         operations.delete(key);
-        if (operations.size === 0) activeOperations.delete(host);
+        if (operations.size === 0) {
+            activeOperations.delete(host);
+            host.isReloading = false;
+        }
     }
 }
 
