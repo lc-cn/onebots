@@ -18,6 +18,7 @@ import {
 } from "../management-websocket.js";
 import type { WebSocket } from "ws";
 import { parseTerminalClientMessage } from "../terminal-message.js";
+import { prepareManagementEventStream } from "../management-event-stream-response.js";
 
 /** SSE 心跳间隔（毫秒） */
 const SSE_HEARTBEAT_INTERVAL_MS = 30000;
@@ -123,18 +124,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
     /* ── 日志流 SSE ───────────────────────────────────────────── */
 
     router.get("/api/logs", (ctx: RouterContext) => {
-        ctx.request.socket.setTimeout(0);
-        ctx.req.socket.setNoDelay(true);
-        ctx.req.socket.setKeepAlive(true);
-        ctx.set({
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type",
-        });
-        ctx.status = 200;
-        ctx.respond = false;
+        prepareManagementEventStream(ctx);
 
         // 发送缓存日志到客户端
         try {

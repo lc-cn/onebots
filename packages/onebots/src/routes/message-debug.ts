@@ -2,6 +2,7 @@ import { RouterContext } from "@onebots/core";
 import type { Router } from "@onebots/core";
 import type { App } from "../app.js";
 import { startManagementAuthorizationMonitor } from "../management-authorization-monitor.js";
+import { prepareManagementEventStream } from "../management-event-stream-response.js";
 
 /**
  * Register message-debug routes: a live view of inbound events (raw CommonEvent
@@ -15,18 +16,7 @@ import { startManagementAuthorizationMonitor } from "../management-authorization
  */
 export function registerMessageDebugRoutes(app: App, router: Router): void {
     router.get("/api/message-debug/stream", (ctx: RouterContext) => {
-        ctx.request.socket.setTimeout(0);
-        ctx.req.socket.setNoDelay(true);
-        ctx.req.socket.setKeepAlive(true);
-        ctx.set({
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type",
-        });
-        ctx.status = 200;
-        ctx.respond = false;
+        prepareManagementEventStream(ctx);
 
         const stopAuthorizationMonitor = startManagementAuthorizationMonitor(
             app,

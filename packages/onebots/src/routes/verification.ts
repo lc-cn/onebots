@@ -2,6 +2,7 @@ import { RouterContext } from "@onebots/core";
 import type { Router, Adapter } from "@onebots/core";
 import type { App } from "../app.js";
 import { startManagementAuthorizationMonitor } from "../management-authorization-monitor.js";
+import { prepareManagementEventStream } from "../management-event-stream-response.js";
 
 /**
  * Register verification-related routes for adapter login flows (device lock, SMS, etc.).
@@ -19,18 +20,7 @@ import { startManagementAuthorizationMonitor } from "../management-authorization
 export function registerVerificationRoutes(app: App, router: Router): void {
     // 验证流 SSE 端点（登录验证事件推送到 Web）
     router.get("/api/verification/stream", (ctx: RouterContext) => {
-        ctx.request.socket.setTimeout(0);
-        ctx.req.socket.setNoDelay(true);
-        ctx.req.socket.setKeepAlive(true);
-        ctx.set({
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type",
-        });
-        ctx.status = 200;
-        ctx.respond = false;
+        prepareManagementEventStream(ctx);
 
         const stopAuthorizationMonitor = startManagementAuthorizationMonitor(
             app,

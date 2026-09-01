@@ -69,6 +69,8 @@ Terminal reconnection also distinguishes the close reason. Network interruption,
 
 Authenticated SSE used by logs, account verification, and message debugging likewise distinguishes a final rejection from a transient failure. If `authFetch` still receives HTTP 401 or 403 after its one token-refresh attempt, the stream cancels the response body, reports one error, and stops retrying. Network failures and HTTP 5xx responses continue recovering at the configured interval. Invalid management credentials therefore cannot create a background request loop even when an embedded container delays or blocks browser navigation.
 
+These three protected SSE endpoints share one response contract. `Cache-Control: no-store, no-transform` prevents browsers and intermediaries from storing or rewriting logs, login-verification events, and message payloads. `X-Accel-Buffering: no` asks compatible reverse proxies to forward events immediately instead of batching them. Connection-level keep-alive and heartbeats remain unchanged, so the stronger cache boundary does not reduce live delivery.
+
 ### Token Management
 
 Complete token lifecycle management.
