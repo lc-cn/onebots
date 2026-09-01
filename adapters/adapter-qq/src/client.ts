@@ -13,10 +13,20 @@ interface ClientLogger {
     error(message: string, ...args: unknown[]): unknown;
 }
 
+interface ReadyWaiter {
+    resolve(): void;
+    reject(error: QQApiError): void;
+}
+
 /** 腾讯官方 SDK 的 OneBots 客户端封装：保留完整 SDK 类型并补充稳定生命周期。 */
 export class QQClient extends QQBot {
     private runController?: AbortController;
     private runPromise?: Promise<void>;
+    private startPromise?: Promise<void>;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
+    private transportReady = false;
+    private readonly readyWaiters = new Set<ReadyWaiter>();
     private self?: QQUser;
     private readonly streamSessions = new QQStreamSessions();
 
@@ -26,6 +36,98 @@ export class QQClient extends QQBot {
         readonly webhookHost?: QQWebhookHost,
     ) {
         super(options);
+        // 必须先于 Adapter 的 READY 监听器注册，让账号启动可以先放行协议出口。
+        this.on("ready", () => {
+            for (const waiter of [...this.readyWaiters]) waiter.resolve();
+        });
+    }
+
+    /** 等待首个接收通道 READY，同时让后续协议启动共享同一取消边界。 */
+    override async start(signal?: AbortSignal): Promise<void> {
+        this.assertStartActive(signal);
+        if (this.transportReady) {
+            this.bindStartSignal(signal);
+            return;
+        }
+        if (this.startPromise) return this.startPromise;
+        this.bindStartSignal(signal);
+        const task = this.startAndWait(signal);
+        this.startPromise = task;
+        try {
+            await task;
+        } finally {
+            if (this.startPromise === task) this.startPromise = undefined;
+            if (!this.transportReady && this.startSignal === signal) this.unbindStartSignal();
+        }
+    }
+
+    private async startAndWait(signal?: AbortSignal): Promise<void> {
+        const ready = this.waitForReady(signal);
+        const running = this.run();
+        void running.catch(error =>
+            this.adapterLogger.error("QQ Client 已停止", QQApiError.wrap(error)),
+        );
+        await ready;
+        this.assertStartActive(signal);
+        if (!this.self) {
+            throw new QQApiError("QQ 接收通道就绪时缺少机器人身份", {
+                code: "QQ_START_IDENTITY_MISSING",
+            });
+        }
+        this.transportReady = true;
+    }
+
+    private waitForReady(signal?: AbortSignal): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const cleanup = (): void => {
+                this.readyWaiters.delete(waiter);
+                signal?.removeEventListener("abort", onAbort);
+            };
+            const waiter: ReadyWaiter = {
+                resolve: () => {
+                    cleanup();
+                    resolve();
+                },
+                reject: error => {
+                    cleanup();
+                    reject(error);
+                },
+            };
+            const onAbort = (): void => {
+                waiter.reject(this.startCancelled());
+            };
+            this.readyWaiters.add(waiter);
+            signal?.addEventListener("abort", onAbort, { once: true });
+            if (signal?.aborted) onAbort();
+        });
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = (): void => this.close();
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
+    }
+
+    private assertStartActive(signal?: AbortSignal): void {
+        if (signal?.aborted) throw this.startCancelled();
+    }
+
+    private startCancelled(): QQApiError {
+        return new QQApiError("QQ Client 启动已取消", {
+            code: "QQ_START_CANCELLED",
+            category: ErrorCategory.ADAPTER,
+        });
     }
 
     /** 持续接收事件；初始连接失败或 SDK 代次结束后按无上限退避重新启动。 */
@@ -36,10 +138,11 @@ export class QQClient extends QQBot {
         this.runController = controller;
         const promise = this.runGeneration(controller, previous);
         this.runPromise = promise;
-        void promise.finally(() => {
+        const cleanup = (): void => {
             if (this.runPromise === promise) this.runPromise = undefined;
             if (this.runController === controller) this.runController = undefined;
-        });
+        };
+        void promise.then(cleanup, cleanup);
         return promise;
     }
 
@@ -55,7 +158,7 @@ export class QQClient extends QQBot {
         let generation = 0;
         while (!controller.signal.aborted && this.runController === controller) {
             try {
-                await this.ensureSelf();
+                await this.ensureSelf(controller.signal);
                 if (!controller.signal.aborted && this.runController === controller) {
                     await super.start(controller.signal);
                     if (!controller.signal.aborted) {
@@ -74,6 +177,10 @@ export class QQClient extends QQBot {
     }
 
     close(): void {
+        this.unbindStartSignal();
+        this.transportReady = false;
+        this.startPromise = undefined;
+        for (const waiter of [...this.readyWaiters]) waiter.reject(this.startCancelled());
         const controller = this.runController;
         this.runController = undefined;
         controller?.abort();
@@ -117,6 +224,7 @@ export class QQClient extends QQBot {
      */
     restartTransportGeneration(): void {
         if (!this.runController || this.runController.signal.aborted) return;
+        this.transportReady = false;
         super.stop();
     }
 
@@ -126,8 +234,9 @@ export class QQClient extends QQBot {
     }
 
     /** 刷新并校验机器人身份；该身份同时用于 canonical bot_id。 */
-    async fetchSelf(): Promise<QQUser> {
+    async fetchSelf(signal?: AbortSignal): Promise<QQUser> {
         const value = await this.call<unknown>({ method: "GET", path: "/users/@me" });
+        if (signal?.aborted) throw this.startCancelled();
         if (!isRecord(value) || typeof value.id !== "string" || !value.id) {
             throw new QQApiError("QQ OpenAPI 返回了无效的机器人身份", {
                 code: "QQ_INVALID_SELF_RESPONSE",
@@ -144,8 +253,8 @@ export class QQClient extends QQBot {
         return self;
     }
 
-    private async ensureSelf(): Promise<QQUser> {
-        return this.self ?? this.fetchSelf();
+    private async ensureSelf(signal?: AbortSignal): Promise<QQUser> {
+        return this.self ?? this.fetchSelf(signal);
     }
 
     /** 将现有 HTTP Host 提取出的原始请求交给官方 SDK 的验签与事件分发管线。 */

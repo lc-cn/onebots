@@ -352,11 +352,19 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
             this.app.router.post(webhookPath, ctx => host.acceptHttp(ctx));
         }
         this.bindEvents(account, client, webhookMode, gatewayDelivery);
-        account.on("start", () => {
+        account.on("start", async (signal: AbortSignal) => {
             gatewayDelivery.start();
-            void client
-                .run()
-                .catch(error => this.logger.error("QQ Client 已停止", QQApiError.wrap(error)));
+            try {
+                await client.start(signal);
+                account.status = AccountStatus.Online;
+                this.applyProfile(account, client.getCachedSelf());
+                this.logger.info(`QQ Bot ${config.account_id} 已就绪`);
+            } catch (error) {
+                gatewayDelivery.stop();
+                account.status = AccountStatus.OffLine;
+                this.logger.error(`启动 QQ Bot ${config.account_id} 失败`, error);
+                throw error;
+            }
         });
         account.on("stop", () => {
             client.close();

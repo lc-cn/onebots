@@ -49,6 +49,106 @@ describe("QQClient", () => {
         await Promise.all([first, second]);
     });
 
+    it("start 等待首个 READY 后才完成账号启动", async () => {
+        let emitReady!: () => void;
+        vi.spyOn(QQBot.prototype, "start").mockImplementation(async function (this: QQBot, signal) {
+            emitReady = () => {
+                void emitSdkEvent(this, "ready", { session_id: "session-1" });
+            };
+            await new Promise<void>(resolve =>
+                signal?.addEventListener("abort", () => resolve(), { once: true }),
+            );
+        });
+        vi.spyOn(QQBot.prototype, "stop").mockImplementation(() => undefined);
+        const client = new QQClient(
+            { appId: "app", appSecret: "secret" },
+            { warn: vi.fn(), error: vi.fn() },
+        );
+        vi.spyOn(client, "call").mockResolvedValue({ id: "bot-openid" });
+        let completed = false;
+
+        const starting = client.start().then(() => {
+            completed = true;
+        });
+        await vi.waitFor(() => expect(emitReady).toBeTypeOf("function"));
+        expect(completed).toBe(false);
+        emitReady();
+
+        await starting;
+        expect(completed).toBe(true);
+        client.close();
+    });
+
+    it("内部 READY 边界不会被业务监听器阻塞", async () => {
+        let releaseBusiness!: () => void;
+        vi.spyOn(QQBot.prototype, "start").mockImplementation(async function (this: QQBot, signal) {
+            void emitSdkEvent(this, "ready", { session_id: "session-1" });
+            await new Promise<void>(resolve =>
+                signal?.addEventListener("abort", () => resolve(), { once: true }),
+            );
+        });
+        vi.spyOn(QQBot.prototype, "stop").mockImplementation(() => undefined);
+        const client = new QQClient(
+            { appId: "app", appSecret: "secret" },
+            { warn: vi.fn(), error: vi.fn() },
+        );
+        vi.spyOn(client, "call").mockResolvedValue({ id: "bot-openid" });
+        client.on("ready", () => new Promise<void>(resolve => (releaseBusiness = resolve)));
+
+        await client.start();
+
+        expect(releaseBusiness).toBeTypeOf("function");
+        releaseBusiness();
+        client.close();
+    });
+
+    it("取消身份验证会立即结束启动并丢弃迟到身份", async () => {
+        let releaseIdentity!: () => void;
+        const sdkStart = vi.spyOn(QQBot.prototype, "start");
+        vi.spyOn(QQBot.prototype, "stop").mockImplementation(() => undefined);
+        const client = new QQClient(
+            { appId: "app", appSecret: "secret" },
+            { warn: vi.fn(), error: vi.fn() },
+        );
+        vi.spyOn(client, "call").mockImplementation(
+            () =>
+                new Promise(resolve => {
+                    releaseIdentity = () => resolve({ id: "late-bot" });
+                }),
+        );
+        const controller = new AbortController();
+
+        const starting = client.start(controller.signal);
+        await vi.waitFor(() => expect(releaseIdentity).toBeTypeOf("function"));
+        controller.abort();
+
+        await expect(starting).rejects.toMatchObject({ code: "QQ_START_CANCELLED" });
+        releaseIdentity();
+        await vi.waitFor(() => expect(client.getCachedSelf()).toBeUndefined());
+        expect(sdkStart).not.toHaveBeenCalled();
+    });
+
+    it("READY 后保留账号信号以支持协议启动失败回滚", async () => {
+        vi.spyOn(QQBot.prototype, "start").mockImplementation(async function (this: QQBot, signal) {
+            void emitSdkEvent(this, "ready", { session_id: "session-1" });
+            await new Promise<void>(resolve =>
+                signal?.addEventListener("abort", () => resolve(), { once: true }),
+            );
+        });
+        const stop = vi.spyOn(QQBot.prototype, "stop").mockImplementation(() => undefined);
+        const client = new QQClient(
+            { appId: "app", appSecret: "secret" },
+            { warn: vi.fn(), error: vi.fn() },
+        );
+        vi.spyOn(client, "call").mockResolvedValue({ id: "bot-openid" });
+        const controller = new AbortController();
+
+        await client.start(controller.signal);
+        controller.abort();
+
+        expect(stop).toHaveBeenCalledOnce();
+    });
+
     it("stop 后的快速重启等待旧连接代次完成", async () => {
         const completions: Array<() => void> = [];
         const start = vi
@@ -185,3 +285,10 @@ describe("QQClient", () => {
         expect(await response.json()).toEqual({});
     });
 });
+
+function emitSdkEvent(bot: QQBot, event: string, payload: unknown): Promise<void> {
+    const sdk = bot as unknown as {
+        emit(name: string, value: unknown): Promise<void>;
+    };
+    return sdk.emit(event, payload);
+}
