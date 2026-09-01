@@ -291,6 +291,7 @@ describe("BaseApp reload boundary", () => {
         const app = {
             config,
             isReloading: false,
+            runtimeOperation: "idle",
             isStarted: true,
             adapters: new Map(),
             logger: { level: "info" },
@@ -305,11 +306,13 @@ describe("BaseApp reload boundary", () => {
             access_token: "next-token",
         });
         await vi.waitFor(() => expect(app.isReloading).toBe(true));
+        expect(app.runtimeOperation).toBe("configuration_reload");
         await expect(BaseApp.prototype.reload.call(app, config)).rejects.toThrow("配置正在重载");
 
         releaseStop?.();
         await firstReload;
         expect(app.isReloading).toBe(false);
+        expect(app.runtimeOperation).toBe("idle");
         expect(app.config.access_token).toBe("next-token");
     });
 

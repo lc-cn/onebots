@@ -421,6 +421,7 @@ describe("doctor health probes", () => {
                     JSON.stringify({
                         ready: false,
                         reloading: true,
+                        runtime_operation: "configuration_reload",
                         configured: false,
                         summary: { total_accounts: 0, online_accounts: 0 },
                     }),
@@ -432,7 +433,30 @@ describe("doctor health probes", () => {
             probeDoctorEndpoint("http://127.0.0.1:6727", "ready", fetcher),
         ).resolves.toMatchObject({
             level: "error",
-            message: "ready: HTTP 503；配置重载中；账号 0/0 在线",
+            message: "ready: HTTP 503；完整配置重载中；账号 0/0 在线",
+        });
+    });
+
+    it("明确区分账号上下线造成的暂时不可用", async () => {
+        const fetcher = vi.fn(
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        ready: false,
+                        reloading: true,
+                        runtime_operation: "account_lifecycle",
+                        configured: true,
+                        summary: { total_accounts: 1, online_accounts: 1 },
+                    }),
+                    { status: 503 },
+                ),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "ready", fetcher),
+        ).resolves.toMatchObject({
+            level: "error",
+            message: "ready: HTTP 503；账号上下线切换中；账号 1/1 在线",
         });
     });
 

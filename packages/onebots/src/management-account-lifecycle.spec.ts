@@ -112,6 +112,7 @@ describe("management account lifecycle boundary", () => {
         expect(result.message).not.toContain("\n");
         expect(app.logger.error).toHaveBeenCalledOnce();
         expect(app.isReloading).toBe(false);
+        expect(app.runtimeOperation).toBe("idle");
     });
 
     it("rejects a concurrent operation on the same account across transports", async () => {
@@ -130,6 +131,7 @@ describe("management account lifecycle boundary", () => {
         });
         await vi.waitFor(() => expect(adapter.setOnline).toHaveBeenCalledOnce());
         expect(app.isReloading).toBe(true);
+        expect(app.runtimeOperation).toBe("account_lifecycle");
         await expect(
             BaseApp.prototype.removeAccount.call(app, "mock", "demo"),
         ).rejects.toBeInstanceOf(AccountMutationConflictError);
@@ -155,6 +157,7 @@ describe("management account lifecycle boundary", () => {
         release();
         await expect(first).resolves.toMatchObject({ success: true });
         expect(app.isReloading).toBe(false);
+        expect(app.runtimeOperation).toBe("idle");
         await expect(
             executeManagementAccountLifecycle(app, "bot.stop", {
                 platform: "mock",
@@ -169,6 +172,7 @@ describe("management account lifecycle boundary", () => {
         const adapter = fakeAdapter(account);
         const app = host(adapter);
         app.isReloading = true;
+        app.runtimeOperation = "account_configuration";
 
         const result = await executeManagementAccountLifecycle(app, "bot.stop", {
             platform: "mock",
@@ -183,6 +187,7 @@ describe("management account lifecycle boundary", () => {
         });
         expect(adapter.setOffline).not.toHaveBeenCalled();
         expect(app.isReloading).toBe(true);
+        expect(app.runtimeOperation).toBe("account_configuration");
     });
 
     it("keeps readiness withdrawn until parallel operations on different accounts finish", async () => {
@@ -211,14 +216,17 @@ describe("management account lifecycle boundary", () => {
         });
         await vi.waitFor(() => expect(adapter.setOffline).toHaveBeenCalledTimes(2));
         expect(app.isReloading).toBe(true);
+        expect(app.runtimeOperation).toBe("account_lifecycle");
 
         releaseFirst();
         await expect(first).resolves.toMatchObject({ success: true });
         expect(app.isReloading).toBe(true);
+        expect(app.runtimeOperation).toBe("account_lifecycle");
 
         releaseSecond();
         await expect(second).resolves.toMatchObject({ success: true });
         expect(app.isReloading).toBe(false);
+        expect(app.runtimeOperation).toBe("idle");
     });
 
     it("ignores unrelated management messages", async () => {
@@ -232,8 +240,9 @@ function host(adapter?: Adapter) {
     return {
         adapters: new Map(adapter ? [["mock", adapter]] : []),
         isReloading: false,
+        runtimeOperation: "idle" as const,
         logger: { error: vi.fn() },
-    } as unknown as Pick<BaseApp, "adapters" | "isReloading" | "logger"> & {
+    } as unknown as Pick<BaseApp, "adapters" | "isReloading" | "logger" | "runtimeOperation"> & {
         logger: { error: ReturnType<typeof vi.fn> };
     };
 }

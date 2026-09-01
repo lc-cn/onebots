@@ -216,8 +216,9 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
         if (typeof payload.instance_id === "string") {
             details.push(`实例 ${payload.instance_id}`);
         }
-        if (payload.reloading === true) details.push("配置重载中");
-        else if (payload.configured === false) details.push("未配置账号");
+        if (payload.reloading === true) {
+            details.push(runtimeOperationLabel(payload.runtime_operation));
+        } else if (payload.configured === false) details.push("未配置账号");
         const config = payload.config as { status?: unknown; in_sync?: unknown } | undefined;
         if (config?.in_sync === false) {
             const label =
@@ -268,6 +269,13 @@ function summarizeEndpointBody(endpoint: DoctorEndpoint, body: string): string {
         const singleLine = body.replace(/\s+/gu, " ").trim();
         return singleLine ? `；响应 ${singleLine.slice(0, 160)}` : "";
     }
+}
+
+function runtimeOperationLabel(operation: unknown): string {
+    if (operation === "configuration_reload") return "完整配置重载中";
+    if (operation === "account_configuration") return "账号配置事务中";
+    if (operation === "account_lifecycle") return "账号上下线切换中";
+    return "运行态变更中";
 }
 
 function isConfigurationPending(body: string): boolean {

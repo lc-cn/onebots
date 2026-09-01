@@ -158,6 +158,7 @@ describe("account transaction", () => {
         );
         const first = mutateAccountAtomically(options(fixture, next));
         await vi.waitFor(() => expect(fixture.host.isReloading).toBe(true));
+        expect(fixture.host.runtimeOperation).toBe("account_configuration");
 
         await expect(mutateAccountAtomically(options(fixture, next))).rejects.toBeInstanceOf(
             AccountMutationConflictError,
@@ -166,6 +167,7 @@ describe("account transaction", () => {
         releaseStart?.();
         await first;
         expect(fixture.host.isReloading).toBe(false);
+        expect(fixture.host.runtimeOperation).toBe("idle");
     });
 
     it("运行态回滚失败时聚合原始错误和清理证据", async () => {

@@ -34,6 +34,7 @@ import {
     getRuntimeProcessIdentity,
     registerObservabilityEndpoints,
     type ApplicationIdentity,
+    type RuntimeOperation,
 } from "./app-observability.js";
 export type { ApplicationIdentity } from "./app-observability.js";
 import { resolvePublicStaticRoot } from "./public-static-root.js";
@@ -68,8 +69,10 @@ export class BaseApp extends Koa {
     public config: Required<BaseApp.Config>;
     public httpServer: Server;
     isStarted: boolean = false;
-    /** 热重载期间保持 HTTP 存活，但 readiness 必须拒绝流量。 */
+    /** 独占运行态操作期间保持 HTTP 存活，但 readiness 必须拒绝流量。 */
     isReloading: boolean = false;
+    /** 对外解释 isReloading 对应的具体运行态操作。 */
+    runtimeOperation: RuntimeOperation = "idle";
     isDisposed: boolean = false;
     public logger: Logger;
     public enhancedLogger: EnhancedLogger;
@@ -474,6 +477,7 @@ export class BaseApp extends Koa {
         const previous = this.config;
         const wasStarted = this.isStarted;
         this.isReloading = true;
+        this.runtimeOperation = "configuration_reload";
         let previousStopped = false;
 
         try {
@@ -514,6 +518,7 @@ export class BaseApp extends Koa {
                 throw ErrorHandler.wrap(finalError, { operation: "reload" });
             }
         } finally {
+            this.runtimeOperation = "idle";
             this.isReloading = false;
         }
     }

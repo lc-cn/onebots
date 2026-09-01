@@ -4,6 +4,7 @@ import {
     getReadinessSnapshot,
     getRuntimeProcessIdentity,
     registerObservabilityEndpoints,
+    type RuntimeOperation,
 } from "./app-observability.js";
 
 function observableApp(
@@ -11,10 +12,12 @@ function observableApp(
     isStarted = true,
     isReloading = false,
     configStatus?: string,
+    runtimeOperation?: RuntimeOperation,
 ) {
     return {
         isStarted,
         isReloading,
+        runtimeOperation,
         runtimeConfigState: configStatus ? { status: configStatus } : undefined,
         adapters: new Map([
             [
@@ -97,7 +100,11 @@ describe("application readiness", () => {
     it("keeps an empty first-run gateway reachable while exposing pending configuration", () => {
         const snapshot = getReadinessSnapshot(observableApp([]));
 
-        expect(snapshot).toMatchObject({ ready: true, configured: false });
+        expect(snapshot).toMatchObject({
+            ready: true,
+            configured: false,
+            runtime_operation: "idle",
+        });
     });
 
     it("rejects readiness while configuration is reloading", () => {
@@ -106,10 +113,29 @@ describe("application readiness", () => {
                 [{ status: "online", protocols: [{ lifecycleStatus: "ready" }] }],
                 true,
                 true,
+                undefined,
+                "configuration_reload",
             ),
         );
 
-        expect(snapshot).toMatchObject({ ready: false, server: true, reloading: true });
+        expect(snapshot).toMatchObject({
+            ready: false,
+            server: true,
+            reloading: true,
+            runtime_operation: "configuration_reload",
+        });
+    });
+
+    it("fails closed to an unknown operation for an embedded busy host", () => {
+        const snapshot = getReadinessSnapshot(
+            observableApp(
+                [{ status: "online", protocols: [{ lifecycleStatus: "ready" }] }],
+                true,
+                true,
+            ),
+        );
+
+        expect(snapshot.runtime_operation).toBe("unknown");
     });
 
     it.each(["drifted", "unavailable"])(
@@ -200,6 +226,19 @@ describe("application readiness", () => {
         expect(metricsContext.body).toContain("onebots_config_in_sync 0");
         expect(metricsContext.body).toContain('onebots_info{version="1.2.3"} 1');
         expect(metricsContext.body).toContain('onebots_core_info{version="1.1.0"} 1');
+        expect(metricsContext.body).toContain('onebots_runtime_operation{operation="idle"} 1');
+        expect(metricsContext.body).toContain(
+            'onebots_runtime_operation{operation="account_lifecycle"} 0',
+        );
+
+        app.isReloading = true;
+        app.runtimeOperation = "account_lifecycle";
+        const busyMetricsContext = observabilityContext();
+        handlers.get("/metrics")?.(busyMetricsContext);
+        expect(busyMetricsContext.body).toContain('onebots_runtime_operation{operation="idle"} 0');
+        expect(busyMetricsContext.body).toContain(
+            'onebots_runtime_operation{operation="account_lifecycle"} 1',
+        );
 
         const healthContext = observabilityContext();
         handlers.get("/health")?.(healthContext);

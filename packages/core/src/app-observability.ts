@@ -24,11 +24,20 @@ interface ObservableApp {
     readonly adapters: ReadonlyMap<keyof Adapter.Configs, Adapter>;
     readonly isStarted: boolean;
     readonly isReloading: boolean;
+    /** 当前撤销 readiness 的运行态操作；嵌入式宿主可省略并得到 unknown。 */
+    readonly runtimeOperation?: RuntimeOperation;
     /** OneBots 主应用提供磁盘配置状态；嵌入式 BaseApp 可不跟踪。 */
     readonly runtimeConfigState?: { status: string };
     /** 主应用可提供不包含原始路径或参数的启动契约摘要。 */
     readonly runtimeContractId?: string;
 }
+
+export type RuntimeOperation =
+    | "idle"
+    | "configuration_reload"
+    | "account_configuration"
+    | "account_lifecycle"
+    | "unknown";
 
 export interface ApplicationIdentity {
     name: string;
@@ -58,6 +67,7 @@ export interface ReadinessSnapshot {
     timestamp: string;
     server: boolean;
     reloading: boolean;
+    runtime_operation: RuntimeOperation;
     configured: boolean;
     config: {
         status: "in_sync" | "drifted" | "unavailable" | "untracked";
@@ -94,6 +104,7 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
     let accountsWithoutProtocols = 0;
     const configStatus = normalizeConfigStatus(app.runtimeConfigState?.status);
     const configInSync = configStatus === "in_sync" || configStatus === "untracked";
+    const runtimeOperation = normalizeRuntimeOperation(app.isReloading, app.runtimeOperation);
 
     for (const [platform, adapter] of app.adapters) {
         let online = 0;
@@ -144,6 +155,7 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
         timestamp: new Date().toISOString(),
         server: app.isStarted,
         reloading: app.isReloading,
+        runtime_operation: runtimeOperation,
         configured: totalAccounts > 0,
         config: {
             status: configStatus,
@@ -159,6 +171,18 @@ export function getReadinessSnapshot(app: ObservableApp): ReadinessSnapshot {
             accounts_without_protocols: accountsWithoutProtocols,
         },
     };
+}
+
+function normalizeRuntimeOperation(
+    isReloading: boolean,
+    operation: RuntimeOperation | undefined,
+): RuntimeOperation {
+    if (!isReloading) return "idle";
+    return operation === "configuration_reload" ||
+        operation === "account_configuration" ||
+        operation === "account_lifecycle"
+        ? operation
+        : "unknown";
 }
 
 function normalizeConfigStatus(status: string | undefined): ReadinessSnapshot["config"]["status"] {
@@ -256,9 +280,23 @@ export function registerObservabilityEndpoints(
             "# HELP onebots_started Whether the application is started",
             "# TYPE onebots_started gauge",
             `onebots_started ${app.isStarted ? 1 : 0}`,
-            "# HELP onebots_reloading Whether the application is reloading configuration",
+            "# HELP onebots_reloading Whether an exclusive runtime operation has withdrawn readiness",
             "# TYPE onebots_reloading gauge",
             `onebots_reloading ${app.isReloading ? 1 : 0}`,
+            "# HELP onebots_runtime_operation Active exclusive runtime operation by kind",
+            "# TYPE onebots_runtime_operation gauge",
+            ...(
+                [
+                    "idle",
+                    "configuration_reload",
+                    "account_configuration",
+                    "account_lifecycle",
+                    "unknown",
+                ] as const
+            ).map(
+                operation =>
+                    `onebots_runtime_operation{operation="${operation}"} ${readiness.runtime_operation === operation ? 1 : 0}`,
+            ),
             "# HELP onebots_config_in_sync Whether disk configuration matches the active runtime",
             "# TYPE onebots_config_in_sync gauge",
             `onebots_config_in_sync ${readiness.config.in_sync ? 1 : 0}`,

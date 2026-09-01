@@ -13,6 +13,13 @@ function readiness(
         configInSync?: boolean;
         instanceId?: string;
         runtimeContractId?: string;
+        reloading?: boolean;
+        runtimeOperation?:
+            | "idle"
+            | "configuration_reload"
+            | "account_configuration"
+            | "account_lifecycle"
+            | "unknown";
     } = {},
 ) {
     return new Response(
@@ -26,7 +33,8 @@ function readiness(
             started_at: "2026-08-31T00:00:00.000Z",
             configured: options.configured ?? true,
             server: true,
-            reloading: false,
+            reloading: options.reloading ?? false,
+            runtime_operation: options.runtimeOperation ?? "idle",
             config: {
                 status: options.configInSync === false ? "drifted" : "in_sync",
                 in_sync: options.configInSync ?? true,
@@ -197,6 +205,32 @@ describe("Web semantic service probes", () => {
         expect(result.detail).toContain("协议出口 0/1 就绪");
         expect(result.detail).toContain("1 个账号没有协议出口");
         expect(result.detail).toContain("配置状态 drifted");
+    });
+
+    it.each([
+        ["configuration_reload", "正在完整重载配置"],
+        ["account_configuration", "正在变更账号配置"],
+        ["account_lifecycle", "正在切换账号上下线"],
+    ] as const)("explains the active runtime operation %s", async (runtimeOperation, message) => {
+        const result = await probeReadiness(
+            vi.fn(async () => readiness(false, { reloading: true, runtimeOperation })),
+        );
+
+        expect(result).toMatchObject({ state: "danger", label: "未就绪" });
+        expect(result.detail).toContain(message);
+    });
+
+    it("rejects contradictory runtime operation evidence", async () => {
+        await expect(
+            probeReadiness(
+                vi.fn(async () =>
+                    readiness(false, {
+                        reloading: false,
+                        runtimeOperation: "account_lifecycle",
+                    }),
+                ),
+            ),
+        ).resolves.toMatchObject({ state: "danger", label: "证据无效" });
     });
 
     it("rejects contradictory HTTP and JSON evidence", async () => {

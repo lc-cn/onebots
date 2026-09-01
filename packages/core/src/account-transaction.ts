@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import yaml from "js-yaml";
 import type { Account } from "./account.js";
 import type { Adapter } from "./adapter.js";
+import type { RuntimeOperation } from "./app-observability.js";
 import { FailureCollector } from "./async-utils.js";
 import { writeConfigFileAtomic } from "./config-file.js";
 import { ConfigError } from "./errors.js";
@@ -9,6 +10,7 @@ import { deepClone } from "./utils.js";
 
 export interface AccountTransactionHost {
     isReloading: boolean;
+    runtimeOperation?: RuntimeOperation;
     config: Record<string, unknown>;
 }
 
@@ -47,13 +49,15 @@ export class AccountMutationConflictError extends ConfigError {
 /**
  * 原子切换一个账号的运行态与磁盘配置。
  *
- * 操作期间复用 isReloading 作为 readiness 与并发锁；运行态或写盘失败时，
- * 会重建旧账号并恢复旧文件。回滚也失败时同时保留所有证据。
+ * 操作期间复用 isReloading 作为 readiness 与并发锁，并发布 account_configuration
+ * 作为公开诊断原因；运行态或写盘失败时会重建旧账号并恢复旧文件。回滚也失败时
+ * 同时保留所有证据。
  */
 export async function mutateAccountAtomically(options: AccountTransactionOptions): Promise<void> {
     const { host } = options;
     if (host.isReloading) throw new AccountMutationConflictError();
     host.isReloading = true;
+    host.runtimeOperation = "account_configuration";
 
     const dependencies: AccountTransactionDependencies = {
         serialize: options.dependencies?.serialize ?? defaultDependencies.serialize,
@@ -89,6 +93,7 @@ export async function mutateAccountAtomically(options: AccountTransactionOptions
             throwCollectedFailures(failures, "账号配置持久化失败且回滚未完整完成");
         }
     } finally {
+        host.runtimeOperation = "idle";
         host.isReloading = false;
     }
 }

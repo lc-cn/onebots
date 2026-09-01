@@ -40,6 +40,12 @@ interface ReadinessPayload {
     configured: boolean;
     server: boolean;
     reloading: boolean;
+    runtime_operation:
+        | "idle"
+        | "configuration_reload"
+        | "account_configuration"
+        | "account_lifecycle"
+        | "unknown";
     config: {
         status: string;
         in_sync: boolean;
@@ -182,9 +188,16 @@ function formatReadinessDetail(payload: ReadinessPayload): string {
         parts.push(`${summary.accounts_without_protocols} 个账号没有协议出口`);
     }
     if (!payload.config.in_sync) parts.push(`配置状态 ${payload.config.status}`);
-    if (payload.reloading) parts.push("正在重载");
+    if (payload.reloading) parts.push(formatRuntimeOperation(payload.runtime_operation));
     if (!payload.server) parts.push("HTTP 服务未启动");
     return parts.join("，");
+}
+
+function formatRuntimeOperation(operation: ReadinessPayload["runtime_operation"]): string {
+    if (operation === "configuration_reload") return "正在完整重载配置";
+    if (operation === "account_configuration") return "正在变更账号配置";
+    if (operation === "account_lifecycle") return "正在切换账号上下线";
+    return "正在变更运行态";
 }
 
 function formatReadinessIdentity(payload: ReadinessPayload): string {
@@ -222,6 +235,7 @@ function isReadinessPayload(value: unknown): value is ReadinessPayload {
         typeof value.configured !== "boolean" ||
         typeof value.server !== "boolean" ||
         typeof value.reloading !== "boolean" ||
+        !isRuntimeOperation(value.runtime_operation) ||
         typeof value.config.status !== "string" ||
         typeof value.config.in_sync !== "boolean"
     ) {
@@ -243,12 +257,15 @@ function isReadinessPayload(value: unknown): value is ReadinessPayload {
     }
 
     const configuredFromCounts = totalAccounts > 0;
+    const operationIsCoherent = value.reloading
+        ? value.runtime_operation !== "idle"
+        : value.runtime_operation === "idle";
     const countsAreCoherent =
         onlineAccounts <= totalAccounts &&
         readyProtocols <= totalProtocols &&
         accountsWithoutProtocols <= totalAccounts &&
         value.configured === configuredFromCounts;
-    if (!countsAreCoherent) return false;
+    if (!countsAreCoherent || !operationIsCoherent) return false;
 
     return (
         !value.ready ||
@@ -258,6 +275,16 @@ function isReadinessPayload(value: unknown): value is ReadinessPayload {
             onlineAccounts === totalAccounts &&
             readyProtocols === totalProtocols &&
             accountsWithoutProtocols === 0)
+    );
+}
+
+function isRuntimeOperation(value: unknown): value is ReadinessPayload["runtime_operation"] {
+    return (
+        value === "idle" ||
+        value === "configuration_reload" ||
+        value === "account_configuration" ||
+        value === "account_lifecycle" ||
+        value === "unknown"
     );
 }
 

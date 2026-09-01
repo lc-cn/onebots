@@ -43,7 +43,10 @@ export type ManagementAccountLifecycleSocketResponse =
           };
       };
 
-type ManagementAccountLifecycleHost = Pick<BaseApp, "adapters" | "isReloading" | "logger">;
+type ManagementAccountLifecycleHost = Pick<
+    BaseApp,
+    "adapters" | "isReloading" | "logger" | "runtimeOperation"
+>;
 const activeOperations = new WeakMap<
     ManagementAccountLifecycleHost,
     Map<string, ManagementAccountLifecycleAction>
@@ -169,6 +172,7 @@ async function runAccountLifecycleOperation(
         operations = new Map();
         activeOperations.set(host, operations);
         host.isReloading = true;
+        host.runtimeOperation = "account_lifecycle";
     }
     const key = `${platform}\0${uin}`;
     const activeAction = operations.get(key);
@@ -184,6 +188,7 @@ async function runAccountLifecycleOperation(
         operations.delete(key);
         if (operations.size === 0) {
             activeOperations.delete(host);
+            host.runtimeOperation = "idle";
             host.isReloading = false;
         }
     }
