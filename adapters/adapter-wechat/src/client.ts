@@ -7,6 +7,7 @@ import {
     RefreshableValue,
 } from "onebots";
 import { assertWechatConfig } from "./config.js";
+import { WechatClientLifecycle, type WechatStartupAttempt } from "./client-lifecycle.js";
 import { WechatApiError } from "./errors.js";
 import { deliverWechatEvent } from "./event-delivery.js";
 import { assertWechatIncomingMessage, wechatEventId } from "./event-id.js";
@@ -45,9 +46,15 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
         string,
         WechatOutboundMessage | undefined
     >();
+    private readonly lifecycle = new WechatClientLifecycle(
+        cause =>
+            new WechatApiError("微信公众号启动已被停止", {
+                code: "WECHAT_START_CANCELLED",
+                cause,
+            }),
+    );
     private startPromise?: Promise<void>;
     private running = false;
-    private generation = 0;
 
     constructor(
         readonly config: WechatConfig,
@@ -62,22 +69,29 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
         return this.config.receive_mode || "webhook";
     }
 
-    async start(): Promise<void> {
-        if (this.running) return;
+    async start(signal?: AbortSignal): Promise<void> {
+        this.lifecycle.assertSignal(signal);
+        if (this.running) {
+            this.lifecycle.bind(signal);
+            return;
+        }
         if (this.startPromise) return this.startPromise;
-        const generation = this.generation;
-        const start = this.startInternal(generation);
+        const attempt = this.lifecycle.begin(signal);
+        const start = this.startGeneration(attempt);
         this.startPromise = start;
         try {
             await start;
         } finally {
             if (this.startPromise === start) this.startPromise = undefined;
+            this.lifecycle.finish(attempt, this.running);
         }
     }
 
     async stop(): Promise<void> {
-        const wasActive = this.running || Boolean(this.startPromise || this.pendingReplies.size);
-        this.generation += 1;
+        const lifecycleActive = this.lifecycle.stop();
+        const wasActive =
+            this.running ||
+            Boolean(this.startPromise || lifecycleActive || this.pendingReplies.size);
         this.running = false;
         this.startPromise = undefined;
         this.tokens.clear();
@@ -91,25 +105,26 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
         if (wasActive) await emitAllAwaited(this, "stop");
     }
 
-    private async startInternal(generation: number): Promise<void> {
-        await this.getAccessToken();
-        this.assertCurrentGeneration(generation);
-        await emitAllAwaited(this, "ready");
-        this.assertCurrentGeneration(generation);
-        this.running = true;
-    }
-
-    private assertCurrentGeneration(generation: number): void {
-        if (generation !== this.generation) {
-            throw new WechatApiError("微信公众号启动已被停止", {
-                code: "WECHAT_START_CANCELLED",
-            });
+    private async startGeneration(attempt: WechatStartupAttempt): Promise<void> {
+        try {
+            await this.startInternal(attempt);
+        } catch (error) {
+            if (this.lifecycle.isCancelled(attempt)) throw this.lifecycle.cancelled(error);
+            throw error;
         }
     }
 
+    private async startInternal(attempt: WechatStartupAttempt): Promise<void> {
+        await this.getAccessToken(false, attempt.controller.signal);
+        this.lifecycle.assertCurrent(attempt);
+        await emitAllAwaited(this, "ready");
+        this.lifecycle.assertCurrent(attempt);
+        this.running = true;
+    }
+
     /** 获取并缓存 access_token；并发刷新只发起一个请求。 */
-    async getAccessToken(force = false): Promise<string> {
-        return this.tokens.get(() => this.fetchAccessToken(force), force);
+    async getAccessToken(force = false, signal?: AbortSignal): Promise<string> {
+        return this.tokens.get(() => this.fetchAccessToken(force, signal), force);
     }
 
     /** 获取并缓存 JS-SDK ticket；与全局 access token 生命周期分离。 */
@@ -321,7 +336,10 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
         };
     }
 
-    private async fetchAccessToken(force: boolean): Promise<{ value: string; ttlMs: number }> {
+    private async fetchAccessToken(
+        force: boolean,
+        signal?: AbortSignal,
+    ): Promise<{ value: string; ttlMs: number }> {
         const data = await this.performCall<{ access_token?: string; expires_in?: number }>(
             {
                 method: "POST",
@@ -333,9 +351,11 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
                     secret: this.config.app_secret,
                     force_refresh: force,
                 },
+                signal,
             },
             false,
         );
+        signal?.throwIfAborted();
         if (!data.access_token || !data.expires_in) {
             throw new WechatApiError("微信 Access Token 响应缺少必要字段", {
                 code: "WECHAT_INVALID_TOKEN_RESPONSE",
@@ -348,7 +368,8 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
 
     private async performCall<T>(options: WechatApiCallOptions, retryToken: boolean): Promise<T> {
         const url = this.resolvePath(options.path, options.query);
-        const requestToken = options.token === false ? undefined : await this.getAccessToken();
+        const requestToken =
+            options.token === false ? undefined : await this.getAccessToken(false, options.signal);
         if (requestToken) url.searchParams.set("access_token", requestToken);
         const headers = new Headers();
         let body: BodyInit | undefined;
@@ -381,7 +402,7 @@ export class WechatClient extends EventEmitter<WechatClientEvents> {
         const errorCode = apiErrorCode(payload);
         if (retryToken && INVALID_TOKEN_CODES.has(errorCode)) {
             if (requestToken && this.tokens.invalidate(requestToken)) {
-                await this.getAccessToken(true);
+                await this.getAccessToken(true, options.signal);
             }
             return this.performCall<T>(options, false);
         }

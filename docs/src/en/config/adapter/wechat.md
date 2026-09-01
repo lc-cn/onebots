@@ -28,3 +28,5 @@ wechat.my_mp:
 | `api_base_url` | No | `https://api.weixin.qq.com` | HTTPS-compatible official API proxy or test endpoint |
 
 All field names use snake_case. Historical camelCase aliases and account-type feature switches are intentionally unsupported; actual endpoint availability is determined by the Official Account's type, verification, and granted permissions.
+
+The initial access-token request and subsequent protocol outlets share OneBots' global `timeout` during account startup. A startup timeout, explicit stop, or configuration reload aborts the pending request. Even if a custom request implementation ignores cancellation, a late token is neither cached nor allowed to bring the old account online. The startup signal remains attached after the account becomes ready, so a protocol startup failure rolls back the account and clears its credential state.

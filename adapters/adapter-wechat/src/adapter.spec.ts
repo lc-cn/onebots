@@ -2,6 +2,7 @@ import { rm } from "node:fs/promises";
 import { BaseApp, SqliteDB, type Account } from "onebots";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WechatAdapter } from "./adapter.js";
+import { WechatClient } from "./client.js";
 
 const databasePath = `/tmp/onebots-wechat-adapter-${process.pid}`;
 const config: Account.Config<"wechat"> = {
@@ -61,5 +62,15 @@ describe("WechatAdapter 身份契约", () => {
                 bot_id: expect.objectContaining({ string: "wx-platform-app" }),
             }),
         );
+    });
+
+    it("把账号启动取消信号传给客户端", async () => {
+        const start = vi.spyOn(WechatClient.prototype, "start").mockResolvedValue();
+        const account = adapter.createAccount(config);
+        adapter.accounts.set(config.account_id, account);
+
+        await adapter.start(config.account_id);
+
+        expect(start).toHaveBeenCalledWith(expect.any(AbortSignal));
     });
 });

@@ -151,9 +151,9 @@ export class WechatAdapter extends Adapter<WechatClient, "wechat"> {
             );
         }
 
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                await client.start();
+                await client.start(signal);
                 account.status = AccountStatus.Online;
                 account.nickname = config.app_id;
                 account.avatar = this.icon;

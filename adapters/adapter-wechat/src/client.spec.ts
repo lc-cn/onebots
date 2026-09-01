@@ -16,6 +16,71 @@ const json = (value: unknown, status = 200) =>
     });
 
 describe("WechatClient", () => {
+    it("启动信号会取消首次凭证请求", async () => {
+        const fetcher = vi.fn<typeof fetch>(
+            (_input, init) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init?.signal?.addEventListener("abort", () =>
+                        reject(new DOMException("aborted", "AbortError")),
+                    );
+                }),
+        );
+        const client = new WechatClient(config, fetcher);
+        const controller = new AbortController();
+
+        const starting = client.start(controller.signal);
+        await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+        expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+        controller.abort();
+
+        await expect(starting).rejects.toMatchObject({ code: "WECHAT_START_CANCELLED" });
+    });
+
+    it("忽略取消的迟到 token 不会被缓存或发布", async () => {
+        let resolveRequest!: (response: Response) => void;
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockImplementationOnce(
+                (_input, init) =>
+                    new Promise<Response>(resolve => {
+                        resolveRequest = resolve;
+                        expect(init?.signal).toBeInstanceOf(AbortSignal);
+                    }),
+            )
+            .mockResolvedValueOnce(json({ access_token: "fresh", expires_in: 7200 }));
+        const client = new WechatClient(config, fetcher);
+        const controller = new AbortController();
+        const refreshed = vi.fn();
+        client.on("token_refreshed", refreshed);
+
+        const starting = client.start(controller.signal);
+        await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+        controller.abort();
+        resolveRequest(json({ access_token: "late", expires_in: 7200 }));
+
+        await expect(starting).rejects.toMatchObject({ code: "WECHAT_START_CANCELLED" });
+        expect(refreshed).not.toHaveBeenCalled();
+
+        await client.start();
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        expect(refreshed).toHaveBeenCalledOnce();
+    });
+
+    it("就绪后仍保留启动信号以支持协议失败回滚", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockImplementation(async () => json({ access_token: "token", expires_in: 7200 }));
+        const client = new WechatClient(config, fetcher);
+        const controller = new AbortController();
+
+        await client.start(controller.signal);
+        controller.abort();
+        await client.stop();
+
+        await client.start();
+        expect(fetcher).toHaveBeenCalledTimes(2);
+    });
+
     it("缓存 token，并在微信报告 token 失效时刷新且只重试一次", async () => {
         const fetcher = vi
             .fn<typeof fetch>()

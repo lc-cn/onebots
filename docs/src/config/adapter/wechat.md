@@ -26,3 +26,5 @@ wechat.my_mp:
 | `api_base_url` | 否 | `https://api.weixin.qq.com` | 官方兼容 HTTPS 代理或测试入口 |
 
 `app_id`、`app_secret`、`token`、`encoding_aes_key` 均使用 snake_case；不接受历史 camelCase 别名。公众号权限由微信后台决定，不需要也不支持 `account_type` 开关。
+
+账号启动时的首次 access token 请求与后续协议出口共用 OneBots 全局 `timeout`。启动超时、人工停止或配置热重载取消账号时，适配器会中止尚未完成的请求；即使自定义请求实现忽略取消，迟到 token 也不会写入缓存或把旧账号重新标记为在线。账号就绪后仍保留启动信号，协议启动失败时会随账号回滚清理凭据状态。
