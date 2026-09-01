@@ -25,16 +25,65 @@ export interface WebSocketRouteOptions {
     authorize?: WebSocketUpgradeAuthorizer;
 }
 
+export interface RouterRegistrationOwner {
+    readonly platform: string;
+    readonly account_id: string;
+}
+
 export class HttpRouteConflictError extends Error {
     readonly path: string;
     readonly methods: string[];
+    readonly registeringOwner?: RouterRegistrationOwner;
+    readonly existingOwner?: RouterRegistrationOwner;
 
-    constructor(path: string, methods: string[]) {
-        super(`HTTP 路由冲突：${methods.join(", ")} ${path} 已注册`);
+    constructor(
+        path: string,
+        methods: string[],
+        registeringOwner?: RouterRegistrationOwner,
+        existingOwner?: RouterRegistrationOwner,
+    ) {
+        super(
+            `HTTP 路由冲突：${methods.join(", ")} ${path} 已注册${formatOwnerConflict(registeringOwner, existingOwner)}`,
+        );
         this.name = "HttpRouteConflictError";
         this.path = path;
         this.methods = methods;
+        this.registeringOwner = registeringOwner;
+        this.existingOwner = existingOwner;
     }
+}
+
+export class WebSocketRouteConflictError extends Error {
+    readonly path: string;
+    readonly registeringOwner?: RouterRegistrationOwner;
+    readonly existingOwner?: RouterRegistrationOwner;
+
+    constructor(
+        path: string,
+        registeringOwner?: RouterRegistrationOwner,
+        existingOwner?: RouterRegistrationOwner,
+    ) {
+        super(
+            `WebSocket 路由冲突：${path} 已注册${formatOwnerConflict(registeringOwner, existingOwner)}`,
+        );
+        this.name = "WebSocketRouteConflictError";
+        this.path = path;
+        this.registeringOwner = registeringOwner;
+        this.existingOwner = existingOwner;
+    }
+}
+
+function formatOwnerConflict(
+    registeringOwner?: RouterRegistrationOwner,
+    existingOwner?: RouterRegistrationOwner,
+): string {
+    const registering = registeringOwner
+        ? `；账号 ${registeringOwner.platform}/${registeringOwner.account_id} 无法注册`
+        : "";
+    const existing = existingOwner
+        ? `（现有注册者：账号 ${existingOwner.platform}/${existingOwner.account_id}）`
+        : "";
+    return `${registering}${existing}`;
 }
 
 export class WsServer<
@@ -67,7 +116,11 @@ export class RouterRegistrationScope {
     private readonly wsServers = new Map<string, WsServer>();
     private closed = false;
 
-    constructor(private readonly router: Router) {}
+    constructor(
+        private readonly router: Router,
+        /** @internal 供 Router 生成冲突诊断。 */
+        readonly owner?: RouterRegistrationOwner,
+    ) {}
 
     run<T>(operation: () => T): T {
         return this.router.runInRegistrationScope(this, operation);
@@ -91,6 +144,7 @@ export class RouterRegistrationScope {
             return;
         }
         this.httpLayers.add(layer);
+        this.router.assignScopedHttpOwner(layer, this.owner);
     }
 
     /** @internal 仅由 Router.ws 调用。 */
@@ -112,7 +166,9 @@ export class RouterRegistrationScope {
 export class Router extends KoaRouter {
     private readonly wsMap = new Map<string, WsServer>();
     private readonly wsAuthorizers = new Map<string, WebSocketUpgradeAuthorizer>();
+    private readonly wsOwners = new Map<string, RouterRegistrationOwner>();
     private readonly registrationScope = new AsyncLocalStorage<RouterRegistrationScope>();
+    private readonly httpOwners = new WeakMap<Layer, RouterRegistrationOwner>();
     private registrationDepth = 0;
     private upgradeHandler?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
 
@@ -189,8 +245,8 @@ export class Router extends KoaRouter {
         return path;
     }
 
-    createRegistrationScope(): RouterRegistrationScope {
-        return new RouterRegistrationScope(this);
+    createRegistrationScope(owner?: RouterRegistrationOwner): RouterRegistrationScope {
+        return new RouterRegistrationScope(this, owner);
     }
 
     /** @internal 由 RouterRegistrationScope.run 建立异步注册归属。 */
@@ -213,9 +269,8 @@ export class Router extends KoaRouter {
         try {
             const result = super.register(path, methods, middleware, additionalOptions);
             const addedLayers = this.stack.filter(layer => !previousLayers.has(layer));
-            this.assertNoHttpRouteConflicts(addedLayers, previousLayers);
-
             const scope = this.registrationScope.getStore();
+            this.assertNoHttpRouteConflicts(addedLayers, previousLayers, scope?.owner);
             if (scope) {
                 for (const layer of addedLayers) scope.trackHttp(layer);
             }
@@ -233,6 +288,7 @@ export class Router extends KoaRouter {
     private assertNoHttpRouteConflicts(
         addedLayers: Layer[],
         previousLayers: ReadonlySet<Layer>,
+        registeringOwner?: RouterRegistrationOwner,
     ): void {
         const checkedLayers = [...previousLayers];
         for (const layer of addedLayers) {
@@ -243,6 +299,8 @@ export class Router extends KoaRouter {
                 throw new HttpRouteConflictError(
                     this.formatHttpPath(layer.path),
                     [...new Set(methods)].sort(),
+                    registeringOwner,
+                    previousLayers.has(existing) ? this.httpOwners.get(existing) : registeringOwner,
                 );
             }
             checkedLayers.push(layer);
@@ -261,21 +319,33 @@ export class Router extends KoaRouter {
     /** 注册不受 Koa prefix 影响的 WebSocket pathname。 */
     ws(path: string, options: WebSocketRouteOptions = {}): WsServer {
         const normalized = this.normalizeWsPath(path);
+        const scope = this.registrationScope.getStore();
         if (this.wsMap.has(normalized)) {
-            throw new Error(`WebSocket server already exists at path: ${normalized}`);
+            throw new WebSocketRouteConflictError(
+                normalized,
+                scope?.owner,
+                this.wsOwners.get(normalized),
+            );
         }
 
         const wsServer = new WsServer({ noServer: true, path: normalized });
         this.wsMap.set(normalized, wsServer);
         if (options.authorize) this.wsAuthorizers.set(normalized, options.authorize);
-        this.registrationScope.getStore()?.trackWs(normalized, wsServer);
+        if (scope?.owner) this.wsOwners.set(normalized, scope.owner);
+        scope?.trackWs(normalized, wsServer);
         return wsServer;
     }
 
     /** @internal 仅撤销作用域实际创建的 Layer。 */
     removeScopedHttpLayer(layer: Layer): void {
+        this.httpOwners.delete(layer);
         const index = this.stack.indexOf(layer);
         if (index >= 0) this.stack.splice(index, 1);
+    }
+
+    /** @internal 记录账号作用域拥有的 HTTP Layer。 */
+    assignScopedHttpOwner(layer: Layer, owner?: RouterRegistrationOwner): void {
+        if (owner) this.httpOwners.set(layer, owner);
     }
 
     /** @internal 路径已被新作用域接管时，不允许旧作用域误删新服务。 */
@@ -312,6 +382,7 @@ export class Router extends KoaRouter {
 
         this.wsMap.delete(normalized);
         this.wsAuthorizers.delete(normalized);
+        this.wsOwners.delete(normalized);
         this.terminateClients(wsServer);
         wsServer.close();
         return true;
@@ -323,6 +394,7 @@ export class Router extends KoaRouter {
         const servers = [...this.wsMap.values()];
         this.wsMap.clear();
         this.wsAuthorizers.clear();
+        this.wsOwners.clear();
         for (const wsServer of servers) {
             this.terminateClients(wsServer);
             wsServer.close();
@@ -335,6 +407,7 @@ export class Router extends KoaRouter {
         const servers = [...this.wsMap.values()];
         this.wsMap.clear();
         this.wsAuthorizers.clear();
+        this.wsOwners.clear();
         await Promise.all(servers.map(wsServer => this.closeWsServer(wsServer)));
     }
 

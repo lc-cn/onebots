@@ -2,7 +2,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import { HttpRouteConflictError, Router } from "./router.js";
+import { HttpRouteConflictError, Router, WebSocketRouteConflictError } from "./router.js";
 
 const servers = new Set<ReturnType<typeof createServer>>();
 
@@ -168,6 +168,71 @@ describe("Router HTTP route registration", () => {
             new HttpRouteConflictError("/gateway/existing", ["GET", "HEAD"]),
         );
         expect(router.stack.map(layer => layer.path)).toEqual(["/gateway/existing"]);
+    });
+
+    it("报告冲突路由的注册账号与现有账号", () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+        const existing = router.createRegistrationScope({
+            platform: "wechat",
+            account_id: "official",
+        });
+        existing.run(() => router.post("/callback", () => undefined));
+        const registering = router.createRegistrationScope({
+            platform: "wecom",
+            account_id: "corp",
+        });
+
+        let conflict: unknown;
+        try {
+            registering.run(() => router.post("/callback", () => undefined));
+        } catch (error) {
+            conflict = error;
+        }
+
+        expect(conflict).toBeInstanceOf(HttpRouteConflictError);
+        expect(conflict).toMatchObject({
+            registeringOwner: { platform: "wecom", account_id: "corp" },
+            existingOwner: { platform: "wechat", account_id: "official" },
+        });
+        expect((conflict as Error).message).toContain(
+            "账号 wecom/corp 无法注册（现有注册者：账号 wechat/official）",
+        );
+        expect(router.stack).toHaveLength(1);
+    });
+
+    it("报告冲突 WebSocket 路径的注册账号与现有账号", () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+        const existing = router.createRegistrationScope({
+            platform: "wechat",
+            account_id: "official",
+        });
+        existing.run(() => router.ws("/events"));
+        const registering = router.createRegistrationScope({
+            platform: "wecom",
+            account_id: "corp",
+        });
+
+        let conflict: unknown;
+        try {
+            registering.run(() => router.ws("/events"));
+        } catch (error) {
+            conflict = error;
+        }
+
+        expect(conflict).toBeInstanceOf(WebSocketRouteConflictError);
+        expect(conflict).toMatchObject({
+            path: "/events",
+            registeringOwner: { platform: "wecom", account_id: "corp" },
+            existingOwner: { platform: "wechat", account_id: "official" },
+        });
+        expect((conflict as Error).message).toContain(
+            "账号 wecom/corp 无法注册（现有注册者：账号 wechat/official）",
+        );
+        expect(router.getWsPaths()).toEqual(["/events"]);
     });
 });
 

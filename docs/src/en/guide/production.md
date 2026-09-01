@@ -363,7 +363,7 @@ If the port does not accept a loopback connection and no managed service is runn
 
 Every `/health` and `/ready` verifier reads at most 64 KiB of response body and checks both the declared `Content-Length` and the actual streamed byte count. An oversized response is cancelled immediately and becomes an explicit probe failure in doctor, status, and the start/restart/update online gates. The best-effort probe that records the old `instance_id` before a service switch uses the same boundary, so an unknown HTTP service on the configured port cannot consume CLI memory with a huge or endless response.
 
-The shared Router rejects duplicate HTTP methods on the same exact path and atomically removes every Layer created by one registration, including path arrays. A conflict therefore fails explicitly before the later handler enters the runtime, while different methods may still share a path.
+The shared Router rejects duplicate HTTP methods on the same exact path and atomically removes every Layer created by one registration, including path arrays. A duplicate WebSocket pathname also fails before a second server is created. For account-scoped HTTP and WebSocket conflicts, the error identifies both the registering account and the account already holding the path, making multi-account configuration failures directly actionable. Different HTTP methods may still share a path.
 
 ## Auto Integration
 

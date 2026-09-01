@@ -14,7 +14,10 @@ export function createAccountWithRouteScope(
     config: Account.Config,
 ): Account {
     if (!host.router) return adapter.createAccount(config);
-    const scope = host.router.createRegistrationScope();
+    const scope = host.router.createRegistrationScope({
+        platform: String(config.platform),
+        account_id: String(config.account_id),
+    });
     try {
         const account = scope.run(() => adapter.createAccount(config));
         account.attachRouteScope(scope);
