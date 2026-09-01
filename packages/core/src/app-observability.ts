@@ -325,6 +325,9 @@ export function registerObservabilityEndpoints(
             "# HELP onebots_started Whether the application is started",
             "# TYPE onebots_started gauge",
             `onebots_started ${app.isStarted ? 1 : 0}`,
+            "# HELP onebots_ready Whether the application currently satisfies the readiness contract",
+            "# TYPE onebots_ready gauge",
+            `onebots_ready ${readiness.ready ? 1 : 0}`,
             "# HELP onebots_reloading Whether an exclusive runtime operation has withdrawn readiness",
             "# TYPE onebots_reloading gauge",
             `onebots_reloading ${app.isReloading ? 1 : 0}`,
@@ -345,6 +348,12 @@ export function registerObservabilityEndpoints(
             "# HELP onebots_config_in_sync Whether disk configuration matches the active runtime",
             "# TYPE onebots_config_in_sync gauge",
             `onebots_config_in_sync ${readiness.config.in_sync ? 1 : 0}`,
+            "# HELP onebots_config_status Current normalized configuration tracking status",
+            "# TYPE onebots_config_status gauge",
+            ...(["in_sync", "drifted", "unavailable", "untracked"] as const).map(
+                status =>
+                    `onebots_config_status{status="${status}"} ${readiness.config.status === status ? 1 : 0}`,
+            ),
             "# HELP onebots_memory_bytes Memory usage in bytes",
             "# TYPE onebots_memory_bytes gauge",
             `onebots_memory_bytes{type="rss"} ${memory.rss}`,

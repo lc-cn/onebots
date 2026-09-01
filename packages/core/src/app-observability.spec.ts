@@ -238,7 +238,12 @@ describe("application readiness", () => {
 
         const metricsContext = observabilityContext();
         handlers.get("/metrics")?.(metricsContext);
+        expect(metricsContext.body).toContain("onebots_ready 0");
         expect(metricsContext.body).toContain("onebots_config_in_sync 0");
+        expect(metricsContext.body).toContain('onebots_config_status{status="in_sync"} 0');
+        expect(metricsContext.body).toContain('onebots_config_status{status="drifted"} 1');
+        expect(metricsContext.body).toContain('onebots_config_status{status="unavailable"} 0');
+        expect(metricsContext.body).toContain('onebots_config_status{status="untracked"} 0');
         expect(metricsContext.body).toContain('onebots_info{version="1.2.3"} 1');
         expect(metricsContext.body).toContain('onebots_core_info{version="1.1.0"} 1');
         expect(metricsContext.body).toContain('onebots_runtime_operation{operation="idle"} 1');
@@ -263,6 +268,7 @@ describe("application readiness", () => {
         expect(busyMetricsContext.body).toContain(
             'onebots_runtime_operation{operation="account_lifecycle"} 1',
         );
+        expect(busyMetricsContext.body).toContain("onebots_ready 0");
 
         const healthContext = observabilityContext();
         handlers.get("/health")?.(healthContext);
@@ -288,6 +294,32 @@ describe("application readiness", () => {
             instance_id: (healthContext.body as Record<string, unknown>).instance_id,
             started_at: (healthContext.body as Record<string, unknown>).started_at,
         });
+    });
+
+    it("publishes the exact ready verdict and distinguishes untracked configuration", () => {
+        const handlers = new Map<string, (ctx: Record<string, unknown>) => void>();
+        const app = {
+            ...observableApp([{ status: "online", protocols: [{ lifecycleStatus: "ready" }] }]),
+            router: {
+                get: (route: string, handler: (ctx: Record<string, unknown>) => void) =>
+                    handlers.set(route, handler),
+            },
+        };
+        registerObservabilityEndpoints(app as never, {
+            name: "embedded",
+            version: "1.0.0",
+            coreVersion: "1.1.0",
+        });
+
+        const metricsContext = observabilityContext();
+        handlers.get("/metrics")?.(metricsContext);
+
+        expect(metricsContext.body).toContain("onebots_ready 1");
+        expect(metricsContext.body).toContain("onebots_config_in_sync 1");
+        expect(metricsContext.body).toContain('onebots_config_status{status="in_sync"} 0');
+        expect(metricsContext.body).toContain('onebots_config_status{status="drifted"} 0');
+        expect(metricsContext.body).toContain('onebots_config_status{status="unavailable"} 0');
+        expect(metricsContext.body).toContain('onebots_config_status{status="untracked"} 1');
     });
 
     it("exports protocol readiness with safe Prometheus labels", () => {
