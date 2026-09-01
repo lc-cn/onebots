@@ -39,6 +39,14 @@ function mockInstalledService(running: boolean, spec = serviceSpec()): void {
         detail: running ? "active" : "inactive",
     });
     vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+    mockCurrentDefinition(spec);
+}
+
+function mockCurrentDefinition(spec: ServiceSpec): void {
+    vi.spyOn(ServiceController.prototype, "definitionPath").mockReturnValue(
+        path.join(spec.workingDirectory, "onebots.service"),
+    );
+    vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
 }
 
 describe("service status", () => {
@@ -57,11 +65,12 @@ describe("service status", () => {
     });
 
     it("returns exit code 1 without probing when the service is stopped", async () => {
-        mockInstalledService(false);
+        const spec = serviceSpec();
+        mockInstalledService(false, spec);
         const fetcher = vi.fn<typeof fetch>();
 
         await expect(serviceStatus({ system: false }, fetcher)).resolves.toEqual({
-            output: "已安装，未运行\n进程管理器: inactive",
+            output: `已安装，未运行\n进程管理器: inactive\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})`,
             exitCode: 1,
         });
         expect(fetcher).not.toHaveBeenCalled();
@@ -77,6 +86,7 @@ describe("service status", () => {
             detail: "systemd bus unavailable",
             error: "进程管理器状态查询失败",
         });
+        mockCurrentDefinition(spec);
         const fetcher = vi.fn<typeof fetch>();
 
         const result = await serviceStatus({ system: false, json: true }, fetcher);
@@ -93,12 +103,22 @@ describe("service status", () => {
                 detail: "systemd bus unavailable",
                 error: "进程管理器状态查询失败",
             },
+            serviceDefinition: {
+                path: path.join(spec.workingDirectory, "onebots.service"),
+                current: true,
+                error: null,
+            },
             probe: { checks: [], error: "进程管理器状态不可用，未执行 HTTP 探测" },
         });
         expect(fetcher).not.toHaveBeenCalled();
     });
 
     it("emits stable machine-readable evidence for uninstalled and stopped services", async () => {
+        const spec = serviceSpec();
+        vi.spyOn(ServiceController.prototype, "readSpec")
+            .mockReturnValueOnce(null)
+            .mockReturnValueOnce(spec);
+        mockCurrentDefinition(spec);
         vi.spyOn(ServiceController.prototype, "status")
             .mockReturnValueOnce({
                 installed: false,
@@ -146,12 +166,15 @@ describe("service status", () => {
                 detail: "inactive",
                 error: null,
             },
+            target: { configPath: expect.any(String) },
+            serviceDefinition: { current: true, error: null },
             probe: { checks: [], error: null },
         });
     });
 
     it("reports liveness and readiness for a running service", async () => {
-        mockInstalledService(true);
+        const spec = serviceSpec();
+        mockInstalledService(true, spec);
         const fetcher = vi.fn<typeof fetch>(async input => {
             const endpoint = String(input).endsWith("/health") ? "health" : "ready";
             return new Response(
@@ -178,13 +201,49 @@ describe("service status", () => {
         const result = await serviceStatus({ system: false }, fetcher);
 
         expect(result).toEqual({
-            output: `运行中，已就绪\n进程管理器: active\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance`,
+            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance`,
             exitCode: undefined,
         });
         expect(fetcher).toHaveBeenCalledWith(
             "http://127.0.0.1:7788/gateway/health",
             expect.anything(),
         );
+    });
+
+    it("拒绝用漂移的平台定义拼接进程与 HTTP 证据", async () => {
+        const spec = serviceSpec();
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: true,
+            scope: "user",
+            detail: "active",
+        });
+        vi.spyOn(ServiceController.prototype, "definitionPath").mockReturnValue(
+            path.join(spec.workingDirectory, "onebots.service"),
+        );
+        vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(false);
+        const fetcher = vi.fn<typeof fetch>();
+
+        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+        expect(result).toMatchObject({ exitCode: 1, raw: true });
+        expect(report).toMatchObject({
+            status: "unavailable",
+            ok: false,
+            target: { configPath: spec.configPath, baseUrl: null },
+            serviceDefinition: {
+                path: path.join(spec.workingDirectory, "onebots.service"),
+                current: false,
+                error: "服务平台定义与服务元数据不一致，请重新执行 onebots install",
+            },
+            probe: {
+                checks: [],
+                error: "服务平台定义与服务元数据不一致，请重新执行 onebots install，未执行 HTTP 探测",
+            },
+        });
+        expect(fetcher).not.toHaveBeenCalled();
     });
 
     it("archives the probe pair and target in the JSON status report", async () => {
@@ -225,6 +284,11 @@ describe("service status", () => {
                 baseUrl: "http://127.0.0.1:7788/gateway",
             },
             processManager: { installed: true, running: true, detail: "active" },
+            serviceDefinition: {
+                path: path.join(spec.workingDirectory, "onebots.service"),
+                current: true,
+                error: null,
+            },
             probe: {
                 error: null,
                 checks: [

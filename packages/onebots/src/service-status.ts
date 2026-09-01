@@ -6,7 +6,8 @@ import {
     resolveGatewayBaseUrl,
 } from "./doctor-endpoint.js";
 import { inspectDoctorServiceMetadata } from "./doctor-service-metadata.js";
-import { ServiceController, type ServiceScope } from "./service-manager.js";
+import { inspectDoctorServiceDefinition } from "./doctor-service-definition.js";
+import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import type { ScopeOptions } from "./cli/command-options.js";
 import packageMetadata from "../package.json" with { type: "json" };
@@ -37,6 +38,11 @@ export interface ServiceStatusReport {
         installed: boolean | null;
         running: boolean | null;
         detail: string | null;
+        error: string | null;
+    };
+    serviceDefinition: {
+        path: string | null;
+        current: boolean | null;
         error: string | null;
     };
     probe: {
@@ -71,6 +77,7 @@ export async function inspectServiceStatus(
         );
     }
     const status = controller.status(metadata.spec);
+    const serviceDefinition = inspectStatusServiceDefinition(controller, metadata.spec);
     const processManager = {
         installed: status.installed,
         running: status.error ? null : status.running,
@@ -81,6 +88,7 @@ export async function inspectServiceStatus(
         return formatServiceStatusResult(
             createServiceStatusReport(scope, "unavailable", processManager, {
                 ...(metadata.spec ? { configPath: metadata.spec.configPath } : {}),
+                serviceDefinition,
                 error: "进程管理器状态不可用，未执行 HTTP 探测",
             }),
             options.json,
@@ -88,13 +96,19 @@ export async function inspectServiceStatus(
     }
     if (!status.installed) {
         return formatServiceStatusResult(
-            createServiceStatusReport(scope, "uninstalled", processManager),
+            createServiceStatusReport(scope, "uninstalled", processManager, {
+                ...(metadata.spec ? { configPath: metadata.spec.configPath } : {}),
+                serviceDefinition,
+            }),
             options.json,
         );
     }
     if (!status.running) {
         return formatServiceStatusResult(
-            createServiceStatusReport(scope, "stopped", processManager),
+            createServiceStatusReport(scope, "stopped", processManager, {
+                ...(metadata.spec ? { configPath: metadata.spec.configPath } : {}),
+                serviceDefinition,
+            }),
             options.json,
         );
     }
@@ -104,6 +118,16 @@ export async function inspectServiceStatus(
         return formatServiceStatusResult(
             createServiceStatusReport(scope, "unavailable", processManager, {
                 error: "服务元数据缺失",
+            }),
+            options.json,
+        );
+    }
+    if (serviceDefinition.current !== true) {
+        return formatServiceStatusResult(
+            createServiceStatusReport(scope, "unavailable", processManager, {
+                configPath: spec.configPath,
+                serviceDefinition,
+                error: `${serviceDefinition.error ?? "服务平台定义与元数据不一致"}，未执行 HTTP 探测`,
             }),
             options.json,
         );
@@ -140,6 +164,7 @@ export async function inspectServiceStatus(
                 configPath: spec.configPath,
                 baseUrl,
                 checks,
+                serviceDefinition,
             }),
             options.json,
         );
@@ -147,6 +172,7 @@ export async function inspectServiceStatus(
         return formatServiceStatusResult(
             createServiceStatusReport(scope, "unavailable", processManager, {
                 configPath: spec.configPath,
+                serviceDefinition,
                 error: `配置读取失败: ${error instanceof Error ? error.message : String(error)}`,
             }),
             options.json,
@@ -159,6 +185,7 @@ interface ServiceStatusReportEvidence {
     baseUrl?: string;
     checks?: DoctorCheck[];
     error?: string;
+    serviceDefinition?: ServiceStatusReport["serviceDefinition"];
 }
 
 function createServiceStatusReport(
@@ -179,6 +206,11 @@ function createServiceStatusReport(
         status,
         ok: status === "ready" || status === "pending_configuration",
         processManager,
+        serviceDefinition: evidence.serviceDefinition ?? {
+            path: null,
+            current: null,
+            error: null,
+        },
         probe: {
             checks: evidence.checks ?? [],
             error: evidence.error ?? null,
@@ -211,9 +243,33 @@ function formatServiceStatusResult(report: ServiceStatusReport, json = false): S
             ...(report.processManager.detail
                 ? [`进程管理器: ${report.processManager.detail}`]
                 : []),
+            ...(report.serviceDefinition.path
+                ? [
+                      report.serviceDefinition.current
+                          ? `服务定义: 与元数据一致 (${report.serviceDefinition.path})`
+                          : `服务定义: ${report.serviceDefinition.error ?? "与元数据不一致"}`,
+                  ]
+                : []),
             ...report.probe.checks.map(check => check.message),
             ...(report.probe.error ? [report.probe.error] : []),
         ].join("\n"),
         exitCode,
+    };
+}
+
+function inspectStatusServiceDefinition(
+    controller: ServiceController,
+    spec: ServiceSpec | null,
+): ServiceStatusReport["serviceDefinition"] {
+    if (!spec) return { path: null, current: null, error: null };
+    const inspection = inspectDoctorServiceDefinition(controller, spec);
+    return {
+        path: controller.definitionPath(spec),
+        current: inspection.current,
+        error:
+            inspection.error ??
+            (inspection.current
+                ? null
+                : "服务平台定义与服务元数据不一致，请重新执行 onebots install"),
     };
 }
