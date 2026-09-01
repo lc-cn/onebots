@@ -1,8 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { prepareDockerExtensionRuntime } from "../../scripts/docker-extension-runtime.mjs";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+    prepareDockerExtensionRuntime,
+    restoreDockerExtensionRuntime,
+} from "../../scripts/docker-extension-runtime.mjs";
 
 describe("Docker persistent extension runtime", () => {
     const temporaryDirectories: string[] = [];
@@ -46,9 +49,11 @@ describe("Docker persistent extension runtime", () => {
             onebotsDockerManagedDependencies: string[];
         };
 
-        expect(result).toEqual({
+        expect(result).toMatchObject({
             root: runtimeRoot,
             managedDependencies: ["onebots", "@onebots/adapter-qq", "@onebots/protocol-onebot-v11"],
+            recoveryPackages: [],
+            missingRecoveryPackages: [],
         });
         expect(manifest).toMatchObject({
             name: "onebots-docker-runtime",
@@ -136,6 +141,74 @@ describe("Docker persistent extension runtime", () => {
         ).toThrow(`扩展运行清单 dependencies 不是对象: ${manifestPath}`);
         expect(fs.readFileSync(manifestPath, "utf8")).toBe(source);
         expect(fs.existsSync(path.join(runtimeRoot, "node_modules"))).toBe(false);
+    });
+
+    it("restores only catalog-pinned HF dependencies and removes the one-shot marker", () => {
+        const fixture = createImageFixture();
+        const runtimeRoot = temporaryDirectory("onebots-docker-runtime-");
+        const recoveryPath = path.join(runtimeRoot, "hf-restore.json");
+        fs.writeFileSync(
+            recoveryPath,
+            JSON.stringify({
+                schemaVersion: 1,
+                packages: { "@onebots/adapter-email": "1.0.0" },
+            }),
+        );
+        const spawn = vi.fn((executable: string, args: string[], options: { cwd: string }) => {
+            expect(executable).toBe("pnpm");
+            expect(args).toEqual(["install", "--prod", "--no-frozen-lockfile"]);
+            expect(options.cwd).toBe(runtimeRoot);
+            const packageRoot = path.join(runtimeRoot, "node_modules", "@onebots", "adapter-email");
+            fs.mkdirSync(packageRoot, { recursive: true });
+            fs.writeFileSync(
+                path.join(packageRoot, "package.json"),
+                JSON.stringify({ name: "@onebots/adapter-email", version: "3.0.8" }),
+            );
+            return { status: 0, error: undefined };
+        });
+
+        const result = restoreDockerExtensionRuntime(
+            {
+                runtimeRoot,
+                recoveryPath,
+                bundledRoot: fixture.bundledRoot,
+                imageRoot: fixture.imageRoot,
+                packageCatalog: { "@onebots/adapter-email": "3.0.8" },
+            },
+            { spawn },
+        );
+
+        expect(result.missingRecoveryPackages).toEqual([]);
+        expect(spawn).toHaveBeenCalledOnce();
+        expect(fs.existsSync(recoveryPath)).toBe(false);
+        const manifest = JSON.parse(
+            fs.readFileSync(path.join(runtimeRoot, "package.json"), "utf8"),
+        ) as { dependencies: Record<string, string> };
+        expect(manifest.dependencies["@onebots/adapter-email"]).toBe("3.0.8");
+    });
+
+    it("rejects an HF recovery package absent from the current image catalog", () => {
+        const fixture = createImageFixture();
+        const runtimeRoot = temporaryDirectory("onebots-docker-runtime-");
+        const recoveryPath = path.join(runtimeRoot, "hf-restore.json");
+        fs.writeFileSync(
+            recoveryPath,
+            JSON.stringify({
+                schemaVersion: 1,
+                packages: { "untrusted-extension": "1.0.0" },
+            }),
+        );
+
+        expect(() =>
+            restoreDockerExtensionRuntime({
+                runtimeRoot,
+                recoveryPath,
+                bundledRoot: fixture.bundledRoot,
+                imageRoot: fixture.imageRoot,
+                packageCatalog: {},
+            }),
+        ).toThrow("HF 扩展恢复清单包含当前镜像不信任的包: untrusted-extension");
+        expect(fs.existsSync(recoveryPath)).toBe(true);
     });
 
     function createImageFixture() {

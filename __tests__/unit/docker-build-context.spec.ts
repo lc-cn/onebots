@@ -74,4 +74,15 @@ describe("Docker 构建上下文", () => {
             expect(source).toContain("配置权限收紧为 0600");
         },
     );
+
+    test("HF 入口恢复轻量扩展清单并使用受信任恢复模式", async () => {
+        const source = await readFile(resolve(repositoryRoot, "docker-entrypoint-hf.sh"), "utf8");
+
+        expect(source).toContain("extensions_backup.json");
+        expect(source).toContain("/data/extensions/hf-restore.json");
+        expect(source).toContain("docker-extension-runtime.mjs --restore");
+        expect(source.indexOf("extensions_backup.json")).toBeLessThan(
+            source.indexOf("docker-extension-runtime.mjs --restore"),
+        );
+    });
 });

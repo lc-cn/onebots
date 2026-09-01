@@ -194,25 +194,26 @@ docker run -d \
   - 使用 `ONEBOTS_ACCESS_TOKEN` 登录后，可在 OneBots 的「配置管理」页面查看或下载当前配置。
   - 首次运行且未挂载持久化卷时，入口脚本会在 `/data` 下生成默认 `config.yaml`，仅当启用持久化后该文件才会在重启后保留。
 
-### HF 免付费：用 Space 仓库备份整个 data 目录
+### HF 免付费：用 Space 仓库备份配置、扩展与数据
 
-未购买持久化存储时，每次重启或重建 Space 会清空 `/data`。可用 **Space 的 Git 仓库** 备份**整个 data 目录**（配置、数据库、日志等），仓库里的文件会保留。
+未购买持久化存储时，每次重启或重建 Space 会清空 `/data`。可用 **Space 的 Git 仓库** 保存配置、受信任扩展恢复清单和有界数据归档。
 
 1. **设置变量**（Space → Settings → Variables）  
    - **`HF_REPO_ID`**：你的 Space 仓库 ID，格式 `用户名/Space 名称`（例如 `liangcai/onebots`）。入口脚本在启动时若发现 `/data` 为空或缺少 `config.yaml`，会按顺序尝试：  
-     - 下载 **`data_backup.tar.gz`**（整个 data 的压缩包），解压到 `/data`，实现完整恢复；  
-     - 若无该文件，再下载 **`config_backup.yaml`** 仅恢复配置。
+     - 下载非空的 **`data_backup.tar.gz`** 并解压到 `/data`；归档不包含可重新安装的 `extensions/node_modules`、扩展清单和锁文件；
+     - 下载 **`config_backup.yaml`** 恢复配置；
+     - 新扩展卷同时下载 **`extensions_backup.json`**，只接受当前镜像扩展目录中的包，并按当前固定版本执行 pnpm 恢复。未知或已从当前目录移除的包会在安装前拒绝。
 
 2. **自动备份（推荐）**  
    - 在 Space → Settings → **Secrets** 中新增 **`HF_TOKEN`**（需有写权限的 [Access Token](https://huggingface.co/settings/tokens)）。  
    - 在 **Variables** 中设置 **`HF_REPO_ID`**（同上）。  
-   - 之后在 Web 端「配置管理」里点击「保存配置」时，会将**整个 `/data` 目录**打成 `data_backup.tar.gz`，并与当前配置一起提交到该 Space 仓库（`config_backup.yaml` + `data_backup.tar.gz`）。下次重启时优先用 `data_backup.tar.gz` 完整恢复，无需手动操作。  
-   - 若 data 目录过大（例如 >15MB），可能只会上传 `config_backup.yaml`，可定期在 Web 端保存以更新备份。
+   - 之后在 Web 端「配置管理」里点击「保存配置」时，会提交 `config_backup.yaml`、`extensions_backup.json` 与不超过 15 MiB 的 `data_backup.tar.gz`。扩展恢复清单只记录扩展目录中已安装、受当前 OneBots 版本信任的包，并固定为发布目录版本。
+   - 若数据归档超过限制或 tar 失败，备份仍会成功提交配置与扩展恢复清单，并用空文件覆盖远端旧归档，避免下次启动误恢复过期数据。管理端会明确说明本次是否包含完整数据归档。
 
 3. **仅手动备份**  
    - 不设置 `HF_TOKEN`，只设置 **`HF_REPO_ID`**。  
-   - 在 Web 端改好配置后点击「下载当前配置」，在 Space 的 **Files** 里上传为 **`config_backup.yaml`**；若有本地 data 目录压缩包，可上传为 **`data_backup.tar.gz`**（解压后内容应为 config.yaml、data/ 等，与 `/data` 结构一致）。  
-   - 下次重启时脚本会优先用 `data_backup.tar.gz` 恢复整个 data，否则用 `config_backup.yaml` 恢复配置。
+   - 在 Web 端改好配置后点击「下载当前配置」，在 Space 的 **Files** 里上传为 **`config_backup.yaml`**；若有本地 data 目录压缩包，可上传为 **`data_backup.tar.gz`**。
+   - 手动安装的非目录扩展不会进入自动恢复白名单；需要这类扩展时应使用 HF Persistent Storage 或自行维护可信镜像与恢复流程。
 
 本地测试 HF 镜像（映射 7860）：
 

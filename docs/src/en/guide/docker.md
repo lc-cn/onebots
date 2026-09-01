@@ -188,6 +188,14 @@ The repo includes Docker files for [Hugging Face Spaces](https://huggingface.co/
   - Sign in with `ONEBOTS_ACCESS_TOKEN`, then use OneBots' **Configuration** page to inspect or download the current configuration.
   - On first run without persistent storage, the entrypoint creates a default `config.yaml` under `/data`; it will persist across restarts only if persistent storage is enabled.
 
+### Repository backup without paid HF storage
+
+Set `HF_REPO_ID` as a Space Variable and a write-capable `HF_TOKEN` as a Secret. Saving configuration or requesting a manual backup then commits three artifacts: `config_backup.yaml`, `extensions_backup.json`, and a bounded `data_backup.tar.gz`. The archive excludes extension `node_modules`, its manifest, and lockfile because those packages can be restored from the much smaller recovery catalog.
+
+On a fresh extension volume, startup accepts only packages present in the current image's trusted extension catalog, pins them to that image's verified versions, and runs pnpm before loading the configured plugins. Unknown or removed packages fail before installation. Custom extensions therefore require HF Persistent Storage or a separately maintained trusted image and restore process.
+
+If the compressed data exceeds 15 MiB or tar fails, the operation still uploads the configuration and extension recovery catalog and replaces any stale remote archive with an empty file. The Web result states whether the full data archive was included, so a successful configuration backup cannot be mistaken for a complete database backup.
+
 Test the HF image locally (port 7860):
 
 ```bash

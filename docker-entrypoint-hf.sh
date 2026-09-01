@@ -38,6 +38,7 @@ if command -v curl >/dev/null 2>&1; then
     echo "[onebots] 尝试从 Space 仓库恢复: ${HF_REPO_ID}"
     _hf_url_tar="https://huggingface.co/spaces/${HF_REPO_ID}/resolve/main/data_backup.tar.gz"
     _hf_url_yaml="https://huggingface.co/spaces/${HF_REPO_ID}/resolve/main/config_backup.yaml"
+    _hf_url_extensions="https://huggingface.co/spaces/${HF_REPO_ID}/resolve/main/extensions_backup.json"
     # 私有仓库需在 Secrets 中设置 HF_TOKEN
     if [ -n "${HF_TOKEN}" ]; then
       _curl_auth="-H"
@@ -75,6 +76,20 @@ if command -v curl >/dev/null 2>&1; then
       else
         rm -f /data/config.yaml
         echo "[onebots] 未找到或下载 config_backup.yaml 失败，将使用默认配置"
+      fi
+    fi
+    # 新卷只恢复受信任扩展的轻量清单；已有持久化扩展目录保持本地依赖不变。
+    if [ ! -f /data/extensions/package.json ]; then
+      mkdir -p /data/extensions
+      if [ -n "${_curl_auth_val}" ]; then
+        curl -sfL -o /data/extensions/hf-restore.json "${_curl_auth}" "${_curl_auth_val}" "${_hf_url_extensions}" 2>/dev/null || true
+      else
+        curl -sfL -o /data/extensions/hf-restore.json "${_hf_url_extensions}" 2>/dev/null || true
+      fi
+      if [ -s /data/extensions/hf-restore.json ]; then
+        echo "[onebots] 已恢复扩展依赖清单，启动前将按当前镜像目录校验并安装"
+      else
+        rm -f /data/extensions/hf-restore.json
       fi
     fi
   fi
@@ -130,7 +145,7 @@ if [ "$(id -u)" = "0" ]; then
     exit 1
   fi
   su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
-    node /app/scripts/docker-extension-runtime.mjs
+    node /app/scripts/docker-extension-runtime.mjs --restore
   cd "$ONEBOTS_EXTENSION_ROOT"
   exec su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
     node /app/packages/onebots/lib/bin.js "$@"
@@ -140,6 +155,6 @@ if [ ! -r /data/config.yaml ] || [ ! -w /data ]; then
   echo "[onebots] 错误: 当前容器用户无法读取 /data/config.yaml 或写入 /data"
   exit 1
 fi
-node /app/scripts/docker-extension-runtime.mjs
+node /app/scripts/docker-extension-runtime.mjs --restore
 cd "$ONEBOTS_EXTENSION_ROOT"
 exec node /app/packages/onebots/lib/bin.js "$@"

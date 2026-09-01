@@ -368,6 +368,11 @@ describe("configuration route", () => {
 
     it("备份成功回执证明处理请求的实例", async () => {
         const { app, backupHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
+        vi.mocked(app.backupDataToHf).mockResolvedValue({
+            success: true,
+            dataArchiveIncluded: false,
+            message: "已备份配置和扩展恢复清单；未包含完整数据归档",
+        });
         const ctx = systemOperationContext({ instance_id: "instance-current" });
 
         await backupHandler(ctx);
@@ -376,7 +381,7 @@ describe("configuration route", () => {
             success: true,
             application: "onebots",
             instance_id: "instance-current",
-            message: "已备份到仓库",
+            message: "已备份配置和扩展恢复清单；未包含完整数据归档",
         });
         expect(app.backupDataToHf).toHaveBeenCalledWith("access_token: old-token\n");
     });

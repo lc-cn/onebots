@@ -33,7 +33,7 @@ const staticRevision = ref('');
 /** Hugging Face Space 典型域名，用于提示上传后会触发仓库备份 */
 const staticHfHint =
     typeof window !== 'undefined' && /\.hf\.space$/i.test(window.location.hostname)
-        ? '在 HF 上若已配置 HF_TOKEN / HF_REPO_ID，上传或删除后将自动把整包 data（含 static）推送到 Space 仓库，避免重启丢失'
+        ? '在 HF 上若已配置 HF_TOKEN / HF_REPO_ID，上传或删除后将备份配置、受信任扩展清单与有界 data 归档'
         : '';
 
 const publicBaseUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : '/';
@@ -44,9 +44,7 @@ const notifyStaticHfBackup = (hf: StaticApiHfBackup | undefined, primaryOk: stri
         return;
     }
     if (hf.success) {
-        toast.success(
-            `${primaryOk}，已同步备份至 Hugging Face 仓库（config_backup.yaml + data_backup.tar.gz）`
-        );
+        toast.success(`${primaryOk}，${hf.message || '已同步备份至 Hugging Face 仓库'}`);
     } else {
         toast.warning(
             `${primaryOk}，但 Hugging Face 备份失败：${hf.message || '未知错误'}，请检查 Secrets 或稍后重试`

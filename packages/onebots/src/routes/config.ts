@@ -135,7 +135,7 @@ export function registerConfigRoutes(app: App, router: Router): void {
                     success: true,
                     application,
                     instance_id: instanceId,
-                    message: "已备份到仓库",
+                    message: result.message ?? "已备份到仓库",
                 };
             } else {
                 ctx.status = 400;
