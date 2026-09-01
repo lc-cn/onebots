@@ -52,7 +52,7 @@ import {
     validateManagementToken,
 } from "./management-auth.js";
 import { startManagementAuthorizationMonitor } from "./management-authorization-monitor.js";
-import type { WebSocket } from "ws";
+import { WebSocket } from "ws";
 import type { ServerResponse } from "node:http";
 import { ensureManagementCredentials } from "./management-credentials.js";
 import { RuntimeConfigStateTracker } from "./runtime-config-state.js";
@@ -76,6 +76,9 @@ import {
     type ServiceRuntimeContract,
 } from "./service-runtime-contract.js";
 import {
+    BoundedWebSocketMessageQueue,
+    MANAGEMENT_WEBSOCKET_MAX_PENDING_BYTES,
+    MANAGEMENT_WEBSOCKET_MAX_PENDING_MESSAGES,
     MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES,
     sendManagementWebSocketJson,
     type BoundedWebSocketSendResult,
@@ -153,11 +156,13 @@ export class App extends BaseApp {
     ): boolean {
         const result = sendManagementWebSocketJson(client, payload, error => {
             this.logger.error(`${context}发送失败`, { error });
+            if (client.readyState === WebSocket.OPEN) client.close(1011, "Outbound send failed");
         });
-        return this.handleManagementWebSocketSendResult(result, context);
+        return this.handleManagementWebSocketSendResult(client, result, context);
     }
 
     private handleManagementWebSocketSendResult(
+        client: WebSocket,
         result: BoundedWebSocketSendResult,
         context: string,
     ): boolean {
@@ -179,10 +184,49 @@ export class App extends BaseApp {
                 return false;
             case "serialization-failed":
                 this.logger.error(`${context}序列化失败`, { error: result.error });
+                if (client.readyState === WebSocket.OPEN)
+                    client.close(1011, "Outbound serialization failed");
                 return false;
             case "send-failed":
                 this.logger.error(`${context}发送失败`, { error: result.error });
+                if (client.readyState === WebSocket.OPEN)
+                    client.close(1011, "Outbound send failed");
                 return false;
+        }
+    }
+
+    private async handleManagementWebSocketMessage(
+        client: WebSocket,
+        managementToken: string | undefined,
+        raw: string,
+    ): Promise<void> {
+        if (client.readyState !== WebSocket.OPEN) return;
+        if (!validateManagementToken(this, managementToken).valid) {
+            client.close(1008, "Unauthorized");
+            return;
+        }
+        let payload: Dict = {};
+        try {
+            payload = JSON.parse(raw);
+        } catch {
+            return;
+        }
+        const configResponse = await handleManagementConfigSocketAction(this, payload);
+        if (configResponse) {
+            this.sendManagementWebSocketMessage(client, configResponse, "管理端配置回执");
+            return;
+        }
+        const accountResponse = await handleManagementAccountLifecycleSocketAction(this, payload);
+        if (accountResponse) {
+            this.sendManagementWebSocketMessage(client, accountResponse, "管理端账号生命周期回执");
+            return;
+        }
+        if (payload.action === "system.input") {
+            process.stdin.resume();
+            process.nextTick(() =>
+                process.stdin.emit("data", Buffer.from(payload.data + "\n", "utf8")),
+            );
+            process.nextTick(() => process.stdin.emit("end"));
         }
     }
 
@@ -454,64 +498,59 @@ export class App extends BaseApp {
                     onUnauthorized: () => client.close(1008, "Unauthorized"),
                 },
             );
-            client.once("close", stopAuthorizationMonitor);
-            this.sendManagementWebSocketMessage(
-                client,
+            const messageQueue = new BoundedWebSocketMessageQueue(
+                raw => this.handleManagementWebSocketMessage(client, managementToken, raw),
                 {
-                    event: "system.sync",
-                    data: {
-                        config: fs.readFileSync(BaseApp.configPath, "utf8"),
-                        adapters: this.adapterInfos,
-                        protocol: ProtocolRegistry.getAllMetadata(),
-                        plugins: this.pluginInfos,
-                        configState: this.runtimeConfigState,
-                        app: this.info,
-                        schema: getAppConfigSchema(),
-                        logs: fs.existsSync(BaseApp.logFile)
-                            ? await readLine(100, BaseApp.logFile)
-                            : "",
+                    maxPendingMessages: MANAGEMENT_WEBSOCKET_MAX_PENDING_MESSAGES,
+                    maxPendingBytes: MANAGEMENT_WEBSOCKET_MAX_PENDING_BYTES,
+                    onOverflow: overflow => {
+                        this.logger.warn("管理 WebSocket 待处理消息超过上限，连接已关闭", {
+                            ...overflow,
+                        });
+                        if (client.readyState === WebSocket.OPEN)
+                            client.close(1013, "Too many pending messages");
+                    },
+                    onError: error => {
+                        this.logger.error("管理 WebSocket 消息处理失败，连接已关闭", { error });
+                        if (client.readyState === WebSocket.OPEN)
+                            client.close(1011, "Message processing failed");
                     },
                 },
-                "管理端初始快照",
             );
-            client.on("message", async raw => {
-                if (!validateManagementToken(this, managementToken).valid) {
-                    client.close(1008, "Unauthorized");
-                    return;
-                }
-                let payload: Dict = {};
-                try {
-                    payload = JSON.parse(raw.toString());
-                } catch {
-                    return;
-                }
-                const configResponse = await handleManagementConfigSocketAction(this, payload);
-                if (configResponse) {
-                    this.sendManagementWebSocketMessage(client, configResponse, "管理端配置回执");
-                    return;
-                }
-                const accountResponse = await handleManagementAccountLifecycleSocketAction(
-                    this,
-                    payload,
-                );
-                if (accountResponse) {
-                    this.sendManagementWebSocketMessage(
-                        client,
-                        accountResponse,
-                        "管理端账号生命周期回执",
-                    );
-                    return;
-                }
-                switch (payload.action) {
-                    case "system.input":
-                        process.stdin.resume();
-                        process.nextTick(() =>
-                            process.stdin.emit("data", Buffer.from(payload.data + "\n", "utf8")),
-                        );
-                        process.nextTick(() => process.stdin.emit("end"));
-                        return true;
-                }
+            client.once("close", () => {
+                stopAuthorizationMonitor();
+                messageQueue.dispose();
             });
+            client.on("message", raw => messageQueue.enqueue(raw));
+
+            try {
+                const snapshotSent = this.sendManagementWebSocketMessage(
+                    client,
+                    {
+                        event: "system.sync",
+                        data: {
+                            config: fs.readFileSync(BaseApp.configPath, "utf8"),
+                            adapters: this.adapterInfos,
+                            protocol: ProtocolRegistry.getAllMetadata(),
+                            plugins: this.pluginInfos,
+                            configState: this.runtimeConfigState,
+                            app: this.info,
+                            schema: getAppConfigSchema(),
+                            logs: fs.existsSync(BaseApp.logFile)
+                                ? await readLine(100, BaseApp.logFile)
+                                : "",
+                        },
+                    },
+                    "管理端初始快照",
+                );
+                if (snapshotSent) messageQueue.start();
+                else messageQueue.dispose();
+            } catch (error) {
+                this.logger.error("构造管理端初始快照失败，连接已关闭", { error });
+                messageQueue.dispose();
+                if (client.readyState === WebSocket.OPEN)
+                    client.close(1011, "Initial snapshot failed");
+            }
         });
 
         for (const [, adapter] of this.adapters) {

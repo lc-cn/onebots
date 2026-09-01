@@ -1,10 +1,16 @@
-import { WebSocket } from "ws";
+import { WebSocket, type RawData } from "ws";
 
 /** 管理端主连接允许配置同步等较大 JSON 消息，但仍限制单条入站载荷。 */
 export const MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
 /** 主连接最多保留两条最大消息的待发送数据，慢客户端不会无限积压。 */
 export const MANAGEMENT_WEBSOCKET_MAX_BUFFERED_BYTES = 8 * 1024 * 1024;
+
+/** 单个管理连接最多保留的待处理动作数。 */
+export const MANAGEMENT_WEBSOCKET_MAX_PENDING_MESSAGES = 64;
+
+/** 待处理动作按原始入站字节累计，避免多个合法小消息绕过单消息上限。 */
+export const MANAGEMENT_WEBSOCKET_MAX_PENDING_BYTES = 8 * 1024 * 1024;
 
 /** 终端输入只需要较小消息，避免单个连接占用过多内存。 */
 export const TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES = 1024 * 1024;
@@ -24,6 +30,135 @@ interface BoundedWebSocketSendOptions {
     maxMessageBytes: number;
     maxBufferedBytes: number;
     onSendError?: (error: Error) => void;
+}
+
+export interface BoundedWebSocketMessageQueueOverflow {
+    pendingMessages: number;
+    pendingBytes: number;
+    incomingBytes: number;
+    maxPendingMessages: number;
+    maxPendingBytes: number;
+}
+
+export interface BoundedWebSocketMessageQueueOptions {
+    maxPendingMessages: number;
+    maxPendingBytes: number;
+    onOverflow: (overflow: BoundedWebSocketMessageQueueOverflow) => void;
+    onError: (error: unknown) => void;
+}
+
+interface PendingWebSocketMessage {
+    content: string;
+    bytes: number;
+}
+
+/**
+ * 将 EventEmitter 风格的 WebSocket 消息闭合成有界、有序的异步处理链。
+ * 队列可先接收消息，再由 `start()` 开闸，保证初始快照先于动作回执发送。
+ */
+export class BoundedWebSocketMessageQueue {
+    private readonly messages: PendingWebSocketMessage[] = [];
+    private pendingMessageCount = 0;
+    private pendingByteCount = 0;
+    private started = false;
+    private processing = false;
+    private disposed = false;
+
+    constructor(
+        private readonly processMessage: (content: string) => Promise<void>,
+        private readonly options: BoundedWebSocketMessageQueueOptions,
+    ) {
+        if (!Number.isSafeInteger(options.maxPendingMessages) || options.maxPendingMessages <= 0) {
+            throw new RangeError("WebSocket maxPendingMessages 必须是正安全整数");
+        }
+        if (!Number.isSafeInteger(options.maxPendingBytes) || options.maxPendingBytes <= 0) {
+            throw new RangeError("WebSocket maxPendingBytes 必须是正安全整数");
+        }
+    }
+
+    get pendingMessages(): number {
+        return this.pendingMessageCount;
+    }
+
+    get pendingBytes(): number {
+        return this.pendingByteCount;
+    }
+
+    enqueue(raw: RawData): boolean {
+        if (this.disposed) return false;
+        const bytes = rawDataByteLength(raw);
+        if (
+            this.pendingMessageCount + 1 > this.options.maxPendingMessages ||
+            this.pendingByteCount + bytes > this.options.maxPendingBytes
+        ) {
+            const overflow: BoundedWebSocketMessageQueueOverflow = {
+                pendingMessages: this.pendingMessageCount,
+                pendingBytes: this.pendingByteCount,
+                incomingBytes: bytes,
+                maxPendingMessages: this.options.maxPendingMessages,
+                maxPendingBytes: this.options.maxPendingBytes,
+            };
+            this.dispose();
+            this.options.onOverflow(overflow);
+            return false;
+        }
+
+        this.messages.push({ content: rawDataToString(raw, bytes), bytes });
+        this.pendingMessageCount++;
+        this.pendingByteCount += bytes;
+        if (this.started) void this.drain();
+        return true;
+    }
+
+    start(): void {
+        if (this.disposed || this.started) return;
+        this.started = true;
+        void this.drain();
+    }
+
+    dispose(): void {
+        if (this.disposed) return;
+        this.disposed = true;
+        for (const message of this.messages) {
+            this.pendingMessageCount--;
+            this.pendingByteCount -= message.bytes;
+        }
+        this.messages.length = 0;
+    }
+
+    private async drain(): Promise<void> {
+        if (!this.started || this.processing || this.disposed) return;
+        this.processing = true;
+        try {
+            while (!this.disposed) {
+                const message = this.messages.shift();
+                if (!message) break;
+                try {
+                    await this.processMessage(message.content);
+                } catch (error) {
+                    this.dispose();
+                    this.options.onError(error);
+                } finally {
+                    this.pendingMessageCount--;
+                    this.pendingByteCount -= message.bytes;
+                }
+            }
+        } finally {
+            this.processing = false;
+            if (!this.disposed && this.messages.length > 0) void this.drain();
+        }
+    }
+}
+
+function rawDataByteLength(raw: RawData): number {
+    if (Array.isArray(raw)) return raw.reduce((total, part) => total + part.byteLength, 0);
+    return raw.byteLength;
+}
+
+function rawDataToString(raw: RawData, bytes: number): string {
+    if (Array.isArray(raw)) return Buffer.concat(raw, bytes).toString("utf8");
+    if (raw instanceof ArrayBuffer) return Buffer.from(raw).toString("utf8");
+    return raw.toString("utf8");
 }
 
 /**
