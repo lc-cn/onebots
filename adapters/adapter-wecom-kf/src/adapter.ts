@@ -185,9 +185,9 @@ export class WeComKfAdapter extends Adapter<WeComKfClient, "wecom-kf"> {
                 webhook.acceptHttp(ctx as unknown as WeComKfHttpContext),
             );
         }
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                await client.start();
+                await client.start(signal);
                 account.status = AccountStatus.Online;
                 account.nickname = "微信客服";
                 account.avatar = this.icon;

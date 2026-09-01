@@ -4,7 +4,13 @@ import { KfApiTransport } from "./api-transport.js";
 import { deliverKfCallback, deliverKfItem, reportKfClientError } from "./client-events.js";
 import { assertWeComKfConfig } from "./config.js";
 import { KfCursorState } from "./cursor-state.js";
-import { ensureKfNotAborted, invalidKfParameter, isKfAborted, WeComKfError } from "./errors.js";
+import {
+    ensureKfNotAborted,
+    invalidKfParameter,
+    isKfAborted,
+    kfAborted,
+    WeComKfError,
+} from "./errors.js";
 import { resolveKfOpenKfId } from "./identity.js";
 import { assertKfUploadSize } from "./media.js";
 import { KfMessageDeduplicator } from "./message-deduplicator.js";
@@ -53,6 +59,8 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     private lifecycleAbort?: AbortController;
     private lifecycleGeneration = 0;
     private startRequest?: Promise<void>;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private started = false;
     private readonly cursorState: KfCursorState;
     private readonly knownOpenKfIds = new Set<string>();
@@ -81,15 +89,21 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     }
 
     /** 初始化凭证、游标与可选补偿轮询；重复调用保持幂等。 */
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        ensureKfNotAborted(signal);
         if (this.startRequest) return this.startRequest;
-        if (this.started) return;
+        if (this.started) {
+            this.bindStartSignal(signal);
+            return;
+        }
+        this.bindStartSignal(signal);
         const request = this.initialize();
         this.startRequest = request;
         try {
             await request;
         } finally {
             if (this.startRequest === request) this.startRequest = undefined;
+            if (!this.started) this.unbindStartSignal();
         }
     }
 
@@ -101,10 +115,12 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         const signal = controller.signal;
         try {
             await this.cursorState.load();
-            await this.getAccessToken();
+            await this.getAccessToken(false, signal);
             ensureKfNotAborted(signal);
             if (this.config.enable_sync_poll) this.startPolling();
             await emitAllAwaited(this, "ready");
+            if (this.lifecycleGeneration !== generation) throw kfAborted();
+            ensureKfNotAborted(signal);
         } catch (error) {
             controller.abort();
             if (this.lifecycleGeneration === generation) {
@@ -117,6 +133,7 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
 
     /** 停止轮询并取消当前生命周期内尚未完成的 API 同步。 */
     async stop(): Promise<void> {
+        this.unbindStartSignal();
         if (!this.started) return;
         this.started = false;
         this.lifecycleGeneration += 1;
@@ -128,6 +145,27 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
         this.transport.stop();
         this.messageFlights.clear();
         await emitAllAwaited(this, "stop");
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = (): void => {
+            void this.stop().catch(error =>
+                reportKfClientError(this, WeComKfError.wrap(error, "WECOM_KF_STOP_FAILED")),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
     }
 
     private startPolling(): void {
@@ -153,8 +191,8 @@ export class WeComKfClient extends EventEmitter<WeComKfClientEvents> {
     }
 
     /** 获取缓存凭证；`force` 用于平台明确报告凭证失效后的单次刷新。 */
-    async getAccessToken(force = false): Promise<string> {
-        return this.transport.getAccessToken(force);
+    async getAccessToken(force = false, signal?: AbortSignal): Promise<string> {
+        return this.transport.getAccessToken(force, signal);
     }
 
     /** 调用受限官方路径，并统一处理凭证、JSON、平台错误与一次失效重试。 */

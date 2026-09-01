@@ -40,9 +40,9 @@ export class KfApiTransport {
         this.tokens.clear();
     }
 
-    async getAccessToken(force = false): Promise<string> {
+    async getAccessToken(force = false, signal?: AbortSignal): Promise<string> {
         const generation = this.tokenGeneration;
-        return this.tokens.get(() => this.fetchToken(generation), force);
+        return this.tokens.get(() => this.fetchToken(generation, signal), force);
     }
 
     call(options: KfBufferCallOptions): Promise<Buffer>;
@@ -52,13 +52,17 @@ export class KfApiTransport {
         return this.performCall(options, true);
     }
 
-    private async fetchToken(generation: number): Promise<{ value: string; ttlMs: number }> {
+    private async fetchToken(
+        generation: number,
+        signal?: AbortSignal,
+    ): Promise<{ value: string; ttlMs: number }> {
         const path = "/cgi-bin/gettoken";
         const payload = await this.performCall(
             {
                 path,
                 token: false,
                 query: { corpid: this.config.corp_id, corpsecret: this.config.corp_secret },
+                signal,
             },
             false,
         );
@@ -78,7 +82,8 @@ export class KfApiTransport {
         retryToken: boolean,
     ): Promise<KfJsonResponse | Buffer> {
         const url = resolveKfApiUrl(this.apiBaseUrl, options.path, options.query);
-        const requestToken = options.token === false ? undefined : await this.getAccessToken();
+        const requestToken =
+            options.token === false ? undefined : await this.getAccessToken(false, options.signal);
         if (requestToken) url.searchParams.set("access_token", requestToken);
         const headers = new Headers();
         let body: BodyInit | undefined;
@@ -112,7 +117,7 @@ export class KfApiTransport {
         const errorCode = kfApiErrorCode(payload);
         if (retryToken && INVALID_TOKEN_CODES.has(errorCode)) {
             if (requestToken && this.tokens.invalidate(requestToken)) {
-                await this.getAccessToken(true);
+                await this.getAccessToken(true, options.signal);
             }
             return this.performCall(options, false);
         }

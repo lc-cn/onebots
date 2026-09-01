@@ -54,6 +54,7 @@ describe("WeComKfAdapter 基础契约", () => {
 
     it("完成 Pending 到 Online 再到 Offline 的生命周期并挂载共享路由", async () => {
         vi.spyOn(WeComKfClient.prototype, "getAccessToken").mockResolvedValue("access-token");
+        const start = vi.spyOn(WeComKfClient.prototype, "start");
         const account = adapter.createAccount(config);
         adapter.accounts.set(config.account_id, account);
 
@@ -65,6 +66,7 @@ describe("WeComKfAdapter 基础契约", () => {
 
         await adapter.start(config.account_id);
         await vi.waitFor(() => expect(account.status).toBe(AccountStatus.Online));
+        expect(start).toHaveBeenCalledWith(expect.any(AbortSignal));
 
         await adapter.stop(config.account_id);
         expect(account.status).toBe(AccountStatus.OffLine);

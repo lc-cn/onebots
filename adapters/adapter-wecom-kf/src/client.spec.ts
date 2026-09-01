@@ -22,6 +22,73 @@ afterEach(async () => {
 });
 
 describe("WeComKfClient", () => {
+    it("启动信号会取消首次凭证请求并结束旧生命周期", async () => {
+        const fetcher = vi.fn<typeof fetch>().mockImplementation(
+            (_input, init) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init?.signal?.addEventListener("abort", () =>
+                        reject(new DOMException("aborted", "AbortError")),
+                    );
+                }),
+        );
+        const client = new WeComKfClient(config, fetcher);
+        const controller = new AbortController();
+
+        const starting = client.start(controller.signal);
+        await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+        expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+
+        controller.abort();
+        await expect(starting).rejects.toMatchObject({ code: "WECOM_KF_ABORTED" });
+    });
+
+    it("就绪后仍保留启动信号以支持协议失败回滚", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValue(
+                json({ errcode: 0, errmsg: "ok", access_token: "access", expires_in: 7200 }),
+            );
+        const client = new WeComKfClient(config, fetcher);
+        const controller = new AbortController();
+        const stopped = vi.fn();
+        client.on("stop", stopped);
+
+        await client.start(controller.signal);
+        controller.abort();
+
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledTimes(1));
+        expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+
+    it("就绪监听器执行期间取消时不会让旧启动成功返回", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValue(
+                json({ errcode: 0, errmsg: "ok", access_token: "access", expires_in: 7200 }),
+            );
+        const client = new WeComKfClient(config, fetcher);
+        const controller = new AbortController();
+        let markReadyEntered!: () => void;
+        let releaseReady!: () => void;
+        const readyEntered = new Promise<void>(resolve => {
+            markReadyEntered = resolve;
+        });
+        const readyBlocked = new Promise<void>(resolve => {
+            releaseReady = resolve;
+        });
+        client.on("ready", () => {
+            markReadyEntered();
+            return readyBlocked;
+        });
+
+        const starting = client.start(controller.signal);
+        await readyEntered;
+        controller.abort();
+        releaseReady();
+
+        await expect(starting).rejects.toMatchObject({ code: "WECOM_KF_ABORTED" });
+    });
+
     it("并发 start 共享初始化且 stop 取消在途同步", async () => {
         const fetcher = vi
             .fn<typeof fetch>()
