@@ -132,6 +132,7 @@ export async function showCapabilities(
             .filter(plugin => plugin.type === "adapter" && selected.has(plugin.name)),
         reportErrors,
         reportPlatforms,
+        catalogIssues.length === 0,
     );
     const evidence = {
         schemaVersion: 1,

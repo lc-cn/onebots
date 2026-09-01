@@ -203,6 +203,7 @@ describe("ExtensionManager", () => {
 
         expect(slack?.capability).toEqual({
             source: "runtime",
+            status: "verified",
             packageVersion: "1.2.3",
             declared: true,
             summary: expect.objectContaining({
@@ -248,6 +249,7 @@ describe("ExtensionManager", () => {
 
         expect(slack?.capability).toEqual({
             source: "runtime",
+            status: "unknown",
             packageVersion: null,
             declared: false,
             summary: null,

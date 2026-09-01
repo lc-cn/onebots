@@ -75,6 +75,7 @@ function extension(name: string, capabilities: AdapterCapabilityManifest): Exten
         installing: false,
         capability: {
             source: "catalog",
+            status: "verified",
             packageVersion: "1.0.0",
             declared: true,
             summary: null,

@@ -47,6 +47,7 @@ export function getAdapterInfos(
                 ),
                 capabilityDeclared: declared,
                 capabilitySource: "runtime" as const,
+                capabilityStatus: declared ? ("verified" as const) : ("unknown" as const),
                 capabilityPackageVersion: plugin.version,
                 accounts: [],
                 accountCapabilities: {},
@@ -93,6 +94,10 @@ export function getAdapterInfo(adapter: AdapterInfoSource, packageVersion: strin
         capabilityDeclared:
             metadata?.capabilities !== undefined || hasDeclaredCapabilities(defaultCapabilities),
         capabilitySource: "runtime" as const,
+        capabilityStatus:
+            metadata?.capabilities !== undefined || hasDeclaredCapabilities(defaultCapabilities)
+                ? ("verified" as const)
+                : ("unknown" as const),
         capabilityPackageVersion: packageVersion,
         accountCapabilities,
         accountCapabilityErrors,

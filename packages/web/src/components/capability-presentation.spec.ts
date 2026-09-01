@@ -101,7 +101,11 @@ describe("capability presentation", () => {
 
         const result = mergeCapabilityAdapters([runtimeAdapter], extensions);
 
-        expect(result.map(adapter => adapter.platform)).toEqual(["telegram", "discord"]);
+        expect(result.map(adapter => adapter.platform)).toEqual([
+            "telegram",
+            "discord",
+            "undeclared",
+        ]);
         expect(result[0]).toMatchObject({
             displayName: "Telegram runtime",
             capabilityDeclared: true,
@@ -115,6 +119,20 @@ describe("capability presentation", () => {
             capabilityPackageVersion: "1.2.3",
             accounts: [],
             capabilities: manifest,
+        });
+        expect(result[2]).toMatchObject({
+            displayName: "undeclared catalog",
+            capabilityDeclared: false,
+            capabilitySource: "catalog",
+            capabilityStatus: "unavailable",
+            capabilities: {
+                version: 1,
+                actions: {},
+                events: {},
+                segments: {},
+                transports: {},
+            },
+            accounts: [],
         });
     });
 });
@@ -144,6 +162,7 @@ function extension(
         capability: capabilityManifest
             ? {
                   source: "catalog",
+                  status: "verified",
                   packageVersion: "1.2.3",
                   declared: true,
                   summary: null,
@@ -151,6 +170,7 @@ function extension(
               }
             : {
                   source: "catalog",
+                  status: "unavailable",
                   packageVersion: null,
                   declared: false,
                   summary: null,

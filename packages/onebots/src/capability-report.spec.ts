@@ -49,6 +49,7 @@ describe("adapter capability report", () => {
             adapters: [
                 {
                     source: "runtime",
+                    status: "verified",
                     name: "example",
                     displayName: "示例平台",
                     packageName: "@onebots/adapter-example",
@@ -82,6 +83,7 @@ describe("adapter capability report", () => {
             adapters: [
                 {
                     source: "catalog",
+                    status: "verified",
                     name: "slack",
                     displayName: "Slack",
                     packageName: "@onebots/adapter-slack",
@@ -127,7 +129,14 @@ describe("adapter capability report", () => {
 
         expect(report).toMatchObject({
             complete: false,
-            adapters: [{ name: "third-party", declared: false, capabilities: null }],
+            adapters: [
+                {
+                    name: "third-party",
+                    status: "unknown",
+                    declared: false,
+                    capabilities: null,
+                },
+            ],
         });
         expect(formatAdapterCapabilityReport(report)).toContain("未声明默认能力清单");
     });
@@ -138,6 +147,31 @@ describe("adapter capability report", () => {
         expect(report).toEqual({ complete: false, errors: ["adapter:missing"], adapters: [] });
         expect(formatAdapterCapabilityReport(report)).toBe("✗ 加载失败: adapter:missing");
         expect(JSON.parse(formatAdapterCapabilityReport(report, true))).toEqual(report);
+    });
+
+    it("keeps catalog platforms visible while isolating unavailable evidence", () => {
+        const report = buildAdapterCapabilityReport(
+            [],
+            ["extension-catalog: 快照版本错配"],
+            ["slack"],
+            false,
+        );
+
+        expect(report).toMatchObject({
+            complete: false,
+            adapters: [
+                {
+                    source: "catalog",
+                    status: "unavailable",
+                    name: "slack",
+                    declared: false,
+                    packageVersion: null,
+                    summary: null,
+                    capabilities: null,
+                },
+            ],
+        });
+        expect(formatAdapterCapabilityReport(report)).toContain("能力目录证据不可用");
     });
 });
 

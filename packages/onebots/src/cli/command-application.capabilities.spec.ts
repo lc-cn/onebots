@@ -205,7 +205,15 @@ describe("capabilities command", () => {
             },
             complete: false,
             errors: ["adapter:missing"],
-            adapters: [],
+            adapters: [
+                {
+                    name: "missing",
+                    source: "catalog",
+                    status: "unavailable",
+                    declared: false,
+                    capabilities: null,
+                },
+            ],
         });
     });
 
@@ -248,7 +256,15 @@ describe("capabilities command", () => {
         expect(JSON.parse(result.output || "{}")).toMatchObject({
             complete: false,
             errors: ["extension-catalog: 适配器能力快照缺失: telegram"],
-            adapters: [{ name: "slack", source: "catalog" }],
+            adapters: [
+                {
+                    name: "slack",
+                    source: "catalog",
+                    status: "unavailable",
+                    declared: false,
+                    capabilities: null,
+                },
+            ],
         });
     });
 });

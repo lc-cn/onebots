@@ -10,6 +10,14 @@ import type {
 } from "@onebots/core";
 import type { AdapterInfo, ExtensionInfo } from "../types";
 
+const EMPTY_CAPABILITY_MANIFEST: AdapterCapabilityManifest = {
+    version: 1,
+    actions: {},
+    events: {},
+    segments: {},
+    transports: {},
+};
+
 export const CAPABILITY_CATEGORIES = [
     { key: "actions", label: "动作" },
     { key: "events", label: "事件" },
@@ -58,21 +66,25 @@ export function mergeCapabilityAdapters(
         if (
             extension.type !== "adapter" ||
             runtimePlatforms.has(extension.name) ||
-            !extension.capability?.declared ||
-            !extension.capability.manifest
+            !extension.capability
         ) {
             return [];
         }
+        const verified = extension.capability.status === "verified";
         return [
             {
                 platform: extension.name,
                 displayName: extension.displayName,
                 description: extension.description,
                 icon: "",
-                capabilities: extension.capability.manifest,
-                capabilityDeclared: true,
+                capabilities: extension.capability.manifest ?? EMPTY_CAPABILITY_MANIFEST,
+                capabilityDeclared: extension.capability.declared,
                 capabilitySource: extension.capability.source,
                 capabilityPackageVersion: extension.capability.packageVersion,
+                capabilityStatus: extension.capability.status,
+                capabilityUnavailableReason: verified
+                    ? undefined
+                    : extension.catalogError || undefined,
                 accounts: [],
             } satisfies AdapterInfo,
         ];
@@ -86,6 +98,9 @@ export function mergeCapabilityAdapters(
                 ...adapter,
                 capabilityDeclared: adapter.capabilityDeclared ?? true,
                 capabilitySource: "runtime" as const,
+                capabilityStatus:
+                    adapter.capabilityStatus ??
+                    (adapter.capabilityDeclared === false ? "unknown" : "verified"),
                 capabilityPackageVersion:
                     adapter.capabilityPackageVersion ?? runtimeCapability?.packageVersion,
             };

@@ -74,7 +74,16 @@
                 </div>
 
                 <UiAlert
-                    v-if="selectedAdapter.capabilityDeclared === false"
+                    v-if="selectedAdapter.capabilityStatus === 'unavailable'"
+                    variant="danger"
+                    title="能力目录证据不可用">
+                    {{
+                        selectedAdapter.capabilityUnavailableReason || "能力目录未通过完整性校验"
+                    }}。下方空分类不能作为平台不支持这些能力的证据，请修复目录错误后重试。
+                </UiAlert>
+
+                <UiAlert
+                    v-else-if="selectedAdapter.capabilityDeclared === false"
                     variant="warning"
                     title="默认能力清单未知">
                     该适配器已经加载，但插件没有注册可信的默认能力清单。下方空分类不能作为平台不支持这些能力的证据；请查看适配器文档或联系插件作者补充声明。

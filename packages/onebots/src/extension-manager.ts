@@ -196,6 +196,7 @@ export class ExtensionManager {
                 adapter.name,
                 {
                     source: "runtime" as const,
+                    status: adapter.declared ? ("verified" as const) : ("unknown" as const),
                     packageVersion: adapter.packageVersion,
                     declared: adapter.declared,
                     summary: adapter.summary,
@@ -254,6 +255,7 @@ export class ExtensionManager {
                         : loaded
                           ? (adapterCapabilities.get(entry.name) ?? {
                                 source: "runtime" as const,
+                                status: "unknown" as const,
                                 packageVersion: null,
                                 declared: false,
                                 summary: null,
@@ -262,6 +264,7 @@ export class ExtensionManager {
                           : !catalogError && catalogCapability
                             ? {
                                   source: "catalog" as const,
+                                  status: "verified" as const,
                                   packageVersion: catalogCapability.packageVersion,
                                   declared: true,
                                   summary: summarizeManifest(catalogCapability.manifest),
@@ -269,6 +272,7 @@ export class ExtensionManager {
                               }
                             : {
                                   source: "catalog" as const,
+                                  status: "unavailable" as const,
                                   packageVersion: null,
                                   declared: false,
                                   summary: null,

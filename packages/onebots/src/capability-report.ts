@@ -4,6 +4,7 @@ import { getExtensionCatalogEntry } from "./extension-catalog.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
 
 export type CapabilityCategory = "actions" | "events" | "segments" | "transports";
+export type CapabilityEvidenceStatus = "verified" | "unknown" | "unavailable";
 
 export interface CapabilityCategorySummary {
     total: number;
@@ -15,6 +16,7 @@ export interface CapabilityCategorySummary {
 
 export interface AdapterCapabilityReportItem {
     source: "catalog" | "runtime";
+    status: CapabilityEvidenceStatus;
     name: string;
     displayName: string;
     description: string;
@@ -58,6 +60,7 @@ export function buildAdapterCapabilityReport(
     loadedPlugins: readonly LoadedPluginInfo[],
     errors: readonly string[] = [],
     catalogPlatforms: readonly string[] = [],
+    catalogAvailable = true,
 ): AdapterCapabilityReport {
     const runtimeAdapters = loadedPlugins
         .filter(plugin => plugin.type === "adapter")
@@ -66,6 +69,7 @@ export function buildAdapterCapabilityReport(
             const capabilities = metadata?.capabilities ?? null;
             return {
                 source: "runtime" as const,
+                status: capabilities ? ("verified" as const) : ("unknown" as const),
                 name: plugin.name,
                 displayName: metadata?.displayName || plugin.name,
                 description: metadata?.description || "",
@@ -80,30 +84,29 @@ export function buildAdapterCapabilityReport(
     const runtimeNames = new Set(runtimeAdapters.map(adapter => adapter.name));
     const catalogAdapters = [...new Set(catalogPlatforms)]
         .filter(platform => !runtimeNames.has(platform))
-        .flatMap(platform => {
+        .map(platform => {
             const capability = getExtensionCapabilityCatalogEntry(platform);
-            if (!capability) return [];
             const extension = getExtensionCatalogEntry(`adapter:${platform}`);
-            return [
-                {
-                    source: "catalog" as const,
-                    name: platform,
-                    displayName: extension?.displayName || platform,
-                    description: extension?.description || "",
-                    packageName: capability.packageName,
-                    packageVersion: capability.packageVersion,
-                    entryPath: null,
-                    declared: true,
-                    summary: summarizeManifest(capability.manifest),
-                    capabilities: capability.manifest,
-                } satisfies AdapterCapabilityReportItem,
-            ];
+            const verified = catalogAvailable && capability !== undefined;
+            return {
+                source: "catalog" as const,
+                status: verified ? ("verified" as const) : ("unavailable" as const),
+                name: platform,
+                displayName: extension?.displayName || platform,
+                description: extension?.description || "",
+                packageName: capability?.packageName || extension?.packageName || platform,
+                packageVersion: verified ? capability.packageVersion : null,
+                entryPath: null,
+                declared: verified,
+                summary: verified ? summarizeManifest(capability.manifest) : null,
+                capabilities: verified ? capability.manifest : null,
+            } satisfies AdapterCapabilityReportItem;
         });
     const adapters = [...runtimeAdapters, ...catalogAdapters].sort((left, right) =>
         left.name.localeCompare(right.name),
     );
     return {
-        complete: errors.length === 0 && adapters.every(adapter => adapter.declared),
+        complete: errors.length === 0 && adapters.every(adapter => adapter.status === "verified"),
         errors: [...errors],
         adapters,
     };
@@ -139,7 +142,11 @@ export function formatAdapterCapabilityReport(
             `${adapter.declared ? "✓" : "✗"} ${title} · ${adapter.packageName}${version} · ${source}`,
         );
         if (!adapter.summary) {
-            lines.push("  未声明默认能力清单，无法在启动账号前验证平台边界");
+            lines.push(
+                adapter.status === "unavailable"
+                    ? "  能力目录证据不可用，不能据此判断平台是否支持这些能力"
+                    : "  未声明默认能力清单，无法在启动账号前验证平台边界",
+            );
             continue;
         }
         lines.push(

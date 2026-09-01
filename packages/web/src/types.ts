@@ -89,6 +89,9 @@ export interface AdapterInfo {
     /** 能力证据来自当前进程，或尚未加载插件的版本化目录快照。 */
     capabilitySource?: "runtime" | "catalog";
     capabilityPackageVersion?: string | null;
+    /** 能力证据已验证、插件未声明，或目录当前不可用。 */
+    capabilityStatus?: "verified" | "unknown" | "unavailable";
+    capabilityUnavailableReason?: string;
     accounts: AccountInfo[];
 }
 
@@ -115,6 +118,7 @@ export interface CapabilityCategorySummary {
 
 export interface ExtensionCapabilityInfo {
     source: "catalog" | "runtime";
+    status: "verified" | "unknown" | "unavailable";
     packageVersion: string | null;
     declared: boolean;
     summary: Record<

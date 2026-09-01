@@ -42,6 +42,8 @@ Explicit event subscriptions are also account capability boundaries. QQ/Discord 
 
 In the Web console, both **Extensions** and **Bots → Capability overview** show package-versioned catalog snapshots for platforms that are not installed, loaded, or configured with an account yet. Users can compare actions, events, message segments, and transports in the same overview without creating an account or entering credentials. Once an adapter is loaded, the overview gives its authoritative registered manifest precedence. After creating an account, users can switch to that account to inspect overrides caused by its token, permissions, or event subscriptions. A third-party plugin without a runtime manifest is explicitly marked as unknown rather than being hidden behind a catalog snapshot. The overview labels each source as a **catalog snapshot** or **runtime manifest** with its plugin version. Summary counts include native and emulated capabilities, while explicitly unsupported entries remain visible; permission, scene, and context restrictions appear on each item. The repository runs `pnpm catalog:capabilities:check` to keep the published snapshot aligned with every built adapter manifest.
 
+Capability evidence distinguishes `verified`, `unknown`, and `unavailable`. If catalog integrity validation fails, the CLI and Web UI keep the affected platforms visible for diagnosis but do not display or search an unverified snapshot; empty categories cannot be interpreted as proof that a platform lacks those capabilities. `unknown` is reserved for a loaded plugin that did not declare a manifest, separate from catalog evidence that is `unavailable`.
+
 The CLI can export each selected adapter's registered default manifest without starting an account:
 
 ```bash
@@ -49,7 +51,7 @@ onebots capabilities -c config.yaml
 onebots capabilities -c config.yaml --json
 ```
 
-The command reuses `plugins.adapters`, with `-r` as a category-level override. It loads adapter entries without connecting to a platform or loading protocols. JSON includes package names, versions, real entry paths, category counts, and complete manifests for selection reviews and CI evidence. Plugin load failures remain in `errors` and return exit code `2`; an adapter without a registered default manifest sets `complete` to `false` and returns exit code `1`. Account permission and subscription overrides remain available after startup through `/api/adapters` and the Web capability panel.
+The command reuses `plugins.adapters`, with `-r` as a category-level override. It loads adapter entries without connecting to a platform or loading protocols. JSON includes package names, versions, real entry paths, `status`, category counts, and complete manifests for selection reviews and CI evidence. Plugin load failures remain in `errors` and return exit code `2`; an adapter without a registered default manifest or with unavailable catalog evidence sets `complete` to `false` and returns exit code `1`. Account permission and subscription overrides remain available after startup through `/api/adapters` and the Web capability panel.
 
 ### Native platform actions
 
