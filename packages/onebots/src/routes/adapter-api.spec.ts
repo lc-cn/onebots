@@ -16,6 +16,7 @@ function setup(overrides: Partial<App> = {}) {
     const posts = new Map<string, RouteHandler>();
     const app = {
         adapterInfos: [],
+        adapterCapabilityReport: { complete: true, errors: [], adapters: [] },
         accounts: [],
         adapters: new Map(),
         logger: { error: vi.fn() },
@@ -32,6 +33,27 @@ function setup(overrides: Partial<App> = {}) {
 }
 
 describe("adapter account routes", () => {
+    it("无账号时通过独立端点返回完整能力证据且不污染已加载适配器清单", () => {
+        const adapterInfos = [{ platform: "loaded", accounts: [] }];
+        const report = {
+            schemaVersion: 1 as const,
+            generatedAt: "2026-09-01T00:00:00.000Z",
+            application: { name: "onebots", version: "1.2.8" },
+            complete: true,
+            errors: [],
+            adapters: [{ name: "qq", source: "catalog", status: "verified" }],
+        };
+        const { gets } = setup({ adapterInfos, adapterCapabilityReport: report } as Partial<App>);
+        const adaptersContext = {} as RouterContext;
+        const capabilitiesContext = {} as RouterContext;
+
+        gets.get("/api/adapters")!(adaptersContext);
+        gets.get("/api/adapter-capabilities")!(capabilitiesContext);
+
+        expect(adaptersContext.body).toBe(adapterInfos);
+        expect(capabilitiesContext.body).toBe(report);
+    });
+
     it("账号配置事务冲突返回 409", async () => {
         const addAccount = vi.fn(async () => {
             throw new AccountMutationConflictError();

@@ -2,11 +2,35 @@
     <UiDrawer v-model="visible" title="适配器能力" size="520px">
         <div v-if="adapters.length === 0" class="py-8">
             <UiEmpty
-                title="暂无可用能力清单"
-                description="能力目录暂不可用，请稍后重试或检查功能扩展页面。" />
+                :title="catalogStatus === 'loading' ? '正在读取平台能力' : '暂无可用能力清单'"
+                :description="emptyDescription">
+                <UiButton
+                    v-if="catalogStatus === 'unavailable'"
+                    size="sm"
+                    class="mt-3"
+                    @click="emit('retry')">
+                    重试
+                </UiButton>
+            </UiEmpty>
         </div>
 
         <div v-else class="flex flex-col gap-5">
+            <UiAlert
+                v-if="catalogStatus === 'unavailable' || catalogError"
+                variant="warning"
+                :title="
+                    catalogStatus === 'unavailable' ? '平台能力目录不可达' : '平台能力目录不完整'
+                ">
+                {{ catalogNotice }}
+                <UiButton
+                    v-if="catalogStatus === 'unavailable'"
+                    size="sm"
+                    class="ml-2"
+                    @click="emit('retry')">
+                    重试
+                </UiButton>
+            </UiAlert>
+
             <div>
                 <label class="mb-1.5 block text-xs font-medium text-fg-secondary">适配器</label>
                 <UiSelect v-model="selectedPlatform" :options="adapterOptions" />
@@ -185,6 +209,7 @@ import { computed, ref, watch } from "vue";
 import UiAvatar from "../ui/UiAvatar.vue";
 import UiAlert from "../ui/UiAlert.vue";
 import UiBadge from "../ui/UiBadge.vue";
+import UiButton from "../ui/UiButton.vue";
 import UiDrawer from "../ui/UiDrawer.vue";
 import UiEmpty from "../ui/UiEmpty.vue";
 import UiSelect from "../ui/UiSelect.vue";
@@ -200,11 +225,35 @@ import {
     type CapabilityCategory,
 } from "./capability-presentation.js";
 
-const props = defineProps<{ adapters: AdapterInfo[] }>();
+const props = withDefaults(
+    defineProps<{
+        adapters: AdapterInfo[];
+        catalogStatus?: "loading" | "ready" | "unavailable";
+        catalogError?: string;
+    }>(),
+    {
+        catalogStatus: "ready",
+        catalogError: "",
+    },
+);
+const emit = defineEmits<{ retry: [] }>();
 const visible = defineModel<boolean>({ default: false });
 const selectedPlatform = ref<string | number | boolean>();
 const selectedAccountId = ref<string | number | boolean>("");
 const activeCategory = ref<CapabilityCategory>("actions");
+const emptyDescription = computed(() => {
+    if (props.catalogStatus === "loading") return "无需配置机器人，能力目录加载后即可比较平台。";
+    if (props.catalogStatus === "unavailable") {
+        return `${props.catalogError || "能力清单请求失败"}。已加载适配器仍会保留，重试不会连接平台。`;
+    }
+    return "当前版本没有可验证的适配器能力证据。";
+});
+const catalogNotice = computed(() => {
+    if (props.catalogStatus === "unavailable") {
+        return `${props.catalogError || "能力清单请求失败"}。当前仅展示已加载适配器的运行时清单。`;
+    }
+    return `${props.catalogError}。未通过校验的目录快照不会作为平台能力证据。`;
+});
 
 const adapterOptions = computed(() =>
     props.adapters.map(adapter => ({

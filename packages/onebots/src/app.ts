@@ -38,6 +38,11 @@ import {
     validateRuntimeConfig,
 } from "./runtime-config-validator.js";
 import { getAdapterInfos } from "./adapter-info.js";
+import { buildAdapterCapabilityReport } from "./capability-report.js";
+import {
+    getInstallableAdapterNames,
+    validateExtensionCatalogIntegrity,
+} from "./extension-catalog-integrity.js";
 import { handleManagementConfigSocketAction } from "./management-config-socket.js";
 import { handleManagementAccountLifecycleSocketAction } from "./management-account-lifecycle.js";
 import {
@@ -225,6 +230,26 @@ export class App extends BaseApp {
     /** 为 REST 与 WebSocket 提供同一份带注册元数据的适配器摘要。 */
     get adapterInfos() {
         return getAdapterInfos(this.adapters.values(), this.pluginInfos);
+    }
+
+    /** 不依赖账号或扩展安装环境的完整适配器能力证据。 */
+    get adapterCapabilityReport() {
+        const catalogIssues = validateExtensionCatalogIntegrity();
+        const report = buildAdapterCapabilityReport(
+            this.pluginInfos,
+            catalogIssues.map(issue => `extension-catalog: ${issue}`),
+            getInstallableAdapterNames(),
+            catalogIssues.length === 0,
+        );
+        return {
+            schemaVersion: 1 as const,
+            generatedAt: new Date().toISOString(),
+            application: {
+                name: packageMetadata.name,
+                version: packageMetadata.version,
+            },
+            ...report,
+        };
     }
 
     /** 当前进程真正通过加载与注册契约校验的插件包清单。 */

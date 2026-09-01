@@ -365,6 +365,8 @@ Every `/health` and `/ready` verifier reads at most 64 KiB of response body and 
 
 The shared Router rejects duplicate HTTP methods on the same exact path and atomically removes every Layer created by one registration, including path arrays. A duplicate WebSocket pathname also fails before a second server is created. For account-scoped HTTP and WebSocket conflicts, the error identifies both the registering account and the account already holding the path, making multi-account configuration failures directly actionable. Different HTTP methods may still share a path.
 
+`GET /api/adapter-capabilities` provides complete platform capability evidence independently of account configuration and the extension installation environment. Its response carries a `schemaVersion`, generation time, current OneBots application identity, catalog-integrity result, runtime manifests for loaded plugins, and package-versioned snapshots for unloaded platforms. A zero-account deployment can therefore archive and compare platforms directly. The Bots page consumes this endpoint instead of borrowing the extension installation inventory, so an extension-inventory failure cannot erase otherwise valid capability evidence. A failed request or invalid response contract keeps loaded adapters visible, explains the reduced evidence, and offers a retry.
+
 ## Auto Integration
 
 All production-ready features are automatically integrated in `BaseApp`, ready to use without additional configuration.

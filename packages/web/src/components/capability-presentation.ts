@@ -8,7 +8,7 @@ import type {
     SegmentCapabilityDescriptor,
     TransportCapabilityDescriptor,
 } from "@onebots/core";
-import type { AdapterInfo, ExtensionInfo } from "../types";
+import type { AdapterCapabilityReport, AdapterInfo } from "../types";
 
 const EMPTY_CAPABILITY_MANIFEST: AdapterCapabilityManifest = {
     version: 1,
@@ -36,6 +36,45 @@ export interface CapabilityEntry {
     descriptor: CapabilityEntryDescriptor;
 }
 
+export function parseAdapterCapabilityReport(value: unknown): AdapterCapabilityReport {
+    if (!value || typeof value !== "object") throw new Error("适配器能力响应必须是对象");
+    const report = value as Partial<AdapterCapabilityReport>;
+    if (
+        report.schemaVersion !== 1 ||
+        typeof report.generatedAt !== "string" ||
+        Number.isNaN(Date.parse(report.generatedAt)) ||
+        !report.application ||
+        typeof report.application.name !== "string" ||
+        !report.application.name.trim() ||
+        typeof report.application.version !== "string" ||
+        !report.application.version.trim() ||
+        typeof report.complete !== "boolean" ||
+        !Array.isArray(report.errors) ||
+        !report.errors.every(error => typeof error === "string") ||
+        !Array.isArray(report.adapters)
+    ) {
+        throw new Error("适配器能力响应结构无效");
+    }
+    for (const adapter of report.adapters) {
+        if (
+            !adapter ||
+            typeof adapter !== "object" ||
+            !["catalog", "runtime"].includes(adapter.source) ||
+            !["verified", "unknown", "unavailable"].includes(adapter.status) ||
+            typeof adapter.name !== "string" ||
+            typeof adapter.displayName !== "string" ||
+            typeof adapter.description !== "string" ||
+            typeof adapter.packageName !== "string" ||
+            (adapter.packageVersion !== null && typeof adapter.packageVersion !== "string") ||
+            typeof adapter.declared !== "boolean" ||
+            (adapter.capabilities !== null && typeof adapter.capabilities !== "object")
+        ) {
+            throw new Error("适配器能力条目结构无效");
+        }
+    }
+    return report as AdapterCapabilityReport;
+}
+
 export function capabilitySupportLabel(support: CapabilitySupport): string {
     return { native: "原生", emulated: "模拟", unsupported: "不支持" }[support];
 }
@@ -57,55 +96,52 @@ export function capabilitySceneLabel(scene: CommonTypes.Scene): string {
     }[scene];
 }
 
-export function mergeCapabilityAdapters(
+/**
+ * 合并独立能力 API 与账号运行态。运行时账号覆写保持权威，未加载平台来自目录证据。
+ */
+export function mergeCapabilityReportAdapters(
     runtimeAdapters: readonly AdapterInfo[],
-    extensions: readonly ExtensionInfo[],
+    report: AdapterCapabilityReport,
 ): AdapterInfo[] {
     const runtimePlatforms = new Set(runtimeAdapters.map(adapter => adapter.platform));
-    const catalogAdapters = extensions.flatMap(extension => {
-        if (
-            extension.type !== "adapter" ||
-            runtimePlatforms.has(extension.name) ||
-            !extension.capability
-        ) {
-            return [];
-        }
-        const verified = extension.capability.status === "verified";
-        return [
-            {
-                platform: extension.name,
-                displayName: extension.displayName,
-                description: extension.description,
-                icon: "",
-                capabilities: extension.capability.manifest ?? EMPTY_CAPABILITY_MANIFEST,
-                capabilityDeclared: extension.capability.declared,
-                capabilitySource: extension.capability.source,
-                capabilityPackageVersion: extension.capability.packageVersion,
-                capabilityStatus: extension.capability.status,
-                capabilityUnavailableReason: verified
-                    ? undefined
-                    : extension.catalogError || undefined,
-                accounts: [],
-            } satisfies AdapterInfo,
-        ];
-    });
+    const reportByPlatform = new Map(report.adapters.map(adapter => [adapter.name, adapter]));
+    const unavailableReason = report.errors.join("；");
     return [
         ...runtimeAdapters.map(adapter => {
-            const runtimeCapability = extensions.find(
-                extension => extension.type === "adapter" && extension.name === adapter.platform,
-            )?.capability;
+            const evidence = reportByPlatform.get(adapter.platform);
             return {
                 ...adapter,
-                capabilityDeclared: adapter.capabilityDeclared ?? true,
+                capabilityDeclared: adapter.capabilityDeclared ?? evidence?.declared ?? true,
                 capabilitySource: "runtime" as const,
                 capabilityStatus:
                     adapter.capabilityStatus ??
+                    evidence?.status ??
                     (adapter.capabilityDeclared === false ? "unknown" : "verified"),
                 capabilityPackageVersion:
-                    adapter.capabilityPackageVersion ?? runtimeCapability?.packageVersion,
+                    adapter.capabilityPackageVersion ?? evidence?.packageVersion,
             };
         }),
-        ...catalogAdapters,
+        ...report.adapters.flatMap(evidence => {
+            if (runtimePlatforms.has(evidence.name)) return [];
+            return [
+                {
+                    platform: evidence.name,
+                    displayName: evidence.displayName,
+                    description: evidence.description,
+                    icon: "",
+                    capabilities: evidence.capabilities ?? EMPTY_CAPABILITY_MANIFEST,
+                    capabilityDeclared: evidence.declared,
+                    capabilitySource: evidence.source,
+                    capabilityPackageVersion: evidence.packageVersion,
+                    capabilityStatus: evidence.status,
+                    capabilityUnavailableReason:
+                        evidence.status === "unavailable"
+                            ? unavailableReason || "能力目录未通过完整性校验"
+                            : undefined,
+                    accounts: [],
+                } satisfies AdapterInfo,
+            ];
+        }),
     ];
 }
 

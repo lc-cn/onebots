@@ -98,6 +98,27 @@ export interface AdapterInfo {
     accounts: AccountInfo[];
 }
 
+export interface AdapterCapabilityReportItem {
+    source: "catalog" | "runtime";
+    status: "verified" | "unknown" | "unavailable";
+    name: string;
+    displayName: string;
+    description: string;
+    packageName: string;
+    packageVersion: string | null;
+    declared: boolean;
+    capabilities: AdapterCapabilityManifest | null;
+}
+
+export interface AdapterCapabilityReport {
+    schemaVersion: 1;
+    generatedAt: string;
+    application: { name: string; version: string };
+    complete: boolean;
+    errors: string[];
+    adapters: AdapterCapabilityReportItem[];
+}
+
 export interface ProtocolInfo {
     name: string;
     displayName: string;

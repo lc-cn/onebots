@@ -11,6 +11,7 @@ import {
  *
  * Routes in this group:
  *  GET  /api/adapters       — list all adapter infos
+ *  GET  /api/adapter-capabilities — list runtime and catalog capability evidence
  *  GET  /api/list           — list all account infos
  *  POST /api/add            — add an account
  *  POST /api/edit           — update an account
@@ -22,6 +23,10 @@ import {
 export function registerAdapterRoutes(app: App, router: Router): void {
     router.get("/api/adapters", (ctx: RouterContext) => {
         ctx.body = app.adapterInfos;
+    });
+
+    router.get("/api/adapter-capabilities", (ctx: RouterContext) => {
+        ctx.body = app.adapterCapabilityReport;
     });
 
     router.get("/api/list", (ctx: RouterContext) => {

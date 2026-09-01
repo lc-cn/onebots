@@ -8,11 +8,12 @@ import {
     countSupportedCapabilities,
     getCapabilityEntries,
     hasAccountCapabilityOverride,
-    mergeCapabilityAdapters,
+    mergeCapabilityReportAdapters,
+    parseAdapterCapabilityReport,
     resolveAccountCapabilityError,
     resolveAccountCapabilities,
 } from "./capability-presentation.js";
-import type { AdapterInfo, ExtensionInfo } from "../types";
+import type { AdapterCapabilityReport, AdapterInfo } from "../types";
 
 const manifest: AdapterCapabilityManifest = {
     version: 1,
@@ -92,14 +93,13 @@ describe("capability presentation", () => {
             capabilities: manifest,
             accounts: [],
         } satisfies AdapterInfo;
-        const extensions = [
-            extension("telegram", manifest),
-            extension("discord", manifest),
-            extension("undeclared", null),
-            { ...extension("protocol", manifest), type: "protocol" as const },
-        ];
+        const report = capabilityReport([
+            reportAdapter("telegram", manifest, "runtime"),
+            reportAdapter("discord", manifest),
+            reportAdapter("undeclared", null, "catalog", "unavailable"),
+        ]);
 
-        const result = mergeCapabilityAdapters([runtimeAdapter], extensions);
+        const result = mergeCapabilityReportAdapters([runtimeAdapter], report);
 
         expect(result.map(adapter => adapter.platform)).toEqual([
             "telegram",
@@ -135,46 +135,44 @@ describe("capability presentation", () => {
             accounts: [],
         });
     });
+
+    it("rejects malformed independent capability API responses", () => {
+        expect(() => parseAdapterCapabilityReport(null)).toThrow("必须是对象");
+        expect(() =>
+            parseAdapterCapabilityReport({ ...capabilityReport([]), adapters: [{}] }),
+        ).toThrow("条目结构无效");
+        expect(parseAdapterCapabilityReport(capabilityReport([]))).toEqual(capabilityReport([]));
+    });
 });
 
-function extension(
+function reportAdapter(
     name: string,
     capabilityManifest: AdapterCapabilityManifest | null,
-): ExtensionInfo {
+    source: "catalog" | "runtime" = "catalog",
+    status: "verified" | "unknown" | "unavailable" = "verified",
+) {
     return {
-        id: `adapter:${name}`,
-        type: "adapter",
+        source,
+        status,
         name,
         displayName: `${name} catalog`,
         description: "catalog",
         packageName: `@onebots/adapter-${name}`,
-        configurationTarget: { kind: "account", platform: name },
-        configurationError: null,
-        catalogError: null,
-        targetVersion: "1.2.3",
-        installedVersion: null,
-        versionAligned: false,
-        setup: [],
-        installed: false,
-        enabled: false,
-        loaded: false,
-        installing: false,
-        capability: capabilityManifest
-            ? {
-                  source: "catalog",
-                  status: "verified",
-                  packageVersion: "1.2.3",
-                  declared: true,
-                  summary: null,
-                  manifest: capabilityManifest,
-              }
-            : {
-                  source: "catalog",
-                  status: "unavailable",
-                  packageVersion: null,
-                  declared: false,
-                  summary: null,
-                  manifest: null,
-              },
+        packageVersion: capabilityManifest ? "1.2.3" : null,
+        declared: capabilityManifest !== null,
+        capabilities: capabilityManifest,
+    };
+}
+
+function capabilityReport(adapters: ReturnType<typeof reportAdapter>[]): AdapterCapabilityReport {
+    return {
+        schemaVersion: 1,
+        generatedAt: "2026-09-01T00:00:00.000Z",
+        application: { name: "onebots", version: "1.2.8" },
+        complete: adapters.every(adapter => adapter.status === "verified"),
+        errors: adapters.some(adapter => adapter.status === "unavailable")
+            ? ["extension-catalog: invalid"]
+            : [],
+        adapters,
     };
 }

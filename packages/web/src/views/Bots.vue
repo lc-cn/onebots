@@ -48,7 +48,12 @@
                 </template>
             </div>
         </div>
-        <AdapterCapabilitiesDrawer v-model="capabilitiesOpen" :adapters="capabilityAdapters" />
+        <AdapterCapabilitiesDrawer
+            v-model="capabilitiesOpen"
+            :adapters="capabilityAdapters"
+            :catalog-status="capabilityCatalogStatus"
+            :catalog-error="capabilityCatalogError"
+            @retry="loadCapabilityCatalog" />
     </div>
 </template>
 
@@ -65,8 +70,11 @@ import { buildApiUrl } from "../config";
 import { reportClientError } from "../client-diagnostics";
 import BotCard from "../components/BotCard.vue";
 import AdapterCapabilitiesDrawer from "../components/AdapterCapabilitiesDrawer.vue";
-import type { AccountInfo, ExtensionInfo } from "../types";
-import { mergeCapabilityAdapters } from "../components/capability-presentation.js";
+import type { AccountInfo, AdapterCapabilityReport, ExtensionInfo } from "../types";
+import {
+    mergeCapabilityReportAdapters,
+    parseAdapterCapabilityReport,
+} from "../components/capability-presentation.js";
 import { getBotOnboardingState } from "./bot-onboarding.js";
 import type { ProtocolInventoryState } from "./bot-onboarding.js";
 
@@ -80,8 +88,18 @@ const loadingBots = ref<Set<string>>(new Set());
 const capabilitiesOpen = ref(false);
 const extensions = ref<ExtensionInfo[]>([]);
 const extensionInventoryStatus = ref<"loading" | "ready" | "unavailable">("loading");
+const capabilityReport = ref<AdapterCapabilityReport>({
+    schemaVersion: 1,
+    generatedAt: "",
+    application: { name: "", version: "" },
+    complete: false,
+    errors: [],
+    adapters: [],
+});
+const capabilityCatalogStatus = ref<"loading" | "ready" | "unavailable">("loading");
+const capabilityCatalogError = ref("");
 const capabilityAdapters = computed(() =>
-    mergeCapabilityAdapters(adapters.value, extensions.value),
+    mergeCapabilityReportAdapters(adapters.value, capabilityReport.value),
 );
 const protocolInventory = computed<ProtocolInventoryState>(() => {
     if (extensionInventoryStatus.value === "loading") return "loading";
@@ -94,7 +112,7 @@ const onboarding = computed(() =>
     getBotOnboardingState(adapters.value.length > 0, protocolInventory.value),
 );
 
-onMounted(async () => {
+async function loadExtensionInventory() {
     try {
         const response = await authFetch(buildApiUrl("/api/extensions"));
         if (!response.ok) throw new Error("无法读取适配器能力目录");
@@ -104,8 +122,32 @@ onMounted(async () => {
         extensionInventoryStatus.value = "ready";
     } catch (error) {
         extensionInventoryStatus.value = "unavailable";
-        reportClientError("获取适配器能力目录失败", error);
+        reportClientError("获取扩展清单失败", error);
     }
+}
+
+async function loadCapabilityCatalog() {
+    if (capabilityCatalogStatus.value === "loading" && capabilityReport.value.adapters.length > 0) {
+        return;
+    }
+    capabilityCatalogStatus.value = "loading";
+    capabilityCatalogError.value = "";
+    try {
+        const response = await authFetch(buildApiUrl("/api/adapter-capabilities"));
+        if (!response.ok) throw new Error(`能力清单请求失败（HTTP ${response.status}）`);
+        capabilityReport.value = parseAdapterCapabilityReport(await response.json());
+        capabilityCatalogError.value = capabilityReport.value.errors.join("；");
+        capabilityCatalogStatus.value = "ready";
+    } catch (error) {
+        capabilityCatalogStatus.value = "unavailable";
+        capabilityCatalogError.value = error instanceof Error ? error.message : "能力清单请求失败";
+        reportClientError("获取独立适配器能力清单失败", error);
+    }
+}
+
+onMounted(() => {
+    void loadExtensionInventory();
+    void loadCapabilityCatalog();
 });
 
 const botKey = (bot: AccountInfo) => `${bot.platform}:${bot.uin}`;
