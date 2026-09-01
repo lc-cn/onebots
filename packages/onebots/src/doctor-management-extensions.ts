@@ -1,5 +1,6 @@
 import type { DoctorCheck } from "./doctor-endpoint.js";
 import type { ManagementFetch } from "./management-credential.js";
+import { validateManagementExtensionInventory } from "./doctor-management-extension-contract.js";
 import { readDoctorManagementJson } from "./doctor-management-response.js";
 
 interface RuntimeExtensionSummary {
@@ -60,6 +61,15 @@ export async function probeAuthenticatedExtensions(
             };
         }
 
+        const inventoryIssues = validateManagementExtensionInventory(extensionsPayload);
+        if (inventoryIssues.length > 0) {
+            return {
+                name: "management-extensions",
+                level: "error",
+                message: `扩展目录证据契约无效: ${inventoryIssues.join("；")}`,
+            };
+        }
+
         const runtime = inspectRuntimeExtensions(extensionsPayload);
         if (runtime.level === "error") return runtime;
         const mutation = inspectPackageMutationStatus(mutationPayload);
@@ -105,8 +115,7 @@ export function inspectPackageMutationStatus(payload: PackageMutationSummary): D
     }
     if (
         state === "recoverable" &&
-        (!payload.available ||
-            (payload.owner === null ? !payload.error : payload.error !== null))
+        (!payload.available || (payload.owner === null ? !payload.error : payload.error !== null))
     ) {
         return invalidPackageMutationContract();
     }
@@ -148,8 +157,7 @@ function isPackageMutationOwner(value: unknown): value is Record<string, unknown
         !Object.hasOwn(value, "token") &&
         isSafeEvidenceText(value.operationId, 256) &&
         (operation === "extension_install" || operation === "package_update") &&
-        ((operation === "extension_install" &&
-            isSafeEvidenceText(value.extensionId, 256)) ||
+        ((operation === "extension_install" && isSafeEvidenceText(value.extensionId, 256)) ||
             (operation === "package_update" && value.extensionId === null)) &&
         isSafeEvidenceText(value.host, 256) &&
         Number.isSafeInteger(value.pid) &&

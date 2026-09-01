@@ -2,8 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { probeDoctorManagement } from "./doctor-management.js";
 import { DOCTOR_MANAGEMENT_BODY_LIMIT_BYTES } from "./doctor-management-response.js";
 import packageMetadata from "../package.json" with { type: "json" };
-import { buildAdapterCapabilityReport } from "./capability-report.js";
+import { buildAdapterCapabilityReport, summarizeManifest } from "./capability-report.js";
 import { getInstallableAdapterNames } from "./extension-catalog-integrity.js";
+import {
+    getExtensionCapabilityCatalogEntry,
+    getExtensionPackageCatalogEntry,
+} from "./extension-capability-catalog.js";
+import { TRUSTED_EXTENSION_CATALOG } from "./trusted-extension-catalog.js";
 
 const capabilityEvidence = () => ({
     capabilityDeclared: true,
@@ -736,7 +741,46 @@ async function probeWithAdapters(adapters: unknown[]) {
 }
 
 function convergedExtensionsResponse(): Response {
-    return new Response("[]", { status: 200 });
+    const inventory = TRUSTED_EXTENSION_CATALOG.map(entry => {
+        const packageEntry = getExtensionPackageCatalogEntry(entry.packageName);
+        if (!packageEntry) throw new Error(`测试目录缺少 ${entry.packageName}`);
+        const capability =
+            entry.type === "adapter" ? getExtensionCapabilityCatalogEntry(entry.name) : undefined;
+        if (entry.type === "adapter" && !capability) {
+            throw new Error(`测试目录缺少 ${entry.name} 能力`);
+        }
+        return {
+            ...structuredClone(entry),
+            catalogError: null,
+            runtimeError: null,
+            packageManagerError: null,
+            runtimeConfigError: null,
+            configurationError: null,
+            targetVersion: packageEntry.packageVersion,
+            installedVersion: null,
+            installedError: null,
+            versionAligned: false,
+            installed: false,
+            enabled: false,
+            loaded: false,
+            loadedVersion: null,
+            restartSupported: true,
+            installing: false,
+            installation: null,
+            lastInstallation: null,
+            capability: capability
+                ? {
+                      source: "catalog",
+                      status: "verified",
+                      packageVersion: capability.packageVersion,
+                      declared: true,
+                      summary: summarizeManifest(capability.manifest),
+                      manifest: capability.manifest,
+                  }
+                : null,
+        };
+    });
+    return new Response(JSON.stringify(inventory), { status: 200 });
 }
 
 function completeCapabilityCatalogResponse(): Response {

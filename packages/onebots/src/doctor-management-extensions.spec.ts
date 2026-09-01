@@ -4,6 +4,12 @@ import {
     inspectRuntimeExtensions,
     probeAuthenticatedExtensions,
 } from "./doctor-management-extensions.js";
+import { summarizeManifest } from "./capability-report.js";
+import {
+    getExtensionCapabilityCatalogEntry,
+    getExtensionPackageCatalogEntry,
+} from "./extension-capability-catalog.js";
+import { TRUSTED_EXTENSION_CATALOG } from "./trusted-extension-catalog.js";
 
 describe("doctor extension runtime evidence", () => {
     it("rejects an active cross-process package update with actionable owner evidence", () => {
@@ -24,7 +30,9 @@ describe("doctor extension runtime evidence", () => {
         ).toEqual({
             name: "management-extensions",
             level: "error",
-            message: expect.stringContaining("OneBots 软件包更新（操作 update-1，主机 host-a，进程 42"),
+            message: expect.stringContaining(
+                "OneBots 软件包更新（操作 update-1，主机 host-a，进程 42",
+            ),
         });
     });
 
@@ -159,7 +167,7 @@ describe("doctor extension runtime evidence", () => {
                       JSON.stringify({ state: "idle", available: true, owner: null, error: null }),
                       { status: 200 },
                   )
-                : new Response(JSON.stringify([extensionEvidence()]), { status: 200 }),
+                : new Response(JSON.stringify(managementInventoryEvidence()), { status: 200 }),
         );
 
         await expect(
@@ -185,4 +193,46 @@ function extensionEvidence(overrides: Record<string, unknown> = {}) {
         configurationError: null,
         ...overrides,
     };
+}
+
+function managementInventoryEvidence(): Array<Record<string, unknown>> {
+    return TRUSTED_EXTENSION_CATALOG.map(entry => {
+        const packageEntry = getExtensionPackageCatalogEntry(entry.packageName);
+        if (!packageEntry) throw new Error(`测试目录缺少 ${entry.packageName}`);
+        const capability =
+            entry.type === "adapter" ? getExtensionCapabilityCatalogEntry(entry.name) : undefined;
+        if (entry.type === "adapter" && !capability) {
+            throw new Error(`测试目录缺少 ${entry.name} 能力`);
+        }
+        return {
+            ...structuredClone(entry),
+            catalogError: null,
+            runtimeError: null,
+            packageManagerError: null,
+            runtimeConfigError: null,
+            configurationError: null,
+            targetVersion: packageEntry.packageVersion,
+            installedVersion: null,
+            installedError: null,
+            versionAligned: false,
+            installed: false,
+            enabled: false,
+            loaded: false,
+            loadedVersion: null,
+            restartSupported: true,
+            installing: false,
+            installation: null,
+            lastInstallation: null,
+            capability: capability
+                ? {
+                      source: "catalog",
+                      status: "verified",
+                      packageVersion: capability.packageVersion,
+                      declared: true,
+                      summary: summarizeManifest(capability.manifest),
+                      manifest: capability.manifest,
+                  }
+                : null,
+        };
+    });
 }
