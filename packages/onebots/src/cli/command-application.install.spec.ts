@@ -313,6 +313,42 @@ describe("service install preflight", () => {
     it.each([
         ["启动", startService, "start"],
         ["重启", restartService, "restart"],
+    ] as const)("%s 命令前拒绝运行时预检后的配置替换", async (action, command, method) => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const spec = serviceSpec(config);
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "inactive",
+        });
+        const control = vi.spyOn(ServiceController.prototype, method).mockResolvedValue();
+        const readInstanceId = vi.fn(async () => {
+            const replacement = `${config}.replacement`;
+            fs.writeFileSync(replacement, "access_token: replaced-token\ngeneral: {}\n", {
+                mode: 0o600,
+            });
+            fs.renameSync(replacement, config);
+            return null;
+        });
+
+        await expect(
+            command({ system: false }, activationDependencies({ readInstanceId })),
+        ).rejects.toMatchObject({
+            message: expect.stringMatching(
+                new RegExp(
+                    `服务${action}最终预检失败.*配置在运行时预检后发生变化.*未执行${action}命令`,
+                ),
+            ),
+            exitCode: 2,
+        });
+        expect(control).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["启动", startService, "start"],
+        ["重启", restartService, "restart"],
     ] as const)("%s 命令前再次拒绝预检后漂移的控制面权限", async (action, command, method) => {
         const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
         const spec = serviceSpec(config);

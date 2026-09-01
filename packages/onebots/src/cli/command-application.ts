@@ -40,6 +40,11 @@ import { createServiceRuntimeContractId } from "../service-runtime-contract.js";
 import { loadMcpStdioTransport, type McpStdioTransportStarter } from "../mcp-stdio-runtime.js";
 import type { DoctorCheck } from "../doctor-endpoint.js";
 import { inspectServiceControlPlanePermissions } from "../service-control-plane-permissions.js";
+import {
+    assertServiceActivationConfigCurrent,
+    captureServiceActivationConfig,
+    type ServiceActivationConfigSnapshot,
+} from "../service-activation-config.js";
 export type { ServiceStatusKind, ServiceStatusReport } from "../service-status.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
@@ -264,7 +269,11 @@ export async function startService(
     dependencies: ServiceActivationDependencies = serviceActivationDependencies,
 ): Promise<CommandResult> {
     const controller = new ServiceController(scopeFrom(options));
-    const spec = await preflightInstalledService(controller, "启动", dependencies);
+    const { spec, configSnapshot } = await preflightInstalledService(
+        controller,
+        "启动",
+        dependencies,
+    );
     const initialStatus = controller.status(spec);
     if (initialStatus.error) {
         throw new CliError(
@@ -278,7 +287,13 @@ export async function startService(
         return { output: "OneBots 服务已在运行并通过在线验证" };
     }
     const previousInstanceId = await dependencies.readInstanceId(spec);
-    revalidateInstalledService(controller, spec, "启动", dependencies.inspectControlPlane);
+    revalidateInstalledService(
+        controller,
+        spec,
+        configSnapshot,
+        "启动",
+        dependencies.inspectControlPlane,
+    );
     await controller.start();
     await verifyActivatedService(spec, "启动", previousInstanceId, dependencies);
     return { output: "OneBots 服务已启动并通过在线验证" };
@@ -316,9 +331,19 @@ export async function restartService(
     dependencies: ServiceActivationDependencies = serviceActivationDependencies,
 ): Promise<CommandResult> {
     const controller = new ServiceController(scopeFrom(options));
-    const spec = await preflightInstalledService(controller, "重启", dependencies);
+    const { spec, configSnapshot } = await preflightInstalledService(
+        controller,
+        "重启",
+        dependencies,
+    );
     const previousInstanceId = await dependencies.readInstanceId(spec);
-    revalidateInstalledService(controller, spec, "重启", dependencies.inspectControlPlane);
+    revalidateInstalledService(
+        controller,
+        spec,
+        configSnapshot,
+        "重启",
+        dependencies.inspectControlPlane,
+    );
     await controller.restart();
     await verifyActivatedService(spec, "重启", previousInstanceId, dependencies);
     return { output: "OneBots 服务已重启并通过在线验证" };
@@ -707,29 +732,32 @@ async function preflightInstalledService(
     controller: ServiceController,
     action: "启动" | "重启",
     dependencies: Pick<ServiceActivationDependencies, "inspectControlPlane" | "preflight">,
-): Promise<ServiceSpec> {
+): Promise<{ spec: ServiceSpec; configSnapshot: ServiceActivationConfigSnapshot }> {
     const spec = controller.readSpec();
     if (!spec) throw new CliError("OneBots 服务尚未安装", 2);
     try {
+        const configSnapshot = captureServiceActivationConfig(spec.configPath);
         assertInstalledServiceControlPlane(controller, spec, dependencies.inspectControlPlane);
         await dependencies.preflight(spec);
+        return { spec, configSnapshot };
     } catch (error) {
         throw new CliError(
             `服务${action}预检失败：${error instanceof Error ? error.message : String(error)}`,
             2,
         );
     }
-    return spec;
 }
 
 function revalidateInstalledService(
     controller: ServiceController,
     spec: ServiceSpec,
+    configSnapshot: ServiceActivationConfigSnapshot,
     action: "启动" | "重启",
     inspectControlPlane: ServiceActivationDependencies["inspectControlPlane"],
 ): void {
     try {
         assertInstalledServiceControlPlane(controller, spec, inspectControlPlane);
+        assertServiceActivationConfigCurrent(spec.configPath, configSnapshot);
     } catch (error) {
         throw new CliError(
             `服务${action}最终预检失败：${error instanceof Error ? error.message : String(error)}；未执行${action}命令`,
