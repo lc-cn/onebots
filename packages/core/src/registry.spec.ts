@@ -6,6 +6,7 @@ import {
     ProtocolRegistry,
     captureExtensionRegistryState,
     restoreExtensionRegistryState,
+    runWithExtensionRegistrationScope,
 } from "./registry.js";
 import { ConfigValidator, type Schema, type ValidationRule } from "./config-validator.js";
 import { defineAdapterCapabilities } from "./adapter-capability.js";
@@ -73,6 +74,48 @@ describe("extension registries", () => {
     afterEach(() => {
         AdapterRegistry.clear();
         ProtocolRegistry.clear();
+    });
+
+    it("超时后关闭注册事务并拒绝其异步后代继续修改注册表", async () => {
+        let release: () => void = () => undefined;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        let lateError: unknown;
+        const transaction = runWithExtensionRegistrationScope(
+            async () => {
+                AdapterRegistry.register("before-timeout", adapterFactory);
+                await gate;
+                try {
+                    AdapterRegistry.register("after-timeout", adapterFactory);
+                } catch (error) {
+                    lateError = error;
+                }
+            },
+            { timeoutMs: 10 },
+        );
+
+        await expect(transaction).rejects.toThrow("插件注册事务超过 10 毫秒未完成");
+        release();
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        expect(AdapterRegistry.has("before-timeout")).toBe(true);
+        expect(AdapterRegistry.has("after-timeout")).toBe(false);
+        expect(lateError).toMatchObject({ message: "插件注册事务已结束，拒绝迟到的注册表修改" });
+    });
+
+    it("拒绝无法由 Node 定时器可靠调度的注册事务超时", async () => {
+        await expect(
+            runWithExtensionRegistrationScope(async () => undefined, { timeoutMs: 0 }),
+        ).rejects.toThrow("插件注册事务超时必须是 1 到 2147483647 之间的整数毫秒");
+        await expect(
+            runWithExtensionRegistrationScope(async () => undefined, { timeoutMs: 1.5 }),
+        ).rejects.toThrow("插件注册事务超时必须是 1 到 2147483647 之间的整数毫秒");
+        await expect(
+            runWithExtensionRegistrationScope(async () => undefined, {
+                timeoutMs: 2_147_483_648,
+            }),
+        ).rejects.toThrow("插件注册事务超时必须是 1 到 2147483647 之间的整数毫秒");
     });
 
     it("keeps repeated adapter registration with the same factory idempotent", () => {

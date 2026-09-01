@@ -19,7 +19,12 @@ interface ExtensionRegistrationScope {
     open: boolean;
 }
 
+export interface ExtensionRegistrationScopeOptions {
+    timeoutMs?: number;
+}
+
 const extensionRegistrationScope = new AsyncLocalStorage<ExtensionRegistrationScope>();
+const MAX_REGISTRATION_TIMEOUT_MS = 2_147_483_647;
 
 /**
  * 将一次插件导入标记为唯一可写的注册时段。
@@ -29,11 +34,33 @@ const extensionRegistrationScope = new AsyncLocalStorage<ExtensionRegistrationSc
  */
 export async function runWithExtensionRegistrationScope<T>(
     operation: () => Promise<T>,
+    options: ExtensionRegistrationScopeOptions = {},
 ): Promise<T> {
+    if (
+        options.timeoutMs !== undefined &&
+        (!Number.isSafeInteger(options.timeoutMs) ||
+            options.timeoutMs <= 0 ||
+            options.timeoutMs > MAX_REGISTRATION_TIMEOUT_MS)
+    ) {
+        throw new ValidationError(
+            `插件注册事务超时必须是 1 到 ${MAX_REGISTRATION_TIMEOUT_MS} 之间的整数毫秒`,
+        );
+    }
     const scope: ExtensionRegistrationScope = { open: true };
+    let timeout: NodeJS.Timeout | undefined;
     try {
-        return await extensionRegistrationScope.run(scope, operation);
+        const execution = extensionRegistrationScope.run(scope, operation);
+        if (options.timeoutMs === undefined) return await execution;
+        const deadline = new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(
+                () =>
+                    reject(new ValidationError(`插件注册事务超过 ${options.timeoutMs} 毫秒未完成`)),
+                options.timeoutMs,
+            );
+        });
+        return await Promise.race([execution, deadline]);
     } finally {
+        if (timeout) clearTimeout(timeout);
         scope.open = false;
     }
 }

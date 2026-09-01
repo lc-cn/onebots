@@ -787,6 +787,88 @@ throw new Error("初始化失败");
         }
     });
 
+    it("超时后回滚插件注册、释放串行队列并封闭迟到的异步注册", async () => {
+        const timedOutDirectory = createImportOnlyPlugin(
+            "timed-out-adapter",
+            `globalThis.__onebotsRegisterBeforePluginTimeout();
+await globalThis.__onebotsHoldTimedOutPlugin();
+try {
+    globalThis.__onebotsRegisterAfterPluginTimeout();
+} catch (error) {
+    globalThis.__onebotsTimedOutRegistrationError = error instanceof Error ? error.message : String(error);
+}
+`,
+        );
+        const successfulDirectory = createImportOnlyPlugin(
+            "after-timeout-adapter",
+            "globalThis.__onebotsRegisterAfterTimedOutPlugin();\n",
+        );
+        let releaseTimedOut: () => void = () => undefined;
+        const timedOutGate = new Promise<void>(resolve => {
+            releaseTimedOut = resolve;
+        });
+        let lateRegistrationAttempted = false;
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterBeforePluginTimeout?: () => void;
+            __onebotsHoldTimedOutPlugin?: () => Promise<void>;
+            __onebotsRegisterAfterPluginTimeout?: () => void;
+            __onebotsRegisterAfterTimedOutPlugin?: () => void;
+            __onebotsTimedOutRegistrationError?: string;
+        };
+        globals.__onebotsRegisterBeforePluginTimeout = () => {
+            AdapterRegistry.register("timed-out", (() => undefined) as never);
+            AdapterRegistry.registerSchema("timed-out", {});
+        };
+        globals.__onebotsHoldTimedOutPlugin = () => timedOutGate;
+        globals.__onebotsRegisterAfterPluginTimeout = () => {
+            lateRegistrationAttempted = true;
+            AdapterRegistry.register("timed-out-late", (() => undefined) as never);
+        };
+        globals.__onebotsRegisterAfterTimedOutPlugin = () => {
+            AdapterRegistry.register("after-timeout", (() => undefined) as never);
+            AdapterRegistry.registerSchema("after-timeout", {});
+        };
+
+        try {
+            const timedOut = await tryLoadRegisteredPlugin(
+                "adapter",
+                "timed-out",
+                ["timed-out-adapter"],
+                createRequire(path.join(timedOutDirectory, "package.json")),
+                { timeoutMs: 50 },
+            );
+
+            expect(timedOut).toMatchObject({
+                loaded: false,
+                message: expect.stringContaining("插件注册事务超过 50 毫秒未完成"),
+            });
+            expect(AdapterRegistry.has("timed-out")).toBe(false);
+
+            await expect(
+                tryLoadRegisteredPlugin(
+                    "adapter",
+                    "after-timeout",
+                    ["after-timeout-adapter"],
+                    createRequire(path.join(successfulDirectory, "package.json")),
+                ),
+            ).resolves.toMatchObject({ loaded: true });
+
+            releaseTimedOut();
+            await vi.waitFor(() => expect(lateRegistrationAttempted).toBe(true));
+            expect(AdapterRegistry.has("timed-out-late")).toBe(false);
+            expect(globals.__onebotsTimedOutRegistrationError).toBe(
+                "插件注册事务已结束，拒绝迟到的注册表修改",
+            );
+        } finally {
+            releaseTimedOut();
+            delete globals.__onebotsRegisterBeforePluginTimeout;
+            delete globals.__onebotsHoldTimedOutPlugin;
+            delete globals.__onebotsRegisterAfterPluginTimeout;
+            delete globals.__onebotsRegisterAfterTimedOutPlugin;
+            delete globals.__onebotsTimedOutRegistrationError;
+        }
+    });
+
     it("accepts a protocol only when its own entry registers the promised factory and schema", async () => {
         const directory = createImportOnlyPlugin(
             "complete-protocol",

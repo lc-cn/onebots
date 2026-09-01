@@ -44,6 +44,12 @@ export interface LoadedPluginInfo {
 type ReadyPluginInspection = Extract<PluginInspection, { status: "ready" }>;
 type PluginInspectionGuard = (inspection: ReadyPluginInspection) => string | undefined;
 
+export interface PluginLoadOptions {
+    timeoutMs?: number;
+}
+
+export const PLUGIN_LOAD_TIMEOUT_MS = 15_000;
+
 let pluginRegistrationTail = Promise.resolve();
 const loadedPlugins = new Map<string, LoadedPluginInfo>();
 const rejectedPluginImportAttempts = new Map<string, number>();
@@ -150,9 +156,10 @@ export async function tryLoadPlugin(
     name: string,
     candidates: string[],
     runtimeRequire: NodeJS.Require,
+    options: PluginLoadOptions = {},
 ): Promise<PluginLoadResult> {
     return serializePluginRegistration(() =>
-        tryLoadPluginUnlocked(kind, name, candidates, runtimeRequire),
+        tryLoadPluginUnlocked(kind, name, candidates, runtimeRequire, undefined, options),
     );
 }
 
@@ -162,6 +169,7 @@ async function tryLoadPluginUnlocked(
     candidates: string[],
     runtimeRequire: NodeJS.Require,
     inspectionGuard?: PluginInspectionGuard,
+    options: PluginLoadOptions = {},
 ): Promise<PluginLoadResult> {
     const inspection = inspectPlugin(candidates, runtimeRequire);
     if (inspection.status === "missing") {
@@ -199,6 +207,7 @@ async function tryLoadPluginUnlocked(
     try {
         await runWithExtensionRegistrationScope(
             () => import(pluginImportUrl(inspection.entryPath)),
+            { timeoutMs: options.timeoutMs ?? PLUGIN_LOAD_TIMEOUT_MS },
         );
         return { loaded: true, inspection };
     } catch (error) {
@@ -218,6 +227,7 @@ export async function tryLoadRegisteredPlugin(
     name: string,
     candidates: string[],
     runtimeRequire: NodeJS.Require,
+    options: PluginLoadOptions = {},
 ): Promise<PluginLoadResult> {
     return serializePluginRegistration(async () => {
         const registryState = captureExtensionRegistryState();
@@ -228,6 +238,7 @@ export async function tryLoadRegisteredPlugin(
             candidates,
             runtimeRequire,
             inspection => getLoadedPluginIdentityError(type, name, inspection),
+            options,
         );
         if (result.loaded === false) {
             restoreExtensionRegistryState(registryState);
@@ -329,8 +340,9 @@ export async function loadPlugin(
     candidates: string[],
     runtimeRequire: NodeJS.Require,
     warn: (message: string) => void = writeCliError,
+    options: PluginLoadOptions = {},
 ): Promise<boolean> {
-    const result = await tryLoadRegisteredPlugin(type, name, candidates, runtimeRequire);
+    const result = await tryLoadRegisteredPlugin(type, name, candidates, runtimeRequire, options);
     if (result.loaded === false) {
         warn(`[onebots] ${result.message}`);
     }
