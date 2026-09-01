@@ -9,6 +9,7 @@ import {
 } from "./doctor-endpoint.js";
 import { inspectDoctorServiceMetadata } from "./doctor-service-metadata.js";
 import { inspectDoctorServiceDefinition } from "./doctor-service-definition.js";
+import { probeDoctorManagementPage } from "./doctor-management-page.js";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import type { ScopeOptions } from "./cli/command-options.js";
@@ -154,11 +155,18 @@ export async function inspectServiceStatus(
             endpointChecks[0]!,
             endpointChecks[1]!,
         );
-        const checks = [
-            ...endpointChecks,
+        const runtimeContractCheck = verifyDoctorRuntimeContract(
             identityCheck,
-            verifyDoctorRuntimeContract(identityCheck, resolveServiceRuntimeContractId(spec)),
-        ];
+            resolveServiceRuntimeContractId(spec),
+        );
+        const checks = [...endpointChecks, identityCheck, runtimeContractCheck];
+        if (
+            endpointChecks[0]!.level === "ok" &&
+            identityCheck.level === "ok" &&
+            runtimeContractCheck.level === "ok"
+        ) {
+            checks.push(await probeDoctorManagementPage(webUrl, config.path, fetcher));
+        }
         const hasError = checks.some(check => check.level === "error");
         const hasWarning = checks.some(check => check.level === "warning");
         const runtimeVersionUnverified = checks[0]?.level === "warning";
