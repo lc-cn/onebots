@@ -3,10 +3,76 @@ import { Logger } from "../logger.js";
 import { TokenManager } from "./token-manager.js";
 
 afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
 });
 
 describe("TokenManager credential rotation", () => {
+    it("访问令牌过期后保留仍在有效期内的刷新令牌", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+        const manager = new TokenManager({
+            defaultExpiration: 1_000,
+            refreshExpiration: 10_000,
+        });
+        const original = manager.generateToken({ username: "admin" });
+
+        vi.advanceTimersByTime(1_001);
+        expect(manager.validateToken(original.token)).toMatchObject({
+            valid: false,
+            expired: true,
+        });
+        const refreshed = manager.refreshToken(original.refreshToken!);
+
+        expect(refreshed).not.toBeNull();
+        expect(manager.validateToken(refreshed!.token).valid).toBe(true);
+    });
+
+    it("批量清理按访问与刷新令牌各自的过期时间处理", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+        const manager = new TokenManager({
+            defaultExpiration: 1_000,
+            refreshExpiration: 10_000,
+        });
+        const original = manager.generateToken();
+
+        vi.advanceTimersByTime(1_001);
+        expect(manager.cleanup()).toBe(1);
+        expect(manager.refreshToken(original.refreshToken!)).not.toBeNull();
+    });
+
+    it("刷新令牌自身过期后拒绝续期并清除对应访问令牌", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+        const manager = new TokenManager({
+            defaultExpiration: 1_000,
+            refreshExpiration: 2_000,
+        });
+        const original = manager.generateToken();
+
+        vi.advanceTimersByTime(2_001);
+        expect(manager.refreshToken(original.refreshToken!)).toBeNull();
+        expect(manager.getTokenInfo(original.token)).toBeUndefined();
+    });
+
+    it("签发新会话时按清理周期回收过期记录而不依赖后台定时器", () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+        const manager = new TokenManager({
+            defaultExpiration: 1_000,
+            refreshExpiration: 2_000,
+        });
+        const expired = manager.generateToken();
+
+        vi.advanceTimersByTime(5 * 60 * 1_000);
+        const active = manager.generateToken();
+
+        expect(manager.getTokenInfo(expired.token)).toBeUndefined();
+        expect(manager.refreshToken(expired.refreshToken!)).toBeNull();
+        expect(manager.validateToken(active.token).valid).toBe(true);
+    });
+
     it("一次撤销全部访问与刷新令牌", () => {
         const manager = new TokenManager();
         const first = manager.generateToken({ username: "first" });

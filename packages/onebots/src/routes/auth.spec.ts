@@ -70,7 +70,10 @@ function apiContext(token?: string, url = "/api/config"): RouterContext {
 
 describe("management HTTP authentication", () => {
     beforeEach(() => vi.stubEnv("ONEBOTS_ACCESS_TOKEN", ""));
-    afterEach(() => vi.unstubAllEnvs());
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllEnvs();
+    });
 
     it("登录处理器在配置热重载后立即使用新凭据", async () => {
         const { app, login } = setup();
@@ -161,6 +164,27 @@ describe("management HTTP authentication", () => {
             );
         }
         expect(app.logger.error).not.toHaveBeenCalled();
+    });
+
+    it("访问令牌自然过期后仍可在刷新窗口内续期", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+        const { app, login, refresh } = setup();
+        app.tokenManager = new TokenManager({
+            defaultExpiration: 1_000,
+            refreshExpiration: 10_000,
+        });
+        const loginCtx = loginContext({ username: "old-user", password: "old-password" });
+        await login(loginCtx, async () => undefined);
+        const session = loginCtx.body as { token: string; refreshToken: string };
+
+        vi.advanceTimersByTime(1_001);
+        expect(app.tokenManager.validateToken(session.token).expired).toBe(true);
+        const refreshCtx = loginContext({ refreshToken: session.refreshToken });
+        await refresh(refreshCtx, async () => undefined);
+
+        expect(refreshCtx.status).not.toBe(401);
+        expect(refreshCtx.body).toMatchObject({ success: true, token: expect.any(String) });
     });
 
     it.each([

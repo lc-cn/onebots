@@ -73,10 +73,10 @@ Complete token lifecycle management.
 **Usage Example**:
 
 ```typescript
-import { initTokenManager, createManagedTokenValidator } from '@onebots/core';
+import { TokenManager, createManagedTokenValidator } from '@onebots/core';
 
-// Initialize token manager
-const tokenManager = initTokenManager({
+// Create a manager owned by this host
+const tokenManager = new TokenManager({
     defaultExpiration: 3600000, // 1 hour
     autoRefresh: true,
 });
@@ -84,6 +84,8 @@ const tokenManager = initTokenManager({
 // Create token validation middleware
 const tokenValidator = createManagedTokenValidator(tokenManager);
 ```
+
+Access and refresh tokens are cleaned according to their own expiration times. When an access token expires naturally or is observed as expired, a refresh token that remains inside its validity window can still renew the session. Only explicit revocation, credential rotation, or the refresh token's own expiry ends that window. Cleanup runs opportunistically when a new session is issued and creates no background timer. `App` automatically owns an independent `app.tokenManager`, so multiple gateways in one process cannot replace each other's session managers. `initTokenManager()` and `getTokenManager()` remain for older integrations that intentionally use one global instance.
 
 ### HMAC Signature Validation
 
@@ -425,19 +427,13 @@ All production-ready features are automatically integrated in `BaseApp`, ready t
 
 ```typescript
 import { App } from 'onebots';
-import { initTokenManager } from '@onebots/core';
-
-// Initialize token manager (optional)
-const tokenManager = initTokenManager({
-    defaultExpiration: 3600000, // 1 hour
-    autoRefresh: true,
-});
 
 const app = new App({
     port: 6727,
     log_level: 'info',
 });
 
+// App already owns its management-session store at app.tokenManager
 await app.start();
 ```
 

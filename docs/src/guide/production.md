@@ -73,10 +73,10 @@ Web 的手动鉴权码、用户名密码、`?access_token=` 引导登录和 refr
 **使用示例**:
 
 ```typescript
-import { initTokenManager, createManagedTokenValidator } from '@onebots/core';
+import { TokenManager, createManagedTokenValidator } from '@onebots/core';
 
-// 初始化令牌管理器
-const tokenManager = initTokenManager({
+// 为当前宿主创建独立令牌管理器
+const tokenManager = new TokenManager({
     defaultExpiration: 3600000, // 1小时
     autoRefresh: true,
 });
@@ -84,6 +84,8 @@ const tokenManager = initTokenManager({
 // 创建令牌验证中间件
 const tokenValidator = createManagedTokenValidator(tokenManager);
 ```
+
+访问令牌和刷新令牌按各自的过期时间清理。访问令牌自然过期或被验证为过期时，仍在有效窗口内的刷新令牌可以继续换取新会话；只有显式撤销、凭据轮换或刷新令牌自身过期才会终止该刷新窗口。清理在新会话签发时按需执行，不创建后台定时器。`App` 自动持有独立的 `app.tokenManager`，同一进程内的多个网关不会改写彼此的会话管理器；`initTokenManager()` 与 `getTokenManager()` 仅为有意使用单一全局实例的旧集成保留。
 
 ### HMAC 签名验证
 
@@ -427,19 +429,13 @@ readinessProbe:
 
 ```typescript
 import { App } from 'onebots';
-import { initTokenManager } from '@onebots/core';
-
-// 初始化令牌管理器（可选）
-const tokenManager = initTokenManager({
-    defaultExpiration: 3600000, // 1小时
-    autoRefresh: true,
-});
 
 const app = new App({
     port: 6727,
     log_level: 'info',
 });
 
+// App 已自动创建实例级管理会话存储，可通过 app.tokenManager 访问
 await app.start();
 ```
 

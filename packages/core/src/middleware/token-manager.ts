@@ -34,6 +34,7 @@ export interface TokenManagerOptions {
 export class TokenManager {
     private tokens: Map<string, TokenInfo> = new Map();
     private options: Required<TokenManagerOptions>;
+    private nextCleanupAt = Date.now() + 5 * 60 * 1000;
 
     constructor(options: TokenManagerOptions = {}) {
         this.options = {
@@ -48,9 +49,13 @@ export class TokenManager {
      * 生成新令牌
      */
     generateToken(metadata?: Record<string, unknown>): TokenInfo {
+        const now = Date.now();
+        if (now >= this.nextCleanupAt) {
+            this.cleanup();
+            this.nextCleanupAt = now + 5 * 60 * 1000;
+        }
         const token = randomBytes(32).toString("hex");
         const refreshToken = randomBytes(32).toString("hex");
-        const now = Date.now();
 
         const tokenInfo: TokenInfo = {
             token,
@@ -89,7 +94,7 @@ export class TokenManager {
         if (info.expiresAt && Date.now() > info.expiresAt) {
             // 清理过期令牌
             this.tokens.delete(token);
-            if (info.refreshToken) {
+            if (info.refreshToken && info.refreshExpiresAt && Date.now() > info.refreshExpiresAt) {
                 this.tokens.delete(`refresh:${info.refreshToken}`);
             }
             return { valid: false, expired: true };
@@ -189,9 +194,8 @@ export class TokenManager {
         let cleaned = 0;
 
         for (const [key, info] of this.tokens.entries()) {
-            const expired =
-                (info.expiresAt && now > info.expiresAt) ||
-                (info.refreshExpiresAt && now > info.refreshExpiresAt);
+            const expiresAt = key.startsWith("refresh:") ? info.refreshExpiresAt : info.expiresAt;
+            const expired = expiresAt !== undefined && now > expiresAt;
 
             if (expired) {
                 this.tokens.delete(key);
@@ -242,16 +246,6 @@ let globalTokenManager: TokenManager | null = null;
  */
 export function initTokenManager(options?: TokenManagerOptions): TokenManager {
     globalTokenManager = new TokenManager(options);
-
-    // 定期清理过期令牌（每 5 分钟）
-    const cleanupTimer = setInterval(
-        () => {
-            globalTokenManager?.cleanup();
-        },
-        5 * 60 * 1000,
-    );
-    cleanupTimer.unref();
-
     return globalTokenManager;
 }
 

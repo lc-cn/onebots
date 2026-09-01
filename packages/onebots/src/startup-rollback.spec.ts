@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { BaseApp } from "@onebots/core";
+import { BaseApp, getTokenManager, initTokenManager } from "@onebots/core";
 import { App } from "./app.js";
 
 const originalConfigDir = BaseApp.configDir;
@@ -22,6 +22,25 @@ afterEach(() => {
 });
 
 describe("App startup rollback", () => {
+    it("使用实例级会话管理器且不改写兼容的全局管理器", async () => {
+        const directory = mkdtempSync(join(tmpdir(), "onebots-app-token-manager-"));
+        const workingDirectory = mkdtempSync(join(tmpdir(), "onebots-app-token-working-"));
+        temporaryDirectories.push(directory, workingDirectory);
+        process.chdir(workingDirectory);
+        BaseApp.configDir = directory;
+        const globalManager = initTokenManager();
+        const app = new App({});
+
+        try {
+            expect(app.tokenManager).not.toBe(globalManager);
+            expect(getTokenManager()).toBe(globalManager);
+            const session = app.tokenManager.generateToken();
+            expect(globalManager.validateToken(session.token).valid).toBe(false);
+        } finally {
+            await app.stop();
+        }
+    });
+
     it("启动前配置校验失败时释放进程级资源", async () => {
         const directory = mkdtempSync(join(tmpdir(), "onebots-app-startup-rollback-"));
         const workingDirectory = mkdtempSync(join(tmpdir(), "onebots-app-working-directory-"));

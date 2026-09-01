@@ -6,7 +6,7 @@ import {
     configure,
     Protocol,
     readLine,
-    initTokenManager,
+    TokenManager,
     writeConfigFileAtomic,
     type Account,
 } from "@onebots/core";
@@ -119,7 +119,7 @@ export class App extends BaseApp {
 
     private static readonly DEFAULT_TOKEN_EXPIRATION_MS = 12 * 60 * 60 * 1000;
     private static readonly REFRESH_TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000;
-    public tokenManager = initTokenManager({
+    public tokenManager = new TokenManager({
         defaultExpiration: App.DEFAULT_TOKEN_EXPIRATION_MS,
         refreshExpiration: App.REFRESH_TOKEN_EXPIRATION_MS,
     });

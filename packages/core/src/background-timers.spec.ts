@@ -24,13 +24,12 @@ describe("background cleanup timers", () => {
         expect(unref).toHaveBeenCalledOnce();
     });
 
-    it("does not keep short-lived processes alive after token manager initialization", async () => {
-        const unref = vi.fn();
-        vi.spyOn(globalThis, "setInterval").mockReturnValue({ unref } as NodeJS.Timeout);
+    it("does not create a background timer for token cleanup", async () => {
+        const setInterval = vi.spyOn(globalThis, "setInterval");
         const { initTokenManager } = await import("./middleware/token-manager.js");
 
         initTokenManager();
 
-        expect(unref).toHaveBeenCalledOnce();
+        expect(setInterval).not.toHaveBeenCalled();
     });
 });

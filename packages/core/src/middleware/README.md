@@ -69,14 +69,16 @@ const configValidator = createConfigTokenValidator(['token1', 'token2']);
 // HMAC 签名验证
 const hmacValidator = createHMACValidator('your-secret-key', 'sha256');
 
-// 带令牌管理的验证（支持过期和刷新）
-import { initTokenManager } from '@onebots/core';
-const tokenManager = initTokenManager({
+// 带实例级令牌管理的验证（支持过期和刷新）
+import { TokenManager } from '@onebots/core';
+const tokenManager = new TokenManager({
     defaultExpiration: 3600000, // 1小时
     autoRefresh: true,
 });
 const managedValidator = createManagedTokenValidator(tokenManager);
 ```
+
+访问令牌过期不会删除仍有效的刷新令牌。`TokenManager` 在签发新会话时按需清理过期记录，不创建后台定时器；需要旧式单一全局实例时仍可使用 `initTokenManager()` 与 `getTokenManager()`。
 
 ### 4. 性能指标收集 (Metrics Collection)
 
