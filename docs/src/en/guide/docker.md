@@ -60,7 +60,7 @@ The repository includes `.env.example`. For environment authentication, copy it 
 
 ### Container health status
 
-The official image includes a health check, and the Compose example enables the same probe explicitly. It reads `port` and `path` from `/data/config.yaml`, requests the matching `/ready` endpoint, and requires a successful HTTP status, an `application/json` media type, an explicit `ready: true` result, the `onebots` application identity, a runtime version, and a non-empty `instance_id`. The probe disables caching and redirects and limits the response body to 64 KiB, so a broken proxy, generic success page, or local process that keeps sending data cannot become container-readiness evidence. Inspect the status and recent failures with:
+The official image includes a health check, and the Compose example enables the same probe explicitly. It reads `port` and `path` from `/data/config.yaml`, requests the matching `/ready` endpoint, and requires a successful HTTP status, an `application/json` media type, an explicit `ready: true` result, the `onebots` application identity, a runtime version exactly matching the main package in the image, and a non-empty `instance_id`. The probe disables caching and redirects and limits the response body to 64 KiB, so a stale OneBots instance, broken proxy, generic success page, or local process that keeps sending data cannot become container-readiness evidence. Inspect the status and recent failures with:
 
 ```bash
 docker compose ps

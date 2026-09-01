@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
     checkReadiness,
     DOCKER_HEALTHCHECK_BODY_LIMIT_BYTES,
+    DOCKER_EXPECTED_APPLICATION_VERSION,
     readinessUrl,
 } from "../../scripts/docker-healthcheck.mjs";
 
@@ -34,7 +35,7 @@ describe("Docker healthcheck", () => {
                 JSON.stringify({
                     ready: true,
                     application: "onebots",
-                    version: "1.2.3",
+                    version: DOCKER_EXPECTED_APPLICATION_VERSION,
                     instance_id: "container-instance",
                 }),
             ),
@@ -80,9 +81,33 @@ describe("Docker healthcheck", () => {
                 config: {},
                 env: {},
                 fetcher: async () =>
-                    jsonResponse('{"ready":true,"application":"onebots","version":"1.2.3"}'),
+                    jsonResponse(
+                        JSON.stringify({
+                            ready: true,
+                            application: "onebots",
+                            version: DOCKER_EXPECTED_APPLICATION_VERSION,
+                        }),
+                    ),
             }),
         ).rejects.toThrow(/instance_id/);
+
+        await expect(
+            checkReadiness({
+                config: {},
+                env: {},
+                fetcher: async () =>
+                    jsonResponse(
+                        JSON.stringify({
+                            ready: true,
+                            application: "onebots",
+                            version: "0.0.0-stale",
+                            instance_id: "stale-instance",
+                        }),
+                    ),
+            }),
+        ).rejects.toThrow(
+            `运行版本不匹配（期望 ${DOCKER_EXPECTED_APPLICATION_VERSION}，实际 0.0.0-stale）`,
+        );
 
         await expect(
             checkReadiness({

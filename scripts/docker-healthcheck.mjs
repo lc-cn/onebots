@@ -5,8 +5,10 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(new URL("../packages/onebots/package.json", import.meta.url));
 const yaml = require("js-yaml");
+const packageMetadata = require("./package.json");
 
 export const DOCKER_HEALTHCHECK_BODY_LIMIT_BYTES = 64 * 1024;
+export const DOCKER_EXPECTED_APPLICATION_VERSION = packageMetadata.version;
 
 export function readConfig(env = process.env) {
     const configPath = env.ONEBOTS_CONFIG_PATH || "/data/config.yaml";
@@ -59,6 +61,11 @@ export async function checkReadiness({
     if (payload?.application !== "onebots") throw new Error(`${url} 未声明 onebots 应用身份`);
     if (typeof payload?.version !== "string" || !payload.version.trim()) {
         throw new Error(`${url} 未声明运行版本`);
+    }
+    if (payload.version.trim() !== DOCKER_EXPECTED_APPLICATION_VERSION) {
+        throw new Error(
+            `${url} 运行版本不匹配（期望 ${DOCKER_EXPECTED_APPLICATION_VERSION}，实际 ${payload.version.trim()}）`,
+        );
     }
     if (typeof payload?.instance_id !== "string" || !payload.instance_id.trim()) {
         throw new Error(`${url} 未声明 instance_id`);
