@@ -32,9 +32,9 @@ function createFakeRuntime() {
 if [ "$1" = "-p" ]; then
     if [ -n "\${ONEBOTS_STATUS_JSON:-}" ]; then
         case "$ONEBOTS_STATUS_JSON" in
-            *'"ok":true'*'"baseUrl":"'*)
+            *'"ok":true'*'"webUrl":"'*)
                 printf '%s\\n' "$ONEBOTS_STATUS_JSON" | \
-                    sed -n 's/.*"baseUrl":"\\([^"]*\\)".*/\\1/p'
+                    sed -n 's/.*"webUrl":"\\([^"]*\\)".*/\\1/p'
                 ;;
             *) exit 2 ;;
         esac
@@ -97,8 +97,9 @@ EOF
         [ "\${FAKE_STATUS_FAIL:-0}" = "1" ] && exit 3
         if [ "$1" = "--json" ]; then
             [ "\${FAKE_STATUS_JSON_INVALID:-0}" = "1" ] && printf '{"ok":true,"target":{}}\\n' && exit 0
-            printf '{"schemaVersion":1,"ok":true,"target":{"baseUrl":"%s"}}\\n' \
-                "\${FAKE_MANAGEMENT_URL:-http://127.0.0.1:6727/gateway}"
+            printf '{"schemaVersion":1,"ok":true,"target":{"baseUrl":"%s","webUrl":"%s"}}\\n' \
+                "\${FAKE_BASE_URL:-http://127.0.0.1:6727/gateway}" \
+                "\${FAKE_MANAGEMENT_URL:-http://127.0.0.1:6727}"
         else
             printf '运行中，已就绪\\n'
         fi
@@ -178,7 +179,7 @@ describe("one-command installer", () => {
 
         const firstCommands = fs.readFileSync(runtime.log, "utf8");
         expect(firstOutput).toContain("首次登录鉴权码：first-token");
-        expect(firstOutput).toContain("管理地址：http://127.0.0.1:6727/gateway");
+        expect(firstOutput).toContain("管理地址：http://127.0.0.1:6727");
         expect(firstCommands).toContain("npm install --omit=dev onebots@latest");
         expect(firstCommands).toContain(
             "npm install --omit=dev @onebots/protocol-onebot-v11@3.0.8",
@@ -208,7 +209,8 @@ slack.production:
         fs.writeFileSync(runtime.log, "", "utf8");
 
         const output = runInstaller(runtime, {
-            FAKE_MANAGEMENT_URL: "http://127.0.0.1:7788/custom",
+            FAKE_BASE_URL: "http://127.0.0.1:7788/custom",
+            FAKE_MANAGEMENT_URL: "http://127.0.0.1:7788",
         });
 
         expect(fs.readFileSync(configPath, "utf8")).toBe(customized);
@@ -216,7 +218,7 @@ slack.production:
         expect(output).toContain("已保留现有管理凭据且未显示");
         expect(output).not.toContain("preserved-token");
         expect(output).not.toContain("首次登录鉴权码：");
-        expect(output).toContain("管理地址：http://127.0.0.1:7788/custom");
+        expect(output).toContain("管理地址：http://127.0.0.1:7788");
         const secondCommands = fs.readFileSync(runtime.log, "utf8");
         expect(secondCommands).not.toContain("onebots setup");
         expect(secondCommands).toContain(
@@ -242,7 +244,7 @@ slack.production:
         expect(source).toContain("function Wait-OneBotsReady");
         expect(source).toContain("Wait-OneBotsReady -OneBotsCommand $OneBots");
         expect(source).toContain("& $OneBots status --json");
-        expect(source).toContain("$StatusReport.target.baseUrl");
+        expect(source).toContain("$StatusReport.target.webUrl");
         expect(source).toMatch(
             /if \(-not \$ConfigExists\) \{\s+if \(\$Line -match '\^access_token/,
         );
@@ -429,7 +431,7 @@ slack.production:
         }).toThrow();
 
         expect(stdout).not.toContain("安装完成");
-        expect(stderr).toContain("最终状态证据缺少已验证的管理地址");
+        expect(stderr).toContain("最终状态证据缺少已验证的 Web 管理地址");
         expect(fs.readFileSync(runtime.log, "utf8")).toContain("onebots status --json");
     });
 

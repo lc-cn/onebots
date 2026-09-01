@@ -141,9 +141,9 @@ try {
         throw "服务虽已通过等待门禁，但无法取得最终状态证据"
     }
     $StatusReport = ($StatusJson -join [Environment]::NewLine) | ConvertFrom-Json
-    $ManagementUrl = [string]$StatusReport.target.baseUrl
+    $ManagementUrl = [string]$StatusReport.target.webUrl
     if (-not $StatusReport.ok -or -not $ManagementUrl) {
-        throw "最终状态证据缺少已验证的管理地址"
+        throw "最终状态证据缺少已验证的 Web 管理地址"
     }
 } catch {
     $InstallError = $_

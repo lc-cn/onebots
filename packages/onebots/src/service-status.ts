@@ -4,6 +4,7 @@ import {
     compareDoctorEndpointIdentities,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
+    resolveManagementWebUrl,
     verifyDoctorRuntimeContract,
 } from "./doctor-endpoint.js";
 import { inspectDoctorServiceMetadata } from "./doctor-service-metadata.js";
@@ -33,6 +34,7 @@ export interface ServiceStatusReport {
         scope: ServiceScope;
         configPath: string | null;
         baseUrl: string | null;
+        webUrl: string | null;
     };
     status: ServiceStatusKind;
     ok: boolean;
@@ -137,6 +139,7 @@ export async function inspectServiceStatus(
     try {
         const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
         const baseUrl = resolveGatewayBaseUrl(config);
+        const webUrl = resolveManagementWebUrl(config);
         const endpointChecks = await Promise.all(
             (["health", "ready"] as const).map(endpoint =>
                 probeDoctorEndpoint(
@@ -170,6 +173,7 @@ export async function inspectServiceStatus(
             createServiceStatusReport(scope, kind, processManager, {
                 configPath: spec.configPath,
                 baseUrl,
+                webUrl,
                 checks,
                 serviceDefinition,
             }),
@@ -190,6 +194,7 @@ export async function inspectServiceStatus(
 interface ServiceStatusReportEvidence {
     configPath?: string;
     baseUrl?: string;
+    webUrl?: string;
     checks?: DoctorCheck[];
     error?: string;
     serviceDefinition?: ServiceStatusReport["serviceDefinition"];
@@ -209,6 +214,7 @@ function createServiceStatusReport(
             scope,
             configPath: evidence.configPath ?? null,
             baseUrl: evidence.baseUrl ?? null,
+            webUrl: evidence.webUrl ?? null,
         },
         status,
         ok: status === "ready" || status === "pending_configuration",

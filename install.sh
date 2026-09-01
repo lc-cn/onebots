@@ -218,10 +218,10 @@ if ! status_json=$(ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" status -
 fi
 if ! management_url=$(
     ONEBOTS_STATUS_JSON="$status_json" "$NODE_BIN" -p \
-        'const report = JSON.parse(process.env.ONEBOTS_STATUS_JSON); if (report.ok !== true || typeof report.target?.baseUrl !== "string" || !report.target.baseUrl) throw new Error("invalid status evidence"); report.target.baseUrl' \
+        'const report = JSON.parse(process.env.ONEBOTS_STATUS_JSON); if (report.ok !== true || typeof report.target?.webUrl !== "string" || !report.target.webUrl) throw new Error("invalid status evidence"); report.target.webUrl' \
         2>/dev/null
 ); then
-    fail "最终状态证据缺少已验证的管理地址"
+    fail "最终状态证据缺少已验证的 Web 管理地址"
 fi
 
 say "安装完成。"

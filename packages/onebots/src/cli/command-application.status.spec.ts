@@ -99,7 +99,7 @@ describe("service status", () => {
         expect(report).toMatchObject({
             status: "unavailable",
             ok: false,
-            target: { configPath: spec.configPath, baseUrl: null },
+            target: { configPath: spec.configPath, baseUrl: null, webUrl: null },
             processManager: {
                 installed: true,
                 running: null,
@@ -145,7 +145,7 @@ describe("service status", () => {
         expect(uninstalledReport).toMatchObject({
             schemaVersion: 1,
             application: { name: "onebots", version: packageMetadata.version },
-            target: { scope: "user", configPath: null, baseUrl: null },
+            target: { scope: "user", configPath: null, baseUrl: null, webUrl: null },
             status: "uninstalled",
             ok: false,
             processManager: {
@@ -276,7 +276,7 @@ describe("service status", () => {
         expect(report).toMatchObject({
             status: "unavailable",
             ok: false,
-            target: { configPath: spec.configPath, baseUrl: null },
+            target: { configPath: spec.configPath, baseUrl: null, webUrl: null },
             serviceDefinition: {
                 path: path.join(spec.workingDirectory, "onebots.service"),
                 current: false,
@@ -328,6 +328,7 @@ describe("service status", () => {
                 scope: "user",
                 configPath: spec.configPath,
                 baseUrl: "http://127.0.0.1:7788/gateway",
+                webUrl: "http://127.0.0.1:7788",
             },
             processManager: { installed: true, running: true, detail: "active" },
             serviceDefinition: {
@@ -568,7 +569,12 @@ describe("service status", () => {
         expect(report).toMatchObject({
             status: "unavailable",
             ok: false,
-            target: { scope: "user", configPath: spec.configPath, baseUrl: null },
+            target: {
+                scope: "user",
+                configPath: spec.configPath,
+                baseUrl: null,
+                webUrl: null,
+            },
             processManager: { installed: true, running: true },
             probe: {
                 checks: [],
@@ -599,7 +605,7 @@ describe("service status", () => {
         expect(report).toMatchObject({
             status: "unavailable",
             ok: false,
-            target: { scope: "user", configPath: null, baseUrl: null },
+            target: { scope: "user", configPath: null, baseUrl: null, webUrl: null },
             processManager: {
                 installed: null,
                 running: null,
