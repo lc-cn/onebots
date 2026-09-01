@@ -37,10 +37,20 @@ export class RuntimeConfigRollbackConflictError extends AggregateError {
     }
 }
 
+export class RuntimeConfigPostApplyConflictError extends ConfigError {
+    constructor(cause: Error) {
+        super("配置运行态处理完成，但磁盘配置已被另一操作更新；已保留最新文件，请重新加载", {
+            cause,
+        });
+        this.name = "RuntimeConfigPostApplyConflictError";
+    }
+}
+
 export function isRuntimeConfigApplicationConflict(error: unknown): boolean {
     return (
         error instanceof RuntimeConfigApplicationConflictError ||
-        error instanceof RuntimeConfigRollbackConflictError
+        error instanceof RuntimeConfigRollbackConflictError ||
+        error instanceof RuntimeConfigPostApplyConflictError
     );
 }
 
@@ -97,8 +107,9 @@ async function saveAndApplyRuntimeConfigUnlocked(
     writeConfigFileAtomic(configPath, content, { backup: true });
     const candidateSnapshot = captureServiceActivationConfig(configPath);
 
+    let result: RuntimeConfigApplicationResult;
     try {
-        return await reloadRuntimeConfig(host, config as BaseApp.Config, configPath, content);
+        result = await reloadRuntimeConfig(host, config as BaseApp.Config, configPath, content);
     } catch (error) {
         try {
             assertServiceActivationConfigCurrent(configPath, candidateSnapshot);
@@ -116,6 +127,14 @@ async function saveAndApplyRuntimeConfigUnlocked(
         }
         throw error;
     }
+    try {
+        assertServiceActivationConfigCurrent(configPath, candidateSnapshot);
+    } catch (error) {
+        throw new RuntimeConfigPostApplyConflictError(
+            error instanceof Error ? error : new Error(String(error)),
+        );
+    }
+    return result;
 }
 
 async function reloadRuntimeConfig(

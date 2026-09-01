@@ -299,6 +299,25 @@ describe("configuration route", () => {
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe(concurrent);
     });
 
+    it("应用成功后发现外部配置写入时返回 409 而不是误报保存成功", async () => {
+        const concurrent = "access_token: external-token\nlog_level: debug\n";
+        const reload = vi.fn(async () => {
+            writeConfigFileAtomic(BaseApp.configPath, concurrent);
+        }) as App["reload"];
+        const { app, handler } = setup(reload);
+        const ctx = { request: { body: "access_token: next-token\n" } } as RouterContext;
+
+        await handler(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: "配置运行态处理完成，但磁盘配置已被另一操作更新；已保留最新文件，请重新加载",
+        });
+        expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe(concurrent);
+        expect(app.backupDataToHf).not.toHaveBeenCalled();
+    });
+
     it("无效 YAML 返回 400 且不写入文件", async () => {
         const reload = vi.fn(async () => undefined) as App["reload"];
         const { handler } = setup(reload);

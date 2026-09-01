@@ -10,6 +10,7 @@ import {
 import {
     applyRuntimeConfigFile,
     RuntimeConfigApplicationConflictError,
+    RuntimeConfigPostApplyConflictError,
     RuntimeConfigRollbackConflictError,
     saveAndApplyRuntimeConfig,
 } from "./runtime-config-application.js";
@@ -142,6 +143,49 @@ describe("runtime config application", () => {
         ]);
         expect(fs.readFileSync(file, "utf8")).toBe(concurrent);
         expect(fs.readFileSync(`${file}.bak`, "utf8")).toBe("access_token: old-token\n");
+        expect(host.markRuntimeConfigApplied).not.toHaveBeenCalled();
+    });
+
+    it("运行态应用成功但磁盘已被另一进程更新时拒绝报告事务成功", async () => {
+        const file = configFile();
+        const concurrent = "access_token: external-token\nlog_level: debug\n";
+        const host = {
+            isReloading: false,
+            markRuntimeConfigApplied: vi.fn(),
+            reload: vi.fn(async () => {
+                writeConfigFileAtomic(file, concurrent);
+            }),
+        };
+
+        await expect(
+            saveAndApplyRuntimeConfig(host, "access_token: next-token\n", file),
+        ).rejects.toBeInstanceOf(RuntimeConfigPostApplyConflictError);
+
+        expect(fs.readFileSync(file, "utf8")).toBe(concurrent);
+        expect(fs.readFileSync(`${file}.bak`, "utf8")).toBe("access_token: old-token\n");
+        expect(host.markRuntimeConfigApplied).toHaveBeenCalledWith(
+            file,
+            "access_token: next-token\n",
+        );
+    });
+
+    it("宿主字段要求重启但磁盘已被另一进程更新时仍返回冲突", async () => {
+        const file = configFile();
+        const concurrent = "access_token: external-token\nport: 7788\n";
+        const host = {
+            isReloading: false,
+            markRuntimeConfigApplied: vi.fn(),
+            reload: vi.fn(async () => {
+                writeConfigFileAtomic(file, concurrent);
+                throw new HostConfigRestartRequiredError(["port"]);
+            }),
+        };
+
+        await expect(saveAndApplyRuntimeConfig(host, "port: 7000\n", file)).rejects.toBeInstanceOf(
+            RuntimeConfigPostApplyConflictError,
+        );
+
+        expect(fs.readFileSync(file, "utf8")).toBe(concurrent);
         expect(host.markRuntimeConfigApplied).not.toHaveBeenCalled();
     });
 

@@ -162,6 +162,32 @@ describe("management config WebSocket actions", () => {
         expect(app.backupDataToHf).not.toHaveBeenCalled();
     });
 
+    it("应用成功后发现外部配置写入时返回 CONFIG_CONFLICT", async () => {
+        const file = configFile();
+        const concurrent = "access_token: external-token\nlog_level: debug\n";
+        const app = host();
+        app.reload.mockImplementation(async () => {
+            writeConfigFileAtomic(file, concurrent);
+        });
+
+        const response = await handleManagementConfigSocketAction(
+            app,
+            { action: "system.saveConfig", data: "access_token: next-token\n" },
+            file,
+        );
+
+        expect(response).toMatchObject({
+            data: {
+                success: false,
+                code: "CONFIG_CONFLICT",
+                message:
+                    "配置运行态处理完成，但磁盘配置已被另一操作更新；已保留最新文件，请重新加载",
+            },
+        });
+        expect(fs.readFileSync(file, "utf8")).toBe(concurrent);
+        expect(app.backupDataToHf).not.toHaveBeenCalled();
+    });
+
     it("忽略不属于配置管理的消息", async () => {
         await expect(
             handleManagementConfigSocketAction(host(), { action: "bot.start" }),
