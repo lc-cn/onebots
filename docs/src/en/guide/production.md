@@ -71,6 +71,8 @@ Authenticated SSE used by logs, account verification, and message debugging like
 
 These three protected SSE endpoints share one response contract. `Cache-Control: no-store, no-transform` prevents browsers and intermediaries from storing or rewriting logs, login-verification events, and message payloads. `X-Accel-Buffering: no` asks compatible reverse proxies to forward events immediately instead of batching them. Connection-level keep-alive and heartbeats remain unchanged, so the stronger cache boundary does not reduce live delivery.
 
+The account-login verification panel also closes the pending list, SSE, and platform mutations into one instance snapshot. The pending-list response declares its application, version, `instance_id`, and runtime contract through the standard headers, and every refresh replaces the previous list completely so resolved or expired requests cannot survive through client-side merging. Each SSE connection sends an identity event before any verification request or clear event. When a reconnect reaches a new instance, Web removes stale cards and reloads the snapshot. SMS requests and slider, QR confirmation, or code submissions carry the snapshot's expected instance. The server rejects drift before parsing the target or invoking an adapter, while the response must prove its processing instance in both the standard headers and JSON receipt. A service restart, cross-instance proxy route, or stale page therefore cannot submit login material to a process that no longer owns the pending verification.
+
 ### Token Management
 
 Complete token lifecycle management.

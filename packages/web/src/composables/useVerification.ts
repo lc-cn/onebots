@@ -7,7 +7,17 @@ import {
     type AuthenticatedEventStream,
 } from "../authenticated-event-stream.js";
 import { reportClientError } from "../client-diagnostics";
-import { readManagementJsonResponse } from "../management-response.js";
+import {
+    sameManagementEvidenceIdentity,
+    type ManagementEvidenceIdentity,
+} from "../management-evidence-identity.js";
+import {
+    isVerificationRequest,
+    parseVerificationStreamIdentity,
+    readVerificationMutationResult,
+    readVerificationSnapshot,
+    verificationMutationHeaders,
+} from "../verification-management.js";
 
 /** 合并单条验证到列表（同 platform+account_id+type 只保留最新） */
 function mergePending(
@@ -42,22 +52,25 @@ export function useVerification() {
     /** 仅在有新验证通过 SSE 到达时置为 true，用于自动打开抽屉；首屏拉取的待处理列表不自动弹窗 */
     const shouldOpenDrawer = ref(false);
     let verificationEventSource: AuthenticatedEventStream | null = null;
+    let verificationIdentity: ManagementEvidenceIdentity | null = null;
+    let pendingRequestGeneration = 0;
+    let streamIdentityEstablished = false;
 
     /** 从服务端拉取待处理验证（Web 未在线时产生的验证，打开页面后可补拉） */
     const fetchPending = async () => {
+        const generation = ++pendingRequestGeneration;
         try {
             const response = await authFetch(buildApiUrl("/api/verification/pending"));
-            if (response.ok) {
-                const list = (await readManagementJsonResponse(response)) as VerificationRequest[];
-                if (Array.isArray(list)) {
-                    let next = pending.value;
-                    for (const item of list) {
-                        if (item.platform && item.account_id && item.type)
-                            next = mergePending(next, item);
-                    }
-                    pending.value = next;
+            const snapshot = await readVerificationSnapshot(response);
+            if (generation !== pendingRequestGeneration) return;
+            verificationIdentity = snapshot.identity;
+            const next: VerificationRequest[] = [];
+            for (const item of snapshot.items) {
+                if (item.platform && item.account_id && item.type) {
+                    next.push(item);
                 }
             }
+            pending.value = next;
         } catch (error) {
             reportClientError("拉取待处理验证失败", error);
         }
@@ -76,20 +89,40 @@ export function useVerification() {
         verificationEventSource = openAuthenticatedEventStream(
             buildApiUrl("/api/verification/stream"),
             {
+                onOpen() {
+                    streamIdentityEstablished = false;
+                },
                 onMessage(data) {
                     try {
-                        const payload = JSON.parse(data) as
-                            | VerificationRequest
-                            | VerificationClearEvent;
+                        const payload: unknown = JSON.parse(data);
+                        const streamIdentity = parseVerificationStreamIdentity(payload);
+                        if (streamIdentity) {
+                            streamIdentityEstablished = true;
+                            const changed =
+                                verificationIdentity !== null &&
+                                !sameManagementEvidenceIdentity(
+                                    verificationIdentity,
+                                    streamIdentity,
+                                );
+                            verificationIdentity = streamIdentity;
+                            pendingRequestGeneration += 1;
+                            if (changed) pending.value = [];
+                            void fetchPending();
+                            return;
+                        }
+                        if (!streamIdentityEstablished) {
+                            throw new Error("验证事件流尚未声明实例身份");
+                        }
                         if (isClearEvent(payload)) {
                             applyClear(payload);
                             return;
                         }
-                        if (payload.platform && payload.account_id && payload.type) {
-                            // 新请求与同 key 刷新（如二维码过期换码）都打开抽屉并更新 UI
-                            pending.value = mergePending(pending.value, payload);
-                            shouldOpenDrawer.value = true;
+                        if (!isVerificationRequest(payload)) {
+                            throw new Error("验证事件流包含无效请求");
                         }
+                        // 新请求与同 key 刷新（如二维码过期换码）都打开抽屉并更新 UI
+                        pending.value = mergePending(pending.value, payload);
+                        shouldOpenDrawer.value = true;
                     } catch (error) {
                         reportClientError("解析验证事件失败", error);
                     }
@@ -116,18 +149,15 @@ export function useVerification() {
         platform: string,
         account_id: string,
     ): Promise<{ success: boolean; message?: string }> => {
+        const identity = verificationIdentity;
+        if (!identity) return { success: false, message: "无法确认待处理验证所属实例" };
         try {
             const response = await authFetch(buildApiUrl("/api/verification/request-sms"), {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: verificationMutationHeaders(identity),
                 body: JSON.stringify({ platform, account_id }),
             });
-            const result = (await readManagementJsonResponse(response)) as {
-                success?: boolean;
-                message?: string;
-            };
-            if (response.ok && result.success) return { success: true };
-            return { success: false, message: result.message || "请求失败" };
+            return await readVerificationMutationResult(response, identity);
         } catch (error) {
             reportClientError("请求短信验证码失败", error);
             return {
@@ -143,21 +173,23 @@ export function useVerification() {
         type: string,
         data: Record<string, unknown>,
     ): Promise<{ success: boolean; message?: string }> => {
+        const identity = verificationIdentity;
+        if (!identity) return { success: false, message: "无法确认待处理验证所属实例" };
         try {
             const response = await authFetch(buildApiUrl("/api/verification/submit"), {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: verificationMutationHeaders(identity),
                 body: JSON.stringify({ platform, account_id, type, data }),
             });
-            const result = (await readManagementJsonResponse(response)) as {
-                success?: boolean;
-                message?: string;
-            };
-            if (response.ok && result.success) {
+            const result = await readVerificationMutationResult(response, identity);
+            if (
+                result.success &&
+                verificationIdentity &&
+                sameManagementEvidenceIdentity(verificationIdentity, identity)
+            ) {
                 dismiss({ platform, account_id, type, data } as VerificationRequest);
-                return { success: true };
             }
-            return { success: false, message: result.message || "提交失败" };
+            return result;
         } catch (error) {
             reportClientError("提交验证失败", error);
             return {
