@@ -8,7 +8,10 @@ import {
     verifyDoctorRuntimeContract,
 } from "./doctor-endpoint.js";
 import { inspectDoctorServiceMetadata } from "./doctor-service-metadata.js";
-import { inspectDoctorServiceDefinition } from "./doctor-service-definition.js";
+import {
+    inspectDoctorServiceDefinition,
+    inspectDoctorServiceDefinitionPermissions,
+} from "./doctor-service-definition.js";
 import { probeDoctorManagementPage } from "./doctor-management-page.js";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
@@ -22,6 +25,8 @@ import {
 import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
 import { inspectPersistedCredentialPermissions } from "./persisted-credential-permissions.js";
 import { inspectPersistedManagementCredentials } from "./management-credentials.js";
+import { inspectDoctorServiceStateDirectory } from "./doctor-service-state.js";
+import { inspectSensitiveFilePermissions } from "./doctor-permissions.js";
 
 export type ServiceStatusKind =
     | "uninstalled"
@@ -105,7 +110,7 @@ export async function inspectServiceStatus(
     }
     const status = controller.status(metadata.spec);
     const serviceDefinition = inspectStatusServiceDefinition(controller, metadata.spec);
-    const serviceRuntime = inspectStatusServiceRuntime(metadata.spec, dependencies);
+    const serviceRuntime = inspectStatusServiceRuntime(controller, metadata.spec, dependencies);
     const processManager = {
         installed: status.installed,
         running: status.error ? null : status.running,
@@ -315,6 +320,7 @@ function formatServiceStatusResult(report: ServiceStatusReport, json = false): S
 }
 
 function inspectStatusServiceRuntime(
+    controller: ServiceController,
     spec: ServiceSpec | null,
     dependencies: ServiceStatusDependencies,
 ): ServiceStatusReport["serviceRuntime"] {
@@ -323,14 +329,48 @@ function inspectStatusServiceRuntime(
     const entry = dependencies.inspectEntry(spec.binPath);
     const credentialCheck = inspectStatusPersistedCredentials(spec.configPath);
     const permissionChecks = inspectStatusCredentialPermissions(spec.configPath);
+    const controlPlaneChecks = inspectStatusServiceControlPlane(controller, spec);
     return {
         valid:
             runtime.supported &&
             entry.valid &&
             credentialCheck.level !== "error" &&
-            permissionChecks.every(check => check.level !== "error"),
-        checks: [runtime.check, entry.check, credentialCheck, ...permissionChecks],
+            permissionChecks.every(check => check.level !== "error") &&
+            controlPlaneChecks.every(check => check.level !== "error"),
+        checks: [
+            runtime.check,
+            entry.check,
+            credentialCheck,
+            ...permissionChecks,
+            ...controlPlaneChecks,
+        ],
     };
+}
+
+function inspectStatusServiceControlPlane(
+    controller: ServiceController,
+    spec: ServiceSpec,
+): DoctorCheck[] {
+    const paths = controller.paths();
+    const checks = [inspectDoctorServiceStateDirectory(paths.stateDir)];
+    if (process.platform === "win32") return checks;
+    return [
+        ...checks,
+        inspectStatusServiceMetadataPermissions(paths.metadata),
+        inspectDoctorServiceDefinitionPermissions(controller.definitionPath(spec)),
+    ];
+}
+
+function inspectStatusServiceMetadataPermissions(metadataPath: string): DoctorCheck {
+    try {
+        return inspectSensitiveFilePermissions(metadataPath, "service-metadata-mode", "服务元数据");
+    } catch {
+        return {
+            name: "service-metadata-mode",
+            level: "error",
+            message: `服务元数据权限无法验证: ${metadataPath}`,
+        };
+    }
 }
 
 function inspectStatusPersistedCredentials(configPath: string): DoctorCheck {

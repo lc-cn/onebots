@@ -70,9 +70,16 @@ function mockInstalledService(running: boolean, spec = serviceSpec()): void {
 }
 
 function mockCurrentDefinition(spec: ServiceSpec): void {
-    vi.spyOn(ServiceController.prototype, "definitionPath").mockReturnValue(
-        path.join(spec.workingDirectory, "onebots.service"),
-    );
+    const definition = path.join(spec.workingDirectory, "onebots.service");
+    const metadata = path.join(spec.workingDirectory, "service.json");
+    fs.writeFileSync(definition, "service definition", { mode: 0o644 });
+    fs.writeFileSync(metadata, JSON.stringify(spec), { mode: 0o600 });
+    vi.spyOn(ServiceController.prototype, "paths").mockReturnValue({
+        stateDir: spec.workingDirectory,
+        definition,
+        metadata,
+    });
+    vi.spyOn(ServiceController.prototype, "definitionPath").mockReturnValue(definition);
     vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
 }
 
@@ -116,6 +123,22 @@ function expectedPermissionChecks() {
 
 const expectedCredentialCheck = { name: "service-credentials", level: "ok" };
 
+function expectedControlPlaneOutput(spec: ServiceSpec): string {
+    return process.platform === "win32"
+        ? `\n服务状态目录可读写: ${spec.workingDirectory}`
+        : `\n服务状态目录可读写: ${spec.workingDirectory}\n服务元数据权限 600 未向组或其他用户开放\n服务定义权限 644 未向组或其他用户开放写入`;
+}
+
+function expectedControlPlaneChecks() {
+    return process.platform === "win32"
+        ? [{ name: "service-permissions", level: "ok" }]
+        : [
+              { name: "service-permissions", level: "ok" },
+              { name: "service-metadata-mode", level: "ok" },
+              { name: "service-definition-mode", level: "ok" },
+          ];
+}
+
 describe("service status", () => {
     it("reports liveness and readiness for a running service", async () => {
         const spec = serviceSpec();
@@ -148,7 +171,7 @@ describe("service status", () => {
         const result = await runServiceStatus({ system: false }, fetcher);
 
         expect(result).toEqual({
-            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}\n服务配置包含持久化管理凭据${expectedPermissionOutput()}\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance\n在线进程的启动契约与服务元数据一致\nWeb 管理页可访问，Router 前缀为 /gateway`,
+            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}\n服务配置包含持久化管理凭据${expectedPermissionOutput()}${expectedControlPlaneOutput(spec)}\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance\n在线进程的启动契约与服务元数据一致\nWeb 管理页可访问，Router 前缀为 /gateway`,
             exitCode: undefined,
         });
         expect(fetcher).toHaveBeenCalledWith(
@@ -202,6 +225,7 @@ describe("service status", () => {
                     },
                     expectedCredentialCheck,
                     ...expectedPermissionChecks(),
+                    ...expectedControlPlaneChecks(),
                 ],
             },
             probe: {
@@ -215,6 +239,53 @@ describe("service status", () => {
             },
         });
     });
+
+    it.runIf(process.platform !== "win32")(
+        "服务控制面文件变为可篡改时不再把健康进程报告为已就绪",
+        async () => {
+            const spec = serviceSpec();
+            mockInstalledService(true, spec);
+            const paths = new ServiceController("user").paths();
+            fs.chmodSync(paths.stateDir, 0o755);
+            fs.chmodSync(paths.metadata, 0o644);
+            fs.chmodSync(paths.definition, 0o666);
+            const fetcher = createStatusFetcher(
+                async input =>
+                    new Response(
+                        JSON.stringify({
+                            ...(String(input).endsWith("/health")
+                                ? { status: "ok" }
+                                : { ready: true }),
+                            application: "onebots",
+                            version: packageMetadata.version,
+                            instance_id: "control-plane-drift-instance",
+                            runtime_contract_id: activeRuntimeContractId,
+                        }),
+                        { status: 200 },
+                    ),
+            );
+
+            const result = await runServiceStatus({ system: false, json: true }, fetcher);
+            const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+            expect(result).toMatchObject({ exitCode: 1, raw: true });
+            expect(report).toMatchObject({
+                status: "unavailable",
+                ok: false,
+                serviceRuntime: { valid: false },
+            });
+            expect(report.serviceRuntime.checks).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({ name: "service-permissions", level: "error" }),
+                    expect.objectContaining({ name: "service-metadata-mode", level: "error" }),
+                    expect.objectContaining({ name: "service-definition-mode", level: "error" }),
+                ]),
+            );
+            expect(report.probe.checks).toContainEqual(
+                expect.objectContaining({ name: "health", level: "ok" }),
+            );
+        },
+    );
 
     it.runIf(process.platform !== "win32")(
         "配置权限在启动后漂移时不再把健康进程报告为已就绪",
@@ -378,9 +449,7 @@ describe("service status", () => {
             scope: "user",
             detail: "active",
         });
-        vi.spyOn(ServiceController.prototype, "definitionPath").mockReturnValue(
-            path.join(spec.workingDirectory, "onebots.service"),
-        );
+        mockCurrentDefinition(spec);
         vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(false);
         const fetcher = vi.fn<typeof fetch>();
 

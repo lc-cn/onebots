@@ -66,9 +66,16 @@ function mockInstalledService(running: boolean, spec = serviceSpec()): void {
 }
 
 function mockCurrentDefinition(spec: ServiceSpec): void {
-    vi.spyOn(ServiceController.prototype, "definitionPath").mockReturnValue(
-        path.join(spec.workingDirectory, "onebots.service"),
-    );
+    const definition = path.join(spec.workingDirectory, "onebots.service");
+    const metadata = path.join(spec.workingDirectory, "service.json");
+    fs.writeFileSync(definition, "service definition", { mode: 0o644 });
+    fs.writeFileSync(metadata, JSON.stringify(spec), { mode: 0o600 });
+    vi.spyOn(ServiceController.prototype, "paths").mockReturnValue({
+        stateDir: spec.workingDirectory,
+        definition,
+        metadata,
+    });
+    vi.spyOn(ServiceController.prototype, "definitionPath").mockReturnValue(definition);
     vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
 }
 
@@ -88,6 +95,22 @@ function expectedPermissionChecks() {
 }
 
 const expectedCredentialCheck = { name: "service-credentials", level: "ok" };
+
+function expectedControlPlaneOutput(spec: ServiceSpec): string {
+    return process.platform === "win32"
+        ? `\n服务状态目录可读写: ${spec.workingDirectory}`
+        : `\n服务状态目录可读写: ${spec.workingDirectory}\n服务元数据权限 600 未向组或其他用户开放\n服务定义权限 644 未向组或其他用户开放写入`;
+}
+
+function expectedControlPlaneChecks() {
+    return process.platform === "win32"
+        ? [{ name: "service-permissions", level: "ok" }]
+        : [
+              { name: "service-permissions", level: "ok" },
+              { name: "service-metadata-mode", level: "ok" },
+              { name: "service-definition-mode", level: "ok" },
+          ];
+}
 
 describe("service status", () => {
     it("returns exit code 2 when no service is installed", async () => {
@@ -110,7 +133,7 @@ describe("service status", () => {
         const fetcher = vi.fn<typeof fetch>();
 
         await expect(runServiceStatus({ system: false }, fetcher)).resolves.toEqual({
-            output: `已安装，未运行\n进程管理器: inactive\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}\n服务配置包含持久化管理凭据${expectedPermissionOutput()}`,
+            output: `已安装，未运行\n进程管理器: inactive\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}\n服务配置包含持久化管理凭据${expectedPermissionOutput()}${expectedControlPlaneOutput(spec)}`,
             exitCode: 1,
         });
         expect(fetcher).not.toHaveBeenCalled();
@@ -137,6 +160,27 @@ describe("service status", () => {
         });
         expect(fetcher).not.toHaveBeenCalled();
     });
+
+    it.runIf(process.platform !== "win32")(
+        "服务元数据在读取后消失时返回结构化权限错误",
+        async () => {
+            const spec = serviceSpec();
+            mockInstalledService(false, spec);
+            const paths = new ServiceController("user").paths();
+            fs.unlinkSync(paths.metadata);
+
+            const result = await runServiceStatus({ system: false, json: true });
+            const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+            expect(result).toMatchObject({ exitCode: 1, raw: true });
+            expect(report.serviceRuntime).toMatchObject({ valid: false });
+            expect(report.serviceRuntime.checks).toContainEqual({
+                name: "service-metadata-mode",
+                level: "error",
+                message: `服务元数据权限无法验证: ${paths.metadata}`,
+            });
+        },
+    );
 
     it("does not misreport a failed process-manager query as stopped", async () => {
         const spec = serviceSpec();
@@ -238,6 +282,7 @@ describe("service status", () => {
                     { name: "service-entry", level: "ok" },
                     expectedCredentialCheck,
                     ...expectedPermissionChecks(),
+                    ...expectedControlPlaneChecks(),
                 ],
             },
             probe: { checks: [], error: null },

@@ -70,9 +70,16 @@ function mockInstalledService(running: boolean, spec = serviceSpec()): void {
 }
 
 function mockCurrentDefinition(spec: ServiceSpec): void {
-    vi.spyOn(ServiceController.prototype, "definitionPath").mockReturnValue(
-        path.join(spec.workingDirectory, "onebots.service"),
-    );
+    const definition = path.join(spec.workingDirectory, "onebots.service");
+    const metadata = path.join(spec.workingDirectory, "service.json");
+    fs.writeFileSync(definition, "service definition", { mode: 0o644 });
+    fs.writeFileSync(metadata, JSON.stringify(spec), { mode: 0o600 });
+    vi.spyOn(ServiceController.prototype, "paths").mockReturnValue({
+        stateDir: spec.workingDirectory,
+        definition,
+        metadata,
+    });
+    vi.spyOn(ServiceController.prototype, "definitionPath").mockReturnValue(definition);
     vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
 }
 
