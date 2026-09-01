@@ -326,4 +326,23 @@ describe("Web semantic service probes", () => {
             detail: "ready 探测超时（5ms）",
         });
     });
+
+    it("rejects oversized public probe bodies before trusting their JSON", async () => {
+        const oversized = () =>
+            new Response("{}", {
+                status: 200,
+                headers: { "content-length": String(64 * 1024 + 1) },
+            });
+
+        await expect(probeHealth(vi.fn(async () => oversized()))).resolves.toEqual({
+            state: "danger",
+            label: "存活未知",
+            detail: "health 不可达：响应正文超过 64 KiB 上限",
+        });
+        await expect(probeReadiness(vi.fn(async () => oversized()))).resolves.toEqual({
+            state: "danger",
+            label: "就绪未知",
+            detail: "ready 不可达：响应正文超过 64 KiB 上限",
+        });
+    });
 });

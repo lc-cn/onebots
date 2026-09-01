@@ -88,6 +88,20 @@ describe("Web service restart verification", () => {
         expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
     });
 
+    it("refuses restart when the preflight health body exceeds its byte boundary", async () => {
+        const fetcher = vi.fn(
+            async () =>
+                new Response("{}", {
+                    headers: { "content-length": String(64 * 1024 + 1) },
+                }),
+        );
+
+        await expect(readCurrentServiceInstanceId(fetcher)).rejects.toThrow(
+            "响应正文超过 64 KiB 上限",
+        );
+        expect(fetcher).toHaveBeenCalledOnce();
+    });
+
     it("keeps every restart probe bounded when the endpoint stalls", async () => {
         const fetcher = vi.fn<typeof fetch>(() => new Promise(() => undefined));
 

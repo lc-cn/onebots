@@ -170,6 +170,46 @@ describe("Web 鉴权码登录", () => {
         expect(getToken()).toBe("existing-token");
     });
 
+    it("公开身份正文超限时不发送候选凭据", async () => {
+        setToken("existing-token", null, null);
+        const fetcher = vi.fn(
+            async () =>
+                new Response("{}", {
+                    headers: { "content-length": String(64 * 1024 + 1) },
+                }),
+        );
+        vi.stubGlobal("fetch", fetcher);
+
+        await expect(loginWithToken("candidate-secret")).resolves.toEqual({
+            ok: false,
+            unavailable: true,
+            message: "拒绝发送管理凭据：health 不可达：响应正文超过 64 KiB 上限",
+        });
+        expect(fetcher).toHaveBeenCalledOnce();
+        expect(JSON.stringify(fetcher.mock.calls[0])).not.toContain("candidate-secret");
+        expect(getToken()).toBe("existing-token");
+    });
+
+    it("认证回执正文超限时保留已有会话", async () => {
+        setToken("existing-token", null, null);
+        const oversizedResponse = authenticationResponse({ token: "candidate-token" });
+        oversizedResponse.headers.set("content-length", String(64 * 1024 + 1));
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValueOnce(healthResponse())
+                .mockResolvedValueOnce(oversizedResponse),
+        );
+
+        await expect(loginWithToken("candidate-token")).resolves.toEqual({
+            ok: false,
+            unavailable: true,
+            message: "认证响应无效：响应正文超过 64 KiB 上限",
+        });
+        expect(getToken()).toBe("existing-token");
+    });
+
     it("认证回执来自另一个实例时不提交候选会话", async () => {
         setToken("existing-token", null, null);
         vi.stubGlobal(

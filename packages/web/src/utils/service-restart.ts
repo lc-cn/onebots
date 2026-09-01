@@ -1,9 +1,11 @@
 import { buildApiUrl } from "../config";
+import { readBoundedJsonResponse } from "../bounded-response.js";
 import {
     DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
     runServiceProbe,
     ServiceProbeTimeoutError,
 } from "./service-probe-request";
+import { WEB_PUBLIC_PROBE_BODY_LIMIT_BYTES } from "./service-probes.js";
 
 interface HealthProbeResult {
     instanceId: string | null;
@@ -34,7 +36,9 @@ async function probeHealthInstance(
                 cache: "no-store",
                 signal,
             });
-            const payload: unknown = response.ok ? await response.json() : null;
+            const payload: unknown = response.ok
+                ? await readBoundedJsonResponse(response, WEB_PUBLIC_PROBE_BODY_LIMIT_BYTES)
+                : null;
             return { response, payload };
         }, timeoutMs);
         if (!response.ok) return { instanceId: null, evidence: `health HTTP ${response.status}` };

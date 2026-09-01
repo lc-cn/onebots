@@ -1,228 +1,313 @@
-import { buildApiUrl } from '../config'
-import { managementRequestInit } from '../management-request.js'
+import { buildApiUrl } from "../config";
+import { readBoundedJsonResponse, ResponseBodyTooLargeError } from "../bounded-response.js";
+import { managementRequestInit } from "../management-request.js";
 import {
-  authenticationRequestErrorMessage,
-  authenticationRequestInit
-} from '../authentication-request.js'
+    authenticationRequestErrorMessage,
+    authenticationRequestInit,
+} from "../authentication-request.js";
 import {
-  assertAuthenticationResponseIdentity,
-  authenticationExchangeHeaders,
-  AuthenticationResponseIdentityError,
-  verifyAuthenticationTarget
-} from '../authentication-target.js'
+    assertAuthenticationResponseIdentity,
+    authenticationExchangeHeaders,
+    AuthenticationResponseIdentityError,
+    verifyAuthenticationTarget,
+} from "../authentication-target.js";
 
-const TOKEN_KEY = 'onebots:authToken'
-const REFRESH_KEY = 'onebots:authRefreshToken'
-const EXPIRES_KEY = 'onebots:authExpiresAt'
-const EXPIRED_FLAG = 'onebots:authExpired'
+const TOKEN_KEY = "onebots:authToken";
+const REFRESH_KEY = "onebots:authRefreshToken";
+const EXPIRES_KEY = "onebots:authExpiresAt";
+const EXPIRED_FLAG = "onebots:authExpired";
+const AUTHENTICATION_RESPONSE_BODY_LIMIT_BYTES = 64 * 1024;
 
 export type LoginResult =
-  | { ok: true; isDefaultCredentials: boolean }
-  | { ok: false; message: string; unavailable?: boolean }
+    | { ok: true; isDefaultCredentials: boolean }
+    | { ok: false; message: string; unavailable?: boolean };
 
-export type RefreshResult = { ok: true } | { ok: false; unavailable?: boolean }
+export type RefreshResult = { ok: true } | { ok: false; unavailable?: boolean };
 
 const getStoredExpiresAt = () => {
-  const value = localStorage.getItem(EXPIRES_KEY)
-  if (!value) return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
+    const value = localStorage.getItem(EXPIRES_KEY);
+    if (!value) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
 
 export const clearAuth = () => {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(REFRESH_KEY)
-  localStorage.removeItem(EXPIRES_KEY)
-  localStorage.removeItem(EXPIRED_FLAG)
-}
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(EXPIRES_KEY);
+    localStorage.removeItem(EXPIRED_FLAG);
+};
 
 export const getToken = () => {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (!token) return null
-  const expiresAt = getStoredExpiresAt()
-  if (expiresAt && Date.now() > expiresAt) {
-    localStorage.setItem(EXPIRED_FLAG, '1')
-    clearAuth()
-    return null
-  }
-  return token
-}
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return null;
+    const expiresAt = getStoredExpiresAt();
+    if (expiresAt && Date.now() > expiresAt) {
+        localStorage.setItem(EXPIRED_FLAG, "1");
+        clearAuth();
+        return null;
+    }
+    return token;
+};
 
-export const isAuthenticated = () => !!getToken()
+export const isAuthenticated = () => !!getToken();
 
-export const setToken = (token: string, expiresAt?: number | null, refreshToken?: string | null) => {
-  localStorage.setItem(TOKEN_KEY, token)
-  if (expiresAt) {
-    localStorage.setItem(EXPIRES_KEY, String(expiresAt))
-  } else {
-    localStorage.removeItem(EXPIRES_KEY)
-  }
-  if (refreshToken) {
-    localStorage.setItem(REFRESH_KEY, refreshToken)
-  }
-  localStorage.removeItem(EXPIRED_FLAG)
-}
+export const setToken = (
+    token: string,
+    expiresAt?: number | null,
+    refreshToken?: string | null,
+) => {
+    localStorage.setItem(TOKEN_KEY, token);
+    if (expiresAt) {
+        localStorage.setItem(EXPIRES_KEY, String(expiresAt));
+    } else {
+        localStorage.removeItem(EXPIRES_KEY);
+    }
+    if (refreshToken) {
+        localStorage.setItem(REFRESH_KEY, refreshToken);
+    }
+    localStorage.removeItem(EXPIRED_FLAG);
+};
 
 export const buildAuthHeaders = () => {
-  const token = getToken()
-  if (!token) return {}
-  return { Authorization: `Bearer ${token}` }
-}
+    const token = getToken();
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
+};
 
-export const getRefreshToken = () => localStorage.getItem(REFRESH_KEY)
+export const getRefreshToken = () => localStorage.getItem(REFRESH_KEY);
 
-export const hasExpiredFlag = () => localStorage.getItem(EXPIRED_FLAG) === '1'
+export const hasExpiredFlag = () => localStorage.getItem(EXPIRED_FLAG) === "1";
 
-export const clearExpiredFlag = () => localStorage.removeItem(EXPIRED_FLAG)
+export const clearExpiredFlag = () => localStorage.removeItem(EXPIRED_FLAG);
 
 /** 仅供浏览器 WebSocket 握手使用；普通 HTTP 与 SSE 必须使用 Authorization header。 */
 export const appendWebSocketAuthQuery = (url: string) => {
-  const token = getToken()
-  if (!token) return url
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}access_token=${encodeURIComponent(token)}`
-}
+    const token = getToken();
+    if (!token) return url;
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}access_token=${encodeURIComponent(token)}`;
+};
 
 export const authFetch = async (
-  input: RequestInfo | URL,
-  init: RequestInit = {},
-  retry = true
+    input: RequestInfo | URL,
+    init: RequestInit = {},
+    retry = true,
 ): Promise<Response> => {
-  const headers = new Headers(init.headers)
-  const authHeaders = buildAuthHeaders()
-  Object.entries(authHeaders).forEach(([key, value]) => headers.set(key, value))
-  const response = await fetch(input, managementRequestInit({ ...init, headers }))
+    const headers = new Headers(init.headers);
+    const authHeaders = buildAuthHeaders();
+    Object.entries(authHeaders).forEach(([key, value]) => headers.set(key, value));
+    const response = await fetch(input, managementRequestInit({ ...init, headers }));
 
-  if (response.status !== 401) return response
+    if (response.status !== 401) return response;
 
-  if (retry) {
-    const refreshed = await refresh(init.signal)
-    if (refreshed.ok) {
-      return authFetch(input, init, false)
+    if (retry) {
+        const refreshed = await refresh(init.signal);
+        if (refreshed.ok) {
+            return authFetch(input, init, false);
+        }
+        if (refreshed.unavailable) return response;
     }
-    if (refreshed.unavailable) return response
-  }
 
-  clearAuth()
-  const redirect = encodeURIComponent(`${window.location.pathname}${window.location.search}${window.location.hash}`)
-  window.location.assign(`/login?redirect=${redirect}&reason=unauthorized`)
-  return response
-}
+    clearAuth();
+    const redirect = encodeURIComponent(
+        `${window.location.pathname}${window.location.search}${window.location.hash}`,
+    );
+    window.location.assign(`/login?redirect=${redirect}&reason=unauthorized`);
+    return response;
+};
 
 /** 使用鉴权码登录（Bearer Token，与 config 中 access_token 一致） */
 export const loginWithToken = async (accessToken: string): Promise<LoginResult> => {
-  const target = await verifyAuthenticationTarget()
-  if (!target.ok) return { ok: false, unavailable: true, message: target.message }
-  let response: Response
-  try {
-    response = await fetch(buildApiUrl('/api/auth/login'), authenticationRequestInit({
-      method: 'POST',
-      headers: authenticationExchangeHeaders(target.identity, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ access_token: accessToken.trim() })
-    }))
-    assertAuthenticationResponseIdentity(response, target.identity)
-  } catch (error) {
-    return { ok: false, unavailable: true, message: authenticationExchangeErrorMessage(error) }
-  }
+    const target = await verifyAuthenticationTarget();
+    if (!target.ok) return { ok: false, unavailable: true, message: target.message };
+    let response: Response;
+    try {
+        response = await fetch(
+            buildApiUrl("/api/auth/login"),
+            authenticationRequestInit({
+                method: "POST",
+                headers: authenticationExchangeHeaders(target.identity, {
+                    "Content-Type": "application/json",
+                }),
+                body: JSON.stringify({ access_token: accessToken.trim() }),
+            }),
+        );
+        assertAuthenticationResponseIdentity(response, target.identity);
+    } catch (error) {
+        return { ok: false, unavailable: true, message: authenticationExchangeErrorMessage(error) };
+    }
 
-  if (!response.ok) {
-    const fallback = response.status === 401 ? '鉴权码错误' : `登录请求失败（HTTP ${response.status}）`
-    const result = await response.json().catch(() => ({ message: fallback }))
-    const failure = { ok: false as const, message: result.message || fallback }
-    return response.status === 401 ? failure : { ...failure, unavailable: true }
-  }
+    if (!response.ok) {
+        const fallback =
+            response.status === 401 ? "鉴权码错误" : `登录请求失败（HTTP ${response.status}）`;
+        const result = await readAuthenticationResponse(response);
+        if (!result.ok) return { ok: false, unavailable: true, message: result.message };
+        const failure = { ok: false as const, message: readMessage(result.value) || fallback };
+        return response.status === 401 ? failure : { ...failure, unavailable: true };
+    }
 
-  const result = await response.json().catch(() => null)
-  if (result?.token) {
-    setToken(result.token, result.expiresAt, result.refreshToken)
-    return { ok: true, isDefaultCredentials: !!result.isDefaultCredentials }
-  }
+    const result = await readAuthenticationResponse(response);
+    if (!result.ok) return { ok: false, unavailable: true, message: result.message };
+    if (isRecord(result.value) && typeof result.value.token === "string" && result.value.token) {
+        setToken(
+            result.value.token,
+            typeof result.value.expiresAt === "number" ? result.value.expiresAt : null,
+            typeof result.value.refreshToken === "string" ? result.value.refreshToken : null,
+        );
+        return { ok: true, isDefaultCredentials: !!result.value.isDefaultCredentials };
+    }
 
-  return { ok: false, unavailable: true, message: result?.message || '登录响应格式无效' }
-}
+    return {
+        ok: false,
+        unavailable: true,
+        message: readMessage(result.value) || "登录响应格式无效",
+    };
+};
 
 export const login = async (username: string, password: string): Promise<LoginResult> => {
-  const target = await verifyAuthenticationTarget()
-  if (!target.ok) return { ok: false, unavailable: true, message: target.message }
-  let response: Response
-  try {
-    response = await fetch(buildApiUrl('/api/auth/login'), authenticationRequestInit({
-      method: 'POST',
-      headers: authenticationExchangeHeaders(target.identity, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ username, password })
-    }))
-    assertAuthenticationResponseIdentity(response, target.identity)
-  } catch (error) {
-    return { ok: false, unavailable: true, message: authenticationExchangeErrorMessage(error) }
-  }
+    const target = await verifyAuthenticationTarget();
+    if (!target.ok) return { ok: false, unavailable: true, message: target.message };
+    let response: Response;
+    try {
+        response = await fetch(
+            buildApiUrl("/api/auth/login"),
+            authenticationRequestInit({
+                method: "POST",
+                headers: authenticationExchangeHeaders(target.identity, {
+                    "Content-Type": "application/json",
+                }),
+                body: JSON.stringify({ username, password }),
+            }),
+        );
+        assertAuthenticationResponseIdentity(response, target.identity);
+    } catch (error) {
+        return { ok: false, unavailable: true, message: authenticationExchangeErrorMessage(error) };
+    }
 
-  if (!response.ok) {
-    const fallback = response.status === 401 ? '用户名或密码错误' : `登录请求失败（HTTP ${response.status}）`
-    const result = await response.json().catch(() => ({ message: fallback }))
-    const failure = { ok: false as const, message: result.message || fallback }
-    return response.status === 401 ? failure : { ...failure, unavailable: true }
-  }
+    if (!response.ok) {
+        const fallback =
+            response.status === 401
+                ? "用户名或密码错误"
+                : `登录请求失败（HTTP ${response.status}）`;
+        const result = await readAuthenticationResponse(response);
+        if (!result.ok) return { ok: false, unavailable: true, message: result.message };
+        const failure = { ok: false as const, message: readMessage(result.value) || fallback };
+        return response.status === 401 ? failure : { ...failure, unavailable: true };
+    }
 
-  const result = await response.json().catch(() => null)
-  if (result?.token) {
-    setToken(result.token, result.expiresAt, result.refreshToken)
-    return { ok: true, isDefaultCredentials: !!result.isDefaultCredentials }
-  }
+    const result = await readAuthenticationResponse(response);
+    if (!result.ok) return { ok: false, unavailable: true, message: result.message };
+    if (isRecord(result.value) && typeof result.value.token === "string" && result.value.token) {
+        setToken(
+            result.value.token,
+            typeof result.value.expiresAt === "number" ? result.value.expiresAt : null,
+            typeof result.value.refreshToken === "string" ? result.value.refreshToken : null,
+        );
+        return { ok: true, isDefaultCredentials: !!result.value.isDefaultCredentials };
+    }
 
-  return { ok: false, unavailable: true, message: result?.message || '登录响应格式无效' }
-}
+    return {
+        ok: false,
+        unavailable: true,
+        message: readMessage(result.value) || "登录响应格式无效",
+    };
+};
 
 export const logout = async () => {
-  const token = getToken()
-  if (!token) {
-    clearAuth()
-    return
-  }
-  try {
-    await authFetch(buildApiUrl('/api/auth/logout'), authenticationRequestInit({ method: 'POST' }))
-  } catch {
-    // 服务端不可达或请求超时时仍应完成本地退出。
-  } finally {
-    clearAuth()
-  }
-}
+    const token = getToken();
+    if (!token) {
+        clearAuth();
+        return;
+    }
+    try {
+        await authFetch(
+            buildApiUrl("/api/auth/logout"),
+            authenticationRequestInit({ method: "POST" }),
+        );
+    } catch {
+        // 服务端不可达或请求超时时仍应完成本地退出。
+    } finally {
+        clearAuth();
+    }
+};
 
 export const refresh = async (signal?: AbortSignal | null): Promise<RefreshResult> => {
-  const refreshToken = getRefreshToken()
-  if (!refreshToken) return { ok: false }
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return { ok: false };
 
-  const target = await verifyAuthenticationTarget(fetch, signal)
-  if (!target.ok) return { ok: false, unavailable: true }
+    const target = await verifyAuthenticationTarget(fetch, signal);
+    if (!target.ok) return { ok: false, unavailable: true };
 
-  let response: Response
-  try {
-    response = await fetch(buildApiUrl('/api/auth/refresh'), authenticationRequestInit({
-      method: 'POST',
-      headers: authenticationExchangeHeaders(target.identity, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ refreshToken }),
-      signal
-    }))
-    assertAuthenticationResponseIdentity(response, target.identity)
-  } catch {
-    return { ok: false, unavailable: true }
-  }
+    let response: Response;
+    try {
+        response = await fetch(
+            buildApiUrl("/api/auth/refresh"),
+            authenticationRequestInit({
+                method: "POST",
+                headers: authenticationExchangeHeaders(target.identity, {
+                    "Content-Type": "application/json",
+                }),
+                body: JSON.stringify({ refreshToken }),
+                signal,
+            }),
+        );
+        assertAuthenticationResponseIdentity(response, target.identity);
+    } catch {
+        return { ok: false, unavailable: true };
+    }
 
-  if (!response.ok) {
-    return response.status === 400 || response.status === 401
-      ? { ok: false }
-      : { ok: false, unavailable: true }
-  }
+    if (!response.ok) {
+        return response.status === 400 || response.status === 401
+            ? { ok: false }
+            : { ok: false, unavailable: true };
+    }
 
-  const result = await response.json().catch(() => null)
-  if (result?.token) {
-    setToken(result.token, result.expiresAt, result.refreshToken)
-    return { ok: true }
-  }
+    const result = await readAuthenticationResponse(response);
+    if (!result.ok) return { ok: false, unavailable: true };
+    if (isRecord(result.value) && typeof result.value.token === "string" && result.value.token) {
+        setToken(
+            result.value.token,
+            typeof result.value.expiresAt === "number" ? result.value.expiresAt : null,
+            typeof result.value.refreshToken === "string" ? result.value.refreshToken : null,
+        );
+        return { ok: true };
+    }
 
-  return { ok: false, unavailable: true }
-}
+    return { ok: false, unavailable: true };
+};
 
 const authenticationExchangeErrorMessage = (error: unknown) =>
-  error instanceof AuthenticationResponseIdentityError
-    ? error.message
-    : authenticationRequestErrorMessage(error)
+    error instanceof AuthenticationResponseIdentityError
+        ? error.message
+        : authenticationRequestErrorMessage(error);
+
+type AuthenticationResponseResult = { ok: true; value: unknown } | { ok: false; message: string };
+
+const readAuthenticationResponse = async (
+    response: Response,
+): Promise<AuthenticationResponseResult> => {
+    try {
+        return {
+            ok: true,
+            value: await readBoundedJsonResponse(
+                response,
+                AUTHENTICATION_RESPONSE_BODY_LIMIT_BYTES,
+            ),
+        };
+    } catch (error) {
+        return {
+            ok: false,
+            message:
+                error instanceof ResponseBodyTooLargeError
+                    ? `认证响应无效：${error.message}`
+                    : "登录响应格式无效",
+        };
+    }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+const readMessage = (value: unknown) =>
+    isRecord(value) && typeof value.message === "string" ? value.message.trim() : "";

@@ -1,4 +1,5 @@
 import { buildApiUrl } from "../config";
+import { readBoundedJsonResponse } from "../bounded-response.js";
 import {
     DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
     runServiceProbe,
@@ -6,6 +7,8 @@ import {
 } from "./service-probe-request";
 
 export type ServiceProbeState = "success" | "warning" | "danger";
+
+export const WEB_PUBLIC_PROBE_BODY_LIMIT_BYTES = 64 * 1024;
 
 export interface ServiceProbeIdentity {
     application: string;
@@ -73,7 +76,9 @@ export async function probeHealth(
                 redirect: "error",
                 signal: cancellationSignal ? AbortSignal.any([signal, cancellationSignal]) : signal,
             });
-            const payload: unknown = response.ok ? await response.json() : null;
+            const payload: unknown = response.ok
+                ? await readBoundedJsonResponse(response, WEB_PUBLIC_PROBE_BODY_LIMIT_BYTES)
+                : null;
             return { response, payload };
         }, timeoutMs);
         if (!response.ok) return danger("存活异常", `health HTTP ${response.status}`);
@@ -125,7 +130,10 @@ export async function probeReadiness(
                 redirect: "error",
                 signal,
             });
-            const payload: unknown = await response.json();
+            const payload: unknown = await readBoundedJsonResponse(
+                response,
+                WEB_PUBLIC_PROBE_BODY_LIMIT_BYTES,
+            );
             return { response, payload };
         }, timeoutMs);
         if (!isReadinessPayload(payload)) {

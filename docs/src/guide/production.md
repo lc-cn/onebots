@@ -395,7 +395,7 @@ readinessProbe:
 
 端口无法通过回环连接且没有已运行的受管服务时，doctor 还会用与网关启动相同的监听方式实际占用并立即释放该端口。其他网卡或 IPv6 上的占用以及绑定权限不足都会成为 `port` 错误，不再误报“端口可用”。
 
-所有 `/health` 与 `/ready` 验证只读取最多 64 KiB 的响应正文，并同时检查声明的 `Content-Length` 与实际流式字节数。超限响应会立即取消读取并作为显式探针错误进入 doctor、status 以及 start/restart/update 的上线门禁；服务切换前记录旧 `instance_id` 的尽力探测也复用同一边界，而且只接受声明完整 `onebots` 应用身份、健康语义有效且 `runtime_contract_id` 与已安装服务元数据一致的实例。未知 HTTP 服务、旧端点或用其他启动参数运行的 OneBots 不会进入“进程已切换”证据。
+所有 `/health` 与 `/ready` 验证只读取最多 64 KiB 的响应正文，并同时检查声明的 `Content-Length` 与实际流式字节数。超限响应会立即取消读取并作为显式探针错误进入 doctor、status 以及 start/restart/update 的上线门禁；服务切换前记录旧 `instance_id` 的尽力探测也复用同一边界，而且只接受声明完整 `onebots` 应用身份、健康语义有效且 `runtime_contract_id` 与已安装服务元数据一致的实例。Web 管理端的公开身份预检、就绪探针和登录、刷新回执也采用 64 KiB 边界；公开响应超限时不会继续发送候选凭据，认证回执超限时不会替换已有会话。未知 HTTP 服务、旧端点或用其他启动参数运行的 OneBots 不会进入“进程已切换”证据。
 
 共享 Router 会拒绝重复的 HTTP 方法与精确路径，并原子撤销数组路径等同一次注册产生的全部 Layer；WebSocket pathname 冲突也会在创建第二个服务前失败。账号作用域内的 HTTP 与 WebSocket 冲突错误都会同时指出正在注册和已经占用路径的平台与账号，便于直接定位多账号配置；同一 HTTP 路径的不同方法仍可分别注册。
 
