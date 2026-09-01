@@ -54,6 +54,7 @@ import {
 } from "./doctor-endpoint.js";
 import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
 import { inspectGatewayPortAvailability } from "./doctor-port.js";
+import { probeDoctorManagementAfterIdentity } from "./doctor-management-boundary.js";
 
 export { compareDoctorEndpointIdentities, probeDoctorEndpoint, resolveGatewayBaseUrl };
 export type { CheckLevel, DoctorCheck, DoctorEndpointIdentity } from "./doctor-endpoint.js";
@@ -437,15 +438,22 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 ]);
                 const identityCheck = compareDoctorEndpointIdentities(...endpointChecks);
                 checks.push(...endpointChecks, identityCheck);
+                let runtimeContractCheck: DoctorCheck | undefined;
                 if (spec) {
-                    checks.push(
-                        verifyDoctorRuntimeContract(
-                            identityCheck,
-                            resolveServiceRuntimeContractId(spec),
-                        ),
+                    runtimeContractCheck = verifyDoctorRuntimeContract(
+                        identityCheck,
+                        resolveServiceRuntimeContractId(spec),
                     );
+                    checks.push(runtimeContractCheck);
                 }
-                checks.push(...(await probeDoctorManagement(base, config)));
+                checks.push(
+                    ...(await probeDoctorManagementAfterIdentity({
+                        health: endpointChecks[0],
+                        identity: identityCheck,
+                        ...(runtimeContractCheck ? { runtimeContract: runtimeContractCheck } : {}),
+                        probe: () => probeDoctorManagement(base, config),
+                    })),
+                );
             } else {
                 checks.push(await inspectGatewayPortAvailability(port));
             }

@@ -39,6 +39,8 @@ OneBots 提供了完整的生产级功能，包括安全性、稳定性和可观
 
 ### 管理面鉴权边界
 
+`onebots doctor` 不会因为配置端口可连接就立即发送管理凭据。它先用公开 `/health` 证明应用名、当前 CLI 版本与健康语义，再要求 `/health`、`/ready` 的应用、版本和 `instance_id` 一致；托管服务还必须匹配本地 `service.json` 计算出的 `runtime_contract_id`。任一证据缺失或冲突时，报告新增 `management-identity` 错误并跳过登录、Bearer 请求与带 token 的 WebSocket 握手，避免把配置中的 token、用户名或密码误发给占用端口的其他服务。readiness 因账号或协议故障返回 503 时，只要身份链仍完整，管理诊断会继续定位具体出口。公开身份不是针对恶意同机进程的密码学证明，生产主机仍应使用独立服务用户和操作系统权限隔离。
+
 `/api/*`、根管理 WebSocket `/` 与终端 WebSocket `/api/terminal` 使用同一组动态认证材料。普通管理 HTTP 只从 `Authorization: Bearer <token>` 读取凭据；`/api/auth/login` 可以在 JSON body 中提交顶层 `access_token`，也可以用用户名密码换取会话 token。日志、账号验证和消息调试 SSE 使用带 Authorization header 的 Fetch 流，不会把长期 token 写进 URL，并由同一客户端统一处理分帧、取消与有界重连。只有浏览器 WebSocket 握手可通过 `Authorization` 或 `?access_token=<token>` 传递，因为原生 WebSocket API 无法设置请求头。未授权 WebSocket 会在协议升级前返回 HTTP 401，不会先建立连接再关闭，因此无法收到包含完整配置的 `system.sync`。
 
 Web 首屏仍兼容用 `?access_token=` 引导登录，但会先调用登录端点验证候选值，只有服务端确认后才写入本地会话。无效链接不会覆盖已有 token；已有会话会继续使用，尚未登录时则回到登录页说明凭据无效。登录、链接验证、令牌刷新和主动登出各自拥有 5 秒请求边界，超时、网络不可达、主动取消与凭据拒绝使用不同语义；慢代理不能让路由守卫、登录按钮或退出操作永久挂起。登出即使无法联系服务端也会清理浏览器本地凭据，服务端会话则在自然过期后失效。无论链接验证结果如何，下一次导航都会先从地址栏移除鉴权码。管理 HTML 还会同时通过 `Referrer-Policy: no-referrer` 响应头和前置的 referrer meta 禁止发送来源地址，因此脚本与样式在前端执行之前加载时，也不会把含 token 的入口 URL 复制到 `Referer` 请求头。建议人工集成优先在登录页输入鉴权码；根管理 WebSocket 的查询参数只用于无法设置 `Authorization` 请求头的客户端。
