@@ -10,7 +10,7 @@ import {
     validateRuntimeConfig,
 } from "./runtime-config-validator.js";
 import { writeCliOutput } from "./cli-output.js";
-import { probeDoctorManagement } from "./doctor-management.js";
+import { probeDoctorManagementSurface } from "./doctor-management-surface.js";
 import { hasManagementCredentials } from "./management-credentials.js";
 import { inspectExtensionCatalog } from "./doctor-extension-catalog.js";
 import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
@@ -49,6 +49,7 @@ import {
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
     resolveGatewayPort,
+    resolveManagementWebUrl,
     verifyDoctorRuntimeContract,
     type DoctorCheck,
 } from "./doctor-endpoint.js";
@@ -415,12 +416,14 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
 
     if (config) {
         let base: string | undefined;
+        let webUrl: string | undefined;
         let port: number | undefined;
         try {
             const environmentPort = spec
                 ? undefined
                 : (options.environmentPort ?? process.env.PORT);
             base = resolveGatewayBaseUrl(config, environmentPort);
+            webUrl = resolveManagementWebUrl(config, environmentPort);
             port = resolveGatewayPort(config, environmentPort);
         } catch (error) {
             checks.push({
@@ -429,7 +432,9 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 message: `网关地址配置无效: ${error instanceof Error ? error.message : String(error)}`,
             });
         }
-        if (base && port !== undefined) {
+        if (base && webUrl && port !== undefined) {
+            const managementBaseUrl = base;
+            const managementWebUrl = webUrl;
             const portOpen = status?.running || (await isPortOpen(port));
             if (portOpen) {
                 const endpointChecks = await Promise.all([
@@ -451,9 +456,19 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                         health: endpointChecks[0],
                         identity: identityCheck,
                         ...(runtimeContractCheck ? { runtimeContract: runtimeContractCheck } : {}),
-                        probe: () => probeDoctorManagement(base, config),
+                        probe: () =>
+                            probeDoctorManagementSurface({
+                                baseUrl: managementBaseUrl,
+                                webUrl: managementWebUrl,
+                                config,
+                            }),
                         confirm: () =>
-                            probeDoctorEndpoint(base, "health", fetch, packageMetadata.version),
+                            probeDoctorEndpoint(
+                                managementBaseUrl,
+                                "health",
+                                fetch,
+                                packageMetadata.version,
+                            ),
                     })),
                 );
             } else {
