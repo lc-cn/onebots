@@ -41,6 +41,7 @@ describe("doctor management probes", () => {
                 );
             }
             if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
             expect(input).toBe("http://127.0.0.1:6727/gateway/api/auth/me");
             return authorization
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -60,6 +61,7 @@ describe("doctor management probes", () => {
             ["management-http-anonymous", "ok"],
             ["management-http-authenticated", "ok"],
             ["management-config", "ok"],
+            ["management-extensions", "ok"],
             ["management-runtime", "ok"],
             ["management-capabilities", "ok"],
             ["management-ws-anonymous", "ok"],
@@ -70,6 +72,9 @@ describe("doctor management probes", () => {
         );
         expect(checks.find(check => check.name === "management-capabilities")?.message).toBe(
             "能力证据已验证: 1 个适配器默认清单与 1 个账号能力均可信",
+        );
+        expect(checks.find(check => check.name === "management-extensions")?.message).toBe(
+            "扩展运行证据已验证: 0 个已启用，0 个已加载，版本均已收敛",
         );
         expect(upgrade).toHaveBeenNthCalledWith(1, "http://127.0.0.1:6727/");
         expect(upgrade).toHaveBeenNthCalledWith(2, "http://127.0.0.1:6727/", "secret");
@@ -87,13 +92,16 @@ describe("doctor management probes", () => {
                 ? "runtime"
                 : input.endsWith("/api/system")
                   ? "config"
-                  : authorization
-                    ? "http-authenticated"
-                    : "http-anonymous";
+                  : input.endsWith("/api/extensions")
+                    ? "extensions"
+                    : authorization
+                      ? "http-authenticated"
+                      : "http-anonymous";
             started.add(name);
             await gate;
             if (name === "runtime") return new Response("[]", { status: 200 });
             if (name === "config") return inSyncSystemResponse();
+            if (name === "extensions") return convergedExtensionsResponse();
             return authorization
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response(null, { status: 401 });
@@ -112,6 +120,7 @@ describe("doctor management probes", () => {
         await vi.waitFor(() => {
             expect([...started].sort()).toEqual([
                 "config",
+                "extensions",
                 "http-anonymous",
                 "http-authenticated",
                 "runtime",
@@ -126,6 +135,7 @@ describe("doctor management probes", () => {
             "management-http-anonymous",
             "management-http-authenticated",
             "management-config",
+            "management-extensions",
             "management-runtime",
             "management-capabilities",
             "management-ws-anonymous",
@@ -145,6 +155,7 @@ describe("doctor management probes", () => {
             if (input.endsWith("/api/auth/logout")) return new Response(null, { status: 200 });
             if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
             if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
             return new Headers(init?.headers).has("authorization")
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response(null, { status: 401 });
@@ -214,6 +225,7 @@ describe("doctor management probes", () => {
             ["management-http-anonymous", "ok"],
             ["management-http-authenticated", "warning"],
             ["management-config", "warning"],
+            ["management-extensions", "warning"],
             ["management-runtime", "warning"],
             ["management-capabilities", "warning"],
             ["management-ws-anonymous", "ok"],
@@ -519,6 +531,7 @@ describe("doctor management probes", () => {
         const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
             if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
             if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
             return new Headers(init?.headers).get("authorization") === "Bearer deployment-token"
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response(null, { status: 401 });
@@ -557,6 +570,7 @@ describe("doctor management probes", () => {
                 );
             }
             if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
+            if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
             return new Headers(init?.headers).has("authorization")
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response(null, { status: 401 });
@@ -589,6 +603,7 @@ async function probeWithAdapters(adapters: unknown[]) {
             return new Response(JSON.stringify(adapters), { status: 200 });
         }
         if (input.endsWith("/api/system")) return inSyncSystemResponse();
+        if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
         return new Headers(init?.headers).has("authorization")
             ? new Response(JSON.stringify({ success: true }), { status: 200 })
             : new Response(null, { status: 401 });
@@ -604,6 +619,10 @@ async function probeWithAdapters(adapters: unknown[]) {
             }),
         },
     );
+}
+
+function convergedExtensionsResponse(): Response {
+    return new Response("[]", { status: 200 });
 }
 
 function inSyncSystemResponse(): Response {
