@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
     EventStreamEventTooLargeError,
+    EventStreamRequestError,
     openAuthenticatedEventStream,
 } from "./authenticated-event-stream.js";
 
@@ -79,6 +80,62 @@ describe("authenticated management event stream", () => {
         await new Promise(resolve => setTimeout(resolve, 5));
         expect(fetcher).toHaveBeenCalledTimes(2);
         expect(onError).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([401, 403])("最终 HTTP %s 鉴权拒绝只报告一次且不重试", async status => {
+        const cancelled = vi.fn();
+        const fetcher = vi.fn(
+            async () =>
+                new Response(
+                    new ReadableStream<Uint8Array>({
+                        cancel: cancelled,
+                    }),
+                    { status },
+                ),
+        );
+        const onError = vi.fn();
+        await new Promise<void>(resolve => {
+            openAuthenticatedEventStream(
+                "/api/logs",
+                {
+                    onMessage: vi.fn(),
+                    onError(error) {
+                        onError(error);
+                        resolve();
+                    },
+                    retryMs: 1,
+                },
+                fetcher,
+            );
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 5));
+        expect(onError).toHaveBeenCalledWith(expect.any(EventStreamRequestError));
+        expect(cancelled).toHaveBeenCalledOnce();
+        expect(fetcher).toHaveBeenCalledOnce();
+    });
+
+    it("HTTP 503 remains retryable", async () => {
+        const fetcher = vi
+            .fn()
+            .mockResolvedValueOnce(new Response(null, { status: 503 }))
+            .mockResolvedValueOnce(eventStream(["data: recovered\n\n"]));
+        let connection!: { close(): void };
+        await new Promise<void>(resolve => {
+            connection = openAuthenticatedEventStream(
+                "/api/logs",
+                {
+                    onMessage() {
+                        connection.close();
+                        resolve();
+                    },
+                    retryMs: 1,
+                },
+                fetcher,
+            );
+        });
+
+        expect(fetcher).toHaveBeenCalledTimes(2);
     });
 
     it("响应类型无效时先取消未读取正文", async () => {

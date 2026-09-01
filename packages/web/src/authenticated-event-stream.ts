@@ -23,6 +23,13 @@ export class EventStreamEventTooLargeError extends Error {
     }
 }
 
+export class EventStreamRequestError extends Error {
+    constructor(public readonly status: number) {
+        super(`事件流请求失败（HTTP ${status}）`);
+        this.name = "EventStreamRequestError";
+    }
+}
+
 /** 使用 Authorization 请求头建立可取消、可重连的管理 SSE，避免把长期令牌写进 URL。 */
 export function openAuthenticatedEventStream(
     url: string,
@@ -51,7 +58,7 @@ export function openAuthenticatedEventStream(
             });
             if (!response.ok) {
                 await cancelResponseBody(response.body);
-                throw new Error(`事件流请求失败（HTTP ${response.status}）`);
+                throw new EventStreamRequestError(response.status);
             }
             if (!response.body) throw new Error("事件流响应缺少可读正文");
             const contentType = response.headers.get("content-type") ?? "";
@@ -70,7 +77,11 @@ export function openAuthenticatedEventStream(
         } catch (error) {
             if (closed || controller.signal.aborted) return;
             options.onError?.(error);
-            if (error instanceof EventStreamEventTooLargeError) {
+            if (
+                error instanceof EventStreamEventTooLargeError ||
+                (error instanceof EventStreamRequestError &&
+                    (error.status === 401 || error.status === 403))
+            ) {
                 closed = true;
                 return;
             }

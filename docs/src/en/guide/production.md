@@ -67,6 +67,8 @@ The Web console terminal also uses one connection generation and one reconnect t
 
 Terminal reconnection also distinguishes the close reason. Network interruption, service restart, and a normal PTY exit continue recovering after three seconds. When the server uses code `1008` for an expired session or rotated management credentials, the page explains that the operator must sign in again and stops repeatedly sending the same invalid credential. A manual connection remains available after the credential is replaced.
 
+Authenticated SSE used by logs, account verification, and message debugging likewise distinguishes a final rejection from a transient failure. If `authFetch` still receives HTTP 401 or 403 after its one token-refresh attempt, the stream cancels the response body, reports one error, and stops retrying. Network failures and HTTP 5xx responses continue recovering at the configured interval. Invalid management credentials therefore cannot create a background request loop even when an embedded container delays or blocks browser navigation.
+
 ### Token Management
 
 Complete token lifecycle management.
