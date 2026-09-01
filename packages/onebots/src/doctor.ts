@@ -477,6 +477,10 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                                 webUrl: managementWebUrl,
                                 config,
                                 expectedIdentity: identityCheck.identity,
+                                expectedPaths: {
+                                    configPath: path.resolve(options.configPath),
+                                    dataDirectory: dataDir,
+                                },
                             }),
                         confirm: () =>
                             probeDoctorEndpoint(

@@ -294,6 +294,8 @@ Web「系统信息」、扩展安装流程和管理终端的重启请求共用�
 
 每个应用会在构造时固化自己的配置目录、配置文件、数据目录与日志文件路径。嵌入式宿主或同一测试进程随后创建另一个 `App` 并切换 `BaseApp.configDir` / `configFileName` 兼容默认值时，已有实例的账号事务、配置保存与热重载、管理端读取、数据库、安全审计、日志观察和 Hugging Face 备份仍使用原实例路径，不会跨实例读写。静态字段继续用于创建实例前设置默认路径；运行中的代码应使用实例公开的 `configDir`、`configPath`、`dataDir` 与 `logFile`。
 
+获得管理凭据后，`onebots doctor` 还会把本次命令指定的配置文件和派生数据目录，与同一在线实例从受保护 `/api/system` 返回的 `configPath`、`configDir`、`dataDir` 逐项核对。路径字段必须是绝对路径，配置目录必须与配置文件父目录闭合；缺失、内部矛盾或指向另一份 `-c` 配置都会使 `management-config` 检查失败。`configState: in_sync` 因此只能证明当前诊断目标对应的在线实例，而不能让同端口上使用另一份配置的 OneBots 进程通过生产门禁。
+
 进程会在启动、每次成功热重载及账号配置落盘后保留配置文件的不可逆摘要。受保护的 `GET /api/system` 通过 `configState` 字段与 Web「系统信息 → 配置状态」只公开 `in_sync`、`drifted` 或 `unavailable` 及最近应用时间，不公开摘要或配置内容。若配置被外部编辑、挂载替换，或者 Web 保存的宿主字段仍等待重启，状态会保持 `drifted`；成功重新加载或重启后才恢复 `in_sync`。同一状态会投影到公开 `/ready`，不同步时返回 HTTP 503。`onebots_ready` 直接发布与该端点相同的最终判定，告警规则无需重新组合账号、协议、配置和运行态操作条件；`onebots_config_status{status="..."}` 用互斥的 `in_sync`、`drifted`、`unavailable`、`untracked` 序列保留具体原因。兼容指标 `onebots_config_in_sync` 在不同步时仍为 `0`，嵌入式宿主未跟踪配置时仍为 `1`；需要区分这两种情况时应使用 `onebots_config_status`。doctor 会把漂移和文件不可读分别报告为可操作原因。管理 WebSocket 的初始 `system.sync` 也携带同一状态。
 
 在 POSIX 系统上，doctor 会分别检查正式配置与 `.bak` 的权限。`0600` 视为私有；`0640` 等仅允许同组读取的模式会给出警告但不自动修改，以兼容服务账号共享；其他用户可访问或同组用户可修改会使检查失败。显式使用 `--fix` 时，这类高风险权限会收紧为 `0600`，JSON 报告中的 `fixed` 字段可供部署脚本留痕。

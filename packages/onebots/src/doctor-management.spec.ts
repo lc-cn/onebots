@@ -204,6 +204,52 @@ describe("doctor management probes", () => {
         expect(checks.find(check => check.name === "management-runtime")?.level).toBe("ok");
     });
 
+    it.each([
+        {
+            name: "配置文件",
+            paths: {
+                configPath: "/srv/other/config.yaml",
+                configDir: "/srv/other",
+                dataDir: "/srv/other/data",
+            },
+            message:
+                "在线进程使用配置 /srv/other/config.yaml，本次诊断目标为 /srv/onebots/config.yaml",
+        },
+        {
+            name: "数据目录",
+            paths: {
+                configPath: "/srv/onebots/config.yaml",
+                configDir: "/srv/onebots",
+                dataDir: "/srv/other/data",
+            },
+            message: "在线进程数据目录 /srv/other/data，本次诊断目标为 /srv/onebots/data",
+        },
+    ])("拒绝在线进程使用错误的$name", async ({ paths, message }) => {
+        const checks = await probeWithSystemResponse(inSyncSystemResponse("instance-a", paths), {
+            configPath: "/srv/onebots/config.yaml",
+            dataDirectory: "/srv/onebots/data",
+        });
+
+        expect(checks.find(check => check.name === "management-config")).toEqual({
+            name: "management-config",
+            level: "error",
+            message,
+        });
+    });
+
+    it("把在线实例路径绑定到本次 doctor 的配置目标", async () => {
+        const checks = await probeWithSystemResponse(inSyncSystemResponse(), {
+            configPath: "/srv/onebots/config.yaml",
+            dataDirectory: "/srv/onebots/data",
+        });
+
+        expect(checks.find(check => check.name === "management-config")).toEqual({
+            name: "management-config",
+            level: "ok",
+            message: "在线进程已应用当前磁盘配置（应用时间 2026-08-31T09:00:00.000Z）",
+        });
+    });
+
     it("starts every independent configured-token probe before a slow peer completes", async () => {
         let release!: () => void;
         const gate = new Promise<void>(resolve => {
@@ -910,15 +956,68 @@ function managementIdentityHeaders(instanceId = "instance-a"): Record<string, st
     };
 }
 
-function inSyncSystemResponse(instanceId = "instance-a"): Response {
+interface SystemRuntimePaths {
+    configPath: string;
+    configDir: string;
+    dataDir: string;
+}
+
+function inSyncSystemResponse(
+    instanceId = "instance-a",
+    paths: SystemRuntimePaths = {
+        configPath: "/srv/onebots/config.yaml",
+        configDir: "/srv/onebots",
+        dataDir: "/srv/onebots/data",
+    },
+): Response {
     return new Response(
         JSON.stringify({
+            ...paths,
             configState: {
                 status: "in_sync",
                 appliedAt: "2026-08-31T09:00:00.000Z",
             },
         }),
         { status: 200, headers: managementIdentityHeaders(instanceId) },
+    );
+}
+
+async function probeWithSystemResponse(
+    systemResponse: Response,
+    expectedPaths: { configPath: string; dataDirectory: string },
+) {
+    const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+        if (input.endsWith("/api/system")) return systemResponse;
+        if (input.endsWith("/api/adapters")) {
+            return new Response("[]", { status: 200, headers: managementIdentityHeaders() });
+        }
+        if (input.endsWith("/api/extensions/package-mutation")) {
+            return idlePackageMutationResponse();
+        }
+        if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
+        if (input.endsWith("/api/adapter-capabilities")) {
+            return completeCapabilityCatalogResponse();
+        }
+        return new Headers(init?.headers).has("authorization")
+            ? new Response(JSON.stringify({ success: true }), { status: 200 })
+            : new Response(null, { status: 401 });
+    });
+    return probeDoctorManagement(
+        "http://127.0.0.1:6727",
+        { access_token: "secret" },
+        {
+            fetcher,
+            upgrade: async (_url, token) => ({
+                upgraded: Boolean(token),
+                status: token ? 101 : 401,
+            }),
+            expectedIdentity: {
+                application: "onebots",
+                version: packageMetadata.version,
+                instanceId: "instance-a",
+            },
+            expectedPaths,
+        },
     );
 }
 

@@ -9,6 +9,10 @@ describe("doctor management surface", () => {
             version: "1.2.8",
             instanceId: "instance-a",
         };
+        const expectedPaths = {
+            configPath: "/srv/onebots/config.yaml",
+            dataDirectory: "/srv/onebots/data",
+        };
         const probePage = vi.fn(async () => ({
             name: "management-page",
             level: "ok" as const,
@@ -29,6 +33,7 @@ describe("doctor management surface", () => {
                     webUrl: "http://127.0.0.1:6727",
                     config,
                     expectedIdentity,
+                    expectedPaths,
                 },
                 { probePage, probeManagement },
             ),
@@ -41,6 +46,7 @@ describe("doctor management surface", () => {
             "http://127.0.0.1:6727/gateway",
             config,
             expectedIdentity,
+            expectedPaths,
         );
     });
 

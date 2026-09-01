@@ -1,4 +1,5 @@
 import * as http from "node:http";
+import * as path from "node:path";
 import { randomBytes } from "node:crypto";
 import { assertAdapterCapabilities } from "@onebots/core";
 import type { DoctorCheck, DoctorEndpointIdentity } from "./doctor.js";
@@ -26,6 +27,12 @@ export interface DoctorManagementProbeDependencies {
     fetcher?: DoctorFetch;
     upgrade?: (url: string, token?: string) => Promise<DoctorWebSocketUpgradeResult>;
     expectedIdentity?: DoctorEndpointIdentity;
+    expectedPaths?: DoctorManagementExpectedPaths;
+}
+
+export interface DoctorManagementExpectedPaths {
+    configPath: string;
+    dataDirectory: string;
 }
 
 /** 验证运行中网关的管理面同时满足匿名拒绝与合法凭据可用。 */
@@ -50,6 +57,7 @@ export async function probeDoctorManagement(
                   credential.token,
                   fetcher,
                   dependencies.expectedIdentity,
+                  dependencies.expectedPaths,
               ),
               probeAuthenticatedExtensions(
                   base,
@@ -163,6 +171,7 @@ async function probeAuthenticatedConfigState(
     token: string,
     fetcher: DoctorFetch,
     expectedIdentity?: DoctorEndpointIdentity,
+    expectedPaths?: DoctorManagementExpectedPaths,
 ): Promise<DoctorCheck> {
     try {
         const response = await fetcher(`${base}/api/system`, {
@@ -191,6 +200,16 @@ async function probeAuthenticatedConfigState(
                     name: "management-config",
                     level: "error",
                     message: `在线配置状态实例 ${managementIdentityLabel(identity)} 与公开探针 ${managementIdentityLabel(expectedIdentity)} 不一致`,
+                };
+            }
+        }
+        if (expectedPaths) {
+            const pathError = runtimePathEvidenceError(payload, expectedPaths);
+            if (pathError) {
+                return {
+                    name: "management-config",
+                    level: "error",
+                    message: pathError,
                 };
             }
         }
@@ -225,6 +244,38 @@ async function probeAuthenticatedConfigState(
     } catch (error) {
         return failedManagementCheck("management-config", "在线配置状态", error);
     }
+}
+
+function runtimePathEvidenceError(
+    payload: Record<string, unknown>,
+    expected: DoctorManagementExpectedPaths,
+): string | null {
+    const actualConfigPath = absoluteRuntimePath(payload.configPath);
+    const actualConfigDir = absoluteRuntimePath(payload.configDir);
+    const actualDataDir = absoluteRuntimePath(payload.dataDir);
+    if (!actualConfigPath || !actualConfigDir || !actualDataDir) {
+        return "在线配置状态响应缺少绝对的 configPath、configDir 或 dataDir 路径证据";
+    }
+
+    const expectedConfigPath = path.resolve(expected.configPath);
+    const expectedConfigDir = path.dirname(expectedConfigPath);
+    const expectedDataDir = path.resolve(expected.dataDirectory);
+    if (actualConfigPath !== expectedConfigPath) {
+        return `在线进程使用配置 ${actualConfigPath}，本次诊断目标为 ${expectedConfigPath}`;
+    }
+    if (actualConfigDir !== expectedConfigDir) {
+        return `在线进程配置目录 ${actualConfigDir} 与配置文件目录 ${expectedConfigDir} 不一致`;
+    }
+    if (actualDataDir !== expectedDataDir) {
+        return `在线进程数据目录 ${actualDataDir}，本次诊断目标为 ${expectedDataDir}`;
+    }
+    return null;
+}
+
+function absoluteRuntimePath(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const candidate = value.trim();
+    return candidate && path.isAbsolute(candidate) ? path.normalize(candidate) : null;
 }
 
 /** 通过受保护的管理 API 定位公开 readiness 聚合背后的具体故障出口。 */
