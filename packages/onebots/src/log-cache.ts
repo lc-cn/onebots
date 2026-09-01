@@ -4,11 +4,84 @@ import { existsSync, writeFileSync, mkdirSync } from "fs";
 import type { ServerResponse } from "node:http";
 import { ManagementStreamClients } from "./management-stream-clients.js";
 
+interface StdioLogSink {
+    cache(message: string): void;
+    broadcast(message: string): void;
+}
+
+interface StdioInterceptionBinding {
+    readonly subscribers: Set<StdioLogSink>;
+    readonly originalStdoutWrite: typeof process.stdout.write;
+    readonly originalStderrWrite: typeof process.stderr.write;
+    readonly stdoutWrite: typeof process.stdout.write;
+    readonly stderrWrite: typeof process.stderr.write;
+}
+
+let activeStdioBinding: StdioInterceptionBinding | undefined;
+
+function subscribeToProcessStdio(sink: StdioLogSink): () => void {
+    if (!activeStdioBinding) {
+        const originalStdoutWrite = process.stdout.write;
+        const originalStderrWrite = process.stderr.write;
+        const subscribers = new Set<StdioLogSink>();
+
+        const intercept = (original: typeof originalStdoutWrite, stream: NodeJS.WriteStream) =>
+            ((
+                chunk: Buffer | string,
+                encoding?: BufferEncoding,
+                callback?: (_error?: Error) => void,
+            ) => {
+                const message = chunk.toString();
+                for (const subscriber of subscribers) {
+                    try {
+                        subscriber.cache(message);
+                        subscriber.broadcast(message);
+                    } catch (error) {
+                        originalStderrWrite.call(
+                            process.stderr,
+                            `[onebots] Log interceptor error: ${String(error)}\n`,
+                        );
+                    }
+                }
+                return original.call(stream, chunk, encoding as BufferEncoding, callback);
+            }) as typeof process.stdout.write;
+
+        const stdoutWrite = intercept(originalStdoutWrite, process.stdout);
+        const stderrWrite = intercept(originalStderrWrite, process.stderr);
+        activeStdioBinding = {
+            subscribers,
+            originalStdoutWrite,
+            originalStderrWrite,
+            stdoutWrite,
+            stderrWrite,
+        };
+        process.stdout.write = stdoutWrite;
+        process.stderr.write = stderrWrite;
+    }
+
+    const binding = activeStdioBinding;
+    binding.subscribers.add(sink);
+    let subscribed = true;
+    return () => {
+        if (!subscribed) return;
+        subscribed = false;
+        binding.subscribers.delete(sink);
+        if (binding.subscribers.size > 0 || activeStdioBinding !== binding) return;
+        if (process.stdout.write === binding.stdoutWrite) {
+            process.stdout.write = binding.originalStdoutWrite;
+        }
+        if (process.stderr.write === binding.stderrWrite) {
+            process.stderr.write = binding.originalStderrWrite;
+        }
+        activeStdioBinding = undefined;
+    };
+}
+
 export class LogCacheManager {
     public readonly cacheFile: string;
     private readonly streamClients = new ManagementStreamClients();
     private writeStream!: fs.WriteStream;
-    private restoreStdio?: () => void;
+    private unsubscribeStdio?: () => void;
     private cleanupPromise?: Promise<void>;
     private isClosing = false;
 
@@ -110,8 +183,8 @@ export class LogCacheManager {
 
     private beginCleanup(): unknown[] {
         this.isClosing = true;
-        this.restoreStdio?.();
-        this.restoreStdio = undefined;
+        this.unsubscribeStdio?.();
+        this.unsubscribeStdio = undefined;
         return this.disconnectClients();
     }
 
@@ -133,41 +206,6 @@ export class LogCacheManager {
     }
 
     interceptStdio() {
-        if (this.restoreStdio) return;
-        const originalStdoutWrite = process.stdout.write;
-        const originalStderrWrite = process.stderr.write;
-
-        const intercept = (original: typeof originalStdoutWrite, stream: NodeJS.WriteStream) => {
-            return ((
-                chunk: Buffer | string,
-                encoding?: BufferEncoding,
-                callback?: (_error?: Error) => void,
-            ) => {
-                const message = chunk.toString();
-                try {
-                    this.cache(message);
-                    this.broadcast(message);
-                } catch (error) {
-                    originalStderrWrite.call(
-                        process.stderr,
-                        `[onebots] Log interceptor error: ${String(error)}\n`,
-                    );
-                }
-                return original.call(stream, chunk, encoding as BufferEncoding, callback);
-            }) as typeof process.stdout.write;
-        };
-
-        const interceptedStdoutWrite = intercept(originalStdoutWrite, process.stdout);
-        const interceptedStderrWrite = intercept(originalStderrWrite, process.stderr);
-        process.stdout.write = interceptedStdoutWrite;
-        process.stderr.write = interceptedStderrWrite;
-        this.restoreStdio = () => {
-            if (process.stdout.write === interceptedStdoutWrite) {
-                process.stdout.write = originalStdoutWrite;
-            }
-            if (process.stderr.write === interceptedStderrWrite) {
-                process.stderr.write = originalStderrWrite;
-            }
-        };
+        this.unsubscribeStdio ??= subscribeToProcessStdio(this);
     }
 }

@@ -53,6 +53,55 @@ describe("LogCacheManager cleanup", () => {
         await cleanup;
     });
 
+    it("shares one process interceptor and supports applications stopping out of order", async () => {
+        const first = createManager();
+        const second = createManager();
+        const actualStdoutWrite = process.stdout.write;
+        const actualStderrWrite = process.stderr.write;
+        const originalStdoutWrite = vi.fn(() => true) as unknown as typeof process.stdout.write;
+        const originalStderrWrite = vi.fn(() => true) as unknown as typeof process.stderr.write;
+        const firstCache = vi.spyOn(first, "cache");
+        const firstBroadcast = vi.spyOn(first, "broadcast");
+        const secondCache = vi.spyOn(second, "cache");
+        const secondBroadcast = vi.spyOn(second, "broadcast");
+
+        process.stdout.write = originalStdoutWrite;
+        process.stderr.write = originalStderrWrite;
+        try {
+            first.interceptStdio();
+            const sharedStdoutWrite = process.stdout.write;
+            const sharedStderrWrite = process.stderr.write;
+            second.interceptStdio();
+
+            expect(process.stdout.write).toBe(sharedStdoutWrite);
+            expect(process.stderr.write).toBe(sharedStderrWrite);
+            process.stdout.write("both applications\n");
+            expect(firstCache).toHaveBeenCalledOnce();
+            expect(firstBroadcast).toHaveBeenCalledOnce();
+            expect(secondCache).toHaveBeenCalledOnce();
+            expect(secondBroadcast).toHaveBeenCalledOnce();
+            expect(originalStdoutWrite).toHaveBeenCalledOnce();
+
+            await first.cleanup();
+            expect(process.stdout.write).toBe(sharedStdoutWrite);
+            expect(process.stderr.write).toBe(sharedStderrWrite);
+            process.stdout.write("second application only\n");
+            expect(firstCache).toHaveBeenCalledOnce();
+            expect(firstBroadcast).toHaveBeenCalledOnce();
+            expect(secondCache).toHaveBeenCalledTimes(2);
+            expect(secondBroadcast).toHaveBeenCalledTimes(2);
+            expect(originalStdoutWrite).toHaveBeenCalledTimes(2);
+
+            await second.cleanup();
+            expect(process.stdout.write).toBe(originalStdoutWrite);
+            expect(process.stderr.write).toBe(originalStderrWrite);
+        } finally {
+            await Promise.allSettled([first.cleanup(), second.cleanup()]);
+            process.stdout.write = actualStdoutWrite;
+            process.stderr.write = actualStderrWrite;
+        }
+    });
+
     it("continues closing clients and the stream before aggregating cleanup failures", async () => {
         const manager = createManager();
         const healthyDispose = vi.fn();
