@@ -60,10 +60,7 @@ import {
 } from "./doctor-endpoint.js";
 import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
 import { inspectGatewayPortAvailability } from "./doctor-port.js";
-import {
-    inspectSensitiveDirectoryMutationPermissions,
-    inspectSensitiveFilePermissions,
-} from "./doctor-permissions.js";
+import { inspectSensitiveFilePermissions } from "./doctor-permissions.js";
 import { probeDoctorManagementAfterIdentity } from "./doctor-management-boundary.js";
 import { inspectPersistedCredentialPermissions } from "./persisted-credential-permissions.js";
 

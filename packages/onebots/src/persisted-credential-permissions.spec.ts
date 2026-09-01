@@ -28,8 +28,28 @@ describe.skipIf(process.platform === "win32")("persisted credential path permiss
         expect(inspectPersistedCredentialPermissions(link)).toContainEqual({
             name: "config-entry-dir-mode",
             level: "error",
-            message:
-                "配置入口目录权限 770 允许组或其他用户替换配置链接；请由目录所有者移除对应写权限",
+            message: expect.stringMatching(/符号链接入口.*权限 770.*替换配置路径组件/u),
+        });
+    });
+
+    it("rejects a replaceable ancestor directory link", () => {
+        const root = createDirectory("onebots-config-ancestor-link-");
+        const entryDirectory = path.join(root, "entry");
+        const targetDirectory = path.join(root, "target");
+        fs.mkdirSync(entryDirectory, { mode: 0o770 });
+        fs.mkdirSync(targetDirectory, { mode: 0o700 });
+        fs.chmodSync(entryDirectory, 0o770);
+        const linkedDirectory = path.join(entryDirectory, "current");
+        fs.symlinkSync(targetDirectory, linkedDirectory);
+        const config = path.join(targetDirectory, "config.yaml");
+        fs.writeFileSync(config, "access_token: persisted-token\n", { mode: 0o600 });
+
+        expect(
+            inspectPersistedCredentialPermissions(path.join(linkedDirectory, "config.yaml")),
+        ).toContainEqual({
+            name: "config-entry-dir-mode",
+            level: "error",
+            message: expect.stringMatching(/符号链接入口.*权限 770.*替换配置路径组件/u),
         });
     });
 
