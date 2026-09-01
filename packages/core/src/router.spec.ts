@@ -19,6 +19,40 @@ afterEach(async () => {
 });
 
 describe("Router WebSocket lifecycle", () => {
+    it("账号作用域关闭时撤销 HTTP、WebSocket 与迟到注册", async () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+        router.get("/shared", ctx => {
+            ctx.body = "shared";
+        });
+        const scope = router.createRegistrationScope();
+        let release!: () => void;
+        const pending = scope.run(async () => {
+            router.get("/owned", ctx => {
+                ctx.body = "owned";
+            });
+            router.ws("/owned/events");
+            await new Promise<void>(resolve => (release = resolve));
+            router.post("/late", ctx => {
+                ctx.body = "late";
+            });
+            router.ws("/late/events");
+        });
+        await Promise.resolve();
+
+        expect(router.stack.map(layer => layer.path)).toEqual(["/shared", "/owned"]);
+        expect(router.getWsPaths()).toEqual(["/owned/events"]);
+        scope.close();
+        expect(router.stack.map(layer => layer.path)).toEqual(["/shared"]);
+        expect(router.getWsPaths()).toEqual([]);
+
+        release();
+        await pending;
+        expect(router.stack.map(layer => layer.path)).toEqual(["/shared"]);
+        expect(router.getWsPaths()).toEqual([]);
+    });
+
     it("使用独立于 Koa prefix 的规范 pathname", () => {
         const server = createServer();
         servers.add(server);

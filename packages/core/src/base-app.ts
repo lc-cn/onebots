@@ -44,6 +44,7 @@ import { normalizeGatewayPathPrefix } from "./gateway-path.js";
 import { AccountMutationConflictError, mutateAccountAtomically } from "./account-transaction.js";
 import { assertAccountIdentifier, assertAccountIdentity } from "./account-config.js";
 import { acquireRuntimeOperation, type RuntimeOperation } from "./runtime-operation.js";
+import { createAccountWithRouteScope } from "./scoped-account.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -271,7 +272,7 @@ export class BaseApp extends Koa {
             const adapter = this.findOrCreateAdapter(platform);
             if (!adapter) continue;
             for (const accountConfig of accountList) {
-                const account = adapter.createAccount(accountConfig);
+                const account = createAccountWithRouteScope(this, adapter, accountConfig);
                 adapter.accounts.set(accountConfig.account_id, account);
             }
         }

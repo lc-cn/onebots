@@ -8,7 +8,10 @@ import {
     HostConfigRestartRequiredError,
     resolveListenPort,
 } from "./app-reload.js";
+import { Account, AccountStatus } from "./account.js";
+import { Adapter } from "./adapter.js";
 import { BaseApp } from "./base-app.js";
+import { AdapterRegistry } from "./registry.js";
 
 const config = {
     port: 6727,
@@ -245,6 +248,86 @@ describe("BaseApp reload boundary", () => {
         }
     });
 
+    it("热重载撤销旧账号路由并让相同路径由新账号接管", async () => {
+        const originalConfigDir = BaseApp.configDir;
+        const originalPort = process.env.PORT;
+        const directory = mkdtempSync(join(tmpdir(), "onebots-route-scope-"));
+        BaseApp.configDir = directory;
+        process.env.PORT = "0";
+
+        class ScopedRouteAdapter extends Adapter {
+            constructor(app: BaseApp) {
+                super(app, "route_scope_test" as never);
+            }
+
+            createAccount(accountConfig: Account.Config): Account {
+                const account = new Account(this, {}, accountConfig);
+                const marker = String(accountConfig.marker);
+                this.app.router.get("/scoped-account", ctx => {
+                    ctx.body = { marker, phase: "create" };
+                });
+                this.app.router.ws("/scoped-account/events");
+                account.on("start", () => {
+                    this.app.router.get("/scoped-start", ctx => {
+                        ctx.body = { marker, phase: "start" };
+                    });
+                    account.status = AccountStatus.Online;
+                });
+                account.on("stop", () => {
+                    account.status = AccountStatus.OffLine;
+                });
+                return account;
+            }
+        }
+
+        AdapterRegistry.register("route_scope_test", ScopedRouteAdapter as never);
+        const app = new BaseApp({
+            database: "route-scope.db",
+            "route_scope_test.primary": { marker: "old" },
+        } as BaseApp.Config);
+
+        try {
+            await app.start();
+            const address = app.httpServer.address();
+            const port = address && typeof address === "object" ? address.port : 0;
+            await expect(routeMarker(port, "/scoped-account")).resolves.toBe("old");
+            await expect(routeMarker(port, "/scoped-start")).resolves.toBe("old");
+
+            await app.reload({
+                ...app.config,
+                "route_scope_test.primary": { marker: "next" },
+            } as BaseApp.Config);
+
+            await expect(routeMarker(port, "/scoped-account")).resolves.toBe("next");
+            await expect(routeMarker(port, "/scoped-start")).resolves.toBe("next");
+
+            await app.updateAccount({
+                platform: "route_scope_test",
+                account_id: "primary",
+                marker: "transaction",
+            } as never);
+
+            await expect(routeMarker(port, "/scoped-account")).resolves.toBe("transaction");
+            await expect(routeMarker(port, "/scoped-start")).resolves.toBe("transaction");
+            expect(app.router.stack.filter(layer => layer.path === "/scoped-account")).toHaveLength(
+                1,
+            );
+            expect(app.router.stack.filter(layer => layer.path === "/scoped-start")).toHaveLength(
+                1,
+            );
+            expect(
+                app.router.getWsPaths().filter(path => path === "/scoped-account/events"),
+            ).toHaveLength(1);
+        } finally {
+            await app.stop();
+            AdapterRegistry.unregister("route_scope_test");
+            BaseApp.configDir = originalConfigDir;
+            if (originalPort === undefined) delete process.env.PORT;
+            else process.env.PORT = originalPort;
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
     it("账号配置成功落盘后通知宿主更新已应用快照", async () => {
         const originalConfigDir = BaseApp.configDir;
         const directory = mkdtempSync(join(tmpdir(), "onebots-persist-hook-"));
@@ -448,3 +531,9 @@ describe("BaseApp reload boundary", () => {
         expect(app.isReloading).toBe(false);
     });
 });
+
+async function routeMarker(port: number, path: string): Promise<string> {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`);
+    const body = (await response.json()) as { marker: string };
+    return body.marker;
+}

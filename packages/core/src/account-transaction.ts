@@ -6,10 +6,13 @@ import { FailureCollector } from "./async-utils.js";
 import { writeConfigFileAtomic } from "./config-file.js";
 import { ConfigError } from "./errors.js";
 import { acquireRuntimeOperation, type RuntimeOperationHost } from "./runtime-operation.js";
+import { createAccountWithRouteScope } from "./scoped-account.js";
+import type { Router } from "./router.js";
 import { deepClone } from "./utils.js";
 
 export interface AccountTransactionHost extends RuntimeOperationHost {
     config: Record<string, unknown>;
+    router?: Router;
 }
 
 export interface AccountTransactionDependencies {
@@ -114,7 +117,7 @@ async function switchAccountRuntime(
         }
         if (!nextConfig) return previousConfig;
 
-        const candidate = adapter.createAccount(nextConfig);
+        const candidate = createAccount(options, nextConfig);
         adapter.accounts.set(accountId, candidate);
         if (runtimeStarted) await candidate.start();
         return previousConfig;
@@ -142,12 +145,16 @@ async function restorePreviousAccount(
     if (!previousConfig) return;
     let restored: Account | undefined;
     await failures.capture(() => {
-        restored = options.adapter.createAccount(previousConfig);
+        restored = createAccount(options, previousConfig);
         options.adapter.accounts.set(options.accountId, restored);
     });
     if (restored && options.runtimeStarted) {
         await failures.capture(() => restored!.start());
     }
+}
+
+function createAccount(options: AccountTransactionOptions, config: Account.Config): Account {
+    return createAccountWithRouteScope(options.host, options.adapter, config);
 }
 
 function restoreConfigEntry(config: Record<string, unknown>, key: string, previous: unknown): void {

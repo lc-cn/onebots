@@ -1,5 +1,11 @@
 import KoaRouter from "@koa/router";
-import type { RouterContext as KoaRouterContext } from "@koa/router";
+import type {
+    Layer,
+    LayerOptions,
+    RouterContext as KoaRouterContext,
+    RouterMiddleware,
+} from "@koa/router";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { Request } from "koa";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
@@ -41,6 +47,51 @@ export namespace WsServer {
 }
 
 /**
+ * 归属一个账号构造与启动周期的 Router 注册。
+ * close 后出现的迟到注册会被立即撤销，避免旧扩展在回滚后重新占用路径。
+ */
+export class RouterRegistrationScope {
+    private readonly httpLayers = new Set<Layer>();
+    private readonly wsServers = new Map<string, WsServer>();
+    private closed = false;
+
+    constructor(private readonly router: Router) {}
+
+    run<T>(operation: () => T): T {
+        return this.router.runInRegistrationScope(this, operation);
+    }
+
+    close(): void {
+        if (this.closed) return;
+        this.closed = true;
+        for (const layer of this.httpLayers) this.router.removeScopedHttpLayer(layer);
+        this.httpLayers.clear();
+        for (const [path, server] of this.wsServers) {
+            this.router.removeScopedWs(path, server);
+        }
+        this.wsServers.clear();
+    }
+
+    /** @internal 仅由 Router.register 调用。 */
+    trackHttp(layer: Layer): void {
+        if (this.closed) {
+            this.router.removeScopedHttpLayer(layer);
+            return;
+        }
+        this.httpLayers.add(layer);
+    }
+
+    /** @internal 仅由 Router.ws 调用。 */
+    trackWs(path: string, server: WsServer): void {
+        if (this.closed) {
+            this.router.removeScopedWs(path, server);
+            return;
+        }
+        this.wsServers.set(path, server);
+    }
+}
+
+/**
  * Koa HTTP Router 与同一 Server 上的 WebSocket upgrade 注册表。
  *
  * WebSocket 路径始终是客户端请求的绝对 pathname，不继承 Koa Router prefix。
@@ -49,6 +100,7 @@ export namespace WsServer {
 export class Router extends KoaRouter {
     private readonly wsMap = new Map<string, WsServer>();
     private readonly wsAuthorizers = new Map<string, WebSocketUpgradeAuthorizer>();
+    private readonly registrationScope = new AsyncLocalStorage<RouterRegistrationScope>();
     private upgradeHandler?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
 
     constructor(
@@ -107,9 +159,7 @@ export class Router extends KoaRouter {
         const serializedHeaders = Object.entries(headers)
             .map(([name, value]) => `${name}: ${value}\r\n`)
             .join("");
-        socket.end(
-            `HTTP/1.1 ${status} ${reason}\r\n${serializedHeaders}Connection: close\r\n\r\n`,
-        );
+        socket.end(`HTTP/1.1 ${status} ${reason}\r\n${serializedHeaders}Connection: close\r\n\r\n`);
     }
 
     private detachUpgradeHandler(): void {
@@ -126,6 +176,32 @@ export class Router extends KoaRouter {
         return path;
     }
 
+    createRegistrationScope(): RouterRegistrationScope {
+        return new RouterRegistrationScope(this);
+    }
+
+    /** @internal 由 RouterRegistrationScope.run 建立异步注册归属。 */
+    runInRegistrationScope<T>(scope: RouterRegistrationScope, operation: () => T): T {
+        return this.registrationScope.run(scope, operation);
+    }
+
+    override register(
+        path: string | RegExp | string[],
+        methods: string[],
+        middleware: RouterMiddleware | RouterMiddleware[],
+        additionalOptions?: LayerOptions,
+    ): Layer | KoaRouter {
+        const previousLayers = new Set(this.stack);
+        const result = super.register(path, methods, middleware, additionalOptions);
+        const scope = this.registrationScope.getStore();
+        if (scope) {
+            for (const layer of this.stack) {
+                if (!previousLayers.has(layer)) scope.trackHttp(layer);
+            }
+        }
+        return result;
+    }
+
     /** 注册不受 Koa prefix 影响的 WebSocket pathname。 */
     ws(path: string, options: WebSocketRouteOptions = {}): WsServer {
         const normalized = this.normalizeWsPath(path);
@@ -136,7 +212,20 @@ export class Router extends KoaRouter {
         const wsServer = new WsServer({ noServer: true, path: normalized });
         this.wsMap.set(normalized, wsServer);
         if (options.authorize) this.wsAuthorizers.set(normalized, options.authorize);
+        this.registrationScope.getStore()?.trackWs(normalized, wsServer);
         return wsServer;
+    }
+
+    /** @internal 仅撤销作用域实际创建的 Layer。 */
+    removeScopedHttpLayer(layer: Layer): void {
+        const index = this.stack.indexOf(layer);
+        if (index >= 0) this.stack.splice(index, 1);
+    }
+
+    /** @internal 路径已被新作用域接管时，不允许旧作用域误删新服务。 */
+    removeScopedWs(path: string, expected: WsServer): void {
+        if (this.wsMap.get(path) !== expected) return;
+        this.removeWs(path);
     }
 
     private terminateClients(wsServer: WsServer): void {

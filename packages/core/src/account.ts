@@ -7,6 +7,7 @@ import { Protocol, type ProtocolLifecycleStatus } from "./protocol.js";
 import { CommonEvent } from "./types.js";
 import { emitAllAwaited, FailureCollector } from "./async-utils.js";
 import { ResourceError } from "./errors.js";
+import type { RouterRegistrationScope } from "./router.js";
 
 export interface ProtocolRuntimeInfo {
     name: string;
@@ -33,6 +34,7 @@ export class Account<
     #startGeneration = 0;
     #starting?: Promise<void>;
     #startController?: AbortController;
+    #routeScope?: RouterRegistrationScope;
     protocols: Protocol[];
     get account_id() {
         return this.config.account_id;
@@ -143,6 +145,11 @@ export class Account<
         );
         this.status = AccountStatus.Pending;
     }
+
+    /** @internal 由 BaseApp 在账号构造完成后绑定路由所有权。 */
+    attachRouteScope(scope: RouterRegistrationScope): void {
+        this.#routeScope = scope;
+    }
     get path() {
         return `/${this.platform}/${this.account_id}`;
     }
@@ -158,7 +165,9 @@ export class Account<
         this.#startController = controller;
         const timeoutSeconds = this.startupTimeoutSeconds;
         let timeout: NodeJS.Timeout | undefined;
-        const operation = this.#startAttempt(controller.signal, generation);
+        const operation = this.#routeScope
+            ? this.#routeScope.run(() => this.#startAttempt(controller.signal, generation))
+            : this.#startAttempt(controller.signal, generation);
         const bounded = Promise.race([
             operation,
             new Promise<never>((_, reject) => {
@@ -219,6 +228,8 @@ export class Account<
         this.#startController?.abort();
         this.#startController = undefined;
         this.#starting = undefined;
+        this.#routeScope?.close();
+        this.#routeScope = undefined;
         const failures = new FailureCollector();
         for (const protocol of this.protocols) {
             await failures.capture(async () => {
