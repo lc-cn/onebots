@@ -1,3 +1,11 @@
+import { ResponseBodyTooLargeError } from "./bounded-response.js";
+import {
+    parseManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+    type ManagementEvidenceIdentity,
+} from "./management-evidence-identity.js";
+import { readManagementJsonResponse } from "./management-response.js";
+
 export type SystemBackupResult =
     | { success: true; message: string }
     | { success: false; message: string };
@@ -5,8 +13,23 @@ export type SystemBackupResult =
 /** 验证备份回执确实由请求绑定的 OneBots 实例处理。 */
 export async function parseSystemBackupResponse(
     response: Response,
-    expectedInstanceId: string,
+    expectedIdentity: ManagementEvidenceIdentity,
 ): Promise<SystemBackupResult> {
+    let actualIdentity: ManagementEvidenceIdentity;
+    try {
+        actualIdentity = parseManagementEvidenceIdentity(response);
+    } catch (error) {
+        return {
+            success: false,
+            message: error instanceof Error ? error.message : "备份响应缺少实例身份",
+        };
+    }
+    if (!sameManagementEvidenceIdentity(actualIdentity, expectedIdentity)) {
+        return {
+            success: false,
+            message: `备份响应实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${actualIdentity.instanceId}`,
+        };
+    }
     let payload: unknown;
     try {
         payload = await readManagementJsonResponse(response);
@@ -27,10 +50,10 @@ export async function parseSystemBackupResponse(
     if (payload.application !== "onebots") {
         return { success: false, message: "备份回执未声明 onebots 应用身份" };
     }
-    if (payload.instance_id !== expectedInstanceId) {
+    if (payload.instance_id !== expectedIdentity.instanceId) {
         return {
             success: false,
-            message: `备份回执实例不匹配：期望 ${expectedInstanceId}，实际 ${typeof payload.instance_id === "string" ? payload.instance_id : "缺失"}`,
+            message: `备份回执实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${typeof payload.instance_id === "string" ? payload.instance_id : "缺失"}`,
         };
     }
     return { success: true, message };
@@ -45,5 +68,3 @@ function boundedMessage(value: unknown, fallback: string): string {
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-import { ResponseBodyTooLargeError } from "./bounded-response.js";
-import { readManagementJsonResponse } from "./management-response.js";

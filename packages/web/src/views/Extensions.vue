@@ -244,7 +244,7 @@ import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
 import { readManagementJsonResponse } from "../management-response.js";
 import {
-    readCurrentServiceInstanceId,
+    readCurrentServiceIdentity,
     requestServiceRestart,
     waitForServiceRestart,
 } from "../utils/service-restart";
@@ -430,9 +430,9 @@ async function loadExtensions(background = false): Promise<void> {
 
 async function restartAfterInstallation(): Promise<void> {
     restarting.value = true;
-    const previousInstanceId = await readCurrentServiceInstanceId();
-    await requestServiceRestart(previousInstanceId, authFetch);
-    await waitForServiceRestart(previousInstanceId);
+    const previousIdentity = await readCurrentServiceIdentity();
+    await requestServiceRestart(previousIdentity, authFetch);
+    await waitForServiceRestart(previousIdentity.instanceId);
     window.location.reload();
 }
 

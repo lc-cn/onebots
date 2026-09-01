@@ -1,22 +1,39 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+    readCurrentServiceIdentity,
     readCurrentServiceInstanceId,
     requestServiceRestart,
     waitForServiceRestart,
 } from "./service-restart";
 import { WEB_MANAGEMENT_BODY_LIMIT_BYTES } from "../management-response.js";
+import type { ManagementEvidenceIdentity } from "../management-evidence-identity.js";
+
+const identity: ManagementEvidenceIdentity = {
+    application: "onebots",
+    version: "1.2.8",
+    instanceId: "old",
+    runtimeContractId: "sha256:contract-a",
+};
 
 function health(instanceId?: string, application = "onebots") {
-    return new Response(JSON.stringify({ status: "ok", application, instance_id: instanceId }), {
-        status: 200,
-    });
+    return new Response(
+        JSON.stringify({
+            status: "ok",
+            application,
+            version: "1.2.8",
+            instance_id: instanceId,
+            runtime_contract_id: "sha256:contract-a",
+        }),
+        { status: 200 },
+    );
 }
 
 describe("Web service restart verification", () => {
     it("reads the current process identity before requesting restart", async () => {
-        await expect(readCurrentServiceInstanceId(vi.fn(async () => health("old")))).resolves.toBe(
-            "old",
-        );
+        const fetcher = vi.fn<typeof fetch>(async () => health("old"));
+        await expect(readCurrentServiceInstanceId(fetcher)).resolves.toBe("old");
+        await expect(readCurrentServiceIdentity(fetcher)).resolves.toEqual(identity);
+        expect(fetcher.mock.calls[0]?.[1]?.redirect).toBe("error");
     });
 
     it.each([
@@ -120,7 +137,7 @@ describe("Web service restart verification", () => {
 
     it("sends the expected instance and accepts only its semantic restart acknowledgement", async () => {
         const fetcher = vi.fn<typeof fetch>(async () =>
-            Response.json({
+            restartResponse({
                 success: true,
                 application: "onebots",
                 instance_id: "old",
@@ -129,13 +146,17 @@ describe("Web service restart verification", () => {
             }),
         );
 
-        await expect(requestServiceRestart("old", fetcher)).resolves.toEqual({
+        await expect(requestServiceRestart(identity, fetcher)).resolves.toEqual({
             scheduled: true,
             message: "服务即将重启",
         });
         expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
             instance_id: "old",
         });
+        expect(
+            new Headers(fetcher.mock.calls[0]?.[1]?.headers).get("X-OneBots-Expected-Instance-Id"),
+        ).toBe("old");
+        expect(fetcher.mock.calls[0]?.[1]?.redirect).toBe("error");
     });
 
     it("rejects an oversized restart acknowledgement", async () => {
@@ -144,12 +165,13 @@ describe("Web service restart verification", () => {
                 new Response("{}", {
                     status: 200,
                     headers: {
+                        ...managementHeaders(),
                         "content-length": String(WEB_MANAGEMENT_BODY_LIMIT_BYTES + 1),
                     },
                 }),
         );
 
-        await expect(requestServiceRestart("old", fetcher)).rejects.toThrow(
+        await expect(requestServiceRestart(identity, fetcher)).rejects.toThrow(
             "重启回执无效：响应正文超过 4 MiB 上限",
         );
     });
@@ -157,15 +179,21 @@ describe("Web service restart verification", () => {
     it("does not send a restart request without a trusted current identity", async () => {
         const fetcher = vi.fn<typeof fetch>();
 
-        await expect(requestServiceRestart(" ", fetcher)).rejects.toThrow(/缺少可信的当前实例身份/);
+        await expect(
+            requestServiceRestart({ ...identity, instanceId: " " }, fetcher),
+        ).rejects.toThrow(/缺少可信的当前实例身份/);
         expect(fetcher).not.toHaveBeenCalled();
     });
 
     it.each([
-        ["空的成功响应", new Response("", { status: 200 }), /未返回有效 JSON 回执/],
+        [
+            "空的成功响应",
+            new Response("", { status: 200, headers: managementHeaders() }),
+            /未返回有效 JSON 回执/,
+        ],
         [
             "错误应用",
-            Response.json({
+            restartResponse({
                 success: true,
                 application: "other",
                 instance_id: "old",
@@ -175,7 +203,7 @@ describe("Web service restart verification", () => {
         ],
         [
             "另一实例",
-            Response.json({
+            restartResponse({
                 success: true,
                 application: "onebots",
                 instance_id: "new",
@@ -185,7 +213,7 @@ describe("Web service restart verification", () => {
         ],
         [
             "缺少调度状态",
-            Response.json({
+            restartResponse({
                 success: true,
                 application: "onebots",
                 instance_id: "old",
@@ -197,10 +225,43 @@ describe("Web service restart verification", () => {
         async (_name, response, error) => {
             await expect(
                 requestServiceRestart(
-                    "old",
+                    identity,
                     vi.fn(async () => response.clone()),
                 ),
             ).rejects.toThrow(error);
         },
     );
+
+    it("拒绝正文正确但标准响应头来自另一实例的重启回执", async () => {
+        await expect(
+            requestServiceRestart(
+                identity,
+                vi.fn(async () =>
+                    restartResponse(
+                        {
+                            success: true,
+                            application: "onebots",
+                            instance_id: "old",
+                            scheduled: true,
+                        },
+                        200,
+                        "new",
+                    ),
+                ),
+            ),
+        ).rejects.toThrow("重启响应实例不匹配：期望 old，实际 new");
+    });
 });
+
+function managementHeaders(instanceId = "old"): Record<string, string> {
+    return {
+        "X-OneBots-Application": "onebots",
+        "X-OneBots-Version": "1.2.8",
+        "X-OneBots-Instance-Id": instanceId,
+        "X-OneBots-Runtime-Contract-Id": "sha256:contract-a",
+    };
+}
+
+function restartResponse(body: unknown, status = 200, instanceId = "old"): Response {
+    return Response.json(body, { status, headers: managementHeaders(instanceId) });
+}

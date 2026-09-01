@@ -88,8 +88,22 @@ export function registerConfigRoutes(app: App, router: Router): void {
 
     /** 手动将 data 与配置备份到 HF 仓库（与保存配置时的备份逻辑一致） */
     router.post("/api/system/backup-to-hf", async (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
         const application = app.info.application_name;
         const instanceId = app.info.instance_id;
+        try {
+            assertManagementInstancePrecondition(app, ctx, "备份");
+        } catch (error) {
+            ctx.status =
+                error instanceof ManagementInstanceMismatchError
+                    ? 409
+                    : error instanceof ValidationError
+                      ? 400
+                      : 500;
+            ctx.body = systemOperationFailure(app, error, "备份请求无效");
+            app.logger.error("管理端备份实例校验失败", { error });
+            return;
+        }
         const expectedInstanceId = readExpectedSystemInstanceId(ctx.request?.body, "备份");
         if (expectedInstanceId instanceof Error) {
             ctx.status = 400;
@@ -144,8 +158,22 @@ export function registerConfigRoutes(app: App, router: Router): void {
 
     /** 预检通过后以临时失败码退出，让服务管理器或容器策略重新拉起。 */
     router.post("/api/system/restart", async (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
         const application = app.info.application_name;
         const instanceId = app.info.instance_id;
+        try {
+            assertManagementInstancePrecondition(app, ctx, "重启");
+        } catch (error) {
+            ctx.status =
+                error instanceof ManagementInstanceMismatchError
+                    ? 409
+                    : error instanceof ValidationError
+                      ? 400
+                      : 500;
+            ctx.body = systemOperationFailure(app, error, "重启请求无效");
+            app.logger.error("管理端重启实例校验失败", { error });
+            return;
+        }
         const requestBody: unknown = ctx.request?.body;
         const expectedInstanceId = readExpectedSystemInstanceId(requestBody, "重启");
         if (expectedInstanceId instanceof Error) {
@@ -194,10 +222,22 @@ export function registerConfigRoutes(app: App, router: Router): void {
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             ctx.status = 422;
-            ctx.body = { success: false, message: `重启预检失败：${message}` };
+            ctx.body = {
+                ...systemOperationFailure(app, error, "重启预检失败"),
+                message: `重启预检失败：${message}`,
+            };
             app.logger.error("管理端重启预检失败，当前服务继续运行", { error });
         }
     });
+}
+
+function systemOperationFailure(app: App, error: unknown, fallback: string) {
+    return {
+        success: false,
+        application: app.info.application_name,
+        instance_id: app.info.instance_id,
+        message: error instanceof Error ? error.message : fallback,
+    };
 }
 
 function readExpectedSystemInstanceId(

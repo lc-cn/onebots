@@ -2,6 +2,12 @@ import { buildApiUrl } from "../config";
 import { readBoundedJsonResponse, ResponseBodyTooLargeError } from "../bounded-response.js";
 import { readManagementJsonResponse } from "../management-response.js";
 import {
+    MANAGEMENT_EXPECTED_INSTANCE_HEADER,
+    parseManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+    type ManagementEvidenceIdentity,
+} from "../management-evidence-identity.js";
+import {
     DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
     runServiceProbe,
     ServiceProbeTimeoutError,
@@ -9,7 +15,7 @@ import {
 import { WEB_PUBLIC_PROBE_BODY_LIMIT_BYTES } from "./service-probes.js";
 
 interface HealthProbeResult {
-    instanceId: string | null;
+    identity: ManagementEvidenceIdentity | null;
     evidence: string;
 }
 
@@ -35,6 +41,7 @@ async function probeHealthInstance(
         const { response, payload } = await runServiceProbe(async signal => {
             const response = await fetcher(buildApiUrl("/health") || "/health", {
                 cache: "no-store",
+                redirect: "error",
                 signal,
             });
             const payload: unknown = response.ok
@@ -42,21 +49,37 @@ async function probeHealthInstance(
                 : null;
             return { response, payload };
         }, timeoutMs);
-        if (!response.ok) return { instanceId: null, evidence: `health HTTP ${response.status}` };
+        if (!response.ok) return { identity: null, evidence: `health HTTP ${response.status}` };
         if (!payload || typeof payload !== "object") {
-            return { instanceId: null, evidence: "health 响应不是对象" };
+            return { identity: null, evidence: "health 响应不是对象" };
         }
         if (!("application" in payload) || payload.application !== "onebots") {
-            return { instanceId: null, evidence: "health 未声明 onebots 应用身份" };
+            return { identity: null, evidence: "health 未声明 onebots 应用身份" };
+        }
+        const version = "version" in payload ? payload.version : null;
+        if (typeof version !== "string" || !version.trim()) {
+            return { identity: null, evidence: "health 未声明运行版本" };
         }
         const instanceId = "instance_id" in payload ? payload.instance_id : null;
         if (typeof instanceId !== "string" || !instanceId.trim()) {
-            return { instanceId: null, evidence: "health 未声明 instance_id" };
+            return { identity: null, evidence: "health 未声明 instance_id" };
         }
-        return { instanceId: instanceId.trim(), evidence: `实例 ${instanceId.trim()}` };
+        const runtimeContractId =
+            "runtime_contract_id" in payload && typeof payload.runtime_contract_id === "string"
+                ? payload.runtime_contract_id.trim()
+                : "";
+        return {
+            identity: {
+                application: "onebots",
+                version: version.trim(),
+                instanceId: instanceId.trim(),
+                ...(runtimeContractId ? { runtimeContractId } : {}),
+            },
+            evidence: `onebots@${version.trim()} 实例 ${instanceId.trim()}`,
+        };
     } catch (error) {
         return {
-            instanceId: null,
+            identity: null,
             evidence:
                 error instanceof ServiceProbeTimeoutError
                     ? `health 探测超时（${error.timeoutMs}ms）`
@@ -65,31 +88,50 @@ async function probeHealthInstance(
     }
 }
 
-/** 重启前记录可信的当前实例；证据不足时拒绝发送无法验证结果的重启请求。 */
+/** 重启前记录可信的完整当前实例；证据不足时拒绝发送无法验证结果的重启请求。 */
+export async function readCurrentServiceIdentity(
+    fetcher: typeof fetch = fetch,
+    timeoutMs = DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
+): Promise<ManagementEvidenceIdentity> {
+    const probe = await probeHealthInstance(fetcher, timeoutMs);
+    if (!probe.identity) {
+        throw new Error(`无法在重启前确认当前 OneBots 实例（${probe.evidence}），未发送重启请求`);
+    }
+    return probe.identity;
+}
+
+/** 兼容只需要实例号的等待与展示调用。 */
 export async function readCurrentServiceInstanceId(
     fetcher: typeof fetch = fetch,
     timeoutMs = DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
 ): Promise<string> {
-    const probe = await probeHealthInstance(fetcher, timeoutMs);
-    if (!probe.instanceId) {
-        throw new Error(`无法在重启前确认当前 OneBots 实例（${probe.evidence}），未发送重启请求`);
-    }
-    return probe.instanceId;
+    return (await readCurrentServiceIdentity(fetcher, timeoutMs)).instanceId;
 }
 
 /** 请求已探测实例重启，并验证机器回执确实来自该 OneBots 进程。 */
 export async function requestServiceRestart(
-    previousInstanceId: string,
+    expectedIdentity: ManagementEvidenceIdentity,
     fetcher: typeof fetch = fetch,
 ): Promise<RestartAcknowledgement> {
-    if (!previousInstanceId.trim()) {
+    if (!expectedIdentity.instanceId.trim()) {
         throw new Error("无法请求服务重启：缺少可信的当前实例身份");
     }
     const response = await fetcher(buildApiUrl("/api/system/restart"), {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ instance_id: previousInstanceId.trim() }),
+        headers: {
+            "content-type": "application/json",
+            [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: expectedIdentity.instanceId.trim(),
+        },
+        body: JSON.stringify({ instance_id: expectedIdentity.instanceId.trim() }),
+        cache: "no-store",
+        redirect: "error",
     });
+    const responseIdentity = parseManagementEvidenceIdentity(response);
+    if (!sameManagementEvidenceIdentity(responseIdentity, expectedIdentity)) {
+        throw new Error(
+            `重启响应实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${responseIdentity.instanceId}`,
+        );
+    }
     let payload: unknown;
     try {
         payload = await readManagementJsonResponse(response);
@@ -115,9 +157,9 @@ export async function requestServiceRestart(
     if (!("application" in payload) || payload.application !== "onebots") {
         throw new Error("重启回执未声明 onebots 应用身份");
     }
-    if (!("instance_id" in payload) || payload.instance_id !== previousInstanceId.trim()) {
+    if (!("instance_id" in payload) || payload.instance_id !== expectedIdentity.instanceId.trim()) {
         throw new Error(
-            `重启回执实例不匹配：期望 ${previousInstanceId.trim()}，实际 ${
+            `重启回执实例不匹配：期望 ${expectedIdentity.instanceId.trim()}，实际 ${
                 "instance_id" in payload && typeof payload.instance_id === "string"
                     ? payload.instance_id
                     : "缺失"
@@ -153,8 +195,12 @@ export async function waitForServiceRestart(
     let lastEvidence = "尚未探测";
     for (let attempt = 0; attempt < attempts; attempt += 1) {
         const probe = await probeHealthInstance(fetcher, probeTimeoutMs);
-        if (probe.instanceId && probe.instanceId !== previousInstanceId) return probe.instanceId;
-        lastEvidence = probe.instanceId ? `旧实例 ${probe.instanceId} 仍在响应` : probe.evidence;
+        if (probe.identity && probe.identity.instanceId !== previousInstanceId) {
+            return probe.identity.instanceId;
+        }
+        lastEvidence = probe.identity
+            ? `旧实例 ${probe.identity.instanceId} 仍在响应`
+            : probe.evidence;
         if (attempt < attempts - 1) await sleep(intervalMs);
     }
     throw new Error(`服务重启超时，未观察到新实例（最后证据：${lastEvidence}）`);

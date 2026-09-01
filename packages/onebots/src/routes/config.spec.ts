@@ -194,9 +194,7 @@ describe("configuration route", () => {
         vi.useFakeTimers();
         const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
         const { app, restartHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
-        const ctx = {
-            request: { body: { instance_id: "instance-current" } },
-        } as RouterContext;
+        const ctx = systemOperationContext({ instance_id: "instance-current" });
 
         await restartHandler(ctx);
         await vi.runAllTimersAsync();
@@ -208,6 +206,9 @@ describe("configuration route", () => {
             scheduled: true,
             restart_supported: true,
         });
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Application", "onebots");
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-current");
+        expect(ctx.set).toHaveBeenCalledWith("Cache-Control", "no-store");
         expect(app.preflightRestart).toHaveBeenCalledOnce();
         expect(app.stop).toHaveBeenCalledOnce();
         expect(exit).toHaveBeenCalledWith(75);
@@ -222,9 +223,7 @@ describe("configuration route", () => {
             false,
             false,
         );
-        const ctx = {
-            request: { body: { instance_id: "instance-current" } },
-        } as RouterContext;
+        const ctx = systemOperationContext({ instance_id: "instance-current" });
 
         await restartHandler(ctx);
         await vi.runAllTimersAsync();
@@ -246,9 +245,7 @@ describe("configuration route", () => {
         vi.useFakeTimers();
         const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
         const { app, restartHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
-        const ctx = {
-            request: { body: { instance_id: "instance-old" } },
-        } as RouterContext;
+        const ctx = systemOperationContext({ instance_id: "instance-old" });
 
         await restartHandler(ctx);
         await vi.runAllTimersAsync();
@@ -268,7 +265,7 @@ describe("configuration route", () => {
         vi.useFakeTimers();
         const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
         const { app, restartHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
-        const malformed = { request: { body: "instance-current" } } as RouterContext;
+        const malformed = systemOperationContext("instance-current");
         await restartHandler(malformed);
         expect(malformed.status).toBe(400);
         expect(malformed.body).toMatchObject({
@@ -276,7 +273,7 @@ describe("configuration route", () => {
             message: "重启请求体必须是对象",
         });
 
-        const invalid = { request: { body: { instance_id: " " } } } as RouterContext;
+        const invalid = systemOperationContext({ instance_id: " " });
 
         await restartHandler(invalid);
         expect(invalid.status).toBe(400);
@@ -287,7 +284,7 @@ describe("configuration route", () => {
         });
         expect(app.preflightRestart).not.toHaveBeenCalled();
 
-        const legacy = { request: { body: undefined } } as RouterContext;
+        const legacy = systemOperationContext(undefined);
         await restartHandler(legacy);
         await vi.runAllTimersAsync();
         expect(legacy.body).toMatchObject({ success: true, instance_id: "instance-current" });
@@ -299,7 +296,7 @@ describe("configuration route", () => {
         const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
         const { app, restartHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
         vi.mocked(app.preflightRestart).mockRejectedValue(new Error("插件入口损坏"));
-        const ctx = {} as RouterContext;
+        const ctx = systemOperationContext(undefined);
 
         await restartHandler(ctx);
         await vi.runAllTimersAsync();
@@ -307,6 +304,8 @@ describe("configuration route", () => {
         expect(ctx.status).toBe(422);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-current",
             message: "重启预检失败：插件入口损坏",
         });
         expect(exit).not.toHaveBeenCalled();
@@ -351,9 +350,7 @@ describe("configuration route", () => {
 
     it("实例已切换时拒绝使用旧系统快照触发备份", async () => {
         const { app, backupHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
-        const ctx = {
-            request: { body: { instance_id: "instance-before-restart" } },
-        } as RouterContext;
+        const ctx = systemOperationContext({ instance_id: "instance-before-restart" });
 
         await backupHandler(ctx);
 
@@ -369,9 +366,7 @@ describe("configuration route", () => {
 
     it("备份成功回执证明处理请求的实例", async () => {
         const { app, backupHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
-        const ctx = {
-            request: { body: { instance_id: "instance-current" } },
-        } as RouterContext;
+        const ctx = systemOperationContext({ instance_id: "instance-current" });
 
         await backupHandler(ctx);
 
@@ -382,6 +377,28 @@ describe("configuration route", () => {
             message: "已备份到仓库",
         });
         expect(app.backupDataToHf).toHaveBeenCalledWith("access_token: old-token\n");
+    });
+
+    it.each([
+        ["重启", "restartHandler", "preflightRestart"],
+        ["备份", "backupHandler", "backupDataToHf"],
+    ] as const)("%s 优先使用标准 header 拒绝旧实例", async (operation, handlerName, method) => {
+        const result = setup(vi.fn(async () => undefined) as App["reload"]);
+        const ctx = systemOperationContext(
+            { instance_id: "instance-current" },
+            "instance-before-restart",
+        );
+
+        await result[handlerName](ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toMatchObject({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-current",
+            message: `${operation}请求期望实例 instance-before-restart，当前已由实例 instance-current 接管`,
+        });
+        expect(result.app[method]).not.toHaveBeenCalled();
     });
 
     it("返回已保存并生效的机器可读状态", async () => {
@@ -507,3 +524,12 @@ describe("configuration route", () => {
         });
     });
 });
+
+function systemOperationContext(body: unknown, expectedInstanceId = ""): RouterContext {
+    return {
+        get: (name: string) =>
+            name === MANAGEMENT_EXPECTED_INSTANCE_HEADER ? expectedInstanceId : "",
+        set: vi.fn(),
+        request: { body },
+    } as unknown as RouterContext;
+}

@@ -337,7 +337,7 @@ import { authFetch } from "../composables/useAuth";
 import { formatSize, formatTime } from "../utils";
 import { buildApiUrl } from "../config";
 import {
-    readCurrentServiceInstanceId,
+    readCurrentServiceIdentity,
     requestServiceRestart,
     waitForServiceRestart,
 } from "../utils/service-restart";
@@ -351,6 +351,10 @@ import {
 import { createSystemDashboardRefreshCoordinator } from "./system-dashboard-refresh.js";
 import { resolveSystemSnapshot } from "../system-snapshot.js";
 import { parseSystemBackupResponse } from "../system-backup.js";
+import {
+    MANAGEMENT_EXPECTED_INSTANCE_HEADER,
+    type ManagementEvidenceIdentity,
+} from "../management-evidence-identity.js";
 
 const {
     systemInfo: rawSystemInfo,
@@ -425,19 +429,30 @@ watch(autoRefresh, val => {
 });
 
 async function handleBackup() {
-    const instanceId = systemInfo.value?.instance_id;
-    if (!instanceId) {
+    const info = systemInfo.value;
+    if (!info?.instance_id || !info.application_version) {
         toast.error("无法确认当前系统快照实例，未发送备份请求");
         return;
     }
+    const identity: ManagementEvidenceIdentity = {
+        application: "onebots",
+        version: info.application_version,
+        instanceId: info.instance_id,
+        ...(info.runtime_contract_id ? { runtimeContractId: info.runtime_contract_id } : {}),
+    };
     backupLoading.value = true;
     try {
         const res = await authFetch(buildApiUrl("/api/system/backup-to-hf"), {
             method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ instance_id: instanceId }),
+            headers: {
+                "content-type": "application/json",
+                [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: identity.instanceId,
+            },
+            body: JSON.stringify({ instance_id: identity.instanceId }),
+            cache: "no-store",
+            redirect: "error",
         });
-        const result = await parseSystemBackupResponse(res, instanceId);
+        const result = await parseSystemBackupResponse(res, identity);
         if (result.success) {
             toast.success(result.message);
         } else {
@@ -484,10 +499,10 @@ async function handleRestart() {
     if (!confirmed) return;
     restartLoading.value = true;
     try {
-        const previousInstanceId = await readCurrentServiceInstanceId();
-        const acknowledgement = await requestServiceRestart(previousInstanceId, authFetch);
+        const previousIdentity = await readCurrentServiceIdentity();
+        const acknowledgement = await requestServiceRestart(previousIdentity, authFetch);
         toast.info(`${acknowledgement.message}，正在验证新实例，请勿关闭页面`);
-        await waitForServiceRestart(previousInstanceId);
+        await waitForServiceRestart(previousIdentity.instanceId);
         toast.success("新服务实例已上线，正在刷新页面");
         window.location.reload();
     } catch (error) {
