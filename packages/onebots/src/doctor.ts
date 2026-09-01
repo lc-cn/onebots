@@ -212,7 +212,11 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     }
 
     const dataDir = path.resolve(path.dirname(options.configPath), "data");
-    checks.push(inspectDataDirectory(dataDir, options.fix));
+    const dataDirectoryCheck = inspectDataDirectory(dataDir, options.fix);
+    checks.push(dataDirectoryCheck);
+    if (process.platform !== "win32" && dataDirectoryCheck.level === "ok") {
+        checks.push(inspectSensitiveDirectoryPermissions(dataDir, options.fix));
+    }
     const database = inspectConfiguredDatabase(dataDir, config);
     if (database.check) checks.push(database.check);
 
@@ -565,6 +569,57 @@ export function inspectDataDirectory(dataDirectory: string, fix = false): Doctor
             name: "data-dir",
             level: "error",
             message: error instanceof Error ? error.message : String(error),
+        };
+    }
+}
+
+/** 检查包含数据库与日志的 POSIX 目录权限，避免同机用户读取或替换运行数据。 */
+export function inspectSensitiveDirectoryPermissions(
+    directoryPath: string,
+    fix = false,
+): DoctorCheck {
+    try {
+        const mode = fs.statSync(directoryPath).mode & 0o777;
+        const formattedMode = formatMode(mode);
+        const hasPublicAccess = (mode & 0o007) !== 0;
+        const hasGroupMutation = (mode & 0o020) !== 0;
+        if (hasPublicAccess || hasGroupMutation) {
+            if (fix) {
+                fs.chmodSync(directoryPath, 0o700);
+                return {
+                    name: "data-dir-mode",
+                    level: "ok",
+                    message: `已将数据目录权限从 ${formattedMode} 收紧为 0700`,
+                    fixed: true,
+                };
+            }
+            return {
+                name: "data-dir-mode",
+                level: "error",
+                message: `数据目录权限 ${formattedMode} 允许其他用户访问或同组用户修改（--fix 可收紧为 0700）`,
+            };
+        }
+        if ((mode & 0o070) !== 0) {
+            return {
+                name: "data-dir-mode",
+                level: "warning",
+                message: `数据目录权限 ${formattedMode} 允许同组用户访问；请确认这是服务部署所需`,
+            };
+        }
+        return {
+            name: "data-dir-mode",
+            level: "ok",
+            message: `数据目录权限 ${formattedMode} 未向组或其他用户开放`,
+        };
+    } catch (error) {
+        const code =
+            error instanceof Error && "code" in error && typeof error.code === "string"
+                ? error.code
+                : "UNKNOWN";
+        return {
+            name: "data-dir-mode",
+            level: "error",
+            message: `数据目录权限无法验证: ${directoryPath} (${code})`,
         };
     }
 }

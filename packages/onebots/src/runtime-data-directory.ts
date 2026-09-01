@@ -33,7 +33,7 @@ export function ensureRuntimeDataDirectory(dataDirectory: string): { created: bo
     if (inspection.status === "invalid") throw new Error(inspection.error);
 
     try {
-        fs.mkdirSync(dataDirectory, { recursive: true });
+        fs.mkdirSync(dataDirectory, { recursive: true, mode: 0o700 });
     } catch (error) {
         throw new Error(`无法创建可用的数据目录: ${formatFileSystemError(error)}`, {
             cause: error,

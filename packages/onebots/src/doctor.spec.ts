@@ -6,6 +6,7 @@ import * as net from "node:net";
 import {
     compareDoctorEndpointIdentities,
     inspectDataDirectory,
+    inspectSensitiveDirectoryPermissions,
     inspectSensitiveFilePermissions,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
@@ -137,6 +138,64 @@ describe("doctor data directory", () => {
             fixed: true,
         });
         expect(fs.statSync(dataDirectory).isDirectory()).toBe(true);
+        if (process.platform !== "win32") {
+            expect(fs.statSync(dataDirectory).mode & 0o777).toBe(0o700);
+        }
+    });
+});
+
+describe.runIf(process.platform !== "win32")("doctor data directory permissions", () => {
+    it("接受仅所有者可访问的目录，并保留明确的同组访问授权", () => {
+        const privateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-data-private-"));
+        const groupDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-data-group-"));
+        temporaryDirectories.push(privateDirectory, groupDirectory);
+        fs.chmodSync(privateDirectory, 0o700);
+        fs.chmodSync(groupDirectory, 0o750);
+
+        expect(inspectSensitiveDirectoryPermissions(privateDirectory)).toEqual({
+            name: "data-dir-mode",
+            level: "ok",
+            message: "数据目录权限 700 未向组或其他用户开放",
+        });
+        expect(inspectSensitiveDirectoryPermissions(groupDirectory, true)).toEqual({
+            name: "data-dir-mode",
+            level: "warning",
+            message: "数据目录权限 750 允许同组用户访问；请确认这是服务部署所需",
+        });
+        expect(fs.statSync(groupDirectory).mode & 0o777).toBe(0o750);
+    });
+
+    it.each([
+        { mode: 0o755, label: "755" },
+        { mode: 0o720, label: "720" },
+    ])("拒绝危险权限 $label，并仅在 --fix 时收紧", ({ mode, label }) => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-data-unsafe-"));
+        temporaryDirectories.push(directory);
+        fs.chmodSync(directory, mode);
+
+        expect(inspectSensitiveDirectoryPermissions(directory)).toMatchObject({
+            name: "data-dir-mode",
+            level: "error",
+            message: expect.stringContaining(mode.toString(8)),
+        });
+        expect(fs.statSync(directory).mode & 0o777).toBe(mode);
+        expect(inspectSensitiveDirectoryPermissions(directory, true)).toEqual({
+            name: "data-dir-mode",
+            level: "ok",
+            message: `已将数据目录权限从 ${label} 收紧为 0700`,
+            fixed: true,
+        });
+        expect(fs.statSync(directory).mode & 0o777).toBe(0o700);
+    });
+
+    it("目录在取证前消失时返回错误而不抛出异常", () => {
+        const missing = path.join(os.tmpdir(), "onebots-data-missing", "data");
+
+        expect(inspectSensitiveDirectoryPermissions(missing)).toEqual({
+            name: "data-dir-mode",
+            level: "error",
+            message: `数据目录权限无法验证: ${missing} (ENOENT)`,
+        });
     });
 });
 
@@ -727,7 +786,7 @@ describe("doctor persisted plugin selection", () => {
         temporaryDirectories.push(directory);
         const configPath = path.join(directory, "config.yaml");
         fs.writeFileSync(configPath, "port: 61998\ngeneral: {}\n", { mode: 0o600 });
-        fs.mkdirSync(path.join(directory, "data"));
+        fs.mkdirSync(path.join(directory, "data"), { mode: 0o700 });
 
         const report = await runDoctor({
             configPath,
@@ -807,7 +866,7 @@ describe("doctor persisted plugin selection", () => {
         temporaryDirectories.push(directory);
         const configPath = path.join(directory, "config.yaml");
         fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
-        fs.mkdirSync(path.join(directory, "data"));
+        fs.mkdirSync(path.join(directory, "data"), { mode: 0o700 });
         const extensionRoot = createExtensionRuntimeRoot();
 
         const normal = await runDoctor({

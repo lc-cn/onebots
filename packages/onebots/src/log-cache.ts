@@ -24,7 +24,7 @@ export class LogCacheManager {
     private init() {
         const dataDir = path.dirname(this.cacheFile);
         if (!existsSync(dataDir)) {
-            mkdirSync(dataDir, { recursive: true });
+            mkdirSync(dataDir, { recursive: true, mode: 0o700 });
         }
         writeFileSync(this.cacheFile, "", "utf-8");
         this.writeStream = fs.createWriteStream(this.cacheFile, { flags: "a", encoding: "utf-8" });
