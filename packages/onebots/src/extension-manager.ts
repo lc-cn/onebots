@@ -33,6 +33,7 @@ import {
     buildExtensionInstallInvocation,
     buildExtensionRestoreInvocation,
     capturePackageManagerMetadata,
+    formatPackageManagerDiagnostic,
     hasPackageManagerMetadataChanged,
     inspectRuntimePackageManager,
     inspectRuntimePackageManagerVersion,
@@ -153,18 +154,9 @@ export interface ExtensionInstallationResult {
     message: string | null;
 }
 
-const MAX_INSTALLATION_ERROR_LENGTH = 4_000;
-
 /** 避免把包管理器输出中的常见凭据带回管理端，并限制单条诊断占用。 */
 export function formatExtensionInstallationError(error: unknown): string {
-    const raw = (error instanceof Error ? error.message : String(error)).trim() || "未知错误";
-    const redacted = raw
-        .replace(/(https?:\/\/)[^/@\s]+@/gi, "$1***@")
-        .replace(/((?:_authToken|access_token|password|token)=)[^\s&]+/gi, "$1***")
-        .replace(/(Bearer\s+)[^\s]+/gi, "$1***");
-    return redacted.length <= MAX_INSTALLATION_ERROR_LENGTH
-        ? redacted
-        : `${redacted.slice(0, MAX_INSTALLATION_ERROR_LENGTH - 1)}…`;
+    return formatPackageManagerDiagnostic(error);
 }
 
 export class ExtensionNotFoundError extends Error {}

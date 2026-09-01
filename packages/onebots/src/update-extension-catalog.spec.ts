@@ -14,6 +14,56 @@ afterEach(() => {
 });
 
 describe("update extension catalog source", () => {
+    it("在启动暂存包管理器前拒绝非精确主程序版本", () => {
+        const root = createRuntimeRoot();
+        const marker = path.join(root, "staged.txt");
+        const npm = installFakeNpm(root, { name: "onebots", version: "1.3.0" }, "2.5.0", marker);
+
+        expect(() =>
+            loadTargetExtensionVersionCatalog(
+                { manager: "npm", resolvedPath: npm },
+                root,
+                "latest",
+                null,
+            ),
+        ).toThrow("目标 OneBots 的版本目录包含非精确版本：onebots=latest");
+        expect(fs.existsSync(marker)).toBe(false);
+    });
+
+    it("暂存失败诊断不回显 registry 凭据", () => {
+        const root = createRuntimeRoot();
+        const npm = installFakeNpm(root, { name: "onebots", version: "1.3.0" }, "2.5.0");
+        fs.writeFileSync(
+            npm,
+            `#!/bin/sh
+cat >&2 <<'EOF'
+fetch https://user:registry-secret@registry.example/pkg?_authToken=token-secret Bearer bearer-secret
+EOF
+exit 1
+`,
+            { mode: 0o755 },
+        );
+
+        let failure: Error | undefined;
+        try {
+            loadTargetExtensionVersionCatalog(
+                { manager: "npm", resolvedPath: npm },
+                root,
+                "1.3.0",
+                null,
+            );
+        } catch (error) {
+            failure = error as Error;
+        }
+
+        expect(failure?.message).toContain("https://***@registry.example/pkg?_authToken=***");
+        expect(failure?.message).toContain("Bearer ***");
+        expect(failure?.message).not.toContain("registry-secret");
+        expect(failure?.message).not.toContain("token-secret");
+        expect(failure?.message).not.toContain("bearer-secret");
+        expect(failure?.cause).toBeUndefined();
+    });
+
     it.each([
         {
             manifest: { name: "substituted-package", version: "1.3.0" },

@@ -2,7 +2,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
-import { buildPackageManagerInvocation, type VerifiedPackageManager } from "./package-manager.js";
+import {
+    buildPackageManagerInvocation,
+    formatPackageManagerDiagnostic,
+    type VerifiedPackageManager,
+} from "./package-manager.js";
 import { inspectPackageManifest } from "./package-manifest.js";
 import type { PackageUpdateEvidence } from "./update-package-transaction.js";
 
@@ -17,6 +21,7 @@ export function resolveVerifiedUpdateTargets(
     onebotsVersion: string,
     snapshot: ExtensionVersionCatalogSnapshot,
 ): PackageUpdateEvidence[] {
+    assertExactPackageVersion("onebots", onebotsVersion);
     if (snapshot.schemaVersion !== 2 || !isRecord(snapshot.packages)) {
         throw new Error("目标 OneBots 的扩展版本目录格式无效");
     }
@@ -24,9 +29,10 @@ export function resolveVerifiedUpdateTargets(
         if (name === "onebots") return { name, target: onebotsVersion };
         const entry = snapshot.packages[name];
         const version = isRecord(entry) ? entry.version : undefined;
-        if (typeof version !== "string" || !/^[0-9A-Za-z][0-9A-Za-z.+_-]*$/u.test(version)) {
+        if (typeof version !== "string") {
             throw new Error(`目标 OneBots 的扩展版本目录缺少 ${name}`);
         }
+        assertExactPackageVersion(name, version);
         return { name, target: version };
     });
 }
@@ -39,6 +45,7 @@ export function loadTargetExtensionVersionCatalog(
     installedVersion: string | null,
     cliEntry = process.argv[1],
 ): ExtensionVersionCatalogSnapshot {
+    assertExactPackageVersion("onebots", onebotsVersion);
     const installedCatalog = findInstalledOnebotsCatalog(runtimeRoot, onebotsVersion, cliEntry);
     if (installedVersion === onebotsVersion && installedCatalog) {
         return installedCatalog;
@@ -79,17 +86,24 @@ export function loadTargetExtensionVersionCatalog(
             onebotsVersion,
         );
     } catch (error) {
-        const detail =
+        const rawDetail =
             error && typeof error === "object" && "stderr" in error
                 ? String(error.stderr).trim()
                 : error instanceof Error
                   ? error.message
                   : String(error);
-        throw new Error(`无法读取 onebots@${onebotsVersion} 的扩展版本目录：${detail}`, {
-            cause: error instanceof Error ? error : undefined,
-        });
+        const detail = formatPackageManagerDiagnostic(rawDetail);
+        throw new Error(`无法读取 onebots@${onebotsVersion} 的扩展版本目录：${detail}`);
     } finally {
         fs.rmSync(stagingRoot, { recursive: true, force: true });
+    }
+}
+
+function assertExactPackageVersion(packageName: string, version: string): void {
+    const semanticVersion =
+        /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
+    if (!semanticVersion.test(version)) {
+        throw new Error(`目标 OneBots 的版本目录包含非精确版本：${packageName}=${version}`);
     }
 }
 

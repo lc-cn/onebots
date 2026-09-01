@@ -222,6 +222,27 @@ describe("post-update service safety", () => {
         ).toThrow("目标 OneBots 的扩展版本目录格式无效");
     });
 
+    it("只接受 registry 与目标目录提供的精确 SemVer", () => {
+        expect(() =>
+            resolveVerifiedUpdateTargets(["onebots"], "latest", {
+                schemaVersion: 2,
+                packages: {},
+            }),
+        ).toThrow("目标 OneBots 的版本目录包含非精确版本：onebots=latest");
+        expect(() =>
+            resolveVerifiedUpdateTargets(["onebots", "@onebots/adapter-mock"], "1.3.0", {
+                schemaVersion: 2,
+                packages: { "@onebots/adapter-mock": { version: "^2.4.0" } },
+            }),
+        ).toThrow("目标 OneBots 的版本目录包含非精确版本：@onebots/adapter-mock=^2.4.0");
+        expect(
+            resolveVerifiedUpdateTargets(["onebots"], "1.3.0-rc.1+build.7", {
+                schemaVersion: 2,
+                packages: {},
+            }),
+        ).toEqual([{ name: "onebots", target: "1.3.0-rc.1+build.7" }]);
+    });
+
     it("目标主程序版本未变化时直接读取当前安装目录，不运行暂存安装", () => {
         const spec = temporaryServiceSpec();
         writePackageManifest(spec.workingDirectory, "onebots", "1.3.0");

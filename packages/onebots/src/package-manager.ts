@@ -8,6 +8,7 @@ export type SupportedPackageManager = "npm" | "pnpm";
 
 /** 包变更命令的单次上限；失败恢复允许再执行一次同等长度的反向命令。 */
 export const PACKAGE_MANAGER_MUTATION_TIMEOUT_MS = 10 * 60 * 1000;
+const MAX_PACKAGE_MANAGER_DIAGNOSTIC_LENGTH = 4_000;
 
 export interface PackageInstallInvocation {
     executable: string;
@@ -57,6 +58,18 @@ export const MINIMUM_PACKAGE_MANAGER_VERSIONS: Readonly<Record<SupportedPackageM
 export interface PackageManagerMetadataSnapshot {
     root: string;
     files: ReadonlyArray<{ path: string; digest: string | null }>;
+}
+
+/** 避免把包管理器输出中的常见凭据带入管理端或更新日志，并限制单条诊断占用。 */
+export function formatPackageManagerDiagnostic(error: unknown): string {
+    const raw = (error instanceof Error ? error.message : String(error)).trim() || "未知错误";
+    const redacted = raw
+        .replace(/(https?:\/\/)[^/@\s]+@/gi, "$1***@")
+        .replace(/((?:_authToken|access_token|password|token)=)[^\s&]+/gi, "$1***")
+        .replace(/(Bearer\s+)[^\s]+/gi, "$1***");
+    return redacted.length <= MAX_PACKAGE_MANAGER_DIAGNOSTIC_LENGTH
+        ? redacted
+        : `${redacted.slice(0, MAX_PACKAGE_MANAGER_DIAGNOSTIC_LENGTH - 1)}…`;
 }
 
 interface RuntimePackageManagerResolution {
