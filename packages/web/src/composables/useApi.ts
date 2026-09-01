@@ -22,6 +22,7 @@ import {
     parseManagementEvidenceIdentity,
     type ManagementEvidenceIdentity,
 } from "../management-evidence-identity.js";
+import { parseSystemInfoSnapshot } from "../system-info.js";
 
 export interface UseApiResources {
     adapters?: boolean;
@@ -40,6 +41,9 @@ export function useApi(resources: UseApiResources = {}) {
     const adapterInventoryStatus = ref<"loading" | "ready" | "unavailable">("loading");
     const adapterInventoryError = ref("");
     const systemInfo = ref<SystemInfo | null>(null);
+    const systemInfoIdentity = ref<ManagementEvidenceIdentity | null>(null);
+    const systemInfoStatus = ref<"loading" | "ready" | "unavailable">("loading");
+    const systemInfoError = ref("");
     const logs = ref<string[]>([]);
     const readinessProbe = ref<ServiceProbeResult>(pendingReadinessProbe());
 
@@ -70,12 +74,18 @@ export function useApi(resources: UseApiResources = {}) {
     const fetchSystemInfo = async () => {
         try {
             const response = await authFetch(buildApiUrl("/api/system"), {
+                cache: "no-store",
                 signal: AbortSignal.timeout(5_000),
             });
-            if (response.ok) {
-                systemInfo.value = await response.json();
-            }
+            if (!response.ok) throw new Error(`系统信息请求失败（HTTP ${response.status}）`);
+            const snapshot = parseSystemInfoSnapshot(response, await response.json());
+            systemInfoIdentity.value = snapshot.identity;
+            systemInfo.value = snapshot.info;
+            systemInfoStatus.value = "ready";
+            systemInfoError.value = "";
         } catch (error) {
+            systemInfoStatus.value = "unavailable";
+            systemInfoError.value = error instanceof Error ? error.message : "系统信息请求失败";
             reportClientError("获取系统信息失败", error);
         }
     };
@@ -190,6 +200,9 @@ export function useApi(resources: UseApiResources = {}) {
         adapterInventoryStatus,
         adapterInventoryError,
         systemInfo,
+        systemInfoIdentity,
+        systemInfoStatus,
+        systemInfoError,
         readinessProbe,
         logs,
         totalBotCount,

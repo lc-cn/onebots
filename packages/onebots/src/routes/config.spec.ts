@@ -57,6 +57,7 @@ function setup(reload: App["reload"], isReloading = false, restartSupported = tr
             appliedAt: "2026-08-31T09:00:00.000Z",
             message: "磁盘配置与当前进程最近应用的版本一致",
         },
+        runtimeContractId: "sha256:contract-current",
         restartSupported,
     } as unknown as App;
     registerConfigRoutes(app, router as never);
@@ -64,6 +65,7 @@ function setup(reload: App["reload"], isReloading = false, restartSupported = tr
         app,
         handler: posts.get("/api/config")!,
         systemHandler: gets.get("/api/system")!,
+        backupHandler: posts.get("/api/system/backup-to-hf")!,
         restartHandler: posts.get("/api/system/restart")!,
     };
 }
@@ -205,7 +207,7 @@ describe("configuration route", () => {
 
     it("系统信息公开当前进程已验证的插件清单", () => {
         const { systemHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
-        const ctx = {} as RouterContext;
+        const ctx = { set: vi.fn() } as unknown as RouterContext;
 
         systemHandler(ctx);
 
@@ -213,6 +215,7 @@ describe("configuration route", () => {
             application_name: "onebots",
             application_version: "1.2.8",
             core_version: "1.2.5",
+            runtime_contract_id: "sha256:contract-current",
             configState: {
                 status: "in_sync",
                 appliedAt: "2026-08-31T09:00:00.000Z",
@@ -228,6 +231,47 @@ describe("configuration route", () => {
                 },
             ],
         });
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-current");
+        expect(ctx.set).toHaveBeenCalledWith(
+            "X-OneBots-Runtime-Contract-Id",
+            "sha256:contract-current",
+        );
+        expect(ctx.set).toHaveBeenCalledWith("Cache-Control", "no-store");
+    });
+
+    it("实例已切换时拒绝使用旧系统快照触发备份", async () => {
+        const { app, backupHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
+        const ctx = {
+            request: { body: { instance_id: "instance-before-restart" } },
+        } as RouterContext;
+
+        await backupHandler(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-current",
+            message: "备份请求期望实例 instance-before-restart，当前已由实例 instance-current 接管",
+        });
+        expect(app.backupDataToHf).not.toHaveBeenCalled();
+    });
+
+    it("备份成功回执证明处理请求的实例", async () => {
+        const { app, backupHandler } = setup(vi.fn(async () => undefined) as App["reload"]);
+        const ctx = {
+            request: { body: { instance_id: "instance-current" } },
+        } as RouterContext;
+
+        await backupHandler(ctx);
+
+        expect(ctx.body).toEqual({
+            success: true,
+            application: "onebots",
+            instance_id: "instance-current",
+            message: "已备份到仓库",
+        });
+        expect(app.backupDataToHf).toHaveBeenCalledWith("access_token: old-token\n");
     });
 
     it("返回已保存并生效的机器可读状态", async () => {

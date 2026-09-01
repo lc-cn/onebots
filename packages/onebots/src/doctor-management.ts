@@ -45,7 +45,12 @@ export async function probeDoctorManagement(
     const authenticatedPromise = credential.token
         ? Promise.all([
               probeAuthenticatedManagementHttp(base, credential.token, fetcher),
-              probeAuthenticatedConfigState(base, credential.token, fetcher),
+              probeAuthenticatedConfigState(
+                  base,
+                  credential.token,
+                  fetcher,
+                  dependencies.expectedIdentity,
+              ),
               probeAuthenticatedExtensions(
                   base,
                   credential.token,
@@ -157,6 +162,7 @@ async function probeAuthenticatedConfigState(
     base: string,
     token: string,
     fetcher: DoctorFetch,
+    expectedIdentity?: DoctorEndpointIdentity,
 ): Promise<DoctorCheck> {
     try {
         const response = await fetcher(`${base}/api/system`, {
@@ -170,6 +176,23 @@ async function probeAuthenticatedConfigState(
                 level: "error",
                 message: `在线配置状态响应无效: HTTP ${response.status}`,
             };
+        }
+        if (expectedIdentity) {
+            const identity = readManagementEvidenceIdentity(response.headers);
+            if (!identity) {
+                return {
+                    name: "management-config",
+                    level: "error",
+                    message: "在线配置状态响应缺少完整 OneBots 实例身份",
+                };
+            }
+            if (!sameManagementEvidenceIdentity(identity, expectedIdentity)) {
+                return {
+                    name: "management-config",
+                    level: "error",
+                    message: `在线配置状态实例 ${managementIdentityLabel(identity)} 与公开探针 ${managementIdentityLabel(expectedIdentity)} 不一致`,
+                };
+            }
         }
         const status = payload.configState.status;
         const appliedAt = runtimeLabel(payload.configState.appliedAt, "未知时间");

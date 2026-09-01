@@ -159,6 +159,51 @@ describe("doctor management probes", () => {
         });
     });
 
+    it("拒绝把其他实例的配置状态拼接到公开探针", async () => {
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/adapters")) {
+                return new Response("[]", {
+                    status: 200,
+                    headers: managementIdentityHeaders(),
+                });
+            }
+            if (input.endsWith("/api/system")) return inSyncSystemResponse("instance-b");
+            if (input.endsWith("/api/extensions/package-mutation")) {
+                return idlePackageMutationResponse();
+            }
+            if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
+            if (input.endsWith("/api/adapter-capabilities")) {
+                return completeCapabilityCatalogResponse();
+            }
+            return new Headers(init?.headers).has("authorization")
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "secret" },
+            {
+                fetcher,
+                upgrade: async (_url, token) => ({
+                    upgraded: Boolean(token),
+                    status: token ? 101 : 401,
+                }),
+                expectedIdentity: {
+                    application: "onebots",
+                    version: packageMetadata.version,
+                    instanceId: "instance-a",
+                },
+            },
+        );
+
+        expect(checks.find(check => check.name === "management-config")).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("instance-b"),
+        });
+        expect(checks.find(check => check.name === "management-runtime")?.level).toBe("ok");
+    });
+
     it("starts every independent configured-token probe before a slow peer completes", async () => {
         let release!: () => void;
         const gate = new Promise<void>(resolve => {
@@ -865,7 +910,7 @@ function managementIdentityHeaders(instanceId = "instance-a"): Record<string, st
     };
 }
 
-function inSyncSystemResponse(): Response {
+function inSyncSystemResponse(instanceId = "instance-a"): Response {
     return new Response(
         JSON.stringify({
             configState: {
@@ -873,7 +918,7 @@ function inSyncSystemResponse(): Response {
                 appliedAt: "2026-08-31T09:00:00.000Z",
             },
         }),
-        { status: 200 },
+        { status: 200, headers: managementIdentityHeaders(instanceId) },
     );
 }
 

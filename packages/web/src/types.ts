@@ -32,8 +32,10 @@ export interface SystemInfo {
     process_id: number;
     process_parent_id: number;
     process_use_memory: number;
-    application_name?: string;
-    application_version?: string;
+    application_name: string;
+    application_version: string;
+    instance_id: string;
+    runtime_contract_id: string;
     core_version?: string;
     /** @deprecated 兼容旧版后端，优先使用 core_version。 */
     sdk_version: string;

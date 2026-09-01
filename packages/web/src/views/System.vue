@@ -15,7 +15,11 @@
                         <UiSwitch v-model="autoRefresh" />
                         <span class="hidden sm:inline">自动刷新</span>
                     </label>
-                    <UiButton variant="primary" :loading="backupLoading" @click="handleBackup">
+                    <UiButton
+                        variant="primary"
+                        :loading="backupLoading"
+                        :disabled="!systemInfo"
+                        @click="handleBackup">
                         <IconUpload v-if="!backupLoading" :size="16" />
                         备份到仓库
                     </UiButton>
@@ -34,6 +38,14 @@
                     </UiButton>
                 </div>
             </header>
+
+            <UiAlert
+                v-if="systemSnapshot.status === 'unavailable'"
+                variant="danger"
+                title="系统快照证据不可用"
+                class="mb-6">
+                {{ systemSnapshot.error }}。页面不会展示或操作来源不一致的系统信息。
+            </UiAlert>
 
             <!-- 统计卡片 -->
             <div v-if="systemInfo" class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -315,7 +327,7 @@ import {
     IconRefresh,
     IconUpload,
 } from "@tabler/icons-vue";
-import { UiButton, UiCard, UiBadge } from "../ui/index";
+import { UiAlert, UiButton, UiCard, UiBadge } from "../ui/index";
 import UiSwitch from "../ui/UiSwitch.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import { useToast } from "../ui/toast";
@@ -337,8 +349,16 @@ import {
     type ServiceProbeResult,
 } from "../utils/service-probes.js";
 import { createSystemDashboardRefreshCoordinator } from "./system-dashboard-refresh.js";
+import { resolveSystemSnapshot } from "../system-snapshot.js";
+import { parseSystemBackupResponse } from "../system-backup.js";
 
-const { systemInfo, fetchSystemInfo } = useApi({ adapters: false, readiness: false });
+const {
+    systemInfo: rawSystemInfo,
+    systemInfoIdentity,
+    systemInfoStatus,
+    systemInfoError,
+    fetchSystemInfo,
+} = useApi({ adapters: false, readiness: false });
 const toast = useToast();
 const { confirm } = useConfirm();
 
@@ -351,6 +371,17 @@ const readyStatus = ref<ServiceProbeResult>(pendingReadinessProbe());
 const healthLoading = ref(false);
 const restartLoading = ref(false);
 const backupLoading = ref(false);
+const systemSnapshot = computed(() =>
+    resolveSystemSnapshot(
+        systemInfoStatus.value,
+        systemInfoIdentity.value,
+        systemInfoError.value,
+        healthStatus.value,
+    ),
+);
+const systemInfo = computed(() =>
+    systemSnapshot.value.status === "ready" ? rawSystemInfo.value : null,
+);
 
 const AUTO_REFRESH_INTERVAL = 10_000;
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -394,14 +425,23 @@ watch(autoRefresh, val => {
 });
 
 async function handleBackup() {
+    const instanceId = systemInfo.value?.instance_id;
+    if (!instanceId) {
+        toast.error("无法确认当前系统快照实例，未发送备份请求");
+        return;
+    }
     backupLoading.value = true;
     try {
-        const res = await authFetch(buildApiUrl("/api/system/backup-to-hf"), { method: "POST" });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data?.success) {
-            toast.success(data?.message ?? "已备份到仓库");
+        const res = await authFetch(buildApiUrl("/api/system/backup-to-hf"), {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ instance_id: instanceId }),
+        });
+        const result = await parseSystemBackupResponse(res, instanceId);
+        if (result.success) {
+            toast.success(result.message);
         } else {
-            toast.error(data?.message ?? "备份失败");
+            toast.error(result.message);
         }
     } catch (error) {
         toast.error((error as Error).message ?? "请求失败");
