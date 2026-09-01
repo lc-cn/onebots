@@ -43,7 +43,7 @@ function serviceSpec(source = "port: 7788\npath: gateway\n"): ServiceSpec {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-status-"));
     temporaryDirectories.push(directory);
     const configPath = path.join(directory, "config.yaml");
-    fs.writeFileSync(configPath, source, "utf8");
+    fs.writeFileSync(configPath, source, { encoding: "utf8", mode: 0o600 });
     return {
         scope: "user",
         configPath,
@@ -97,6 +97,21 @@ function createStatusFetcher(
     );
 }
 
+function expectedPermissionOutput(): string {
+    return process.platform === "win32"
+        ? ""
+        : "\n配置文件权限 600 未向组或其他用户开放\n配置目录权限 700 不允许组或其他用户替换配置路径";
+}
+
+function expectedPermissionChecks() {
+    return process.platform === "win32"
+        ? []
+        : [
+              { name: "config-mode", level: "ok" },
+              { name: "config-dir-mode", level: "ok" },
+          ];
+}
+
 describe("service status", () => {
     it("reports liveness and readiness for a running service", async () => {
         const spec = serviceSpec();
@@ -129,7 +144,7 @@ describe("service status", () => {
         const result = await runServiceStatus({ system: false }, fetcher);
 
         expect(result).toEqual({
-            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance\n在线进程的启动契约与服务元数据一致\nWeb 管理页可访问，Router 前缀为 /gateway`,
+            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}${expectedPermissionOutput()}\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance\n在线进程的启动契约与服务元数据一致\nWeb 管理页可访问，Router 前缀为 /gateway`,
             exitCode: undefined,
         });
         expect(fetcher).toHaveBeenCalledWith(
@@ -181,6 +196,7 @@ describe("service status", () => {
                         level: "error",
                         message: `服务入口不可读取: ${spec.binPath}`,
                     },
+                    ...expectedPermissionChecks(),
                 ],
             },
             probe: {
@@ -194,6 +210,84 @@ describe("service status", () => {
             },
         });
     });
+
+    it.runIf(process.platform !== "win32")(
+        "配置权限在启动后漂移时不再把健康进程报告为已就绪",
+        async () => {
+            const spec = serviceSpec();
+            fs.chmodSync(spec.configPath, 0o644);
+            mockInstalledService(true, spec);
+            const fetcher = createStatusFetcher(
+                async input =>
+                    new Response(
+                        JSON.stringify({
+                            ...(String(input).endsWith("/health")
+                                ? { status: "ok" }
+                                : { ready: true }),
+                            application: "onebots",
+                            version: packageMetadata.version,
+                            instance_id: "permission-drift-instance",
+                            runtime_contract_id: activeRuntimeContractId,
+                        }),
+                        { status: 200 },
+                    ),
+            );
+
+            const result = await runServiceStatus({ system: false, json: true }, fetcher);
+            const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+            expect(result).toMatchObject({ exitCode: 1, raw: true });
+            expect(report).toMatchObject({
+                status: "unavailable",
+                ok: false,
+                serviceRuntime: { valid: false },
+            });
+            expect(report.serviceRuntime.checks).toContainEqual({
+                name: "config-mode",
+                level: "error",
+                message: expect.stringContaining("配置文件权限 644"),
+            });
+            expect(report.probe.checks).toContainEqual(
+                expect.objectContaining({ name: "health", level: "ok" }),
+            );
+        },
+    );
+
+    it.runIf(process.platform !== "win32")(
+        "组只读配置保留可见警告但不破坏健康服务状态",
+        async () => {
+            const spec = serviceSpec();
+            fs.chmodSync(spec.configPath, 0o640);
+            mockInstalledService(true, spec);
+            const fetcher = createStatusFetcher(
+                async input =>
+                    new Response(
+                        JSON.stringify({
+                            ...(String(input).endsWith("/health")
+                                ? { status: "ok" }
+                                : { ready: true }),
+                            application: "onebots",
+                            version: packageMetadata.version,
+                            instance_id: "group-readable-instance",
+                            runtime_contract_id: activeRuntimeContractId,
+                        }),
+                        { status: 200 },
+                    ),
+            );
+
+            const result = await runServiceStatus({ system: false, json: true }, fetcher);
+            const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+            expect(result.exitCode).toBeUndefined();
+            expect(report).toMatchObject({ status: "ready", ok: true });
+            expect(report.serviceRuntime).toMatchObject({ valid: true });
+            expect(report.serviceRuntime.checks).toContainEqual({
+                name: "config-mode",
+                level: "warning",
+                message: expect.stringContaining("配置文件权限 640"),
+            });
+        },
+    );
 
     it("拒绝把同版本但启动契约不同的进程报告为当前服务", async () => {
         const spec = serviceSpec();

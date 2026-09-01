@@ -20,6 +20,7 @@ import {
     type DoctorServiceRuntimeInspection,
 } from "./doctor-service-runtime.js";
 import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
+import { inspectPersistedCredentialPermissions } from "./persisted-credential-permissions.js";
 
 export type ServiceStatusKind =
     | "uninstalled"
@@ -319,10 +320,32 @@ function inspectStatusServiceRuntime(
     if (!spec) return { valid: null, checks: [] };
     const runtime = dependencies.inspectNode(spec.nodePath);
     const entry = dependencies.inspectEntry(spec.binPath);
+    const permissionChecks = inspectStatusCredentialPermissions(spec.configPath);
     return {
-        valid: runtime.supported && entry.valid,
-        checks: [runtime.check, entry.check],
+        valid:
+            runtime.supported &&
+            entry.valid &&
+            permissionChecks.every(check => check.level !== "error"),
+        checks: [runtime.check, entry.check, ...permissionChecks],
     };
+}
+
+function inspectStatusCredentialPermissions(configPath: string): DoctorCheck[] {
+    try {
+        return inspectPersistedCredentialPermissions(configPath);
+    } catch (error) {
+        const code =
+            error instanceof Error && "code" in error && typeof error.code === "string"
+                ? error.code
+                : "UNKNOWN";
+        return [
+            {
+                name: "config-mode",
+                level: "error",
+                message: `持久化凭据权限无法验证: ${configPath} (${code})`,
+            },
+        ];
+    }
 }
 
 function inspectStatusServiceDefinition(

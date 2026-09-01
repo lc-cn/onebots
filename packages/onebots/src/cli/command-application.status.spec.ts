@@ -40,7 +40,7 @@ function serviceSpec(source = "port: 7788\npath: gateway\n"): ServiceSpec {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-status-"));
     temporaryDirectories.push(directory);
     const configPath = path.join(directory, "config.yaml");
-    fs.writeFileSync(configPath, source, "utf8");
+    fs.writeFileSync(configPath, source, { encoding: "utf8", mode: 0o600 });
     return {
         scope: "user",
         configPath,
@@ -70,6 +70,21 @@ function mockCurrentDefinition(spec: ServiceSpec): void {
     vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
 }
 
+function expectedPermissionOutput(): string {
+    return process.platform === "win32"
+        ? ""
+        : "\n配置文件权限 600 未向组或其他用户开放\n配置目录权限 700 不允许组或其他用户替换配置路径";
+}
+
+function expectedPermissionChecks() {
+    return process.platform === "win32"
+        ? []
+        : [
+              { name: "config-mode", level: "ok" },
+              { name: "config-dir-mode", level: "ok" },
+          ];
+}
+
 describe("service status", () => {
     it("returns exit code 2 when no service is installed", async () => {
         vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
@@ -91,7 +106,7 @@ describe("service status", () => {
         const fetcher = vi.fn<typeof fetch>();
 
         await expect(runServiceStatus({ system: false }, fetcher)).resolves.toEqual({
-            output: `已安装，未运行\n进程管理器: inactive\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}`,
+            output: `已安装，未运行\n进程管理器: inactive\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}${expectedPermissionOutput()}`,
             exitCode: 1,
         });
         expect(fetcher).not.toHaveBeenCalled();
@@ -195,6 +210,7 @@ describe("service status", () => {
                 checks: [
                     { name: "service-node", level: "ok" },
                     { name: "service-entry", level: "ok" },
+                    ...expectedPermissionChecks(),
                 ],
             },
             probe: { checks: [], error: null },

@@ -43,7 +43,7 @@ function serviceSpec(source = "port: 7788\npath: gateway\n"): ServiceSpec {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-status-"));
     temporaryDirectories.push(directory);
     const configPath = path.join(directory, "config.yaml");
-    fs.writeFileSync(configPath, source, "utf8");
+    fs.writeFileSync(configPath, source, { encoding: "utf8", mode: 0o600 });
     return {
         scope: "user",
         configPath,
