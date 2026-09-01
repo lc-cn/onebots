@@ -76,7 +76,8 @@ export function buildAdapterCapabilityReport(
                 description: metadata?.description || "",
                 packageName: plugin.packageName,
                 packageVersion: plugin.version,
-                entryPath: plugin.entryPath,
+                // 能力证据以包名与版本绑定身份；绝对入口路径不进入可归档报告。
+                entryPath: null,
                 declared: capabilities !== null,
                 summary: capabilities ? summarizeManifest(capabilities) : null,
                 capabilities,

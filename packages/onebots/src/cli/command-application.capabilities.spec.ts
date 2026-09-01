@@ -113,8 +113,15 @@ describe("capabilities command", () => {
             },
             complete: true,
             errors: [],
-            adapters: [{ name: "mock", packageName: "@onebots/adapter-mock" }],
+            adapters: [
+                {
+                    name: "mock",
+                    packageName: "@onebots/adapter-mock",
+                    entryPath: null,
+                },
+            ],
         });
+        expect(result.output).not.toContain("/runtime/mock.js");
     });
 
     it("配置损坏时保留静态能力目录并发布脱敏 JSON 证据", async () => {

@@ -116,9 +116,10 @@ describe("adapter capability report", () => {
         expect(report.adapters[0]).toMatchObject({
             source: "runtime",
             packageVersion: "1.2.3",
-            entryPath: "/runtime/slack/index.js",
+            entryPath: null,
             capabilities,
         });
+        expect(JSON.stringify(report)).not.toContain("/runtime/slack/index.js");
     });
 
     it("makes an undeclared third-party boundary machine visible", () => {
