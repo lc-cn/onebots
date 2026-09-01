@@ -52,6 +52,11 @@ printf 'onebots %s\\n' "$*" >> "$FAKE_COMMAND_LOG"
 command_name=$1
 shift
 case "$command_name" in
+    --service-runtime)
+        [ "$1" = "preflight" ] || exit 2
+        [ "\${FAKE_RESTORE_PREFLIGHT_FAIL:-0}" = "1" ] && exit 45
+        :
+        ;;
     setup)
         config_file=""
         while [ "$#" -gt 0 ]; do
@@ -225,7 +230,8 @@ slack.production:
         expect(source).toContain('"@onebots/protocol-onebot-v11@$ProtocolVersion"');
         expect(source).toContain('"update", "-c", $ConfigFile, "--yes", "--packages-only"');
         expect(source).toContain('"onebots@$PreviousOneBotsVersion"');
-        expect(source).toContain("已恢复升级前的 OneBots $PreviousOneBotsVersion");
+        expect(source).toContain('"--service-runtime", "preflight", "-c", $ConfigFile');
+        expect(source).toContain("已恢复升级前的 OneBots $PreviousOneBotsVersion，并通过隔离预检");
         expect(source).toContain("if (-not $ConfigExists)");
         expect(source).not.toContain('"@onebots/web@latest"');
         expect(source).not.toContain('"@onebots/protocol-onebot-v11@latest"');
@@ -260,11 +266,57 @@ slack.production:
             name: "onebots",
             version: "1.2.3",
         });
-        expect(output).toContain("已恢复升级前的 OneBots 1.2.3");
+        expect(output).toContain("已恢复升级前的 OneBots 1.2.3，并通过隔离预检");
         const commands = fs.readFileSync(runtime.log, "utf8");
         expect(commands).toContain("npm install --omit=dev onebots@latest");
         expect(commands).toContain("onebots update -c");
         expect(commands).toContain("npm install --omit=dev onebots@1.2.3");
+        expect(commands).toContain(
+            "onebots --service-runtime preflight -c " +
+                path.join(runtime.home, ".onebots", "config.yaml"),
+        );
+        expect(commands).not.toContain("onebots install -c");
+        expect(commands).not.toContain("onebots restart");
+    });
+
+    it("恢复后的主程序与依赖无法启动时明确报告恢复未完成", () => {
+        const runtime = createFakeRuntime();
+        const onebotsManifest = path.join(
+            runtime.home,
+            ".onebots/runtime/node_modules/onebots/package.json",
+        );
+
+        runInstaller(runtime);
+        fs.writeFileSync(
+            onebotsManifest,
+            JSON.stringify({ name: "onebots", version: "1.2.3" }),
+            "utf8",
+        );
+        fs.writeFileSync(runtime.log, "", "utf8");
+
+        let stdout = "";
+        let stderr = "";
+        expect(() => {
+            try {
+                runInstaller(runtime, {
+                    FAKE_UPDATE_FAIL: "1",
+                    FAKE_RESTORE_PREFLIGHT_FAIL: "1",
+                });
+            } catch (error) {
+                stdout = String((error as { stdout?: string }).stdout ?? "");
+                stderr = String((error as { stderr?: string }).stderr ?? "");
+                throw error;
+            }
+        }).toThrow();
+
+        expect(stdout).not.toContain("已恢复升级前的 OneBots 1.2.3");
+        expect(stderr).toContain("恢复失败：旧 OneBots 与恢复后的依赖未通过隔离预检");
+        expect(JSON.parse(fs.readFileSync(onebotsManifest, "utf8"))).toMatchObject({
+            name: "onebots",
+            version: "1.2.3",
+        });
+        const commands = fs.readFileSync(runtime.log, "utf8");
+        expect(commands).toContain("onebots --service-runtime preflight -c");
         expect(commands).not.toContain("onebots install -c");
         expect(commands).not.toContain("onebots restart");
     });

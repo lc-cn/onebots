@@ -146,7 +146,11 @@ try {
             if ($RestoredVersion -ne $PreviousOneBotsVersion) {
                 throw "期望 $PreviousOneBotsVersion，实际 $RestoredVersion"
             }
-            Write-Step "已恢复升级前的 OneBots $PreviousOneBotsVersion。"
+            $env:ONEBOTS_EXTENSION_ROOT = $RuntimeDir
+            Invoke-Checked -FilePath $OneBots -Arguments @(
+                "--service-runtime", "preflight", "-c", $ConfigFile
+            )
+            Write-Step "已恢复升级前的 OneBots $PreviousOneBotsVersion，并通过隔离预检。"
         } catch {
             throw "安装失败：$($InstallError.Exception.Message)；OneBots 恢复失败：$($_.Exception.Message)"
         }

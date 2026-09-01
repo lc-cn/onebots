@@ -32,7 +32,12 @@ cleanup() {
                     'require(process.env.ONEBOTS_PACKAGE_MANIFEST).version ?? ""'
             )
             if [ "$restored_version" = "$previous_onebots_version" ]; then
-                say "已恢复升级前的 OneBots ${previous_onebots_version}。"
+                if ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" \
+                    --service-runtime preflight -c "$CONFIG_FILE"; then
+                    say "已恢复升级前的 OneBots ${previous_onebots_version}，并通过隔离预检。"
+                else
+                    printf '%s\n' "[OneBots] 恢复失败：旧 OneBots 与恢复后的依赖未通过隔离预检" >&2
+                fi
             else
                 printf '%s\n' "[OneBots] 恢复失败：期望 ${previous_onebots_version}，实际 ${restored_version:-未安装}" >&2
             fi
