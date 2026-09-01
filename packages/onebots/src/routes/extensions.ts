@@ -7,6 +7,7 @@ import {
     ExtensionInstallConflictError,
     ExtensionNotFoundError,
     ExtensionRuntimeConfigError,
+    ExtensionStateConflictError,
     formatExtensionInstallationError,
 } from "../extension-manager.js";
 import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
@@ -82,6 +83,51 @@ export function registerExtensionRoutes(app: App, router: Router): void {
                 message,
             };
             app.logger.error("管理端安装扩展失败", { error: message });
+        }
+    });
+
+    router.post("/api/extensions/:id/disable", async (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
+        try {
+            assertManagementInstancePrecondition(app, ctx, "扩展停用");
+            assertManagementConfigRevisionPrecondition(ctx, "扩展停用", app.configPath);
+            const result = await app.extensionManager.disable(String(ctx.params.id));
+            const configRevision = createManagementConfigRevision(
+                readFileSync(app.configPath, "utf8"),
+            );
+            ctx.body = {
+                success: true,
+                ...result,
+                application: app.info.application_name,
+                instance_id: app.info.instance_id,
+                config_revision: configRevision,
+                restartSupported: app.restartSupported,
+                message: app.restartSupported
+                    ? "扩展已从启动配置移除；依赖仍保留，重启后完成停用"
+                    : "扩展已从启动配置移除且依赖仍保留；请手动重启 OneBots 以完成停用",
+            };
+        } catch (error) {
+            const message = formatExtensionInstallationError(error);
+            ctx.status =
+                error instanceof ManagementInstanceMismatchError ||
+                error instanceof ManagementConfigRevisionMismatchError ||
+                error instanceof ExtensionInstallConflictError ||
+                error instanceof ExtensionStateConflictError
+                    ? 409
+                    : error instanceof ExtensionNotFoundError
+                      ? 404
+                      : error instanceof ExtensionRuntimeConfigError
+                        ? 422
+                        : error instanceof ValidationError
+                          ? 400
+                          : 500;
+            ctx.body = {
+                success: false,
+                application: app.info.application_name,
+                instance_id: app.info.instance_id,
+                message,
+            };
+            app.logger.error("管理端停用扩展失败", { error: message });
         }
     });
 }

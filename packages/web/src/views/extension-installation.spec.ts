@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    getExtensionDisableAction,
     getExtensionInstallCompletion,
     getExtensionInstallRequestRecovery,
     getExtensionInstallationAction,
@@ -7,6 +8,46 @@ import {
     getExtensionRuntimeStatus,
     hasExtensionRuntimeVersionDrift,
 } from "./extension-installation.js";
+
+describe("extension disable action", () => {
+    it("只为已启用扩展提供停用操作并说明重启边界", () => {
+        expect(
+            getExtensionDisableAction({
+                enabled: true,
+                restartSupported: true,
+                runtimeConfigError: null,
+            }),
+        ).toEqual({ visible: true, available: true, label: "停用并重启" });
+        expect(
+            getExtensionDisableAction({
+                enabled: true,
+                restartSupported: false,
+                runtimeConfigError: null,
+            }),
+        ).toEqual({
+            visible: true,
+            available: true,
+            label: "停用并在完成后手动重启",
+        });
+        expect(
+            getExtensionDisableAction({
+                enabled: false,
+                restartSupported: true,
+                runtimeConfigError: null,
+            }),
+        ).toEqual({ visible: false, available: false, label: "已停用" });
+    });
+
+    it("启动配置不可读取时阻止停用", () => {
+        expect(
+            getExtensionDisableAction({
+                enabled: true,
+                restartSupported: true,
+                runtimeConfigError: "配置损坏",
+            }),
+        ).toEqual({ visible: true, available: false, label: "启动配置不可用" });
+    });
+});
 
 describe("extension install completion", () => {
     it("keeps automatic restart for managed and legacy servers", () => {

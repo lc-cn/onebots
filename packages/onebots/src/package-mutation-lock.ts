@@ -10,7 +10,7 @@ const DEFAULT_STALE_AFTER_MS = 30 * 60 * 1000;
 export interface PackageMutationLockOwner {
     token: string;
     operationId: string;
-    operation: "extension_install" | "package_update";
+    operation: "extension_install" | "extension_disable" | "package_update";
     extensionId: string | null;
     host: string;
     pid: number;
@@ -113,6 +113,7 @@ export function acquirePackageMutationLock(
     runtimeRoot: string,
     input: { token: string; operationId: string } & (
         | { operation: "extension_install"; extensionId: string }
+        | { operation: "extension_disable"; extensionId: string }
         | { operation: "package_update" }
     ),
     options: PackageMutationLockOptions = {},
@@ -128,7 +129,7 @@ export function acquirePackageMutationLock(
         const acquiredAt = now();
         const owner: PackageMutationLockOwner = {
             ...input,
-            extensionId: input.operation === "extension_install" ? input.extensionId : null,
+            extensionId: input.operation === "package_update" ? null : input.extensionId,
             host: currentHost,
             pid: process.pid,
             startedAt: acquiredAt.toISOString(),
@@ -249,9 +250,11 @@ function parseOwner(value: unknown): PackageMutationLockOwner | null {
     if (
         !isSafeEvidenceString(owner.token, 256) ||
         !isSafeEvidenceString(owner.operationId, 256) ||
-        !["extension_install", "package_update"].includes(String(owner.operation)) ||
+        !["extension_install", "extension_disable", "package_update"].includes(
+            String(owner.operation),
+        ) ||
         !(
-            (owner.operation === "extension_install" &&
+            ((owner.operation === "extension_install" || owner.operation === "extension_disable") &&
                 isSafeEvidenceString(owner.extensionId, 256)) ||
             (owner.operation === "package_update" && owner.extensionId === null)
         ) ||
@@ -312,7 +315,9 @@ function conflictError(
     const operation =
         inspection.owner.operation === "extension_install"
             ? `扩展 ${inspection.owner.extensionId} 的安装事务`
-            : "OneBots 软件包更新事务";
+            : inspection.owner.operation === "extension_disable"
+              ? `扩展 ${inspection.owner.extensionId} 的停用事务`
+              : "OneBots 软件包更新事务";
     return new PackageMutationLockConflictError(
         `${operation}正由 ${inspection.owner.host} 的进程 ${inspection.owner.pid} 执行（操作 ${inspection.owner.operationId}，开始于 ${inspection.owner.startedAt}），请等待完成后重试。`,
     );

@@ -351,6 +351,15 @@ describe("package mutation response", () => {
         };
         expect(parsePackageMutationStatus(idle)).toEqual(idle);
         expect(parsePackageMutationStatus(active)).toEqual(active);
+        expect(
+            parsePackageMutationStatus({
+                ...active,
+                owner: {
+                    ...active.owner,
+                    operation: "extension_disable",
+                },
+            }),
+        ).toMatchObject({ owner: { operation: "extension_disable", extensionId: "adapter:mock" } });
     });
 
     it("拒绝开放安装的活动租约、泄露 token 的所有者与无原因的无效状态", () => {

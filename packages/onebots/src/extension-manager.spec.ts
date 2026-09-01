@@ -15,6 +15,7 @@ import type { ServicePreflightSpec } from "./service-preflight.js";
 import { getExtensionPackageCatalogEntry } from "./extension-capability-catalog.js";
 import { EXTENSION_CATALOG } from "./extension-catalog.js";
 import packageMetadata from "../package.json" with { type: "json" };
+import { acquirePackageMutationLock } from "./package-mutation-lock.js";
 
 const directories: string[] = [];
 const successfulPreflight: ExtensionConfigPreflight = async () => undefined;
@@ -1388,5 +1389,149 @@ describe("ExtensionManager", () => {
             adapters: ["telegram", "slack"],
             protocols: ["onebot-v11"],
         });
+    });
+
+    it("停用扩展时只移除启动选择并保留已安装依赖", async () => {
+        const { root, configPath } = fixture();
+        fs.writeFileSync(
+            configPath,
+            "plugins:\n  adapters: [slack, telegram]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+        );
+        installFixturePackage(
+            "@onebots/adapter-slack",
+            catalogVersion("@onebots/adapter-slack"),
+            root,
+        );
+        const preflight = vi.fn(successfulPreflight);
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: vi.fn() },
+            preflight,
+        });
+
+        await expect(manager.disable("adapter:slack")).resolves.toEqual({
+            restartRequired: true,
+        });
+
+        expect(preflight).toHaveBeenCalledWith(
+            expect.objectContaining({
+                selection: { adapters: ["telegram"], protocols: ["onebot-v11"] },
+            }),
+        );
+        const config = yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+        expect(config.plugins).toEqual({
+            adapters: ["telegram"],
+            protocols: ["onebot-v11"],
+        });
+        expect(fs.existsSync(path.join(root, "node_modules", "@onebots", "adapter-slack"))).toBe(
+            true,
+        );
+    });
+
+    it("停用候选配置无法启动时不修改现有配置", async () => {
+        const { root, configPath } = fixture();
+        fs.writeFileSync(
+            configPath,
+            "plugins:\n  adapters: [slack]\n  protocols: [onebot-v11]\nslack:\n  bot-a: {}\n",
+        );
+        const originalConfig = fs.readFileSync(configPath, "utf8");
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: vi.fn() },
+            preflight: async () => {
+                throw new Error("账号 bot-a 仍引用 slack 适配器");
+            },
+        });
+
+        await expect(manager.disable("adapter:slack")).rejects.toThrow(
+            "账号 bot-a 仍引用 slack 适配器",
+        );
+        expect(fs.readFileSync(configPath, "utf8")).toBe(originalConfig);
+        expect(manager.packageMutationStatus()).toMatchObject({ state: "idle", available: true });
+    });
+
+    it("停用预检期间配置变化时重新合并并保留并发修改", async () => {
+        const { root, configPath } = fixture();
+        fs.writeFileSync(
+            configPath,
+            "plugins:\n  adapters: [slack]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+        );
+        const preflight = vi.fn(async () => {
+            if (preflight.mock.calls.length === 1) {
+                fs.writeFileSync(
+                    configPath,
+                    "plugins:\n  adapters: [slack, telegram]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+                );
+            }
+        });
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: vi.fn() },
+            preflight,
+        });
+
+        await manager.disable("adapter:slack");
+
+        expect(preflight).toHaveBeenCalledTimes(2);
+        expect(preflight).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                selection: { adapters: ["telegram"], protocols: ["onebot-v11"] },
+            }),
+        );
+        const config = yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
+        expect(config.plugins).toEqual({
+            adapters: ["telegram"],
+            protocols: ["onebot-v11"],
+        });
+    });
+
+    it("拒绝停用未在启动配置中启用的扩展", async () => {
+        const { root, configPath } = fixture();
+        const preflight = vi.fn(successfulPreflight);
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: vi.fn() },
+            preflight,
+        });
+
+        await expect(manager.disable("adapter:slack")).rejects.toThrow(
+            "扩展 slack 未在启动配置中启用",
+        );
+        expect(preflight).not.toHaveBeenCalled();
+    });
+
+    it("跨进程包事务进行时不读取或预检停用候选配置", async () => {
+        const { root, configPath } = fixture();
+        fs.writeFileSync(
+            configPath,
+            "plugins:\n  adapters: [slack]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+        );
+        const lock = acquirePackageMutationLock(root, {
+            token: "other-operation-token",
+            operationId: "other-operation",
+            operation: "extension_install",
+            extensionId: "adapter:telegram",
+        });
+        const preflight = vi.fn(successfulPreflight);
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: vi.fn() },
+            preflight,
+        });
+
+        try {
+            await expect(manager.disable("adapter:slack")).rejects.toThrow(
+                "扩展 adapter:telegram 的安装事务",
+            );
+            expect(preflight).not.toHaveBeenCalled();
+        } finally {
+            lock.release();
+        }
     });
 });

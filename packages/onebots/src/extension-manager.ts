@@ -161,6 +161,7 @@ export function formatExtensionInstallationError(error: unknown): string {
 
 export class ExtensionNotFoundError extends Error {}
 export class ExtensionInstallConflictError extends Error {}
+export class ExtensionStateConflictError extends Error {}
 export class ExtensionCatalogIntegrityError extends Error {}
 export class ExtensionRuntimeConfigError extends Error {}
 
@@ -474,6 +475,58 @@ export class ExtensionManager {
         }
     }
 
+    /**
+     * 从下一次启动选择中移除扩展。依赖保留在磁盘，避免配置操作隐式改写包管理器状态。
+     * 当前进程仍会继续使用已加载扩展，调用方必须在写入成功后完成一次可验证重启。
+     */
+    async disable(id: string): Promise<{ restartRequired: true }> {
+        const entry = getTrustedExtensionCatalogEntry(id);
+        if (!entry) throw new ExtensionNotFoundError("扩展不存在或不允许从管理端停用");
+        if (this.installation) {
+            throw new ExtensionInstallConflictError(
+                `扩展 ${this.installation.id} 正在安装，请等待安装完成后再停用扩展`,
+            );
+        }
+
+        let packageLock;
+        try {
+            packageLock = acquirePackageMutationLock(this.runtimeRoot, {
+                token: randomUUID(),
+                operationId: randomUUID(),
+                operation: "extension_disable",
+                extensionId: id,
+            });
+        } catch (error) {
+            if (error instanceof PackageMutationLockConflictError) {
+                throw new ExtensionInstallConflictError(error.message, { cause: error });
+            }
+            throw error;
+        }
+        try {
+            let candidate = this.prepareConfig(entry.type, entry.name, undefined, false);
+            for (let attempt = 0; attempt < 3; attempt++) {
+                const latestSource = fs.readFileSync(this.configPath, "utf8");
+                if (latestSource !== candidate.source) {
+                    candidate = this.prepareConfig(entry.type, entry.name, latestSource, false);
+                }
+                await this.preflight({
+                    content: candidate.content,
+                    selection: candidate.selection,
+                    runtimeRoot: this.runtimeRoot,
+                    configPath: this.configPath,
+                });
+                if (fs.readFileSync(this.configPath, "utf8") !== candidate.source) continue;
+                writeConfigFileAtomic(this.configPath, candidate.content, { backup: true });
+                return { restartRequired: true };
+            }
+            throw new ExtensionInstallConflictError(
+                "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
+            );
+        } finally {
+            packageLock.release();
+        }
+    }
+
     private setInstallationPhase(operationId: string, phase: ExtensionInstallationPhase): void {
         if (this.installation?.operationId === operationId) this.installation.phase = phase;
     }
@@ -518,8 +571,13 @@ export class ExtensionManager {
         return current.version !== previous.version || current.error !== previous.error;
     }
 
-    /** 在调用包管理器前验证配置，并生成不会丢失现有插件选择的候选内容。 */
-    private prepareConfig(type: "adapter" | "protocol", name: string, source?: string) {
+    /** 解析当前配置并生成不会丢失其他插件选择的候选内容。 */
+    private prepareConfig(
+        type: "adapter" | "protocol",
+        name: string,
+        source?: string,
+        enabled = true,
+    ) {
         try {
             const currentSource = source ?? fs.readFileSync(this.configPath, "utf8");
             const config = parseRuntimeConfig(currentSource);
@@ -532,7 +590,14 @@ export class ExtensionManager {
                 protocols: [...currentSelection.protocols],
             };
             const key = type === "adapter" ? "adapters" : "protocols";
-            if (!selection[key].includes(name)) selection[key].push(name);
+            const selected = selection[key].includes(name);
+            if (enabled && !selected) selection[key].push(name);
+            if (!enabled) {
+                if (!selected) {
+                    throw new ExtensionStateConflictError(`扩展 ${name} 未在启动配置中启用`);
+                }
+                selection[key] = selection[key].filter(item => item !== name);
+            }
             setRuntimePluginSelection(config, selection);
             return {
                 source: currentSource,
@@ -540,7 +605,12 @@ export class ExtensionManager {
                 selection,
             };
         } catch (error) {
-            if (error instanceof ExtensionRuntimeConfigError) throw error;
+            if (
+                error instanceof ExtensionRuntimeConfigError ||
+                error instanceof ExtensionStateConflictError
+            ) {
+                throw error;
+            }
             throw new ExtensionRuntimeConfigError(formatExtensionRuntimeConfigError(error), {
                 cause: error,
             });

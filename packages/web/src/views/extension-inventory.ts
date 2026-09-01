@@ -28,9 +28,10 @@ export interface ExtensionManagementSnapshot {
 export function buildExtensionInstallRequestHeaders(
     identity: ManagementEvidenceIdentity,
     configRevision: string,
+    operation = "安装",
 ): Record<string, string> {
     if (!/^sha256:[a-f0-9]{64}$/u.test(configRevision)) {
-        throw new Error("扩展安装请求缺少有效配置修订号");
+        throw new Error(`扩展${operation}请求缺少有效配置修订号`);
     }
     return {
         [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: identity.instanceId,
@@ -68,11 +69,12 @@ export function assertExtensionInstallAcknowledgement(
     response: Pick<Response, "headers">,
     value: unknown,
     expectedIdentity: ManagementEvidenceIdentity,
+    operation = "安装",
 ): string {
     const identity = parseManagementEvidenceIdentity(response);
     if (!sameManagementEvidenceIdentity(identity, expectedIdentity)) {
         throw new Error(
-            `扩展安装回执实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${identity.instanceId}`,
+            `扩展${operation}回执实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${identity.instanceId}`,
         );
     }
     if (
@@ -81,11 +83,11 @@ export function assertExtensionInstallAcknowledgement(
         value.application !== "onebots" ||
         value.instance_id !== expectedIdentity.instanceId
     ) {
-        throw new Error("扩展安装回执未由预期 OneBots 实例确认");
+        throw new Error(`扩展${operation}回执未由预期 OneBots 实例确认`);
     }
     const configRevision = value.config_revision;
     if (typeof configRevision !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(configRevision)) {
-        throw new Error("扩展安装回执缺少有效配置修订号");
+        throw new Error(`扩展${operation}回执缺少有效配置修订号`);
     }
     return configRevision;
 }
@@ -322,12 +324,16 @@ function parsePackageMutationOwner(value: unknown): PackageMutationStatus["owner
         !isRecord(value) ||
         Object.hasOwn(value, "token") ||
         !isText(value.operationId) ||
-        !isOneOf(value.operation, ["extension_install", "package_update"] as const) ||
+        !isOneOf(value.operation, [
+            "extension_install",
+            "extension_disable",
+            "package_update",
+        ] as const) ||
         !isText(value.host) ||
         !Number.isSafeInteger(value.pid) ||
         Number(value.pid) <= 0 ||
         !isIsoTimestamp(value.startedAt) ||
-        (value.operation === "extension_install"
+        (value.operation === "extension_install" || value.operation === "extension_disable"
             ? !isText(value.extensionId)
             : value.extensionId !== null)
     ) {

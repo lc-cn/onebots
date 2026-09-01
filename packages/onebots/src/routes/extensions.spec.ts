@@ -27,6 +27,7 @@ function postContext(
 function setup(
     install = vi.fn(async () => ({ restartRequired: true as const })),
     restartSupported = true,
+    disable = vi.fn(async () => ({ restartRequired: true as const })),
 ) {
     const gets = new Map<string, RouteHandler>();
     const posts = new Map<string, RouteHandler>();
@@ -41,6 +42,7 @@ function setup(
                 error: null,
             })),
             install,
+            disable,
         },
         logger: { error: vi.fn() },
         configPath,
@@ -56,7 +58,7 @@ function setup(
         get: vi.fn((route: string, handler: RouteHandler) => gets.set(route, handler)),
         post: vi.fn((route: string, handler: RouteHandler) => posts.set(route, handler)),
     } as never);
-    return { app, gets, posts, install };
+    return { app, gets, posts, install, disable };
 }
 
 describe("extension routes", () => {
@@ -148,6 +150,41 @@ describe("extension routes", () => {
             restartSupported: false,
             message: expect.stringContaining("请手动重启 OneBots"),
         });
+    });
+
+    it("停用扩展后返回新的配置修订并明确保留依赖", async () => {
+        const { posts, disable } = setup();
+        const ctx = postContext();
+
+        await posts.get("/api/extensions/:id/disable")!(ctx);
+
+        expect(disable).toHaveBeenCalledWith("adapter:slack");
+        expect(ctx.body).toMatchObject({
+            success: true,
+            restartRequired: true,
+            restartSupported: true,
+            application: "onebots",
+            instance_id: "instance-a",
+            config_revision: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+            message: expect.stringContaining("依赖仍保留"),
+        });
+    });
+
+    it("拒绝由过期配置快照发起的停用", async () => {
+        const { posts, disable } = setup();
+        const ctx = postContext({
+            [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: "instance-a",
+            [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: `sha256:${"0".repeat(64)}`,
+        });
+
+        await posts.get("/api/extensions/:id/disable")!(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toMatchObject({
+            success: false,
+            message: "扩展停用使用的配置已经过期，请重新读取后再操作",
+        });
+        expect(disable).not.toHaveBeenCalled();
     });
 
     it("并发安装返回 409", async () => {

@@ -214,7 +214,7 @@ export interface PackageMutationStatus {
     available: boolean;
     owner: {
         operationId: string;
-        operation: "extension_install" | "package_update";
+        operation: "extension_install" | "extension_disable" | "package_update";
         extensionId: string | null;
         host: string;
         pid: number;

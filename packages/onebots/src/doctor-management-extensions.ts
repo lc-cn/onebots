@@ -181,9 +181,11 @@ export function inspectPackageMutationStatus(payload: PackageMutationSummary): D
     const operation =
         owner?.operation === "extension_install"
             ? `扩展 ${String(owner.extensionId)} 安装`
-            : owner?.operation === "package_update"
-              ? "OneBots 软件包更新"
-              : "未知包变更";
+            : owner?.operation === "extension_disable"
+              ? `扩展 ${String(owner.extensionId)} 停用`
+              : owner?.operation === "package_update"
+                ? "OneBots 软件包更新"
+                : "未知包变更";
     const detail = owner
         ? `${operation}（操作 ${String(owner.operationId)}，主机 ${String(owner.host)}，进程 ${String(owner.pid)}，开始于 ${String(owner.startedAt)}）`
         : String(payload.error);
@@ -213,8 +215,11 @@ function isPackageMutationOwner(value: unknown): value is Record<string, unknown
     return (
         !Object.hasOwn(value, "token") &&
         isSafeEvidenceText(value.operationId, 256) &&
-        (operation === "extension_install" || operation === "package_update") &&
-        ((operation === "extension_install" && isSafeEvidenceText(value.extensionId, 256)) ||
+        (operation === "extension_install" ||
+            operation === "extension_disable" ||
+            operation === "package_update") &&
+        (((operation === "extension_install" || operation === "extension_disable") &&
+            isSafeEvidenceText(value.extensionId, 256)) ||
             (operation === "package_update" && value.extensionId === null)) &&
         isSafeEvidenceText(value.host, 256) &&
         Number.isSafeInteger(value.pid) &&

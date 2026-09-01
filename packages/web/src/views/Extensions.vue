@@ -36,7 +36,7 @@
                 <p>
                     {{ activeInstallation.displayName }}：{{
                         installationProgress(activeInstallation)?.label ?? "正在安装扩展"
-                    }}。完成前暂不能开始其他扩展安装。
+                    }}。完成前暂不能变更其他扩展。
                 </p>
                 <p
                     v-if="installationProgress(activeInstallation)?.detail"
@@ -212,12 +212,30 @@
                                 </UiButton>
                             </RouterLink>
                             <UiButton
+                                v-if="disableAction(extension).visible"
+                                variant="danger"
+                                :loading="disablingId === extension.id"
+                                :disabled="
+                                    restarting ||
+                                    Boolean(installingId) ||
+                                    Boolean(disablingId) ||
+                                    Boolean(activeInstallation) ||
+                                    !extensionSnapshotIdentity ||
+                                    !extensionConfigRevision ||
+                                    packageMutationStatus?.available === false ||
+                                    !disableAction(extension).available
+                                "
+                                @click="disable(extension)">
+                                {{ disableAction(extension).label }}
+                            </UiButton>
+                            <UiButton
                                 v-if="installationAction(extension).visible"
                                 variant="primary"
                                 :loading="installingId === extension.id || extension.installing"
                                 :disabled="
                                     restarting ||
                                     Boolean(installingId) ||
+                                    Boolean(disablingId) ||
                                     Boolean(activeInstallation) ||
                                     !extensionSnapshotIdentity ||
                                     !extensionConfigRevision ||
@@ -250,6 +268,7 @@ import {
 } from "../utils/service-restart";
 import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiEmpty, UiInput, UiSpinner } from "../ui";
+import { useConfirm } from "../ui/confirm.js";
 import { matchesExtensionSearch } from "../components/capability-search.js";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
 import {
@@ -262,6 +281,7 @@ import { getExtensionConfigurationAction } from "./extension-configuration.js";
 import {
     getExtensionInstallRequestRecovery,
     getExtensionInstallCompletion,
+    getExtensionDisableAction,
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
@@ -269,6 +289,7 @@ import {
 } from "./extension-installation.js";
 
 const route = useRoute();
+const { confirm } = useConfirm();
 const extensions = ref<ExtensionInfo[]>([]);
 const packageMutationStatus = ref<PackageMutationStatus | null>(null);
 const extensionSnapshotIdentity = ref<ManagementEvidenceIdentity | null>(null);
@@ -277,6 +298,7 @@ const loading = ref(true);
 const filter = ref<ExtensionFilter>("all");
 const searchKeyword = ref("");
 const installingId = ref("");
+const disablingId = ref("");
 const restarting = ref(false);
 const errorMessage = ref("");
 const restartMessage = ref("");
@@ -312,6 +334,7 @@ watch(
 const configurationAction = (extension: ExtensionInfo) =>
     getExtensionConfigurationAction(extension);
 const installationAction = (extension: ExtensionInfo) => getExtensionInstallationAction(extension);
+const disableAction = (extension: ExtensionInfo) => getExtensionDisableAction(extension);
 const installationProgress = (extension: ExtensionInfo) =>
     getExtensionInstallationProgress(extension);
 const runtimeStatus = (extension: ExtensionInfo) => getExtensionRuntimeStatus(extension);
@@ -338,19 +361,21 @@ const packageMutationMessage = computed(() => {
     const status = packageMutationStatus.value;
     if (!status || status.state === "idle") return "";
     if (status.state === "invalid") {
-        return `${status.error ?? "包变更租约无法验证"}。为避免依赖目录损坏，扩展安装已禁用。`;
+        return `${status.error ?? "包变更租约无法验证"}。为避免依赖目录损坏，扩展变更已禁用。`;
     }
     const owner = status.owner;
     const operation =
         owner?.operation === "extension_install"
             ? `扩展 ${owner.extensionId} 安装`
-            : owner?.operation === "package_update"
-              ? "OneBots 软件包更新"
-              : "包变更";
+            : owner?.operation === "extension_disable"
+              ? `扩展 ${owner.extensionId} 停用`
+              : owner?.operation === "package_update"
+                ? "OneBots 软件包更新"
+                : "包变更";
     if (status.state === "recoverable") {
-        return `检测到可回收的${operation}租约；下一次扩展安装会先安全回收。`;
+        return `检测到可回收的${operation}租约；下一次扩展变更会先安全回收。`;
     }
-    return `${operation}正在由 ${owner?.host ?? "未知主机"} 的进程 ${owner?.pid ?? "未知"} 执行，完成前暂不能安装其他扩展。`;
+    return `${operation}正在由 ${owner?.host ?? "未知主机"} 的进程 ${owner?.pid ?? "未知"} 执行，完成前暂不能变更其他扩展。`;
 });
 
 const filteredExtensions = computed(() =>
@@ -549,6 +574,87 @@ async function install(extension: ExtensionInfo): Promise<void> {
         errorMessage.value = error instanceof Error ? error.message : String(error);
     } finally {
         installingId.value = "";
+    }
+}
+
+async function disable(extension: ExtensionInfo): Promise<void> {
+    const expectedIdentity = extensionSnapshotIdentity.value;
+    const expectedConfigRevision = extensionConfigRevision.value;
+    if (!expectedIdentity || !expectedConfigRevision) {
+        errorMessage.value = "扩展管理快照尚未验证，请重新加载后再停用";
+        return;
+    }
+    const accepted = await confirm({
+        title: `停用 ${extension.displayName}？`,
+        message:
+            "OneBots 会先验证移除后的启动配置。仍有机器人账号或协议出口引用该扩展时，操作会被拒绝；已安装依赖会保留，可随时重新启用。",
+        confirmText: "停用扩展",
+        danger: true,
+    });
+    if (!accepted) return;
+
+    disablingId.value = extension.id;
+    errorMessage.value = "";
+    restartMessage.value = "";
+    try {
+        let result: {
+            success: boolean;
+            restartRequired?: boolean;
+            restartSupported?: boolean;
+            message?: string;
+        };
+        try {
+            const response = await authFetch(
+                buildApiUrl(`/api/extensions/${encodeURIComponent(extension.id)}/disable`),
+                {
+                    method: "POST",
+                    headers: buildExtensionInstallRequestHeaders(
+                        expectedIdentity,
+                        expectedConfigRevision,
+                        "停用",
+                    ),
+                },
+            );
+            result = (await readManagementJsonResponse(response)) as typeof result;
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || "扩展停用失败");
+            }
+            extensionConfigRevision.value = assertExtensionInstallAcknowledgement(
+                response,
+                result,
+                expectedIdentity,
+                "停用",
+            );
+        } catch (error) {
+            const requestMessage = error instanceof Error ? error.message : String(error);
+            await loadExtensions();
+            const refreshed = extensions.value.find(item => item.id === extension.id);
+            if (!refreshed || refreshed.enabled) {
+                errorMessage.value = requestMessage;
+                return;
+            }
+            result = {
+                success: true,
+                restartRequired: true,
+                restartSupported: refreshed.restartSupported,
+                message: "扩展已从启动配置移除",
+            };
+        }
+
+        const completion = getExtensionInstallCompletion(result);
+        if (!completion.restart) {
+            await loadExtensions();
+            restartMessage.value =
+                completion.message ?? "扩展已停用；请手动重启 OneBots 以停止当前进程中的扩展";
+            return;
+        }
+        await restartAfterInstallation();
+    } catch (error) {
+        restarting.value = false;
+        await loadExtensions();
+        errorMessage.value = error instanceof Error ? error.message : String(error);
+    } finally {
+        disablingId.value = "";
     }
 }
 

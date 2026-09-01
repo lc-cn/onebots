@@ -2,10 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-    acquirePackageMutationLock,
-    inspectPackageMutationLock,
-} from "./package-mutation-lock.js";
+import { acquirePackageMutationLock, inspectPackageMutationLock } from "./package-mutation-lock.js";
 
 const directories: string[] = [];
 
@@ -56,6 +53,27 @@ describe("package mutation lock", () => {
             error: null,
         });
         expect(JSON.stringify(inspectPackageMutationLock(root))).not.toContain("private-token");
+        lock.release();
+    });
+
+    it("公开扩展停用租约并保留扩展身份", () => {
+        const root = fixture();
+        const lock = acquirePackageMutationLock(root, {
+            token: "private-token",
+            operationId: "disable-operation",
+            operation: "extension_disable",
+            extensionId: "adapter:slack",
+        });
+
+        expect(inspectPackageMutationLock(root)).toMatchObject({
+            state: "active",
+            available: false,
+            owner: {
+                operationId: "disable-operation",
+                operation: "extension_disable",
+                extensionId: "adapter:slack",
+            },
+        });
         lock.release();
     });
 

@@ -13,6 +13,27 @@ import {
 import { TRUSTED_EXTENSION_CATALOG } from "./trusted-extension-catalog.js";
 
 describe("doctor extension runtime evidence", () => {
+    it("reports an active extension disable transaction", () => {
+        expect(
+            inspectPackageMutationStatus({
+                state: "active",
+                available: false,
+                owner: {
+                    operationId: "disable-1",
+                    operation: "extension_disable",
+                    extensionId: "adapter:slack",
+                    host: "host-a",
+                    pid: 42,
+                    startedAt: "2026-09-01T01:00:00.000Z",
+                },
+                error: null,
+            }),
+        ).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("扩展 adapter:slack 停用"),
+        });
+    });
+
     it("rejects an active cross-process package update with actionable owner evidence", () => {
         expect(
             inspectPackageMutationStatus({

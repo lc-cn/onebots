@@ -6,6 +6,27 @@ export interface ExtensionInstallationAction {
     label: string;
 }
 
+export interface ExtensionDisableAction {
+    visible: boolean;
+    available: boolean;
+    label: string;
+}
+
+/** 停用只改写下一次启动选择；磁盘依赖会保留，前台进程需要人工重启。 */
+export function getExtensionDisableAction(
+    extension: Pick<ExtensionInfo, "enabled" | "restartSupported" | "runtimeConfigError">,
+): ExtensionDisableAction {
+    if (!extension.enabled) return { visible: false, available: false, label: "已停用" };
+    if (extension.runtimeConfigError) {
+        return { visible: true, available: false, label: "启动配置不可用" };
+    }
+    return {
+        visible: true,
+        available: true,
+        label: extension.restartSupported === false ? "停用并在完成后手动重启" : "停用并重启",
+    };
+}
+
 export interface ExtensionRuntimeStatus {
     variant: "success" | "warning" | "danger" | "neutral";
     label: string;
