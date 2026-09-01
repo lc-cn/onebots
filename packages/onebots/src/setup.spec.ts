@@ -53,6 +53,7 @@ describe("setup workflow", () => {
 
         expect(fs.readFileSync(configPath, "utf8")).toBe("port: 7000\n");
         expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect(fs.statSync(path.join(path.dirname(configPath), "data")).isDirectory()).toBe(true);
         expect(output.mock.calls.map(call => String(call[0])).join("")).toContain(
             "配置文件已存在并通过验证",
         );
@@ -74,6 +75,20 @@ describe("setup workflow", () => {
         expect((error as Error).message).not.toContain("secret-never-return");
         expect(fs.readFileSync(configPath, "utf8")).toBe(original);
         expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+    });
+
+    it("rejects an existing config whose runtime data path is a file", async () => {
+        const configPath = temporaryConfigPath();
+        const dataPath = path.join(path.dirname(configPath), "data");
+        const original = "port: 7000\n";
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+        fs.writeFileSync(dataPath, "keep this mount evidence");
+
+        await expect(runSetup(configPath)).rejects.toThrow(`数据存储路径不是目录: ${dataPath}`);
+
+        expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect(fs.readFileSync(dataPath, "utf8")).toBe("keep this mount evidence");
     });
 
     it("rejects a colliding data path before writing a first-run config", async () => {

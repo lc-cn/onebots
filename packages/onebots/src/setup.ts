@@ -125,6 +125,7 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     }
     if (preserveExisting) {
         await validateConfig(config);
+        ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
         writeCliOutput(`配置文件已存在并通过验证: ${configPath}`);
         writeCliOutput("非交互环境不会覆盖；如需更新请使用 --force。");
         return;
