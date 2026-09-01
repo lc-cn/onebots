@@ -16,6 +16,12 @@ export interface TerminalWebSocketConnectionCallbacks {
     onMessage?(event: MessageEvent): void;
     onError?(event: Event): void;
     onClose?(event: CloseEvent): void;
+    shouldReconnect?(event: CloseEvent): boolean;
+}
+
+/** 服务端使用 1008 表示管理凭据已失效，继续携带同一凭据重试没有恢复意义。 */
+export function shouldReconnectTerminalWebSocket(event: Pick<CloseEvent, "code">): boolean {
+    return event.code !== 1008;
 }
 
 /** 保证终端页面至多持有一个当前连接和一个重连定时器。 */
@@ -52,6 +58,7 @@ export class TerminalWebSocketConnection {
             this.detach(socket);
             this.socket = null;
             this.callbacks.onClose?.(event);
+            if (this.callbacks.shouldReconnect?.(event) === false) return;
             this.reconnectTimer = setTimeout(() => {
                 this.reconnectTimer = undefined;
                 this.connect();

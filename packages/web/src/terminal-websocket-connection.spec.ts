@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     TerminalWebSocketConnection,
+    shouldReconnectTerminalWebSocket,
     type TerminalWebSocketLike,
 } from "./terminal-websocket-connection.js";
 
@@ -39,6 +40,26 @@ describe("TerminalWebSocketConnection", () => {
 
         expect(onClose).toHaveBeenCalledOnce();
         expect(sockets).toHaveLength(2);
+    });
+
+    it("does not retry a policy close caused by invalid management credentials", () => {
+        vi.useFakeTimers();
+        const sockets: FakeSocket[] = [];
+        const connection = createConnection(sockets, {
+            shouldReconnect: shouldReconnectTerminalWebSocket,
+        });
+
+        connection.connect();
+        sockets[0].serverClose(1008);
+        vi.advanceTimersByTime(6000);
+
+        expect(sockets).toHaveLength(1);
+    });
+
+    it("keeps retrying transient and normal terminal-exit closures", () => {
+        expect(shouldReconnectTerminalWebSocket({ code: 1000 })).toBe(true);
+        expect(shouldReconnectTerminalWebSocket({ code: 1006 })).toBe(true);
+        expect(shouldReconnectTerminalWebSocket({ code: 1013 })).toBe(true);
     });
 
     it("dispose cancels a reconnect already scheduled by server close", () => {
@@ -102,7 +123,7 @@ class FakeSocket implements TerminalWebSocketLike {
     send = vi.fn();
     close = vi.fn();
 
-    serverClose(): void {
-        this.onclose?.({ code: 1006 } as CloseEvent);
+    serverClose(code = 1006): void {
+        this.onclose?.({ code } as CloseEvent);
     }
 }

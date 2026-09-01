@@ -65,6 +65,8 @@ Legacy clients may still submit one string line to process stdin through the roo
 
 The Web console terminal also uses one connection generation and one reconnect timer. Manual reconnect detaches the old socket callbacks before closing it, so a late `close` from that socket cannot create an extra connection. Leaving the terminal page cancels any pending reconnect and releases the current socket, preventing an orphan terminal session from appearing in the background three seconds later.
 
+Terminal reconnection also distinguishes the close reason. Network interruption, service restart, and a normal PTY exit continue recovering after three seconds. When the server uses code `1008` for an expired session or rotated management credentials, the page explains that the operator must sign in again and stops repeatedly sending the same invalid credential. A manual connection remains available after the credential is replaced.
+
 ### Token Management
 
 Complete token lifecycle management.

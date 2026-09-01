@@ -43,7 +43,10 @@ import '@xterm/xterm/css/xterm.css';
 import { UiButton, UiBadge } from '../ui/index';
 import { buildWsUrl } from '../config';
 import { appendWebSocketAuthQuery } from '../composables/useAuth';
-import { TerminalWebSocketConnection } from '../terminal-websocket-connection';
+import {
+    TerminalWebSocketConnection,
+    shouldReconnectTerminalWebSocket,
+} from '../terminal-websocket-connection';
 
 const terminalContainer = ref<HTMLElement>();
 let terminal: Terminal | null = null;
@@ -88,10 +91,14 @@ const connectWebSocket = () => {
             onError: error => {
                 console.error('WebSocket 错误:', error);
             },
-            onClose: () => {
+            onClose: event => {
                 isConnected.value = false;
                 console.log('终端连接已关闭');
-            }
+                if (!shouldReconnectTerminalWebSocket(event)) {
+                    terminal?.writeln('\r\n\x1b[31m[管理凭据已失效，请重新登录后手动连接]\x1b[0m');
+                }
+            },
+            shouldReconnect: shouldReconnectTerminalWebSocket,
         }
     );
     connection.connect();
