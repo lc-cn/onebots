@@ -37,7 +37,7 @@ function createConfig(source: string): string {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-install-preflight-"));
     temporaryDirectories.push(directory);
     const configPath = path.join(directory, "config.yaml");
-    fs.writeFileSync(configPath, source, "utf8");
+    fs.writeFileSync(configPath, source, { mode: 0o600 });
     return configPath;
 }
 
@@ -133,6 +133,20 @@ describe("service install preflight", () => {
         expect(install).toHaveBeenCalledWith(
             expect.objectContaining({ configPath: config, adapters: [], protocols: [] }),
         );
+    });
+
+    it.runIf(process.platform !== "win32")("凭据权限不安全时不写入服务定义", async () => {
+        const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        fs.chmodSync(config, 0o644);
+
+        await expect(installService(options(config))).rejects.toMatchObject({
+            message: expect.stringMatching(
+                /服务安装预检失败.*持久化管理凭据权限不安全.*配置文件权限 644/,
+            ),
+            exitCode: 2,
+        });
+        expect(install).not.toHaveBeenCalled();
     });
 
     it("更新运行中的服务定义时明确要求重启应用新定义", async () => {

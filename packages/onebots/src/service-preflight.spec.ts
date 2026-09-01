@@ -168,7 +168,9 @@ describe("service runtime preflight", () => {
         const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cwd-"));
         temporaryDirectories.push(workingDirectory);
         const configPath = path.join(workingDirectory, "config.yaml");
-        fs.writeFileSync(configPath, "access_token: persisted-token\ngeneral: {}\n", "utf8");
+        fs.writeFileSync(configPath, "access_token: persisted-token\ngeneral: {}\n", {
+            mode: 0o600,
+        });
 
         const packageDirectory = path.join(workingDirectory, "node_modules", "custom-adapter");
         fs.mkdirSync(packageDirectory, { recursive: true });
@@ -276,7 +278,7 @@ describe("service runtime preflight", () => {
         const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cwd-"));
         temporaryDirectories.push(workingDirectory);
         const configPath = path.join(workingDirectory, "config.yaml");
-        fs.writeFileSync(configPath, config, "utf8");
+        fs.writeFileSync(configPath, config, { mode: 0o600 });
 
         await expect(
             preflightServiceRuntime({
@@ -287,6 +289,27 @@ describe("service runtime preflight", () => {
             }),
         ).resolves.toBeUndefined();
     });
+
+    it.runIf(process.platform !== "win32")(
+        "在安装或启动服务前拒绝公开可读的持久化管理凭据",
+        async () => {
+            const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cwd-"));
+            temporaryDirectories.push(workingDirectory);
+            const configPath = path.join(workingDirectory, "config.yaml");
+            fs.writeFileSync(configPath, "access_token: persisted-token\ngeneral: {}\n", {
+                mode: 0o644,
+            });
+
+            await expect(
+                preflightServiceRuntime({
+                    configPath,
+                    adapters: [],
+                    protocols: [],
+                    workingDirectory,
+                }),
+            ).rejects.toThrow("服务配置中的持久化管理凭据权限不安全：配置文件权限 644");
+        },
+    );
 
     it("rejects an importable plugin that does not fulfil its registration contract", async () => {
         const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cwd-"));

@@ -12,6 +12,8 @@ import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor
 import { hasManagementCredentials } from "./management-credentials.js";
 import { pluginCandidates, tryLoadRegisteredPlugin, type PluginType } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
+import { inspectPersistedCredentialPermissions } from "./persisted-credential-permissions.js";
+import { formatConfiguredCommand } from "./setup-config.js";
 
 export type ServicePreflightSpec = Pick<
     ServiceSpec,
@@ -144,6 +146,14 @@ export async function preflightServiceRuntime(spec: ServicePreflightSpec): Promi
     if (!hasManagementCredentials(config, "")) {
         throw new Error(
             "服务配置缺少持久化管理凭据。守护服务不会保存当前 shell 的 ONEBOTS_ACCESS_TOKEN；请将 access_token 或完整用户名密码写入配置，也可取消该环境变量后执行 onebots setup --force 自动生成鉴权码",
+        );
+    }
+    const permissionErrors = inspectPersistedCredentialPermissions(spec.configPath).filter(
+        check => check.level === "error",
+    );
+    if (permissionErrors.length > 0) {
+        throw new Error(
+            `服务配置中的持久化管理凭据权限不安全：${permissionErrors.map(check => check.message).join("；")}。请先运行 ${formatConfiguredCommand(spec.configPath, "doctor")} --fix，或按提示调整目录权限`,
         );
     }
 }

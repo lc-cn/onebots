@@ -22,10 +22,7 @@ import {
 } from "./runtime-plugin-selection.js";
 import { ensureRuntimeDataDirectory } from "./runtime-data-directory.js";
 import { resolveManagementWebUrl } from "./doctor-endpoint.js";
-import {
-    inspectSensitiveDirectoryMutationPermissions,
-    inspectSensitiveFilePermissions,
-} from "./doctor-permissions.js";
+import { inspectPersistedCredentialPermissions } from "./persisted-credential-permissions.js";
 
 export interface SetupOptions {
     force?: boolean;
@@ -209,13 +206,7 @@ function verifyPersistedCredentialPermissions(
     const resolvedConfigPath = fs.realpathSync(configPath);
     const backupPath = `${resolvedConfigPath}.bak`;
     if (!hasManagementCredentials(config, "") && !fs.existsSync(backupPath)) return;
-    const checks = [
-        inspectSensitiveFilePermissions(resolvedConfigPath, "config-mode", "配置文件"),
-        inspectSensitiveDirectoryMutationPermissions(path.dirname(resolvedConfigPath)),
-        ...(fs.existsSync(backupPath)
-            ? [inspectSensitiveFilePermissions(backupPath, "config-backup-mode", "配置备份")]
-            : []),
-    ];
+    const checks = inspectPersistedCredentialPermissions(resolvedConfigPath);
     const errors = checks.filter(check => check.level === "error");
     if (errors.length > 0) {
         throw new Error(
