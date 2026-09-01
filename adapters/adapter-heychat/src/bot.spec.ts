@@ -1,7 +1,8 @@
 import { EventEmitter } from "node:events";
 import type WebSocket from "ws";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { HeychatBot } from "./bot.js";
+import { HeychatWsClient } from "./ws/client.js";
 
 function envelope(sequence: number) {
     return { sequence, type: "50", timestamp: 1_700_000_000, data: {} };
@@ -12,6 +13,8 @@ class HostSocket extends EventEmitter {
 }
 
 describe("HeychatBot manual ingress", () => {
+    afterEach(() => vi.restoreAllMocks());
+
     it("不创建正向连接，并让 raw 与已升级 socket 共用同一去重管线", async () => {
         const bot = new HeychatBot({
             account_id: "bot",
@@ -82,6 +85,46 @@ describe("HeychatBot manual ingress", () => {
         releaseDelivery();
         await stopping;
         expect(stopped).toHaveBeenCalledOnce();
+    });
+
+    it("账号启动取消会关闭尚未完成的正向 WebSocket", async () => {
+        let connectSignal: AbortSignal | undefined;
+        const connect = vi.spyOn(HeychatWsClient.prototype, "connect").mockImplementation(
+            signal =>
+                new Promise<void>((_resolve, reject) => {
+                    connectSignal = signal;
+                    signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+                }),
+        );
+        const close = vi.spyOn(HeychatWsClient.prototype, "close").mockImplementation(() => {});
+        const bot = new HeychatBot({ account_id: "bot", token: "token" });
+        const controller = new AbortController();
+        const reason = new Error("account startup timeout");
+
+        const starting = bot.start(controller.signal);
+        controller.abort(reason);
+
+        await expect(starting).rejects.toBe(reason);
+        expect(connect).toHaveBeenCalledWith(controller.signal);
+        expect(connectSignal?.aborted).toBe(true);
+        expect(close).toHaveBeenCalledOnce();
+    });
+
+    it("就绪后继续响应账号信号以支持协议启动回滚", async () => {
+        const bot = new HeychatBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        const stopped = vi.fn();
+        bot.on("stopped", stopped);
+        const controller = new AbortController();
+
+        await bot.start(controller.signal);
+        controller.abort(new Error("protocol failed"));
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+
+        expect(bot.isConnected()).toBe(false);
     });
 
     it("旧启动迟到失败不会覆盖快速重启的新代次", async () => {

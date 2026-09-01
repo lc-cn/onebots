@@ -53,6 +53,8 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     private botId: number | null = null;
     private running = false;
     private startPromise: Promise<void> | null = null;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private readonly channelContexts = new Map<string, HeychatChannelContext>();
     private readonly messageContexts = new Map<string, HeychatChannelContext>();
 
@@ -62,19 +64,28 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
         this.http = new HeychatHttpClient(config);
     }
 
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.startPromise) return this.startPromise;
         if (this.running) return;
-        const start = this.startInternal();
+        this.bindStartSignal(signal);
+        const start = this.startInternal(signal);
+        const generation = this.deliveryGeneration;
         this.startPromise = start;
         try {
             await start;
+        } catch (error) {
+            if (signal?.aborted) throw signal.reason;
+            throw error;
         } finally {
             if (this.startPromise === start) this.startPromise = null;
+            if (generation === this.deliveryGeneration && !this.running) {
+                this.unbindStartSignal();
+            }
         }
     }
 
-    private async startInternal(): Promise<void> {
+    private async startInternal(signal?: AbortSignal): Promise<void> {
         this.running = true;
         const generation = ++this.deliveryGeneration;
         const deliveryAbort = new AbortController();
@@ -84,20 +95,24 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
             if (resolveHeychatReceiveMode(this.config) === "manual") {
                 this.ingress.reset();
                 await emitAllAwaited(this, "ready");
+                this.assertLifecycle(generation, signal);
                 return;
             }
             const ws = new HeychatWsClient(this.config);
             startingWs = ws;
             this.ws = ws;
             ws.on("ready", async () => {
+                this.assertLifecycle(generation, signal);
                 this.ingress.reset();
                 await emitAllAwaited(this, "ready");
+                this.assertLifecycle(generation, signal);
             });
             ws.on("disconnected", details => this.emit("disconnected", details));
             ws.on("reconnecting", details => this.emit("reconnecting", details));
             ws.on("error", error => this.emit("error", error));
             ws.on("event", envelope => this.enqueueSocketEvent(envelope));
-            await ws.connect();
+            await ws.connect(signal);
+            this.assertLifecycle(generation, signal);
         } catch (error) {
             if (generation === this.deliveryGeneration) {
                 this.running = false;
@@ -113,6 +128,7 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
     async stop(): Promise<void> {
         const wasActive = this.running || Boolean(this.startPromise || this.ws);
         if (!wasActive) return;
+        this.unbindStartSignal();
         this.running = false;
         this.startPromise = null;
         this.deliveryGeneration += 1;
@@ -139,6 +155,38 @@ export class HeychatBot extends EventEmitter<HeychatBotEvents> {
         return resolveHeychatReceiveMode(this.config) === "manual"
             ? this.running
             : (this.ws?.isConnected() ?? false);
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error => {
+                if (this.listenerCount("error") > 0) {
+                    this.emit("error", HeychatApiError.wrap(error, "HEYCHAT_STOP_FAILED"));
+                }
+            });
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
+    }
+
+    private assertLifecycle(generation: number, signal?: AbortSignal): void {
+        signal?.throwIfAborted();
+        if (!this.running || generation !== this.deliveryGeneration) {
+            throw new HeychatApiError("黑盒语音客户端启动已取消", {
+                code: "HEYCHAT_START_CANCELLED",
+            });
+        }
     }
 
     /** 将宿主收到的结构化事件或 WS 文本帧交给统一事件管线。 */

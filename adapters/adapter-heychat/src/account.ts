@@ -41,9 +41,9 @@ export function createHeychatAccount(
             }),
         );
     });
-    account.on("start", async () => {
+    account.on("start", async (signal: AbortSignal) => {
         account.status = AccountStatus.Pending;
-        await bot.start();
+        await bot.start(signal);
     });
     account.on("stop", async () => bot.stop());
     return account;

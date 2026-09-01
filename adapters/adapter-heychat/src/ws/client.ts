@@ -35,6 +35,7 @@ export function calculateHeychatReconnectDelay(
 export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
     private ws: WebSocket | null = null;
     private pendingWs: WebSocket | null = null;
+    private abortPendingConnect: ((reason: unknown) => void) | null = null;
     private readonly token: string;
     private readonly wsUrl: string;
     private readonly chatVersion: string;
@@ -64,10 +65,19 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
         this.proxy = config.proxy;
     }
 
-    async connect(): Promise<void> {
+    async connect(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (!this.closed) return;
         this.closed = false;
-        await this.connectGeneration();
+        try {
+            await this.connectGeneration(signal);
+        } catch (error) {
+            if (signal?.aborted) {
+                this.close();
+                throw signal.reason;
+            }
+            throw error;
+        }
     }
 
     close(): void {
@@ -83,11 +93,12 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
         return this.ws?.readyState === WebSocket.OPEN;
     }
 
-    private async connectGeneration(): Promise<void> {
+    private async connectGeneration(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.closed) return;
         const generation = ++this.generation;
         try {
-            const ws = await this.openSocket(generation);
+            const ws = await this.openSocket(generation, signal);
             if (this.closed || generation !== this.generation) {
                 ws.terminate();
                 return;
@@ -98,6 +109,7 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
             this.startHeartbeat(generation);
             await emitAllAwaited(this, "ready");
         } catch (error) {
+            if (signal?.aborted) throw signal.reason;
             if (this.closed || generation !== this.generation) return;
             const wrapped = HeychatApiError.wrap(
                 error,
@@ -109,7 +121,8 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
         }
     }
 
-    private async openSocket(generation: number): Promise<WebSocket> {
+    private async openSocket(generation: number, signal?: AbortSignal): Promise<WebSocket> {
+        signal?.throwIfAborted();
         const options: WebSocket.ClientOptions = {
             headers: { Accept: "application/json, text/plain, */*" },
             handshakeTimeout: this.handshakeTimeoutMs,
@@ -122,33 +135,58 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
         return new Promise((resolve, reject) => {
             const ws = new WebSocket(this.buildConnectUrl(), options);
             this.pendingWs = ws;
-            const onError = (error: Error): void => {
-                ws.removeListener("open", onOpen);
-                ws.removeListener("close", onClose);
-                if (this.pendingWs === ws) this.pendingWs = null;
-                ws.terminate();
-                reject(error);
-            };
-            const onClose = (code: number): void => {
+            let settled = false;
+            const cleanup = (): void => {
                 ws.removeListener("open", onOpen);
                 ws.removeListener("error", onError);
-                if (this.pendingWs === ws) this.pendingWs = null;
-                reject(new Error(`WebSocket 在握手完成前关闭（${code}）`));
-            };
-            const onOpen = (): void => {
-                ws.removeListener("error", onError);
                 ws.removeListener("close", onClose);
+                signal?.removeEventListener("abort", onAbort);
                 if (this.pendingWs === ws) this.pendingWs = null;
-                if (generation !== this.generation || this.closed) {
-                    ws.terminate();
-                    reject(new Error("连接已被更新的 generation 取代"));
-                    return;
-                }
+                if (this.abortPendingConnect === abortConnect) this.abortPendingConnect = null;
+            };
+            const resolveOnce = (): void => {
+                if (settled) return;
+                settled = true;
+                cleanup();
                 resolve(ws);
             };
+            const rejectOnce = (error: unknown): void => {
+                if (settled) return;
+                settled = true;
+                cleanup();
+                reject(error);
+            };
+            const onError = (error: Error): void => {
+                ws.terminate();
+                rejectOnce(error);
+            };
+            const onClose = (code: number): void => {
+                rejectOnce(new Error(`WebSocket 在握手完成前关闭（${code}）`));
+            };
+            const onOpen = (): void => {
+                if (generation !== this.generation || this.closed) {
+                    ws.terminate();
+                    rejectOnce(new Error("连接已被更新的 generation 取代"));
+                    return;
+                }
+                resolveOnce();
+            };
+            const onAbort = (): void => {
+                abortConnect(signal?.reason);
+            };
+            const abortConnect = (reason: unknown): void => {
+                // ws 在 HTTP upgrade 前 terminate 会额外发出 error；这是主动取消的结果，
+                // 不能在结算 Promise、移除常规监听器后变成未处理异常。
+                ws.once("error", () => undefined);
+                ws.terminate();
+                rejectOnce(reason);
+            };
+            this.abortPendingConnect = abortConnect;
             ws.once("error", onError);
             ws.once("close", onClose);
             ws.once("open", onOpen);
+            signal?.addEventListener("abort", onAbort, { once: true });
+            if (signal?.aborted) onAbort();
         });
     }
 
@@ -250,10 +288,8 @@ export class HeychatWsClient extends EventEmitter<HeychatWsClientEvents> {
     }
 
     private disposeSocket(): void {
-        if (this.pendingWs) {
-            this.pendingWs.removeAllListeners();
-            this.pendingWs.terminate();
-            this.pendingWs = null;
+        if (this.abortPendingConnect) {
+            this.abortPendingConnect(new Error("WebSocket 握手已取消"));
         }
         if (!this.ws) return;
         this.ws.removeAllListeners();
