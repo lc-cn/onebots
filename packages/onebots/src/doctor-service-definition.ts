@@ -25,7 +25,7 @@ export interface DoctorServiceRepairOptions {
 
 /** 将平台服务定义的读取或比对异常收敛为 doctor 可持久化的脱敏证据。 */
 export function inspectDoctorServiceDefinition(
-    controller: Pick<ServiceController, "definitionIsCurrent" | "paths">,
+    controller: Pick<ServiceController, "definitionIsCurrent" | "definitionPath">,
     spec: ServiceSpec,
 ): DoctorServiceDefinitionInspection {
     try {
@@ -33,7 +33,7 @@ export function inspectDoctorServiceDefinition(
     } catch {
         return {
             current: false,
-            error: `服务平台定义无法读取或验证: ${controller.paths().definition}`,
+            error: `服务平台定义无法读取或验证: ${controller.definitionPath(spec)}`,
         };
     }
 }
@@ -96,7 +96,7 @@ export async function repairDoctorUserService(
             {
                 name: "service-definition",
                 level: "error",
-                message: `用户级服务定义修复失败: ${options.controller.paths().definition}`,
+                message: `用户级服务定义修复失败: ${options.controller.definitionPath(options.repairedSpec)}`,
             },
         ];
     }

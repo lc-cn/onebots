@@ -16,6 +16,10 @@ import {
     type ServiceStatus,
 } from "./service-definition.js";
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
+import {
+    getWindowsSystemServiceFiles,
+    validateWindowsSystemServiceDefinition,
+} from "./windows-system-service-definition.js";
 
 export * from "./service-definition.js";
 export type { ServiceHost } from "./service-host.js";
@@ -154,6 +158,14 @@ export class ServiceController {
         return getPaths(this.scope, this.host);
     }
 
+    /** 返回承载真实启动契约的平台定义；Windows 系统服务由 node-windows 写在入口旁。 */
+    definitionPath(spec: ServiceSpec): string {
+        if (this.host.platform === "win32" && this.scope === "system") {
+            return getWindowsSystemServiceFiles(spec).definition;
+        }
+        return this.paths().definition;
+    }
+
     readSpec(): ServiceSpec | null {
         const { metadata } = this.paths();
         if (!fs.existsSync(metadata)) return null;
@@ -165,20 +177,33 @@ export class ServiceController {
     /** 检查已写入的平台定义是否与元数据一致。 */
     definitionIsCurrent(spec: ServiceSpec): boolean {
         const paths = this.paths();
-        if (!fs.existsSync(paths.definition)) return false;
+        const definition = this.definitionPath(spec);
+        if (!fs.existsSync(definition)) return false;
         if (this.host.platform === "win32" && this.scope === "user") {
             const runnerPath = path.join(paths.stateDir, "onebots-runner.cmd");
             return (
                 fs.existsSync(runnerPath) &&
-                fs.readFileSync(paths.definition, "utf16le") === renderWindowsTaskXml(runnerPath) &&
+                fs.readFileSync(definition, "utf16le") === renderWindowsTaskXml(runnerPath) &&
                 fs.readFileSync(runnerPath, "utf8") === renderWindowsRunner(spec, paths.stateDir)
             );
         }
+        if (this.host.platform === "win32") {
+            const files = getWindowsSystemServiceFiles(spec);
+            return (
+                fs.existsSync(files.executable) &&
+                validateWindowsSystemServiceDefinition(
+                    fs.readFileSync(definition, "utf8"),
+                    spec,
+                    paths.stateDir,
+                    resolveNodeWindowsWrapper(),
+                )
+            );
+        }
         if (this.host.platform === "linux")
-            return fs.readFileSync(paths.definition, "utf8") === renderSystemdUnit(spec);
+            return fs.readFileSync(definition, "utf8") === renderSystemdUnit(spec);
         if (this.host.platform === "darwin") {
             return (
-                fs.readFileSync(paths.definition, "utf8") ===
+                fs.readFileSync(definition, "utf8") ===
                 renderLaunchdPlist(
                     spec,
                     path.join(paths.stateDir, "onebots.log"),
@@ -465,6 +490,15 @@ function createNodeWindowsService(spec: ServiceSpec, logPath: string): NodeWindo
             grow: 0,
             maxRestarts: -1,
         });
+    } catch {
+        throw new Error("Windows 系统服务需要可选依赖 node-windows，请重新安装 OneBots 后再试。");
+    }
+}
+
+function resolveNodeWindowsWrapper(): string {
+    const require = createRequire(import.meta.url);
+    try {
+        return path.join(path.dirname(require.resolve("node-windows")), "wrapper.js");
     } catch {
         throw new Error("Windows 系统服务需要可选依赖 node-windows，请重新安装 OneBots 后再试。");
     }

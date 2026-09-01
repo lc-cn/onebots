@@ -87,6 +87,31 @@ describe("Windows user task persistence", () => {
     });
 });
 
+describe("Windows system service persistence", () => {
+    it("使用 node-windows 的真实 WinSW 定义路径而不是状态目录占位文件", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-windows-system-service-"));
+        temporaryDirectories.push(root);
+        const controller = new ServiceController("system", windowsHost(root));
+        const binPath = path.join(root, "onebots", "lib", "bin.js");
+        const spec: ServiceSpec = {
+            scope: "system",
+            configPath: path.join(root, "config.yaml"),
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            nodePath: path.join(root, "node.exe"),
+            binPath,
+            workingDirectory: root,
+        };
+        fs.mkdirSync(controller.paths().stateDir, { recursive: true });
+        fs.writeFileSync(controller.paths().definition, "legacy placeholder", "utf8");
+
+        expect(controller.definitionPath(spec)).toBe(
+            path.join(path.dirname(binPath), "daemon", "onebotsgateway.xml"),
+        );
+        expect(controller.definitionIsCurrent(spec)).toBe(false);
+    });
+});
+
 function linuxHost(root: string): ServiceHost {
     return {
         platform: "linux",
@@ -106,7 +131,7 @@ function windowsHost(root: string): ServiceHost {
         platform: "win32",
         homedir: root,
         isElevated: false,
-        env: { LOCALAPPDATA: root },
+        env: { LOCALAPPDATA: root, ProgramData: root },
         exec: vi.fn(() => ""),
         spawn: vi.fn(async () => 0),
     };

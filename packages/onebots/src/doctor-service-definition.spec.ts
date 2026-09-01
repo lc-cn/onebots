@@ -78,10 +78,6 @@ describe("doctor service platform definition", () => {
 function controllerFixture(definitionIsCurrent: (spec: ServiceSpec) => boolean) {
     return {
         definitionIsCurrent: vi.fn(definitionIsCurrent),
-        paths: vi.fn(() => ({
-            stateDir: "/state/onebots",
-            definition: "/state/onebots/onebots.service",
-            metadata: "/state/onebots/service.json",
-        })),
-    } satisfies Pick<ServiceController, "definitionIsCurrent" | "paths">;
+        definitionPath: vi.fn(() => "/state/onebots/onebots.service"),
+    } satisfies Pick<ServiceController, "definitionIsCurrent" | "definitionPath">;
 }
