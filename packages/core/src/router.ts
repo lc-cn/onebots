@@ -28,6 +28,8 @@ export interface WebSocketRouteOptions {
     authorize?: WebSocketUpgradeAuthorizer;
     /** 单条入站 WebSocket 消息的最大字节数，超限连接以 1009 关闭。 */
     maxPayloadBytes?: number;
+    /** 同一路径允许的最大并发连接数；满载时在升级前以 HTTP 503 拒绝。 */
+    maxConnections?: number;
 }
 
 export interface RouterRegistrationOwner {
@@ -174,6 +176,7 @@ export class RouterRegistrationScope {
 export class Router extends KoaRouter {
     private readonly wsMap = new Map<string, WsServer>();
     private readonly wsAuthorizers = new Map<string, WebSocketUpgradeAuthorizer>();
+    private readonly wsConnectionLimits = new Map<string, number>();
     private readonly wsOwners = new Map<string, RouterRegistrationOwner>();
     private readonly registrationScope = new AsyncLocalStorage<RouterRegistrationScope>();
     private readonly httpOwners = new WeakMap<Layer, RouterRegistrationOwner>();
@@ -218,6 +221,12 @@ export class Router extends KoaRouter {
                     });
                     return;
                 }
+            }
+
+            const maxConnections = this.wsConnectionLimits.get(pathname);
+            if (maxConnections !== undefined && wsServer.clients.size >= maxConnections) {
+                this.rejectUpgrade(socket, 503, "Service Unavailable", { "Retry-After": "1" });
+                return;
             }
 
             wsServer.handleUpgrade(request, socket, head, ws => {
@@ -337,6 +346,12 @@ export class Router extends KoaRouter {
         ) {
             throw new RangeError("WebSocket maxPayloadBytes 必须是 1 到 100 MiB 之间的安全整数");
         }
+        if (
+            options.maxConnections !== undefined &&
+            (!Number.isSafeInteger(options.maxConnections) || options.maxConnections <= 0)
+        ) {
+            throw new RangeError("WebSocket maxConnections 必须是正安全整数");
+        }
         const scope = this.registrationScope.getStore();
         if (this.wsMap.has(normalized)) {
             throw new WebSocketRouteConflictError(
@@ -353,6 +368,9 @@ export class Router extends KoaRouter {
         });
         this.wsMap.set(normalized, wsServer);
         if (options.authorize) this.wsAuthorizers.set(normalized, options.authorize);
+        if (options.maxConnections !== undefined) {
+            this.wsConnectionLimits.set(normalized, options.maxConnections);
+        }
         if (scope?.owner) this.wsOwners.set(normalized, scope.owner);
         scope?.trackWs(normalized, wsServer);
         return wsServer;
@@ -404,6 +422,7 @@ export class Router extends KoaRouter {
 
         this.wsMap.delete(normalized);
         this.wsAuthorizers.delete(normalized);
+        this.wsConnectionLimits.delete(normalized);
         this.wsOwners.delete(normalized);
         this.terminateClients(wsServer);
         wsServer.close();
@@ -416,6 +435,7 @@ export class Router extends KoaRouter {
         const servers = [...this.wsMap.values()];
         this.wsMap.clear();
         this.wsAuthorizers.clear();
+        this.wsConnectionLimits.clear();
         this.wsOwners.clear();
         for (const wsServer of servers) {
             this.terminateClients(wsServer);
@@ -429,6 +449,7 @@ export class Router extends KoaRouter {
         const servers = [...this.wsMap.values()];
         this.wsMap.clear();
         this.wsAuthorizers.clear();
+        this.wsConnectionLimits.clear();
         this.wsOwners.clear();
         await Promise.all(servers.map(wsServer => this.closeWsServer(wsServer)));
     }

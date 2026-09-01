@@ -83,6 +83,9 @@ describe("Router WebSocket lifecycle", () => {
                 maxPayloadBytes: DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES + 1,
             }),
         ).toThrow("1 到 100 MiB");
+        expect(() => router.ws("/no-connections", { maxConnections: 0 })).toThrow(
+            "maxConnections 必须是正安全整数",
+        );
         expect(router.getWsPaths()).toEqual(["/default", "/limited"]);
     });
 
@@ -163,6 +166,48 @@ describe("Router WebSocket lifecycle", () => {
         authorized.close();
         await once(authorized, "close");
         await router.cleanupAsync();
+    });
+
+    it("先授权再检查连接上限，满载时拒绝升级并在断开后恢复容量", async () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+        const wsServer = router.ws("/limited-connections", {
+            authorize: request => request.headers.authorization === "Bearer secret",
+            maxConnections: 1,
+        });
+
+        server.listen(0, "127.0.0.1");
+        await once(server, "listening");
+        const address = server.address();
+        if (!address || typeof address === "string") throw new Error("测试服务器未监听 TCP");
+        const url = `ws://127.0.0.1:${address.port}/limited-connections`;
+        const headers = { Authorization: "Bearer secret" };
+
+        const first = new WebSocket(url, { headers });
+        await once(first, "open");
+        expect(wsServer.clients.size).toBe(1);
+
+        await expect(rejectedUpgradeResponse(url)).resolves.toMatchObject({
+            status: 401,
+            authenticate: "Bearer",
+        });
+        await expect(rejectedUpgradeResponse(url, headers)).resolves.toMatchObject({
+            status: 503,
+            retryAfter: "1",
+        });
+        expect(wsServer.clients.size).toBe(1);
+
+        first.close();
+        await once(first, "close");
+        expect(wsServer.clients.size).toBe(0);
+
+        const replacement = new WebSocket(url, { headers });
+        await once(replacement, "open");
+        expect(wsServer.clients.size).toBe(1);
+        const replacementClosed = once(replacement, "close");
+        await router.cleanupAsync();
+        await replacementClosed;
     });
 });
 
@@ -297,17 +342,32 @@ describe("Router HTTP route registration", () => {
 function rejectedUpgradeStatus(
     url: string,
 ): Promise<{ status: number | undefined; authenticate: string | undefined }> {
+    return rejectedUpgradeResponse(url).then(response => ({
+        status: response.status,
+        authenticate: response.authenticate,
+    }));
+}
+
+function rejectedUpgradeResponse(
+    url: string,
+    headers?: Record<string, string>,
+): Promise<{
+    status: number | undefined;
+    authenticate: string | undefined;
+    retryAfter: string | undefined;
+}> {
     return new Promise((resolve, reject) => {
-        const client = new WebSocket(url);
+        const client = new WebSocket(url, headers ? { headers } : undefined);
         client.once("unexpected-response", (_request, response) => {
             const result = {
                 status: response.statusCode,
                 authenticate: response.headers["www-authenticate"],
+                retryAfter: response.headers["retry-after"],
             };
             response.resume();
             resolve(result);
         });
-        client.once("open", () => reject(new Error("未授权 WebSocket 意外完成握手")));
+        client.once("open", () => reject(new Error("预期被拒绝的 WebSocket 意外完成握手")));
         client.once("error", () => undefined);
     });
 }

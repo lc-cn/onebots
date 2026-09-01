@@ -11,6 +11,7 @@ import {
 import { startManagementAuthorizationMonitor } from "../management-authorization-monitor.js";
 import { scheduleProcessRestart } from "../process-restart.js";
 import {
+    TERMINAL_WEBSOCKET_MAX_CONNECTIONS,
     TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES,
     sendTerminalWebSocketJson,
     type BoundedWebSocketSendResult,
@@ -35,6 +36,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
     const terminalWs = router.ws("/api/terminal", {
         authorize: request => authorizeManagementUpgrade(app, request),
         maxPayloadBytes: TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES,
+        maxConnections: TERMINAL_WEBSOCKET_MAX_CONNECTIONS,
     });
     terminalWs.on("connection", (client, request) => {
         client.on("error", error => {

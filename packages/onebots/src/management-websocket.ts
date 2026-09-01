@@ -3,6 +3,9 @@ import { WebSocket, type RawData } from "ws";
 /** 管理端主连接允许配置同步等较大 JSON 消息，但仍限制单条入站载荷。 */
 export const MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
 
+/** 限制初始快照、队列和广播的聚合资源占用。 */
+export const MANAGEMENT_WEBSOCKET_MAX_CONNECTIONS = 32;
+
 /** 主连接最多保留两条最大消息的待发送数据，慢客户端不会无限积压。 */
 export const MANAGEMENT_WEBSOCKET_MAX_BUFFERED_BYTES = 8 * 1024 * 1024;
 
@@ -14,6 +17,9 @@ export const MANAGEMENT_WEBSOCKET_MAX_PENDING_BYTES = 8 * 1024 * 1024;
 
 /** 终端输入只需要较小消息，避免单个连接占用过多内存。 */
 export const TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES = 1024 * 1024;
+
+/** 单个 PTY 只允许少量管理页面同时订阅输出。 */
+export const TERMINAL_WEBSOCKET_MAX_CONNECTIONS = 8;
 
 /** 终端输出允许短时积压两条最大消息，超过后要求客户端重连。 */
 export const TERMINAL_WEBSOCKET_MAX_BUFFERED_BYTES = 2 * 1024 * 1024;

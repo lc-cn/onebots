@@ -77,6 +77,7 @@ import {
 } from "./service-runtime-contract.js";
 import {
     BoundedWebSocketMessageQueue,
+    MANAGEMENT_WEBSOCKET_MAX_CONNECTIONS,
     MANAGEMENT_WEBSOCKET_MAX_PENDING_BYTES,
     MANAGEMENT_WEBSOCKET_MAX_PENDING_MESSAGES,
     MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES,
@@ -249,6 +250,7 @@ export class App extends BaseApp {
         this.ws = this.router.ws("/", {
             authorize: request => authorizeManagementUpgrade(this, request),
             maxPayloadBytes: MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES,
+            maxConnections: MANAGEMENT_WEBSOCKET_MAX_CONNECTIONS,
         });
 
         const cleanupLogCacheOnExit = () => this._logCache.cleanupSync();
