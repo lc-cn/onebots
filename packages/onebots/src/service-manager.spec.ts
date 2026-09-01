@@ -41,6 +41,67 @@ describe.runIf(process.platform !== "win32")("service definition persistence", (
         expect(controller.definitionIsCurrent(spec)).toBe(true);
         expect(fs.readdirSync(path.dirname(definition))).toEqual([path.basename(definition)]);
     });
+
+    it("平台命令失败时恢复上一份定义与元数据", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-rollback-"));
+        temporaryDirectories.push(root);
+        let failNextEnable = false;
+        const exec = vi.fn((_file: string, args: string[]) => {
+            if (failNextEnable && args.includes("enable")) {
+                failNextEnable = false;
+                throw new Error("injected enable failure");
+            }
+            return "";
+        });
+        const controller = new ServiceController("user", { ...linuxHost(root), exec });
+        const previous: ServiceSpec = {
+            scope: "user",
+            configPath: path.join(root, "previous.yaml"),
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            nodePath: "/opt/node/bin/node",
+            binPath: "/opt/onebots/lib/bin.js",
+            workingDirectory: root,
+        };
+        await controller.install(previous);
+
+        failNextEnable = true;
+        await expect(
+            controller.install({ ...previous, configPath: path.join(root, "candidate.yaml") }),
+        ).rejects.toThrow("injected enable failure");
+
+        expect(controller.readSpec()).toEqual(previous);
+        expect(controller.definitionIsCurrent(previous)).toBe(true);
+        expect(exec.mock.calls.filter(([, args]) => args.includes("enable"))).toHaveLength(3);
+    });
+
+    it("首次安装失败时清理孤立定义且不提交元数据", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cleanup-"));
+        temporaryDirectories.push(root);
+        const exec = vi.fn((_file: string, args: string[]) => {
+            if (args.includes("enable")) throw new Error("injected first install failure");
+            return "";
+        });
+        const controller = new ServiceController("user", { ...linuxHost(root), exec });
+        const candidate: ServiceSpec = {
+            scope: "user",
+            configPath: path.join(root, "config.yaml"),
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            nodePath: "/opt/node/bin/node",
+            binPath: "/opt/onebots/lib/bin.js",
+            workingDirectory: root,
+        };
+
+        await expect(controller.install(candidate)).rejects.toThrow(
+            "injected first install failure",
+        );
+
+        expect(fs.existsSync(controller.paths().definition)).toBe(false);
+        expect(fs.existsSync(controller.paths().metadata)).toBe(false);
+        expect(controller.status()).toMatchObject({ installed: false, running: false });
+        expect(exec.mock.calls.some(([, args]) => args.includes("disable"))).toBe(true);
+    });
 });
 
 describe("Windows user task persistence", () => {

@@ -13,6 +13,8 @@ import {
     type ServiceStatus,
 } from "./service-definition.js";
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
+import { runServiceInstallTransaction } from "./service-install-transaction.js";
+import { getServiceFiles, writePrivateJson, writeServiceFile } from "./service-files.js";
 import {
     WINDOWS_SYSTEM_SERVICE_ID,
     buildWindowsSystemServiceOptions,
@@ -31,51 +33,6 @@ export * from "./service-definition.js";
 export type { ServiceHost } from "./service-host.js";
 const WINDOWS_TASK_NAME = "OneBots Gateway";
 
-function getPaths(scope: ServiceScope, host: ServiceHost) {
-    if (host.platform === "linux") {
-        const stateDir =
-            scope === "system"
-                ? "/var/lib/onebots"
-                : path.join(
-                      host.env.XDG_STATE_HOME || path.join(host.homedir, ".local", "state"),
-                      "onebots",
-                  );
-        const definition =
-            scope === "system"
-                ? path.join("/etc/systemd/system", `${SERVICE_NAME}.service`)
-                : path.join(
-                      host.env.XDG_CONFIG_HOME || path.join(host.homedir, ".config"),
-                      "systemd",
-                      "user",
-                      `${SERVICE_NAME}.service`,
-                  );
-        return { stateDir, definition, metadata: path.join(stateDir, "service.json") };
-    }
-    if (host.platform === "darwin") {
-        const base =
-            scope === "system"
-                ? "/Library/Application Support/OneBots"
-                : path.join(host.homedir, "Library", "Application Support", "OneBots");
-        const definition =
-            scope === "system"
-                ? path.join("/Library/LaunchDaemons", `${LAUNCHD_LABEL}.plist`)
-                : path.join(host.homedir, "Library", "LaunchAgents", `${LAUNCHD_LABEL}.plist`);
-        return { stateDir: base, definition, metadata: path.join(base, "service.json") };
-    }
-    const base =
-        scope === "system"
-            ? path.join(host.env.ProgramData || "C:\\ProgramData", "OneBots")
-            : path.join(
-                  host.env.LOCALAPPDATA || path.join(host.homedir, "AppData", "Local"),
-                  "OneBots",
-              );
-    return {
-        stateDir: base,
-        definition: path.join(base, "onebots-service.xml"),
-        metadata: path.join(base, "service.json"),
-    };
-}
-
 function ensureSystemPermission(scope: ServiceScope, host: ServiceHost): void {
     if (scope !== "system") return;
     if (host.platform === "win32") {
@@ -93,26 +50,6 @@ function ensureSystemPermission(scope: ServiceScope, host: ServiceHost): void {
         .map(value => `'${value.replace(/'/g, `'"'"'`)}'`)
         .join(" ");
     throw new Error(`系统级服务需要管理员权限。请执行: sudo ${command}`);
-}
-
-function writePrivateJson(file: string, value: unknown): void {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    const temporary = `${file}.${process.pid}.tmp`;
-    fs.writeFileSync(temporary, JSON.stringify(value, null, 2) + "\n", {
-        encoding: "utf8",
-        mode: 0o600,
-    });
-    fs.renameSync(temporary, file);
-}
-
-function writeServiceFile(file: string, content: string, encoding: BufferEncoding = "utf8"): void {
-    const temporary = `${file}.${process.pid}.tmp`;
-    try {
-        fs.writeFileSync(temporary, content, { encoding, mode: 0o644 });
-        fs.renameSync(temporary, file);
-    } finally {
-        if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
-    }
 }
 
 interface NodeWindowsService {
@@ -159,7 +96,7 @@ export class ServiceController {
     ) {}
 
     paths() {
-        return getPaths(this.scope, this.host);
+        return getServiceFiles(this.scope, this.host);
     }
 
     /** 返回承载真实启动契约的平台定义；Windows 系统服务由 node-windows 写在入口旁。 */
@@ -226,7 +163,24 @@ export class ServiceController {
         const normalized: ServiceSpec = { ...spec, scope: this.scope };
         const paths = this.paths();
         fs.mkdirSync(paths.stateDir, { recursive: true });
+        const previous = this.readValidSpecForRollback();
 
+        await runServiceInstallTransaction({
+            target: normalized,
+            previous,
+            apply: (target, replaced) => this.applyPlatformDefinition(target, replaced),
+            remove: target => this.removePlatformDefinition(target),
+            verify: target => this.definitionIsCurrent(target),
+            commit: target => writePrivateJson(paths.metadata, target),
+            definitionPath: target => this.definitionPath(target),
+        });
+    }
+
+    private async applyPlatformDefinition(
+        normalized: ServiceSpec,
+        replaced: ServiceSpec | null,
+    ): Promise<void> {
+        const paths = this.paths();
         if (this.host.platform === "linux") {
             fs.mkdirSync(path.dirname(paths.definition), { recursive: true });
             writeServiceFile(paths.definition, renderSystemdUnit(normalized));
@@ -258,10 +212,9 @@ export class ServiceController {
             );
             if (fs.existsSync(files.legacyRunner)) fs.unlinkSync(files.legacyRunner);
         } else if (this.host.platform === "win32") {
-            const previousSpec = this.readSpec();
-            if (previousSpec) {
+            if (replaced) {
                 await waitForNodeWindows(
-                    createNodeWindowsService(previousSpec, paths.stateDir),
+                    createNodeWindowsService(replaced, paths.stateDir),
                     "uninstall",
                 );
             }
@@ -273,7 +226,6 @@ export class ServiceController {
         } else {
             throw new Error(`不支持的操作系统: ${this.host.platform}`);
         }
-        writePrivateJson(paths.metadata, normalized);
     }
 
     async start(): Promise<void> {
@@ -432,8 +384,15 @@ export class ServiceController {
     async uninstall(): Promise<void> {
         ensureSystemPermission(this.scope, this.host);
         const paths = this.paths();
-        if (!this.readSpec()) return;
+        const spec = this.readSpec();
+        if (!spec) return;
         await this.stop(true);
+        await this.removePlatformDefinition(spec);
+        if (fs.existsSync(paths.metadata)) fs.unlinkSync(paths.metadata);
+    }
+
+    private async removePlatformDefinition(spec: ServiceSpec): Promise<void> {
+        const paths = this.paths();
         if (this.host.platform === "linux") {
             const base = this.scope === "user" ? ["--user"] : [];
             this.host.exec("systemctl", [...base, "disable", SERVICE_NAME], {
@@ -457,12 +416,21 @@ export class ServiceController {
                 if (fs.existsSync(file)) fs.unlinkSync(file);
             }
         } else {
-            const spec = this.readSpec()!;
-            await waitForNodeWindows(createNodeWindowsService(spec, paths.stateDir), "uninstall");
+            const service = createNodeWindowsService(spec, paths.stateDir);
+            if (service.exists) await waitForNodeWindows(service, "uninstall");
             const runner = getWindowsSystemServiceFiles(spec, paths.stateDir).runner;
             if (fs.existsSync(runner)) fs.unlinkSync(runner);
         }
-        if (fs.existsSync(paths.metadata)) fs.unlinkSync(paths.metadata);
+    }
+
+    private readValidSpecForRollback(): ServiceSpec | null {
+        try {
+            return this.readSpec();
+        } catch (error) {
+            // 损坏的元数据不是可恢复契约；安装成功后会由新元数据原子替换。
+            void error;
+            return null;
+        }
     }
 
     private requireInstalled(): ServiceSpec {
