@@ -7,8 +7,6 @@ import {
     SERVICE_NAME,
     renderLaunchdPlist,
     renderSystemdUnit,
-    renderWindowsCommand,
-    renderWindowsTaskXml,
     type ServiceCommandOptions,
     type ServiceScope,
     type ServiceSpec,
@@ -23,6 +21,11 @@ import {
     type WindowsSystemServiceOptions,
     validateWindowsSystemServiceDefinition,
 } from "./windows-system-service-definition.js";
+import {
+    getWindowsUserServiceFiles,
+    renderWindowsUserRunner,
+    renderWindowsUserTaskXml,
+} from "./windows-user-service-definition.js";
 
 export * from "./service-definition.js";
 export type { ServiceHost } from "./service-host.js";
@@ -112,10 +115,6 @@ function writeServiceFile(file: string, content: string, encoding: BufferEncodin
     }
 }
 
-function renderWindowsRunner(spec: ServiceSpec, stateDirectory: string): string {
-    return `@echo off\r\ncd /d "${spec.workingDirectory.replace(/"/g, '""')}"\r\n${renderWindowsCommand(spec)} >> "${path.join(stateDirectory, "onebots.log")}" 2>&1\r\n`;
-}
-
 interface NodeWindowsService {
     directory(root?: string): string;
     readonly exists: boolean;
@@ -185,11 +184,12 @@ export class ServiceController {
         const definition = this.definitionPath(spec);
         if (!fs.existsSync(definition)) return false;
         if (this.host.platform === "win32" && this.scope === "user") {
-            const runnerPath = path.join(paths.stateDir, "onebots-runner.cmd");
+            const files = getWindowsUserServiceFiles(paths.stateDir);
             return (
-                fs.existsSync(runnerPath) &&
-                fs.readFileSync(definition, "utf16le") === renderWindowsTaskXml(runnerPath) &&
-                fs.readFileSync(runnerPath, "utf8") === renderWindowsRunner(spec, paths.stateDir)
+                fs.existsSync(files.runner) &&
+                fs.readFileSync(definition, "utf16le") ===
+                    renderWindowsUserTaskXml(spec.nodePath, files.runner) &&
+                fs.readFileSync(files.runner, "utf8") === renderWindowsUserRunner(spec, files.log)
             );
         }
         if (this.host.platform === "win32") {
@@ -244,14 +244,19 @@ export class ServiceController {
                 ),
             );
         } else if (this.host.platform === "win32" && this.scope === "user") {
-            const runnerPath = path.join(paths.stateDir, "onebots-runner.cmd");
-            writeServiceFile(runnerPath, renderWindowsRunner(normalized, paths.stateDir));
-            writeServiceFile(paths.definition, renderWindowsTaskXml(runnerPath), "utf16le");
+            const files = getWindowsUserServiceFiles(paths.stateDir);
+            writeServiceFile(files.runner, renderWindowsUserRunner(normalized, files.log));
+            writeServiceFile(
+                files.definition,
+                renderWindowsUserTaskXml(normalized.nodePath, files.runner),
+                "utf16le",
+            );
             this.host.exec(
                 "schtasks.exe",
-                ["/Create", "/F", "/TN", WINDOWS_TASK_NAME, "/XML", paths.definition],
+                ["/Create", "/F", "/TN", WINDOWS_TASK_NAME, "/XML", files.definition],
                 { inherit: true },
             );
+            if (fs.existsSync(files.legacyRunner)) fs.unlinkSync(files.legacyRunner);
         } else if (this.host.platform === "win32") {
             const previousSpec = this.readSpec();
             if (previousSpec) {
@@ -447,6 +452,10 @@ export class ServiceController {
                 inherit: true,
                 ignoreError: true,
             });
+            const files = getWindowsUserServiceFiles(paths.stateDir);
+            for (const file of [files.definition, files.runner, files.legacyRunner]) {
+                if (fs.existsSync(file)) fs.unlinkSync(file);
+            }
         } else {
             const spec = this.readSpec()!;
             await waitForNodeWindows(createNodeWindowsService(spec, paths.stateDir), "uninstall");

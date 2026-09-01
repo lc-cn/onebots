@@ -211,7 +211,7 @@ doctor 会分别验证当前 CLI 与守护服务定义中的 Node.js。对于服
 
 systemd unit、launchd plist 等平台服务定义无法读取或比对时不会再让 doctor 中断；`service-definition` 会以不包含文件内容的路径诊断令门禁失败。POSIX 上的 `service-definition-mode` 允许 unit/plist 公开读取，但拒绝组或其他用户写入；用户级 `--fix` 可恢复 `0644`，系统级只报告风险。安装器会原子替换定义并主动恢复 `0644`，因此重新安装也能消除既有危险权限。用户级 `--fix` 写入定义后会再次读取并与新元数据比较，只有结果一致才标记为 `fixed`。若 systemctl、launchctl 或任务计划程序在修复期间失败，doctor 仍会返回完整报告，保留修复前的 Node 与入口证据，并以定义路径报告失败，不回显底层命令可能携带的环境或文件内容。
 
-Windows 用户级服务会同时验证任务计划 XML 与实际执行的 `onebots-runner.cmd`，包括 Node、CLI 入口、配置、插件选择、工作目录和日志重定向。任一文件缺失或被修改都会让 `service-definition` 失败；重新安装或用户级 `doctor --fix` 会原子重建两份文件，再以同一渲染契约复验，不再把“XML 路径存在”当成启动命令可信。
+Windows 用户级服务会同时验证任务计划 XML 与实际执行的 `onebots-user-runner.mjs`，包括 Node、CLI 入口、配置、插件选择、工作目录和日志输出。任务计划直接用 Node 执行 runner，不经过 `cmd.exe` 或 PowerShell；runner 以数组恢复完整参数，因此路径或配置值中的空格、`&`、`%VAR%` 和引号不会被 shell 解释。任一文件缺失或被修改都会让 `service-definition` 失败；重新安装或用户级 `doctor --fix` 会原子重建两份文件并清理旧 `.cmd` runner，再以同一渲染契约复验。卸载会移除任务 XML 与新旧 runner，但保留日志和用户数据。
 
 Windows 系统级服务通过状态目录中的 `onebots-system-runner.mjs` 以数组无损传递完整参数，避开 `node-windows` 按空格拆分 `scriptOptions` 导致配置或入口路径失真的问题。WinSW XML 与 `.exe` 仍安装在 CLI 入口旁的 `daemon/` 目录；doctor 会同时验证 runner、Node、wrapper、工作目录、日志目录和重启策略。启动、停止与状态查询使用 WinSW 实际注册的 `onebotsgateway.exe` 服务 ID。任一文件或启动契约漂移都会失败并要求管理员重新执行 `onebots install --system`；卸载时会一并清理 runner。
 

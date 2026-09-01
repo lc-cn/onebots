@@ -44,7 +44,7 @@ describe.runIf(process.platform !== "win32")("service definition persistence", (
 });
 
 describe("Windows user task persistence", () => {
-    it("同时验证并原子恢复计划任务 XML 与 runner", async () => {
+    it("同时验证并原子恢复计划任务 XML 与无 shell runner", async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-windows-service-"));
         temporaryDirectories.push(root);
         const host = windowsHost(root);
@@ -61,13 +61,15 @@ describe("Windows user task persistence", () => {
 
         await controller.install(spec);
         const paths = controller.paths();
-        const runner = path.join(paths.stateDir, "onebots-runner.cmd");
+        const runner = path.join(paths.stateDir, "onebots-user-runner.mjs");
         expect(controller.definitionIsCurrent(spec)).toBe(true);
 
         fs.writeFileSync(runner, "tampered runner", "utf8");
+        fs.writeFileSync(path.join(paths.stateDir, "onebots-runner.cmd"), "legacy runner", "utf8");
         expect(controller.definitionIsCurrent(spec)).toBe(false);
         await controller.install(spec);
         expect(controller.definitionIsCurrent(spec)).toBe(true);
+        expect(fs.existsSync(path.join(paths.stateDir, "onebots-runner.cmd"))).toBe(false);
 
         fs.writeFileSync(paths.definition, "tampered xml", "utf16le");
         expect(controller.definitionIsCurrent(spec)).toBe(false);
@@ -75,8 +77,8 @@ describe("Windows user task persistence", () => {
 
         expect(controller.definitionIsCurrent(spec)).toBe(true);
         expect(fs.readdirSync(paths.stateDir).sort()).toEqual([
-            "onebots-runner.cmd",
             "onebots-service.xml",
+            "onebots-user-runner.mjs",
             "service.json",
         ]);
         expect(host.exec).toHaveBeenCalledWith(
@@ -84,6 +86,9 @@ describe("Windows user task persistence", () => {
             ["/Create", "/F", "/TN", "OneBots Gateway", "/XML", paths.definition],
             { inherit: true },
         );
+
+        await controller.uninstall();
+        expect(fs.readdirSync(paths.stateDir)).toEqual([]);
     });
 });
 
