@@ -215,6 +215,41 @@ describe("runtime package manager", () => {
         ).toBe("pnpm");
     });
 
+    it("把 npm shrinkwrap 作为权威 npm 证据而不跟随 pnpm 启动环境", () => {
+        const root = fixture();
+        fs.writeFileSync(path.join(root, "npm-shrinkwrap.json"), '{"lockfileVersion":3}\n');
+        const environment = {
+            npm_execpath: "/opt/corepack/pnpm.js",
+            npm_config_user_agent: "pnpm/9.15.9 npm/? node/v24.0.0",
+        };
+
+        expect(detectRuntimePackageManager(root, environment)).toBe("npm");
+        expect(
+            buildExtensionInstallInvocation(
+                root,
+                "@onebots/adapter-slack@3.0.8",
+                "linux",
+                environment,
+            ),
+        ).toMatchObject({
+            executable: "npm",
+            args: ["install", "--save", "--omit=dev", "@onebots/adapter-slack@3.0.8"],
+        });
+    });
+
+    it("npm shrinkwrap 与 pnpm 证据并存时拒绝修改依赖", () => {
+        const root = fixture();
+        fs.writeFileSync(path.join(root, "npm-shrinkwrap.json"), '{"lockfileVersion":3}\n');
+        fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+
+        expect(inspectRuntimePackageManager(root).error).toMatch(
+            /包管理器证据冲突.*npm-shrinkwrap\.json.*pnpm-lock\.yaml/,
+        );
+        expect(() => buildExtensionInstallInvocation(root, "@onebots/adapter-slack@3.0.8")).toThrow(
+            /包管理器证据冲突/,
+        );
+    });
+
     it("同层 npm 与 pnpm 证据冲突时在生成安装命令前失败", () => {
         const root = fixture({ packageManager: "pnpm@9.15.9" });
         fs.writeFileSync(path.join(root, "package-lock.json"), "{}\n");

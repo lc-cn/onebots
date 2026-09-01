@@ -129,6 +129,8 @@ function inspectPackageManagerEvidence(directory: string): RuntimePackageManager
 
     if (fs.existsSync(path.join(directory, "package-lock.json")))
         npmEvidence.push("package-lock.json");
+    if (fs.existsSync(path.join(directory, "npm-shrinkwrap.json")))
+        npmEvidence.push("npm-shrinkwrap.json");
     if (fs.existsSync(path.join(directory, "pnpm-lock.yaml"))) pnpmEvidence.push("pnpm-lock.yaml");
     if (fs.existsSync(path.join(directory, "pnpm-workspace.yaml")))
         pnpmEvidence.push("pnpm-workspace.yaml");

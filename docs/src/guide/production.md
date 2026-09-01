@@ -243,7 +243,7 @@ Web 扩展安装还会记录包管理器执行前的插件版本。即使 npm/pn
 
 `onebots doctor` 获得管理凭据后还会读取受保护的 `/api/extensions`，独立验证扩展证据契约和运行版本收敛。已启用扩展缺少磁盘依赖或没有加载、已加载版本缺失或不同于磁盘版本、已启用或已加载扩展的磁盘版本偏离当前 OneBots 验证版本、安装事务未结束，以及目录、配置或包清单诊断都会使该检查失败并给出具体扩展 ID；相同的全局目录错误只报告一次。没有管理凭据时该项为 warning，因此 `--strict` 仍会拒绝无法证明扩展版本的部署。公开 readiness 继续只表示当前进程能否服务，不会在一次已完成但等待重启的扩展升级中提前摘除流量。
 
-扩展安装按运行目录及其最近项目根的锁文件、workspace 声明和 `packageManager` 选择 npm 或 pnpm。即使 OneBots 从 pnpm workspace 成员目录被 `node` 直接启动，也会识别上层 workspace 并继续把依赖写入当前成员包，不会误用 npm 解析 `workspace:` / `catalog:`。`ONEBOTS_EXTENSION_ROOT` 或部署目录是符号链接时，包管理器证据会沿链接目标的规范化真实路径查找，安装命令仍在指定运行目录执行；因此链接到 workspace 成员不会因链接所在父目录缺少锁文件而错误回退 npm。独立 npm 项目仍优先采用自己更近的 `package-lock.json`。同一目录同时出现 npm 与 pnpm 证据，或声明 Yarn、Bun、无效 `packageManager` 时，不再猜测或降级到 npm；扩展清单、安装端点、doctor 和 update 会在查询或修改依赖前给出目录级错误，要求只保留实际包管理器对应的锁文件和声明。
+扩展安装按运行目录及其最近项目根的锁文件、workspace 声明和 `packageManager` 选择 npm 或 pnpm。即使 OneBots 从 pnpm workspace 成员目录被 `node` 直接启动，也会识别上层 workspace 并继续把依赖写入当前成员包，不会误用 npm 解析 `workspace:` / `catalog:`。`ONEBOTS_EXTENSION_ROOT` 或部署目录是符号链接时，包管理器证据会沿链接目标的规范化真实路径查找，安装命令仍在指定运行目录执行；因此链接到 workspace 成员不会因链接所在父目录缺少锁文件而错误回退 npm。独立 npm 项目仍优先采用自己更近的 `package-lock.json` 或发布部署常用的 `npm-shrinkwrap.json`；即使进程从 pnpm 环境启动，也不会因此改写成另一套锁文件。同一目录同时出现 npm 与 pnpm 证据，或声明 Yarn、Bun、无效 `packageManager` 时，不再猜测或降级到 npm；扩展清单、安装端点、doctor 和 update 会在查询或修改依赖前给出目录级错误，要求只保留实际包管理器对应的锁文件和声明。
 
 发布工作流会真实打包所有公开包，并读取 tarball 内最终生成的 `package.json`。除入口与生产文件边界外，门禁还会拒绝残留的 `catalog:`、`workspace:`、`file:`、`link:`、`portal:` 或 `patch:` 依赖协议，避免 workspace 源清单在发布转换失败后形成 npm 无法安装的制品。
 
