@@ -4,7 +4,11 @@ import * as path from "node:path";
 import yaml from "js-yaml";
 import { BaseAppConfigSchema, writeConfigFileAtomic, type Account } from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "../service-manager.js";
-import { preflightServiceRuntime, type ServicePreflightSpec } from "../service-preflight.js";
+import {
+    preflightInstalledServiceRuntime,
+    preflightServiceRuntime,
+    type ServicePreflightSpec,
+} from "../service-preflight.js";
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
 import { getRuntimePluginSelection } from "../runtime-plugin-selection.js";
 import { formatRuntimeConfigDiagnostic, parseRuntimeConfig } from "../runtime-config-validator.js";
@@ -234,6 +238,7 @@ export async function installService(
 }
 
 export interface ServiceActivationDependencies {
+    preflight(spec: ServiceSpec): Promise<void>;
     readInstanceId(spec: ServiceSpec): Promise<string | null>;
     verifyOnline(
         spec: ServiceSpec,
@@ -243,6 +248,7 @@ export interface ServiceActivationDependencies {
 }
 
 const serviceActivationDependencies: ServiceActivationDependencies = {
+    preflight: preflightInstalledServiceRuntime,
     readInstanceId: readServiceInstanceId,
     verifyOnline: (spec, expectedVersion, previousInstanceId) =>
         verifyServiceOnline(spec, expectedVersion, { previousInstanceId }),
@@ -254,7 +260,7 @@ export async function startService(
     dependencies: ServiceActivationDependencies = serviceActivationDependencies,
 ): Promise<CommandResult> {
     const controller = new ServiceController(scopeFrom(options));
-    const spec = await preflightInstalledService(controller, "启动");
+    const spec = await preflightInstalledService(controller, "启动", dependencies.preflight);
     const initialStatus = controller.status(spec);
     if (initialStatus.error) {
         throw new CliError(
@@ -305,7 +311,7 @@ export async function restartService(
     dependencies: ServiceActivationDependencies = serviceActivationDependencies,
 ): Promise<CommandResult> {
     const controller = new ServiceController(scopeFrom(options));
-    const spec = await preflightInstalledService(controller, "重启");
+    const spec = await preflightInstalledService(controller, "重启", dependencies.preflight);
     const previousInstanceId = await dependencies.readInstanceId(spec);
     await controller.restart();
     await verifyActivatedService(spec, "重启", previousInstanceId, dependencies);
@@ -693,12 +699,13 @@ function selectMcpAccount(app: StartedMcpApp, accountOption?: string): Account {
 async function preflightInstalledService(
     controller: ServiceController,
     action: "启动" | "重启",
+    preflight: (spec: ServiceSpec) => Promise<void>,
 ): Promise<ServiceSpec> {
     const spec = controller.readSpec();
     if (!spec) throw new CliError("OneBots 服务尚未安装", 2);
-    await preflightService(spec, action);
     try {
         assertInstalledServiceDefinitionCurrent(controller, spec);
+        await preflight(spec);
     } catch (error) {
         throw new CliError(
             `服务${action}预检失败：${error instanceof Error ? error.message : String(error)}`,

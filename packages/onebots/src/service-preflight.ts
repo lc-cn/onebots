@@ -4,6 +4,11 @@ import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import type { ServiceSpec } from "./service-manager.js";
+import {
+    inspectServiceNodeRuntime,
+    type DoctorServiceRuntimeInspection,
+} from "./doctor-service-runtime.js";
+import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
 import { hasManagementCredentials } from "./management-credentials.js";
 import { pluginCandidates, tryLoadRegisteredPlugin, type PluginType } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
@@ -22,13 +27,13 @@ interface IsolatedPreflightExecutionOptions {
     maxBuffer: number;
 }
 
-type IsolatedPreflightExecutor = (
+export type IsolatedPreflightExecutor = (
     file: string,
     args: string[],
     options: IsolatedPreflightExecutionOptions,
 ) => Promise<unknown>;
 
-interface IsolatedPreflightProcessOptions {
+export interface IsolatedPreflightProcessOptions {
     nodePath?: string;
     binPath?: string;
     timeoutMs?: number;
@@ -71,6 +76,38 @@ export async function preflightServiceRuntimeIsolated(
             cause: error instanceof Error ? error : undefined,
         });
     }
+}
+
+export interface InstalledServiceRuntimePreflightDependencies {
+    inspectNode(nodePath: string): DoctorServiceRuntimeInspection;
+    inspectEntry(binPath: string): DoctorServiceEntryInspection;
+    runIsolated(
+        spec: ServicePreflightSpec,
+        options: IsolatedPreflightProcessOptions,
+    ): Promise<void>;
+}
+
+const installedRuntimePreflightDependencies: InstalledServiceRuntimePreflightDependencies = {
+    inspectNode: inspectServiceNodeRuntime,
+    inspectEntry: inspectServiceEntry,
+    runIsolated: preflightServiceRuntimeIsolated,
+};
+
+/** 使用服务定义保存的 Node 与 OneBots 入口执行预检，不借用当前 CLI 进程的运行时。 */
+export async function preflightInstalledServiceRuntime(
+    spec: ServiceSpec,
+    dependencies: InstalledServiceRuntimePreflightDependencies = installedRuntimePreflightDependencies,
+): Promise<void> {
+    const runtime = dependencies.inspectNode(spec.nodePath);
+    if (!runtime.supported) throw new Error(runtime.check.message);
+
+    const entry = dependencies.inspectEntry(spec.binPath);
+    if (!entry.valid) throw new Error(entry.check.message);
+
+    await dependencies.runIsolated(spec, {
+        nodePath: spec.nodePath,
+        binPath: spec.binPath,
+    });
 }
 
 /** 按守护进程实际工作目录加载插件并校验配置，但不连接平台或写入服务定义。 */

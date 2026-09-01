@@ -4,7 +4,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { AdapterRegistry, ProtocolRegistry } from "@onebots/core";
 import { clearLoadedPlugins } from "./plugin-loader.js";
-import { preflightServiceRuntime, preflightServiceRuntimeIsolated } from "./service-preflight.js";
+import {
+    preflightInstalledServiceRuntime,
+    preflightServiceRuntime,
+    preflightServiceRuntimeIsolated,
+} from "./service-preflight.js";
+import type { ServiceSpec } from "./service-manager.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -76,6 +81,87 @@ describe("service runtime preflight", () => {
                 { binPath: "/srv/onebots/bin.js", execute },
             ),
         ).rejects.toThrow("插件加载失败：adapter:slack 入口损坏");
+    });
+
+    it("在执行入口或加载插件前拒绝服务定义中的旧 Node", async () => {
+        const inspectEntry = vi.fn(() => ({
+            valid: true,
+            check: { name: "service-entry", level: "ok" as const, message: "入口有效" },
+        }));
+        const runIsolated = vi.fn(async () => undefined);
+
+        await expect(
+            preflightInstalledServiceRuntime(installedSpec(), {
+                inspectNode: () => ({
+                    supported: false,
+                    check: {
+                        name: "service-node",
+                        level: "error",
+                        message: "服务定义 /legacy/node：Node.js v22 不受支持",
+                    },
+                }),
+                inspectEntry,
+                runIsolated,
+            }),
+        ).rejects.toThrow("Node.js v22 不受支持");
+        expect(inspectEntry).not.toHaveBeenCalled();
+        expect(runIsolated).not.toHaveBeenCalled();
+    });
+
+    it("在隔离插件预检前拒绝错配或损坏的 OneBots 服务入口", async () => {
+        const runIsolated = vi.fn(async () => undefined);
+
+        await expect(
+            preflightInstalledServiceRuntime(installedSpec(), {
+                inspectNode: () => ({
+                    supported: true,
+                    check: { name: "service-node", level: "ok", message: "Node 有效" },
+                }),
+                inspectEntry: () => ({
+                    valid: false,
+                    check: {
+                        name: "service-entry",
+                        level: "error",
+                        message: "服务入口版本错配，期望 onebots@1.2.8",
+                    },
+                }),
+                runIsolated,
+            }),
+        ).rejects.toThrow("服务入口版本错配");
+        expect(runIsolated).not.toHaveBeenCalled();
+    });
+
+    it("使用服务定义保存的 Node、入口、工作目录与插件选择执行隔离预检", async () => {
+        const spec = installedSpec();
+        const order: string[] = [];
+        const runIsolated = vi.fn(async () => {
+            order.push("isolated");
+        });
+
+        await expect(
+            preflightInstalledServiceRuntime(spec, {
+                inspectNode: nodePath => {
+                    order.push(`node:${nodePath}`);
+                    return {
+                        supported: true,
+                        check: { name: "service-node", level: "ok", message: "Node 有效" },
+                    };
+                },
+                inspectEntry: binPath => {
+                    order.push(`entry:${binPath}`);
+                    return {
+                        valid: true,
+                        check: { name: "service-entry", level: "ok", message: "入口有效" },
+                    };
+                },
+                runIsolated,
+            }),
+        ).resolves.toBeUndefined();
+        expect(order).toEqual([`node:${spec.nodePath}`, `entry:${spec.binPath}`, "isolated"]);
+        expect(runIsolated).toHaveBeenCalledWith(spec, {
+            nodePath: spec.nodePath,
+            binPath: spec.binPath,
+        });
     });
 
     it("resolves import-only plugins from the installed service working directory", async () => {
@@ -226,3 +312,15 @@ describe("service runtime preflight", () => {
         ).rejects.toThrow("已初始化，但没有注册适配器 empty-adapter");
     });
 });
+
+function installedSpec(): ServiceSpec {
+    return {
+        scope: "user",
+        configPath: "/srv/onebots/config.yaml",
+        adapters: ["slack"],
+        protocols: ["onebot-v11"],
+        nodePath: "/opt/node/bin/node",
+        binPath: "/srv/onebots/node_modules/onebots/lib/bin.js",
+        workingDirectory: "/srv/onebots",
+    };
+}

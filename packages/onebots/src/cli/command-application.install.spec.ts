@@ -5,11 +5,13 @@ import * as path from "node:path";
 import {
     installService,
     restartService,
+    type ServiceActivationDependencies,
     startService,
     stopService,
     uninstallService,
 } from "./command-application.js";
 import { ServiceController, type ServiceSpec } from "../service-manager.js";
+import { preflightServiceRuntime } from "../service-preflight.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -58,6 +60,17 @@ function serviceSpec(configPath: string): ServiceSpec {
         nodePath: process.execPath,
         binPath: process.argv[1],
         workingDirectory: process.cwd(),
+    };
+}
+
+function activationDependencies(
+    overrides: Partial<ServiceActivationDependencies> = {},
+): ServiceActivationDependencies {
+    return {
+        preflight: preflightServiceRuntime,
+        readInstanceId: async () => null,
+        verifyOnline: async () => undefined,
+        ...overrides,
     };
 }
 
@@ -238,7 +251,9 @@ describe("service install preflight", () => {
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(serviceSpec(config));
         const start = vi.spyOn(ServiceController.prototype, "start").mockResolvedValue();
 
-        await expect(startService({ system: false })).rejects.toMatchObject({
+        await expect(
+            startService({ system: false }, activationDependencies()),
+        ).rejects.toMatchObject({
             message: expect.stringMatching(/服务启动预检失败.*配置根节点必须是对象/),
             exitCode: 2,
         });
@@ -250,7 +265,9 @@ describe("service install preflight", () => {
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(serviceSpec(config));
         const restart = vi.spyOn(ServiceController.prototype, "restart").mockResolvedValue();
 
-        await expect(restartService({ system: false })).rejects.toMatchObject({
+        await expect(
+            restartService({ system: false }, activationDependencies()),
+        ).rejects.toMatchObject({
             message: expect.stringMatching(/服务重启预检失败.*配置根节点必须是对象/),
             exitCode: 2,
         });
@@ -267,7 +284,7 @@ describe("service install preflight", () => {
         vi.mocked(ServiceController.prototype.definitionIsCurrent).mockReturnValue(false);
         const control = vi.spyOn(ServiceController.prototype, method).mockResolvedValue();
 
-        await expect(command({ system: false })).rejects.toMatchObject({
+        await expect(command({ system: false }, activationDependencies())).rejects.toMatchObject({
             message: expect.stringMatching(
                 new RegExp(
                     `服务${action}预检失败.*服务平台定义与服务元数据不一致.*onebots install`,
@@ -275,6 +292,29 @@ describe("service install preflight", () => {
             ),
             exitCode: 2,
         });
+        expect(control).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["启动", startService, "start"],
+        ["重启", restartService, "restart"],
+    ] as const)("%s 前拒绝失效的已保存服务运行时", async (action, command, method) => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(serviceSpec(config));
+        const control = vi.spyOn(ServiceController.prototype, method).mockResolvedValue();
+        const preflight = vi.fn(async () => {
+            throw new Error("服务 Node.js 无法执行: /legacy/node");
+        });
+
+        await expect(
+            command({ system: false }, activationDependencies({ preflight })),
+        ).rejects.toMatchObject({
+            message: expect.stringMatching(
+                new RegExp(`服务${action}预检失败.*服务 Node.js 无法执行.*legacy/node`),
+            ),
+            exitCode: 2,
+        });
+        expect(preflight).toHaveBeenCalledOnce();
         expect(control).not.toHaveBeenCalled();
     });
 
@@ -293,7 +333,10 @@ describe("service install preflight", () => {
         const verifyOnline = vi.fn(async () => undefined);
 
         await expect(
-            startService({ system: false }, { readInstanceId, verifyOnline }),
+            startService(
+                { system: false },
+                activationDependencies({ readInstanceId, verifyOnline }),
+            ),
         ).resolves.toEqual({ output: "OneBots 服务已启动并通过在线验证" });
         expect(start).toHaveBeenCalledOnce();
         expect(verifyOnline).toHaveBeenCalledWith(spec, expect.any(String), "occupied-instance");
@@ -315,7 +358,10 @@ describe("service install preflight", () => {
         const verifyOnline = vi.fn(async () => undefined);
 
         await expect(
-            startService({ system: false }, { readInstanceId, verifyOnline }),
+            startService(
+                { system: false },
+                activationDependencies({ readInstanceId, verifyOnline }),
+            ),
         ).rejects.toMatchObject({
             message: expect.stringMatching(
                 /无法确认服务当前状态.*进程管理器状态查询失败.*systemd bus unavailable.*未执行启动命令/,
@@ -342,7 +388,10 @@ describe("service install preflight", () => {
         const verifyOnline = vi.fn(async () => undefined);
 
         await expect(
-            startService({ system: false }, { readInstanceId, verifyOnline }),
+            startService(
+                { system: false },
+                activationDependencies({ readInstanceId, verifyOnline }),
+            ),
         ).resolves.toEqual({ output: "OneBots 服务已在运行并通过在线验证" });
         expect(start).not.toHaveBeenCalled();
         expect(readInstanceId).not.toHaveBeenCalled();
@@ -358,12 +407,12 @@ describe("service install preflight", () => {
         await expect(
             restartService(
                 { system: false },
-                {
+                activationDependencies({
                     readInstanceId: async () => "old-instance",
                     verifyOnline: async () => {
                         throw new Error("实例仍为 old-instance");
                     },
-                },
+                }),
             ),
         ).rejects.toMatchObject({
             message: expect.stringMatching(
