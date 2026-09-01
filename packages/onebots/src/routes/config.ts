@@ -7,6 +7,16 @@ import { saveManagedRuntimeConfig } from "../managed-runtime-config.js";
 import { isRuntimeConfigApplicationConflict } from "../runtime-config-application.js";
 import { scheduleProcessRestart } from "../process-restart.js";
 import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
+import {
+    assertManagementInstancePrecondition,
+    ManagementInstanceMismatchError,
+} from "../management-instance-precondition.js";
+import {
+    assertManagementConfigRevisionPrecondition,
+    createManagementConfigRevision,
+    ManagementConfigRevisionMismatchError,
+    setManagementConfigRevision,
+} from "../management-config-revision.js";
 
 /**
  * Register configuration and system management routes.
@@ -19,24 +29,45 @@ import { setManagementEvidenceIdentity } from "../management-evidence-identity.j
  */
 export function registerConfigRoutes(app: App, router: Router): void {
     router.get("/api/config", (ctx: RouterContext) => {
-        ctx.body = readFileSync(BaseApp.configPath, "utf8");
+        const content = readFileSync(BaseApp.configPath, "utf8");
+        setManagementEvidenceIdentity(app, ctx);
+        setManagementConfigRevision(ctx, content);
+        ctx.body = content;
     });
 
     router.get("/api/config/schema", (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
         ctx.body = getAppConfigSchema();
     });
 
     router.post("/api/config", async (ctx: RouterContext) => {
         const configContent = ctx.request.body as string;
         try {
-            ctx.body = await saveManagedRuntimeConfig(app, configContent);
+            assertManagementInstancePrecondition(app, ctx, "配置保存");
+            assertManagementConfigRevisionPrecondition(ctx, "配置保存");
+            ctx.body = {
+                ...(await saveManagedRuntimeConfig(app, configContent)),
+                application: app.info.application_name,
+                instance_id: app.info.instance_id,
+                config_revision: createManagementConfigRevision(configContent),
+            };
         } catch (error) {
-            ctx.status = isRuntimeConfigApplicationConflict(error)
-                ? 409
-                : error instanceof ValidationError
-                  ? 400
-                  : 500;
-            ctx.body = { success: false, message: (error as Error).message };
+            ctx.status =
+                error instanceof ManagementInstanceMismatchError ||
+                error instanceof ManagementConfigRevisionMismatchError
+                    ? 409
+                    : isRuntimeConfigApplicationConflict(error)
+                      ? 409
+                      : error instanceof ValidationError
+                        ? 400
+                        : 500;
+            ctx.body = {
+                success: false,
+                application: app.info.application_name,
+                instance_id: app.info.instance_id,
+                message: (error as Error).message,
+            };
+            app.logger.error("管理端配置保存失败", { error });
         }
     });
 

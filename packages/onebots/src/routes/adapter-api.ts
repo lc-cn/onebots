@@ -6,6 +6,14 @@ import {
     type ManagementAccountLifecycleAction,
 } from "../management-account-lifecycle.js";
 import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
+import {
+    assertManagementInstancePrecondition,
+    ManagementInstanceMismatchError,
+} from "../management-instance-precondition.js";
+import {
+    assertManagementConfigRevisionPrecondition,
+    ManagementConfigRevisionMismatchError,
+} from "../management-config-revision.js";
 
 /**
  * Register adapter / account management and message-sending routes.
@@ -39,27 +47,35 @@ export function registerAdapterRoutes(app: App, router: Router): void {
     router.post("/api/add", async (ctx: RouterContext) => {
         const config = ctx.request.body;
         try {
+            assertManagementInstancePrecondition(app, ctx, "账号新增");
+            assertManagementConfigRevisionPrecondition(ctx, "账号新增");
             await app.addAccount(config);
             ctx.body = { success: true, message: "添加成功" };
         } catch (error) {
             ctx.status = accountMutationStatus(error);
             ctx.body = { success: false, message: (error as Error).message };
+            app.logger.error("管理端新增账号失败", { error });
         }
     });
 
     router.post("/api/edit", async (ctx: RouterContext) => {
         const config = ctx.request.body;
         try {
+            assertManagementInstancePrecondition(app, ctx, "账号编辑");
+            assertManagementConfigRevisionPrecondition(ctx, "账号编辑");
             await app.updateAccount(config);
             ctx.body = { success: true, message: "修改成功" };
         } catch (error) {
             ctx.status = accountMutationStatus(error);
             ctx.body = { success: false, message: (error as Error).message };
+            app.logger.error("管理端编辑账号失败", { error });
         }
     });
 
     router.get("/api/remove", async (ctx: RouterContext) => {
         try {
+            assertManagementInstancePrecondition(app, ctx, "账号删除");
+            assertManagementConfigRevisionPrecondition(ctx, "账号删除");
             const { uin, platform, force } = ctx.request.query;
             await app.removeAccount(
                 requiredQueryString("platform", platform),
@@ -70,6 +86,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
         } catch (error) {
             ctx.status = accountMutationStatus(error);
             ctx.body = { success: false, message: (error as Error).message };
+            app.logger.error("管理端删除账号失败", { error });
         }
     });
 
@@ -154,6 +171,8 @@ function requiredQueryString(field: string, value: unknown): string {
 }
 
 function accountMutationStatus(error: unknown): number {
+    if (error instanceof ManagementInstanceMismatchError) return 409;
+    if (error instanceof ManagementConfigRevisionMismatchError) return 409;
     if (error instanceof AccountMutationConflictError) return 409;
     if (error instanceof ValidationError) return 400;
     return 500;

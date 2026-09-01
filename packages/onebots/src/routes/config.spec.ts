@@ -9,6 +9,11 @@ import {
     type RouterContext,
 } from "@onebots/core";
 import type { App } from "../app.js";
+import {
+    createManagementConfigRevision,
+    MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER,
+} from "../management-config-revision.js";
+import { MANAGEMENT_EXPECTED_INSTANCE_HEADER } from "../management-instance-precondition.js";
 import { registerConfigRoutes } from "./config.js";
 
 type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
@@ -64,6 +69,8 @@ function setup(reload: App["reload"], isReloading = false, restartSupported = tr
     return {
         app,
         handler: posts.get("/api/config")!,
+        configHandler: gets.get("/api/config")!,
+        schemaHandler: gets.get("/api/config/schema")!,
         systemHandler: gets.get("/api/system")!,
         backupHandler: posts.get("/api/system/backup-to-hf")!,
         restartHandler: posts.get("/api/system/restart")!,
@@ -80,6 +87,84 @@ afterEach(() => {
 });
 
 describe("configuration route", () => {
+    it("配置正文与 Schema 发布同一份不可缓存实例身份", () => {
+        const { configHandler, schemaHandler } = setup(
+            vi.fn(async () => undefined) as App["reload"],
+        );
+        const configContext = { set: vi.fn() } as unknown as RouterContext;
+        const schemaContext = { set: vi.fn() } as unknown as RouterContext;
+
+        configHandler(configContext);
+        schemaHandler(schemaContext);
+
+        expect(configContext.body).toBe("access_token: old-token\n");
+        expect(configContext.set).toHaveBeenCalledWith(
+            "X-OneBots-Config-Revision",
+            createManagementConfigRevision("access_token: old-token\n"),
+        );
+        for (const context of [configContext, schemaContext]) {
+            expect(context.set).toHaveBeenCalledWith("X-OneBots-Application", "onebots");
+            expect(context.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-current");
+            expect(context.set).toHaveBeenCalledWith(
+                "X-OneBots-Runtime-Contract-Id",
+                "sha256:contract-current",
+            );
+            expect(context.set).toHaveBeenCalledWith("Cache-Control", "no-store");
+        }
+    });
+
+    it("实例切换后在写盘和重载前拒绝过期配置保存", async () => {
+        const reload = vi.fn(async () => undefined) as App["reload"];
+        const { app, handler } = setup(reload);
+        const ctx = {
+            get: () => "instance-before-restart",
+            request: { body: "access_token: next-token\n" },
+        } as unknown as RouterContext;
+
+        await handler(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-current",
+            message:
+                "配置保存请求期望实例 instance-before-restart，当前已由实例 instance-current 接管",
+        });
+        expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe("access_token: old-token\n");
+        expect(reload).not.toHaveBeenCalled();
+        expect(app.backupDataToHf).not.toHaveBeenCalled();
+    });
+
+    it("同一实例内配置已更新时拒绝旧编辑页覆盖新文件", async () => {
+        const reload = vi.fn(async () => undefined) as App["reload"];
+        const { app, handler } = setup(reload);
+        const staleRevision = createManagementConfigRevision("access_token: old-token\n");
+        fs.writeFileSync(BaseApp.configPath, "access_token: external-token\n");
+        const ctx = {
+            get: (name: string) =>
+                name === MANAGEMENT_EXPECTED_INSTANCE_HEADER
+                    ? "instance-current"
+                    : name === MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER
+                      ? staleRevision
+                      : "",
+            request: { body: "access_token: next-token\n" },
+        } as unknown as RouterContext;
+
+        await handler(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toMatchObject({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-current",
+            message: "配置保存使用的配置已经过期，请重新读取后再操作",
+        });
+        expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe("access_token: external-token\n");
+        expect(reload).not.toHaveBeenCalled();
+        expect(app.backupDataToHf).not.toHaveBeenCalled();
+    });
+
     it("以可被守护服务识别的失败码触发重启", async () => {
         vi.useFakeTimers();
         const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
@@ -283,6 +368,9 @@ describe("configuration route", () => {
 
         expect(ctx.body).toEqual({
             success: true,
+            application: "onebots",
+            instance_id: "instance-current",
+            config_revision: createManagementConfigRevision("access_token: next-token\n"),
             applied: true,
             restartRequired: false,
             changedHostFields: [],
@@ -338,6 +426,8 @@ describe("configuration route", () => {
         expect(ctx.status).toBe(409);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-current",
             message: "配置应用失败，且磁盘配置已被另一操作更新；已保留最新文件",
         });
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe(concurrent);
@@ -356,6 +446,8 @@ describe("configuration route", () => {
         expect(ctx.status).toBe(409);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-current",
             message: "配置运行态处理完成，但磁盘配置已被另一操作更新；已保留最新文件，请重新加载",
         });
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe(concurrent);

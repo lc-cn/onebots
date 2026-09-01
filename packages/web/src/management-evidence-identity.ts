@@ -5,6 +5,10 @@ export interface ManagementEvidenceIdentity {
     runtimeContractId?: string;
 }
 
+export const MANAGEMENT_EXPECTED_INSTANCE_HEADER = "X-OneBots-Expected-Instance-Id";
+export const MANAGEMENT_CONFIG_REVISION_HEADER = "X-OneBots-Config-Revision";
+export const MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER = "X-OneBots-Expected-Config-Revision";
+
 /** 读取管理响应头中的 OneBots 进程身份，拒绝通用服务或不可定位的响应。 */
 export function parseManagementEvidenceIdentity(
     response: Pick<Response, "headers">,

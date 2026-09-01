@@ -103,6 +103,44 @@ describe("adapter account routes", () => {
         });
     });
 
+    it.each([
+        ["/api/add", "账号新增", "addAccount"],
+        ["/api/edit", "账号编辑", "updateAccount"],
+    ] as const)("%s 在实例切换后拒绝过期账号写入", async (route, operation, method) => {
+        const { app, posts } = setup();
+        const ctx = {
+            get: () => "instance-before-restart",
+            request: { body: { platform: "mock", account_id: "demo" } },
+        } as unknown as RouterContext;
+
+        await posts.get(route)!(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: `${operation}请求期望实例 instance-before-restart，当前已由实例 instance-a 接管`,
+        });
+        expect(app[method]).not.toHaveBeenCalled();
+    });
+
+    it("账号写入拒绝畸形配置修订号且不调用 Core", async () => {
+        const { app, posts } = setup();
+        const ctx = {
+            get: (name: string) =>
+                name === "X-OneBots-Expected-Instance-Id" ? "instance-a" : "stale",
+            request: { body: { platform: "mock", account_id: "demo" } },
+        } as unknown as RouterContext;
+
+        await posts.get("/api/add")!(ctx);
+
+        expect(ctx.status).toBe(400);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: "账号新增请求的配置修订号无效",
+        });
+        expect(app.addAccount).not.toHaveBeenCalled();
+    });
+
     it("删除账号缺少身份参数时返回 400 且不调用 Core", async () => {
         const { app, gets } = setup();
         const ctx = { request: { query: { platform: "mock" } } } as unknown as RouterContext;
@@ -113,6 +151,23 @@ describe("adapter account routes", () => {
         expect(ctx.body).toEqual({
             success: false,
             message: "查询参数 uin 必须是非空字符串",
+        });
+        expect(app.removeAccount).not.toHaveBeenCalled();
+    });
+
+    it("实例切换后在读取目标和调用 Core 前拒绝账号删除", async () => {
+        const { app, gets } = setup();
+        const ctx = {
+            get: () => "instance-before-restart",
+            request: { query: { platform: "mock", uin: "demo" } },
+        } as unknown as RouterContext;
+
+        await gets.get("/api/remove")!(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: "账号删除请求期望实例 instance-before-restart，当前已由实例 instance-a 接管",
         });
         expect(app.removeAccount).not.toHaveBeenCalled();
     });

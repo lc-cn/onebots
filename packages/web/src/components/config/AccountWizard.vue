@@ -37,10 +37,16 @@ import {
     getAccountAdapterSelectionState,
     type SchemaLoadStatus,
 } from "./account-adapter-selection.js";
+import {
+    MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER,
+    MANAGEMENT_EXPECTED_INSTANCE_HEADER,
+} from "../../management-evidence-identity.js";
 
 const props = defineProps<{
     schema: SchemaBundle | null;
     schemaStatus: SchemaLoadStatus;
+    instanceId?: string;
+    configRevision?: string;
 }>();
 
 const emit = defineEmits<{
@@ -199,6 +205,10 @@ const onSelectStep = (index: number) => {
 };
 
 const handleSubmit = async () => {
+    if (!props.instanceId || !props.configRevision) {
+        toast.error("配置快照不可用，请重新读取后再保存账号");
+        return;
+    }
     if (!adapterSelection.value.valid) {
         currentStep.value = 0;
         toast.warning(adapterSelection.value.description);
@@ -269,7 +279,11 @@ const handleSubmit = async () => {
     const url = isEdit.value ? "/api/edit" : "/api/add";
     const response = await authFetch(buildApiUrl(url), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: props.instanceId,
+            [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: props.configRevision,
+        },
         body: JSON.stringify(payload),
     });
 
