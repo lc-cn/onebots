@@ -20,6 +20,18 @@ const ADAPTER_METHODS = [
 ] as const;
 
 const PROTOCOL_METHODS = ["start", "stop", "dispatch", "format", "apply", "on", "off"] as const;
+const ACCOUNT_METHODS = [
+    "start",
+    "stop",
+    "dispatch",
+    "dispatchAwaited",
+    "dispatchManyAwaited",
+    "attachRouteScope",
+    "on",
+    "off",
+    "emit",
+    "removeAllListeners",
+] as const;
 
 /** 在实例进入 App 前验证第三方适配器工厂没有越过注册身份与宿主边界。 */
 export function assertAdapterFactoryContract(
@@ -45,6 +57,48 @@ export function assertAdapterFactoryContract(
         });
     }
     assertMethods(instance, ADAPTER_METHODS, `适配器 ${name}`);
+}
+
+/** 在账号进入 Adapter 映射前验证第三方 createAccount 没有替换身份或所有权。 */
+export function assertAccountFactoryContract(
+    candidate: unknown,
+    adapter: Adapter,
+    config: Account.Config,
+): asserts candidate is Account {
+    const label = `账号 ${config.platform}/${config.account_id}`;
+    const instance = requireObject(candidate, `${label} 工厂必须返回对象实例`);
+    if (instance.adapter !== adapter) {
+        throw new ValidationError(`${label} 工厂返回了不属于当前适配器的实例`, {
+            context: { platform: config.platform, account_id: config.account_id },
+        });
+    }
+    const returnedConfig = requireObject(instance.config, `${label} 工厂返回值缺少有效配置对象`);
+    if (
+        instance.platform !== config.platform ||
+        instance.account_id !== config.account_id ||
+        returnedConfig.platform !== config.platform ||
+        returnedConfig.account_id !== config.account_id
+    ) {
+        throw new ValidationError(
+            `${label} 工厂返回的账号身份不一致：实例为 ${formatIdentity(instance.platform)}/${formatIdentity(instance.account_id)}，配置为 ${formatIdentity(returnedConfig.platform)}/${formatIdentity(returnedConfig.account_id)}`,
+            {
+                context: {
+                    platform: config.platform,
+                    account_id: config.account_id,
+                    actualPlatform: formatIdentity(instance.platform),
+                    actualAccountId: formatIdentity(instance.account_id),
+                    actualConfigPlatform: formatIdentity(returnedConfig.platform),
+                    actualConfigAccountId: formatIdentity(returnedConfig.account_id),
+                },
+            },
+        );
+    }
+    if (!Array.isArray(instance.protocols)) {
+        throw new ValidationError(`${label} 工厂返回值缺少协议集合`, {
+            context: { platform: config.platform, account_id: config.account_id },
+        });
+    }
+    assertMethods(instance, ACCOUNT_METHODS, label);
 }
 
 /** 在实例挂入账号前验证第三方协议工厂的身份、所有权和运行接口。 */

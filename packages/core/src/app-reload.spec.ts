@@ -332,11 +332,28 @@ describe("BaseApp reload boundary", () => {
         const originalConfigDir = BaseApp.configDir;
         const directory = mkdtempSync(join(tmpdir(), "onebots-persist-hook-"));
         BaseApp.configDir = directory;
-        const account = { start: vi.fn(async () => undefined) };
         const adapter = {
-            createAccount: vi.fn(() => account),
             accounts: new Map(),
-        };
+        } as unknown as Adapter;
+        const accountConfig = { platform: "mock", account_id: "primary" };
+        const account = {
+            adapter,
+            config: accountConfig,
+            platform: accountConfig.platform,
+            account_id: accountConfig.account_id,
+            protocols: [],
+            start: vi.fn(async () => undefined),
+            stop: vi.fn(async () => undefined),
+            dispatch: vi.fn(),
+            dispatchAwaited: vi.fn(async () => undefined),
+            dispatchManyAwaited: vi.fn(async () => undefined),
+            attachRouteScope: vi.fn(),
+            on: vi.fn(),
+            off: vi.fn(),
+            emit: vi.fn(),
+            removeAllListeners: vi.fn(),
+        } as unknown as Account;
+        adapter.createAccount = vi.fn(() => account);
         const onConfigPersisted = vi.fn();
         const app = {
             config: { ...config },
@@ -349,10 +366,7 @@ describe("BaseApp reload boundary", () => {
         } as unknown as BaseApp;
 
         try {
-            await BaseApp.prototype.addAccount.call(app, {
-                platform: "mock",
-                account_id: "primary",
-            });
+            await BaseApp.prototype.addAccount.call(app, accountConfig);
 
             expect(existsSync(BaseApp.configPath)).toBe(true);
             expect(onConfigPersisted).toHaveBeenCalledOnce();

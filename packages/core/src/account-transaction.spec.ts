@@ -19,11 +19,27 @@ interface TestAccountOptions {
     stop?: (force?: boolean) => Promise<void>;
 }
 
-function createAccount(config: Account.Config, options: TestAccountOptions = {}): Account {
+function createAccount(
+    adapter: Adapter,
+    config: Account.Config,
+    options: TestAccountOptions = {},
+): Account {
     return {
+        adapter,
         config,
+        platform: config.platform,
+        account_id: config.account_id,
+        protocols: [],
         start: options.start ?? vi.fn(async () => undefined),
         stop: options.stop ?? vi.fn(async () => undefined),
+        dispatch: vi.fn(),
+        dispatchAwaited: vi.fn(async () => undefined),
+        dispatchManyAwaited: vi.fn(async () => undefined),
+        attachRouteScope: vi.fn(),
+        on: vi.fn(),
+        off: vi.fn(),
+        emit: vi.fn(),
+        removeAllListeners: vi.fn(),
     } as Account;
 }
 
@@ -71,7 +87,7 @@ describe("account transaction", () => {
     it("新增账号启动失败时清理候选运行态并保留原配置文件", async () => {
         const fixture = createFixture();
         const next = { platform: "mock", account_id: "10001", token: "next" };
-        const candidate = createAccount(next, {
+        const candidate = createAccount(fixture.adapter, next, {
             start: vi.fn(async () => {
                 throw new Error("登录失败");
             }),
@@ -91,13 +107,13 @@ describe("account transaction", () => {
         const previousConfig = { platform: "mock", account_id: "10001", token: "old" };
         const next = { ...previousConfig, token: "next" };
         const fixture = createFixture(previousConfig);
-        const previous = createAccount(previousConfig);
-        const candidate = createAccount(next, {
+        const previous = createAccount(fixture.adapter, previousConfig);
+        const candidate = createAccount(fixture.adapter, next, {
             start: vi.fn(async () => {
                 throw new Error("新凭据无效");
             }),
         });
-        const restored = createAccount(previousConfig);
+        const restored = createAccount(fixture.adapter, previousConfig);
         fixture.adapter.accounts.set("10001", previous);
         vi.mocked(fixture.adapter.createAccount)
             .mockReturnValueOnce(candidate)
@@ -117,9 +133,9 @@ describe("account transaction", () => {
         const previousConfig = { platform: "mock", account_id: "10001", token: "old" };
         const next = { ...previousConfig, token: "next" };
         const fixture = createFixture(previousConfig);
-        const previous = createAccount(previousConfig);
-        const candidate = createAccount(next);
-        const restored = createAccount(previousConfig);
+        const previous = createAccount(fixture.adapter, previousConfig);
+        const candidate = createAccount(fixture.adapter, next);
+        const restored = createAccount(fixture.adapter, previousConfig);
         fixture.adapter.accounts.set("10001", previous);
         vi.mocked(fixture.adapter.createAccount)
             .mockReturnValueOnce(candidate)
@@ -154,7 +170,7 @@ describe("account transaction", () => {
             releaseStart = resolve;
         });
         vi.mocked(fixture.adapter.createAccount).mockReturnValue(
-            createAccount(next, { start: () => startGate }),
+            createAccount(fixture.adapter, next, { start: () => startGate }),
         );
         const first = mutateAccountAtomically(options(fixture, next));
         await vi.waitFor(() => expect(fixture.host.isReloading).toBe(true));
@@ -189,8 +205,8 @@ describe("account transaction", () => {
         const previousConfig = { platform: "mock", account_id: "10001", token: "old" };
         const next = { ...previousConfig, token: "next" };
         const fixture = createFixture(previousConfig);
-        fixture.adapter.accounts.set("10001", createAccount(previousConfig));
-        const candidate = createAccount(next, {
+        fixture.adapter.accounts.set("10001", createAccount(fixture.adapter, previousConfig));
+        const candidate = createAccount(fixture.adapter, next, {
             start: vi.fn(async () => {
                 throw new Error("新账号启动失败");
             }),
@@ -219,7 +235,7 @@ describe("account transaction", () => {
     it("BaseApp 在事务开始前拒绝重复账号和并发配置变更", async () => {
         const fixture = createFixture();
         const config = { platform: "mock", account_id: "10001", token: "next" };
-        fixture.adapter.accounts.set("10001", createAccount(config));
+        fixture.adapter.accounts.set("10001", createAccount(fixture.adapter, config));
         const findOrCreateAdapter = vi.fn(() => fixture.adapter);
         const app = {
             isReloading: false,
@@ -246,7 +262,7 @@ describe("account transaction", () => {
         BaseApp.configDir = path.dirname(fixture.configPath);
         const config = { platform: "mock", account_id: "10001", token: "next" };
         vi.mocked(fixture.adapter.createAccount).mockReturnValue(
-            createAccount(config, {
+            createAccount(fixture.adapter, config, {
                 start: vi.fn(async () => {
                     throw new Error("登录失败");
                 }),
@@ -335,7 +351,7 @@ describe("account transaction", () => {
             nested: { next: true },
         };
         const fixture = createFixture(previousConfig);
-        fixture.adapter.accounts.set("10001", createAccount(previousConfig));
+        fixture.adapter.accounts.set("10001", createAccount(fixture.adapter, previousConfig));
         const app = {
             isReloading: false,
             config: fixture.host.config,
