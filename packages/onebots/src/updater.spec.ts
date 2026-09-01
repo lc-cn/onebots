@@ -449,11 +449,21 @@ EOF
         );
     });
 
-    it("bypasses caches when recording the pre-update service instance", async () => {
+    it("只记录采用已安装运行契约的旧版本 OneBots 实例并绕过缓存", async () => {
         const spec = temporaryServiceSpec();
+        const runtimeContractId = resolveServiceRuntimeContractId(spec);
         const fetcher = vi.fn<typeof fetch>(
             async () =>
-                new Response(JSON.stringify({ instance_id: "current-instance" }), { status: 200 }),
+                new Response(
+                    JSON.stringify({
+                        status: "ok",
+                        application: "onebots",
+                        version: "1.2.9",
+                        instance_id: "current-instance",
+                        runtime_contract_id: runtimeContractId,
+                    }),
+                    { status: 200 },
+                ),
         );
 
         await expect(readServiceInstanceId(spec, fetcher)).resolves.toBe("current-instance");
@@ -461,6 +471,37 @@ EOF
             "http://127.0.0.1:6727/health",
             expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
         );
+    });
+
+    it("不把仅返回 instance_id 的通用 HTTP 服务当作旧 OneBots 实例", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(
+            async () =>
+                new Response(JSON.stringify({ status: "ok", instance_id: "foreign" }), {
+                    status: 200,
+                }),
+        );
+
+        await expect(readServiceInstanceId(spec, fetcher)).resolves.toBeNull();
+    });
+
+    it("不记录使用其他启动契约的 OneBots 实例", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(
+            async () =>
+                new Response(
+                    JSON.stringify({
+                        status: "ok",
+                        application: "onebots",
+                        version: "1.2.9",
+                        instance_id: "wrong-runtime",
+                        runtime_contract_id: "sha256:wrong-contract",
+                    }),
+                    { status: 200 },
+                ),
+        );
+
+        await expect(readServiceInstanceId(spec, fetcher)).resolves.toBeNull();
     });
 
     it("不从超限的旧健康响应接受实例身份", async () => {

@@ -3,13 +3,12 @@ import type { ServiceSpec } from "./service-manager.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import {
     compareDoctorEndpointIdentities,
-    DOCTOR_ENDPOINT_BODY_LIMIT_BYTES,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
     verifyDoctorRuntimeContract,
 } from "./doctor-endpoint.js";
 import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
-import { readBoundedResponseBody } from "./bounded-response.js";
+import packageMetadata from "../package.json" with { type: "json" };
 
 export interface ServiceOnlineVerificationOptions {
     fetcher?: typeof fetch;
@@ -19,24 +18,22 @@ export interface ServiceOnlineVerificationOptions {
     previousInstanceId?: string | null;
 }
 
-/** 读取当前监听端口上的 OneBots 进程身份；不可达或旧端点返回 null。 */
+/** 读取采用已安装启动契约的 OneBots 进程身份；无关服务、错误契约或旧端点返回 null。 */
 export async function readServiceInstanceId(
     spec: ServiceSpec,
     fetcher: typeof fetch = fetch,
 ): Promise<string | null> {
     try {
         const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
-        const response = await fetcher(`${resolveGatewayBaseUrl(config)}/health`, {
-            cache: "no-store",
-            signal: AbortSignal.timeout(2_000),
-        });
-        if (!response.ok) return null;
-        const payload: unknown = JSON.parse(
-            await readBoundedResponseBody(response, DOCTOR_ENDPOINT_BODY_LIMIT_BYTES),
+        const health = await probeDoctorEndpoint(resolveGatewayBaseUrl(config), "health", fetcher);
+        if (health.level !== "ok" || health.identity?.application !== packageMetadata.name) {
+            return null;
+        }
+        const runtimeContract = verifyDoctorRuntimeContract(
+            health,
+            resolveServiceRuntimeContractId(spec),
         );
-        if (!payload || typeof payload !== "object" || !("instance_id" in payload)) return null;
-        const instanceId = payload.instance_id;
-        return typeof instanceId === "string" && instanceId.trim() ? instanceId.trim() : null;
+        return runtimeContract.level === "ok" ? (health.identity?.instanceId ?? null) : null;
     } catch {
         // 操作前探测是尽力而为；不可达表示当前端口没有可比较的 OneBots 实例。
         return null;
