@@ -249,6 +249,7 @@ import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiEmpty, UiInput, UiSpinner } from "../ui";
 import { matchesExtensionSearch } from "../components/capability-search.js";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
+import { parseExtensionInventory, parsePackageMutationStatus } from "./extension-inventory.js";
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
 import {
     getExtensionInstallRequestRecovery,
@@ -392,8 +393,10 @@ async function loadExtensions(background = false): Promise<void> {
         ]);
         if (!extensionsResponse.ok) throw new Error("无法读取扩展目录");
         if (!mutationResponse.ok) throw new Error("无法读取包变更状态");
-        extensions.value = await extensionsResponse.json();
-        packageMutationStatus.value = await mutationResponse.json();
+        const nextExtensions = parseExtensionInventory(await extensionsResponse.json());
+        const nextMutationStatus = parsePackageMutationStatus(await mutationResponse.json());
+        extensions.value = nextExtensions;
+        packageMutationStatus.value = nextMutationStatus;
     } catch (error) {
         errorMessage.value = error instanceof Error ? error.message : String(error);
     } finally {

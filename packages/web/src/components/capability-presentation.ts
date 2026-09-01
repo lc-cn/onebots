@@ -111,7 +111,9 @@ export function parseAdapterCapabilityReport(value: unknown): AdapterCapabilityR
 }
 
 /** 浏览器边界的纯数据校验，避免为解析 API 响应引入 core 的 Node.js 运行时入口。 */
-function assertCapabilityManifest(value: unknown): asserts value is AdapterCapabilityManifest {
+export function assertCapabilityManifest(
+    value: unknown,
+): asserts value is AdapterCapabilityManifest {
     if (!isRecord(value) || value.version !== 1) throw new Error("能力清单版本无效");
     if (
         Object.keys(value).some(

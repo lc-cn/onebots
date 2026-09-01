@@ -77,6 +77,7 @@ import {
 } from "../components/capability-presentation.js";
 import { getBotOnboardingState } from "./bot-onboarding.js";
 import type { ProtocolInventoryState } from "./bot-onboarding.js";
+import { parseExtensionInventory } from "./extension-inventory.js";
 
 const { adapters, totalBotCount, startBot, stopBot } = useApi({
     systemInfo: false,
@@ -116,9 +117,7 @@ async function loadExtensionInventory() {
     try {
         const response = await authFetch(buildApiUrl("/api/extensions"));
         if (!response.ok) throw new Error("无法读取适配器能力目录");
-        const payload: unknown = await response.json();
-        if (!Array.isArray(payload)) throw new Error("功能扩展目录响应格式无效");
-        extensions.value = payload as ExtensionInfo[];
+        extensions.value = parseExtensionInventory(await response.json());
         extensionInventoryStatus.value = "ready";
     } catch (error) {
         extensionInventoryStatus.value = "unavailable";
