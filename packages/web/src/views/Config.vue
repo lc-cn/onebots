@@ -4,10 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { IconSettings, IconRefresh, IconCheck, IconPlus, IconDownload } from "@tabler/icons-vue";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
-import {
-    readManagementJsonResponse,
-    readManagementResponseBody,
-} from "../management-response.js";
+import { readManagementJsonResponse, readManagementResponseBody } from "../management-response.js";
 import yaml from "js-yaml";
 import UiButton from "../ui/UiButton.vue";
 import UiCard from "../ui/UiCard.vue";
@@ -26,6 +23,7 @@ import type { Schema, SchemaBundle, SchemaGroup, AccountRow } from "../component
 import type { SchemaLoadStatus } from "../components/config/account-adapter-selection.js";
 import { isAccountWizardRequest } from "./bot-onboarding.js";
 import { parseProtocolConfigurationRequest } from "./protocol-configuration-request.js";
+import { buildAccountRemovalRequest } from "../account-removal-request.js";
 import {
     assertConfigurationMutationAcknowledgement,
     parseConfigurationSnapshot,
@@ -267,9 +265,7 @@ const handleSave = async () => {
             },
             body: config.value,
         });
-        const result = (await readManagementJsonResponse(
-            response,
-        )) as ConfigurationMutationResult;
+        const result = (await readManagementJsonResponse(response)) as ConfigurationMutationResult;
         if (response.ok) {
             assertConfigurationMutationAcknowledgement(result, expectedIdentity.instanceId);
             configRevision.value = result.config_revision as string;
@@ -296,9 +292,6 @@ const handleRemoveAccount = async (row: AccountRow) => {
     });
     if (!ok) return;
 
-    const url = buildApiUrl(
-        `/api/remove?platform=${encodeURIComponent(row.platform)}&uin=${encodeURIComponent(row.account_id)}`,
-    );
     const expectedIdentity = configurationIdentity.value;
     const expectedRevision = configRevision.value;
     if (!expectedIdentity || !expectedRevision) {
@@ -306,12 +299,15 @@ const handleRemoveAccount = async (row: AccountRow) => {
         return;
     }
     try {
-        const response = await authFetch(url, {
-            headers: {
-                [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: expectedIdentity.instanceId,
-                [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: expectedRevision,
-            },
-        });
+        const response = await authFetch(
+            buildApiUrl("/api/remove"),
+            buildAccountRemovalRequest(
+                row.platform,
+                row.account_id,
+                expectedIdentity.instanceId,
+                expectedRevision,
+            ),
+        );
         if (response.ok) {
             toast.success("删除成功");
             await loadConfigurationSnapshot();

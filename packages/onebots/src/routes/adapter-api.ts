@@ -24,7 +24,8 @@ import {
  *  GET  /api/list           — list all account infos
  *  POST /api/add            — add an account
  *  POST /api/edit           — update an account
- *  GET  /api/remove         — remove an account
+ *  POST /api/remove         — remove an account
+ *  GET  /api/remove         — deprecated compatibility entry for account removal
  *  POST /api/bots/start     — set a bot online
  *  POST /api/bots/stop      — set a bot offline
  *  POST /api/send           — send a message through a running gateway
@@ -72,22 +73,32 @@ export function registerAdapterRoutes(app: App, router: Router): void {
         }
     });
 
+    router.post("/api/remove", async (ctx: RouterContext) => {
+        await handleAccountRemoval(app, ctx, () => {
+            const body = requiredBodyRecord(ctx.request.body);
+            return {
+                platform: requiredBodyString("platform", body.platform),
+                uin: requiredBodyString("uin", body.uin),
+                force: optionalBodyBoolean("force", body.force),
+            };
+        });
+    });
+
     router.get("/api/remove", async (ctx: RouterContext) => {
-        try {
-            assertManagementInstancePrecondition(app, ctx, "账号删除");
-            assertManagementConfigRevisionPrecondition(ctx, "账号删除", app.configPath);
+        ctx.set("Cache-Control", "no-store");
+        ctx.set("Deprecation", "@1788307200");
+        ctx.set(
+            "Warning",
+            '299 OneBots "GET /api/remove is deprecated; use POST with a JSON body"',
+        );
+        await handleAccountRemoval(app, ctx, () => {
             const { uin, platform, force } = ctx.request.query;
-            await app.removeAccount(
-                requiredQueryString("platform", platform),
-                requiredQueryString("uin", uin),
-                parseBooleanQuery(force),
-            );
-            ctx.body = { success: true, message: "移除成功" };
-        } catch (error) {
-            ctx.status = accountMutationStatus(error);
-            ctx.body = { success: false, message: (error as Error).message };
-            app.logger.error("管理端删除账号失败", { error });
-        }
+            return {
+                platform: requiredQueryString("platform", platform),
+                uin: requiredQueryString("uin", uin),
+                force: parseBooleanQuery(force),
+            };
+        });
     });
 
     router.post("/api/bots/start", async (ctx: RouterContext) => {
@@ -156,6 +167,31 @@ export function registerAdapterRoutes(app: App, router: Router): void {
     });
 }
 
+interface AccountRemovalRequest {
+    platform: string;
+    uin: string;
+    force: boolean;
+}
+
+async function handleAccountRemoval(
+    app: App,
+    ctx: RouterContext,
+    readRequest: () => AccountRemovalRequest,
+): Promise<void> {
+    try {
+        assertManagementInstancePrecondition(app, ctx, "账号删除");
+        assertManagementConfigRevisionPrecondition(ctx, "账号删除", app.configPath);
+        const request = readRequest();
+        await app.removeAccount(request.platform, request.uin, request.force);
+        ctx.set("Cache-Control", "no-store");
+        ctx.body = { success: true, message: "移除成功" };
+    } catch (error) {
+        ctx.status = accountMutationStatus(error);
+        ctx.body = { success: false, message: (error as Error).message };
+        app.logger.error("管理端删除账号失败", { error });
+    }
+}
+
 function parseBooleanQuery(value: unknown): boolean {
     if (Array.isArray(value)) return value.some(item => parseBooleanQuery(item));
     if (typeof value !== "string") return value === true;
@@ -167,6 +203,26 @@ function requiredQueryString(field: string, value: unknown): string {
     if (typeof value !== "string" || value.trim().length === 0) {
         throw new ValidationError(`查询参数 ${field} 必须是非空字符串`);
     }
+    return value;
+}
+
+function requiredBodyRecord(value: unknown): Record<string, unknown> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new ValidationError("账号删除请求体必须是对象");
+    }
+    return value as Record<string, unknown>;
+}
+
+function requiredBodyString(field: string, value: unknown): string {
+    if (typeof value !== "string" || value.trim().length === 0) {
+        throw new ValidationError(`请求字段 ${field} 必须是非空字符串`);
+    }
+    return value;
+}
+
+function optionalBodyBoolean(field: string, value: unknown): boolean {
+    if (value === undefined) return false;
+    if (typeof value !== "boolean") throw new ValidationError(`请求字段 ${field} 必须是布尔值`);
     return value;
 }
 

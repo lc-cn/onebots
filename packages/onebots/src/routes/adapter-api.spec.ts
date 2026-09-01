@@ -143,7 +143,10 @@ describe("adapter account routes", () => {
 
     it("删除账号缺少身份参数时返回 400 且不调用 Core", async () => {
         const { app, gets } = setup();
-        const ctx = { request: { query: { platform: "mock" } } } as unknown as RouterContext;
+        const ctx = {
+            request: { query: { platform: "mock" } },
+            set: vi.fn(),
+        } as unknown as RouterContext;
 
         await gets.get("/api/remove")!(ctx);
 
@@ -160,9 +163,28 @@ describe("adapter account routes", () => {
         const ctx = {
             get: () => "instance-before-restart",
             request: { query: { platform: "mock", uin: "demo" } },
+            set: vi.fn(),
         } as unknown as RouterContext;
 
         await gets.get("/api/remove")!(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: "账号删除请求期望实例 instance-before-restart，当前已由实例 instance-a 接管",
+        });
+        expect(app.removeAccount).not.toHaveBeenCalled();
+    });
+
+    it("POST 删除在解析请求体前拒绝已切换实例的旧页面", async () => {
+        const { app, posts } = setup();
+        const ctx = {
+            get: () => "instance-before-restart",
+            request: { body: "malformed" },
+            set: vi.fn(),
+        } as unknown as RouterContext;
+
+        await posts.get("/api/remove")!(ctx);
 
         expect(ctx.status).toBe(409);
         expect(ctx.body).toEqual({
@@ -181,12 +203,55 @@ describe("adapter account routes", () => {
         const { app, gets } = setup();
         const ctx = {
             request: { query: { platform: "mock", uin: "10001", force } },
+            set: vi.fn(),
         } as unknown as RouterContext;
 
         await gets.get("/api/remove")!(ctx);
 
         expect(app.removeAccount).toHaveBeenCalledWith("mock", "10001", expected);
         expect(ctx.body).toEqual({ success: true, message: "移除成功" });
+    });
+
+    it("使用 POST 请求体删除账号并严格校验 force", async () => {
+        const { app, posts } = setup();
+        const valid = {
+            request: { body: { platform: "mock", uin: "10001", force: true } },
+            set: vi.fn(),
+        } as unknown as RouterContext;
+
+        await posts.get("/api/remove")!(valid);
+
+        expect(app.removeAccount).toHaveBeenCalledWith("mock", "10001", true);
+        expect(valid.body).toEqual({ success: true, message: "移除成功" });
+        expect(valid.set).toHaveBeenCalledWith("Cache-Control", "no-store");
+
+        const invalid = {
+            request: { body: { platform: "mock", uin: "10001", force: "false" } },
+            set: vi.fn(),
+        } as unknown as RouterContext;
+        await posts.get("/api/remove")!(invalid);
+        expect(invalid.status).toBe(400);
+        expect(invalid.body).toEqual({
+            success: false,
+            message: "请求字段 force 必须是布尔值",
+        });
+        expect(app.removeAccount).toHaveBeenCalledTimes(1);
+    });
+
+    it("保留 GET 删除兼容入口并明确标记弃用", async () => {
+        const { gets } = setup();
+        const ctx = {
+            request: { query: { platform: "mock", uin: "10001" } },
+            set: vi.fn(),
+        } as unknown as RouterContext;
+
+        await gets.get("/api/remove")!(ctx);
+
+        expect(ctx.set).toHaveBeenCalledWith("Deprecation", "@1788307200");
+        expect(ctx.set).toHaveBeenCalledWith(
+            "Warning",
+            '299 OneBots "GET /api/remove is deprecated; use POST with a JSON body"',
+        );
     });
 
     it.each(["/api/bots/start", "/api/bots/stop"])("%s 缺少账号身份时返回 400", async route => {
