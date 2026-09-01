@@ -228,8 +228,9 @@ function connectSSE() {
                 console.error('解析消息调试数据失败:', error);
             }
         },
-        onError: () => {
+        onError: error => {
             isConnected.value = false;
+            console.error('消息调试 SSE 连接错误:', error);
         },
         retryMs: 3_000,
     });

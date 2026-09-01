@@ -330,9 +330,9 @@ const connectSSE = () => {
                 console.error('解析日志数据失败:', error);
             }
         },
-        onError: () => {
+        onError: error => {
             isConnected.value = false;
-            console.error('SSE 连接错误');
+            console.error('SSE 连接错误:', error);
         },
         retryMs: 3_000,
     });
