@@ -350,9 +350,9 @@ export class MatrixAdapter extends Adapter<MatrixClient, "matrix"> {
         if (client.receiveMode === "appservice") {
             this.appserviceHost.mount(account.account_id, client, account.path);
         }
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                const identity = await client.start();
+                const identity = await client.start(signal);
                 account.status = AccountStatus.Online;
                 account.nickname = identity.user_id;
                 this.logger.info(`Matrix Bot ${identity.user_id} 已就绪（${client.receiveMode}）`);

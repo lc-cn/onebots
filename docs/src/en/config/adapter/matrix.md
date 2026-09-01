@@ -23,6 +23,8 @@ matrix.bot:
 
 Startup calls `whoami` and rejects credentials whose identity differs from `user_id`. The Web form renders Matrix event types as an add/remove choice list and generates the `/sync` filter directly.
 
+`whoami`, asynchronous ready listeners, `/sync` long polling, and subsequent protocol outlets share the account startup boundary. When the global `timeout` expires or a hot reload is cancelled, the adapter aborts pending identity and sync requests. Connection-generation checks prevent a late response that ignored cancellation from restoring account state.
+
 ## Application Service
 
 ```yaml

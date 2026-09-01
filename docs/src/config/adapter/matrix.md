@@ -30,6 +30,8 @@ matrix.bot:
 
 启动时会调用 `whoami`，返回的 `user_id` 必须与配置完全一致。Web 表单中的事件类型使用可动态增减的选择列表，直接生成 `/sync` filter，不需要手写 JSON。
 
+`whoami`、异步就绪监听器、`/sync` 长轮询和后续协议出口共用账号启动边界。达到全局 `timeout` 或取消热重载时，适配器会中止正在进行的身份与同步请求；连接代次检查会阻止忽略取消的迟到响应重新恢复账号状态。
+
 ## Application Service
 
 ```yaml

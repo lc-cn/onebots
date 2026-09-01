@@ -275,6 +275,59 @@ describe("MatrixClient", () => {
         await expect(start).rejects.toMatchObject({ code: "MATRIX_START_CANCELLED" });
     });
 
+    it("账号启动取消会中止进行中的 whoami 请求且不发出 ready", async () => {
+        let requestSignal: AbortSignal | undefined;
+        const fetcher = vi.fn<typeof fetch>((_input, init) => {
+            requestSignal = init?.signal ?? undefined;
+            return new Promise((_resolve, reject) =>
+                requestSignal?.addEventListener("abort", () => reject(requestSignal?.reason), {
+                    once: true,
+                }),
+            );
+        });
+        const client = new MatrixClient(manualConfig, { fetcher });
+        const ready = vi.fn();
+        client.on("ready", ready);
+        const controller = new AbortController();
+
+        const start = client.start(controller.signal);
+        await vi.waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
+        controller.abort(new DOMException("账号启动超时", "AbortError"));
+
+        await expect(start).rejects.toMatchObject({ name: "AbortError" });
+        expect(requestSignal?.aborted).toBe(true);
+        expect(ready).not.toHaveBeenCalled();
+    });
+
+    it("身份就绪后账号启动取消会关闭后续 sync 长轮询", async () => {
+        let syncSignal: AbortSignal | undefined;
+        const fetcher = vi.fn<typeof fetch>((input, init) => {
+            const url = new URL(String(input));
+            if (url.pathname.endsWith("/account/whoami")) {
+                return Promise.resolve(Response.json({ user_id: manualConfig.user_id }));
+            }
+            if (url.pathname.endsWith("/sync")) {
+                syncSignal = init?.signal ?? undefined;
+                return new Promise((_resolve, reject) =>
+                    syncSignal?.addEventListener("abort", () => reject(syncSignal?.reason), {
+                        once: true,
+                    }),
+                );
+            }
+            throw new Error(`unexpected Matrix path ${url.pathname}`);
+        });
+        const client = new MatrixClient({ ...manualConfig, receive_mode: "sync" }, { fetcher });
+        const stop = vi.spyOn(client, "stop");
+        const controller = new AbortController();
+
+        await client.start(controller.signal);
+        await vi.waitFor(() => expect(syncSignal).toBeInstanceOf(AbortSignal));
+        controller.abort();
+
+        await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(syncSignal?.aborted).toBe(true));
+    });
+
     it("AppService transaction 拒绝非 Matrix 事件，而不是 ACK 后静默丢弃", async () => {
         const client = new MatrixClient({
             ...manualConfig,

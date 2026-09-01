@@ -61,8 +61,11 @@ export class MatrixClient extends EventEmitter<MatrixClientEvents> {
     private readonly reactionEvents = new Map<string, { event_id: string; key?: string }>();
     private readonly typingUsers = new Map<string, Set<string>>();
     private abortController?: AbortController;
+    private startupAbort?: AbortController;
     private syncTask?: Promise<void>;
     private startTask?: Promise<MatrixIdentity>;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private identity?: MatrixIdentity;
     private generation = 0;
 
@@ -88,23 +91,29 @@ export class MatrixClient extends EventEmitter<MatrixClientEvents> {
         return this.identity?.user_id || this.config.user_id;
     }
 
-    async start(): Promise<MatrixIdentity> {
+    async start(signal?: AbortSignal): Promise<MatrixIdentity> {
+        signal?.throwIfAborted();
         if (this.startTask) return this.startTask;
         if (this.identity) return this.identity;
+        this.bindStartSignal(signal);
         const generation = ++this.generation;
-        const task = this.startInternal(generation);
+        const controller = new AbortController();
+        this.startupAbort = controller;
+        const task = this.startInternal(generation, controller.signal);
         this.startTask = task;
         try {
             return await task;
         } finally {
             if (this.startTask === task) this.startTask = undefined;
+            if (this.startupAbort === controller) this.startupAbort = undefined;
+            if (!this.identity) this.unbindStartSignal();
         }
     }
 
-    private async startInternal(generation: number): Promise<MatrixIdentity> {
+    private async startInternal(generation: number, signal: AbortSignal): Promise<MatrixIdentity> {
         const token = this.config.access_token ? "access" : "appservice";
         const identity = parseIdentity(
-            await this.call("GET", "/_matrix/client/v3/account/whoami", { token }),
+            await this.call("GET", "/_matrix/client/v3/account/whoami", { token, signal }),
         );
         if (identity.user_id !== this.config.user_id) {
             throw new MatrixError("Matrix 凭据身份与配置 user_id 不一致", {
@@ -112,9 +121,7 @@ export class MatrixClient extends EventEmitter<MatrixClientEvents> {
                 details: { expected: this.config.user_id, actual: identity.user_id },
             });
         }
-        if (generation !== this.generation) {
-            throw new MatrixError("Matrix Client 启动已取消", { code: "MATRIX_START_CANCELLED" });
-        }
+        this.assertStartCurrent(generation, signal);
         this.identity = identity;
         try {
             await emitAllAwaited(this, "ready", identity);
@@ -122,9 +129,11 @@ export class MatrixClient extends EventEmitter<MatrixClientEvents> {
             this.identity = undefined;
             throw error;
         }
-        if (generation !== this.generation) {
+        try {
+            this.assertStartCurrent(generation, signal);
+        } catch (error) {
             this.identity = undefined;
-            throw new MatrixError("Matrix Client 启动已取消", { code: "MATRIX_START_CANCELLED" });
+            throw error;
         }
         if (this.receiveMode === "sync" && !this.syncTask) {
             this.abortController = new AbortController();
@@ -137,7 +146,10 @@ export class MatrixClient extends EventEmitter<MatrixClientEvents> {
     }
 
     async stop(): Promise<void> {
+        this.unbindStartSignal();
         this.generation += 1;
+        this.startupAbort?.abort();
+        this.startupAbort = undefined;
         this.abortController?.abort();
         try {
             await this.syncTask;
@@ -146,6 +158,36 @@ export class MatrixClient extends EventEmitter<MatrixClientEvents> {
         }
         this.identity = undefined;
         await emitAllAwaited(this, "stop");
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error =>
+                this.reportError(MatrixError.wrap(error, "MATRIX_STOP_FAILED")),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
+    }
+
+    private assertStartCurrent(generation: number, signal: AbortSignal): void {
+        if (generation !== this.generation) {
+            throw new MatrixError("Matrix Client 启动已取消", {
+                code: "MATRIX_START_CANCELLED",
+            });
+        }
+        signal.throwIfAborted();
     }
 
     call(method: string, path: string, options: MatrixCallOptions = {}): Promise<unknown> {
