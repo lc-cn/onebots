@@ -1,6 +1,6 @@
 import { AdapterRegistry, type AdapterCapabilityManifest } from "@onebots/core";
 import { getExtensionCapabilityCatalogEntry } from "./extension-capability-catalog.js";
-import { getExtensionCatalogEntry } from "./extension-catalog.js";
+import { getTrustedExtensionCatalogEntry } from "./trusted-extension-catalog.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
 
 export type CapabilityCategory = "actions" | "events" | "segments" | "transports";
@@ -87,7 +87,7 @@ export function buildAdapterCapabilityReport(
         .filter(platform => !runtimeNames.has(platform))
         .map(platform => {
             const capability = getExtensionCapabilityCatalogEntry(platform);
-            const extension = getExtensionCatalogEntry(`adapter:${platform}`);
+            const extension = getTrustedExtensionCatalogEntry(`adapter:${platform}`);
             const verified = catalogAvailable && capability !== undefined;
             return {
                 source: "catalog" as const,

@@ -6,7 +6,7 @@ import {
     getExtensionCapabilityCatalogEntry,
     getExtensionPackageCatalogEntry,
 } from "./extension-capability-catalog.js";
-import { EXTENSION_CATALOG } from "./extension-catalog.js";
+import { TRUSTED_EXTENSION_CATALOG } from "./trusted-extension-catalog.js";
 import type { DoctorCheck, DoctorEndpointIdentity } from "./doctor.js";
 import type { ManagementFetch } from "./management-credential.js";
 import { readDoctorManagementJson } from "./doctor-management-response.js";
@@ -100,7 +100,7 @@ export function inspectCapabilityCatalogPayload(
 
     const errors = payload.errors as string[];
     const adapters = payload.adapters as CapabilityInventoryItem[];
-    const expectedEntries = EXTENSION_CATALOG.filter(entry => entry.type === "adapter");
+    const expectedEntries = TRUSTED_EXTENSION_CATALOG.filter(entry => entry.type === "adapter");
     const expectedByName = new Map(expectedEntries.map(entry => [entry.name, entry]));
     const names = new Set<string>();
     let runtimeCount = 0;

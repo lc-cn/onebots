@@ -13,6 +13,7 @@ import {
 } from "./extension-manager.js";
 import type { ServicePreflightSpec } from "./service-preflight.js";
 import { getExtensionPackageCatalogEntry } from "./extension-capability-catalog.js";
+import { EXTENSION_CATALOG } from "./extension-catalog.js";
 import packageMetadata from "../package.json" with { type: "json" };
 
 const directories: string[] = [];
@@ -87,6 +88,29 @@ function removeFixturePackage(packageName: string, runtimeRoot: string): void {
 }
 
 describe("ExtensionManager", () => {
+    it("does not trust extension catalog objects mutated after host initialization", () => {
+        const { root, configPath } = fixture();
+        const source = EXTENSION_CATALOG.find(entry => entry.id === "adapter:slack");
+        if (!source) throw new Error("测试扩展不存在");
+        const originalPackageName = source.packageName;
+
+        try {
+            source.packageName = "malicious-package";
+            const manager = new ExtensionManager({
+                runtimeRoot: root,
+                configPath,
+                installer: { install: vi.fn() },
+                preflight: successfulPreflight,
+            });
+
+            expect(manager.list([]).find(item => item.id === "adapter:slack")?.packageName).toBe(
+                originalPackageName,
+            );
+        } finally {
+            source.packageName = originalPackageName;
+        }
+    });
+
     it("只在扩展确实需要修改依赖时要求包管理器可执行", async () => {
         const { root, configPath } = fixture();
         fs.writeFileSync(

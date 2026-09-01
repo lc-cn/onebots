@@ -1,11 +1,12 @@
-import { EXTENSION_CATALOG, type ExtensionCatalogEntry } from "./extension-catalog.js";
+import type { ExtensionCatalogEntry } from "./extension-catalog.js";
+import { TRUSTED_EXTENSION_CATALOG } from "./trusted-extension-catalog.js";
 import { validateExtensionCatalogIntegrity } from "./extension-catalog-integrity.js";
 import { validateExtensionConfigurationTarget } from "./extension-configuration-target.js";
 import type { DoctorCheck } from "./doctor.js";
 
 /** 验证扩展目录承诺的配置入口，供人工诊断与 JSON 诊断共享。 */
 export function inspectExtensionCatalog(
-    entries: readonly ExtensionCatalogEntry[] = EXTENSION_CATALOG,
+    entries: readonly ExtensionCatalogEntry[] = TRUSTED_EXTENSION_CATALOG,
     integrityIssues: readonly string[] = validateExtensionCatalogIntegrity(entries),
 ): DoctorCheck {
     const targetIssues = entries.flatMap(entry => {

@@ -5,7 +5,10 @@ import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { BaseApp, writeConfigFileAtomic, yaml } from "@onebots/core";
-import { EXTENSION_CATALOG, getExtensionCatalogEntry } from "./extension-catalog.js";
+import {
+    getTrustedExtensionCatalogEntry,
+    TRUSTED_EXTENSION_CATALOG,
+} from "./trusted-extension-catalog.js";
 import { buildAdapterCapabilityReport, summarizeManifest } from "./capability-report.js";
 import {
     getExtensionCapabilityCatalogEntry,
@@ -210,7 +213,7 @@ export class ExtensionManager {
                 },
             ]),
         );
-        return EXTENSION_CATALOG.map(entry => {
+        return TRUSTED_EXTENSION_CATALOG.map(entry => {
             const packageCatalog = getExtensionPackageCatalogEntry(entry.packageName);
             const installedPackage = this.inspectInstalledPackage(entry.packageName);
             const installedVersion = installedPackage.version;
@@ -293,7 +296,7 @@ export class ExtensionManager {
     }
 
     async install(id: string): Promise<{ restartRequired: true }> {
-        const entry = getExtensionCatalogEntry(id);
+        const entry = getTrustedExtensionCatalogEntry(id);
         if (!entry) throw new ExtensionNotFoundError("扩展不存在或不允许从管理端安装");
         if (this.installation) {
             if (this.installation.id === id) return this.installation.promise;

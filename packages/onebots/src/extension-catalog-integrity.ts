@@ -1,4 +1,5 @@
-import { EXTENSION_CATALOG, type ExtensionCatalogEntry } from "./extension-catalog.js";
+import type { ExtensionCatalogEntry } from "./extension-catalog.js";
+import { TRUSTED_EXTENSION_CATALOG } from "./trusted-extension-catalog.js";
 import {
     getExtensionCapabilityCatalogEntry,
     getExtensionCapabilityCatalogPlatforms,
@@ -24,7 +25,7 @@ const DEFAULT_SOURCE: ExtensionCatalogIntegritySource = {
 
 /** 校验安装白名单、固定包版本与适配器能力快照形成闭合集合。 */
 export function validateExtensionCatalogIntegrity(
-    entries: readonly ExtensionCatalogEntry[] = EXTENSION_CATALOG,
+    entries: readonly ExtensionCatalogEntry[] = TRUSTED_EXTENSION_CATALOG,
     source: ExtensionCatalogIntegritySource = DEFAULT_SOURCE,
 ): string[] {
     const issues: string[] = [];
@@ -82,7 +83,7 @@ export function validateExtensionCatalogIntegrity(
 }
 
 export function getInstallableAdapterNames(
-    entries: readonly ExtensionCatalogEntry[] = EXTENSION_CATALOG,
+    entries: readonly ExtensionCatalogEntry[] = TRUSTED_EXTENSION_CATALOG,
 ): string[] {
     return entries
         .filter(entry => entry.type === "adapter")
