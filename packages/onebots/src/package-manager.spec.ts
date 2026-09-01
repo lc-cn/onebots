@@ -564,6 +564,35 @@ describe("runtime package manager", () => {
         });
     });
 
+    it("更新与移除命令沿用已验证的绝对包管理器入口", () => {
+        const root = fixture({ packageManager: "pnpm@9.15.9" });
+        const packageManager = {
+            manager: "pnpm" as const,
+            resolvedPath: path.join(root, "verified", "pnpm"),
+        };
+
+        expect(
+            buildPackageUpdateInvocation(
+                root,
+                ["onebots@1.3.0"],
+                root,
+                "linux",
+                { PATH: path.join(root, "untrusted") },
+                packageManager,
+            ).executable,
+        ).toBe(packageManager.resolvedPath);
+        expect(
+            buildPackageRemovalInvocation(
+                root,
+                ["@onebots/adapter-slack"],
+                root,
+                "linux",
+                { PATH: path.join(root, "untrusted") },
+                packageManager,
+            ).executable,
+        ).toBe(packageManager.resolvedPath);
+    });
+
     it("Windows 更新和版本查询使用 cmd 入口", () => {
         const root = fixture({ packageManager: "npm@11.17.0" });
 

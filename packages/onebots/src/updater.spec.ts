@@ -110,7 +110,7 @@ describe("post-update service safety", () => {
                 version: "11.17.0",
                 error: null,
             })),
-        ).resolves.toBe("npm");
+        ).resolves.toEqual({ manager: "npm", resolvedPath: "/tools/npm" });
         await expect(
             requireUpdatePackageManager("/runtime", async () => ({
                 manager: "npm",
@@ -241,7 +241,13 @@ describe("post-update service safety", () => {
             }),
         );
 
-        expect(loadTargetExtensionVersionCatalog("npm", spec.workingDirectory, "1.3.0")).toEqual({
+        expect(
+            loadTargetExtensionVersionCatalog(
+                { manager: "npm", resolvedPath: "/verified/npm" },
+                spec.workingDirectory,
+                "1.3.0",
+            ),
+        ).toEqual({
             schemaVersion: 2,
             packages: { "@onebots/adapter-mock": { version: "2.4.0" } },
         });
@@ -270,7 +276,13 @@ EOF
         vi.stubEnv("PATH", `${bin}:${process.env.PATH ?? ""}`);
         vi.stubEnv("UPDATE_MARKER", marker);
 
-        expect(loadTargetExtensionVersionCatalog("npm", spec.workingDirectory, "1.3.0")).toEqual({
+        expect(
+            loadTargetExtensionVersionCatalog(
+                { manager: "npm", resolvedPath: npm },
+                spec.workingDirectory,
+                "1.3.0",
+            ),
+        ).toEqual({
             schemaVersion: 2,
             packages: { "@onebots/adapter-mock": { version: "2.5.0" } },
         });

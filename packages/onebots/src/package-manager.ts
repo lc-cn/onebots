@@ -547,8 +547,10 @@ export function buildPackageUpdateInvocation(
     projectRoot: string | null,
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
+    packageManager?: VerifiedPackageManager,
 ): PackageUpdateInvocation {
-    const manager = detectRuntimePackageManager(runtimeRoot, environment);
+    const manager =
+        packageManager?.manager ?? detectRuntimePackageManager(runtimeRoot, environment);
     const invocation = buildPackageManagerInvocation(
         manager,
         manager === "pnpm"
@@ -562,6 +564,7 @@ export function buildPackageUpdateInvocation(
               ],
         platform,
         environment,
+        packageManager?.resolvedPath,
     );
     return { ...invocation, cwd: projectRoot ?? runtimeRoot };
 }
@@ -573,8 +576,10 @@ export function buildPackageRemovalInvocation(
     projectRoot: string | null,
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
+    packageManager?: VerifiedPackageManager,
 ): PackageUpdateInvocation {
-    const manager = detectRuntimePackageManager(runtimeRoot, environment);
+    const manager =
+        packageManager?.manager ?? detectRuntimePackageManager(runtimeRoot, environment);
     const invocation = buildPackageManagerInvocation(
         manager,
         manager === "pnpm"
@@ -586,6 +591,7 @@ export function buildPackageRemovalInvocation(
               ],
         platform,
         environment,
+        packageManager?.resolvedPath,
     );
     return { ...invocation, cwd: projectRoot ?? runtimeRoot };
 }

@@ -4,6 +4,7 @@ import {
     buildPackageUpdateInvocation,
     PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
     type PackageUpdateInvocation,
+    type VerifiedPackageManager,
 } from "./package-manager.js";
 
 export interface PackageUpdateEvidence {
@@ -23,6 +24,7 @@ interface FailedUpdateRecoveryOptions {
     metadataChanged?: boolean;
     execute?: PackageInvocationExecutor;
     verifyMetadata?: () => void;
+    packageManager?: VerifiedPackageManager;
 }
 
 const executePackageInvocation: PackageInvocationExecutor = invocation => {
@@ -58,16 +60,35 @@ export function rollbackUpdatedPackages(
     projectRoot: string | null,
     resolveVersion: PackageVersionResolver,
     execute: PackageInvocationExecutor = executePackageInvocation,
+    packageManager?: VerifiedPackageManager,
 ): void {
     const previousPackages = snapshots.flatMap(item =>
         item.current ? [`${item.name}@${item.current}`] : [],
     );
     if (previousPackages.length) {
-        execute(buildPackageUpdateInvocation(runtimeRoot, previousPackages, projectRoot));
+        execute(
+            buildPackageUpdateInvocation(
+                runtimeRoot,
+                previousPackages,
+                projectRoot,
+                process.platform,
+                process.env,
+                packageManager,
+            ),
+        );
     }
     const newlyAddedPackages = snapshots.flatMap(item => (item.current ? [] : [item.name]));
     if (newlyAddedPackages.length) {
-        execute(buildPackageRemovalInvocation(runtimeRoot, newlyAddedPackages, projectRoot));
+        execute(
+            buildPackageRemovalInvocation(
+                runtimeRoot,
+                newlyAddedPackages,
+                projectRoot,
+                process.platform,
+                process.env,
+                packageManager,
+            ),
+        );
     }
     const mismatches = snapshots.flatMap(item => {
         const actual = resolveVersion(item.name, runtimeRoot);
@@ -108,6 +129,7 @@ export function recoverPackagesAfterFailedUpdate(
             projectRoot,
             resolveVersion,
             options.execute,
+            options.packageManager,
         );
         options.verifyMetadata?.();
     } catch (rollbackError) {

@@ -25,11 +25,16 @@ describe("update extension catalog source", () => {
         },
     ])("拒绝无法证明目标 OneBots 身份的暂存目录", ({ manifest, message }) => {
         const root = createRuntimeRoot();
-        installFakeNpm(root, manifest, "9.9.9");
+        const npm = installFakeNpm(root, manifest, "9.9.9");
 
-        expect(() => loadTargetExtensionVersionCatalog("npm", root, "1.3.0", null)).toThrow(
-            message,
-        );
+        expect(() =>
+            loadTargetExtensionVersionCatalog(
+                { manager: "npm", resolvedPath: npm },
+                root,
+                "1.3.0",
+                null,
+            ),
+        ).toThrow(message);
     });
 
     it("不把当前安装的版本与另一安装的目录拼接为证据", () => {
@@ -40,10 +45,16 @@ describe("update extension catalog source", () => {
         writePackage(foreignRoot, "onebots", "1.2.9", "8.8.8");
         fs.writeFileSync(foreignEntry, "", "utf8");
         const marker = path.join(root, "staged.txt");
-        installFakeNpm(root, { name: "onebots", version: "1.3.0" }, "2.5.0", marker);
+        const npm = installFakeNpm(root, { name: "onebots", version: "1.3.0" }, "2.5.0", marker);
 
         expect(
-            loadTargetExtensionVersionCatalog("npm", root, "1.3.0", "1.3.0", foreignEntry),
+            loadTargetExtensionVersionCatalog(
+                { manager: "npm", resolvedPath: npm },
+                root,
+                "1.3.0",
+                "1.3.0",
+                foreignEntry,
+            ),
         ).toEqual({
             schemaVersion: 2,
             packages: { "@onebots/adapter-mock": { version: "2.5.0" } },
@@ -89,7 +100,7 @@ function installFakeNpm(
     manifest: { name: string; version: string },
     adapterVersion: string,
     marker?: string,
-): void {
+): string {
     const bin = path.join(root, "bin");
     fs.mkdirSync(bin, { recursive: true });
     fs.writeFileSync(
@@ -108,4 +119,5 @@ ${marker ? 'printf staged > "$UPDATE_CATALOG_MARKER"' : ""}
     );
     vi.stubEnv("PATH", `${bin}:${process.env.PATH ?? ""}`);
     if (marker) vi.stubEnv("UPDATE_CATALOG_MARKER", marker);
+    return path.join(bin, "npm");
 }

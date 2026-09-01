@@ -20,7 +20,7 @@ import {
     inspectRuntimePackageManagerVersion,
     PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
     type RuntimePackageManagerVersionInspection,
-    type SupportedPackageManager,
+    type VerifiedPackageManager,
 } from "./package-manager.js";
 import { acquirePackageMutationLock } from "./package-mutation-lock.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
@@ -117,12 +117,15 @@ export async function requireUpdatePackageManager(
     inspect: (
         target: string,
     ) => Promise<RuntimePackageManagerVersionInspection> = inspectRuntimePackageManagerVersion,
-): Promise<SupportedPackageManager> {
+): Promise<VerifiedPackageManager> {
     const inspection = await inspect(runtimeRoot);
     if (inspection.error || !inspection.manager || !inspection.version) {
         throw new Error(`更新包管理器不可用：${inspection.error ?? "无法确认实际版本"}`);
     }
-    return inspection.manager;
+    if (!inspection.resolvedPath) {
+        throw new Error("更新包管理器不可用：无法确认已验证的可执行入口");
+    }
+    return { manager: inspection.manager, resolvedPath: inspection.resolvedPath };
 }
 
 /** 检查并更新 OneBots 与当前服务使用的插件。 */
@@ -194,14 +197,21 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
 
     if (isEphemeralNpx()) {
         const command =
-            manager === "pnpm"
+            manager.manager === "pnpm"
                 ? `pnpm add ${changed.map(item => `${item.name}@${item.target}`).join(" ")}`
                 : `npm install ${changed.map(item => `${item.name}@${item.target}`).join(" ")}`;
         throw new Error(`当前从 npx 临时缓存运行，无法安全自更新。请在项目中执行: ${command}`);
     }
     const names = changed.map(item => `${item.name}@${item.target}`);
     const projectRoot = resolvePackageUpdateProjectRoot(runtimeRoot);
-    const invocation = buildPackageUpdateInvocation(runtimeRoot, names, projectRoot);
+    const invocation = buildPackageUpdateInvocation(
+        runtimeRoot,
+        names,
+        projectRoot,
+        process.platform,
+        process.env,
+        manager,
+    );
     const initialServiceStatus = spec ? controller.status(spec) : null;
     if (initialServiceStatus?.error) {
         throw new Error(
@@ -239,13 +249,14 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
                                       );
                                   }
                               },
+                    packageManager: manager,
                 },
             );
         }
         try {
             assertUpdatedPackageVersions(updates, runtimeRoot, resolveInstalledPackageVersion);
         } catch (error) {
-            rollbackPackagesBeforeServiceSwitch(updates, runtimeRoot, projectRoot, error);
+            rollbackPackagesBeforeServiceSwitch(updates, runtimeRoot, projectRoot, manager, error);
         }
         if (options.packagesOnly) {
             await preflightPackagesOnlyUpdate(
@@ -266,6 +277,8 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
                             runtimeRoot,
                             projectRoot,
                             resolveInstalledPackageVersion,
+                            undefined,
+                            manager,
                         ),
                 },
             );
@@ -288,6 +301,8 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
                             runtimeRoot,
                             projectRoot,
                             resolveInstalledPackageVersion,
+                            undefined,
+                            manager,
                         ),
                 },
             );
@@ -358,10 +373,18 @@ function rollbackPackagesBeforeServiceSwitch(
     changes: readonly PackageUpdateChange[],
     runtimeRoot: string,
     projectRoot: string | null,
+    packageManager: VerifiedPackageManager,
     originalError: unknown,
 ): never {
     try {
-        rollbackUpdatedPackages(changes, runtimeRoot, projectRoot, resolveInstalledPackageVersion);
+        rollbackUpdatedPackages(
+            changes,
+            runtimeRoot,
+            projectRoot,
+            resolveInstalledPackageVersion,
+            undefined,
+            packageManager,
+        );
     } catch (rollbackError) {
         throw packageRollbackAggregate(originalError, rollbackError);
     }
@@ -553,13 +576,13 @@ function readPackageVersion(manifest: string, expectedName: string): string | nu
 
 /** 从当前安装或隔离暂存的目标 OneBots 包读取版本目录。 */
 export function loadTargetExtensionVersionCatalog(
-    manager: "npm" | "pnpm",
+    packageManager: VerifiedPackageManager,
     runtimeRoot: string,
     onebotsVersion: string,
 ): ExtensionVersionCatalogSnapshot {
     const installedVersion = resolveInstalledPackageVersion("onebots", runtimeRoot);
     return loadVersionCatalog(
-        manager,
+        packageManager,
         runtimeRoot,
         onebotsVersion,
         installedVersion,
@@ -567,8 +590,14 @@ export function loadTargetExtensionVersionCatalog(
     );
 }
 
-function latestVersion(manager: "npm" | "pnpm", name: string): string | null {
-    const invocation = buildPackageManagerInvocation(manager, ["view", name, "version"]);
+function latestVersion(packageManager: VerifiedPackageManager, name: string): string | null {
+    const invocation = buildPackageManagerInvocation(
+        packageManager.manager,
+        ["view", name, "version"],
+        process.platform,
+        process.env,
+        packageManager.resolvedPath,
+    );
     try {
         return execFileSync(invocation.executable, invocation.args, {
             encoding: "utf8",

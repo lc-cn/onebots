@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { execFileSync } from "node:child_process";
-import { buildPackageManagerInvocation } from "./package-manager.js";
+import { buildPackageManagerInvocation, type VerifiedPackageManager } from "./package-manager.js";
 import { inspectPackageManifest } from "./package-manifest.js";
 import type { PackageUpdateEvidence } from "./update-package-transaction.js";
 
@@ -33,7 +33,7 @@ export function resolveVerifiedUpdateTargets(
 
 /** 从当前安装或隔离暂存的目标 OneBots 包读取版本目录。 */
 export function loadTargetExtensionVersionCatalog(
-    manager: "npm" | "pnpm",
+    packageManager: VerifiedPackageManager,
     runtimeRoot: string,
     onebotsVersion: string,
     installedVersion: string | null,
@@ -52,8 +52,8 @@ export function loadTargetExtensionVersionCatalog(
             "utf8",
         );
         const invocation = buildPackageManagerInvocation(
-            manager,
-            manager === "pnpm"
+            packageManager.manager,
+            packageManager.manager === "pnpm"
                 ? ["add", "--ignore-scripts", "--save-prod", `onebots@${onebotsVersion}`]
                 : [
                       "install",
@@ -62,6 +62,9 @@ export function loadTargetExtensionVersionCatalog(
                       "--omit=dev",
                       `onebots@${onebotsVersion}`,
                   ],
+            process.platform,
+            process.env,
+            packageManager.resolvedPath,
         );
         execFileSync(invocation.executable, invocation.args, {
             cwd: stagingRoot,

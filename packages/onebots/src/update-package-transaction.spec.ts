@@ -15,6 +15,10 @@ describe("update package transaction", () => {
             if (invocation.args[0] === "up") versions.set("onebots", "1.2.8");
             if (invocation.args[0] === "remove") versions.set("@onebots/adapter-mock", null);
         });
+        const packageManager = {
+            manager: "pnpm" as const,
+            resolvedPath: "/verified/corepack/pnpm",
+        };
 
         rollbackUpdatedPackages(
             [
@@ -25,11 +29,16 @@ describe("update package transaction", () => {
             process.cwd(),
             name => versions.get(name) ?? null,
             execute,
+            packageManager,
         );
 
         expect(execute.mock.calls.map(([invocation]) => invocation.args)).toEqual([
             ["up", "onebots@1.2.8"],
             ["remove", "@onebots/adapter-mock"],
+        ]);
+        expect(execute.mock.calls.map(([invocation]) => invocation.executable)).toEqual([
+            packageManager.resolvedPath,
+            packageManager.resolvedPath,
         ]);
     });
 
