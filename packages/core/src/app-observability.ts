@@ -31,6 +31,15 @@ interface ObservableApp {
     readonly runtimeConfigState?: { status: string };
     /** 主应用可提供不包含原始路径或参数的启动契约摘要。 */
     readonly runtimeContractId?: string;
+    /** 主应用显式选择可公开的 WebSocket 容量标签，避免枚举第三方路径。 */
+    readonly webSocketCapacity?: readonly WebSocketCapacityMetric[];
+}
+
+export interface WebSocketCapacityMetric {
+    name: string;
+    activeConnections: number;
+    maxConnections?: number;
+    capacityRejections: number;
 }
 
 export interface ApplicationIdentity {
@@ -211,6 +220,48 @@ export function formatProtocolReadinessMetrics(snapshot: ReadinessSnapshot): str
     return lines;
 }
 
+export function formatWebSocketCapacityMetrics(
+    routes: readonly WebSocketCapacityMetric[],
+): string[] {
+    if (routes.length === 0) return [];
+    const lines = [
+        "# HELP onebots_websocket_connections Active WebSocket connections by published route",
+        "# TYPE onebots_websocket_connections gauge",
+    ];
+    for (const route of routes) {
+        const label = escapePrometheusLabel(route.name);
+        lines.push(
+            `onebots_websocket_connections{route="${label}"} ${formatNonNegativeMetricValue(route.activeConnections)}`,
+        );
+    }
+    lines.push(
+        "# HELP onebots_websocket_connection_limit Configured WebSocket connection limit by published route",
+        "# TYPE onebots_websocket_connection_limit gauge",
+    );
+    for (const route of routes) {
+        if (route.maxConnections === undefined) continue;
+        const label = escapePrometheusLabel(route.name);
+        lines.push(
+            `onebots_websocket_connection_limit{route="${label}"} ${formatNonNegativeMetricValue(route.maxConnections)}`,
+        );
+    }
+    lines.push(
+        "# HELP onebots_websocket_capacity_rejections_total WebSocket upgrades rejected because a published route was full",
+        "# TYPE onebots_websocket_capacity_rejections_total counter",
+    );
+    for (const route of routes) {
+        const label = escapePrometheusLabel(route.name);
+        lines.push(
+            `onebots_websocket_capacity_rejections_total{route="${label}"} ${formatNonNegativeMetricValue(route.capacityRejections)}`,
+        );
+    }
+    return lines;
+}
+
+function formatNonNegativeMetricValue(value: number): number | "NaN" {
+    return Number.isSafeInteger(value) && value >= 0 ? value : "NaN";
+}
+
 function escapePrometheusLabel(value: string): string {
     return value.replace(/\\/gu, "\\\\").replace(/\n/gu, "\\n").replace(/"/gu, '\\"');
 }
@@ -322,6 +373,7 @@ export function registerObservabilityEndpoints(
         }
 
         lines.push(...formatProtocolReadinessMetrics(readiness));
+        lines.push(...formatWebSocketCapacityMetrics(app.webSocketCapacity ?? []));
 
         const performance = metrics.exportPrometheus().trim();
         if (performance) lines.push("", "# Performance metrics", performance);

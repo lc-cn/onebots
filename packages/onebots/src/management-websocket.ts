@@ -1,4 +1,5 @@
 import { WebSocket, type RawData } from "ws";
+import type { Router } from "@onebots/core";
 
 /** 管理端主连接允许配置同步等较大 JSON 消息，但仍限制单条入站载荷。 */
 export const MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES = 4 * 1024 * 1024;
@@ -23,6 +24,19 @@ export const TERMINAL_WEBSOCKET_MAX_CONNECTIONS = 8;
 
 /** 终端输出允许短时积压两条最大消息，超过后要求客户端重连。 */
 export const TERMINAL_WEBSOCKET_MAX_BUFFERED_BYTES = 2 * 1024 * 1024;
+
+/** 仅把固定管理语义映射为公开指标标签，不暴露 Router 中的任意扩展路径。 */
+export function getPublishedManagementWebSocketCapacity(router: Pick<Router, "getWsRouteStats">) {
+    return (
+        [
+            ["management", "/"],
+            ["terminal", "/api/terminal"],
+        ] as const
+    ).flatMap(([name, path]) => {
+        const stats = router.getWsRouteStats(path);
+        return stats ? [{ name, ...stats }] : [];
+    });
+}
 
 export type BoundedWebSocketSendResult =
     | { status: "sent"; bytes: number }

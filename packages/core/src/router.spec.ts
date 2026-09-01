@@ -176,6 +176,11 @@ describe("Router WebSocket lifecycle", () => {
             authorize: request => request.headers.authorization === "Bearer secret",
             maxConnections: 1,
         });
+        expect(router.getWsRouteStats("limited-connections")).toEqual({
+            activeConnections: 0,
+            maxConnections: 1,
+            capacityRejections: 0,
+        });
 
         server.listen(0, "127.0.0.1");
         await once(server, "listening");
@@ -187,6 +192,10 @@ describe("Router WebSocket lifecycle", () => {
         const first = new WebSocket(url, { headers });
         await once(first, "open");
         expect(wsServer.clients.size).toBe(1);
+        expect(router.getWsRouteStats("/limited-connections")).toMatchObject({
+            activeConnections: 1,
+            capacityRejections: 0,
+        });
 
         await expect(rejectedUpgradeResponse(url)).resolves.toMatchObject({
             status: 401,
@@ -197,10 +206,19 @@ describe("Router WebSocket lifecycle", () => {
             retryAfter: "1",
         });
         expect(wsServer.clients.size).toBe(1);
+        expect(router.getWsRouteStats("/limited-connections")).toEqual({
+            activeConnections: 1,
+            maxConnections: 1,
+            capacityRejections: 1,
+        });
 
         first.close();
         await once(first, "close");
         expect(wsServer.clients.size).toBe(0);
+        expect(router.getWsRouteStats("/limited-connections")).toMatchObject({
+            activeConnections: 0,
+            capacityRejections: 1,
+        });
 
         const replacement = new WebSocket(url, { headers });
         await once(replacement, "open");
@@ -208,6 +226,7 @@ describe("Router WebSocket lifecycle", () => {
         const replacementClosed = once(replacement, "close");
         await router.cleanupAsync();
         await replacementClosed;
+        expect(router.getWsRouteStats("/limited-connections")).toBeUndefined();
     });
 });
 

@@ -32,6 +32,12 @@ export interface WebSocketRouteOptions {
     maxConnections?: number;
 }
 
+export interface WebSocketRouteStats {
+    activeConnections: number;
+    maxConnections?: number;
+    capacityRejections: number;
+}
+
 export interface RouterRegistrationOwner {
     readonly platform: string;
     /** 省略时表示平台 Adapter 自身拥有的全局路由。 */
@@ -177,6 +183,7 @@ export class Router extends KoaRouter {
     private readonly wsMap = new Map<string, WsServer>();
     private readonly wsAuthorizers = new Map<string, WebSocketUpgradeAuthorizer>();
     private readonly wsConnectionLimits = new Map<string, number>();
+    private readonly wsCapacityRejections = new Map<string, number>();
     private readonly wsOwners = new Map<string, RouterRegistrationOwner>();
     private readonly registrationScope = new AsyncLocalStorage<RouterRegistrationScope>();
     private readonly httpOwners = new WeakMap<Layer, RouterRegistrationOwner>();
@@ -225,6 +232,11 @@ export class Router extends KoaRouter {
 
             const maxConnections = this.wsConnectionLimits.get(pathname);
             if (maxConnections !== undefined && wsServer.clients.size >= maxConnections) {
+                const rejected = this.wsCapacityRejections.get(pathname) ?? 0;
+                this.wsCapacityRejections.set(
+                    pathname,
+                    rejected < Number.MAX_SAFE_INTEGER ? rejected + 1 : rejected,
+                );
                 this.rejectUpgrade(socket, 503, "Service Unavailable", { "Retry-After": "1" });
                 return;
             }
@@ -367,6 +379,7 @@ export class Router extends KoaRouter {
             maxPayload: maxPayloadBytes,
         });
         this.wsMap.set(normalized, wsServer);
+        this.wsCapacityRejections.set(normalized, 0);
         if (options.authorize) this.wsAuthorizers.set(normalized, options.authorize);
         if (options.maxConnections !== undefined) {
             this.wsConnectionLimits.set(normalized, options.maxConnections);
@@ -423,6 +436,7 @@ export class Router extends KoaRouter {
         this.wsMap.delete(normalized);
         this.wsAuthorizers.delete(normalized);
         this.wsConnectionLimits.delete(normalized);
+        this.wsCapacityRejections.delete(normalized);
         this.wsOwners.delete(normalized);
         this.terminateClients(wsServer);
         wsServer.close();
@@ -436,6 +450,7 @@ export class Router extends KoaRouter {
         this.wsMap.clear();
         this.wsAuthorizers.clear();
         this.wsConnectionLimits.clear();
+        this.wsCapacityRejections.clear();
         this.wsOwners.clear();
         for (const wsServer of servers) {
             this.terminateClients(wsServer);
@@ -450,11 +465,25 @@ export class Router extends KoaRouter {
         this.wsMap.clear();
         this.wsAuthorizers.clear();
         this.wsConnectionLimits.clear();
+        this.wsCapacityRejections.clear();
         this.wsOwners.clear();
         await Promise.all(servers.map(wsServer => this.closeWsServer(wsServer)));
     }
 
     getWsPaths(): string[] {
         return [...this.wsMap.keys()];
+    }
+
+    /** 返回指定 WebSocket pathname 的瞬时容量证据，不枚举或公开其他路由。 */
+    getWsRouteStats(path: string): WebSocketRouteStats | undefined {
+        const normalized = this.normalizeWsPath(path);
+        const wsServer = this.wsMap.get(normalized);
+        if (!wsServer) return undefined;
+        const maxConnections = this.wsConnectionLimits.get(normalized);
+        return {
+            activeConnections: wsServer.clients.size,
+            ...(maxConnections === undefined ? {} : { maxConnections }),
+            capacityRejections: this.wsCapacityRejections.get(normalized) ?? 0,
+        };
     }
 }

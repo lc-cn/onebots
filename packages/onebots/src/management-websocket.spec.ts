@@ -4,6 +4,7 @@ import {
     BoundedWebSocketMessageQueue,
     MANAGEMENT_WEBSOCKET_MAX_BUFFERED_BYTES,
     TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES,
+    getPublishedManagementWebSocketCapacity,
     sendBoundedWebSocketJson,
     sendManagementWebSocketJson,
     sendTerminalWebSocketJson,
@@ -41,6 +42,24 @@ function createMockWebSocket(
 }
 
 describe("bounded management WebSocket sender", () => {
+    it("只以固定语义标签发布已注册的管理路由容量", () => {
+        const getWsRouteStats = vi.fn((path: string) =>
+            path === "/"
+                ? { activeConnections: 2, maxConnections: 32, capacityRejections: 3 }
+                : undefined,
+        );
+
+        expect(getPublishedManagementWebSocketCapacity({ getWsRouteStats })).toEqual([
+            {
+                name: "management",
+                activeConnections: 2,
+                maxConnections: 32,
+                capacityRejections: 3,
+            },
+        ]);
+        expect(getWsRouteStats.mock.calls).toEqual([["/"], ["/api/terminal"]]);
+    });
+
     it("按 UTF-8 字节限制消息并在入队前以 1009 关闭", () => {
         const state = createMockWebSocket();
 

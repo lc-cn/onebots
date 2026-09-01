@@ -81,6 +81,7 @@ import {
     MANAGEMENT_WEBSOCKET_MAX_PENDING_BYTES,
     MANAGEMENT_WEBSOCKET_MAX_PENDING_MESSAGES,
     MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES,
+    getPublishedManagementWebSocketCapacity,
     sendManagementWebSocketJson,
     type BoundedWebSocketSendResult,
 } from "./management-websocket.js";
@@ -148,6 +149,9 @@ export class App extends BaseApp {
     }
     get messageDebug() {
         return this._messageDebug;
+    }
+    get webSocketCapacity() {
+        return getPublishedManagementWebSocketCapacity(this.router);
     }
 
     private sendManagementWebSocketMessage(

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     formatProtocolReadinessMetrics,
+    formatWebSocketCapacityMetrics,
     getReadinessSnapshot,
     getRuntimeProcessIdentity,
     registerObservabilityEndpoints,
@@ -198,6 +199,20 @@ describe("application readiness", () => {
                     handlers.set(route, handler),
             },
             runtimeContractId: "sha256:runtime-contract",
+            webSocketCapacity: [
+                {
+                    name: "management",
+                    activeConnections: 2,
+                    maxConnections: 32,
+                    capacityRejections: 3,
+                },
+                {
+                    name: "terminal",
+                    activeConnections: 1,
+                    maxConnections: 8,
+                    capacityRejections: 0,
+                },
+            ],
         };
         registerObservabilityEndpoints(app as never, {
             name: "onebots",
@@ -229,6 +244,15 @@ describe("application readiness", () => {
         expect(metricsContext.body).toContain('onebots_runtime_operation{operation="idle"} 1');
         expect(metricsContext.body).toContain(
             'onebots_runtime_operation{operation="account_lifecycle"} 0',
+        );
+        expect(metricsContext.body).toContain(
+            'onebots_websocket_connections{route="management"} 2',
+        );
+        expect(metricsContext.body).toContain(
+            'onebots_websocket_connection_limit{route="terminal"} 8',
+        );
+        expect(metricsContext.body).toContain(
+            'onebots_websocket_capacity_rejections_total{route="management"} 3',
         );
 
         app.isReloading = true;
@@ -278,6 +302,25 @@ describe("application readiness", () => {
         );
         expect(formatProtocolReadinessMetrics(snapshot)).toContain(
             'onebots_accounts_without_protocols{platform="mock\\"adapter"} 0',
+        );
+    });
+
+    it("escapes explicitly published WebSocket labels and marks invalid host values unknown", () => {
+        const lines = formatWebSocketCapacityMetrics([
+            {
+                name: 'management"\nroute',
+                activeConnections: Number.NaN,
+                maxConnections: -1,
+                capacityRejections: Number.POSITIVE_INFINITY,
+            },
+        ]);
+
+        expect(lines).toContain('onebots_websocket_connections{route="management\\"\\nroute"} NaN');
+        expect(lines).toContain(
+            'onebots_websocket_connection_limit{route="management\\"\\nroute"} NaN',
+        );
+        expect(lines).toContain(
+            'onebots_websocket_capacity_rejections_total{route="management\\"\\nroute"} NaN',
         );
     });
 });
