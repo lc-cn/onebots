@@ -9,7 +9,7 @@ import {
     type DoctorServiceRuntimeInspection,
 } from "./doctor-service-runtime.js";
 import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
-import { hasManagementCredentials } from "./management-credentials.js";
+import { inspectPersistedManagementCredentials } from "./management-credentials.js";
 import { pluginCandidates, tryLoadRegisteredPlugin, type PluginType } from "./plugin-loader.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { inspectPersistedCredentialPermissions } from "./persisted-credential-permissions.js";
@@ -143,11 +143,8 @@ export async function preflightServiceRuntime(spec: ServicePreflightSpec): Promi
 
     const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
     validateRuntimeConfig(config);
-    if (!hasManagementCredentials(config, "")) {
-        throw new Error(
-            "服务配置缺少持久化管理凭据。守护服务不会保存当前 shell 的 ONEBOTS_ACCESS_TOKEN；请将 access_token 或完整用户名密码写入配置，也可取消该环境变量后执行 onebots setup --force 自动生成鉴权码",
-        );
-    }
+    const credentialCheck = inspectPersistedManagementCredentials(config);
+    if (credentialCheck.level === "error") throw new Error(credentialCheck.message);
     const permissionErrors = inspectPersistedCredentialPermissions(spec.configPath).filter(
         check => check.level === "error",
     );

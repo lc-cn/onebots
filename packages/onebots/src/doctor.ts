@@ -12,7 +12,7 @@ import {
 } from "./runtime-config-validator.js";
 import { writeCliOutput } from "./cli-output.js";
 import { probeDoctorManagementSurface } from "./doctor-management-surface.js";
-import { hasManagementCredentials } from "./management-credentials.js";
+import { inspectPersistedManagementCredentials } from "./management-credentials.js";
 import { inspectExtensionCatalog } from "./doctor-extension-catalog.js";
 import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
 import {
@@ -382,14 +382,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     );
     if (spec) {
         if (config && path.resolve(spec.configPath) === path.resolve(options.configPath)) {
-            const credentialsPersisted = hasManagementCredentials(config, "");
-            checks.push({
-                name: "service-credentials",
-                level: credentialsPersisted ? "ok" : "error",
-                message: credentialsPersisted
-                    ? "服务配置包含持久化管理凭据"
-                    : "服务配置缺少持久化管理凭据；当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入服务定义，请将凭据写入配置或取消该环境变量后执行 onebots setup --force",
-            });
+            checks.push(inspectPersistedManagementCredentials(config));
         }
         const inspectServiceRuntime = options.serviceRuntimeInspector ?? inspectServiceNodeRuntime;
         const serviceRuntime = inspectServiceRuntime(spec.nodePath);

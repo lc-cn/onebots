@@ -1,5 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
-import { ensureManagementCredentials, hasManagementCredentials } from "./management-credentials.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+    ensureManagementCredentials,
+    hasManagementCredentials,
+    inspectPersistedManagementCredentials,
+} from "./management-credentials.js";
+
+afterEach(() => {
+    vi.unstubAllEnvs();
+});
 
 describe("management credential bootstrap", () => {
     it("distinguishes complete credentials from incomplete or empty values", () => {
@@ -66,5 +74,20 @@ describe("management credential bootstrap", () => {
         });
         expect(generator).not.toHaveBeenCalled();
         expect(config).not.toHaveProperty("access_token");
+    });
+
+    it("持久化凭据证据忽略当前 shell 的临时 token", () => {
+        vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "shell-only-secret");
+
+        expect(inspectPersistedManagementCredentials({})).toEqual({
+            name: "service-credentials",
+            level: "error",
+            message: expect.stringContaining("服务配置缺少持久化管理凭据"),
+        });
+        expect(inspectPersistedManagementCredentials({ access_token: "saved-secret" })).toEqual({
+            name: "service-credentials",
+            level: "ok",
+            message: "服务配置包含持久化管理凭据",
+        });
     });
 });

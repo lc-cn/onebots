@@ -39,7 +39,9 @@ afterEach(() => {
     }
 });
 
-function serviceSpec(source = "port: 7788\npath: gateway\n"): ServiceSpec {
+function serviceSpec(
+    source = "port: 7788\npath: gateway\naccess_token: status-secret\n",
+): ServiceSpec {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-status-"));
     temporaryDirectories.push(directory);
     const configPath = path.join(directory, "config.yaml");
@@ -112,6 +114,8 @@ function expectedPermissionChecks() {
           ];
 }
 
+const expectedCredentialCheck = { name: "service-credentials", level: "ok" };
+
 describe("service status", () => {
     it("reports liveness and readiness for a running service", async () => {
         const spec = serviceSpec();
@@ -144,7 +148,7 @@ describe("service status", () => {
         const result = await runServiceStatus({ system: false }, fetcher);
 
         expect(result).toEqual({
-            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}${expectedPermissionOutput()}\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance\n在线进程的启动契约与服务元数据一致\nWeb 管理页可访问，Router 前缀为 /gateway`,
+            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}\n服务配置包含持久化管理凭据${expectedPermissionOutput()}\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance\n在线进程的启动契约与服务元数据一致\nWeb 管理页可访问，Router 前缀为 /gateway`,
             exitCode: undefined,
         });
         expect(fetcher).toHaveBeenCalledWith(
@@ -196,6 +200,7 @@ describe("service status", () => {
                         level: "error",
                         message: `服务入口不可读取: ${spec.binPath}`,
                     },
+                    expectedCredentialCheck,
                     ...expectedPermissionChecks(),
                 ],
             },
@@ -252,6 +257,42 @@ describe("service status", () => {
             );
         },
     );
+
+    it("持久化凭据在启动后被删除时不再把健康进程报告为可安全重启", async () => {
+        const spec = serviceSpec("port: 7788\npath: gateway\n");
+        mockInstalledService(true, spec);
+        const fetcher = createStatusFetcher(
+            async input =>
+                new Response(
+                    JSON.stringify({
+                        ...(String(input).endsWith("/health") ? { status: "ok" } : { ready: true }),
+                        application: "onebots",
+                        version: packageMetadata.version,
+                        instance_id: "credential-drift-instance",
+                        runtime_contract_id: activeRuntimeContractId,
+                    }),
+                    { status: 200 },
+                ),
+        );
+
+        const result = await runServiceStatus({ system: false, json: true }, fetcher);
+        const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+        expect(result).toMatchObject({ exitCode: 1, raw: true });
+        expect(report).toMatchObject({
+            status: "unavailable",
+            ok: false,
+            serviceRuntime: { valid: false },
+        });
+        expect(report.serviceRuntime.checks).toContainEqual({
+            name: "service-credentials",
+            level: "error",
+            message: expect.stringContaining("服务配置缺少持久化管理凭据"),
+        });
+        expect(report.probe.checks).toContainEqual(
+            expect.objectContaining({ name: "health", level: "ok" }),
+        );
+    });
 
     it.runIf(process.platform !== "win32")(
         "组只读配置保留可见警告但不破坏健康服务状态",

@@ -36,7 +36,9 @@ afterEach(() => {
     }
 });
 
-function serviceSpec(source = "port: 7788\npath: gateway\n"): ServiceSpec {
+function serviceSpec(
+    source = "port: 7788\npath: gateway\naccess_token: status-secret\n",
+): ServiceSpec {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-status-"));
     temporaryDirectories.push(directory);
     const configPath = path.join(directory, "config.yaml");
@@ -85,6 +87,8 @@ function expectedPermissionChecks() {
           ];
 }
 
+const expectedCredentialCheck = { name: "service-credentials", level: "ok" };
+
 describe("service status", () => {
     it("returns exit code 2 when no service is installed", async () => {
         vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
@@ -106,8 +110,30 @@ describe("service status", () => {
         const fetcher = vi.fn<typeof fetch>();
 
         await expect(runServiceStatus({ system: false }, fetcher)).resolves.toEqual({
-            output: `已安装，未运行\n进程管理器: inactive\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}${expectedPermissionOutput()}`,
+            output: `已安装，未运行\n进程管理器: inactive\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}\n服务配置包含持久化管理凭据${expectedPermissionOutput()}`,
             exitCode: 1,
+        });
+        expect(fetcher).not.toHaveBeenCalled();
+    });
+
+    it("停止状态也会解释下一次启动缺少持久化管理凭据", async () => {
+        const spec = serviceSpec("port: 7788\npath: gateway\n");
+        mockInstalledService(false, spec);
+        const fetcher = vi.fn<typeof fetch>();
+
+        const result = await runServiceStatus({ system: false, json: true }, fetcher);
+        const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+        expect(result).toMatchObject({ exitCode: 1, raw: true });
+        expect(report).toMatchObject({
+            status: "stopped",
+            ok: false,
+            serviceRuntime: { valid: false },
+        });
+        expect(report.serviceRuntime.checks).toContainEqual({
+            name: "service-credentials",
+            level: "error",
+            message: expect.stringContaining("服务配置缺少持久化管理凭据"),
         });
         expect(fetcher).not.toHaveBeenCalled();
     });
@@ -210,6 +236,7 @@ describe("service status", () => {
                 checks: [
                     { name: "service-node", level: "ok" },
                     { name: "service-entry", level: "ok" },
+                    expectedCredentialCheck,
                     ...expectedPermissionChecks(),
                 ],
             },

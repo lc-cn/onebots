@@ -21,6 +21,7 @@ import {
 } from "./doctor-service-runtime.js";
 import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
 import { inspectPersistedCredentialPermissions } from "./persisted-credential-permissions.js";
+import { inspectPersistedManagementCredentials } from "./management-credentials.js";
 
 export type ServiceStatusKind =
     | "uninstalled"
@@ -320,14 +321,33 @@ function inspectStatusServiceRuntime(
     if (!spec) return { valid: null, checks: [] };
     const runtime = dependencies.inspectNode(spec.nodePath);
     const entry = dependencies.inspectEntry(spec.binPath);
+    const credentialCheck = inspectStatusPersistedCredentials(spec.configPath);
     const permissionChecks = inspectStatusCredentialPermissions(spec.configPath);
     return {
         valid:
             runtime.supported &&
             entry.valid &&
+            credentialCheck.level !== "error" &&
             permissionChecks.every(check => check.level !== "error"),
-        checks: [runtime.check, entry.check, ...permissionChecks],
+        checks: [runtime.check, entry.check, credentialCheck, ...permissionChecks],
     };
+}
+
+function inspectStatusPersistedCredentials(configPath: string): DoctorCheck {
+    try {
+        const config = parseRuntimeConfig(fs.readFileSync(configPath, "utf8"));
+        return inspectPersistedManagementCredentials(config);
+    } catch (error) {
+        const code =
+            error instanceof Error && "code" in error && typeof error.code === "string"
+                ? error.code
+                : "INVALID";
+        return {
+            name: "service-credentials",
+            level: "error",
+            message: `持久化管理凭据无法验证：服务配置无法读取或结构无效 (${code})`,
+        };
+    }
 }
 
 function inspectStatusCredentialPermissions(configPath: string): DoctorCheck[] {

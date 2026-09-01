@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { DoctorCheck } from "./doctor-endpoint.js";
 
 export interface EnsuredManagementCredentials {
     config: Record<string, unknown>;
@@ -16,6 +17,20 @@ export function hasManagementCredentials(
         hasText(config.access_token) ||
         (hasText(config.username) && hasText(config.password))
     );
+}
+
+/** 生成不受当前 shell 环境影响的持久化管理凭据证据。 */
+export function inspectPersistedManagementCredentials(
+    config: Record<string, unknown>,
+): DoctorCheck {
+    const persisted = hasManagementCredentials(config, "");
+    return {
+        name: "service-credentials",
+        level: persisted ? "ok" : "error",
+        message: persisted
+            ? "服务配置包含持久化管理凭据"
+            : "服务配置缺少持久化管理凭据；当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入服务定义，请将凭据写入配置或取消该环境变量后执行 onebots setup --force",
+    };
 }
 
 /** 为没有完整管理凭据的配置生成高熵静态鉴权码。 */

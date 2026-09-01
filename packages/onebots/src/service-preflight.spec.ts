@@ -268,7 +268,7 @@ describe("service runtime preflight", () => {
                 protocols: [],
                 workingDirectory,
             }),
-        ).rejects.toThrow("守护服务不会保存当前 shell 的 ONEBOTS_ACCESS_TOKEN");
+        ).rejects.toThrow("当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入服务定义");
     });
 
     it.each([

@@ -39,7 +39,9 @@ afterEach(() => {
     }
 });
 
-function serviceSpec(source = "port: 7788\npath: gateway\n"): ServiceSpec {
+function serviceSpec(
+    source = "port: 7788\npath: gateway\naccess_token: status-secret\n",
+): ServiceSpec {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-status-"));
     temporaryDirectories.push(directory);
     const configPath = path.join(directory, "config.yaml");
