@@ -7,9 +7,12 @@ import type { ServiceSpec } from "./service-manager.js";
 import {
     acquireUpdatePackageMutationLock,
     loadTargetExtensionVersionCatalog,
+    PACKAGE_VERSION_QUERY_MAX_BUFFER_BYTES,
+    PACKAGE_VERSION_QUERY_TIMEOUT_MS,
     packageNamesFor,
     preflightCurrentPackagesOnlyRuntime,
     preflightPackagesOnlyUpdate,
+    queryLatestPackageVersion,
     refreshServiceAfterUpdate,
     requireUpdatePackageManager,
     resolveInstalledPackageVersion,
@@ -120,6 +123,67 @@ describe("post-update service safety", () => {
                 error: null,
             })),
         ).rejects.toThrow("无法确认实际版本");
+    });
+
+    it("以已验证绝对入口和有界资源查询 registry 版本", () => {
+        vi.stubEnv("npm_config_recursive", "true");
+        const run = vi.fn(request => {
+            expect(request).toMatchObject({
+                executable: "/tools/npm",
+                args: ["view", "onebots", "version"],
+                timeout: PACKAGE_VERSION_QUERY_TIMEOUT_MS,
+                maxBuffer: PACKAGE_VERSION_QUERY_MAX_BUFFER_BYTES,
+            });
+            expect(request.environment.npm_config_recursive).toBeUndefined();
+            return "1.3.0\n";
+        });
+
+        expect(
+            queryLatestPackageVersion(
+                { manager: "npm", resolvedPath: "/tools/npm" },
+                "onebots",
+                run,
+            ),
+        ).toBe("1.3.0");
+        expect(run).toHaveBeenCalledOnce();
+    });
+
+    it("在暂存下载前拒绝多行、周围空白和非精确 registry 版本", () => {
+        const manager = { manager: "pnpm" as const, resolvedPath: "/tools/pnpm" };
+
+        for (const output of ["warning\n1.3.0\n", " 1.3.0\n", "latest\n", "^1.3.0\n"]) {
+            expect(() => queryLatestPackageVersion(manager, "onebots", () => output)).toThrow(
+                /registry 返回的 onebots 版本不是精确 SemVer/,
+            );
+        }
+        expect(queryLatestPackageVersion(manager, "onebots", () => "1.3.0-rc.1+build.7\r\n")).toBe(
+            "1.3.0-rc.1+build.7",
+        );
+    });
+
+    it("保留脱敏且限长的 registry 查询失败原因", () => {
+        const secret = "registry-secret";
+        const run = () => {
+            throw {
+                stderr: `npm ERR https://user:${secret}@registry.example/pkg _authToken=${secret} Authorization: Bearer ${secret}${"x".repeat(5_000)}`,
+            };
+        };
+
+        let failure: Error | undefined;
+        try {
+            queryLatestPackageVersion(
+                { manager: "npm", resolvedPath: "/tools/npm" },
+                "onebots",
+                run,
+            );
+        } catch (error) {
+            failure = error as Error;
+        }
+        expect(failure?.message).toMatch(/^无法查询包版本 onebots：/);
+        expect(failure?.message).toContain("***");
+        expect(failure?.message).not.toContain(secret);
+        expect(failure?.message.length).toBeLessThan(4_100);
+        expect(failure?.cause).toBeUndefined();
     });
 
     it("CLI 更新在同一运行目录中取得跨进程租约", () => {

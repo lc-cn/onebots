@@ -16,9 +16,12 @@ import {
     buildPackageManagerInvocation,
     buildPackageUpdateInvocation,
     capturePackageManagerMetadata,
+    formatPackageManagerDiagnostic,
     hasPackageManagerMetadataChanged,
     inspectRuntimePackageManagerVersion,
+    isExactPackageVersion,
     PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
+    type PackageInstallInvocation,
     type RuntimePackageManagerVersionInspection,
     type VerifiedPackageManager,
 } from "./package-manager.js";
@@ -55,6 +58,16 @@ export interface UpdateOptions {
 export interface PackageUpdateChange extends PackageUpdateEvidence {
     current: string | null;
 }
+
+export const PACKAGE_VERSION_QUERY_TIMEOUT_MS = 30_000;
+export const PACKAGE_VERSION_QUERY_MAX_BUFFER_BYTES = 64 * 1024;
+
+export interface PackageVersionQueryRequest extends PackageInstallInvocation {
+    timeout: number;
+    maxBuffer: number;
+}
+
+export type PackageVersionQueryRunner = (request: PackageVersionQueryRequest) => string;
 
 interface PackagesOnlyPreflightDependencies {
     preflight(spec: ServiceSpec): void | Promise<void>;
@@ -143,8 +156,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     );
     const packages = packageNamesFor(adapters, protocols);
     const manager = await requireUpdatePackageManager(runtimeRoot);
-    const targetOnebotsVersion = latestVersion(manager, "onebots");
-    if (!targetOnebotsVersion) throw new Error("无法查询包版本: onebots");
+    const targetOnebotsVersion = queryLatestPackageVersion(manager, "onebots");
     const targetCatalog = loadTargetExtensionVersionCatalog(
         manager,
         runtimeRoot,
@@ -590,7 +602,12 @@ export function loadTargetExtensionVersionCatalog(
     );
 }
 
-function latestVersion(packageManager: VerifiedPackageManager, name: string): string | null {
+/** 通过已验证入口执行有界 registry 查询，并只接受单行精确 SemVer 证据。 */
+export function queryLatestPackageVersion(
+    packageManager: VerifiedPackageManager,
+    name: string,
+    run: PackageVersionQueryRunner = runPackageVersionQuery,
+): string {
     const invocation = buildPackageManagerInvocation(
         packageManager.manager,
         ["view", name, "version"],
@@ -598,15 +615,43 @@ function latestVersion(packageManager: VerifiedPackageManager, name: string): st
         process.env,
         packageManager.resolvedPath,
     );
+    let output: string;
     try {
-        return execFileSync(invocation.executable, invocation.args, {
-            encoding: "utf8",
-            env: invocation.environment,
-            stdio: ["ignore", "pipe", "pipe"],
-        }).trim();
-    } catch {
-        return null;
+        output = run({
+            ...invocation,
+            timeout: PACKAGE_VERSION_QUERY_TIMEOUT_MS,
+            maxBuffer: PACKAGE_VERSION_QUERY_MAX_BUFFER_BYTES,
+        });
+    } catch (error) {
+        const rawDetail =
+            error && typeof error === "object" && "stderr" in error
+                ? String(error.stderr)
+                : error instanceof Error
+                  ? error.message
+                  : String(error);
+        throw new Error(`无法查询包版本 ${name}：${formatPackageManagerDiagnostic(rawDetail)}`);
     }
+    const version = output.endsWith("\r\n")
+        ? output.slice(0, -2)
+        : output.endsWith("\n")
+          ? output.slice(0, -1)
+          : output;
+    if (!isExactPackageVersion(version)) {
+        throw new Error(
+            `registry 返回的 ${name} 版本不是精确 SemVer：${formatPackageManagerDiagnostic(output)}`,
+        );
+    }
+    return version;
+}
+
+function runPackageVersionQuery(request: PackageVersionQueryRequest): string {
+    return execFileSync(request.executable, request.args, {
+        encoding: "utf8",
+        env: request.environment,
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: request.timeout,
+        maxBuffer: request.maxBuffer,
+    });
 }
 
 function isEphemeralNpx(): boolean {

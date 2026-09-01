@@ -72,6 +72,13 @@ export function formatPackageManagerDiagnostic(error: unknown): string {
         : `${redacted.slice(0, MAX_PACKAGE_MANAGER_DIAGNOSTIC_LENGTH - 1)}…`;
 }
 
+/** 只接受可直接安装和比较的完整 SemVer，不接受标签、范围或周围空白。 */
+export function isExactPackageVersion(version: string): boolean {
+    return /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u.test(
+        version,
+    );
+}
+
 interface RuntimePackageManagerResolution {
     manager: SupportedPackageManager | null;
     error: string | null;

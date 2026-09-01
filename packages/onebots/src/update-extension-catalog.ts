@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import {
     buildPackageManagerInvocation,
     formatPackageManagerDiagnostic,
+    isExactPackageVersion,
     type VerifiedPackageManager,
 } from "./package-manager.js";
 import { inspectPackageManifest } from "./package-manifest.js";
@@ -100,9 +101,7 @@ export function loadTargetExtensionVersionCatalog(
 }
 
 function assertExactPackageVersion(packageName: string, version: string): void {
-    const semanticVersion =
-        /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
-    if (!semanticVersion.test(version)) {
+    if (!isExactPackageVersion(version)) {
         throw new Error(`目标 OneBots 的版本目录包含非精确版本：${packageName}=${version}`);
     }
 }
