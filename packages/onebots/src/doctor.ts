@@ -279,11 +279,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         );
     }
     const selection = resolveDoctorPluginSelection(options, configuredPlugins, spec);
-    checks.push({
-        name: "plugin-selection",
-        level: selection.adapters.length || selection.protocols.length ? "ok" : "warning",
-        message: formatDoctorPluginSelection(selection),
-    });
+    checks.push(inspectDoctorPluginSelection(selection));
     const extensionRoot =
         options.extensionRoot ?? process.env.ONEBOTS_EXTENSION_ROOT ?? selection.workingDirectory;
     const extensionRuntime = inspectExtensionRuntimeRoot(extensionRoot);
@@ -779,6 +775,27 @@ function formatDoctorPluginSelection(selection: DoctorPluginSelection): string {
     };
     const list = (values: string[]) => (values.length ? values.join(", ") : "无");
     return `适配器 ${sourceNames[selection.adapterSource]} [${list(selection.adapters)}]；协议 ${sourceNames[selection.protocolSource]} [${list(selection.protocols)}]；解析目录 ${selection.workingDirectory}`;
+}
+
+/** 分别证明平台入口与协议出口已经选择，避免半套插件被误报为可部署。 */
+export function inspectDoctorPluginSelection(selection: DoctorPluginSelection): DoctorCheck {
+    const summary = formatDoctorPluginSelection(selection);
+    const hasAdapters = selection.adapters.length > 0;
+    const hasProtocols = selection.protocols.length > 0;
+    if (hasAdapters && hasProtocols) {
+        return { name: "plugin-selection", level: "ok", message: summary };
+    }
+    const guidance =
+        !hasAdapters && !hasProtocols
+            ? "尚未选择适配器和协议；请先比较平台能力并安装至少一个平台入口和协议出口"
+            : !hasAdapters
+              ? "未选择适配器，无法创建平台账号"
+              : "未选择协议，账号无法配置对外出口";
+    return {
+        name: "plugin-selection",
+        level: "warning",
+        message: `${summary}；${guidance}`,
+    };
 }
 
 /** 以人类可读或 JSON 格式输出诊断结果。 */

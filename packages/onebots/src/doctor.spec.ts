@@ -7,6 +7,7 @@ import {
     compareDoctorEndpointIdentities,
     inspectConfiguredPublicStaticDirectory,
     inspectDataDirectory,
+    inspectDoctorPluginSelection,
     inspectSensitiveDirectoryPermissions,
     inspectSensitiveDirectoryMutationPermissions,
     inspectSensitiveFilePermissions,
@@ -181,6 +182,36 @@ describe("doctor data directory", () => {
         if (process.platform !== "win32") {
             expect(fs.statSync(dataDirectory).mode & 0o777).toBe(0o700);
         }
+    });
+});
+
+describe("doctor plugin selection", () => {
+    const selection = (adapters: string[], protocols: string[]) => ({
+        adapters,
+        protocols,
+        adapterSource: adapters.length ? ("config" as const) : ("none" as const),
+        protocolSource: protocols.length ? ("config" as const) : ("none" as const),
+        workingDirectory: "/srv/onebots",
+    });
+
+    it("只有平台入口时明确指出缺少协议出口", () => {
+        expect(inspectDoctorPluginSelection(selection(["qq"], []))).toMatchObject({
+            level: "warning",
+            message: expect.stringContaining("未选择协议，账号无法配置对外出口"),
+        });
+    });
+
+    it("只有协议出口时明确指出缺少平台入口", () => {
+        expect(inspectDoctorPluginSelection(selection([], ["onebot-v11"]))).toMatchObject({
+            level: "warning",
+            message: expect.stringContaining("未选择适配器，无法创建平台账号"),
+        });
+    });
+
+    it("平台入口与协议出口都存在时才通过", () => {
+        expect(inspectDoctorPluginSelection(selection(["qq"], ["onebot-v11"]))).toMatchObject({
+            level: "ok",
+        });
     });
 });
 
@@ -1416,7 +1447,7 @@ describe("doctor persisted plugin selection", () => {
             report.checks.find(check => check.name === "adapter:missing-first-run"),
         ).toMatchObject({ level: "error" });
         expect(report.checks.find(check => check.name === "plugin-selection")).toMatchObject({
-            level: "ok",
+            level: "warning",
             message: expect.stringContaining("适配器 配置文件 [missing-first-run]"),
         });
         expect(report.target).toMatchObject({
