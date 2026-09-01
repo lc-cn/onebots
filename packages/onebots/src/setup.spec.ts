@@ -132,6 +132,87 @@ describe("setup workflow", () => {
         expect(fs.existsSync(path.join(path.dirname(configPath), "data"))).toBe(false);
     });
 
+    it("首次配置写入后被另一进程替换时拒绝报告 setup 成功", async () => {
+        const configPath = temporaryConfigPath();
+        const concurrent = "port: 7788\naccess_token: concurrent-token\n";
+        const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+        await expect(
+            runSetupWithEnvironment(configPath, {}, "", {
+                loadPlugins: async () => [],
+                afterConfigWrite: file => {
+                    fs.writeFileSync(file, concurrent, { mode: 0o600 });
+                },
+            }),
+        ).rejects.toThrow("配置写入后发生变化，setup 未报告成功");
+
+        expect(fs.readFileSync(configPath, "utf8")).toBe(concurrent);
+        expect(output.mock.calls.map(call => String(call[0])).join("")).not.toContain("配置已就绪");
+    });
+
+    it("首次配置写入后被等内容文件替换时仍拒绝报告 setup 成功", async () => {
+        const configPath = temporaryConfigPath();
+        const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+        await expect(
+            runSetupWithEnvironment(configPath, {}, "", {
+                loadPlugins: async () => [],
+                afterConfigWrite: file => {
+                    const replacement = `${file}.concurrent`;
+                    fs.writeFileSync(replacement, fs.readFileSync(file), { mode: 0o600 });
+                    fs.renameSync(replacement, file);
+                },
+            }),
+        ).rejects.toThrow("配置写入后发生变化，setup 未报告成功");
+
+        expect(fs.statSync(configPath).mode & 0o777).toBe(0o600);
+        expect(output.mock.calls.map(call => String(call[0])).join("")).not.toContain("配置已就绪");
+    });
+
+    it.runIf(process.platform !== "win32")(
+        "首次生成凭据写入后权限放宽时拒绝报告 setup 成功",
+        async () => {
+            const configPath = temporaryConfigPath();
+            const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+            await expect(
+                runSetupWithEnvironment(configPath, {}, "", {
+                    loadPlugins: async () => [],
+                    afterConfigWrite: file => {
+                        fs.chmodSync(file, 0o644);
+                    },
+                }),
+            ).rejects.toThrow("配置写入后发生变化，setup 未报告成功");
+
+            expect(fs.statSync(configPath).mode & 0o777).toBe(0o644);
+            expect(output.mock.calls.map(call => String(call[0])).join("")).not.toContain(
+                "配置已就绪",
+            );
+        },
+    );
+
+    it.runIf(process.platform !== "win32")(
+        "首次生成凭据写入后父目录变得可替换时拒绝报告 setup 成功",
+        async () => {
+            const configPath = temporaryConfigPath();
+            const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+            await expect(
+                runSetupWithEnvironment(configPath, {}, "", {
+                    loadPlugins: async () => [],
+                    afterConfigWrite: file => {
+                        fs.chmodSync(path.dirname(file), 0o770);
+                    },
+                }),
+            ).rejects.toThrow(/现有管理凭据权限不安全.*配置目录权限 770/u);
+
+            expect(fs.statSync(configPath).mode & 0o777).toBe(0o600);
+            expect(output.mock.calls.map(call => String(call[0])).join("")).not.toContain(
+                "配置已就绪",
+            );
+        },
+    );
+
     it("允许非交互 setup 幂等验证相同的插件集合", async () => {
         const configPath = temporaryConfigPath();
         const original = [

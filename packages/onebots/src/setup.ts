@@ -33,6 +33,7 @@ export interface SetupOptions {
 
 interface SetupDependencies {
     loadPlugins(adapters: string[], protocols: string[]): Promise<string[]>;
+    afterConfigWrite?(configPath: string): void;
 }
 
 type SetupConfigSnapshot =
@@ -198,10 +199,23 @@ export async function runSetup(
     assertSetupConfigCurrent(configPath, initialConfig);
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
-    writeConfigFileAtomic(configPath, yaml.dump(config, { noRefs: true }), {
+    const expectedRealPath = initialConfig.exists
+        ? initialConfig.realPath
+        : resolveNewSetupConfigRealPath(configPath);
+    const source = yaml.dump(config, { noRefs: true });
+    const expectedMode = managementCredentials.generated
+        ? 0o600
+        : initialConfig.exists
+          ? initialConfig.mode
+          : 0o600;
+    writeConfigFileAtomic(configPath, source, {
         backup: exists,
         ...(managementCredentials.generated ? { mode: 0o600 } : {}),
     });
+    const writtenConfig = captureWrittenSetupConfig(configPath);
+    dependencies?.afterConfigWrite?.(configPath);
+    assertWrittenSetupConfig(configPath, writtenConfig, source, expectedRealPath, expectedMode);
+    verifyPersistedCredentialPermissions(configPath, config, false);
     writeCliOutput(`配置已就绪: ${configPath}`);
     if (managementCredentials.generated) {
         writeCliOutput("已生成管理端鉴权码并安全写入配置文件的 access_token 字段。");
@@ -226,6 +240,53 @@ export async function runSetup(
     } else {
         writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
     }
+}
+
+function resolveNewSetupConfigRealPath(configPath: string): string {
+    const absolute = path.resolve(configPath);
+    return path.join(fs.realpathSync(path.dirname(absolute)), path.basename(absolute));
+}
+
+function assertWrittenSetupConfig(
+    configPath: string,
+    written: Extract<SetupConfigSnapshot, { exists: true }>,
+    expectedSource: string,
+    expectedRealPath: string,
+    expectedMode: number,
+): void {
+    let current: SetupConfigSnapshot;
+    try {
+        current = captureSetupConfig(configPath);
+    } catch {
+        throw new Error("配置写入后变得无法读取，setup 未报告成功；请重新执行 setup");
+    }
+    if (
+        written.source !== expectedSource ||
+        written.realPath !== expectedRealPath ||
+        written.mode !== expectedMode ||
+        !current.exists ||
+        current.source !== written.source ||
+        current.realPath !== written.realPath ||
+        current.device !== written.device ||
+        current.inode !== written.inode ||
+        current.mode !== written.mode ||
+        current.uid !== written.uid ||
+        current.gid !== written.gid
+    ) {
+        throw new Error("配置写入后发生变化，setup 未报告成功；已保留当前文件，请重新执行 setup");
+    }
+}
+
+function captureWrittenSetupConfig(
+    configPath: string,
+): Extract<SetupConfigSnapshot, { exists: true }> {
+    try {
+        const snapshot = captureSetupConfig(configPath);
+        if (snapshot.exists) return snapshot;
+    } catch {
+        // 统一使用不含底层路径细节或配置内容的 setup 诊断。
+    }
+    throw new Error("配置写入后变得无法读取，setup 未报告成功；请重新执行 setup");
 }
 
 function captureSetupConfig(configPath: string): SetupConfigSnapshot {
@@ -304,6 +365,7 @@ function sameStringSet(left: readonly string[], right: readonly string[]): boole
 function verifyPersistedCredentialPermissions(
     configPath: string,
     config: Record<string, unknown>,
+    emitWarnings = true,
 ): void {
     if (process.platform === "win32") return;
     const backupPath = `${fs.realpathSync(configPath)}.bak`;
@@ -315,8 +377,10 @@ function verifyPersistedCredentialPermissions(
             `现有管理凭据权限不安全：${errors.map(check => check.message).join("；")}。请先运行 ${formatConfiguredCommand(configPath, "doctor")} --fix，或按提示调整目录权限。`,
         );
     }
-    for (const warning of checks.filter(check => check.level === "warning")) {
-        writeCliOutput(`安全提示：${warning.message}`);
+    if (emitWarnings) {
+        for (const warning of checks.filter(check => check.level === "warning")) {
+            writeCliOutput(`安全提示：${warning.message}`);
+        }
     }
 }
 
