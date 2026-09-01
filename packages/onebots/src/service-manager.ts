@@ -95,14 +95,18 @@ function writePrivateJson(file: string, value: unknown): void {
     fs.renameSync(temporary, file);
 }
 
-function writeServiceDefinition(file: string, content: string): void {
+function writeServiceFile(file: string, content: string, encoding: BufferEncoding = "utf8"): void {
     const temporary = `${file}.${process.pid}.tmp`;
     try {
-        fs.writeFileSync(temporary, content, { encoding: "utf8", mode: 0o644 });
+        fs.writeFileSync(temporary, content, { encoding, mode: 0o644 });
         fs.renameSync(temporary, file);
     } finally {
         if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
     }
+}
+
+function renderWindowsRunner(spec: ServiceSpec, stateDirectory: string): string {
+    return `@echo off\r\ncd /d "${spec.workingDirectory.replace(/"/g, '""')}"\r\n${renderWindowsCommand(spec)} >> "${path.join(stateDirectory, "onebots.log")}" 2>&1\r\n`;
 }
 
 interface NodeWindowsService {
@@ -162,6 +166,14 @@ export class ServiceController {
     definitionIsCurrent(spec: ServiceSpec): boolean {
         const paths = this.paths();
         if (!fs.existsSync(paths.definition)) return false;
+        if (this.host.platform === "win32" && this.scope === "user") {
+            const runnerPath = path.join(paths.stateDir, "onebots-runner.cmd");
+            return (
+                fs.existsSync(runnerPath) &&
+                fs.readFileSync(paths.definition, "utf16le") === renderWindowsTaskXml(runnerPath) &&
+                fs.readFileSync(runnerPath, "utf8") === renderWindowsRunner(spec, paths.stateDir)
+            );
+        }
         if (this.host.platform === "linux")
             return fs.readFileSync(paths.definition, "utf8") === renderSystemdUnit(spec);
         if (this.host.platform === "darwin") {
@@ -185,13 +197,13 @@ export class ServiceController {
 
         if (this.host.platform === "linux") {
             fs.mkdirSync(path.dirname(paths.definition), { recursive: true });
-            writeServiceDefinition(paths.definition, renderSystemdUnit(normalized));
+            writeServiceFile(paths.definition, renderSystemdUnit(normalized));
             const base = this.scope === "user" ? ["--user"] : [];
             this.host.exec("systemctl", [...base, "daemon-reload"], { inherit: true });
             this.host.exec("systemctl", [...base, "enable", SERVICE_NAME], { inherit: true });
         } else if (this.host.platform === "darwin") {
             fs.mkdirSync(path.dirname(paths.definition), { recursive: true });
-            writeServiceDefinition(
+            writeServiceFile(
                 paths.definition,
                 renderLaunchdPlist(
                     normalized,
@@ -201,12 +213,8 @@ export class ServiceController {
             );
         } else if (this.host.platform === "win32" && this.scope === "user") {
             const runnerPath = path.join(paths.stateDir, "onebots-runner.cmd");
-            fs.writeFileSync(
-                runnerPath,
-                `@echo off\r\ncd /d "${normalized.workingDirectory.replace(/"/g, '""')}"\r\n${renderWindowsCommand(normalized)} >> "${path.join(paths.stateDir, "onebots.log")}" 2>&1\r\n`,
-                "utf8",
-            );
-            fs.writeFileSync(paths.definition, renderWindowsTaskXml(runnerPath), "utf16le");
+            writeServiceFile(runnerPath, renderWindowsRunner(normalized, paths.stateDir));
+            writeServiceFile(paths.definition, renderWindowsTaskXml(runnerPath), "utf16le");
             this.host.exec(
                 "schtasks.exe",
                 ["/Create", "/F", "/TN", WINDOWS_TASK_NAME, "/XML", paths.definition],

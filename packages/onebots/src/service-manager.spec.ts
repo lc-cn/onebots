@@ -43,6 +43,50 @@ describe.runIf(process.platform !== "win32")("service definition persistence", (
     });
 });
 
+describe("Windows user task persistence", () => {
+    it("同时验证并原子恢复计划任务 XML 与 runner", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-windows-service-"));
+        temporaryDirectories.push(root);
+        const host = windowsHost(root);
+        const controller = new ServiceController("user", host);
+        const spec: ServiceSpec = {
+            scope: "user",
+            configPath: "C:\\One Bots\\config.yaml",
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            nodePath: "C:\\Program Files\\nodejs\\node.exe",
+            binPath: "C:\\One Bots\\lib\\bin.js",
+            workingDirectory: "C:\\One Bots",
+        };
+
+        await controller.install(spec);
+        const paths = controller.paths();
+        const runner = path.join(paths.stateDir, "onebots-runner.cmd");
+        expect(controller.definitionIsCurrent(spec)).toBe(true);
+
+        fs.writeFileSync(runner, "tampered runner", "utf8");
+        expect(controller.definitionIsCurrent(spec)).toBe(false);
+        await controller.install(spec);
+        expect(controller.definitionIsCurrent(spec)).toBe(true);
+
+        fs.writeFileSync(paths.definition, "tampered xml", "utf16le");
+        expect(controller.definitionIsCurrent(spec)).toBe(false);
+        await controller.install(spec);
+
+        expect(controller.definitionIsCurrent(spec)).toBe(true);
+        expect(fs.readdirSync(paths.stateDir).sort()).toEqual([
+            "onebots-runner.cmd",
+            "onebots-service.xml",
+            "service.json",
+        ]);
+        expect(host.exec).toHaveBeenCalledWith(
+            "schtasks.exe",
+            ["/Create", "/F", "/TN", "OneBots Gateway", "/XML", paths.definition],
+            { inherit: true },
+        );
+    });
+});
+
 function linuxHost(root: string): ServiceHost {
     return {
         platform: "linux",
@@ -52,6 +96,17 @@ function linuxHost(root: string): ServiceHost {
             XDG_STATE_HOME: path.join(root, "state"),
             XDG_CONFIG_HOME: path.join(root, "config"),
         },
+        exec: vi.fn(() => ""),
+        spawn: vi.fn(async () => 0),
+    };
+}
+
+function windowsHost(root: string): ServiceHost {
+    return {
+        platform: "win32",
+        homedir: root,
+        isElevated: false,
+        env: { LOCALAPPDATA: root },
         exec: vi.fn(() => ""),
         spawn: vi.fn(async () => 0),
     };
