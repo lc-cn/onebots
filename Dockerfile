@@ -51,6 +51,7 @@ COPY --chown=node:node --from=builder /app/adapters ./adapters
 COPY --chown=node:node --from=builder /app/protocols ./protocols
 COPY --chown=node:node --from=builder /app/development ./development
 COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs
+COPY --chown=node:node scripts/docker-extension-runtime.mjs ./scripts/docker-extension-runtime.mjs
 
 # 数据目录：挂载卷到 /data，配置文件为 /data/config.yaml
 EXPOSE 6727

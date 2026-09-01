@@ -24,6 +24,9 @@ describe("Docker 构建上下文", () => {
             "COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs",
         );
         expect(dockerfile).toContain(
+            "COPY --chown=node:node scripts/docker-extension-runtime.mjs ./scripts/docker-extension-runtime.mjs",
+        );
+        expect(dockerfile).toContain(
             'HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "/app/scripts/docker-healthcheck.mjs"]',
         );
     });
@@ -45,6 +48,9 @@ describe("Docker 构建上下文", () => {
             expect(source).toContain('if [ "$(id -u)" = "0" ]; then');
             expect(source).toContain('if [ "$(id -u)" != "0" ] && [ ! -w /data ]; then');
             expect(source).toContain("chown -R node:node /data");
+            expect(source).toContain("node /app/scripts/docker-extension-runtime.mjs");
+            expect(source).toContain("ONEBOTS_EXTENSION_ROOT 必须是绝对路径");
+            expect(source).toContain('cd "$ONEBOTS_EXTENSION_ROOT"');
             expect(source).toContain(
                 "exec su-exec node:node env HOME=/home/node USER=node LOGNAME=node",
             );

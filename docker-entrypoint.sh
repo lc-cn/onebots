@@ -41,8 +41,18 @@ if [ "$HAS_CONFIG" = 0 ]; then
   set -- -c /data/config.yaml "$@"
 fi
 
-# 从 development 目录启动，以便 require 能解析 workspace 的 node_modules（适配器、协议在此）
-cd /app/development
+# 扩展清单与后续安装依赖保存在数据卷；NODE_PATH 仅作为镜像内置依赖的兼容回退。
+ONEBOTS_EXTENSION_ROOT="${ONEBOTS_EXTENSION_ROOT:-/data/extensions}"
+case "$ONEBOTS_EXTENSION_ROOT" in
+  /*) ;;
+  *)
+    echo "[onebots] 错误: ONEBOTS_EXTENSION_ROOT 必须是绝对路径"
+    exit 1
+    ;;
+esac
+export ONEBOTS_EXTENSION_ROOT
+NODE_PATH="${ONEBOTS_EXTENSION_ROOT}/node_modules:/app/development/node_modules${NODE_PATH:+:${NODE_PATH}}"
+export NODE_PATH
 
 # root 只负责初始化挂载卷；长期运行的网关降权到镜像内置 node 用户（uid/gid 1000）。
 # 递归迁移已有卷，确保旧版 root 容器创建的数据库、日志与配置仍可继续写入。
@@ -51,6 +61,9 @@ if [ "$(id -u)" = "0" ]; then
     echo "[onebots] 错误: 无法将 /data 交给 node 用户，请检查挂载卷权限"
     exit 1
   fi
+  su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
+    node /app/scripts/docker-extension-runtime.mjs
+  cd "$ONEBOTS_EXTENSION_ROOT"
   exec su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
     node /app/packages/onebots/lib/bin.js "$@"
 fi
@@ -60,4 +73,6 @@ if [ ! -r /data/config.yaml ] || [ ! -w /data ]; then
   echo "[onebots] 错误: 当前容器用户无法读取 /data/config.yaml 或写入 /data"
   exit 1
 fi
+node /app/scripts/docker-extension-runtime.mjs
+cd "$ONEBOTS_EXTENSION_ROOT"
 exec node /app/packages/onebots/lib/bin.js "$@"

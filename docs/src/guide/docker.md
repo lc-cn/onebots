@@ -54,7 +54,7 @@ docker compose logs -f onebots
 docker compose down
 ```
 
-首次运行会在当前目录下创建 `./data`，并在其中生成权限为 `0600` 的默认 `config.yaml`；入口脚本从第一次持久化写入起使用私有 `umask`，无法收紧配置权限时会拒绝启动。默认文件不包含平台账号，因此不会用空凭据连接外部平台；若没有环境鉴权或文件凭据，容器会把随机 256 位 `access_token` 写入该配置，但不会把鉴权码输出到容器日志。从 `./data/config.yaml` 读取鉴权码登录 Web 管理端。若部署环境不能直接读取挂载文件，可把高熵鉴权码作为 Secret 注入 `ONEBOTS_ACCESS_TOKEN`；它优先于文件 token，且不会被写入配置或日志。添加账号、设置协议访问令牌后，“保存并应用”会立即热重载账号与协议。Compose 示例把 `ONEBOTS_RESTARTABLE=1` 与 `restart: unless-stopped` 成对配置，因此 Web 安装扩展后可以安全切换实例；没有可验证监督器的前台进程会保留在线并要求人工重启。只有端口、路径、数据库等宿主参数变更时，页面才会明确提示执行 `docker compose restart`。
+首次运行会在当前目录下创建 `./data`，并在其中生成权限为 `0600` 的默认 `config.yaml`；入口脚本从第一次持久化写入起使用私有 `umask`，无法收紧配置权限时会拒绝启动。默认文件不包含平台账号，因此不会用空凭据连接外部平台；若没有环境鉴权或文件凭据，容器会把随机 256 位 `access_token` 写入该配置，但不会把鉴权码输出到容器日志。从 `./data/config.yaml` 读取鉴权码登录 Web 管理端。若部署环境不能直接读取挂载文件，可把高熵鉴权码作为 Secret 注入 `ONEBOTS_ACCESS_TOKEN`；它优先于文件 token，且不会被写入配置或日志。添加账号、设置协议访问令牌后，“保存并应用”会立即热重载账号与协议。Compose 示例把 `ONEBOTS_RESTARTABLE=1` 与 `restart: unless-stopped` 成对配置，因此 Web 安装扩展后可以安全切换实例；没有可验证监督器的前台进程会保留在线并要求人工重启。扩展中心安装的依赖和清单保存在 `./data/extensions`，容器重启或用新镜像重建后仍会从同一目录加载；入口只刷新镜像内置包的受管链接，不会覆盖用户安装的依赖。只有端口、路径、数据库等宿主参数变更时，页面才会明确提示执行 `docker compose restart`。
 
 仓库提供 `.env.example`。需要环境鉴权时复制为 `.env`，填写由密码管理器或 `openssl rand -hex 32` 生成的值，再执行 `docker compose up -d`；`.env` 已被 Git 忽略。修改后必须重启容器。
 
@@ -63,6 +63,8 @@ docker compose down
 官方镜像只在入口初始化阶段使用 `root` 创建或迁移 `/data`。配置权限收紧后，入口会把挂载卷交给镜像内置的 `node` 用户（uid/gid `1000`），再通过 `su-exec` 启动网关；平台适配器、协议和 Web 管理进程不会长期以 root 身份运行。入口同时把 `HOME`、`USER` 和 `LOGNAME` 切换到该账号，镜像内的 Corepack 使用预先准备且可写的共享缓存，因此 Web 扩展安装不会继续访问 `/root` 而触发权限错误。升级旧镜像后的第一次启动会递归调整现有 `/data` 的属主，因此宿主机上看到的文件属主可能变为 `1000:1000`。
 
 若卷后端禁止修改属主，入口会明确报错并停止，避免以 root 身份静默降级运行。也可以用 Docker 的 `--user` 或 Compose 的 `user:` 显式指定运行身份；此时入口尊重该身份且不会执行 `chown`，但调用方必须预先保证该用户能读取 `/data/config.yaml` 并写入 `/data`。
+
+默认扩展根为 `/data/extensions`。只有在额外挂载了其他持久化目录时才需要设置 `ONEBOTS_EXTENSION_ROOT`，且容器内路径必须使用绝对路径，避免启动目录变化后安装与加载落到不同位置。
 
 ### 容器健康状态
 
@@ -126,11 +128,13 @@ docker run -d \
 |----------------|------|
 | `/data/config.yaml` | 用户主配置文件，**必须**通过卷挂载以持久化，否则重启容器后丢失 |
 | `/data/data/` | 数据库与审计日志等，由应用自动创建 |
+| `/data/extensions/` | Web 扩展中心的依赖清单与已安装包；入口从这里启动并保留用户依赖 |
 
 **务必**将宿主机目录挂载到容器的 `/data`（如 `-v $(pwd)/data:/data` 或 docker-compose 中的 `./data:/data`），这样：
 
 - 用户配置 `config.yaml` 持久化在宿主机，重启或重建容器后仍生效
 - 数据库、日志等不会随容器删除而丢失
+- 扩展中心安装的适配器与协议不会只留在容器可写层中
 
 入口脚本会在未显式传入 `-c`/`--config` 时自动使用 `/data/config.yaml`，避免配置落到容器内 `/app/development` 导致重建后丢失。
 

@@ -11,14 +11,13 @@ if [ "$(id -u)" != "0" ] && [ ! -w /data ]; then
   exit 1
 fi
 
-# 从 development 目录启动，以便 require 能解析 workspace 的 node_modules（适配器、协议在此）
+# 镜像内置依赖仍位于 development；持久化扩展根会在下载恢复完成后准备。
 cd /app/development
 # 便于排查：若 HF 报找不到适配器/协议，请清除 Space 构建缓存后重新部署，确保拉取到最新基础镜像
 if [ ! -d node_modules ] || [ -z "$(ls -A node_modules 2>/dev/null)" ]; then
   echo "[onebots] 错误: /app/development/node_modules 不存在或为空，请使用最新的 ghcr.io/lc-cn/onebots 镜像并清除 HF 构建缓存后重试"
   exit 1
 fi
-export NODE_PATH="/app/development/node_modules"
 
 mkdir -p /data
 mkdir -p /data/static
@@ -113,12 +112,26 @@ if [ "$HAS_CONFIG" = 0 ]; then
   set -- -c /data/config.yaml "$@"
 fi
 
-# onebots 通过 process.cwd()/node_modules 解析适配器，故必须在 development 下执行
+ONEBOTS_EXTENSION_ROOT="${ONEBOTS_EXTENSION_ROOT:-/data/extensions}"
+case "$ONEBOTS_EXTENSION_ROOT" in
+  /*) ;;
+  *)
+    echo "[onebots] 错误: ONEBOTS_EXTENSION_ROOT 必须是绝对路径"
+    exit 1
+    ;;
+esac
+export ONEBOTS_EXTENSION_ROOT
+NODE_PATH="${ONEBOTS_EXTENSION_ROOT}/node_modules:/app/development/node_modules${NODE_PATH:+:${NODE_PATH}}"
+export NODE_PATH
+
 if [ "$(id -u)" = "0" ]; then
   if ! chown -R node:node /data; then
     echo "[onebots] 错误: 无法将 /data 交给 node 用户，请检查持久化存储权限"
     exit 1
   fi
+  su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
+    node /app/scripts/docker-extension-runtime.mjs
+  cd "$ONEBOTS_EXTENSION_ROOT"
   exec su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
     node /app/packages/onebots/lib/bin.js "$@"
 fi
@@ -127,4 +140,6 @@ if [ ! -r /data/config.yaml ] || [ ! -w /data ]; then
   echo "[onebots] 错误: 当前容器用户无法读取 /data/config.yaml 或写入 /data"
   exit 1
 fi
+node /app/scripts/docker-extension-runtime.mjs
+cd "$ONEBOTS_EXTENSION_ROOT"
 exec node /app/packages/onebots/lib/bin.js "$@"
