@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { ensureManagementCredentials } from "./management-credentials.js";
+import { ensureManagementCredentials, hasManagementCredentials } from "./management-credentials.js";
 
 describe("management credential bootstrap", () => {
+    it("distinguishes complete credentials from incomplete or empty values", () => {
+        expect(hasManagementCredentials({ access_token: "token" }, "")).toBe(true);
+        expect(hasManagementCredentials({ username: "operator", password: "secret" }, "")).toBe(
+            true,
+        );
+        expect(hasManagementCredentials({ username: "operator" }, "")).toBe(false);
+        expect(hasManagementCredentials({ access_token: "  " }, "")).toBe(false);
+        expect(hasManagementCredentials({}, "deployment-token")).toBe(true);
+    });
+
     it("preserves an explicit access token", () => {
         const config = { access_token: "configured-token" };
         const generator = vi.fn(() => "generated-token");

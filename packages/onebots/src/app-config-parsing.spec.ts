@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { BaseApp } from "@onebots/core";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createOnebots } from "./app.js";
 
 const temporaryDirectories: string[] = [];
@@ -10,6 +10,7 @@ const originalConfigDir = BaseApp.configDir;
 const originalConfigFileName = BaseApp.configFileName;
 
 afterEach(() => {
+    vi.unstubAllEnvs();
     BaseApp.configDir = originalConfigDir;
     BaseApp.configFileName = originalConfigFileName;
     for (const directory of temporaryDirectories.splice(0)) {
@@ -18,6 +19,23 @@ afterEach(() => {
 });
 
 describe("createOnebots config parsing", () => {
+    it("自动生成鉴权码时收紧已有配置与备份权限", async () => {
+        vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "");
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-app-credentials-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        const original = "port: 7000\ngeneral: {}\n";
+        fs.writeFileSync(configPath, original, { mode: 0o640 });
+
+        const app = createOnebots(configPath);
+
+        expect(fs.readFileSync(configPath, "utf8")).toMatch(/access_token: [a-f0-9]{64}/u);
+        expect(fs.readFileSync(`${configPath}.bak`, "utf8")).toBe(original);
+        expect(fs.statSync(configPath).mode & 0o777).toBe(0o600);
+        expect(fs.statSync(`${configPath}.bak`).mode & 0o777).toBe(0o600);
+        await app.stop();
+    });
+
     it("前台启动在生成默认配置前拒绝冲突的数据路径", () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-app-data-"));
         temporaryDirectories.push(directory);

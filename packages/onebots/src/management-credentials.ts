@@ -6,6 +6,18 @@ export interface EnsuredManagementCredentials {
     source: "config" | "environment" | "generated";
 }
 
+/** 判断当前配置或部署环境是否已经提供完整管理凭据。 */
+export function hasManagementCredentials(
+    config: Record<string, unknown>,
+    environmentToken: string | undefined = process.env.ONEBOTS_ACCESS_TOKEN,
+): boolean {
+    return (
+        hasText(environmentToken) ||
+        hasText(config.access_token) ||
+        (hasText(config.username) && hasText(config.password))
+    );
+}
+
 /** 为没有完整管理凭据的配置生成高熵静态鉴权码。 */
 export function ensureManagementCredentials(
     config: Record<string, unknown>,
@@ -15,7 +27,7 @@ export function ensureManagementCredentials(
     if (hasText(environmentToken)) {
         return { config, generated: false, source: "environment" };
     }
-    if (hasText(config.access_token) || (hasText(config.username) && hasText(config.password))) {
+    if (hasManagementCredentials(config, "")) {
         return { config, generated: false, source: "config" };
     }
 

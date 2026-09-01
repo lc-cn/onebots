@@ -9,7 +9,7 @@ import {
     parseRuntimeConfig,
     validateRuntimeConfig,
 } from "./runtime-config-validator.js";
-import { ensureManagementCredentials } from "./management-credentials.js";
+import { ensureManagementCredentials, hasManagementCredentials } from "./management-credentials.js";
 import {
     createBaseSetupConfig,
     createProtocolDefaults,
@@ -132,6 +132,11 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     }
     if (preserveExisting) {
         await validateConfig(config);
+        if (!hasManagementCredentials(config)) {
+            throw new Error(
+                "现有配置缺少管理凭据，非交互环境不会自动写入。请设置 ONEBOTS_ACCESS_TOKEN，或使用 --force 备份配置并生成鉴权码。",
+            );
+        }
         ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
         writeCliOutput(`配置文件已存在并通过验证: ${configPath}`);
         writeCliOutput("非交互环境不会覆盖；如需更新请使用 --force。");

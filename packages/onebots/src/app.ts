@@ -525,7 +525,10 @@ export function createOnebots(config: BaseApp.Config | string = "config.yaml") {
     const managementCredentials = ensureManagementCredentials(config as Record<string, unknown>);
     config = managementCredentials.config as BaseApp.Config;
     if (managementCredentials.generated) {
-        writeConfigFileAtomic(BaseApp.configPath, yaml.dump(config), { backup: true });
+        writeConfigFileAtomic(BaseApp.configPath, yaml.dump(config), {
+            backup: true,
+            mode: 0o600,
+        });
         writeCliError("[onebots] 已生成管理端鉴权码并写入配置文件的 access_token 字段。");
         writeCliError("[onebots] 鉴权码不会写入日志；首次登录时请从以下文件读取：");
         writeCliError(`  配置文件: ${BaseApp.configPath}`);

@@ -45,6 +45,7 @@ describe("setup workflow", () => {
     });
 
     it("validates but does not overwrite an existing config in a non-interactive session", async () => {
+        vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "deployment-secret");
         const configPath = temporaryConfigPath();
         fs.writeFileSync(configPath, "port: 7000\n", "utf8");
         const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -57,6 +58,20 @@ describe("setup workflow", () => {
         expect(output.mock.calls.map(call => String(call[0])).join("")).toContain(
             "配置文件已存在并通过验证",
         );
+    });
+
+    it("does not report a credential-free existing config as ready without write permission", async () => {
+        const configPath = temporaryConfigPath();
+        const original = "port: 7000\n";
+        fs.writeFileSync(configPath, original, { mode: 0o640 });
+
+        await expect(runSetup(configPath)).rejects.toThrow(
+            "现有配置缺少管理凭据，非交互环境不会自动写入",
+        );
+
+        expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect(fs.existsSync(path.join(path.dirname(configPath), "data"))).toBe(false);
     });
 
     it("rejects a broken existing config instead of reporting non-interactive success", async () => {
@@ -80,7 +95,7 @@ describe("setup workflow", () => {
     it("rejects an existing config whose runtime data path is a file", async () => {
         const configPath = temporaryConfigPath();
         const dataPath = path.join(path.dirname(configPath), "data");
-        const original = "port: 7000\n";
+        const original = "port: 7000\naccess_token: configured-token\n";
         fs.writeFileSync(configPath, original, { mode: 0o600 });
         fs.writeFileSync(dataPath, "keep this mount evidence");
 
