@@ -6,6 +6,7 @@ import packageMetadata from "../package.json" with { type: "json" };
 import type { ServiceSpec } from "./service-manager.js";
 import {
     acquireUpdatePackageMutationLock,
+    assertUpdatePluginSelectionUnchanged,
     loadTargetExtensionVersionCatalog,
     PACKAGE_VERSION_QUERY_MAX_BUFFER_BYTES,
     PACKAGE_VERSION_QUERY_TIMEOUT_MS,
@@ -13,6 +14,7 @@ import {
     preflightCurrentPackagesOnlyRuntime,
     preflightPackagesOnlyUpdate,
     queryLatestPackageVersion,
+    refreshUpdatePackageSnapshots,
     refreshServiceAfterUpdate,
     requireUpdatePackageManager,
     resolveInstalledPackageVersion,
@@ -205,6 +207,53 @@ describe("post-update service safety", () => {
         first.release();
         const retry = acquireUpdatePackageMutationLock(root, "update-operation-3");
         retry.release();
+    });
+
+    it("取得写租约后重新读取全部包版本作为回滚基线", () => {
+        const resolveVersion = vi.fn((name: string, root: string) => {
+            expect(root).toBe("/runtime");
+            return name === "onebots" ? "1.2.9" : "2.4.1";
+        });
+
+        expect(
+            refreshUpdatePackageSnapshots(
+                [
+                    { name: "onebots", current: "1.2.8", target: "1.3.0" },
+                    {
+                        name: "@onebots/adapter-mock",
+                        current: "2.4.0",
+                        target: "2.5.0",
+                    },
+                ],
+                "/runtime",
+                resolveVersion,
+            ),
+        ).toEqual([
+            { name: "onebots", current: "1.2.9", target: "1.3.0" },
+            { name: "@onebots/adapter-mock", current: "2.4.1", target: "2.5.0" },
+        ]);
+        expect(resolveVersion).toHaveBeenCalledTimes(2);
+    });
+
+    it("写租约内拒绝执行已经发生插件选择漂移的更新计划", () => {
+        expect(() =>
+            assertUpdatePluginSelectionUnchanged(
+                { adapters: ["mock"], protocols: ["onebot-v11"] },
+                { adapters: ["mock", "slack"], protocols: ["onebot-v11"] },
+            ),
+        ).toThrow(/插件选择在更新确认期间发生变化.*未修改依赖.*重新运行 onebots update/);
+        expect(() =>
+            assertUpdatePluginSelectionUnchanged(
+                { adapters: ["mock"], protocols: ["onebot-v11"] },
+                { adapters: ["mock"], protocols: ["onebot-v12"] },
+            ),
+        ).toThrow(/插件选择在更新确认期间发生变化/);
+        expect(() =>
+            assertUpdatePluginSelectionUnchanged(
+                { adapters: ["mock"], protocols: ["onebot-v11"] },
+                { adapters: ["mock"], protocols: ["onebot-v11"] },
+            ),
+        ).not.toThrow();
     });
 
     it("不会把仅依赖 core 的普通项目当成 OneBots 更新目标", () => {

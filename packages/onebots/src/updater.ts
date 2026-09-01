@@ -70,6 +70,11 @@ export interface PackageVersionQueryRequest extends PackageInstallInvocation {
 
 export type PackageVersionQueryRunner = (request: PackageVersionQueryRequest) => string;
 
+interface UpdatePluginSelection {
+    adapters: string[];
+    protocols: string[];
+}
+
 interface PackagesOnlyPreflightDependencies {
     preflight(spec: ServiceSpec): void | Promise<void>;
     rollback(): void | Promise<void>;
@@ -215,16 +220,6 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
                 : `npm install ${changed.map(item => `${item.name}@${item.target}`).join(" ")}`;
         throw new Error(`当前从 npx 临时缓存运行，无法安全自更新。请在项目中执行: ${command}`);
     }
-    const names = changed.map(item => `${item.name}@${item.target}`);
-    const projectRoot = resolvePackageUpdateProjectRoot(runtimeRoot);
-    const invocation = buildPackageUpdateInvocation(
-        runtimeRoot,
-        names,
-        projectRoot,
-        process.platform,
-        process.env,
-        manager,
-    );
     const initialServiceStatus = spec ? controller.status(spec) : null;
     if (initialServiceStatus?.error) {
         throw new Error(
@@ -233,6 +228,38 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     }
     const packageLock = acquireUpdatePackageMutationLock(runtimeRoot);
     try {
+        const lockedSelection = resolveUpdatePluginSelection(
+            options,
+            options.packagesOnly ? null : installedSpec,
+            options.packagesOnly ? options.configPath : undefined,
+        );
+        assertUpdatePluginSelectionUnchanged({ adapters, protocols }, lockedSelection);
+        const lockedUpdates = refreshUpdatePackageSnapshots(updates, runtimeRoot);
+        const lockedChanged = lockedUpdates.filter(item => item.current !== item.target);
+        if (!lockedChanged.length) {
+            if (options.packagesOnly) {
+                await preflightCurrentPackagesOnlyRuntime({
+                    scope: options.scope,
+                    configPath: path.resolve(options.configPath!),
+                    adapters,
+                    protocols,
+                    nodePath: process.execPath,
+                    binPath: path.resolve(process.argv[1]),
+                    workingDirectory: runtimeRoot,
+                });
+            }
+            writeCliOutput("依赖在确认期间已更新到目标版本");
+            return { status: "current", changes: [] };
+        }
+        const projectRoot = resolvePackageUpdateProjectRoot(runtimeRoot);
+        const invocation = buildPackageUpdateInvocation(
+            runtimeRoot,
+            lockedChanged.map(item => `${item.name}@${item.target}`),
+            projectRoot,
+            process.platform,
+            process.env,
+            manager,
+        );
         const packageMetadata = projectRoot ? capturePackageManagerMetadata(projectRoot) : null;
         try {
             execFileSync(invocation.executable, invocation.args, {
@@ -243,7 +270,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             });
         } catch (error) {
             recoverPackagesAfterFailedUpdate(
-                updates,
+                lockedUpdates,
                 runtimeRoot,
                 projectRoot,
                 resolveInstalledPackageVersion,
@@ -267,9 +294,19 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             );
         }
         try {
-            assertUpdatedPackageVersions(updates, runtimeRoot, resolveInstalledPackageVersion);
+            assertUpdatedPackageVersions(
+                lockedUpdates,
+                runtimeRoot,
+                resolveInstalledPackageVersion,
+            );
         } catch (error) {
-            rollbackPackagesBeforeServiceSwitch(updates, runtimeRoot, projectRoot, manager, error);
+            rollbackPackagesBeforeServiceSwitch(
+                lockedUpdates,
+                runtimeRoot,
+                projectRoot,
+                manager,
+                error,
+            );
         }
         if (options.packagesOnly) {
             await preflightPackagesOnlyUpdate(
@@ -286,7 +323,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
                     preflight: runUpdatedServicePreflight,
                     rollback: () =>
                         rollbackUpdatedPackages(
-                            updates,
+                            lockedUpdates,
                             runtimeRoot,
                             projectRoot,
                             resolveInstalledPackageVersion,
@@ -310,7 +347,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
                     initiallyRunning: initialServiceStatus?.running,
                     recoverPreflightFailure: () =>
                         rollbackUpdatedPackages(
-                            updates,
+                            lockedUpdates,
                             runtimeRoot,
                             projectRoot,
                             resolveInstalledPackageVersion,
@@ -321,7 +358,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             );
             if (result.wasRunning && !result.restarted) {
                 writeCliOutput("软件包已更新，但运行中的旧实例尚未重启；请执行 onebots restart");
-                return { status: "updated", changes: changed };
+                return { status: "updated", changes: lockedChanged };
             }
         }
         writeCliOutput(
@@ -329,10 +366,40 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
                 ? "OneBots 及已选插件依赖同步完成；未修改或重启服务"
                 : "OneBots 及插件更新完成",
         );
-        return { status: "updated", changes: changed };
+        return { status: "updated", changes: lockedChanged };
     } finally {
         packageLock.release();
     }
+}
+
+/** 取得写租约后重读包版本，确保失败恢复不会使用确认前的陈旧基线。 */
+export function refreshUpdatePackageSnapshots(
+    updates: readonly PackageUpdateChange[],
+    runtimeRoot: string,
+    resolveVersion: (name: string, root: string) => string | null = resolveInstalledPackageVersion,
+): PackageUpdateChange[] {
+    return updates.map(item => ({
+        ...item,
+        current: resolveVersion(item.name, runtimeRoot),
+    }));
+}
+
+/** 写租约内的插件选择必须仍与用户确认的更新计划一致。 */
+export function assertUpdatePluginSelectionUnchanged(
+    planned: UpdatePluginSelection,
+    current: UpdatePluginSelection,
+): void {
+    if (
+        sameStringList(planned.adapters, current.adapters) &&
+        sameStringList(planned.protocols, current.protocols)
+    ) {
+        return;
+    }
+    throw new Error("插件选择在更新确认期间发生变化；未修改依赖，请重新运行 onebots update");
+}
+
+function sameStringList(left: readonly string[], right: readonly string[]): boolean {
+    return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 /** 为 CLI 更新取得与 Web 扩展安装共享的运行目录租约。 */
