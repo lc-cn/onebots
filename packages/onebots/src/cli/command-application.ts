@@ -15,6 +15,7 @@ import { formatRuntimeConfigDiagnostic, parseRuntimeConfig } from "../runtime-co
 import { getLoadedPlugins, type LoadedPluginInfo } from "../plugin-loader.js";
 import {
     buildAdapterCapabilityReport,
+    createAdapterCapabilityEvidenceDigest,
     formatAdapterCapabilityReport,
     type AdapterCapabilityEvidenceReport,
     type AdapterCapabilitySelectionSource,
@@ -146,7 +147,7 @@ export async function showCapabilities(
         reportPlatforms,
         catalogIssues.length === 0,
     );
-    const evidence = {
+    const evidenceWithoutDigest = {
         schemaVersion: 1,
         generatedAt: new Date().toISOString(),
         application: {
@@ -161,6 +162,10 @@ export async function showCapabilities(
             },
         },
         ...report,
+    } satisfies Omit<AdapterCapabilityEvidenceReport, "evidenceDigest">;
+    const evidence = {
+        ...evidenceWithoutDigest,
+        evidenceDigest: createAdapterCapabilityEvidenceDigest(evidenceWithoutDigest),
     } satisfies AdapterCapabilityEvidenceReport;
     return {
         output: formatAdapterCapabilityReport(evidence, options.json),

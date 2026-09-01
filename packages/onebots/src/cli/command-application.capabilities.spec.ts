@@ -4,6 +4,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { AdapterRegistry, EMPTY_ADAPTER_CAPABILITIES, type Adapter } from "@onebots/core";
 import { showCapabilities } from "./command-application.js";
+import {
+    createAdapterCapabilityEvidenceDigest,
+    type AdapterCapabilityEvidenceReport,
+} from "../capability-report.js";
 import type { LoadedPluginInfo } from "../plugin-loader.js";
 
 const directories: string[] = [];
@@ -29,15 +33,8 @@ describe("capabilities command", () => {
                 getLoadedPlugins: () => [],
             },
         );
-        const report = JSON.parse(result.output || "{}") as {
+        const report = JSON.parse(result.output || "{}") as AdapterCapabilityEvidenceReport & {
             schemaVersion: number;
-            generatedAt: string;
-            application: { name: string; version: string };
-            target: {
-                configPath: string;
-                adapterSelection: { source: string; names: string[] };
-            };
-            complete: boolean;
             adapters: Array<{
                 source: string;
                 name: string;
@@ -51,6 +48,7 @@ describe("capabilities command", () => {
         expect(report).toMatchObject({
             schemaVersion: 1,
             generatedAt: expect.any(String),
+            evidenceDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
             application: { name: "onebots", version: expect.any(String) },
             target: {
                 configPath: path.resolve("config.yaml"),
@@ -58,6 +56,7 @@ describe("capabilities command", () => {
             },
         });
         expect(Number.isNaN(Date.parse(report.generatedAt))).toBe(false);
+        expect(createAdapterCapabilityEvidenceDigest(report)).toBe(report.evidenceDigest);
         expect(report.complete).toBe(true);
         expect(report.target.adapterSelection.names).toEqual(
             report.adapters.map(adapter => adapter.name),

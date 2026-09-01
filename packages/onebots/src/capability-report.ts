@@ -1,4 +1,4 @@
-import { AdapterRegistry, type AdapterCapabilityManifest } from "@onebots/core";
+import { AdapterRegistry, sha256Json, type AdapterCapabilityManifest } from "@onebots/core";
 import { getExtensionCapabilityCatalogEntry } from "./extension-capability-catalog.js";
 import { getTrustedExtensionCatalogEntry } from "./trusted-extension-catalog.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
@@ -40,6 +40,7 @@ export type AdapterCapabilitySelectionSource = "cli" | "config" | "catalog";
 export interface AdapterCapabilityEvidenceReport extends AdapterCapabilityReport {
     schemaVersion: 1;
     generatedAt: string;
+    evidenceDigest: string;
     application: {
         name: string;
         version: string;
@@ -53,7 +54,45 @@ export interface AdapterCapabilityEvidenceReport extends AdapterCapabilityReport
     };
 }
 
+type AdapterCapabilityEvidenceDigestSource = Pick<
+    AdapterCapabilityEvidenceReport,
+    "schemaVersion" | "application" | "target" | "complete" | "errors" | "adapters"
+>;
+
 const CATEGORIES: CapabilityCategory[] = ["actions", "events", "segments", "transports"];
+
+/**
+ * 计算能力证据的稳定内容摘要。
+ *
+ * 生成时间、配置绝对路径和摘要字段本身不参与计算；选择名称、错误与适配器条目按
+ * 语义身份排序，因此相同能力证据不会因调用目录、生成时刻或集合顺序变化而漂移。
+ */
+export function createAdapterCapabilityEvidenceDigest(
+    evidence: AdapterCapabilityEvidenceDigestSource,
+): string {
+    const digestPayload = {
+        schemaVersion: evidence.schemaVersion,
+        application: evidence.application,
+        adapterSelection: {
+            source: evidence.target.adapterSelection.source,
+            names: [...evidence.target.adapterSelection.names].sort(),
+        },
+        complete: evidence.complete,
+        errors: [...evidence.errors].sort(),
+        adapters: [...evidence.adapters].sort((left, right) => {
+            const nameOrder = compareText(left.name, right.name);
+            if (nameOrder !== 0) return nameOrder;
+            const sourceOrder = compareText(left.source, right.source);
+            if (sourceOrder !== 0) return sourceOrder;
+            return compareText(left.packageName, right.packageName);
+        }),
+    };
+    return `sha256:${sha256Json(digestPayload)}`;
+}
+
+function compareText(left: string, right: string): number {
+    return left < right ? -1 : left > right ? 1 : 0;
+}
 
 /** 从已完成加载契约校验的插件生成无连接能力报告。 */
 export function buildAdapterCapabilityReport(

@@ -7,7 +7,9 @@ import {
 } from "@onebots/core";
 import {
     buildAdapterCapabilityReport,
+    createAdapterCapabilityEvidenceDigest,
     formatAdapterCapabilityReport,
+    type AdapterCapabilityEvidenceReport,
 } from "./capability-report.js";
 import type { LoadedPluginInfo } from "./plugin-loader.js";
 
@@ -23,6 +25,50 @@ const schema: Schema = {
 afterEach(() => AdapterRegistry.clear());
 
 describe("adapter capability report", () => {
+    it("creates a stable digest that excludes volatile archive metadata", () => {
+        const report = buildAdapterCapabilityReport(
+            [],
+            ["adapter:zeta", "adapter:alpha"],
+            ["telegram", "slack"],
+        );
+        const evidence = {
+            schemaVersion: 1,
+            generatedAt: "2026-09-01T00:00:00.000Z",
+            evidenceDigest: "ignored",
+            application: { name: "onebots", version: "1.2.8" },
+            target: {
+                configPath: "/srv/onebots/config.yaml",
+                adapterSelection: { source: "catalog", names: ["telegram", "slack"] },
+            },
+            ...report,
+        } satisfies AdapterCapabilityEvidenceReport;
+
+        const digest = createAdapterCapabilityEvidenceDigest(evidence);
+        const relocated = {
+            ...evidence,
+            generatedAt: "2026-09-02T03:04:05.000Z",
+            evidenceDigest: "sha256:stale",
+            target: {
+                configPath: "/workspace/config.yaml",
+                adapterSelection: {
+                    ...evidence.target.adapterSelection,
+                    names: [...evidence.target.adapterSelection.names].reverse(),
+                },
+            },
+            adapters: [...evidence.adapters].reverse(),
+            errors: [...evidence.errors].reverse(),
+        };
+
+        expect(digest).toMatch(/^sha256:[a-f0-9]{64}$/u);
+        expect(createAdapterCapabilityEvidenceDigest(relocated)).toBe(digest);
+        expect(
+            createAdapterCapabilityEvidenceDigest({
+                ...relocated,
+                application: { ...relocated.application, version: "1.2.9" },
+            }),
+        ).not.toBe(digest);
+    });
+
     it("exports package evidence, support counts and the complete manifest", () => {
         const capabilities = defineAdapterCapabilities({
             actions: {
