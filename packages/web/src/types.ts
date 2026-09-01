@@ -92,6 +92,8 @@ export interface AdapterInfo {
     /** 能力证据已验证、插件未声明，或目录当前不可用。 */
     capabilityStatus?: "verified" | "unknown" | "unavailable";
     capabilityUnavailableReason?: string;
+    /** 当前适配器是否真实实现手动上线/下线；旧版服务端缺失时按不支持处理。 */
+    accountLifecycleControl?: { online: boolean; offline: boolean };
     accounts: AccountInfo[];
 }
 

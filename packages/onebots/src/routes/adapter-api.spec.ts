@@ -1,4 +1,10 @@
-import { AccountMutationConflictError, ValidationError, type RouterContext } from "@onebots/core";
+import {
+    AccountMutationConflictError,
+    UnsupportedCapabilityError,
+    ValidationError,
+    type Adapter,
+    type RouterContext,
+} from "@onebots/core";
 import { describe, expect, it, vi } from "vitest";
 import type { App } from "../app.js";
 import { registerAdapterRoutes } from "./adapter-api.js";
@@ -91,4 +97,97 @@ describe("adapter account routes", () => {
         expect(app.removeAccount).toHaveBeenCalledWith("mock", "10001", expected);
         expect(ctx.body).toEqual({ success: true, message: "移除成功" });
     });
+
+    it.each(["/api/bots/start", "/api/bots/stop"])("%s 缺少账号身份时返回 400", async route => {
+        const { posts } = setup();
+        const ctx = { request: { body: { platform: "mock" } } } as RouterContext;
+
+        await posts.get(route)!(ctx);
+
+        expect(ctx.status).toBe(400);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: "请求字段 uin 必须是非空字符串",
+        });
+    });
+
+    it("启动不存在的适配器时返回 404 而不是静默成功", async () => {
+        const { posts } = setup();
+        const ctx = {
+            request: { body: { platform: "missing", uin: "demo" } },
+        } as RouterContext;
+
+        await posts.get("/api/bots/start")!(ctx);
+
+        expect(ctx.status).toBe(404);
+        expect(ctx.body).toEqual({ success: false, message: "适配器 missing 不存在" });
+    });
+
+    it("停止不存在的账号时返回 404 且不调用适配器", async () => {
+        const adapter = lifecycleAdapter(undefined);
+        const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
+        const ctx = {
+            request: { body: { platform: "mock", uin: "missing" } },
+        } as RouterContext;
+
+        await posts.get("/api/bots/stop")!(ctx);
+
+        expect(ctx.status).toBe(404);
+        expect(ctx.body).toEqual({ success: false, message: "账号 mock.missing 不存在" });
+        expect(adapter.setOffline).not.toHaveBeenCalled();
+    });
+
+    it("未实现手动生命周期控制时返回 501", async () => {
+        const account = { info: { uin: "demo", status: "offline" } };
+        const adapter = lifecycleAdapter(account, {
+            setOnline: vi.fn(async () => {
+                throw new UnsupportedCapabilityError({
+                    platform: "mock",
+                    capability: "account.set_online",
+                });
+            }),
+        });
+        const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
+        const ctx = {
+            request: { body: { platform: "mock", uin: "demo" } },
+        } as RouterContext;
+
+        await posts.get("/api/bots/start")!(ctx);
+
+        expect(ctx.status).toBe(501);
+        expect(ctx.body).toMatchObject({
+            success: false,
+            message: expect.stringContaining("account.set_online"),
+        });
+    });
+
+    it("真实生命周期操作完成后返回最新账号状态", async () => {
+        const account = { info: { uin: "demo", status: "online" } };
+        const adapter = lifecycleAdapter(account);
+        const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
+        const ctx = {
+            request: { body: { platform: "mock", uin: "demo" } },
+        } as RouterContext;
+
+        await posts.get("/api/bots/start")!(ctx);
+
+        expect(adapter.setOnline).toHaveBeenCalledWith("demo");
+        expect(ctx.status).toBeUndefined();
+        expect(ctx.body).toEqual({ success: true, data: account.info });
+    });
 });
+
+function lifecycleAdapter(
+    account: { info: { uin: string; status: string } } | undefined,
+    overrides: Record<string, unknown> = {},
+) {
+    return {
+        getAccount: vi.fn(() => account),
+        setOnline: vi.fn(async () => undefined),
+        setOffline: vi.fn(async () => undefined),
+        ...overrides,
+    } as unknown as Adapter & {
+        setOnline: ReturnType<typeof vi.fn>;
+        setOffline: ReturnType<typeof vi.fn>;
+    };
+}

@@ -41,6 +41,7 @@
                         :key="`${bot.platform}:${bot.uin}`"
                         :bot="bot"
                         :adapter-icon="adapter.icon"
+                        :lifecycle-control="adapter.accountLifecycleControl"
                         :loading="loadingBots.has(`${bot.platform}:${bot.uin}`)"
                         @start="handleBotStart"
                         @stop="handleBotStop" />

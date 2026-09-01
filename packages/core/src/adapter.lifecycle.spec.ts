@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { Adapter } from "./adapter.js";
 import type { Account } from "./account.js";
+import { UnsupportedCapabilityError } from "./errors.js";
 
 describe("Adapter account startup isolation", () => {
     it("continues starting later accounts after one account fails", async () => {
@@ -40,6 +41,45 @@ describe("Adapter account startup isolation", () => {
         expect(error).toBeInstanceOf(AggregateError);
         expect((error as AggregateError).message).toBe("2 个 mock 账号启动失败");
         expect((error as AggregateError).errors).toEqual([firstError, secondError]);
+    });
+
+    it("fails closed when an adapter does not implement manual lifecycle control", async () => {
+        const adapter = {
+            platform: "mock",
+            unsupported: Adapter.prototype.unsupported,
+        } as Adapter;
+
+        await expect(Adapter.prototype.setOnline.call(adapter, "demo")).rejects.toMatchObject({
+            name: "UnsupportedCapabilityError",
+            capability: "account.set_online",
+            reason: "not_implemented",
+        } satisfies Partial<UnsupportedCapabilityError>);
+        await expect(Adapter.prototype.setOffline.call(adapter, "demo")).rejects.toMatchObject({
+            name: "UnsupportedCapabilityError",
+            capability: "account.set_offline",
+            reason: "not_implemented",
+        } satisfies Partial<UnsupportedCapabilityError>);
+    });
+
+    it("reports only lifecycle controls that the adapter really overrides", () => {
+        const getter = Object.getOwnPropertyDescriptor(
+            Adapter.prototype,
+            "accountLifecycleControl",
+        )?.get;
+        expect(getter).toBeTypeOf("function");
+
+        expect(
+            getter?.call({
+                setOnline: Adapter.prototype.setOnline,
+                setOffline: Adapter.prototype.setOffline,
+            }),
+        ).toEqual({ online: false, offline: false });
+        expect(
+            getter?.call({
+                setOnline: vi.fn(),
+                setOffline: Adapter.prototype.setOffline,
+            }),
+        ).toEqual({ online: true, offline: false });
     });
 });
 

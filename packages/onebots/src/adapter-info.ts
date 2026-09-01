@@ -49,6 +49,7 @@ export function getAdapterInfos(
                 capabilitySource: "runtime" as const,
                 capabilityStatus: declared ? ("verified" as const) : ("unknown" as const),
                 capabilityPackageVersion: plugin.version,
+                accountLifecycleControl: { online: false, offline: false },
                 accounts: [],
                 accountCapabilities: {},
                 accountCapabilityErrors: {},

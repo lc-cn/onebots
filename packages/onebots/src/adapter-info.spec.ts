@@ -44,6 +44,7 @@ describe("adapter management info", () => {
                 capabilityDeclared: true,
                 capabilitySource: "runtime",
                 capabilityPackageVersion: "1.2.3",
+                accountLifecycleControl: { online: false, offline: false },
                 accounts: [],
             }),
         ]);
@@ -79,6 +80,7 @@ describe("adapter management info", () => {
                 platform: "mock",
                 icon: "",
                 capabilities: EMPTY_ADAPTER_CAPABILITIES,
+                accountLifecycleControl: { online: true, offline: false },
                 accounts: [{ uin: "demo" }],
             },
             describeCapabilities: () => EMPTY_ADAPTER_CAPABILITIES,
@@ -93,6 +95,7 @@ describe("adapter management info", () => {
         expect(infos[0]).toMatchObject({
             platform: "mock",
             capabilityPackageVersion: "1.2.3",
+            accountLifecycleControl: { online: true, offline: false },
             accounts: [{ uin: "demo" }],
         });
     });

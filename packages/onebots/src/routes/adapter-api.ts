@@ -1,5 +1,10 @@
-import { AccountMutationConflictError, RouterContext, ValidationError } from "@onebots/core";
-import type { Router, Adapter } from "@onebots/core";
+import {
+    AccountMutationConflictError,
+    RouterContext,
+    UnsupportedCapabilityError,
+    ValidationError,
+} from "@onebots/core";
+import type { Account, Adapter, Router } from "@onebots/core";
 import type { App } from "../app.js";
 
 /**
@@ -62,25 +67,23 @@ export function registerAdapterRoutes(app: App, router: Router): void {
     });
 
     router.post("/api/bots/start", async (ctx: RouterContext) => {
-        const { platform, uin } = ctx.request.body as { platform: string; uin: string };
         try {
-            const adapter = app.adapters.get(platform as keyof Adapter.Configs);
-            await adapter?.setOnline(uin);
-            ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
+            const { account, adapter, uin } = requireAccountTarget(app, ctx.request.body);
+            await adapter.setOnline(uin);
+            ctx.body = { success: true, data: account.info };
         } catch (error) {
-            ctx.status = 500;
+            ctx.status = accountLifecycleStatus(error);
             ctx.body = { success: false, message: (error as Error).message };
         }
     });
 
     router.post("/api/bots/stop", async (ctx: RouterContext) => {
-        const { platform, uin } = ctx.request.body as { platform: string; uin: string };
         try {
-            const adapter = app.adapters.get(platform as keyof Adapter.Configs);
-            await adapter?.setOffline(uin);
-            ctx.body = { success: true, data: adapter?.getAccount(uin)?.info };
+            const { account, adapter, uin } = requireAccountTarget(app, ctx.request.body);
+            await adapter.setOffline(uin);
+            ctx.body = { success: true, data: account.info };
         } catch (error) {
-            ctx.status = 500;
+            ctx.status = accountLifecycleStatus(error);
             ctx.body = { success: false, message: (error as Error).message };
         }
     });
@@ -162,3 +165,38 @@ function accountMutationStatus(error: unknown): number {
     if (error instanceof ValidationError) return 400;
     return 500;
 }
+
+function requireAccountTarget(
+    app: App,
+    body: unknown,
+): { account: Account; adapter: Adapter; uin: string } {
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+        throw new ValidationError("请求体必须是对象");
+    }
+    const request = body as Record<string, unknown>;
+    const platform = requiredBodyString("platform", request.platform);
+    const uin = requiredBodyString("uin", request.uin);
+    const adapter = app.adapters.get(platform as keyof Adapter.Configs);
+    if (!adapter) throw new AccountLifecycleTargetNotFoundError(`适配器 ${platform} 不存在`);
+    const account = adapter.getAccount(uin);
+    if (!account) {
+        throw new AccountLifecycleTargetNotFoundError(`账号 ${platform}.${uin} 不存在`);
+    }
+    return { account, adapter, uin };
+}
+
+function requiredBodyString(field: string, value: unknown): string {
+    if (typeof value !== "string" || value.trim().length === 0) {
+        throw new ValidationError(`请求字段 ${field} 必须是非空字符串`);
+    }
+    return value;
+}
+
+function accountLifecycleStatus(error: unknown): number {
+    if (error instanceof ValidationError) return 400;
+    if (error instanceof AccountLifecycleTargetNotFoundError) return 404;
+    if (error instanceof UnsupportedCapabilityError) return 501;
+    return 500;
+}
+
+class AccountLifecycleTargetNotFoundError extends Error {}

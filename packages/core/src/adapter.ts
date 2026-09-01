@@ -176,12 +176,34 @@ export abstract class Adapter<
             platform: this.platform,
             icon: this.icon,
             capabilities: this.describeCapabilities(),
+            accountLifecycleControl: this.accountLifecycleControl,
             accounts: [...this.accounts.values()].map(account => account.info),
         };
     }
 
-    async setOnline(_uin: string) {}
-    async setOffline(_uin: string) {}
+    /** 管理面只能展示适配器真实实现的账号在线状态控制，不能把基类占位方法当成能力。 */
+    get accountLifecycleControl() {
+        return {
+            online: this.setOnline !== Adapter.prototype.setOnline,
+            offline: this.setOffline !== Adapter.prototype.setOffline,
+        };
+    }
+
+    async setOnline(_uin: string): Promise<void> {
+        return this.unsupported(
+            "account.set_online",
+            "not_implemented",
+            `${this.platform} 适配器不支持手动上线账号`,
+        );
+    }
+
+    async setOffline(_uin: string): Promise<void> {
+        return this.unsupported(
+            "account.set_offline",
+            "not_implemented",
+            `${this.platform} 适配器不支持手动下线账号`,
+        );
+    }
 
     submitVerification?(
         accountId: string,

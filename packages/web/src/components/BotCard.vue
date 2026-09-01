@@ -85,7 +85,7 @@
                 </div>
                 <div>
                     <UiButton
-                        v-if="bot.status === 'offline'"
+                        v-if="bot.status === 'offline' && lifecycleControl?.online"
                         variant="primary"
                         :loading="props.loading"
                         :disabled="props.loading"
@@ -95,7 +95,7 @@
                         上线
                     </UiButton>
                     <UiButton
-                        v-else-if="bot.status === 'online'"
+                        v-else-if="bot.status === 'online' && lifecycleControl?.offline"
                         variant="danger"
                         :loading="props.loading"
                         :disabled="props.loading"
@@ -103,6 +103,18 @@
                         @click="emit('stop', bot)">
                         <IconPlayerPause v-if="!props.loading" :size="14" />
                         下线
+                    </UiButton>
+                    <UiButton
+                        v-else-if="bot.status === 'offline' || bot.status === 'online'"
+                        variant="secondary"
+                        disabled
+                        class="w-28"
+                        :title="
+                            bot.status === 'offline'
+                                ? '此适配器不支持手动上线账号'
+                                : '此适配器不支持手动下线账号'
+                        ">
+                        不支持手动切换
                     </UiButton>
                     <UiButton v-else variant="secondary" loading disabled class="w-28">
                         连接中
@@ -133,6 +145,7 @@ import { buildApiUrl } from "../config";
 interface Props {
     bot: AccountInfo;
     adapterIcon: string;
+    lifecycleControl?: { online: boolean; offline: boolean };
     loading?: boolean;
 }
 
