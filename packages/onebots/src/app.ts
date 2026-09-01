@@ -39,6 +39,7 @@ import {
 } from "./runtime-config-validator.js";
 import { getAdapterInfos } from "./adapter-info.js";
 import { handleManagementConfigSocketAction } from "./management-config-socket.js";
+import { handleManagementAccountLifecycleSocketAction } from "./management-account-lifecycle.js";
 import {
     authorizeManagementUpgrade,
     extractManagementToken,
@@ -383,6 +384,18 @@ export class App extends BaseApp {
                         return;
                     }
                 }
+                const accountResponse = await handleManagementAccountLifecycleSocketAction(
+                    this,
+                    payload,
+                );
+                if (accountResponse) {
+                    try {
+                        return client.send(JSON.stringify(accountResponse));
+                    } catch (error) {
+                        this.logger.error("发送管理端账号生命周期回执失败", { error });
+                        return;
+                    }
+                }
                 switch (payload.action) {
                     case "system.input":
                         process.stdin.resume();
@@ -391,26 +404,6 @@ export class App extends BaseApp {
                         );
                         process.nextTick(() => process.stdin.emit("end"));
                         return true;
-                    case "bot.start": {
-                        const { platform, uin } = JSON.parse(payload.data);
-                        await this.adapters.get(platform)?.setOnline(uin);
-                        return client.send(
-                            JSON.stringify({
-                                event: "bot.change",
-                                data: this.adapters.get(platform).getAccount(uin).info,
-                            }),
-                        );
-                    }
-                    case "bot.stop": {
-                        const { platform, uin } = JSON.parse(payload.data);
-                        await this.adapters.get(platform)?.setOffline(uin);
-                        return client.send(
-                            JSON.stringify({
-                                event: "bot.change",
-                                data: this.adapters.get(platform).getAccount(uin).info,
-                            }),
-                        );
-                    }
                 }
             });
         });

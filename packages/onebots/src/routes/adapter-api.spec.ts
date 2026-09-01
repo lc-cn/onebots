@@ -18,6 +18,7 @@ function setup(overrides: Partial<App> = {}) {
         adapterInfos: [],
         accounts: [],
         adapters: new Map(),
+        logger: { error: vi.fn() },
         addAccount: vi.fn(async () => undefined),
         updateAccount: vi.fn(async () => undefined),
         removeAccount: vi.fn(async () => undefined),
@@ -107,6 +108,7 @@ describe("adapter account routes", () => {
         expect(ctx.status).toBe(400);
         expect(ctx.body).toEqual({
             success: false,
+            code: "ACCOUNT_REQUEST_INVALID",
             message: "请求字段 uin 必须是非空字符串",
         });
     });
@@ -120,7 +122,11 @@ describe("adapter account routes", () => {
         await posts.get("/api/bots/start")!(ctx);
 
         expect(ctx.status).toBe(404);
-        expect(ctx.body).toEqual({ success: false, message: "适配器 missing 不存在" });
+        expect(ctx.body).toEqual({
+            success: false,
+            code: "ACCOUNT_TARGET_NOT_FOUND",
+            message: "适配器 missing 不存在",
+        });
     });
 
     it("停止不存在的账号时返回 404 且不调用适配器", async () => {
@@ -133,7 +139,11 @@ describe("adapter account routes", () => {
         await posts.get("/api/bots/stop")!(ctx);
 
         expect(ctx.status).toBe(404);
-        expect(ctx.body).toEqual({ success: false, message: "账号 mock.missing 不存在" });
+        expect(ctx.body).toEqual({
+            success: false,
+            code: "ACCOUNT_TARGET_NOT_FOUND",
+            message: "账号 mock.missing 不存在",
+        });
         expect(adapter.setOffline).not.toHaveBeenCalled();
     });
 
@@ -157,6 +167,7 @@ describe("adapter account routes", () => {
         expect(ctx.status).toBe(501);
         expect(ctx.body).toMatchObject({
             success: false,
+            code: "ACCOUNT_LIFECYCLE_UNSUPPORTED",
             message: expect.stringContaining("account.set_online"),
         });
     });
