@@ -171,6 +171,7 @@ describe("application readiness", () => {
                 get: (route: string, handler: (ctx: Record<string, unknown>) => void) =>
                     handlers.set(route, handler),
             },
+            runtimeContractId: "sha256:runtime-contract",
         };
         registerObservabilityEndpoints(app as never, {
             name: "onebots",
@@ -189,6 +190,7 @@ describe("application readiness", () => {
                 core_version: "1.1.0",
                 instance_id: getRuntimeProcessIdentity().instanceId,
                 started_at: getRuntimeProcessIdentity().startedAt,
+                runtime_contract_id: "sha256:runtime-contract",
                 config: { status: "drifted", in_sync: false },
             },
         });
@@ -207,6 +209,7 @@ describe("application readiness", () => {
             core_version: "1.1.0",
             instance_id: expect.any(String),
             started_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+            runtime_contract_id: "sha256:runtime-contract",
         });
         expect(healthContext.body).toMatchObject({
             instance_id: getRuntimeProcessIdentity().instanceId,

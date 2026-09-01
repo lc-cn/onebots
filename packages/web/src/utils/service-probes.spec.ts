@@ -12,6 +12,7 @@ function readiness(
         accountsWithoutProtocols?: number;
         configInSync?: boolean;
         instanceId?: string;
+        runtimeContractId?: string;
     } = {},
 ) {
     return new Response(
@@ -21,6 +22,7 @@ function readiness(
             version: "1.2.3",
             core_version: "1.2.1",
             instance_id: options.instanceId ?? "instance-ready",
+            runtime_contract_id: options.runtimeContractId ?? "sha256:runtime-ready",
             started_at: "2026-08-31T00:00:00.000Z",
             configured: options.configured ?? true,
             server: true,
@@ -63,6 +65,7 @@ describe("Web semantic service probes", () => {
                         application: "onebots",
                         version: "1.2.3",
                         instance_id: "instance-1",
+                        runtime_contract_id: "sha256:runtime-ready",
                     }),
                 ),
         );
@@ -102,6 +105,7 @@ describe("Web semantic service probes", () => {
                 application: "onebots",
                 version: "1.2.3",
                 instanceId: "instance-ready",
+                runtimeContractId: "sha256:runtime-ready",
             },
         });
     });
@@ -115,6 +119,7 @@ describe("Web semantic service probes", () => {
                 application: "onebots",
                 version: "1.2.3",
                 instanceId: "instance-ready",
+                runtimeContractId: "sha256:runtime-ready",
             },
         });
     });
@@ -129,6 +134,7 @@ describe("Web semantic service probes", () => {
                             application: "onebots",
                             version: "1.2.3",
                             instance_id: "instance-new",
+                            runtime_contract_id: "sha256:runtime-ready",
                         }),
                     ),
             ),
@@ -141,6 +147,36 @@ describe("Web semantic service probes", () => {
             state: "danger",
             label: "证据冲突",
             detail: "health 来自 onebots@1.2.3 实例 instance-new，ready 来自 onebots@1.2.3 实例 instance-old，拒绝拼接不一致的探针证据",
+        });
+    });
+
+    it("rejects probe pairs from the same process identity but different runtime contracts", async () => {
+        const health = await probeHealth(
+            vi.fn(
+                async () =>
+                    new Response(
+                        JSON.stringify({
+                            status: "ok",
+                            application: "onebots",
+                            version: "1.2.3",
+                            instance_id: "instance-same",
+                            runtime_contract_id: "sha256:runtime-new",
+                        }),
+                    ),
+            ),
+        );
+        const readinessResult = await probeReadiness(
+            vi.fn(async () =>
+                readiness(true, {
+                    instanceId: "instance-same",
+                    runtimeContractId: "sha256:runtime-old",
+                }),
+            ),
+        );
+
+        expect(reconcileServiceProbeInstances(health, readinessResult)).toMatchObject({
+            state: "danger",
+            label: "证据冲突",
         });
     });
 

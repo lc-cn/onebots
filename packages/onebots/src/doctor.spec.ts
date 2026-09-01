@@ -13,6 +13,7 @@ import {
 } from "./doctor.js";
 import { ServiceController, type ServiceSpec } from "./service-manager.js";
 import packageMetadata from "../package.json" with { type: "json" };
+import { verifyDoctorRuntimeContract } from "./doctor-endpoint.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -195,6 +196,41 @@ describe("doctor health probes", () => {
                 message: "legacy ready",
             }),
         ).toMatchObject({ level: "error", message: expect.stringContaining("ready 缺少") });
+    });
+
+    it("要求成对探针声明并匹配服务启动契约", () => {
+        const identityCheck = {
+            name: "probe-instance",
+            level: "ok" as const,
+            message: "same instance",
+            identity: {
+                application: "onebots",
+                version: "1.2.8",
+                instanceId: "instance-a",
+                runtimeContractId: "sha256:expected",
+            },
+        };
+
+        expect(verifyDoctorRuntimeContract(identityCheck, "sha256:expected")).toMatchObject({
+            name: "service-runtime-contract",
+            level: "ok",
+        });
+        expect(verifyDoctorRuntimeContract(identityCheck, "sha256:other")).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("启动契约与服务元数据不一致"),
+        });
+        expect(
+            verifyDoctorRuntimeContract(
+                {
+                    ...identityCheck,
+                    identity: { ...identityCheck.identity, runtimeContractId: undefined },
+                },
+                "sha256:expected",
+            ),
+        ).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("未声明 runtime_contract_id"),
+        });
     });
 
     it.each([

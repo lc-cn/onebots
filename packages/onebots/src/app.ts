@@ -65,6 +65,10 @@ import {
 import { isProcessRestartSupported } from "./process-restart.js";
 import { ensureRuntimeDataDirectory } from "./runtime-data-directory.js";
 import { assertManagedRuntimeDefinitionsCurrent } from "./service-definition-preflight.js";
+import {
+    createServiceRuntimeContractId,
+    type ServiceRuntimeContract,
+} from "./service-runtime-contract.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -95,6 +99,7 @@ export class App extends BaseApp {
     public readonly extensionManager: ExtensionManager;
     /** 退出码 75 后是否有守护器或编排器负责拉起新实例。 */
     public readonly restartSupported = isProcessRestartSupported();
+    public readonly runtimeContractId?: string;
 
     private static readonly DEFAULT_TOKEN_EXPIRATION_MS = 12 * 60 * 60 * 1000;
     private static readonly REFRESH_TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -130,8 +135,11 @@ export class App extends BaseApp {
         return this._messageDebug;
     }
 
-    constructor(config: App.Config) {
+    constructor(config: App.Config, runtimeContract?: ServiceRuntimeContract) {
         super(config, { name: packageMetadata.name, version: packageMetadata.version });
+        this.runtimeContractId = runtimeContract
+            ? createServiceRuntimeContractId(runtimeContract)
+            : undefined;
         this.runtimeConfigStateTracker = new RuntimeConfigStateTracker(BaseApp.configPath);
         this.extensionManager = new ExtensionManager({ configPath: BaseApp.configPath });
 
@@ -508,7 +516,10 @@ export namespace App {
     }
 }
 
-export function createOnebots(config: BaseApp.Config | string = "config.yaml") {
+export function createOnebots(
+    config: BaseApp.Config | string = "config.yaml",
+    runtimeContract?: ServiceRuntimeContract,
+) {
     const isStartWithConfigFile = typeof config === "string";
     if (isStartWithConfigFile) {
         config = path.resolve(process.cwd(), config as string);
@@ -565,7 +576,7 @@ export function createOnebots(config: BaseApp.Config | string = "config.yaml") {
         },
         disableClustering: true,
     });
-    return new App(config as BaseApp.Config);
+    return new App(config as BaseApp.Config, runtimeContract);
 }
 
 export function defineConfig(config: BaseApp.Config) {

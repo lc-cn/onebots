@@ -5,8 +5,10 @@ import * as path from "node:path";
 import { serviceStatus, type ServiceStatusReport } from "./command-application.js";
 import { ServiceController, type ServiceSpec } from "../service-manager.js";
 import packageMetadata from "../../package.json" with { type: "json" };
+import { resolveServiceRuntimeContractId } from "../service-runtime-contract.js";
 
 const temporaryDirectories: string[] = [];
+let activeRuntimeContractId = "";
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -32,6 +34,7 @@ function serviceSpec(source = "port: 7788\npath: gateway\n"): ServiceSpec {
 }
 
 function mockInstalledService(running: boolean, spec = serviceSpec()): void {
+    activeRuntimeContractId = resolveServiceRuntimeContractId(spec);
     vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
         installed: true,
         running,
@@ -186,12 +189,14 @@ describe("service status", () => {
                               version: packageMetadata.version,
                               core_version: "1.2.5",
                               instance_id: "status-instance",
+                              runtime_contract_id: activeRuntimeContractId,
                           }
                         : {
                               ready: true,
                               application: "onebots",
                               version: packageMetadata.version,
                               instance_id: "status-instance",
+                              runtime_contract_id: activeRuntimeContractId,
                           },
                 ),
                 { status: 200 },
@@ -201,13 +206,52 @@ describe("service status", () => {
         const result = await serviceStatus({ system: false }, fetcher);
 
         expect(result).toEqual({
-            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance`,
+            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance\n在线进程的启动契约与服务元数据一致`,
             exitCode: undefined,
         });
         expect(fetcher).toHaveBeenCalledWith(
             "http://127.0.0.1:7788/gateway/health",
             expect.anything(),
         );
+    });
+
+    it("拒绝把同版本但启动契约不同的进程报告为当前服务", async () => {
+        const spec = serviceSpec();
+        mockInstalledService(true, spec);
+        const fetcher = vi.fn<typeof fetch>(
+            async input =>
+                new Response(
+                    JSON.stringify({
+                        ...(String(input).endsWith("/health") ? { status: "ok" } : { ready: true }),
+                        application: "onebots",
+                        version: packageMetadata.version,
+                        instance_id: "foreign-contract-instance",
+                        runtime_contract_id: "sha256:foreign-contract",
+                    }),
+                    { status: 200 },
+                ),
+        );
+
+        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+        expect(result).toMatchObject({ exitCode: 1, raw: true });
+        expect(report).toMatchObject({
+            status: "unavailable",
+            ok: false,
+            probe: {
+                checks: [
+                    { name: "health", level: "ok" },
+                    { name: "ready", level: "ok" },
+                    { name: "probe-instance", level: "ok" },
+                    {
+                        name: "service-runtime-contract",
+                        level: "error",
+                        message: expect.stringContaining("启动契约与服务元数据不一致"),
+                    },
+                ],
+            },
+        });
     });
 
     it("拒绝用漂移的平台定义拼接进程与 HTTP 证据", async () => {
@@ -257,6 +301,7 @@ describe("service status", () => {
                           application: "onebots",
                           version: packageMetadata.version,
                           instance_id: "json-instance",
+                          runtime_contract_id: activeRuntimeContractId,
                       }),
                       { status: 200 },
                   )
@@ -266,6 +311,7 @@ describe("service status", () => {
                           application: "onebots",
                           version: packageMetadata.version,
                           instance_id: "json-instance",
+                          runtime_contract_id: activeRuntimeContractId,
                       }),
                       { status: 200 },
                   ),
@@ -303,6 +349,7 @@ describe("service status", () => {
                             instanceId: "json-instance",
                         },
                     },
+                    { name: "service-runtime-contract", level: "ok" },
                 ],
             },
         });
@@ -318,6 +365,7 @@ describe("service status", () => {
                           application: "onebots",
                           version: packageMetadata.version,
                           instance_id: "status-instance",
+                          runtime_contract_id: activeRuntimeContractId,
                       }),
                       { status: 200 },
                   )
@@ -327,6 +375,7 @@ describe("service status", () => {
                           application: "onebots",
                           version: packageMetadata.version,
                           instance_id: "status-instance",
+                          runtime_contract_id: activeRuntimeContractId,
                           configured: false,
                           summary: { online_accounts: 0, total_accounts: 0 },
                       }),
@@ -346,7 +395,14 @@ describe("service status", () => {
         expect(JSON.parse(jsonResult.output ?? "{}")).toMatchObject({
             status: "pending_configuration",
             ok: true,
-            probe: { checks: [{ level: "ok" }, { level: "warning" }, { level: "ok" }] },
+            probe: {
+                checks: [
+                    { level: "ok" },
+                    { level: "warning" },
+                    { level: "ok" },
+                    { name: "service-runtime-contract", level: "ok" },
+                ],
+            },
         });
     });
 
@@ -394,6 +450,7 @@ describe("service status", () => {
                         application: "onebots",
                         version: "0.0.0",
                         instance_id: "old-instance",
+                        runtime_contract_id: activeRuntimeContractId,
                     }),
                     { status: 200 },
                 ),
@@ -410,6 +467,7 @@ describe("service status", () => {
                     { name: "health", level: "warning" },
                     { name: "ready", level: "ok" },
                     { name: "probe-instance", level: "ok" },
+                    { name: "service-runtime-contract", level: "ok" },
                 ],
                 error: null,
             },
@@ -426,6 +484,7 @@ describe("service status", () => {
                           application: "onebots",
                           version: packageMetadata.version,
                           instance_id: "instance-new",
+                          runtime_contract_id: activeRuntimeContractId,
                       }),
                       { status: 200 },
                   )
@@ -435,6 +494,7 @@ describe("service status", () => {
                           application: "onebots",
                           version: packageMetadata.version,
                           instance_id: "instance-old",
+                          runtime_contract_id: activeRuntimeContractId,
                       }),
                       { status: 200 },
                   ),
@@ -459,6 +519,7 @@ describe("service status", () => {
                           application: "onebots",
                           version: packageMetadata.version,
                           instance_id: "status-instance",
+                          runtime_contract_id: activeRuntimeContractId,
                       }),
                       { status: 200 },
                   )
@@ -488,6 +549,7 @@ describe("service status", () => {
                     { name: "health", level: "ok" },
                     { name: "ready", level: "error" },
                     { name: "probe-instance", level: "error" },
+                    { name: "service-runtime-contract", level: "error" },
                 ],
                 error: null,
             },

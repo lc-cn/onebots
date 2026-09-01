@@ -7,6 +7,7 @@ export interface DoctorEndpointIdentity {
     application: string;
     version: string;
     instanceId: string;
+    runtimeContractId?: string;
 }
 
 export interface DoctorCheck {
@@ -108,7 +109,8 @@ export function compareDoctorEndpointIdentities(
     if (
         health.identity.application !== readiness.identity.application ||
         health.identity.version !== readiness.identity.version ||
-        health.identity.instanceId !== readiness.identity.instanceId
+        health.identity.instanceId !== readiness.identity.instanceId ||
+        health.identity.runtimeContractId !== readiness.identity.runtimeContractId
     ) {
         return {
             name: "probe-instance",
@@ -121,6 +123,34 @@ export function compareDoctorEndpointIdentities(
         level: "ok",
         message: `health 与 ready 均来自 ${healthLabel}`,
         identity: health.identity,
+    };
+}
+
+/** 证明在线实例采用本地服务元数据描述的完整启动契约。 */
+export function verifyDoctorRuntimeContract(
+    identityCheck: DoctorCheck,
+    expectedRuntimeContractId: string,
+): DoctorCheck {
+    const actual = identityCheck.identity?.runtimeContractId;
+    if (!actual) {
+        return {
+            name: "service-runtime-contract",
+            level: "error",
+            message: "在线探针未声明 runtime_contract_id，无法证明当前进程采用已安装服务契约",
+        };
+    }
+    if (actual !== expectedRuntimeContractId) {
+        return {
+            name: "service-runtime-contract",
+            level: "error",
+            message: "在线进程的启动契约与服务元数据不一致；请执行 onebots restart",
+        };
+    }
+    return {
+        name: "service-runtime-contract",
+        level: "ok",
+        message: "在线进程的启动契约与服务元数据一致",
+        identity: identityCheck.identity,
     };
 }
 
@@ -234,8 +264,17 @@ function readEndpointIdentity(body: string): DoctorEndpointIdentity | undefined 
         const version = typeof payload.version === "string" ? payload.version.trim() : "";
         const instanceId =
             typeof payload.instance_id === "string" ? payload.instance_id.trim() : "";
+        const runtimeContractId =
+            typeof payload.runtime_contract_id === "string"
+                ? payload.runtime_contract_id.trim()
+                : "";
         return application && version && instanceId
-            ? { application, version, instanceId }
+            ? {
+                  application,
+                  version,
+                  instanceId,
+                  ...(runtimeContractId ? { runtimeContractId } : {}),
+              }
             : undefined;
     } catch {
         return undefined;

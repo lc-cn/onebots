@@ -524,7 +524,14 @@ export async function runMcpStdio(
     if (failures.length) throw new CliError(`无法加载插件: ${failures.join(", ")}`, 2);
 
     const { createOnebots } = await import("../app.js");
-    const app = createOnebots(runtime.configPath);
+    const app = createOnebots(runtime.configPath, {
+        configPath: runtime.configPath,
+        adapters: runtime.adapters,
+        protocols: runtime.protocols,
+        nodePath: process.execPath,
+        binPath: path.resolve(process.argv[1]),
+        workingDirectory: process.cwd(),
+    });
 
     await app.start();
 

@@ -54,7 +54,14 @@ export async function runBridge(options: RuntimeOptions): Promise<void> {
         validateRuntimeConfig(config);
     }
 
-    const app = createOnebots(configPath);
+    const app = createOnebots(configPath, {
+        configPath,
+        adapters: options.adapters,
+        protocols: options.protocols,
+        nodePath: process.execPath,
+        binPath: path.resolve(process.argv[1]),
+        workingDirectory: process.cwd(),
+    });
     let coordinator: ReturnType<typeof createRuntimeShutdownCoordinator>;
 
     // 第三方 SDK（如 icqq SSO 心跳）可能抛出未处理的 Promise rejection；注册监听后 Node 不会再默认退出

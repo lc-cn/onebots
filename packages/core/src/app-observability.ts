@@ -26,6 +26,8 @@ interface ObservableApp {
     readonly isReloading: boolean;
     /** OneBots 主应用提供磁盘配置状态；嵌入式 BaseApp 可不跟踪。 */
     readonly runtimeConfigState?: { status: string };
+    /** 主应用可提供不包含原始路径或参数的启动契约摘要。 */
+    readonly runtimeContractId?: string;
 }
 
 export interface ApplicationIdentity {
@@ -78,6 +80,7 @@ export interface ReadinessResponse extends ReadinessSnapshot {
     core_version: string;
     instance_id: string;
     started_at: string;
+    runtime_contract_id?: string;
 }
 
 /** 生成与 HTTP 无关的就绪快照，便于部署探针和测试共享同一判定。 */
@@ -216,6 +219,7 @@ export function registerObservabilityEndpoints(
             application: identity.name,
             version: identity.version,
             core_version: identity.coreVersion,
+            ...(app.runtimeContractId ? { runtime_contract_id: app.runtimeContractId } : {}),
         };
     });
 
@@ -231,6 +235,7 @@ export function registerObservabilityEndpoints(
             core_version: identity.coreVersion,
             instance_id: processIdentity.instanceId,
             started_at: processIdentity.startedAt,
+            ...(app.runtimeContractId ? { runtime_contract_id: app.runtimeContractId } : {}),
         } satisfies ReadinessResponse;
     });
 

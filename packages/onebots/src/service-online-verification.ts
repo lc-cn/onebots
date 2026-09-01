@@ -5,7 +5,9 @@ import {
     compareDoctorEndpointIdentities,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
+    verifyDoctorRuntimeContract,
 } from "./doctor-endpoint.js";
+import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
 
 export interface ServiceOnlineVerificationOptions {
     fetcher?: typeof fetch;
@@ -54,6 +56,7 @@ export async function verifyServiceOnline(
             }));
     const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
     const base = resolveGatewayBaseUrl(config);
+    const expectedRuntimeContractId = resolveServiceRuntimeContractId(spec);
     let lastEvidence = "服务尚未响应";
     for (let attempt = 0; attempt < attempts; attempt += 1) {
         const checks = await Promise.all([
@@ -61,10 +64,15 @@ export async function verifyServiceOnline(
             probeDoctorEndpoint(base, "ready", fetcher),
         ]);
         const identityCheck = compareDoctorEndpointIdentities(...checks);
+        const runtimeContractCheck = verifyDoctorRuntimeContract(
+            identityCheck,
+            expectedRuntimeContractId,
+        );
         if (
             checks[0].level === "ok" &&
             checks[1].level !== "error" &&
-            identityCheck.level === "ok"
+            identityCheck.level === "ok" &&
+            runtimeContractCheck.level === "ok"
         ) {
             const currentInstanceId = identityCheck.identity?.instanceId;
             if (!currentInstanceId) {
@@ -78,7 +86,9 @@ export async function verifyServiceOnline(
                 return;
             }
         } else {
-            lastEvidence = [...checks, identityCheck].map(check => check.message).join("；");
+            lastEvidence = [...checks, identityCheck, runtimeContractCheck]
+                .map(check => check.message)
+                .join("；");
         }
         if (attempt < attempts - 1) await sleep(intervalMs);
     }

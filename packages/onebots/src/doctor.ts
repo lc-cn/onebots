@@ -49,8 +49,10 @@ import {
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
     resolveGatewayPort,
+    verifyDoctorRuntimeContract,
     type DoctorCheck,
 } from "./doctor-endpoint.js";
+import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
 
 export { compareDoctorEndpointIdentities, probeDoctorEndpoint, resolveGatewayBaseUrl };
 export type { CheckLevel, DoctorCheck, DoctorEndpointIdentity } from "./doctor-endpoint.js";
@@ -432,7 +434,16 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                     probeDoctorEndpoint(base, "health", fetch, packageMetadata.version),
                     probeDoctorEndpoint(base, "ready", fetch),
                 ]);
-                checks.push(...endpointChecks, compareDoctorEndpointIdentities(...endpointChecks));
+                const identityCheck = compareDoctorEndpointIdentities(...endpointChecks);
+                checks.push(...endpointChecks, identityCheck);
+                if (spec) {
+                    checks.push(
+                        verifyDoctorRuntimeContract(
+                            identityCheck,
+                            resolveServiceRuntimeContractId(spec),
+                        ),
+                    );
+                }
                 checks.push(...(await probeDoctorManagement(base, config)));
             } else {
                 checks.push({ name: "port", level: "ok", message: `端口 ${port} 可用` });

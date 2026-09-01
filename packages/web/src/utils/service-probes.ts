@@ -11,6 +11,7 @@ export interface ServiceProbeIdentity {
     application: string;
     version: string;
     instanceId: string;
+    runtimeContractId: string;
 }
 
 export interface ServiceProbeResult {
@@ -35,6 +36,7 @@ interface ReadinessPayload {
     core_version: string;
     instance_id: string;
     started_at: string;
+    runtime_contract_id: string;
     configured: boolean;
     server: boolean;
     reloading: boolean;
@@ -79,6 +81,12 @@ export async function probeHealth(
         if (typeof payload.instance_id !== "string" || !payload.instance_id.trim()) {
             return danger("证据无效", "health 未声明 instance_id");
         }
+        if (
+            typeof payload.runtime_contract_id !== "string" ||
+            !payload.runtime_contract_id.trim()
+        ) {
+            return danger("证据无效", "health 未声明 runtime_contract_id");
+        }
         return {
             state: "success",
             label: "正常",
@@ -87,6 +95,7 @@ export async function probeHealth(
                 application: "onebots",
                 version: payload.version.trim(),
                 instanceId: payload.instance_id.trim(),
+                runtimeContractId: payload.runtime_contract_id.trim(),
             },
         };
     } catch (error) {
@@ -151,7 +160,8 @@ export function reconcileServiceProbeInstances(
     if (
         health.identity.application === readiness.identity.application &&
         health.identity.version === readiness.identity.version &&
-        health.identity.instanceId === readiness.identity.instanceId
+        health.identity.instanceId === readiness.identity.instanceId &&
+        health.identity.runtimeContractId === readiness.identity.runtimeContractId
     ) {
         return readiness;
     }
@@ -186,6 +196,7 @@ function readinessIdentity(payload: ReadinessPayload): ServiceProbeIdentity {
         application: payload.application,
         version: payload.version.trim(),
         instanceId: payload.instance_id.trim(),
+        runtimeContractId: payload.runtime_contract_id.trim(),
     };
 }
 
@@ -204,6 +215,8 @@ function isReadinessPayload(value: unknown): value is ReadinessPayload {
         !value.core_version.trim() ||
         typeof value.instance_id !== "string" ||
         !value.instance_id.trim() ||
+        typeof value.runtime_contract_id !== "string" ||
+        !value.runtime_contract_id.trim() ||
         typeof value.started_at !== "string" ||
         !value.started_at.trim() ||
         typeof value.configured !== "boolean" ||

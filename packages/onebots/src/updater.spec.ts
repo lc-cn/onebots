@@ -15,6 +15,7 @@ import {
     runUpdatedServicePreflight,
 } from "./updater.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
+import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -454,6 +455,7 @@ EOF
     it("waits through the old process and accepts the target version once ready", async () => {
         const spec = temporaryServiceSpec();
         fs.writeFileSync(spec.configPath, "port: 7788\npath: gateway\n", "utf8");
+        const runtimeContractId = resolveServiceRuntimeContractId(spec);
         let healthAttempts = 0;
         const fetcher = vi.fn<typeof fetch>(async input => {
             if (String(input).endsWith("/ready")) {
@@ -463,6 +465,7 @@ EOF
                         application: "onebots",
                         version: "1.3.0",
                         instance_id: "updated-instance",
+                        runtime_contract_id: runtimeContractId,
                     }),
                     { status: 200 },
                 );
@@ -474,6 +477,7 @@ EOF
                     application: "onebots",
                     version: healthAttempts === 1 ? "1.2.9" : "1.3.0",
                     instance_id: "updated-instance",
+                    runtime_contract_id: runtimeContractId,
                 }),
                 { status: 200 },
             );
@@ -516,6 +520,7 @@ EOF
 
     it("rejects a healthy endpoint when restart did not replace the previous instance", async () => {
         const spec = temporaryServiceSpec();
+        const runtimeContractId = resolveServiceRuntimeContractId(spec);
         const fetcher = vi.fn<typeof fetch>(async input =>
             String(input).endsWith("/ready")
                 ? new Response(
@@ -524,6 +529,7 @@ EOF
                           application: "onebots",
                           version: "1.3.0",
                           instance_id: "old-instance",
+                          runtime_contract_id: runtimeContractId,
                       }),
                       { status: 200 },
                   )
@@ -533,6 +539,7 @@ EOF
                           application: "onebots",
                           version: "1.3.0",
                           instance_id: "old-instance",
+                          runtime_contract_id: runtimeContractId,
                       }),
                       { status: 200 },
                   ),
@@ -606,6 +613,7 @@ EOF
 
     it("accepts the target version only after a different instance owns the endpoint", async () => {
         const spec = temporaryServiceSpec();
+        const runtimeContractId = resolveServiceRuntimeContractId(spec);
         const fetcher = vi.fn<typeof fetch>(async input =>
             String(input).endsWith("/ready")
                 ? new Response(
@@ -614,6 +622,7 @@ EOF
                           application: "onebots",
                           version: "1.3.0",
                           instance_id: "new-instance",
+                          runtime_contract_id: runtimeContractId,
                       }),
                       { status: 200 },
                   )
@@ -623,6 +632,7 @@ EOF
                           application: "onebots",
                           version: "1.3.0",
                           instance_id: "new-instance",
+                          runtime_contract_id: runtimeContractId,
                       }),
                       { status: 200 },
                   ),
@@ -635,6 +645,27 @@ EOF
                 previousInstanceId: "old-instance",
             }),
         ).resolves.toBeUndefined();
+    });
+
+    it("拒绝同版本新实例使用与服务元数据不同的启动契约", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(
+            async input =>
+                new Response(
+                    JSON.stringify({
+                        ...(String(input).endsWith("/ready") ? { ready: true } : { status: "ok" }),
+                        application: "onebots",
+                        version: "1.3.0",
+                        instance_id: "new-instance",
+                        runtime_contract_id: "sha256:wrong-contract",
+                    }),
+                    { status: 200 },
+                ),
+        );
+
+        await expect(verifyServiceOnline(spec, "1.3.0", { fetcher, attempts: 1 })).rejects.toThrow(
+            /在线进程的启动契约与服务元数据不一致.*onebots restart/,
+        );
     });
 
     it("launches the saved updated CLI in the service working directory", () => {

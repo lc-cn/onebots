@@ -4,6 +4,7 @@ import {
     compareDoctorEndpointIdentities,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
+    verifyDoctorRuntimeContract,
 } from "./doctor-endpoint.js";
 import { inspectDoctorServiceMetadata } from "./doctor-service-metadata.js";
 import { inspectDoctorServiceDefinition } from "./doctor-service-definition.js";
@@ -11,6 +12,7 @@ import { ServiceController, type ServiceScope, type ServiceSpec } from "./servic
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import type { ScopeOptions } from "./cli/command-options.js";
 import packageMetadata from "../package.json" with { type: "json" };
+import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
 
 export type ServiceStatusKind =
     | "uninstalled"
@@ -145,9 +147,14 @@ export async function inspectServiceStatus(
                 ),
             ),
         );
+        const identityCheck = compareDoctorEndpointIdentities(
+            endpointChecks[0]!,
+            endpointChecks[1]!,
+        );
         const checks = [
             ...endpointChecks,
-            compareDoctorEndpointIdentities(endpointChecks[0]!, endpointChecks[1]!),
+            identityCheck,
+            verifyDoctorRuntimeContract(identityCheck, resolveServiceRuntimeContractId(spec)),
         ];
         const hasError = checks.some(check => check.level === "error");
         const hasWarning = checks.some(check => check.level === "warning");
