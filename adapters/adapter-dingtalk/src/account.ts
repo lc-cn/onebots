@@ -40,9 +40,12 @@ export function createDingTalkAccount(
     bot.on("event", dispatchEvent);
     bot.on("native_event", dispatchEvent);
 
-    account.on("start", async () => {
+    bot.on("stopped", () => {
+        account.status = AccountStatus.OffLine;
+    });
+    account.on("start", async (signal: AbortSignal) => {
         try {
-            await bot.start();
+            await bot.start(signal);
             const me = bot.getCachedMe();
             account.nickname = me?.name || "钉钉机器人";
             account.avatar = me?.avatar || adapter.icon;

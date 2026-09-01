@@ -380,17 +380,20 @@ describe("DingTalkBot", () => {
         expect(ready).toHaveBeenCalledTimes(1);
     });
 
-    it("停止中的启动不会在异步令牌返回后重新上线", async () => {
+    it("停止中的启动会取消令牌请求并拒绝迟到令牌重新上线", async () => {
         let release!: (response: Response) => void;
-        vi.stubGlobal(
-            "fetch",
-            vi.fn(
-                () =>
+        let requestSignal: AbortSignal | undefined;
+        const fetchMock = vi
+            .fn()
+            .mockImplementationOnce(
+                (_url: URL, init?: RequestInit) =>
                     new Promise<Response>(resolve => {
+                        requestSignal = init?.signal ?? undefined;
                         release = resolve;
                     }),
-            ),
-        );
+            )
+            .mockResolvedValue(jsonResponse({ accessToken: "fresh-token" }));
+        vi.stubGlobal("fetch", fetchMock);
         const bot = new DingTalkBot({
             account_id: "bot",
             receive_mode: "webhook",
@@ -402,10 +405,61 @@ describe("DingTalkBot", () => {
 
         const starting = bot.start();
         await bot.stop();
+        expect(requestSignal?.aborted).toBe(true);
         release(jsonResponse({ accessToken: "token" }));
-        await starting;
+        await expect(starting).rejects.toMatchObject({ code: "DINGTALK_START_CANCELLED" });
 
         expect(ready).not.toHaveBeenCalled();
+        await expect(bot.start()).resolves.toBeUndefined();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        await bot.stop();
+    });
+
+    it("账号启动取消会传播原始原因并关闭尚未完成的 Stream", async () => {
+        const bot = new DingTalkBot({
+            account_id: "bot",
+            receive_mode: "stream",
+            app_key: "app-key",
+            app_secret: "secret",
+        });
+        const disconnect = vi.fn();
+        let streamSignal: AbortSignal | undefined;
+        vi.spyOn(
+            bot as unknown as {
+                startStream(generation: number, signal: AbortSignal): Promise<void>;
+            },
+            "startStream",
+        ).mockImplementation(
+            (_generation, signal) =>
+                new Promise<void>((_resolve, reject) => {
+                    streamSignal = signal;
+                    Object.assign(bot as object, { streamClient: { disconnect } });
+                    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+                }),
+        );
+        const controller = new AbortController();
+        const reason = new Error("account startup timeout");
+
+        const starting = bot.start(controller.signal);
+        controller.abort(reason);
+
+        await expect(starting).rejects.toBe(reason);
+        expect(streamSignal?.aborted).toBe(true);
+        expect(disconnect).toHaveBeenCalledOnce();
+    });
+
+    it("就绪后继续响应账号信号以支持协议启动回滚", async () => {
+        const bot = new DingTalkBot({ account_id: "bot", receive_mode: "manual" });
+        const stopped = vi.fn();
+        bot.on("stopped", stopped);
+        const controller = new AbortController();
+
+        await bot.start(controller.signal);
+        controller.abort(new Error("protocol failed"));
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+
+        await expect(bot.start()).resolves.toBeUndefined();
+        await bot.stop();
     });
 
     it("Stream 断开失败时仍完成异步停止通知", async () => {

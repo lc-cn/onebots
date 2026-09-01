@@ -57,6 +57,8 @@ export interface DingTalkApiRequestOptions {
     query?: Record<string, string | number | boolean>;
     /** 现代 API 使用请求头鉴权，旧版 oapi 使用 query 鉴权。 */
     auth?: "modern" | "legacy" | "none";
+    /** 取消尚未完成的令牌或 API 请求。 */
+    signal?: AbortSignal;
 }
 
 export interface DingTalkUser {

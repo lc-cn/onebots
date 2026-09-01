@@ -67,6 +67,9 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
     private me: DingTalkUser | null = null;
     private streamClient?: DWClient;
     private startPromise?: Promise<void>;
+    private lifecycleAbort?: AbortController;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private running = false;
     private generation = 0;
     private callbackCrypto?: DingTalkCallbackCrypto;
@@ -96,24 +99,45 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         return this.config.receive_mode || "stream";
     }
 
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.running) return;
         if (this.startPromise) return this.startPromise;
+        this.bindStartSignal(signal);
         const generation = this.generation;
-        const start = this.startInternal(generation);
+        const controller = new AbortController();
+        this.lifecycleAbort = controller;
+        const start = this.startInternal(generation, controller.signal);
         this.startPromise = start;
         try {
             await start;
+        } catch (error) {
+            if (signal?.aborted) throw signal.reason;
+            if (controller.signal.aborted) {
+                throw new DingTalkError("钉钉客户端启动已取消", {
+                    code: "DINGTALK_START_CANCELLED",
+                    category: ErrorCategory.NETWORK,
+                    cause: error,
+                });
+            }
+            throw error;
         } finally {
             if (this.startPromise === start) this.startPromise = undefined;
+            if (this.lifecycleAbort === controller && !this.running) {
+                this.lifecycleAbort = undefined;
+                this.unbindStartSignal();
+            }
         }
     }
 
     async stop(): Promise<void> {
         const wasActive = this.running || Boolean(this.streamClient || this.startPromise);
+        this.unbindStartSignal();
         this.generation += 1;
         this.running = false;
         this.startPromise = undefined;
+        this.lifecycleAbort?.abort();
+        this.lifecycleAbort = undefined;
         const stream = this.streamClient;
         this.streamClient = undefined;
         const failures = new FailureCollector();
@@ -126,21 +150,19 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         }
     }
 
-    private async startInternal(generation: number): Promise<void> {
+    private async startInternal(generation: number, signal: AbortSignal): Promise<void> {
         try {
-            if (this.receiveMode === "stream") await this.startStream(generation);
-            if (this.hasAppCredentials()) await this.getAccessToken();
-            if (generation !== this.generation) {
-                this.streamClient?.disconnect();
-                this.streamClient = undefined;
-                return;
-            }
+            if (this.receiveMode === "stream") await this.startStream(generation, signal);
+            this.assertLifecycle(generation, signal);
+            if (this.hasAppCredentials()) await this.getAccessToken(signal);
+            this.assertLifecycle(generation, signal);
             this.me ||= {
                 userid: this.config.robot_code || this.config.app_key || this.config.account_id,
                 name: "钉钉机器人",
             };
             this.running = true;
             await emitAllAwaited(this, "ready");
+            this.assertLifecycle(generation, signal);
         } catch (error) {
             if (generation === this.generation) {
                 const stream = this.streamClient;
@@ -159,7 +181,7 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         }
     }
 
-    private async startStream(generation: number): Promise<void> {
+    private async startStream(generation: number, signal: AbortSignal): Promise<void> {
         if (!this.config.app_key || !this.config.app_secret) {
             throw DingTalkError.config(
                 "钉钉 Stream 模式必须配置 app_key 和 app_secret",
@@ -202,11 +224,43 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
                 ErrorCategory.NETWORK,
             );
         }
+        this.assertLifecycle(generation, signal);
         if (!this.isCurrentStream(stream, generation)) stream.disconnect();
     }
 
     private isCurrentStream(stream: DWClient, generation: number): boolean {
         return this.streamClient === stream && this.generation === generation;
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error =>
+                this.reportError(DingTalkError.wrap(error, "DINGTALK_STOP_FAILED")),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
+    }
+
+    private assertLifecycle(generation: number, signal: AbortSignal): void {
+        signal.throwIfAborted();
+        if (generation !== this.generation) {
+            throw new DingTalkError("钉钉客户端启动已取消", {
+                code: "DINGTALK_START_CANCELLED",
+                category: ErrorCategory.NETWORK,
+            });
+        }
     }
 
     private rememberRobot(message: DingTalkRobotMessage): void {
@@ -380,8 +434,8 @@ export class DingTalkBot extends EventEmitter<DingTalkBotEvents> {
         return this.api.hasCredentials();
     }
 
-    async getAccessToken(): Promise<string> {
-        return this.api.getAccessToken();
+    async getAccessToken(signal?: AbortSignal): Promise<string> {
+        return this.api.getAccessToken(signal);
     }
 
     async callApi<T = unknown>(path: string, options: DingTalkApiRequestOptions = {}): Promise<T> {

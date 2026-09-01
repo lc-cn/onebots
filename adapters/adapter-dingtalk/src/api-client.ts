@@ -25,7 +25,8 @@ export class DingTalkApiClient {
         return Boolean(this.config.app_key && this.config.app_secret);
     }
 
-    async getAccessToken(): Promise<string> {
+    async getAccessToken(signal?: AbortSignal): Promise<string> {
+        signal?.throwIfAborted();
         if (!this.hasCredentials()) {
             throw DingTalkError.config(
                 "钉钉开放平台 API 需要 app_key 和 app_secret",
@@ -33,6 +34,7 @@ export class DingTalkApiClient {
             );
         }
         if (this.accessToken && Date.now() < this.tokenExpireTime) return this.accessToken;
+        if (signal) return this.refreshAccessToken(signal);
         const refresh = (this.accessTokenPromise ||= this.refreshAccessToken());
         try {
             return await refresh;
@@ -83,11 +85,12 @@ export class DingTalkApiClient {
         return data;
     }
 
-    private async refreshAccessToken(): Promise<string> {
+    private async refreshAccessToken(signal?: AbortSignal): Promise<string> {
         const data = await this.request<DingTalkTokenResponse>("/v1.0/oauth2/accessToken", {
             method: "POST",
             auth: "none",
             body: { appKey: this.config.app_key, appSecret: this.config.app_secret },
+            signal,
         });
         const token = data.accessToken || data.access_token;
         if (!token) {
@@ -98,6 +101,7 @@ export class DingTalkApiClient {
                 details: data,
             });
         }
+        signal?.throwIfAborted();
         this.accessToken = token;
         this.tokenExpireTime =
             Date.now() + ((data.expireIn || data.expires_in || 7200) - 60) * 1000;
@@ -115,7 +119,8 @@ export class DingTalkApiClient {
             ...options.headers,
         };
         if (auth !== "none") {
-            const token = await this.getAccessToken();
+            const token = await this.getAccessToken(options.signal);
+            options.signal?.throwIfAborted();
             if (auth === "modern") headers["x-acs-dingtalk-access-token"] = token;
             else url.searchParams.set("access_token", token);
         }
@@ -126,8 +131,10 @@ export class DingTalkApiClient {
                 method: options.method || "GET",
                 headers,
                 body: options.body ? JSON.stringify(options.body) : undefined,
+                signal: options.signal,
             });
             text = await response.text();
+            options.signal?.throwIfAborted();
         } catch (error) {
             throw DingTalkError.wrap(error, "DINGTALK_NETWORK_ERROR", ErrorCategory.NETWORK, {
                 path,
