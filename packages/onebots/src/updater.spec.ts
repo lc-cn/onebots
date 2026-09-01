@@ -131,6 +131,7 @@ describe("post-update service safety", () => {
             expect(request).toMatchObject({
                 executable: "/tools/npm",
                 args: ["view", "onebots", "version"],
+                cwd: "/runtime",
                 timeout: PACKAGE_VERSION_QUERY_TIMEOUT_MS,
                 maxBuffer: PACKAGE_VERSION_QUERY_MAX_BUFFER_BYTES,
             });
@@ -142,6 +143,7 @@ describe("post-update service safety", () => {
             queryLatestPackageVersion(
                 { manager: "npm", resolvedPath: "/tools/npm" },
                 "onebots",
+                "/runtime",
                 run,
             ),
         ).toBe("1.3.0");
@@ -152,13 +154,18 @@ describe("post-update service safety", () => {
         const manager = { manager: "pnpm" as const, resolvedPath: "/tools/pnpm" };
 
         for (const output of ["warning\n1.3.0\n", " 1.3.0\n", "latest\n", "^1.3.0\n"]) {
-            expect(() => queryLatestPackageVersion(manager, "onebots", () => output)).toThrow(
-                /registry 返回的 onebots 版本不是精确 SemVer/,
-            );
+            expect(() =>
+                queryLatestPackageVersion(manager, "onebots", "/runtime", () => output),
+            ).toThrow(/registry 返回的 onebots 版本不是精确 SemVer/);
         }
-        expect(queryLatestPackageVersion(manager, "onebots", () => "1.3.0-rc.1+build.7\r\n")).toBe(
-            "1.3.0-rc.1+build.7",
-        );
+        expect(
+            queryLatestPackageVersion(
+                manager,
+                "onebots",
+                "/runtime",
+                () => "1.3.0-rc.1+build.7\r\n",
+            ),
+        ).toBe("1.3.0-rc.1+build.7");
     });
 
     it("保留脱敏且限长的 registry 查询失败原因", () => {
@@ -174,6 +181,7 @@ describe("post-update service safety", () => {
             queryLatestPackageVersion(
                 { manager: "npm", resolvedPath: "/tools/npm" },
                 "onebots",
+                "/runtime",
                 run,
             );
         } catch (error) {

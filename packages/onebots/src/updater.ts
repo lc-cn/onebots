@@ -63,6 +63,7 @@ export const PACKAGE_VERSION_QUERY_TIMEOUT_MS = 30_000;
 export const PACKAGE_VERSION_QUERY_MAX_BUFFER_BYTES = 64 * 1024;
 
 export interface PackageVersionQueryRequest extends PackageInstallInvocation {
+    cwd: string;
     timeout: number;
     maxBuffer: number;
 }
@@ -156,7 +157,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     );
     const packages = packageNamesFor(adapters, protocols);
     const manager = await requireUpdatePackageManager(runtimeRoot);
-    const targetOnebotsVersion = queryLatestPackageVersion(manager, "onebots");
+    const targetOnebotsVersion = queryLatestPackageVersion(manager, "onebots", runtimeRoot);
     const targetCatalog = loadTargetExtensionVersionCatalog(
         manager,
         runtimeRoot,
@@ -606,6 +607,7 @@ export function loadTargetExtensionVersionCatalog(
 export function queryLatestPackageVersion(
     packageManager: VerifiedPackageManager,
     name: string,
+    runtimeRoot: string,
     run: PackageVersionQueryRunner = runPackageVersionQuery,
 ): string {
     const invocation = buildPackageManagerInvocation(
@@ -619,6 +621,7 @@ export function queryLatestPackageVersion(
     try {
         output = run({
             ...invocation,
+            cwd: runtimeRoot,
             timeout: PACKAGE_VERSION_QUERY_TIMEOUT_MS,
             maxBuffer: PACKAGE_VERSION_QUERY_MAX_BUFFER_BYTES,
         });
@@ -646,6 +649,7 @@ export function queryLatestPackageVersion(
 
 function runPackageVersionQuery(request: PackageVersionQueryRequest): string {
     return execFileSync(request.executable, request.args, {
+        cwd: request.cwd,
         encoding: "utf8",
         env: request.environment,
         stdio: ["ignore", "pipe", "pipe"],
