@@ -1,5 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { deepMerge, getValueOfObj, setValueToObj } from "./utils.js";
+import { deepClone, deepMerge, getValueOfObj, setValueToObj } from "./utils.js";
+
+describe("deepClone", () => {
+    it("创建包含循环引用和内建类型的独立副本", () => {
+        const source = { createdAt: new Date("2026-09-01T00:00:00Z") } as {
+            createdAt: Date;
+            self?: unknown;
+        };
+        source.self = source;
+
+        const clone = deepClone(source);
+
+        expect(clone).not.toBe(source);
+        expect(clone.createdAt).not.toBe(source.createdAt);
+        expect(clone.createdAt).toEqual(source.createdAt);
+        expect(clone.self).toBe(clone);
+    });
+
+    it("无法创建独立副本时抛错而不回退到原引用", () => {
+        const source = { handler: () => "unsafe" };
+
+        expect(() => deepClone(source)).toThrow();
+    });
+});
 
 describe("deepMerge", () => {
     it("递归合并自有字段并保持数组去重语义", () => {

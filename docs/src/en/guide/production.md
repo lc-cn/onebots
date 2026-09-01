@@ -92,6 +92,8 @@ Third-party extensions that handle externally supplied field paths can use `getV
 
 Use `deepMerge` from the same package when merging external configuration. It merges enumerable own properties only and recursively rejects the same prototype-chain names before changing the target; arrays retain their ordered deduplication behavior. A malformed account or protocol configuration therefore fails as a whole instead of leaving a partially merged result.
 
+Use `deepClone` when retaining a configuration snapshot. A successful call is guaranteed to return an independent structured clone. Values that cannot be cloned safely, including functions and WeakMaps, throw instead of falling back to the caller-owned object. Account edits also clone the active configuration before constructing a candidate, so candidate validation, runtime switching, and persistence cannot begin with an already mutated live configuration.
+
 ## Stability Features
 
 ### Circuit Breaker Pattern

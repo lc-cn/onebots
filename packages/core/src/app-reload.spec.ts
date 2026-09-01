@@ -107,6 +107,26 @@ describe("BaseApp reload boundary", () => {
         );
     });
 
+    it("初始化与重载都不会保留调用方配置的嵌套引用", async () => {
+        const initialProtocol = { use_http: true };
+        const initial = {
+            general: { "onebot.v11": initialProtocol },
+        } as BaseApp.Config;
+        const app = new BaseApp(initial);
+
+        initialProtocol.use_http = false;
+        expect((app.config.general["onebot.v11"] as { use_http: boolean }).use_http).toBe(true);
+
+        const reloadedProtocol = { use_http: false };
+        const reloaded = {
+            general: { "onebot.v11": reloadedProtocol },
+        } as BaseApp.Config;
+        await app.reload(reloaded);
+
+        reloadedProtocol.use_http = true;
+        expect((app.config.general["onebot.v11"] as { use_http: boolean }).use_http).toBe(false);
+    });
+
     it("将规范化的宿主 path 应用于真实 HTTP 路由而不暴露根路径", async () => {
         const originalConfigDir = BaseApp.configDir;
         const originalPort = process.env.PORT;

@@ -69,7 +69,10 @@ export class Account<
             if (ProtocolRegistry.has(protocol, version)) {
                 const config = this.config[key] || {};
                 const general = this.app.config.general[key] || {};
-                const merged = deepMerge(deepClone(general), config) as Record<string, unknown>;
+                const merged = deepMerge(deepClone(general), deepClone(config)) as Record<
+                    string,
+                    unknown
+                >;
                 result.push({
                     ...merged,
                     protocol,

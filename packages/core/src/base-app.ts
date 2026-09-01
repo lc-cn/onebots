@@ -124,7 +124,7 @@ export class BaseApp extends Koa {
 
         this.lifecycle = new LifecycleManager();
 
-        const mergedConfig = deepMerge(deepClone(BaseApp.defaultConfig), config);
+        const mergedConfig = deepMerge(deepClone(BaseApp.defaultConfig), deepClone(config));
         try {
             this.config = ConfigValidator.validateWithDefaults(
                 mergedConfig as Partial<Required<BaseApp.Config>>,
@@ -315,7 +315,10 @@ export class BaseApp extends Koa {
         const account = adapter.accounts.get(config.account_id);
         if (!account) return this.addAccount(config);
         const key = `${config.platform}.${config.account_id}`;
-        const newConfig = deepMerge(this.config[key], config) as Account.Config<P>;
+        const newConfig = deepMerge(
+            deepClone(this.config[key]),
+            deepClone(config),
+        ) as Account.Config<P>;
         this.validateAccountConfigCandidate(key, newConfig);
         await mutateAccountAtomically({
             host: this,
@@ -461,7 +464,7 @@ export class BaseApp extends Koa {
         if (this.isReloading) {
             throw new ConfigError("OneBots 配置正在重载，请等待当前操作完成");
         }
-        const merged = deepMerge(deepClone(BaseApp.defaultConfig), config);
+        const merged = deepMerge(deepClone(BaseApp.defaultConfig), deepClone(config));
         const next = ConfigValidator.validateWithDefaults(
             merged as Partial<Required<BaseApp.Config>>,
             BaseAppConfigSchema,

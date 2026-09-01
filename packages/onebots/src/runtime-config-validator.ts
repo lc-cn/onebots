@@ -123,7 +123,10 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
                 continue;
             }
             const inherited = asConfigObject(general?.[key]) ?? {};
-            const merged = deepMerge(deepClone(inherited), localConfig) as Record<string, unknown>;
+            const merged = deepMerge(deepClone(inherited), deepClone(localConfig)) as Record<
+                string,
+                unknown
+            >;
             captureSchemaIssues(merged, protocolSchema, `${rootKey}.${key}`, issues);
         }
         if (loadedProtocolCount === 0) {

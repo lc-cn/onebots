@@ -297,4 +297,40 @@ describe("account transaction", () => {
         expect(fixture.adapter.createAccount).not.toHaveBeenCalled();
         expect(adapters.has("mock")).toBe(false);
     });
+
+    it("BaseApp 编辑候选校验失败时不提前修改在线配置", async () => {
+        const previousConfig = {
+            platform: "mock",
+            account_id: "10001",
+            token: "old",
+            nested: { old: true },
+        };
+        const nextConfig = {
+            platform: "mock",
+            account_id: "10001",
+            token: "next",
+            nested: { next: true },
+        };
+        const fixture = createFixture(previousConfig);
+        fixture.adapter.accounts.set("10001", createAccount(previousConfig));
+        const app = {
+            isReloading: false,
+            config: fixture.host.config,
+            adapters: new Map([["mock", fixture.adapter]]),
+            validateAccountConfigCandidate: vi.fn(() => {
+                throw new Error("Schema 校验失败");
+            }),
+        };
+
+        await expect(BaseApp.prototype.updateAccount.call(app, nextConfig)).rejects.toThrow(
+            "Schema 校验失败",
+        );
+
+        const candidate = app.validateAccountConfigCandidate.mock.calls[0][1] as typeof nextConfig;
+        expect(app.config["mock.10001"]).toBe(previousConfig);
+        expect(app.config["mock.10001"]).toEqual(previousConfig);
+        expect(candidate).not.toBe(nextConfig);
+        expect(candidate.nested).not.toBe(nextConfig.nested);
+        expect(fixture.adapter.createAccount).not.toHaveBeenCalled();
+    });
 });

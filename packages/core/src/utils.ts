@@ -95,15 +95,9 @@ export function transformObj(
     );
 }
 
-// 深拷贝
+/** 使用结构化克隆创建独立副本；不支持的值会抛出 DataCloneError。 */
 export function deepClone<T>(obj: T): T {
-    try {
-        return structuredClone(obj);
-    } catch {
-        // structuredClone does not support all types (e.g. functions, DOM nodes).
-        // Return the original reference as a best-effort fallback.
-        return obj;
-    }
+    return structuredClone(obj);
 }
 
 export function pick<T extends object, K extends keyof T>(
