@@ -214,7 +214,7 @@ describe("Router WebSocket lifecycle", () => {
 
         first.close();
         await once(first, "close");
-        expect(wsServer.clients.size).toBe(0);
+        await vi.waitFor(() => expect(wsServer.clients.size).toBe(0));
         expect(router.getWsRouteStats("/limited-connections")).toMatchObject({
             activeConnections: 0,
             capacityRejections: 1,
