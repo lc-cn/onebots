@@ -77,6 +77,17 @@ if (-not (Test-Path $Manifest)) {
     '{"name":"onebots-managed-runtime","private":true,"version":"1.0.0"}' | Set-Content $Manifest -Encoding utf8
 }
 
+$OneBotsManifest = Join-Path $RuntimeDir "node_modules/onebots/package.json"
+$PreviousOneBotsVersion = ""
+$RollbackOneBots = $false
+if ($ConfigExists -and (Test-Path $OneBotsManifest)) {
+    $PreviousOneBotsVersion = (Get-Content $OneBotsManifest -Raw | ConvertFrom-Json).version
+    if (-not $PreviousOneBotsVersion -or $PreviousOneBotsVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z.+_-]*$') {
+        throw "现有 OneBots 版本无效，无法建立安全升级回滚点"
+    }
+    $RollbackOneBots = $true
+}
+
 Write-Step "正在安装 OneBots 与匹配的 Web 管理端…"
 Push-Location $RuntimeDir
 try {
@@ -91,19 +102,21 @@ try {
     if (-not (Test-Path $WebEntry) -and -not (Test-Path $NestedWebEntry)) {
         throw "与 OneBots 匹配的 Web 管理端产物缺失"
     }
-    $Catalog = Get-Content $CatalogFile -Raw | ConvertFrom-Json
-    $ProtocolVersion = $Catalog.packages.'@onebots/protocol-onebot-v11'.version
-    if (-not $ProtocolVersion -or $ProtocolVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z.+_-]*$') {
-        throw "OneBots 扩展目录中的 OneBot v11 版本无效"
-    }
-    Write-Step "正在安装 OneBots 验证的 OneBot v11 协议版本 $($ProtocolVersion)…"
-    Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "@onebots/protocol-onebot-v11@$ProtocolVersion")
+    if (-not $ConfigExists) {
+        $Catalog = Get-Content $CatalogFile -Raw | ConvertFrom-Json
+        $ProtocolVersion = $Catalog.packages.'@onebots/protocol-onebot-v11'.version
+        if (-not $ProtocolVersion -or $ProtocolVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z.+_-]*$') {
+            throw "OneBots 扩展目录中的 OneBot v11 版本无效"
+        }
+        Write-Step "正在安装 OneBots 验证的 OneBot v11 协议版本 $($ProtocolVersion)…"
+        Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "@onebots/protocol-onebot-v11@$ProtocolVersion")
 
-    $ProtocolManifest = Join-Path $RuntimeDir "node_modules/@onebots/protocol-onebot-v11/package.json"
-    if (-not (Test-Path $ProtocolManifest)) { throw "默认 OneBot v11 协议安装不完整" }
-    $InstalledProtocolVersion = (Get-Content $ProtocolManifest -Raw | ConvertFrom-Json).version
-    if ($InstalledProtocolVersion -ne $ProtocolVersion) {
-        throw "默认 OneBot v11 协议版本校验失败：期望 $($ProtocolVersion)，实际 $InstalledProtocolVersion"
+        $ProtocolManifest = Join-Path $RuntimeDir "node_modules/@onebots/protocol-onebot-v11/package.json"
+        if (-not (Test-Path $ProtocolManifest)) { throw "默认 OneBot v11 协议安装不完整" }
+        $InstalledProtocolVersion = (Get-Content $ProtocolManifest -Raw | ConvertFrom-Json).version
+        if ($InstalledProtocolVersion -ne $ProtocolVersion) {
+            throw "默认 OneBot v11 协议版本校验失败：期望 $($ProtocolVersion)，实际 $InstalledProtocolVersion"
+        }
     }
 
     $env:ONEBOTS_EXTENSION_ROOT = $RuntimeDir
@@ -116,12 +129,29 @@ try {
     Invoke-Checked -FilePath $OneBots -Arguments @(
         "update", "-c", $ConfigFile, "--yes", "--packages-only"
     )
+    $RollbackOneBots = $false
     Invoke-Checked -FilePath $OneBots -Arguments @("install", "-c", $ConfigFile)
     & $OneBots restart
     if ($LASTEXITCODE -ne 0) {
         Invoke-Checked -FilePath $OneBots -Arguments @("start")
     }
     Wait-OneBotsReady -OneBotsCommand $OneBots
+} catch {
+    $InstallError = $_
+    if ($RollbackOneBots -and $PreviousOneBotsVersion) {
+        Write-Step "安装未通过依赖事务，正在恢复 OneBots $PreviousOneBotsVersion…"
+        try {
+            Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "onebots@$PreviousOneBotsVersion")
+            $RestoredVersion = (Get-Content $OneBotsManifest -Raw | ConvertFrom-Json).version
+            if ($RestoredVersion -ne $PreviousOneBotsVersion) {
+                throw "期望 $PreviousOneBotsVersion，实际 $RestoredVersion"
+            }
+            Write-Step "已恢复升级前的 OneBots $PreviousOneBotsVersion。"
+        } catch {
+            throw "安装失败：$($InstallError.Exception.Message)；OneBots 恢复失败：$($_.Exception.Message)"
+        }
+    }
+    throw $InstallError
 } finally {
     Pop-Location
 }

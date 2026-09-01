@@ -5,6 +5,9 @@ ONEBOTS_HOME=${ONEBOTS_HOME:-"$HOME/.onebots"}
 RUNTIME_DIR="$ONEBOTS_HOME/runtime"
 CONFIG_FILE="$ONEBOTS_HOME/config.yaml"
 NODE_DIR="$ONEBOTS_HOME/node"
+work_dir=""
+previous_onebots_version=""
+rollback_onebots=false
 
 say() {
     printf '%s\n' "[OneBots] $*"
@@ -14,6 +17,37 @@ fail() {
     printf '%s\n' "[OneBots] 安装失败：$*" >&2
     exit 1
 }
+
+cleanup() {
+    status=$?
+    trap - EXIT HUP INT TERM
+    if [ "$rollback_onebots" = true ] && [ -n "$previous_onebots_version" ]; then
+        say "安装未通过依赖事务，正在恢复 OneBots ${previous_onebots_version}…"
+        if (
+            cd "$RUNTIME_DIR"
+            "$NPM_BIN" install --omit=dev "onebots@$previous_onebots_version"
+        ); then
+            restored_version=$(
+                ONEBOTS_PACKAGE_MANIFEST="$RUNTIME_DIR/node_modules/onebots/package.json" "$NODE_BIN" -p \
+                    'require(process.env.ONEBOTS_PACKAGE_MANIFEST).version ?? ""'
+            )
+            if [ "$restored_version" = "$previous_onebots_version" ]; then
+                say "已恢复升级前的 OneBots ${previous_onebots_version}。"
+            else
+                printf '%s\n' "[OneBots] 恢复失败：期望 ${previous_onebots_version}，实际 ${restored_version:-未安装}" >&2
+            fi
+        else
+            printf '%s\n' "[OneBots] 恢复失败：无法重新安装 onebots@$previous_onebots_version" >&2
+        fi
+    fi
+    [ -z "$work_dir" ] || rm -rf "$work_dir"
+    exit "$status"
+}
+
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 wait_for_service() {
     attempt=1
@@ -61,7 +95,6 @@ fi
 if [ "$node_usable" = false ]; then
     say "未找到 Node.js 24，正在安装独立运行环境…"
     work_dir=$(mktemp -d "${TMPDIR:-/tmp}/onebots-install.XXXXXX")
-    trap 'rm -rf "$work_dir"' EXIT INT TERM
     checksums="$work_dir/SHASUMS256.txt"
     curl -fsSL "https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt" -o "$checksums"
     archive=$(awk -v suffix="-$node_os-$node_arch.tar.gz" '$2 ~ suffix "$" { print $2; exit }' "$checksums")
@@ -102,6 +135,18 @@ if [ ! -f "$RUNTIME_DIR/package.json" ]; then
 EOF
 fi
 
+ONEBOTS_PACKAGE_MANIFEST="$RUNTIME_DIR/node_modules/onebots/package.json"
+if [ "$config_exists" = true ] && [ -f "$ONEBOTS_PACKAGE_MANIFEST" ]; then
+    previous_onebots_version=$(
+        ONEBOTS_PACKAGE_MANIFEST="$ONEBOTS_PACKAGE_MANIFEST" "$NODE_BIN" -p \
+            'require(process.env.ONEBOTS_PACKAGE_MANIFEST).version ?? ""'
+    )
+    case "$previous_onebots_version" in
+        ""|*[!0-9A-Za-z.+_-]*) fail "现有 OneBots 版本无效，无法建立安全升级回滚点" ;;
+        *) rollback_onebots=true ;;
+    esac
+fi
+
 say "正在安装 OneBots 与匹配的 Web 管理端…"
 (
     cd "$RUNTIME_DIR"
@@ -118,27 +163,29 @@ if [ ! -f "$WEB_ENTRY" ] && [ ! -f "$NESTED_WEB_ENTRY" ]; then
     fail "与 OneBots 匹配的 Web 管理端产物缺失"
 fi
 
-protocol_version=$(
-    ONEBOTS_CATALOG_FILE="$CATALOG_FILE" "$NODE_BIN" -p \
-        'require(process.env.ONEBOTS_CATALOG_FILE).packages["@onebots/protocol-onebot-v11"]?.version ?? ""'
-)
-case "$protocol_version" in
-    ""|*[!0-9A-Za-z.+_-]*) fail "OneBots 扩展目录中的 OneBot v11 版本无效" ;;
-esac
-say "正在安装 OneBots 验证的 OneBot v11 协议版本 ${protocol_version}…"
-(
-    cd "$RUNTIME_DIR"
-    "$NPM_BIN" install --omit=dev "@onebots/protocol-onebot-v11@$protocol_version"
-)
+if [ "$config_exists" = false ]; then
+    protocol_version=$(
+        ONEBOTS_CATALOG_FILE="$CATALOG_FILE" "$NODE_BIN" -p \
+            'require(process.env.ONEBOTS_CATALOG_FILE).packages["@onebots/protocol-onebot-v11"]?.version ?? ""'
+    )
+    case "$protocol_version" in
+        ""|*[!0-9A-Za-z.+_-]*) fail "OneBots 扩展目录中的 OneBot v11 版本无效" ;;
+    esac
+    say "正在安装 OneBots 验证的 OneBot v11 协议版本 ${protocol_version}…"
+    (
+        cd "$RUNTIME_DIR"
+        "$NPM_BIN" install --omit=dev "@onebots/protocol-onebot-v11@$protocol_version"
+    )
 
-PROTOCOL_MANIFEST="$RUNTIME_DIR/node_modules/@onebots/protocol-onebot-v11/package.json"
-[ -f "$PROTOCOL_MANIFEST" ] || fail "默认 OneBot v11 协议安装不完整"
-installed_protocol_version=$(
-    ONEBOTS_PROTOCOL_MANIFEST="$PROTOCOL_MANIFEST" "$NODE_BIN" -p \
-        'require(process.env.ONEBOTS_PROTOCOL_MANIFEST).version ?? ""'
-)
-[ "$installed_protocol_version" = "$protocol_version" ] ||
-    fail "默认 OneBot v11 协议版本校验失败：期望 ${protocol_version}，实际 ${installed_protocol_version:-未安装}"
+    PROTOCOL_MANIFEST="$RUNTIME_DIR/node_modules/@onebots/protocol-onebot-v11/package.json"
+    [ -f "$PROTOCOL_MANIFEST" ] || fail "默认 OneBot v11 协议安装不完整"
+    installed_protocol_version=$(
+        ONEBOTS_PROTOCOL_MANIFEST="$PROTOCOL_MANIFEST" "$NODE_BIN" -p \
+            'require(process.env.ONEBOTS_PROTOCOL_MANIFEST).version ?? ""'
+    )
+    [ "$installed_protocol_version" = "$protocol_version" ] ||
+        fail "默认 OneBot v11 协议版本校验失败：期望 ${protocol_version}，实际 ${installed_protocol_version:-未安装}"
+fi
 
 say "正在创建安全配置并安装用户级常驻服务…"
 (
@@ -150,6 +197,10 @@ say "正在创建安全配置并安装用户级常驻服务…"
     fi
     say "正在同步配置中已选扩展的验证版本…"
     ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" update -c "$CONFIG_FILE" --yes --packages-only
+)
+rollback_onebots=false
+(
+    cd "$RUNTIME_DIR"
     ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" install -c "$CONFIG_FILE"
     if ! ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" restart; then
         ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" start

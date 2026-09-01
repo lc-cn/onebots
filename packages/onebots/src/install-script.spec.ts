@@ -34,6 +34,8 @@ if [ "$1" = "-p" ]; then
         printf '3.0.8\\n'
     elif [ -n "\${ONEBOTS_PROTOCOL_MANIFEST:-}" ]; then
         awk -F'"' '{ print $4; exit }' "$ONEBOTS_PROTOCOL_MANIFEST"
+    elif [ -n "\${ONEBOTS_PACKAGE_MANIFEST:-}" ]; then
+        sed -n 's/.*"version":"\\([^"]*\\)".*/\\1/p' "$ONEBOTS_PACKAGE_MANIFEST"
     else
         printf '24\\n'
     fi
@@ -66,7 +68,10 @@ general: {}
 EOF
         ;;
     install) ;;
-    update) ;;
+    update)
+        if [ "\${FAKE_UPDATE_FAIL:-0}" = "1" ]; then exit 43; fi
+        :
+        ;;
     restart)
         [ -f "$FAKE_SERVICE_MARKER" ] || exit 1
         ;;
@@ -92,12 +97,23 @@ case "$*" in
         mkdir -p node_modules/.bin node_modules/onebots/lib node_modules/@onebots/web/dist
         cp "$FAKE_ONEBOTS_SOURCE" node_modules/.bin/onebots
         chmod 755 node_modules/.bin/onebots
+        printf '{"name":"onebots","version":"2.0.0"}\\n' > node_modules/onebots/package.json
         cat > node_modules/onebots/lib/extension-capability-catalog.json <<'EOF'
 {"schemaVersion":2,"packages":{"@onebots/protocol-onebot-v11":{"version":"3.0.8"}}}
 EOF
         if [ "\${FAKE_WEB_MISSING:-0}" != "1" ]; then
             : > node_modules/@onebots/web/dist/index.html
         fi
+        ;;
+    *"onebots@"*)
+        package_spec=""
+        for argument in "$@"; do package_spec=$argument; done
+        requested_version=\${package_spec##*@}
+        if [ "\${FAKE_RESTORE_FAIL:-0}" = "1" ]; then exit 44; fi
+        mkdir -p node_modules/.bin node_modules/onebots
+        cp "$FAKE_ONEBOTS_SOURCE" node_modules/.bin/onebots
+        chmod 755 node_modules/.bin/onebots
+        printf '{"name":"onebots","version":"%s"}\\n' "$requested_version" > node_modules/onebots/package.json
         ;;
     *"@onebots/protocol-onebot-v11@"*)
         package_spec=""
@@ -181,6 +197,7 @@ slack.production:
         expect(secondCommands).toContain(
             "onebots update -c " + configPath + " --yes --packages-only",
         );
+        expect(secondCommands).not.toContain("@onebots/protocol-onebot-v11@");
         expect(secondCommands).toContain("onebots install -c");
         expect(secondCommands).toContain("onebots restart");
         expect(secondCommands).not.toContain("onebots start");
@@ -207,8 +224,80 @@ slack.production:
         expect(source).toContain("$Catalog.packages.'@onebots/protocol-onebot-v11'.version");
         expect(source).toContain('"@onebots/protocol-onebot-v11@$ProtocolVersion"');
         expect(source).toContain('"update", "-c", $ConfigFile, "--yes", "--packages-only"');
+        expect(source).toContain('"onebots@$PreviousOneBotsVersion"');
+        expect(source).toContain("已恢复升级前的 OneBots $PreviousOneBotsVersion");
+        expect(source).toContain("if (-not $ConfigExists)");
         expect(source).not.toContain('"@onebots/web@latest"');
         expect(source).not.toContain('"@onebots/protocol-onebot-v11@latest"');
+    });
+
+    it("重复安装的依赖事务失败时恢复升级前主程序", () => {
+        const runtime = createFakeRuntime();
+        const onebotsManifest = path.join(
+            runtime.home,
+            ".onebots/runtime/node_modules/onebots/package.json",
+        );
+
+        runInstaller(runtime);
+        fs.writeFileSync(
+            onebotsManifest,
+            JSON.stringify({ name: "onebots", version: "1.2.3" }),
+            "utf8",
+        );
+        fs.writeFileSync(runtime.log, "", "utf8");
+
+        let output = "";
+        expect(() => {
+            try {
+                runInstaller(runtime, { FAKE_UPDATE_FAIL: "1" });
+            } catch (error) {
+                output = String((error as { stdout?: string }).stdout ?? "");
+                throw error;
+            }
+        }).toThrow();
+
+        expect(JSON.parse(fs.readFileSync(onebotsManifest, "utf8"))).toMatchObject({
+            name: "onebots",
+            version: "1.2.3",
+        });
+        expect(output).toContain("已恢复升级前的 OneBots 1.2.3");
+        const commands = fs.readFileSync(runtime.log, "utf8");
+        expect(commands).toContain("npm install --omit=dev onebots@latest");
+        expect(commands).toContain("onebots update -c");
+        expect(commands).toContain("npm install --omit=dev onebots@1.2.3");
+        expect(commands).not.toContain("onebots install -c");
+        expect(commands).not.toContain("onebots restart");
+    });
+
+    it("主程序恢复也失败时明确保留未恢复诊断", () => {
+        const runtime = createFakeRuntime();
+        const onebotsManifest = path.join(
+            runtime.home,
+            ".onebots/runtime/node_modules/onebots/package.json",
+        );
+
+        runInstaller(runtime);
+        fs.writeFileSync(
+            onebotsManifest,
+            JSON.stringify({ name: "onebots", version: "1.2.3" }),
+            "utf8",
+        );
+        fs.writeFileSync(runtime.log, "", "utf8");
+
+        let stderr = "";
+        expect(() => {
+            try {
+                runInstaller(runtime, { FAKE_UPDATE_FAIL: "1", FAKE_RESTORE_FAIL: "1" });
+            } catch (error) {
+                stderr = String((error as { stderr?: string }).stderr ?? "");
+                throw error;
+            }
+        }).toThrow();
+
+        expect(stderr).toContain("恢复失败：无法重新安装 onebots@1.2.3");
+        const commands = fs.readFileSync(runtime.log, "utf8");
+        expect(commands).toContain("npm install --omit=dev onebots@1.2.3");
+        expect(commands).not.toContain("onebots install -c");
     });
 
     it("Web 管理端产物缺失时不创建配置或安装服务", () => {

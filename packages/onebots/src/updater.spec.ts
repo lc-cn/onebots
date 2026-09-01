@@ -7,6 +7,7 @@ import type { ServiceSpec } from "./service-manager.js";
 import {
     loadTargetExtensionVersionCatalog,
     packageNamesFor,
+    preflightCurrentPackagesOnlyRuntime,
     preflightPackagesOnlyUpdate,
     refreshServiceAfterUpdate,
     resolveInstalledPackageVersion,
@@ -311,6 +312,26 @@ EOF
         ).resolves.toBeUndefined();
         expect(preflight).toHaveBeenCalledWith(spec);
         expect(rollback).not.toHaveBeenCalled();
+    });
+
+    it("packages-only 无需改包时仍预检当前整组运行环境", async () => {
+        const spec = temporaryServiceSpec();
+        const preflight = vi.fn(async () => undefined);
+
+        await expect(preflightCurrentPackagesOnlyRuntime(spec, preflight)).resolves.toBeUndefined();
+        expect(preflight).toHaveBeenCalledWith(spec);
+    });
+
+    it("packages-only 当前依赖预检失败时明确声明没有修改", async () => {
+        const spec = temporaryServiceSpec();
+
+        await expect(
+            preflightCurrentPackagesOnlyRuntime(spec, async () => {
+                throw new Error("existing protocol cannot load with new core");
+            }),
+        ).rejects.toThrow(
+            /当前依赖隔离预检失败；未修改依赖、服务定义或运行实例.*existing protocol cannot load with new core/,
+        );
     });
 
     it("packages-only 预检失败时恢复依赖且不触碰服务", async () => {

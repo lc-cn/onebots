@@ -135,6 +135,17 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     }
     const changed = updates.filter(item => item.current !== item.target);
     if (!changed.length) {
+        if (options.packagesOnly) {
+            await preflightCurrentPackagesOnlyRuntime({
+                scope: options.scope,
+                configPath: path.resolve(options.configPath!),
+                adapters,
+                protocols,
+                nodePath: process.execPath,
+                binPath: path.resolve(process.argv[1]),
+                workingDirectory: runtimeRoot,
+            });
+        }
         writeCliOutput("已是最新稳定版本");
         return { status: "current", changes: [] };
     }
@@ -239,6 +250,21 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             : "OneBots 及插件更新完成",
     );
     return { status: "updated", changes: changed };
+}
+
+/** 未发生包变更时仍验证整组依赖，避免安装器过早提交主包升级。 */
+export async function preflightCurrentPackagesOnlyRuntime(
+    spec: ServiceSpec,
+    preflight: (target: ServiceSpec) => void | Promise<void> = runUpdatedServicePreflight,
+): Promise<void> {
+    try {
+        await preflight(spec);
+    } catch (error) {
+        throw new Error(
+            `当前依赖隔离预检失败；未修改依赖、服务定义或运行实例：${errorMessage(error)}`,
+            { cause: error instanceof Error ? error : undefined },
+        );
+    }
 }
 
 /** packages-only 更新只有通过真实配置预检后才会保留新依赖。 */
