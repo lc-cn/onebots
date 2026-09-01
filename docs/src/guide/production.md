@@ -213,7 +213,7 @@ systemd unit、launchd plist 等平台服务定义无法读取或比对时不会
 
 Windows 用户级服务会同时验证任务计划 XML 与实际执行的 `onebots-runner.cmd`，包括 Node、CLI 入口、配置、插件选择、工作目录和日志重定向。任一文件缺失或被修改都会让 `service-definition` 失败；重新安装或用户级 `doctor --fix` 会原子重建两份文件，再以同一渲染契约复验，不再把“XML 路径存在”当成启动命令可信。
 
-Windows 系统级服务则直接读取 `node-windows` 实际安装在 CLI 入口旁 `daemon/` 目录中的 WinSW XML，并确认配套 `.exe` 存在。doctor 会逐项验证 Node、wrapper、CLI 入口、完整参数、工作目录、日志目录和重启策略，诊断也会指向真实 XML；因此系统服务不再因状态目录中的占位路径永久误报，任一实际启动契约漂移仍会失败并要求管理员重新执行 `onebots install --system`。
+Windows 系统级服务通过状态目录中的 `onebots-system-runner.mjs` 以数组无损传递完整参数，避开 `node-windows` 按空格拆分 `scriptOptions` 导致配置或入口路径失真的问题。WinSW XML 与 `.exe` 仍安装在 CLI 入口旁的 `daemon/` 目录；doctor 会同时验证 runner、Node、wrapper、工作目录、日志目录和重启策略。启动、停止与状态查询使用 WinSW 实际注册的 `onebotsgateway.exe` 服务 ID。任一文件或启动契约漂移都会失败并要求管理员重新执行 `onebots install --system`；卸载时会一并清理 runner。
 
 `service-permissions` 会验证保存服务元数据与日志的状态路径确实是当前进程可遍历、读取和写入的目录。普通文件占位、目录缺失或访问权限不足都会以只包含目标路径的错误令部署门禁失败，不会把原始文件系统异常带入报告。
 

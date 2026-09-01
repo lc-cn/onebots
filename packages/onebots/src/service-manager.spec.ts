@@ -110,6 +110,40 @@ describe("Windows system service persistence", () => {
         );
         expect(controller.definitionIsCurrent(spec)).toBe(false);
     });
+
+    it("使用 node-windows 注册的真实服务 ID 控制生命周期", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-windows-system-control-"));
+        temporaryDirectories.push(root);
+        const exec = vi.fn((_file: string, args: string[]) =>
+            args[0] === "query" ? "STATE : 4 RUNNING" : "",
+        );
+        const host = { ...windowsHost(root), isElevated: true, exec };
+        const controller = new ServiceController("system", host);
+        const spec: ServiceSpec = {
+            scope: "system",
+            configPath: path.join(root, "config.yaml"),
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            nodePath: path.join(root, "node.exe"),
+            binPath: path.join(root, "onebots", "lib", "bin.js"),
+            workingDirectory: root,
+        };
+        fs.mkdirSync(controller.paths().stateDir, { recursive: true });
+        fs.writeFileSync(controller.paths().metadata, JSON.stringify(spec), "utf8");
+
+        await controller.start();
+        await controller.stop();
+        expect(controller.status(spec).running).toBe(true);
+
+        expect(exec).toHaveBeenCalledWith("sc.exe", ["start", "onebotsgateway.exe"], {
+            inherit: true,
+        });
+        expect(exec).toHaveBeenCalledWith("sc.exe", ["stop", "onebotsgateway.exe"], {
+            inherit: true,
+            ignoreError: false,
+        });
+        expect(exec).toHaveBeenCalledWith("sc.exe", ["query", "onebotsgateway.exe"]);
+    });
 });
 
 function linuxHost(root: string): ServiceHost {

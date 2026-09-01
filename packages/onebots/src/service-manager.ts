@@ -8,7 +8,6 @@ import {
     renderLaunchdPlist,
     renderSystemdUnit,
     renderWindowsCommand,
-    renderWindowsScriptOptions,
     renderWindowsTaskXml,
     type ServiceCommandOptions,
     type ServiceScope,
@@ -17,7 +16,11 @@ import {
 } from "./service-definition.js";
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import {
+    WINDOWS_SYSTEM_SERVICE_ID,
+    buildWindowsSystemServiceOptions,
     getWindowsSystemServiceFiles,
+    renderWindowsSystemRunner,
+    type WindowsSystemServiceOptions,
     validateWindowsSystemServiceDefinition,
 } from "./windows-system-service-definition.js";
 
@@ -114,6 +117,8 @@ function renderWindowsRunner(spec: ServiceSpec, stateDirectory: string): string 
 }
 
 interface NodeWindowsService {
+    directory(root?: string): string;
+    readonly exists: boolean;
     once(event: string, listener: (...args: unknown[]) => void): void;
     install(): void;
     uninstall(): void;
@@ -161,7 +166,7 @@ export class ServiceController {
     /** 返回承载真实启动契约的平台定义；Windows 系统服务由 node-windows 写在入口旁。 */
     definitionPath(spec: ServiceSpec): string {
         if (this.host.platform === "win32" && this.scope === "system") {
-            return getWindowsSystemServiceFiles(spec).definition;
+            return getWindowsSystemServiceFiles(spec, this.paths().stateDir).definition;
         }
         return this.paths().definition;
     }
@@ -188,9 +193,11 @@ export class ServiceController {
             );
         }
         if (this.host.platform === "win32") {
-            const files = getWindowsSystemServiceFiles(spec);
+            const files = getWindowsSystemServiceFiles(spec, paths.stateDir);
             return (
                 fs.existsSync(files.executable) &&
+                fs.existsSync(files.runner) &&
+                fs.readFileSync(files.runner, "utf8") === renderWindowsSystemRunner(spec) &&
                 validateWindowsSystemServiceDefinition(
                     fs.readFileSync(definition, "utf8"),
                     spec,
@@ -246,8 +253,17 @@ export class ServiceController {
                 { inherit: true },
             );
         } else if (this.host.platform === "win32") {
+            const previousSpec = this.readSpec();
+            if (previousSpec) {
+                await waitForNodeWindows(
+                    createNodeWindowsService(previousSpec, paths.stateDir),
+                    "uninstall",
+                );
+            }
+            const files = getWindowsSystemServiceFiles(normalized, paths.stateDir);
+            writeServiceFile(files.runner, renderWindowsSystemRunner(normalized));
             const service = createNodeWindowsService(normalized, paths.stateDir);
-            if (this.readSpec()) await waitForNodeWindows(service, "uninstall");
+            if (service.exists) await waitForNodeWindows(service, "uninstall");
             await waitForNodeWindows(service, "install");
         } else {
             throw new Error(`不支持的操作系统: ${this.host.platform}`);
@@ -275,7 +291,7 @@ export class ServiceController {
         } else if (this.scope === "user") {
             this.host.exec("schtasks.exe", ["/Run", "/TN", WINDOWS_TASK_NAME], { inherit: true });
         } else {
-            this.host.exec("sc.exe", ["start", SERVICE_NAME], { inherit: true });
+            this.host.exec("sc.exe", ["start", WINDOWS_SYSTEM_SERVICE_ID], { inherit: true });
         }
     }
 
@@ -303,7 +319,7 @@ export class ServiceController {
                 ignoreError: ignoreMissing,
             });
         } else {
-            this.host.exec("sc.exe", ["stop", SERVICE_NAME], {
+            this.host.exec("sc.exe", ["stop", WINDOWS_SYSTEM_SERVICE_ID], {
                 inherit: true,
                 ignoreError: ignoreMissing,
             });
@@ -352,7 +368,7 @@ export class ServiceController {
                     detail,
                 };
             }
-            detail = this.host.exec("sc.exe", ["query", SERVICE_NAME]).trim();
+            detail = this.host.exec("sc.exe", ["query", WINDOWS_SYSTEM_SERVICE_ID]).trim();
             return { installed: true, running: /RUNNING/.test(detail), scope: this.scope, detail };
         } catch (error) {
             return {
@@ -432,10 +448,10 @@ export class ServiceController {
                 ignoreError: true,
             });
         } else {
-            await waitForNodeWindows(
-                createNodeWindowsService(this.readSpec()!, paths.stateDir),
-                "uninstall",
-            );
+            const spec = this.readSpec()!;
+            await waitForNodeWindows(createNodeWindowsService(spec, paths.stateDir), "uninstall");
+            const runner = getWindowsSystemServiceFiles(spec, paths.stateDir).runner;
+            if (fs.existsSync(runner)) fs.unlinkSync(runner);
         }
         if (fs.existsSync(paths.metadata)) fs.unlinkSync(paths.metadata);
     }
@@ -475,21 +491,12 @@ function createNodeWindowsService(spec: ServiceSpec, logPath: string): NodeWindo
     try {
         const Service = (
             require("node-windows") as {
-                Service: new (options: Record<string, unknown>) => NodeWindowsService;
+                Service: new (options: WindowsSystemServiceOptions) => NodeWindowsService;
             }
         ).Service;
-        return new Service({
-            name: SERVICE_NAME,
-            description: "OneBots Bridge Service",
-            script: spec.binPath,
-            scriptOptions: renderWindowsScriptOptions(spec),
-            execPath: spec.nodePath,
-            workingDirectory: spec.workingDirectory,
-            logpath: logPath,
-            wait: 5,
-            grow: 0,
-            maxRestarts: -1,
-        });
+        const service = new Service(buildWindowsSystemServiceOptions(spec, logPath));
+        service.directory(path.dirname(path.resolve(spec.binPath)));
+        return service;
     } catch {
         throw new Error("Windows 系统服务需要可选依赖 node-windows，请重新安装 OneBots 后再试。");
     }
