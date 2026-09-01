@@ -37,6 +37,8 @@ export interface LoadedPluginInfo {
     packageName: string;
     version: string | null;
     entryPath: string;
+    /** 当前进程实际成功求值的 ESM 标识；重试加载时可能包含缓存隔离参数。 */
+    moduleUrl?: string;
 }
 
 type ReadyPluginInspection = Extract<PluginInspection, { status: "ready" }>;
@@ -246,6 +248,7 @@ export async function tryLoadRegisteredPlugin(
                 packageName: result.inspection.packageName,
                 version: result.inspection.version,
                 entryPath: realPath(result.inspection.entryPath),
+                moduleUrl: pluginImportUrl(result.inspection.entryPath),
             });
             return result;
         }

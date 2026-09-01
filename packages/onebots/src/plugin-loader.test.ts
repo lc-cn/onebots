@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 import { AdapterRegistry, ProtocolRegistry } from "@onebots/core";
 import {
     clearLoadedPlugins,
@@ -654,6 +655,12 @@ throw new Error("初始化失败");
             expect(registrations).toBe(2);
             expect(AdapterRegistry.has("retryable")).toBe(true);
             expect(AdapterRegistry.getSchema("retryable")).toBeDefined();
+            expect(getLoadedPlugins()).toMatchObject([
+                {
+                    name: "retryable",
+                    moduleUrl: expect.stringContaining("onebots_retry=1"),
+                },
+            ]);
         } finally {
             delete globals.__onebotsRegisterRetryableAdapter;
         }
@@ -1039,6 +1046,9 @@ throw new Error("初始化失败");
                     entryPath: fs.realpathSync(
                         path.join(directory, "node_modules", "inventory-adapter", "index.js"),
                     ),
+                    moduleUrl: pathToFileURL(
+                        path.join(directory, "node_modules", "inventory-adapter", "index.js"),
+                    ).href,
                 },
             ]);
         } finally {

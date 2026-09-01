@@ -2,12 +2,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import yaml from "js-yaml";
-import {
-    BaseAppConfigSchema,
-    writeConfigFileAtomic,
-    type Account,
-    type Protocol,
-} from "@onebots/core";
+import { BaseAppConfigSchema, writeConfigFileAtomic, type Account } from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "../service-manager.js";
 import { preflightServiceRuntime, type ServicePreflightSpec } from "../service-preflight.js";
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
@@ -38,6 +33,7 @@ import { inspectDoctorServiceMetadata } from "../doctor-service-metadata.js";
 import { assertInstalledServiceDefinitionCurrent } from "../service-definition-preflight.js";
 import { inspectServiceStatus } from "../service-status.js";
 import { createServiceRuntimeContractId } from "../service-runtime-contract.js";
+import { loadMcpStdioTransport, type McpStdioTransportStarter } from "../mcp-stdio-runtime.js";
 export type { ServiceStatusKind, ServiceStatusReport } from "../service-status.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
@@ -601,86 +597,93 @@ export async function runMcpStdio(
 
     await app.start();
 
-    // 查找目标 account
-    let targetAccount: Account | undefined;
-
-    if (options.account) {
-        const [platform, accountId] = options.account.split("/");
-        if (!platform || !accountId)
-            throw new CliError("--account 格式: platform/account_id（如 qq/my-bot）", 2);
-        for (const adapter of app.adapters.values()) {
-            if (String(adapter.platform) === platform) {
-                targetAccount = adapter.getAccount(accountId);
-                if (targetAccount) break;
-            }
-        }
-        if (!targetAccount) throw new CliError(`找不到账号 ${options.account}`, 2);
-    } else {
-        // 没指定 account 时取第一个
-        for (const adapter of app.adapters.values()) {
-            for (const account of adapter.accounts.values()) {
-                targetAccount = account;
-                break;
-            }
-            if (targetAccount) break;
-        }
-        if (!targetAccount)
-            throw new CliError("没有可用的账号，请在配置中添加至少一个适配器账号", 2);
-    }
-
-    // 查找该 account 上的 MCP 协议实例
-    const mcpProtocol = targetAccount.protocols?.find(
-        protocol => protocol.name === "mcp" && protocol.version === "v1",
-    );
-    if (!mcpProtocol) {
-        throw new CliError(
-            `账号 ${targetAccount.platform}/${targetAccount.account_id} 未配置 mcp.v1 协议。\n` +
-                `请在 config.yaml 对应账号下添加:\n  mcp.v1: {}`,
-            2,
-        );
-    }
-
-    // 动态导入 stdio 传输（协议包作为插件加载，不是编译时依赖）
-    const mcpModName = "@onebots/protocol-mcp-v1";
-    let startStdioTransport: (options: {
-        protocol: Protocol;
-        onClose?: () => void | Promise<void>;
-    }) => void;
-    try {
-        const module: unknown = await import(/* webpackIgnore: true */ mcpModName);
-        if (!isMcpStdioModule(module)) {
-            throw new Error("插件未导出 startStdioTransport");
-        }
-        startStdioTransport = module.startStdioTransport;
-    } catch {
-        throw new CliError(
-            "无法加载 @onebots/protocol-mcp-v1，请确保已安装:\n  pnpm add @onebots/protocol-mcp-v1",
-            2,
-        );
-    }
-    startStdioTransport({
-        protocol: mcpProtocol,
-        onClose: async () => {
-            await app.stop();
-        },
-    });
-
-    // stdio 模式下不退出，等待输入
-    return new Promise(() => {});
+    await runStartedMcpStdio(app, options.account);
+    return {};
 }
 
-function isMcpStdioModule(value: unknown): value is {
-    startStdioTransport(options: {
-        protocol: Protocol;
-        onClose?: () => void | Promise<void>;
-    }): void;
-} {
-    return (
-        typeof value === "object" &&
-        value !== null &&
-        "startStdioTransport" in value &&
-        typeof value.startStdioTransport === "function"
-    );
+interface StartedMcpApp {
+    adapters: {
+        values(): IterableIterator<{
+            platform: unknown;
+            getAccount(accountId: string): Account | undefined;
+            accounts: { values(): IterableIterator<Account> };
+        }>;
+    };
+    enhancedLogger: {
+        error(message: string, context?: Record<string, unknown>): void;
+    };
+    stop(): Promise<void>;
+}
+
+/** 已启动 App 的 MCP stdio 交接边界；交接前任一步失败都会释放账号、协议和监听器。 */
+export async function runStartedMcpStdio(
+    app: StartedMcpApp,
+    accountOption?: string,
+    loadTransport: () => Promise<McpStdioTransportStarter> = loadMcpStdioTransport,
+    waitForClose: () => Promise<void> = () => new Promise(() => undefined),
+): Promise<void> {
+    let stopPromise: Promise<void> | undefined;
+    const stopApp = () => (stopPromise ??= app.stop());
+    try {
+        const targetAccount = selectMcpAccount(app, accountOption);
+        const mcpProtocol = targetAccount.protocols?.find(
+            protocol => protocol.name === "mcp" && protocol.version === "v1",
+        );
+        if (!mcpProtocol) {
+            throw new CliError(
+                `账号 ${targetAccount.platform}/${targetAccount.account_id} 未配置 mcp.v1 协议。\n` +
+                    `请在 config.yaml 对应账号下添加:\n  mcp.v1: {}`,
+                2,
+            );
+        }
+
+        const startStdioTransport = await loadTransport();
+        startStdioTransport({
+            protocol: mcpProtocol,
+            onClose: stopApp,
+        });
+        await waitForClose();
+    } catch (error) {
+        app.enhancedLogger.error("MCP stdio 交接失败，正在停止已启动的应用", {
+            error: error instanceof Error ? error.message : String(error),
+        });
+        const cleanupError = await stopApp().then(
+            () => null,
+            failure => failure,
+        );
+        if (cleanupError) {
+            app.enhancedLogger.error("MCP stdio 交接失败后的应用清理未完成", {
+                error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+            });
+            throw new AggregateError(
+                [error, cleanupError],
+                `MCP stdio 启动失败且应用清理失败：${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
+        throw error;
+    }
+}
+
+function selectMcpAccount(app: StartedMcpApp, accountOption?: string): Account {
+    if (accountOption) {
+        const [platform, accountId] = accountOption.split("/");
+        if (!platform || !accountId) {
+            throw new CliError("--account 格式: platform/account_id（如 qq/my-bot）", 2);
+        }
+        for (const adapter of app.adapters.values()) {
+            if (String(adapter.platform) !== platform) continue;
+            const account = adapter.getAccount(accountId);
+            if (account) return account;
+        }
+        throw new CliError(`找不到账号 ${accountOption}`, 2);
+    }
+
+    for (const adapter of app.adapters.values()) {
+        for (const account of adapter.accounts.values()) {
+            return account;
+        }
+    }
+    throw new CliError("没有可用的账号，请在配置中添加至少一个适配器账号", 2);
 }
 
 async function preflightInstalledService(

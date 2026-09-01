@@ -107,6 +107,8 @@ MCP 提供两种传输方式，适用于不同场景：
 onebots mcp --config config.yaml --account qq/my-bot
 ```
 
+stdio 命令会复用本次启动时已经通过注册契约验证的 MCP 插件入口，不会再相对于 `onebots` 包自身查找另一份依赖。因此 npm、pnpm 严格依赖布局和 workspace 成员目录都使用网关实际加载的同一版本。若账号选择、协议配置或 stdio 导出校验失败，命令会先停止已经启动的账号、协议和监听器再返回错误；stdin 重复发出关闭信号也只会触发一次停止。
+
 ::: tip 何时用 stdio
 本地开发、Cursor/Claude Code/Cline 等桌面 AI Agent 直连时使用。Agent 会自动启动该命令并通过管道通信。
 :::
