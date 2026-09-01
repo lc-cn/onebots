@@ -46,6 +46,8 @@ teams.my_teams_bot:
 
 ## Related Links
 
+If account startup times out or the account is stopped, OneBots cancels the active startup
+attempt. A lifecycle listener that finishes later cannot mark the rolled-back account online again.
+
 - [Microsoft Teams Platform](/en/platform/teams)
 - [Quick Start](/en/guide/start)
-

@@ -228,9 +228,9 @@ export class TeamsAdapter extends Adapter<TeamsBot, "teams"> {
         bot.on("stopped", () => {
             account.status = AccountStatus.OffLine;
         });
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                await bot.start();
+                await bot.start(signal);
                 account.status = AccountStatus.Online;
                 const me = bot.getCachedMe();
                 account.nickname = me.name;

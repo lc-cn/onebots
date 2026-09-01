@@ -130,6 +130,37 @@ describe("TeamsBot 会话引用契约", () => {
         expect(recovered).toHaveBeenCalledOnce();
     });
 
+    it("账号取消后拒绝迟到完成的启动任务", async () => {
+        const bot = createBot();
+        const controller = new AbortController();
+        let releaseReady!: () => void;
+        bot.on("ready", () => new Promise<void>(resolve => (releaseReady = resolve)));
+
+        const starting = bot.start(controller.signal);
+        await Promise.resolve();
+        controller.abort(new Error("account startup timed out"));
+        releaseReady();
+
+        await expect(starting).rejects.toMatchObject({ code: "TEAMS_START_CANCELLED" });
+    });
+
+    it("停止中的旧启动任务不能覆盖后续启动状态", async () => {
+        const bot = createBot();
+        let releaseReady!: () => void;
+        const delayedReady = () => new Promise<void>(resolve => (releaseReady = resolve));
+        bot.on("ready", delayedReady);
+
+        const staleStart = bot.start();
+        await Promise.resolve();
+        await bot.stop();
+        bot.off("ready", delayedReady);
+        await expect(bot.start()).resolves.toBeUndefined();
+        releaseReady();
+
+        await expect(staleStart).rejects.toMatchObject({ code: "TEAMS_START_CANCELLED" });
+        await expect(bot.start()).resolves.toBeUndefined();
+    });
+
     it("公开 ingest 汇入同一管线并去重 canonical Activity", async () => {
         const bot = createBot();
         const message = vi.fn();

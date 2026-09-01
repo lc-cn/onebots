@@ -85,9 +85,9 @@ https://your-ngrok-url.ngrok.io/teams/my_teams_bot/webhook
 1. **HTTPS 要求**：生产环境的 Webhook URL 必须是 HTTPS
 2. **消息限制**：Teams 对消息发送频率有限制，请遵守限制
 3. **自适应卡片**：Teams 支持丰富的自适应卡片格式，可以创建更丰富的交互体验
+4. **启动取消**：账号启动超时或被停止时，OneBots 会取消当前启动任务；迟到完成的生命周期监听器不会把已回滚的账号重新标记为在线
 
 ## 相关链接
 
 - [Microsoft Bot Framework 文档](https://dev.botframework.com/)
 - [Teams Bot 开发文档](https://docs.microsoft.com/en-us/microsoftteams/platform/bots/what-are-bots)
-

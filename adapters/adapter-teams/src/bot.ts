@@ -40,6 +40,7 @@ import { TeamsApiError, TeamsConversationReferenceError } from "./errors.js";
 import { TeamsGraphClient, type TeamsGraphRequestOptions } from "./graph.js";
 import { TeamsFileConsentManager, type TeamsFileConsentResult } from "./file-consent.js";
 import { TeamsInvokeResponder, type TeamsInvokeHandler } from "./invoke-response.js";
+import { TeamsBotLifecycle } from "./lifecycle.js";
 import type {
     TeamsConfig,
     TeamsConversationReference,
@@ -86,8 +87,11 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
     private readonly fileConsents: TeamsFileConsentManager;
     private readonly activityIngress = new TeamsActivityIngress();
     private readonly invokeResponder = new TeamsInvokeResponder();
+    private readonly lifecycle = new TeamsBotLifecycle(
+        () => emitAllAwaited(this, "ready"),
+        () => emitAllAwaited(this, "stopped"),
+    );
     private me: TeamsUser;
-    private running = false;
 
     constructor(
         private readonly config: TeamsConfig,
@@ -131,21 +135,12 @@ export class TeamsBot extends EventEmitter<TeamsBotEvents> {
         this.me = { id: config.app_id, name: "Microsoft Teams Agent", role: "bot" };
     }
 
-    async start(): Promise<void> {
-        if (this.running) return;
-        this.running = true;
-        try {
-            await emitAllAwaited(this, "ready");
-        } catch (error) {
-            this.running = false;
-            throw error;
-        }
+    async start(signal?: AbortSignal): Promise<void> {
+        await this.lifecycle.start(signal);
     }
 
     async stop(): Promise<void> {
-        if (!this.running) return;
-        this.running = false;
-        await emitAllAwaited(this, "stopped");
+        await this.lifecycle.stop();
     }
 
     /** 由任意 HTTP Host 调用，完成 JWT 校验并返回宿主无关的结构化响应。 */
