@@ -18,7 +18,16 @@ function setup(
     const posts = new Map<string, RouteHandler>();
     const app = {
         pluginInfos: [],
-        extensionManager: { list: vi.fn(() => [{ id: "adapter:slack" }]), install },
+        extensionManager: {
+            list: vi.fn(() => [{ id: "adapter:slack" }]),
+            packageMutationStatus: vi.fn(() => ({
+                state: "idle",
+                available: true,
+                owner: null,
+                error: null,
+            })),
+            install,
+        },
         logger: { error: vi.fn() },
         restartSupported,
     } as unknown as App;
@@ -37,6 +46,16 @@ describe("extension routes", () => {
         gets.get("/api/extensions")!(ctx);
 
         expect(ctx.body).toEqual([{ id: "adapter:slack", restartSupported: true }]);
+    });
+
+    it("从独立端点返回不含所有权凭据的跨进程包变更状态", () => {
+        const { app, gets } = setup();
+        const ctx = {} as RouterContext;
+
+        gets.get("/api/extensions/package-mutation")!(ctx);
+
+        expect(app.extensionManager.packageMutationStatus).toHaveBeenCalledOnce();
+        expect(ctx.body).toEqual({ state: "idle", available: true, owner: null, error: null });
     });
 
     it("安装固定扩展并明确要求重启", async () => {

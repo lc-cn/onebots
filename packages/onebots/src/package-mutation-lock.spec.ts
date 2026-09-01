@@ -2,7 +2,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { acquirePackageMutationLock } from "./package-mutation-lock.js";
+import {
+    acquirePackageMutationLock,
+    inspectPackageMutationLock,
+} from "./package-mutation-lock.js";
 
 const directories: string[] = [];
 
@@ -19,6 +22,99 @@ function fixture(): string {
 }
 
 describe("package mutation lock", () => {
+    it("公开空闲状态且不创建租约", () => {
+        const root = fixture();
+
+        expect(inspectPackageMutationLock(root)).toEqual({
+            state: "idle",
+            available: true,
+            owner: null,
+            error: null,
+        });
+        expect(fs.existsSync(path.join(root, ".onebots-package-mutation.lock"))).toBe(false);
+    });
+
+    it("公开活跃更新的运维证据但不泄露所有权 token", () => {
+        const root = fixture();
+        const lock = acquirePackageMutationLock(root, {
+            token: "private-token",
+            operationId: "update-operation",
+            operation: "package_update",
+        });
+
+        expect(inspectPackageMutationLock(root)).toEqual({
+            state: "active",
+            available: false,
+            owner: {
+                operationId: "update-operation",
+                operation: "package_update",
+                extensionId: null,
+                host: expect.any(String),
+                pid: process.pid,
+                startedAt: expect.any(String),
+            },
+            error: null,
+        });
+        expect(JSON.stringify(inspectPackageMutationLock(root))).not.toContain("private-token");
+        lock.release();
+    });
+
+    it("把同机已退出进程的租约标为可回收但不在读取时修改目录", () => {
+        const root = fixture();
+        acquirePackageMutationLock(root, {
+            token: "abandoned-token",
+            operationId: "operation-1",
+            operation: "extension_install",
+            extensionId: "adapter:slack",
+        });
+
+        expect(inspectPackageMutationLock(root, { isProcessAlive: () => false })).toMatchObject({
+            state: "recoverable",
+            available: true,
+            owner: { operationId: "operation-1", extensionId: "adapter:slack" },
+            error: null,
+        });
+        expect(fs.existsSync(path.join(root, ".onebots-package-mutation.lock"))).toBe(true);
+    });
+
+    it("把保护期内损坏的租约标为不可用", () => {
+        const root = fixture();
+        const lockPath = path.join(root, ".onebots-package-mutation.lock");
+        fs.mkdirSync(lockPath);
+
+        expect(inspectPackageMutationLock(root)).toEqual({
+            state: "invalid",
+            available: false,
+            owner: null,
+            error: "owner.json 缺失",
+        });
+    });
+
+    it("不会把租约文件中的终端控制字符公开为所有者证据", () => {
+        const root = fixture();
+        const lockPath = path.join(root, ".onebots-package-mutation.lock");
+        fs.mkdirSync(lockPath);
+        fs.writeFileSync(
+            path.join(lockPath, "owner.json"),
+            JSON.stringify({
+                token: "private-token",
+                operationId: "update\u001b[31m",
+                operation: "package_update",
+                extensionId: null,
+                host: "host-a",
+                pid: 42,
+                startedAt: "2026-09-01T01:00:00.000Z",
+            }),
+        );
+
+        expect(inspectPackageMutationLock(root)).toEqual({
+            state: "invalid",
+            available: false,
+            owner: null,
+            error: "owner.json 字段无效",
+        });
+    });
+
     it("拒绝共享运行目录中的第二个活跃安装并公开所有者证据", () => {
         const root = fixture();
         const first = acquirePackageMutationLock(root, {

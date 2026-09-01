@@ -31,6 +31,7 @@ import {
 } from "./package-manager.js";
 import {
     acquirePackageMutationLock,
+    inspectPackageMutationLock,
     PackageMutationLockConflictError,
 } from "./package-mutation-lock.js";
 import { validateExtensionConfigurationTarget } from "./extension-configuration-target.js";
@@ -285,6 +286,10 @@ export class ExtensionManager {
                               },
             };
         });
+    }
+
+    packageMutationStatus() {
+        return inspectPackageMutationLock(this.runtimeRoot);
     }
 
     async install(id: string): Promise<{ restartRequired: true }> {

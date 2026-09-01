@@ -1,10 +1,75 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+    inspectPackageMutationStatus,
     inspectRuntimeExtensions,
     probeAuthenticatedExtensions,
 } from "./doctor-management-extensions.js";
 
 describe("doctor extension runtime evidence", () => {
+    it("rejects an active cross-process package update with actionable owner evidence", () => {
+        expect(
+            inspectPackageMutationStatus({
+                state: "active",
+                available: false,
+                owner: {
+                    operationId: "update-1",
+                    operation: "package_update",
+                    extensionId: null,
+                    host: "host-a",
+                    pid: 42,
+                    startedAt: "2026-09-01T01:00:00.000Z",
+                },
+                error: null,
+            }),
+        ).toEqual({
+            name: "management-extensions",
+            level: "error",
+            message: expect.stringContaining("OneBots 软件包更新（操作 update-1，主机 host-a，进程 42"),
+        });
+    });
+
+    it("rejects contradictory or token-bearing package mutation evidence", () => {
+        expect(
+            inspectPackageMutationStatus({
+                state: "idle",
+                available: false,
+                owner: null,
+                error: null,
+            }),
+        ).toMatchObject({ level: "error", message: "包变更租约证据契约无效" });
+        expect(
+            inspectPackageMutationStatus({
+                state: "active",
+                available: false,
+                owner: {
+                    token: "must-not-be-public",
+                    operationId: "install-1",
+                    operation: "extension_install",
+                    extensionId: "adapter:mock",
+                    host: "host-a",
+                    pid: 42,
+                    startedAt: "2026-09-01T01:00:00.000Z",
+                },
+                error: null,
+            }),
+        ).toMatchObject({ level: "error", message: "包变更租约证据契约无效" });
+        expect(
+            inspectPackageMutationStatus({
+                state: "active",
+                available: false,
+                owner: {
+                    operationId: "install\u001b[31m",
+                    operation: "extension_install",
+                    extensionId: "adapter:mock",
+                    host: "host-a",
+                    pid: 42,
+                    startedAt: "2026-09-01T01:00:00.000Z",
+                },
+                error: null,
+            }),
+        ).toMatchObject({ level: "error", message: "包变更租约证据契约无效" });
+    });
+
     it("accepts enabled extensions only after disk and process versions converge", () => {
         expect(inspectRuntimeExtensions([extensionEvidence()])).toEqual({
             name: "management-extensions",
@@ -81,6 +146,25 @@ describe("doctor extension runtime evidence", () => {
             "http://127.0.0.1:6727/gateway/api/extensions",
             expect.objectContaining({ headers: { authorization: "Bearer secret" } }),
         );
+        expect(fetcher).toHaveBeenCalledWith(
+            "http://127.0.0.1:6727/gateway/api/extensions/package-mutation",
+            expect.objectContaining({ headers: { authorization: "Bearer secret" } }),
+        );
+    });
+
+    it("accepts converged extensions only when the shared package lease is idle", async () => {
+        const fetcher = vi.fn(async (input: string) =>
+            input.endsWith("/package-mutation")
+                ? new Response(
+                      JSON.stringify({ state: "idle", available: true, owner: null, error: null }),
+                      { status: 200 },
+                  )
+                : new Response(JSON.stringify([extensionEvidence()]), { status: 200 }),
+        );
+
+        await expect(
+            probeAuthenticatedExtensions("http://127.0.0.1:6727", "secret", fetcher),
+        ).resolves.toMatchObject({ level: "ok" });
     });
 });
 

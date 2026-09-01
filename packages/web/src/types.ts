@@ -180,6 +180,20 @@ export interface ExtensionInfo {
     capability: ExtensionCapabilityInfo | null;
 }
 
+export interface PackageMutationStatus {
+    state: "idle" | "active" | "recoverable" | "invalid";
+    available: boolean;
+    owner: {
+        operationId: string;
+        operation: "extension_install" | "package_update";
+        extensionId: string | null;
+        host: string;
+        pid: number;
+        startedAt: string;
+    } | null;
+    error: string | null;
+}
+
 /** 验证请求展示块（Web 按 type 通用渲染） */
 export type VerificationBlock =
     | { type: "image"; base64: string; alt?: string }

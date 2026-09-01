@@ -42,6 +42,9 @@ describe("doctor management probes", () => {
                 );
             }
             if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            if (input.endsWith("/api/extensions/package-mutation")) {
+                return idlePackageMutationResponse();
+            }
             if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
             expect(input).toBe("http://127.0.0.1:6727/gateway/api/auth/me");
             return authorization
@@ -93,6 +96,8 @@ describe("doctor management probes", () => {
                 ? "runtime"
                 : input.endsWith("/api/system")
                   ? "config"
+                  : input.endsWith("/api/extensions/package-mutation")
+                    ? "package-mutation"
                   : input.endsWith("/api/extensions")
                     ? "extensions"
                     : authorization
@@ -102,6 +107,7 @@ describe("doctor management probes", () => {
             await gate;
             if (name === "runtime") return new Response("[]", { status: 200 });
             if (name === "config") return inSyncSystemResponse();
+            if (name === "package-mutation") return idlePackageMutationResponse();
             if (name === "extensions") return convergedExtensionsResponse();
             return authorization
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -124,6 +130,7 @@ describe("doctor management probes", () => {
                 "extensions",
                 "http-anonymous",
                 "http-authenticated",
+                "package-mutation",
                 "runtime",
                 "ws-anonymous",
                 "ws-authenticated",
@@ -156,6 +163,9 @@ describe("doctor management probes", () => {
             if (input.endsWith("/api/auth/logout")) return new Response(null, { status: 200 });
             if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
             if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            if (input.endsWith("/api/extensions/package-mutation")) {
+                return idlePackageMutationResponse();
+            }
             if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
             return new Headers(init?.headers).has("authorization")
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -218,6 +228,9 @@ describe("doctor management probes", () => {
         const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
             if (input.endsWith("/api/adapters")) return oversizedManagementResponse();
             if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            if (input.endsWith("/api/extensions/package-mutation")) {
+                return idlePackageMutationResponse();
+            }
             if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
             return new Headers(init?.headers).has("authorization")
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -592,6 +605,9 @@ describe("doctor management probes", () => {
         const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
             if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
             if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            if (input.endsWith("/api/extensions/package-mutation")) {
+                return idlePackageMutationResponse();
+            }
             if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
             return new Headers(init?.headers).get("authorization") === "Bearer deployment-token"
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -631,6 +647,9 @@ describe("doctor management probes", () => {
                 );
             }
             if (input.endsWith("/api/adapters")) return new Response("[]", { status: 200 });
+            if (input.endsWith("/api/extensions/package-mutation")) {
+                return idlePackageMutationResponse();
+            }
             if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
             return new Headers(init?.headers).has("authorization")
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -664,6 +683,9 @@ async function probeWithAdapters(adapters: unknown[]) {
             return new Response(JSON.stringify(adapters), { status: 200 });
         }
         if (input.endsWith("/api/system")) return inSyncSystemResponse();
+        if (input.endsWith("/api/extensions/package-mutation")) {
+            return idlePackageMutationResponse();
+        }
         if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
         return new Headers(init?.headers).has("authorization")
             ? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -684,6 +706,13 @@ async function probeWithAdapters(adapters: unknown[]) {
 
 function convergedExtensionsResponse(): Response {
     return new Response("[]", { status: 200 });
+}
+
+function idlePackageMutationResponse(): Response {
+    return new Response(
+        JSON.stringify({ state: "idle", available: true, owner: null, error: null }),
+        { status: 200 },
+    );
 }
 
 function inSyncSystemResponse(): Response {

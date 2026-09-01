@@ -27,6 +27,11 @@
                 {{ runtimeConfigErrorMessage }}。能力目录仍可浏览；请修复 config.yaml
                 后再安装或启用扩展。
             </UiAlert>
+            <UiAlert
+                v-if="packageMutationMessage"
+                :variant="packageMutationStatus?.state === 'recoverable' ? 'warning' : 'danger'">
+                {{ packageMutationMessage }}
+            </UiAlert>
             <UiAlert v-if="activeInstallation" variant="warning">
                 <p>
                     {{ activeInstallation.displayName }}：{{
@@ -214,6 +219,7 @@
                                     restarting ||
                                     Boolean(installingId) ||
                                     Boolean(activeInstallation) ||
+                                    packageMutationStatus?.available === false ||
                                     !installationAction(extension).available
                                 "
                                 @click="install(extension)">
@@ -231,7 +237,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { IconSearch } from "@tabler/icons-vue";
-import type { ExtensionInfo } from "../types";
+import type { ExtensionInfo, PackageMutationStatus } from "../types";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
 import {
@@ -255,6 +261,7 @@ import {
 
 const route = useRoute();
 const extensions = ref<ExtensionInfo[]>([]);
+const packageMutationStatus = ref<PackageMutationStatus | null>(null);
 const loading = ref(true);
 const filter = ref<ExtensionFilter>("all");
 const searchKeyword = ref("");
@@ -316,6 +323,24 @@ const runtimeConfigErrorMessage = computed(
 const activeInstallation = computed(
     () => extensions.value.find(extension => extension.installing) ?? null,
 );
+const packageMutationMessage = computed(() => {
+    const status = packageMutationStatus.value;
+    if (!status || status.state === "idle") return "";
+    if (status.state === "invalid") {
+        return `${status.error ?? "包变更租约无法验证"}。为避免依赖目录损坏，扩展安装已禁用。`;
+    }
+    const owner = status.owner;
+    const operation =
+        owner?.operation === "extension_install"
+            ? `扩展 ${owner.extensionId} 安装`
+            : owner?.operation === "package_update"
+              ? "OneBots 软件包更新"
+              : "包变更";
+    if (status.state === "recoverable") {
+        return `检测到可回收的${operation}租约；下一次扩展安装会先安全回收。`;
+    }
+    return `${operation}正在由 ${owner?.host ?? "未知主机"} 的进程 ${owner?.pid ?? "未知"} 执行，完成前暂不能安装其他扩展。`;
+});
 
 const filteredExtensions = computed(() =>
     filter.value === "all"
@@ -336,7 +361,10 @@ function clearInstallationRefresh(): void {
 function scheduleInstallationRefresh(): void {
     clearInstallationRefresh();
     if (!isMounted) return;
-    if (!extensions.value.some(extension => extension.installing)) {
+    if (
+        !extensions.value.some(extension => extension.installing) &&
+        packageMutationStatus.value?.state !== "active"
+    ) {
         installationRefreshAttempts = 0;
         return;
     }
@@ -358,9 +386,14 @@ async function loadExtensions(background = false): Promise<void> {
     }
     errorMessage.value = "";
     try {
-        const response = await authFetch(buildApiUrl("/api/extensions"));
-        if (!response.ok) throw new Error("无法读取扩展目录");
-        extensions.value = await response.json();
+        const [extensionsResponse, mutationResponse] = await Promise.all([
+            authFetch(buildApiUrl("/api/extensions")),
+            authFetch(buildApiUrl("/api/extensions/package-mutation")),
+        ]);
+        if (!extensionsResponse.ok) throw new Error("无法读取扩展目录");
+        if (!mutationResponse.ok) throw new Error("无法读取包变更状态");
+        extensions.value = await extensionsResponse.json();
+        packageMutationStatus.value = await mutationResponse.json();
     } catch (error) {
         errorMessage.value = error instanceof Error ? error.message : String(error);
     } finally {

@@ -17,6 +17,10 @@ export function registerExtensionRoutes(app: App, router: Router): void {
         }));
     });
 
+    router.get("/api/extensions/package-mutation", (ctx: RouterContext) => {
+        ctx.body = app.extensionManager.packageMutationStatus();
+    });
+
     router.post("/api/extensions/:id/install", async (ctx: RouterContext) => {
         try {
             const result = await app.extensionManager.install(String(ctx.params.id));

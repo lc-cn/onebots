@@ -21,6 +21,13 @@ export interface PackageMutationLock {
     release(): void;
 }
 
+export interface PackageMutationLockStatus {
+    state: "idle" | "active" | "recoverable" | "invalid";
+    available: boolean;
+    owner: Omit<PackageMutationLockOwner, "token"> | null;
+    error: string | null;
+}
+
 interface PackageMutationLockOptions {
     now?: () => Date;
     hostIdentity?: () => string;
@@ -35,6 +42,66 @@ interface LockInspection {
 }
 
 export class PackageMutationLockConflictError extends Error {}
+
+/**
+ * 只读取共享运行目录中的包变更租约，供管理面和 doctor 主动展示跨进程事务。
+ * 私有所有权 token 与底层文件内容永远不会进入返回值。
+ */
+export function inspectPackageMutationLock(
+    runtimeRoot: string,
+    options: PackageMutationLockOptions = {},
+): PackageMutationLockStatus {
+    const lockPath = path.join(path.resolve(runtimeRoot), LOCK_DIRECTORY_NAME);
+    const now = options.now ?? (() => new Date());
+    const currentHost = (options.hostIdentity ?? defaultHostIdentity)();
+    const isProcessAlive = options.isProcessAlive ?? defaultIsProcessAlive;
+    const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
+    let inspection: LockInspection | null;
+    try {
+        inspection = inspectLock(lockPath);
+    } catch {
+        return {
+            state: "invalid",
+            available: false,
+            owner: null,
+            error: "包变更租约无法读取",
+        };
+    }
+    if (inspection === null) {
+        return { state: "idle", available: true, owner: null, error: null };
+    }
+
+    const reclaimable = isReclaimable(
+        inspection,
+        currentHost,
+        now().getTime(),
+        isProcessAlive,
+        staleAfterMs,
+    );
+    if (!inspection.owner) {
+        return {
+            state: reclaimable ? "recoverable" : "invalid",
+            available: reclaimable,
+            owner: null,
+            error: inspection.error ?? "包变更租约无效",
+        };
+    }
+
+    const owner: Omit<PackageMutationLockOwner, "token"> = {
+        operationId: inspection.owner.operationId,
+        operation: inspection.owner.operation,
+        extensionId: inspection.owner.extensionId,
+        host: inspection.owner.host,
+        pid: inspection.owner.pid,
+        startedAt: inspection.owner.startedAt,
+    };
+    return {
+        state: reclaimable ? "recoverable" : "active",
+        available: reclaimable,
+        owner,
+        error: null,
+    };
+}
 
 /**
  * 在共享运行目录中原子取得包变更租约，避免多个 OneBots 实例交错修改依赖与锁文件。
@@ -81,12 +148,13 @@ export function acquirePackageMutationLock(
 
         const inspection = inspectLock(lockPath);
         if (inspection === null) continue;
-        const age = Math.max(0, acquiredAt.getTime() - inspection.updatedAtMs);
-        const reclaimable = inspection.owner
-            ? inspection.owner.host === currentHost
-                ? !isProcessAlive(inspection.owner.pid)
-                : age > staleAfterMs
-            : age > staleAfterMs;
+        const reclaimable = isReclaimable(
+            inspection,
+            currentHost,
+            acquiredAt.getTime(),
+            isProcessAlive,
+            staleAfterMs,
+        );
         if (!reclaimable) {
             throw conflictError(lockPath, inspection);
         }
@@ -96,6 +164,17 @@ export function acquirePackageMutationLock(
     throw new PackageMutationLockConflictError(
         `扩展运行目录的包变更租约持续发生竞争：${lockPath}。请等待其他 OneBots 操作完成后重试。`,
     );
+}
+
+function isReclaimable(
+    inspection: LockInspection,
+    currentHost: string,
+    nowMs: number,
+    isProcessAlive: (pid: number) => boolean,
+    staleAfterMs: number,
+): boolean {
+    if (inspection.owner?.host === currentHost) return !isProcessAlive(inspection.owner.pid);
+    return Math.max(0, nowMs - inspection.updatedAtMs) > staleAfterMs;
 }
 
 function createLease(lockPath: string, owner: PackageMutationLockOwner): PackageMutationLock {
@@ -168,21 +247,15 @@ function parseOwner(value: unknown): PackageMutationLockOwner | null {
     if (!value || typeof value !== "object" || Array.isArray(value)) return null;
     const owner = value as Record<string, unknown>;
     if (
-        typeof owner.token !== "string" ||
-        !owner.token ||
-        typeof owner.operationId !== "string" ||
-        !owner.operationId ||
+        !isSafeEvidenceString(owner.token, 256) ||
+        !isSafeEvidenceString(owner.operationId, 256) ||
         !["extension_install", "package_update"].includes(String(owner.operation)) ||
         !(
             (owner.operation === "extension_install" &&
-                typeof owner.extensionId === "string" &&
-                owner.extensionId) ||
+                isSafeEvidenceString(owner.extensionId, 256)) ||
             (owner.operation === "package_update" && owner.extensionId === null)
         ) ||
-        typeof owner.host !== "string" ||
-        !owner.host ||
-        owner.host.length > 256 ||
-        /[\u0000-\u001f\u007f]/u.test(owner.host) ||
+        !isSafeEvidenceString(owner.host, 256) ||
         !Number.isSafeInteger(owner.pid) ||
         Number(owner.pid) <= 0 ||
         !isValidDate(owner.startedAt)
@@ -193,7 +266,20 @@ function parseOwner(value: unknown): PackageMutationLockOwner | null {
 }
 
 function isValidDate(value: unknown): value is string {
-    return typeof value === "string" && Number.isFinite(Date.parse(value));
+    return (
+        isSafeEvidenceString(value, 64) &&
+        Number.isFinite(Date.parse(value)) &&
+        new Date(value).toISOString() === value
+    );
+}
+
+function isSafeEvidenceString(value: unknown, maxLength: number): value is string {
+    return (
+        typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= maxLength &&
+        !/[\u0000-\u001f\u007f]/u.test(value)
+    );
 }
 
 function assertOwner(lockPath: string, token: string): void {
