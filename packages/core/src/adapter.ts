@@ -13,7 +13,11 @@ import {
     normalizeAdapterCapabilities,
     type AdapterCapabilityManifest,
 } from "./adapter-capability.js";
-import { UnsupportedCapabilityError, type UnsupportedCapabilityReason } from "./errors.js";
+import {
+    ErrorHandler,
+    UnsupportedCapabilityError,
+    type UnsupportedCapabilityReason,
+} from "./errors.js";
 import { AdapterActionDefaults } from "./adapter-actions.js";
 import { FailureCollector } from "./async-utils.js";
 import "./adapter-types.js";
@@ -193,9 +197,23 @@ export abstract class Adapter<
         const startAccounts = [...this.accounts.values()].filter(account => {
             return account_id ? account.account_id === account_id : true;
         });
+        const failures = new FailureCollector();
         for (const account of startAccounts) {
-            await account.start();
+            await failures.capture(
+                () => account.start(),
+                error => {
+                    const wrappedError = ErrorHandler.wrap(error, {
+                        platform: String(this.platform),
+                        account_id: String(account.account_id),
+                    });
+                    this.logger.error(
+                        `账号 ${this.platform}/${account.account_id} 启动失败`,
+                        wrappedError,
+                    );
+                },
+            );
         }
+        failures.throwIfAny(`${failures.size} 个 ${this.platform} 账号启动失败`);
         this.logger.info(`Adapter for platform ${this.platform} started`);
     }
 
