@@ -162,6 +162,17 @@
                             </p>
                         </UiAlert>
 
+                        <UiAlert
+                            v-if="disableProgress(extension)"
+                            :variant="disableProgress(extension)?.variant">
+                            <p>{{ disableProgress(extension)?.label }}</p>
+                            <p
+                                v-if="disableProgress(extension)?.detail"
+                                class="mt-1 font-mono text-xs opacity-75">
+                                {{ disableProgress(extension)?.detail }}
+                            </p>
+                        </UiAlert>
+
                         <ExtensionCapabilities
                             v-if="extension.capability"
                             :capability="extension.capability"
@@ -214,7 +225,7 @@
                             <UiButton
                                 v-if="disableAction(extension).visible"
                                 variant="danger"
-                                :loading="disablingId === extension.id"
+                                :loading="disablingId === extension.id || extension.disabling"
                                 :disabled="
                                     restarting ||
                                     Boolean(installingId) ||
@@ -282,10 +293,13 @@ import {
     getExtensionInstallRequestRecovery,
     getExtensionInstallCompletion,
     getExtensionDisableAction,
+    getExtensionDisableProgress,
+    getExtensionDisableRequestRecovery,
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
     hasExtensionRuntimeVersionDrift,
+    shouldRefreshExtensionOperations,
 } from "./extension-installation.js";
 
 const route = useRoute();
@@ -311,6 +325,12 @@ let disconnectedInstallation: {
     requestMessage: string;
 } | null = null;
 let recoveringDisconnectedInstallation = false;
+let disconnectedDisable: {
+    id: string;
+    previousOperationId: string | null;
+    requestMessage: string;
+} | null = null;
+let recoveringDisconnectedDisable = false;
 const INSTALLATION_REFRESH_INTERVAL_MS = 1_500;
 // 覆盖服务端 10 分钟包安装与最多 3 次、每次 60 秒的隔离预检，并留出观察余量。
 const INSTALLATION_STATUS_TIMEOUT_MS = 14 * 60 * 1_000;
@@ -335,6 +355,7 @@ const configurationAction = (extension: ExtensionInfo) =>
     getExtensionConfigurationAction(extension);
 const installationAction = (extension: ExtensionInfo) => getExtensionInstallationAction(extension);
 const disableAction = (extension: ExtensionInfo) => getExtensionDisableAction(extension);
+const disableProgress = (extension: ExtensionInfo) => getExtensionDisableProgress(extension);
 const installationProgress = (extension: ExtensionInfo) =>
     getExtensionInstallationProgress(extension);
 const runtimeStatus = (extension: ExtensionInfo) => getExtensionRuntimeStatus(extension);
@@ -398,14 +419,17 @@ function scheduleInstallationRefresh(): void {
     clearInstallationRefresh();
     if (!isMounted) return;
     if (
-        !extensions.value.some(extension => extension.installing) &&
-        packageMutationStatus.value?.state !== "active"
+        !shouldRefreshExtensionOperations({
+            extensions: extensions.value,
+            packageMutationActive: packageMutationStatus.value?.state === "active",
+            disconnectedRequest: Boolean(disconnectedInstallation || disconnectedDisable),
+        })
     ) {
         installationRefreshAttempts = 0;
         return;
     }
     if (installationRefreshAttempts >= MAX_INSTALLATION_REFRESH_ATTEMPTS) {
-        errorMessage.value = "扩展安装状态确认超时，请刷新页面检查最终结果";
+        errorMessage.value = "扩展操作状态确认超时，请刷新页面检查最终结果";
         return;
     }
     installationRefreshAttempts += 1;
@@ -415,12 +439,13 @@ function scheduleInstallationRefresh(): void {
     }, INSTALLATION_REFRESH_INTERVAL_MS);
 }
 
-async function loadExtensions(background = false): Promise<void> {
+async function loadExtensions(background = false): Promise<boolean> {
     if (!background) {
         loading.value = true;
         installationRefreshAttempts = 0;
     }
     errorMessage.value = "";
+    let loaded = false;
     try {
         const [extensionsResponse, mutationResponse] = await Promise.all([
             authFetch(buildApiUrl("/api/extensions")),
@@ -442,6 +467,7 @@ async function loadExtensions(background = false): Promise<void> {
         packageMutationStatus.value = snapshot.packageMutationStatus;
         extensionSnapshotIdentity.value = snapshot.identity;
         extensionConfigRevision.value = snapshot.configRevision;
+        loaded = true;
     } catch (error) {
         extensionSnapshotIdentity.value = null;
         extensionConfigRevision.value = "";
@@ -449,11 +475,15 @@ async function loadExtensions(background = false): Promise<void> {
     } finally {
         if (!background) loading.value = false;
         scheduleInstallationRefresh();
-        void resumeDisconnectedInstallation();
+        if (loaded) {
+            void resumeDisconnectedInstallation();
+            void resumeDisconnectedDisable();
+        }
     }
+    return loaded;
 }
 
-async function restartAfterInstallation(): Promise<void> {
+async function restartAfterExtensionMutation(): Promise<void> {
     restarting.value = true;
     const previousIdentity = await readCurrentServiceIdentity();
     await requestServiceRestart(previousIdentity, authFetch);
@@ -490,13 +520,56 @@ async function resumeDisconnectedInstallation(): Promise<void> {
 
     recoveringDisconnectedInstallation = true;
     try {
-        await restartAfterInstallation();
+        await restartAfterExtensionMutation();
     } catch (error) {
         restarting.value = false;
         await loadExtensions();
         errorMessage.value = error instanceof Error ? error.message : String(error);
     } finally {
         recoveringDisconnectedInstallation = false;
+    }
+}
+
+async function resumeDisconnectedDisable(): Promise<void> {
+    if (!disconnectedDisable || recoveringDisconnectedDisable || !isMounted) return;
+    const pending = disconnectedDisable;
+    const refreshed = extensions.value.find(item => item.id === pending.id);
+    const recovery = getExtensionDisableRequestRecovery(pending.previousOperationId, refreshed);
+    if (recovery.status === "running") return;
+
+    disconnectedDisable = null;
+    if (recovery.status === "failed") {
+        errorMessage.value = recovery.message;
+        return;
+    }
+    if (recovery.status === "unknown") {
+        errorMessage.value = pending.requestMessage;
+        return;
+    }
+
+    const completion = getExtensionInstallCompletion({
+        restartRequired: true,
+        restartSupported: refreshed?.restartSupported,
+        message:
+            refreshed?.restartSupported === false
+                ? "扩展已停用；当前进程不会自动拉起，请手动重启 OneBots 以完成停用"
+                : undefined,
+    });
+    if (!completion.restart) {
+        restartMessage.value =
+            completion.message ?? "扩展已停用；当前进程不会自动拉起，请手动重启 OneBots 以完成停用";
+        return;
+    }
+
+    recoveringDisconnectedDisable = true;
+    try {
+        await restartAfterExtensionMutation();
+    } catch (error) {
+        restarting.value = false;
+        await loadExtensions();
+        errorMessage.value = error instanceof Error ? error.message : String(error);
+    } finally {
+        recoveringDisconnectedDisable = false;
     }
 }
 
@@ -547,7 +620,16 @@ async function install(extension: ExtensionInfo): Promise<void> {
             }
         } catch (error) {
             const requestMessage = error instanceof Error ? error.message : String(error);
-            await loadExtensions();
+            const loaded = await loadExtensions();
+            if (!loaded) {
+                disconnectedInstallation = {
+                    id: extension.id,
+                    previousOperationId,
+                    requestMessage,
+                };
+                scheduleInstallationRefresh();
+                return;
+            }
             const refreshed = extensions.value.find(item => item.id === extension.id);
             const recovery = getExtensionInstallRequestRecovery(previousOperationId, refreshed);
             if (recovery.status === "running") {
@@ -567,7 +649,7 @@ async function install(extension: ExtensionInfo): Promise<void> {
             }
         }
 
-        if (shouldRestart) await restartAfterInstallation();
+        if (shouldRestart) await restartAfterExtensionMutation();
     } catch (error) {
         restarting.value = false;
         await loadExtensions();
@@ -593,6 +675,7 @@ async function disable(extension: ExtensionInfo): Promise<void> {
     });
     if (!accepted) return;
 
+    const previousOperationId = extension.lastDisable?.operationId ?? null;
     disablingId.value = extension.id;
     errorMessage.value = "";
     restartMessage.value = "";
@@ -627,18 +710,38 @@ async function disable(extension: ExtensionInfo): Promise<void> {
             );
         } catch (error) {
             const requestMessage = error instanceof Error ? error.message : String(error);
-            await loadExtensions();
-            const refreshed = extensions.value.find(item => item.id === extension.id);
-            if (!refreshed || refreshed.enabled) {
-                errorMessage.value = requestMessage;
+            const loaded = await loadExtensions();
+            if (!loaded) {
+                disconnectedDisable = {
+                    id: extension.id,
+                    previousOperationId,
+                    requestMessage,
+                };
+                scheduleInstallationRefresh();
                 return;
             }
-            result = {
-                success: true,
-                restartRequired: true,
-                restartSupported: refreshed.restartSupported,
-                message: "扩展已从启动配置移除",
-            };
+            const refreshed = extensions.value.find(item => item.id === extension.id);
+            const recovery = getExtensionDisableRequestRecovery(previousOperationId, refreshed);
+            if (recovery.status === "running") {
+                disconnectedDisable = {
+                    id: extension.id,
+                    previousOperationId,
+                    requestMessage,
+                };
+                return;
+            }
+            if (recovery.status === "succeeded") {
+                result = {
+                    success: true,
+                    restartRequired: true,
+                    restartSupported: refreshed?.restartSupported,
+                    message: "扩展已从启动配置移除",
+                };
+            } else {
+                errorMessage.value =
+                    recovery.status === "failed" ? recovery.message : requestMessage;
+                return;
+            }
         }
 
         const completion = getExtensionInstallCompletion(result);
@@ -648,7 +751,7 @@ async function disable(extension: ExtensionInfo): Promise<void> {
                 completion.message ?? "扩展已停用；请手动重启 OneBots 以停止当前进程中的扩展";
             return;
         }
-        await restartAfterInstallation();
+        await restartAfterExtensionMutation();
     } catch (error) {
         restarting.value = false;
         await loadExtensions();

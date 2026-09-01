@@ -180,6 +180,21 @@ function parseExtension(value: unknown, index: number, ids: Set<string>): Extens
     if (installation && lastInstallation) {
         throw new Error(`扩展 ${value.id} 同时携带活动操作与终态`);
     }
+    if (value.disabling !== undefined && typeof value.disabling !== "boolean") {
+        throw new Error(`扩展 ${value.id} 的停用状态无效`);
+    }
+    const disableOperation = parseDisableOperation(value.disableOperation, value.id);
+    const disabling = value.disabling ?? disableOperation !== null;
+    if (!disabling && disableOperation !== null) {
+        throw new Error(`扩展 ${value.id} 未停用中却携带活动停用操作`);
+    }
+    const lastDisable = parseLastDisable(value.lastDisable, value.id);
+    if (disableOperation && lastDisable) {
+        throw new Error(`扩展 ${value.id} 同时携带活动停用与停用终态`);
+    }
+    if (installation && disableOperation) {
+        throw new Error(`扩展 ${value.id} 同时安装和停用`);
+    }
     const capability = parseExtensionCapability(value.capability, value.id);
     if (type === "protocol" && capability !== null) {
         throw new Error(`协议扩展 ${value.id} 不得携带适配器能力清单`);
@@ -191,6 +206,31 @@ function parseExtension(value: unknown, index: number, ids: Set<string>): Extens
         throw new Error(`扩展 ${value.id} 的能力来源与加载状态矛盾`);
     }
     return value as unknown as ExtensionInfo;
+}
+
+function parseDisableOperation(value: unknown, id: string): ExtensionInfo["disableOperation"] {
+    if (value === undefined || value === null) return null;
+    if (!isRecord(value) || !isText(value.operationId) || !isIsoTimestamp(value.startedAt)) {
+        throw new Error(`扩展 ${id} 的活动停用证据无效`);
+    }
+    return value as NonNullable<ExtensionInfo["disableOperation"]>;
+}
+
+function parseLastDisable(value: unknown, id: string): ExtensionInfo["lastDisable"] {
+    if (value === undefined || value === null) return null;
+    if (
+        !isRecord(value) ||
+        !isText(value.operationId) ||
+        !isOneOf(value.status, ["succeeded", "failed"] as const) ||
+        !isIsoTimestamp(value.startedAt) ||
+        !isIsoTimestamp(value.completedAt) ||
+        Date.parse(value.completedAt) < Date.parse(value.startedAt) ||
+        !isNullableText(value.message) ||
+        (value.status === "succeeded" && value.message !== null)
+    ) {
+        throw new Error(`扩展 ${id} 的停用终态证据无效`);
+    }
+    return value as NonNullable<ExtensionInfo["lastDisable"]>;
 }
 
 function assertConfigurationTarget(

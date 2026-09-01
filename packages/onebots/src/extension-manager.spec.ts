@@ -1427,6 +1427,15 @@ describe("ExtensionManager", () => {
         expect(fs.existsSync(path.join(root, "node_modules", "@onebots", "adapter-slack"))).toBe(
             true,
         );
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+            disabling: false,
+            disableOperation: null,
+            lastDisable: {
+                operationId: expect.any(String),
+                status: "succeeded",
+                message: null,
+            },
+        });
     });
 
     it("停用候选配置无法启动时不修改现有配置", async () => {
@@ -1450,6 +1459,12 @@ describe("ExtensionManager", () => {
         );
         expect(fs.readFileSync(configPath, "utf8")).toBe(originalConfig);
         expect(manager.packageMutationStatus()).toMatchObject({ state: "idle", available: true });
+        expect(
+            manager.list([]).find(item => item.id === "adapter:slack")?.lastDisable,
+        ).toMatchObject({
+            status: "failed",
+            message: "账号 bot-a 仍引用 slack 适配器",
+        });
     });
 
     it("停用预检期间配置变化时重新合并并保留并发修改", async () => {
@@ -1533,5 +1548,61 @@ describe("ExtensionManager", () => {
         } finally {
             lock.release();
         }
+    });
+
+    it("同一停用请求复用活动操作并发布可恢复终态", async () => {
+        const { root, configPath } = fixture();
+        fs.writeFileSync(
+            configPath,
+            "plugins:\n  adapters: [slack]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+        );
+        let finishPreflight: (() => void) | undefined;
+        const preflightGate = new Promise<void>(resolve => {
+            finishPreflight = resolve;
+        });
+        const preflight = vi.fn(() => preflightGate);
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install: vi.fn() },
+            preflight,
+        });
+
+        const first = manager.disable("adapter:slack");
+        const retry = manager.disable("adapter:slack");
+        await vi.waitFor(() => expect(preflight).toHaveBeenCalledOnce());
+
+        const active = manager.list([]).find(item => item.id === "adapter:slack");
+        expect(active).toMatchObject({
+            disabling: true,
+            disableOperation: {
+                operationId: expect.any(String),
+                startedAt: expect.any(String),
+            },
+            lastDisable: null,
+        });
+        await expect(manager.disable("protocol:onebot-v11")).rejects.toThrow(
+            "扩展 adapter:slack 正在停用",
+        );
+        await expect(manager.install("adapter:telegram")).rejects.toThrow(
+            "扩展 adapter:slack 正在停用",
+        );
+
+        finishPreflight?.();
+        await expect(Promise.all([first, retry])).resolves.toEqual([
+            { restartRequired: true },
+            { restartRequired: true },
+        ]);
+        expect(preflight).toHaveBeenCalledOnce();
+
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+            disabling: false,
+            disableOperation: null,
+            lastDisable: {
+                operationId: active?.disableOperation?.operationId,
+                status: "succeeded",
+                message: null,
+            },
+        });
     });
 });

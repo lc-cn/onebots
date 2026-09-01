@@ -1,13 +1,43 @@
 import { describe, expect, it } from "vitest";
 import {
     getExtensionDisableAction,
+    getExtensionDisableProgress,
+    getExtensionDisableRequestRecovery,
     getExtensionInstallCompletion,
     getExtensionInstallRequestRecovery,
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
     hasExtensionRuntimeVersionDrift,
+    shouldRefreshExtensionOperations,
 } from "./extension-installation.js";
+
+describe("extension operation refresh", () => {
+    it("持续观察活动事务和断线后尚未闭合的请求", () => {
+        const idle = [{ installing: false, disabling: false }];
+        expect(
+            shouldRefreshExtensionOperations({
+                extensions: idle,
+                packageMutationActive: false,
+                disconnectedRequest: false,
+            }),
+        ).toBe(false);
+        expect(
+            shouldRefreshExtensionOperations({
+                extensions: idle,
+                packageMutationActive: false,
+                disconnectedRequest: true,
+            }),
+        ).toBe(true);
+        expect(
+            shouldRefreshExtensionOperations({
+                extensions: [{ installing: false, disabling: true }],
+                packageMutationActive: false,
+                disconnectedRequest: false,
+            }),
+        ).toBe(true);
+    });
+});
 
 describe("extension disable action", () => {
     it("只为已启用扩展提供停用操作并说明重启边界", () => {
@@ -46,6 +76,75 @@ describe("extension disable action", () => {
                 runtimeConfigError: "配置损坏",
             }),
         ).toEqual({ visible: true, available: false, label: "启动配置不可用" });
+    });
+});
+
+describe("extension disable request recovery", () => {
+    const previous = {
+        operationId: "previous-disable",
+        status: "succeeded" as const,
+        startedAt: "2026-09-02T00:00:00.000Z",
+        completedAt: "2026-09-02T00:01:00.000Z",
+        message: null,
+    };
+
+    it("等待活动停用并只采用本次请求产生的新终态", () => {
+        expect(
+            getExtensionDisableRequestRecovery(previous.operationId, {
+                disableOperation: {
+                    operationId: "active-disable",
+                    startedAt: "2026-09-02T00:02:00.000Z",
+                },
+                lastDisable: null,
+            }),
+        ).toEqual({ status: "running" });
+        expect(
+            getExtensionDisableRequestRecovery(previous.operationId, {
+                disableOperation: null,
+                lastDisable: { ...previous, operationId: "completed-disable" },
+            }),
+        ).toEqual({ status: "succeeded" });
+        expect(
+            getExtensionDisableRequestRecovery(previous.operationId, {
+                disableOperation: null,
+                lastDisable: {
+                    ...previous,
+                    operationId: "failed-disable",
+                    status: "failed",
+                    message: "账号仍在引用",
+                },
+            }),
+        ).toEqual({ status: "failed", message: "账号仍在引用" });
+        expect(
+            getExtensionDisableRequestRecovery(previous.operationId, {
+                disableOperation: null,
+                lastDisable: previous,
+            }),
+        ).toEqual({ status: "unknown" });
+    });
+
+    it("展示活动停用与最近失败证据", () => {
+        expect(
+            getExtensionDisableProgress({
+                disabling: true,
+                disableOperation: {
+                    operationId: "active-disable",
+                    startedAt: "2026-09-02T00:02:00.000Z",
+                },
+                lastDisable: null,
+            }),
+        ).toMatchObject({ variant: "warning", label: "正在隔离预检并停用扩展" });
+        expect(
+            getExtensionDisableProgress({
+                disabling: false,
+                disableOperation: null,
+                lastDisable: {
+                    ...previous,
+                    status: "failed",
+                    message: "账号仍在引用",
+                },
+            }),
+        ).toMatchObject({ variant: "danger", label: "上次停用失败：账号仍在引用" });
     });
 });
 

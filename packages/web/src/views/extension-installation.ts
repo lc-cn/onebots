@@ -44,9 +44,23 @@ export type ExtensionInstallRequestRecovery =
     | { status: "failed"; message: string }
     | { status: "unknown" };
 
+export type ExtensionDisableRequestRecovery = ExtensionInstallRequestRecovery;
+
 export interface ExtensionInstallCompletion {
     restart: boolean;
     message: string | null;
+}
+
+export function shouldRefreshExtensionOperations(input: {
+    extensions: ReadonlyArray<Pick<ExtensionInfo, "installing" | "disabling">>;
+    packageMutationActive: boolean;
+    disconnectedRequest: boolean;
+}): boolean {
+    return Boolean(
+        input.packageMutationActive ||
+        input.disconnectedRequest ||
+        input.extensions.some(extension => extension.installing || extension.disabling),
+    );
 }
 
 /** 只有磁盘与当前进程都提供版本证据时才判定需要进程切换。 */
@@ -90,6 +104,43 @@ export function getExtensionInstallRequestRecovery(
     if (!result || result.operationId === previousOperationId) return { status: "unknown" };
     if (result.status === "succeeded") return { status: "succeeded" };
     return { status: "failed", message: result.message ?? "扩展安装失败" };
+}
+
+/** 长停用请求断线后，只接受当前活动操作或本次请求产生的新终态作为恢复证据。 */
+export function getExtensionDisableRequestRecovery(
+    previousOperationId: string | null,
+    extension: Pick<ExtensionInfo, "disableOperation" | "lastDisable"> | null | undefined,
+): ExtensionDisableRequestRecovery {
+    if (extension?.disableOperation) return { status: "running" };
+    const result = extension?.lastDisable;
+    if (!result || result.operationId === previousOperationId) return { status: "unknown" };
+    if (result.status === "succeeded") return { status: "succeeded" };
+    return { status: "failed", message: result.message ?? "扩展停用失败" };
+}
+
+export function getExtensionDisableProgress(
+    extension: Pick<ExtensionInfo, "disabling" | "disableOperation" | "lastDisable">,
+): ExtensionInstallationProgress | null {
+    if (extension.disabling) {
+        const detail = extension.disableOperation
+            ? buildInstallationEvidence(
+                  extension.disableOperation.operationId,
+                  extension.disableOperation.startedAt,
+              )
+            : null;
+        return { variant: "warning", label: "正在隔离预检并停用扩展", detail };
+    }
+    if (extension.lastDisable?.status === "failed") {
+        return {
+            variant: "danger",
+            label: `上次停用失败：${extension.lastDisable.message ?? "未知错误"}`,
+            detail: buildInstallationEvidence(
+                extension.lastDisable.operationId,
+                extension.lastDisable.completedAt,
+            ),
+        };
+    }
+    return null;
 }
 
 export function getExtensionInstallationProgress(

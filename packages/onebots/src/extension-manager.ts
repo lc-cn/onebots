@@ -154,6 +154,19 @@ export interface ExtensionInstallationResult {
     message: string | null;
 }
 
+export interface ExtensionDisableStatus {
+    operationId: string;
+    startedAt: string;
+}
+
+export interface ExtensionDisableResult {
+    operationId: string;
+    status: "succeeded" | "failed";
+    startedAt: string;
+    completedAt: string;
+    message: string | null;
+}
+
 /** 避免把包管理器输出中的常见凭据带回管理端，并限制单条诊断占用。 */
 export function formatExtensionInstallationError(error: unknown): string {
     return formatPackageManagerDiagnostic(error);
@@ -183,6 +196,13 @@ export class ExtensionManager {
         promise: Promise<{ restartRequired: true }>;
     } | null = null;
     private readonly lastInstallations = new Map<string, ExtensionInstallationResult>();
+    private disabling: {
+        id: string;
+        operationId: string;
+        startedAt: string;
+        promise: Promise<{ restartRequired: true }>;
+    } | null = null;
+    private readonly lastDisables = new Map<string, ExtensionDisableResult>();
 
     constructor(options: ExtensionManagerOptions = {}) {
         this.runtimeRoot = path.resolve(
@@ -252,6 +272,13 @@ export class ExtensionManager {
                           startedAt: this.installation.startedAt,
                       }
                     : null;
+            const disableOperation =
+                this.disabling?.id === entry.id
+                    ? {
+                          operationId: this.disabling.operationId,
+                          startedAt: this.disabling.startedAt,
+                      }
+                    : null;
             return {
                 ...entry,
                 catalogError,
@@ -273,6 +300,9 @@ export class ExtensionManager {
                 installing: installation !== null,
                 installation,
                 lastInstallation: this.lastInstallations.get(entry.id) ?? null,
+                disabling: disableOperation !== null,
+                disableOperation,
+                lastDisable: this.lastDisables.get(entry.id) ?? null,
                 capability:
                     entry.type !== "adapter"
                         ? null
@@ -317,6 +347,11 @@ export class ExtensionManager {
             if (this.installation.id === id) return this.installation.promise;
             throw new ExtensionInstallConflictError(
                 `扩展 ${this.installation.id} 正在安装，请稍后再试`,
+            );
+        }
+        if (this.disabling) {
+            throw new ExtensionInstallConflictError(
+                `扩展 ${this.disabling.id} 正在停用，请等待停用完成后再安装扩展`,
             );
         }
         this.assertCatalogIntegrity();
@@ -487,43 +522,82 @@ export class ExtensionManager {
                 `扩展 ${this.installation.id} 正在安装，请等待安装完成后再停用扩展`,
             );
         }
-
-        let packageLock;
-        try {
-            packageLock = acquirePackageMutationLock(this.runtimeRoot, {
-                token: randomUUID(),
-                operationId: randomUUID(),
-                operation: "extension_disable",
-                extensionId: id,
-            });
-        } catch (error) {
-            if (error instanceof PackageMutationLockConflictError) {
-                throw new ExtensionInstallConflictError(error.message, { cause: error });
-            }
-            throw error;
-        }
-        try {
-            let candidate = this.prepareConfig(entry.type, entry.name, undefined, false);
-            for (let attempt = 0; attempt < 3; attempt++) {
-                const latestSource = fs.readFileSync(this.configPath, "utf8");
-                if (latestSource !== candidate.source) {
-                    candidate = this.prepareConfig(entry.type, entry.name, latestSource, false);
-                }
-                await this.preflight({
-                    content: candidate.content,
-                    selection: candidate.selection,
-                    runtimeRoot: this.runtimeRoot,
-                    configPath: this.configPath,
-                });
-                if (fs.readFileSync(this.configPath, "utf8") !== candidate.source) continue;
-                writeConfigFileAtomic(this.configPath, candidate.content, { backup: true });
-                return { restartRequired: true };
-            }
+        if (this.disabling) {
+            if (this.disabling.id === id) return this.disabling.promise;
             throw new ExtensionInstallConflictError(
-                "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
+                `扩展 ${this.disabling.id} 正在停用，请稍后再试`,
             );
+        }
+
+        let startDisable: (() => void) | undefined;
+        const startGate = new Promise<void>(resolve => {
+            startDisable = resolve;
+        });
+        const operationId = randomUUID();
+        const startedAt = new Date().toISOString();
+        const promise = startGate.then(async (): Promise<{ restartRequired: true }> => {
+            let packageLock;
+            try {
+                packageLock = acquirePackageMutationLock(this.runtimeRoot, {
+                    token: randomUUID(),
+                    operationId,
+                    operation: "extension_disable",
+                    extensionId: id,
+                });
+            } catch (error) {
+                if (error instanceof PackageMutationLockConflictError) {
+                    throw new ExtensionInstallConflictError(error.message, { cause: error });
+                }
+                throw error;
+            }
+            try {
+                let candidate = this.prepareConfig(entry.type, entry.name, undefined, false);
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    const latestSource = fs.readFileSync(this.configPath, "utf8");
+                    if (latestSource !== candidate.source) {
+                        candidate = this.prepareConfig(entry.type, entry.name, latestSource, false);
+                    }
+                    await this.preflight({
+                        content: candidate.content,
+                        selection: candidate.selection,
+                        runtimeRoot: this.runtimeRoot,
+                        configPath: this.configPath,
+                    });
+                    if (fs.readFileSync(this.configPath, "utf8") !== candidate.source) continue;
+                    writeConfigFileAtomic(this.configPath, candidate.content, { backup: true });
+                    return { restartRequired: true };
+                }
+                throw new ExtensionInstallConflictError(
+                    "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
+                );
+            } finally {
+                packageLock.release();
+            }
+        });
+        this.disabling = { id, operationId, startedAt, promise };
+        this.lastDisables.delete(id);
+        startDisable?.();
+        try {
+            const result = await promise;
+            this.lastDisables.set(id, {
+                operationId,
+                status: "succeeded",
+                startedAt,
+                completedAt: new Date().toISOString(),
+                message: null,
+            });
+            return result;
+        } catch (error) {
+            this.lastDisables.set(id, {
+                operationId,
+                status: "failed",
+                startedAt,
+                completedAt: new Date().toISOString(),
+                message: formatExtensionInstallationError(error),
+            });
+            throw error;
         } finally {
-            packageLock.release();
+            if (this.disabling?.promise === promise) this.disabling = null;
         }
     }
 

@@ -205,6 +205,20 @@ export interface ExtensionInfo {
         completedAt: string;
         message: string | null;
     } | null;
+    /** 当前服务端停用操作；旧版服务端可能不返回该字段。 */
+    disabling?: boolean;
+    disableOperation?: {
+        operationId: string;
+        startedAt: string;
+    } | null;
+    /** 当前服务实例内最近一次停用终态；开始下一次停用或服务重启后更新/清空。 */
+    lastDisable?: {
+        operationId: string;
+        status: "succeeded" | "failed";
+        startedAt: string;
+        completedAt: string;
+        message: string | null;
+    } | null;
     /** 适配器能力来自已加载插件的运行时契约，或安装前可见的版本化目录快照。 */
     capability: ExtensionCapabilityInfo | null;
 }

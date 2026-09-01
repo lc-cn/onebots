@@ -54,6 +54,9 @@ function adapter(overrides: Record<string, unknown> = {}) {
         installing: false,
         installation: null,
         lastInstallation: null,
+        disabling: false,
+        disableOperation: null,
+        lastDisable: null,
         capability: {
             source: "catalog",
             status: "verified",
@@ -327,6 +330,45 @@ describe("extension inventory response", () => {
                 }),
             ],
             "同时携带活动操作与终态",
+        ],
+        [
+            "活动停用与停用终态并存",
+            [
+                adapter({
+                    disabling: true,
+                    disableOperation: {
+                        operationId: "disable-1",
+                        startedAt: "2026-09-02T00:00:00.000Z",
+                    },
+                    lastDisable: {
+                        operationId: "disable-0",
+                        status: "failed",
+                        startedAt: "2026-09-01T00:00:00.000Z",
+                        completedAt: "2026-09-01T00:00:01.000Z",
+                        message: "失败",
+                    },
+                }),
+            ],
+            "同时携带活动停用与停用终态",
+        ],
+        [
+            "同一扩展同时安装和停用",
+            [
+                adapter({
+                    installing: true,
+                    installation: {
+                        operationId: "install-1",
+                        phase: "preflighting",
+                        startedAt: "2026-09-02T00:00:00.000Z",
+                    },
+                    disabling: true,
+                    disableOperation: {
+                        operationId: "disable-1",
+                        startedAt: "2026-09-02T00:00:00.000Z",
+                    },
+                }),
+            ],
+            "同时安装和停用",
         ],
     ])("拒绝%s", (_name, value, message) => {
         expect(() => parseExtensionInventory(value)).toThrow(message);
