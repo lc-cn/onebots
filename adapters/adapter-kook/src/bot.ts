@@ -26,6 +26,8 @@ import { KookWebhookReceiver, kookWebhookErrorStatus, type KookIngestResult } fr
 
 export type { KookBotEvents } from "./bot-events.js";
 
+export type KookWebSocketFactory = (url: URL) => WebSocket;
+
 const HELLO_TIMEOUT = 6_000;
 const PONG_TIMEOUT = 6_000;
 const MAX_RECONNECT_DELAY = 60_000;
@@ -40,6 +42,9 @@ export class KookBot extends EventEmitter<KookBotEvents> {
     private reconnectAttempt = 0;
     private stopped = true;
     private startPromise?: Promise<void>;
+    private lifecycleAbort?: AbortController;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private readonly gatewaySequence = new KookGatewaySequence();
     private gatewayDeliveryTail: Promise<void> = Promise.resolve();
     private gatewayDeliveryGeneration = 0;
@@ -50,7 +55,10 @@ export class KookBot extends EventEmitter<KookBotEvents> {
     private readonly oauth: KookOAuthClient;
     private readonly messageContexts = new KookMessageContextStore();
 
-    constructor(readonly config: KookConfig) {
+    constructor(
+        readonly config: KookConfig,
+        private readonly createSocket: KookWebSocketFactory = url => new WebSocket(url),
+    ) {
         super();
         assertKookConfig(config);
         this.webhook = new KookWebhookReceiver(config);
@@ -62,13 +70,18 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         return this.config.receive_mode || "gateway";
     }
 
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.startPromise) return this.startPromise;
         if (!this.stopped) return;
+        this.bindStartSignal(signal);
         this.stopped = false;
         const generation = ++this.generation;
-        const startPromise = this.establish(generation).catch(error => {
+        const controller = new AbortController();
+        this.lifecycleAbort = controller;
+        const startPromise = this.establish(generation, controller.signal).catch(error => {
             this.scheduleReconnect(generation);
+            if (signal?.aborted) throw signal.reason;
             throw error;
         });
         this.startPromise = startPromise;
@@ -81,9 +94,12 @@ export class KookBot extends EventEmitter<KookBotEvents> {
 
     async stop(): Promise<void> {
         const wasActive = !this.stopped || Boolean(this.startPromise || this.socket);
+        this.unbindStartSignal();
         this.stopped = true;
         this.generation++;
         this.startPromise = undefined;
+        this.lifecycleAbort?.abort();
+        this.lifecycleAbort = undefined;
         this.clearTimers();
         this.me = null;
         const socket = this.socket;
@@ -123,35 +139,45 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         return this.messageContexts.get(messageId);
     }
 
-    private async establish(generation: number): Promise<void> {
+    private async establish(generation: number, signal: AbortSignal): Promise<void> {
         if (this.stopped || generation !== this.generation) return;
-        if (!this.me) this.me = await this.callApi<KookUser>("/v3/user/me");
-        if (this.stopped || generation !== this.generation) return;
-        if (this.receiveMode === "gateway") await this.connect(generation);
-        else await emitAllAwaited(this, "ready");
+        signal.throwIfAborted();
+        if (!this.me) {
+            const me = await this.callApi<KookUser>("/v3/user/me", { signal });
+            this.assertLifecycle(generation, signal);
+            this.me = me;
+        }
+        if (this.receiveMode === "gateway") await this.connect(generation, signal);
+        else {
+            await emitAllAwaited(this, "ready");
+            this.assertLifecycle(generation, signal);
+        }
     }
 
-    private async connect(generation: number): Promise<void> {
+    private async connect(generation: number, signal: AbortSignal): Promise<void> {
         if (this.stopped || generation !== this.generation) return;
+        signal.throwIfAborted();
         this.clearSocketTimers();
         const gateway = await this.callApi<{ url: string }>("/v3/gateway/index", {
             query: { compress: 0 },
+            signal,
         });
-        if (this.stopped || generation !== this.generation) return;
+        this.assertLifecycle(generation, signal);
         const url = new URL(gateway.url);
         if (this.sessionId) {
             url.searchParams.set("resume", "1");
             url.searchParams.set("sn", String(this.gatewaySequence.sn));
             url.searchParams.set("session_id", this.sessionId);
         }
-        const socket = new WebSocket(url);
+        const socket = this.createSocket(url);
         this.socket = socket;
         try {
-            await this.waitForHello(socket, generation);
-            if (generation !== this.generation || this.stopped) return;
+            await this.waitForHello(socket, generation, signal);
+            this.assertLifecycle(generation, signal);
             this.reconnectAttempt = 0;
             this.armPing(socket, generation);
             await emitAllAwaited(this, "ready");
+            this.assertLifecycle(generation, signal);
         } catch (error) {
             if (this.socket === socket) this.socket = undefined;
             socket.removeAllListeners();
@@ -161,16 +187,30 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         }
     }
 
-    private waitForHello(socket: WebSocket, generation: number): Promise<void> {
+    private waitForHello(
+        socket: WebSocket,
+        generation: number,
+        signal: AbortSignal,
+    ): Promise<void> {
+        signal.throwIfAborted();
         return new Promise((resolve, reject) => {
             let settled = false;
             const settle = (error?: Error) => {
                 if (settled) return;
                 settled = true;
                 clearTimeout(helloTimer);
+                signal.removeEventListener("abort", abort);
                 if (error) reject(error);
                 else resolve();
             };
+            const abort = () =>
+                settle(
+                    signal.reason instanceof Error
+                        ? signal.reason
+                        : new KookError("KOOK Gateway 启动已取消", {
+                              code: "KOOK_START_CANCELLED",
+                          }),
+                );
             const helloTimer = setTimeout(
                 () =>
                     settle(
@@ -180,6 +220,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
                     ),
                 HELLO_TIMEOUT,
             );
+            signal.addEventListener("abort", abort, { once: true });
             socket.on("message", raw => {
                 try {
                     const signal = parseSignal(JSON.parse(raw.toString()) as unknown);
@@ -274,7 +315,9 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         const delay = Math.round(base * (0.8 + Math.random() * 0.4));
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = undefined;
-            void this.establish(generation).catch(error => {
+            const signal = this.lifecycleAbort?.signal;
+            if (!signal) return;
+            void this.establish(generation, signal).catch(error => {
                 this.reportError(error);
                 this.scheduleReconnect(generation);
             });
@@ -293,6 +336,34 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         this.clearSocketTimers();
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
         this.reconnectTimer = undefined;
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error =>
+                this.reportError(KookError.wrap(error, "KOOK_STOP_FAILED")),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
+    }
+
+    private assertLifecycle(generation: number, signal: AbortSignal): void {
+        signal.throwIfAborted();
+        if (this.stopped || generation !== this.generation) {
+            throw new KookError("KOOK Bot 启动已取消", { code: "KOOK_START_CANCELLED" });
+        }
     }
 
     private resetGatewaySession(): void {

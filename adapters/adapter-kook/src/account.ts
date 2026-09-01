@@ -57,9 +57,9 @@ export function createKookAccount(
         }
     });
 
-    account.on("start", async () => {
+    account.on("start", async (signal: AbortSignal) => {
         try {
-            await bot.start();
+            await bot.start(signal);
         } catch (error) {
             account.status = AccountStatus.OffLine;
             adapter.logger.error("启动 KOOK Bot 失败:", error);

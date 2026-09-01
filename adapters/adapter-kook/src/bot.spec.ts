@@ -1,4 +1,5 @@
 import { createCipheriv } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { KookBot } from "./bot.js";
 import { KookApiError } from "./errors.js";
@@ -191,6 +192,103 @@ describe("KOOK Bot", () => {
         expect(firstSettled).toHaveBeenCalledOnce();
         expect(secondSettled).toHaveBeenCalledOnce();
         await bot.stop();
+    });
+
+    test("启动取消会中止尚未完成的身份请求并拒绝迟到身份", async () => {
+        let requestSignal: AbortSignal | undefined;
+        vi.stubGlobal(
+            "fetch",
+            vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+                requestSignal = init?.signal ?? undefined;
+                return new Promise<Response>((_resolve, reject) => {
+                    requestSignal?.addEventListener("abort", () => reject(requestSignal?.reason), {
+                        once: true,
+                    });
+                });
+            }),
+        );
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        const controller = new AbortController();
+        const starting = bot.start(controller.signal);
+        await vi.waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
+
+        const reason = new Error("account startup timeout");
+        controller.abort(reason);
+
+        await expect(starting).rejects.toBe(reason);
+        expect(requestSignal?.aborted).toBe(true);
+        expect(bot.getCachedMe()).toBeNull();
+    });
+
+    test("启动取消会关闭尚未收到 HELLO 的 Gateway 连接", async () => {
+        const socket = Object.assign(new EventEmitter(), {
+            readyState: 0,
+            close: vi.fn(),
+            terminate: vi.fn(),
+            send: vi.fn(),
+        });
+        socket.close.mockImplementation(() => {
+            socket.readyState = 2;
+        });
+        const createSocket = vi.fn(() => socket as never);
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                new Response(JSON.stringify({ code: 0, data: { id: "bot", username: "KOOK" } })),
+            )
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        code: 0,
+                        data: { url: "wss://gateway.example.test" },
+                    }),
+                ),
+            );
+        vi.stubGlobal("fetch", fetchMock);
+        const bot = new KookBot({ account_id: "bot", token: "token" }, createSocket);
+        const controller = new AbortController();
+        const starting = bot.start(controller.signal);
+        await vi.waitFor(() => expect(createSocket).toHaveBeenCalledOnce());
+
+        const reason = new Error("account startup timeout");
+        controller.abort(reason);
+
+        await expect(starting).rejects.toBe(reason);
+        expect(socket.close).toHaveBeenCalledOnce();
+        expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+        expect(fetchMock.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    test("就绪后继续响应账号启动信号以支持协议启动回滚", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValue(
+                    new Response(
+                        JSON.stringify({ code: 0, data: { id: "bot", username: "KOOK" } }),
+                    ),
+                ),
+        );
+        const bot = new KookBot({
+            account_id: "bot",
+            token: "token",
+            receive_mode: "manual",
+        });
+        const stopped = vi.fn();
+        bot.on("stopped", stopped);
+        const controller = new AbortController();
+
+        await bot.start(controller.signal);
+        expect(bot.getCachedMe()).toMatchObject({ id: "bot" });
+        controller.abort(new Error("protocol startup failed"));
+
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+        expect(bot.getCachedMe()).toBeNull();
     });
 
     test("等待异步生命周期监听器并在关闭失败后完成停止通知", async () => {

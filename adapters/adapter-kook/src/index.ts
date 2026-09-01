@@ -5,7 +5,7 @@ export { assertKookConfig, assertKookOAuthConfig } from "./config.js";
 export { KookWebhookReceiver, type KookEventDispatch, type KookIngestResult } from "./webhook.js";
 export { KookRestClient, type KookBinaryResult, type KookHttpTransport } from "./rest-client.js";
 export { KookOAuthClient } from "./oauth.js";
-export { KookBot, type KookBotEvents } from "./bot.js";
+export { KookBot, type KookBotEvents, type KookWebSocketFactory } from "./bot.js";
 export { projectKookEvents, type KookRawEvent } from "./events.js";
 export type {
     KookApiRequestOptions,

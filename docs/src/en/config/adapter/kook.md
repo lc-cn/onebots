@@ -8,9 +8,10 @@ Kook (formerly Kaiheila) adapter configuration guide.
 kook.{account_id}:
   # Kook platform configuration
   token: 'your_kook_token'        # Required: Kook Bot Token
-  mode: 'websocket'                # Optional: Connection mode, 'websocket' (default) or 'webhook'
-  verifyToken: 'your_verify_token' # Optional: Webhook verification Token (required for webhook mode)
-  encryptKey: 'your_encrypt_key'   # Optional: Message encryption key
+  receive_mode: 'gateway'           # Optional: gateway (default), webhook, or manual
+  verify_token: 'your_verify_token' # Required in webhook mode
+  encrypt_key: 'your_encrypt_key'   # Optional webhook encryption key
+  max_retries: 3                    # Optional REST rate-limit retries, 0-10
   
   # Protocol configuration
   onebot.v11:
@@ -29,20 +30,22 @@ kook.{account_id}:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `token` | string | Yes | Kook Bot Token, get from [KOOK Developer Platform](https://developer.kookapp.cn/) |
-| `mode` | string | No | Connection mode:<br>- `websocket` (default): Use WebSocket connection, real-time event reception<br>- `webhook`: Use webhook mode, requires callback URL configuration |
-| `verifyToken` | string | No | Webhook verification Token, required for webhook mode |
-| `encryptKey` | string | No | Message encryption key, optional |
+| `receive_mode` | string | No | Event ingress: `gateway` (default), `webhook`, or `manual` |
+| `verify_token` | string | No | Webhook verification token, required in webhook mode |
+| `encrypt_key` | string | No | Webhook message encryption key |
+| `api_base_url` | string | No | HTTPS base URL for the KOOK REST API; defaults to the official endpoint |
+| `max_retries` | number | No | Maximum REST rate-limit retries; defaults to 3 and accepts 0-10 |
 
 ## Connection Modes
 
-### WebSocket Mode (Recommended)
+### Gateway Mode (Recommended)
 
-WebSocket mode is the default mode, providing real-time bidirectional communication:
+Gateway mode is the default and receives events over WebSocket:
 
 ```yaml
 kook.zhin:
   token: 'your_kook_token'
-  mode: 'websocket'  # Can be omitted, default value
+  receive_mode: 'gateway'  # Can be omitted
 ```
 
 **Advantages**:
@@ -57,8 +60,8 @@ Webhook mode requires callback URL configuration, suitable for server deployment
 ```yaml
 kook.zhin:
   token: 'your_kook_token'
-  mode: 'webhook'
-  verifyToken: 'your_verify_token'
+  receive_mode: 'webhook'
+  verify_token: 'your_verify_token'
 ```
 
 **Advantages**:
@@ -66,8 +69,15 @@ kook.zhin:
 - No need to maintain persistent connection
 - Easy to scale
 
+### Manual Mode
+
+`manual` validates the bot identity without opening a Gateway or Webhook event ingress. It is intended for an existing host that feeds events through the SDK's `ingest()` or `acceptHttp()` boundary.
+
+## Startup Timeout and Cancellation
+
+KOOK account startup observes the global OneBots `timeout`. When startup times out or a configuration reload cancels it, the adapter aborts identity and Gateway URL requests, closes a WebSocket that is still waiting for HELLO, and prevents late responses from restoring online state. The signal remains active until protocol outlets finish, so a failed outlet startup also closes the Gateway during rollback.
+
 ## Related Links
 
 - [Kook Platform](/en/platform/kook)
 - [Quick Start](/en/guide/start)
-
