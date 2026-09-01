@@ -27,7 +27,8 @@ export interface WebSocketRouteOptions {
 
 export interface RouterRegistrationOwner {
     readonly platform: string;
-    readonly account_id: string;
+    /** 省略时表示平台 Adapter 自身拥有的全局路由。 */
+    readonly account_id?: string;
 }
 
 export class HttpRouteConflictError extends Error {
@@ -77,13 +78,15 @@ function formatOwnerConflict(
     registeringOwner?: RouterRegistrationOwner,
     existingOwner?: RouterRegistrationOwner,
 ): string {
-    const registering = registeringOwner
-        ? `；账号 ${registeringOwner.platform}/${registeringOwner.account_id} 无法注册`
-        : "";
-    const existing = existingOwner
-        ? `（现有注册者：账号 ${existingOwner.platform}/${existingOwner.account_id}）`
-        : "";
+    const registering = registeringOwner ? `；${formatOwner(registeringOwner)} 无法注册` : "";
+    const existing = existingOwner ? `（现有注册者：${formatOwner(existingOwner)}）` : "";
     return `${registering}${existing}`;
+}
+
+function formatOwner(owner: RouterRegistrationOwner): string {
+    return owner.account_id
+        ? `账号 ${owner.platform}/${owner.account_id}`
+        : `适配器 ${owner.platform}`;
 }
 
 export class WsServer<

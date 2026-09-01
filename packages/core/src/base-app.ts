@@ -49,6 +49,7 @@ import {
 } from "./account-config.js";
 import { acquireRuntimeOperation, type RuntimeOperation } from "./runtime-operation.js";
 import { createAccountWithRouteScope } from "./scoped-account.js";
+import { closeAdapterRouteScope } from "./scoped-adapter.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -310,6 +311,7 @@ export class BaseApp extends Koa {
         } catch (error) {
             if (!adapterExisted && adapter.accounts.size === 0) {
                 this.adapters.delete(config.platform);
+                closeAdapterRouteScope(adapter);
             }
             throw error;
         }
@@ -377,7 +379,13 @@ export class BaseApp extends Koa {
         if (this.adapters.has(platform)) return this.adapters.get(platform);
         const adapter = AdapterRegistry.create(`${platform}`, this);
         this.adapters.set(platform, adapter);
-        this.onAdapterCreated(adapter);
+        try {
+            this.onAdapterCreated(adapter);
+        } catch (error) {
+            this.adapters.delete(platform);
+            closeAdapterRouteScope(adapter);
+            throw error;
+        }
         return adapter;
     }
 
@@ -411,7 +419,13 @@ export class BaseApp extends Koa {
         await Promise.all(
             [...this.adapters].map(async ([platform, adapter]) => {
                 await failures.capture(
-                    () => adapter.stop(),
+                    async () => {
+                        try {
+                            await adapter.stop();
+                        } finally {
+                            closeAdapterRouteScope(adapter);
+                        }
+                    },
                     error => {
                         const wrappedError = ErrorHandler.wrap(error, { platform });
                         this.enhancedLogger.error(wrappedError, { platform });

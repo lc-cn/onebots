@@ -234,6 +234,22 @@ describe("Router HTTP route registration", () => {
         );
         expect(router.getWsPaths()).toEqual(["/events"]);
     });
+
+    it("区分适配器全局路由与账号路由的冲突归属", () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+        const adapter = router.createRegistrationScope({ platform: "wechat" });
+        adapter.run(() => router.post("/callback", () => undefined));
+        const account = router.createRegistrationScope({
+            platform: "wechat",
+            account_id: "official",
+        });
+
+        expect(() => account.run(() => router.post("/callback", () => undefined))).toThrow(
+            "账号 wechat/official 无法注册（现有注册者：适配器 wechat）",
+        );
+    });
 });
 
 function rejectedUpgradeStatus(

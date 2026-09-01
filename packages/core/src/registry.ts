@@ -15,6 +15,7 @@ import {
     assertProtocolFactoryContract,
 } from "./extension-factory-contract.js";
 import { invokeExtensionFactoryWithRegistryBoundary } from "./extension-factory-registry-boundary.js";
+import { createAdapterWithRouteScope } from "./scoped-adapter.js";
 
 interface ExtensionRegistrationScope {
     open: boolean;
@@ -513,24 +514,28 @@ export class AdapterRegistry {
         if (!factory) {
             throw new Error(`Adapter ${name} not registered`);
         }
-        const adapter = invokeExtensionFactoryWithRegistryBoundary(
-            `适配器 ${name}`,
-            () => (Adapter.isClassAdapter(factory) ? new factory(app) : factory(app)),
-            extensionRegistryBoundary,
-        );
-        assertAdapterFactoryContract(adapter, name, app);
-        const runtimeCapabilities = normalizeAdapterCapabilities(adapter.describeCapabilities());
-        const registeredCapabilities = this.metadata.get(name)?.capabilities;
-        if (
-            registeredCapabilities &&
-            !isDeepStrictEqual(registeredCapabilities, runtimeCapabilities)
-        ) {
-            throw new ValidationError(`适配器 ${name} 的注册能力清单与实例默认能力不一致`, {
-                context: { name },
-            });
-        }
-        assertSupportedActionsImplemented(adapter, runtimeCapabilities);
-        return adapter;
+        return createAdapterWithRouteScope(app, name, () => {
+            const adapter = invokeExtensionFactoryWithRegistryBoundary(
+                `适配器 ${name}`,
+                () => (Adapter.isClassAdapter(factory) ? new factory(app) : factory(app)),
+                extensionRegistryBoundary,
+            );
+            assertAdapterFactoryContract(adapter, name, app);
+            const runtimeCapabilities = normalizeAdapterCapabilities(
+                adapter.describeCapabilities(),
+            );
+            const registeredCapabilities = this.metadata.get(name)?.capabilities;
+            if (
+                registeredCapabilities &&
+                !isDeepStrictEqual(registeredCapabilities, runtimeCapabilities)
+            ) {
+                throw new ValidationError(`适配器 ${name} 的注册能力清单与实例默认能力不一致`, {
+                    context: { name },
+                });
+            }
+            assertSupportedActionsImplemented(adapter, runtimeCapabilities);
+            return adapter;
+        });
     }
 
     /**
