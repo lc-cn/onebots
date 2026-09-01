@@ -111,7 +111,9 @@ export function registerAdapterRoutes(app: App, router: Router): void {
 
     // CLI send：通过已运行网关发信
     router.post("/api/send", async (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
         try {
+            assertManagementInstancePrecondition(app, ctx, "消息发送");
             const body = (ctx.request.body as Record<string, unknown>) || {};
             const channel = String(body.channel ?? "");
             const target_id = String(body.target_id ?? "");
@@ -123,7 +125,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
 
             if (!channel || !target_id) {
                 ctx.status = 400;
-                ctx.body = { success: false, message: "缺少 channel 或 target_id" };
+                ctx.body = managementSendFailure(app, "缺少 channel 或 target_id");
                 return;
             }
 
@@ -133,21 +135,21 @@ export function registerAdapterRoutes(app: App, router: Router): void {
 
             if (!platform || !account_id) {
                 ctx.status = 400;
-                ctx.body = { success: false, message: "channel 格式应为 platform.account_id" };
+                ctx.body = managementSendFailure(app, "channel 格式应为 platform.account_id");
                 return;
             }
 
             const adapter = app.adapters.get(platform as keyof Adapter.Configs);
             if (!adapter) {
                 ctx.status = 404;
-                ctx.body = { success: false, message: `适配器 ${platform} 不存在` };
+                ctx.body = managementSendFailure(app, `适配器 ${platform} 不存在`);
                 return;
             }
 
             const account = adapter.getAccount(account_id);
             if (!account) {
                 ctx.status = 404;
-                ctx.body = { success: false, message: `账号 ${channel} 不存在` };
+                ctx.body = managementSendFailure(app, `账号 ${channel} 不存在`);
                 return;
             }
 
@@ -158,13 +160,30 @@ export function registerAdapterRoutes(app: App, router: Router): void {
                 scene_id,
                 message: segments,
             });
-            ctx.body = { success: true, message_id: result?.message_id ?? null };
-        } catch (error: unknown) {
-            const err = error as Error;
-            ctx.status = 500;
-            ctx.body = { success: false, message: err?.message ?? "发送失败" };
+            ctx.body = {
+                success: true,
+                application: app.info.application_name,
+                instance_id: app.info.instance_id,
+                message_id: result?.message_id ?? null,
+            };
+        } catch (error) {
+            ctx.status = error instanceof ManagementInstanceMismatchError ? 409 : 500;
+            ctx.body = managementSendFailure(
+                app,
+                error instanceof Error ? error.message : "发送失败",
+            );
+            app.logger.error("管理端发送消息失败", { error });
         }
     });
+}
+
+function managementSendFailure(app: App, message: string) {
+    return {
+        success: false,
+        application: app.info.application_name,
+        instance_id: app.info.instance_id,
+        message,
+    };
 }
 
 interface AccountRemovalRequest {

@@ -86,7 +86,7 @@ setup 不会写入占位平台账号；它只为本次 `-p` 实际加载的协�
 
 账号身份由 core 统一验证，因为它同时组成配置键和协议 URL 路径。别名可使用 Unicode、`@`、冒号、连字符、下划线和内部点号；空白、控制字符、`/`、`\\`、`%`、`?`、`#` 以及单独的 `.` / `..` 会在 Web 向导、账号管理 API、启动、热重载、doctor 和服务预检的共同边界被拒绝。`telegram.bot.eu` 仍会被解析为平台 `telegram`、账号 `bot.eu`，不会在第二个点号处截断。
 
-`onebots ui --web -c config.yaml` 会打开管理页面实际所在的本机 origin。宿主 `path` 只作为 Router HTTP 前缀，不会被误拼到页面地址；页面会从运行时元数据读取它。`onebots send -c config.yaml --channel <platform.account> --target_type private <target> <message>` 同样复用规范前缀和管理鉴权优先级：`ONEBOTS_ACCESS_TOKEN` 优先于文件 token；只有用户名密码时会先登录取得 Bearer 会话，并在发送成功或失败后撤销。显式 `--url` 只接受不含 URL 凭据、查询串或 fragment 的 HTTP(S) 网关根地址，避免把管理令牌发送到歧义目标。
+`onebots ui --web -c config.yaml` 会打开管理页面实际所在的本机 origin。宿主 `path` 只作为 Router HTTP 前缀，不会被误拼到页面地址；页面会从运行时元数据读取它。`onebots send -c config.yaml --channel <platform.account> --target_type private <target> <message>` 同样复用规范前缀和管理鉴权优先级：`ONEBOTS_ACCESS_TOKEN` 优先于文件 token；只有用户名密码时会先登录取得 Bearer 会话，并在发送成功或失败后撤销。发送命令会先用不含凭据的 `/health` 探针确认目标是与当前 CLI 同版本的 OneBots，再把登录和发送绑定到该进程的 `instance_id`；只有响应头和 JSON 成功回执均证明来自同一实例时才报告成功。显式 `--url` 只接受不含 URL 凭据、查询串或 fragment 的 HTTP(S) 网关根地址，避免把管理令牌发送到歧义目标。
 
 ## 工作原理
 

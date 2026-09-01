@@ -27,12 +27,23 @@ import {
 import packageMetadata from "../../package.json" with { type: "json" };
 import { readServiceInstanceId, verifyServiceOnline } from "../service-online-verification.js";
 import { verifyServiceStopped } from "../service-offline-verification.js";
-import { resolveGatewayBaseUrl } from "../doctor-endpoint.js";
+import {
+    probeDoctorEndpoint,
+    resolveGatewayBaseUrl,
+    type DoctorEndpointIdentity,
+} from "../doctor-endpoint.js";
 import {
     acquireManagementCredential,
     revokeManagementSession,
     type ManagementFetch,
 } from "../management-credential.js";
+import { readBoundedResponseBody } from "../bounded-response.js";
+import { DOCTOR_MANAGEMENT_BODY_LIMIT_BYTES } from "../doctor-management-response.js";
+import {
+    readManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+} from "../management-evidence-identity.js";
+import { MANAGEMENT_EXPECTED_INSTANCE_HEADER } from "../management-instance-precondition.js";
 import type { UpdateRunResult } from "../updater.js";
 import { inspectDoctorServiceMetadata } from "../doctor-service-metadata.js";
 import { assertInstalledServiceDefinitionCurrent } from "../service-definition-preflight.js";
@@ -561,7 +572,8 @@ export async function sendMessage(
     const baseUrl = options.url
         ? normalizeExplicitManagementBase(options.url)
         : resolveGatewayBaseUrl(config, process.env.PORT);
-    const credential = await acquireManagementCredential(baseUrl, config, fetcher);
+    const identity = await verifySendTarget(baseUrl, fetcher);
+    const credential = await acquireManagementCredential(baseUrl, config, fetcher, identity);
     if (!credential.token) {
         throw new CliError(
             credential.error ?? "配置未提供 access_token 或完整用户名密码，无法调用管理 API",
@@ -577,6 +589,7 @@ export async function sendMessage(
             headers: {
                 "content-type": "application/json",
                 authorization: `Bearer ${credential.token}`,
+                [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: identity.instanceId,
             },
             body: JSON.stringify({
                 channel: options.channel,
@@ -584,10 +597,14 @@ export async function sendMessage(
                 target_type: options.target_type,
                 message,
             }),
+            cache: "no-store",
+            redirect: "error",
             signal: AbortSignal.timeout(sendTimeoutMs(config.timeout)),
         });
-        const text = await response.text();
+        const text = await readBoundedResponseBody(response, DOCTOR_MANAGEMENT_BODY_LIMIT_BYTES);
+        assertSendResponseIdentity(response, identity);
         if (!response.ok) throw new CliError(`发送失败 (${response.status}): ${text}`, 2);
+        assertSendAcknowledgement(text, identity);
         result = { output: text || "发送成功" };
     } catch (error) {
         operationError = error;
@@ -615,6 +632,51 @@ export async function sendMessage(
     }
     if (cleanupError) throw cleanupError;
     return result!;
+}
+
+async function verifySendTarget(
+    baseUrl: string,
+    fetcher: ManagementFetch,
+): Promise<DoctorEndpointIdentity> {
+    const health = await probeDoctorEndpoint(baseUrl, "health", fetcher, packageMetadata.version);
+    if (
+        health.level !== "ok" ||
+        !health.identity ||
+        health.identity.application !== "onebots" ||
+        health.identity.version !== packageMetadata.version
+    ) {
+        throw new CliError(`拒绝发送：无法确认目标是当前版本 OneBots；${health.message}`, 2);
+    }
+    return health.identity;
+}
+
+function assertSendResponseIdentity(response: Response, expected: DoctorEndpointIdentity): void {
+    const actual = readManagementEvidenceIdentity(response.headers);
+    if (!actual || !sameManagementEvidenceIdentity(actual, expected)) {
+        throw new CliError("发送响应身份与发送前探测的 OneBots 实例不一致", 2);
+    }
+}
+
+function assertSendAcknowledgement(text: string, expected: DoctorEndpointIdentity): void {
+    let payload: unknown;
+    try {
+        payload = JSON.parse(text);
+    } catch {
+        throw new CliError("发送响应不是有效的 JSON 回执", 2);
+    }
+    if (
+        !isRecord(payload) ||
+        payload.success !== true ||
+        payload.application !== "onebots" ||
+        payload.instance_id !== expected.instanceId ||
+        !(payload.message_id === null || typeof payload.message_id === "string")
+    ) {
+        throw new CliError("发送响应缺少与目标实例一致的成功回执", 2);
+    }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeExplicitManagementBase(value: string): string {

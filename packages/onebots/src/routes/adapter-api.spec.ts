@@ -403,6 +403,66 @@ describe("adapter account routes", () => {
         await starting;
         expect(startCtx.body).toEqual({ success: true, data: account.info });
     });
+
+    it("实例切换后在读取账号和调用适配器前拒绝消息发送", async () => {
+        const adapter = sendAdapter();
+        const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
+        const ctx = {
+            get: () => "instance-before-restart",
+            set: vi.fn(),
+            request: {
+                body: {
+                    channel: "mock.demo",
+                    target_id: "user-1",
+                    target_type: "private",
+                    message: "hello",
+                },
+            },
+        } as unknown as RouterContext;
+
+        await posts.get("/api/send")!(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-a",
+            message: "消息发送请求期望实例 instance-before-restart，当前已由实例 instance-a 接管",
+        });
+        expect(adapter.getAccount).not.toHaveBeenCalled();
+        expect(adapter.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it("消息发送成功响应同时发布头部和正文实例身份", async () => {
+        const adapter = sendAdapter();
+        const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
+        const ctx = {
+            get: () => "instance-a",
+            set: vi.fn(),
+            request: {
+                body: {
+                    channel: "mock.demo",
+                    target_id: "user-1",
+                    target_type: "private",
+                    message: "hello",
+                },
+            },
+        } as unknown as RouterContext;
+
+        await posts.get("/api/send")!(ctx);
+
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Application", "onebots");
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Version", "1.2.8");
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
+        expect(ctx.set).toHaveBeenCalledWith("Cache-Control", "no-store");
+        expect(adapter.sendMessage).toHaveBeenCalledOnce();
+        expect(ctx.body).toEqual({
+            success: true,
+            application: "onebots",
+            instance_id: "instance-a",
+            message_id: "message-1",
+        });
+    });
 });
 
 function lifecycleAdapter(
@@ -417,5 +477,16 @@ function lifecycleAdapter(
     } as unknown as Adapter & {
         setOnline: ReturnType<typeof vi.fn>;
         setOffline: ReturnType<typeof vi.fn>;
+    };
+}
+
+function sendAdapter() {
+    return {
+        getAccount: vi.fn(() => ({ info: { uin: "demo" } })),
+        createId: vi.fn((value: string) => value),
+        sendMessage: vi.fn(async () => ({ message_id: "message-1" })),
+    } as unknown as Adapter & {
+        getAccount: ReturnType<typeof vi.fn>;
+        sendMessage: ReturnType<typeof vi.fn>;
     };
 }

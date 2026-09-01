@@ -1,4 +1,10 @@
 import { readDoctorManagementJson } from "./doctor-management-response.js";
+import type { DoctorEndpointIdentity } from "./doctor-endpoint.js";
+import {
+    readManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+} from "./management-evidence-identity.js";
+import { MANAGEMENT_EXPECTED_INSTANCE_HEADER } from "./management-instance-precondition.js";
 
 export type ManagementFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -19,6 +25,7 @@ export async function acquireManagementCredential(
     base: string,
     config: Record<string, unknown>,
     fetcher: ManagementFetch = fetch,
+    expectedIdentity?: DoctorEndpointIdentity,
 ): Promise<ManagementCredential> {
     const accessToken =
         stringConfigValue(process.env.ONEBOTS_ACCESS_TOKEN) ??
@@ -31,11 +38,32 @@ export async function acquireManagementCredential(
     try {
         const response = await fetcher(`${base}/api/auth/login`, {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: {
+                "content-type": "application/json",
+                ...(expectedIdentity
+                    ? {
+                          [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: expectedIdentity.instanceId,
+                      }
+                    : {}),
+            },
             body: JSON.stringify({ username, password }),
+            cache: "no-store",
+            redirect: "error",
             signal: AbortSignal.timeout(2_000),
         });
         const payload = await readDoctorManagementJson(response);
+        if (expectedIdentity) {
+            const actualIdentity = readManagementEvidenceIdentity(response.headers);
+            if (
+                !actualIdentity ||
+                !sameManagementEvidenceIdentity(actualIdentity, expectedIdentity)
+            ) {
+                return {
+                    session: false,
+                    error: "管理登录响应身份与已探测的 OneBots 实例不一致",
+                };
+            }
+        }
         const token =
             isRecord(payload) && typeof payload.token === "string" ? payload.token.trim() : "";
         if (!response.ok || !token) {
