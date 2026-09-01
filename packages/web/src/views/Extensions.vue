@@ -240,6 +240,7 @@ import { IconSearch } from "@tabler/icons-vue";
 import type { ExtensionInfo, PackageMutationStatus } from "../types";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
+import { readManagementJsonResponse } from "../management-response.js";
 import {
     readCurrentServiceInstanceId,
     requestServiceRestart,
@@ -402,8 +403,12 @@ async function loadExtensions(background = false): Promise<void> {
         if (!sameManagementEvidenceIdentity(inventoryIdentity, mutationIdentity)) {
             throw new Error("扩展目录与包变更状态来自不同 OneBots 实例");
         }
-        const nextExtensions = parseExtensionInventory(await extensionsResponse.json());
-        const nextMutationStatus = parsePackageMutationStatus(await mutationResponse.json());
+        const nextExtensions = parseExtensionInventory(
+            await readManagementJsonResponse(extensionsResponse),
+        );
+        const nextMutationStatus = parsePackageMutationStatus(
+            await readManagementJsonResponse(mutationResponse),
+        );
         extensions.value = nextExtensions;
         packageMutationStatus.value = nextMutationStatus;
     } catch (error) {
@@ -474,7 +479,7 @@ async function install(extension: ExtensionInfo): Promise<void> {
                 buildApiUrl(`/api/extensions/${encodeURIComponent(extension.id)}/install`),
                 { method: "POST" },
             );
-            const result = (await response.json()) as {
+            const result = (await readManagementJsonResponse(response)) as {
                 success: boolean;
                 restartRequired?: boolean;
                 restartSupported?: boolean;

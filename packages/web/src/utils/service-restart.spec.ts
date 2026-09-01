@@ -4,6 +4,7 @@ import {
     requestServiceRestart,
     waitForServiceRestart,
 } from "./service-restart";
+import { WEB_MANAGEMENT_BODY_LIMIT_BYTES } from "../management-response.js";
 
 function health(instanceId?: string, application = "onebots") {
     return new Response(JSON.stringify({ status: "ok", application, instance_id: instanceId }), {
@@ -135,6 +136,22 @@ describe("Web service restart verification", () => {
         expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
             instance_id: "old",
         });
+    });
+
+    it("rejects an oversized restart acknowledgement", async () => {
+        const fetcher = vi.fn(
+            async () =>
+                new Response("{}", {
+                    status: 200,
+                    headers: {
+                        "content-length": String(WEB_MANAGEMENT_BODY_LIMIT_BYTES + 1),
+                    },
+                }),
+        );
+
+        await expect(requestServiceRestart("old", fetcher)).rejects.toThrow(
+            "重启回执无效：响应正文超过 4 MiB 上限",
+        );
     });
 
     it("does not send a restart request without a trusted current identity", async () => {

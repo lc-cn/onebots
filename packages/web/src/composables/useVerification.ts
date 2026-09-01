@@ -7,6 +7,7 @@ import {
     type AuthenticatedEventStream,
 } from "../authenticated-event-stream.js";
 import { reportClientError } from "../client-diagnostics";
+import { readManagementJsonResponse } from "../management-response.js";
 
 /** 合并单条验证到列表（同 platform+account_id+type 只保留最新） */
 function mergePending(
@@ -47,7 +48,7 @@ export function useVerification() {
         try {
             const response = await authFetch(buildApiUrl("/api/verification/pending"));
             if (response.ok) {
-                const list = (await response.json()) as VerificationRequest[];
+                const list = (await readManagementJsonResponse(response)) as VerificationRequest[];
                 if (Array.isArray(list)) {
                     let next = pending.value;
                     for (const item of list) {
@@ -121,7 +122,10 @@ export function useVerification() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ platform, account_id }),
             });
-            const result = await response.json().catch(() => ({}));
+            const result = (await readManagementJsonResponse(response)) as {
+                success?: boolean;
+                message?: string;
+            };
             if (response.ok && result.success) return { success: true };
             return { success: false, message: result.message || "请求失败" };
         } catch (error) {
@@ -145,7 +149,10 @@ export function useVerification() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ platform, account_id, type, data }),
             });
-            const result = await response.json().catch(() => ({}));
+            const result = (await readManagementJsonResponse(response)) as {
+                success?: boolean;
+                message?: string;
+            };
             if (response.ok && result.success) {
                 dismiss({ platform, account_id, type, data } as VerificationRequest);
                 return { success: true };

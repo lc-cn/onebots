@@ -4,6 +4,10 @@ import { useRoute, useRouter } from "vue-router";
 import { IconSettings, IconRefresh, IconCheck, IconPlus, IconDownload } from "@tabler/icons-vue";
 import { buildApiUrl } from "../config";
 import { authFetch } from "../composables/useAuth";
+import {
+    readManagementJsonResponse,
+    readManagementResponseBody,
+} from "../management-response.js";
 import yaml from "js-yaml";
 import UiButton from "../ui/UiButton.vue";
 import UiCard from "../ui/UiCard.vue";
@@ -18,7 +22,7 @@ import ConfigStaticTab from "../components/config/ConfigStaticTab.vue";
 import ConfigAccountsTab from "../components/config/ConfigAccountsTab.vue";
 import AccountWizard from "../components/config/AccountWizard.vue";
 
-import type { SchemaBundle, SchemaGroup, AccountRow } from "../components/config/types";
+import type { Schema, SchemaBundle, SchemaGroup, AccountRow } from "../components/config/types";
 import type { SchemaLoadStatus } from "../components/config/account-adapter-selection.js";
 import { isAccountWizardRequest } from "./bot-onboarding.js";
 import { parseProtocolConfigurationRequest } from "./protocol-configuration-request.js";
@@ -153,14 +157,14 @@ const loadConfigurationSnapshot = async () => {
             );
         }
         const [content, rawSchema] = await Promise.all([
-            configResponse.text(),
-            schemaResponse.json(),
+            readManagementResponseBody(configResponse),
+            readManagementJsonResponse(schemaResponse),
         ]);
         const snapshot = parseConfigurationSnapshot(
             configResponse,
             schemaResponse,
             content,
-            normalizeSchema(rawSchema),
+            normalizeSchema(rawSchema as Schema | SchemaBundle),
         );
         const configObject = parseConfigObject(snapshot.content);
         if (generation !== configurationLoadGeneration) return;
@@ -208,7 +212,7 @@ const handleDownloadConfig = async () => {
         if (responseRevision !== configRevision.value) {
             throw new Error("在线配置已经更新，请重新读取后再下载");
         }
-        const text = await response.text();
+        const text = await readManagementResponseBody(response);
         const blob = new Blob([text], { type: "application/yaml" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -263,7 +267,9 @@ const handleSave = async () => {
             },
             body: config.value,
         });
-        const result = (await response.json()) as ConfigurationMutationResult;
+        const result = (await readManagementJsonResponse(
+            response,
+        )) as ConfigurationMutationResult;
         if (response.ok) {
             assertConfigurationMutationAcknowledgement(result, expectedIdentity.instanceId);
             configRevision.value = result.config_revision as string;
@@ -275,7 +281,7 @@ const handleSave = async () => {
         }
     } catch (error) {
         console.error("保存配置失败:", error);
-        toast.error("保存配置失败");
+        toast.error(error instanceof Error ? error.message : "保存配置失败");
     } finally {
         saving.value = false;
     }
@@ -299,18 +305,22 @@ const handleRemoveAccount = async (row: AccountRow) => {
         toast.error("配置快照不可用，请重新读取后再删除账号");
         return;
     }
-    const response = await authFetch(url, {
-        headers: {
-            [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: expectedIdentity.instanceId,
-            [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: expectedRevision,
-        },
-    });
-    if (response.ok) {
-        toast.success("删除成功");
-        await loadConfigurationSnapshot();
-    } else {
-        const result = await response.json().catch(() => ({}));
-        toast.error(result.message || "删除失败");
+    try {
+        const response = await authFetch(url, {
+            headers: {
+                [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: expectedIdentity.instanceId,
+                [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: expectedRevision,
+            },
+        });
+        if (response.ok) {
+            toast.success("删除成功");
+            await loadConfigurationSnapshot();
+        } else {
+            const result = (await readManagementJsonResponse(response)) as { message?: string };
+            toast.error(result.message || "删除失败");
+        }
+    } catch (error) {
+        toast.error(error instanceof Error ? error.message : "删除失败");
     }
 };
 

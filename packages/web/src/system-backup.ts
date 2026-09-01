@@ -7,7 +7,18 @@ export async function parseSystemBackupResponse(
     response: Response,
     expectedInstanceId: string,
 ): Promise<SystemBackupResult> {
-    const payload: unknown = await response.json().catch(() => null);
+    let payload: unknown;
+    try {
+        payload = await readManagementJsonResponse(response);
+    } catch (error) {
+        return {
+            success: false,
+            message:
+                error instanceof ResponseBodyTooLargeError
+                    ? `备份响应无效：${error.message}`
+                    : `备份响应无效（HTTP ${response.status}）`,
+        };
+    }
     if (!isRecord(payload)) {
         return { success: false, message: `备份响应无效（HTTP ${response.status}）` };
     }
@@ -34,3 +45,5 @@ function boundedMessage(value: unknown, fallback: string): string {
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+import { ResponseBodyTooLargeError } from "./bounded-response.js";
+import { readManagementJsonResponse } from "./management-response.js";

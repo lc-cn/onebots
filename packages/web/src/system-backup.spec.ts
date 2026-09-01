@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { WEB_MANAGEMENT_BODY_LIMIT_BYTES } from "./management-response.js";
 import { parseSystemBackupResponse } from "./system-backup.js";
 
 describe("system backup response", () => {
@@ -40,5 +41,21 @@ describe("system backup response", () => {
         await expect(
             parseSystemBackupResponse(new Response(null, { status: 200 }), "instance-a"),
         ).resolves.toEqual({ success: false, message: "备份响应无效（HTTP 200）" });
+    });
+
+    it("拒绝超过管理响应边界的备份回执", async () => {
+        await expect(
+            parseSystemBackupResponse(
+                new Response("{}", {
+                    headers: {
+                        "content-length": String(WEB_MANAGEMENT_BODY_LIMIT_BYTES + 1),
+                    },
+                }),
+                "instance-a",
+            ),
+        ).resolves.toEqual({
+            success: false,
+            message: "备份响应无效：响应正文超过 4 MiB 上限",
+        });
     });
 });

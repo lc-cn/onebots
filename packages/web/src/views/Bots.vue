@@ -75,6 +75,7 @@ import { useToast } from "../ui/toast";
 import { useApi } from "../composables/useApi";
 import { authFetch } from "../composables/useAuth";
 import { buildApiUrl } from "../config";
+import { readManagementJsonResponse } from "../management-response.js";
 import { reportClientError } from "../client-diagnostics";
 import BotCard from "../components/BotCard.vue";
 import AdapterCapabilitiesDrawer from "../components/AdapterCapabilitiesDrawer.vue";
@@ -187,7 +188,7 @@ async function loadExtensionInventory() {
         const response = await authFetch(buildApiUrl("/api/extensions"));
         if (!response.ok) throw new Error("无法读取适配器能力目录");
         const identity = parseManagementEvidenceIdentity(response);
-        const inventory = parseExtensionInventory(await response.json());
+        const inventory = parseExtensionInventory(await readManagementJsonResponse(response));
         extensionInventoryIdentity.value = identity;
         extensions.value = inventory;
         extensionInventoryStatus.value = "ready";
@@ -206,7 +207,9 @@ async function loadCapabilityCatalog() {
     try {
         const response = await authFetch(buildApiUrl("/api/adapter-capabilities"));
         if (!response.ok) throw new Error(`能力清单请求失败（HTTP ${response.status}）`);
-        capabilityReport.value = parseAdapterCapabilityReport(await response.json());
+        capabilityReport.value = parseAdapterCapabilityReport(
+            await readManagementJsonResponse(response),
+        );
         capabilityCatalogError.value =
             capabilityReport.value.errors.join("；") ||
             (capabilityReport.value.complete ? "" : "存在未完成版本绑定的能力证据");

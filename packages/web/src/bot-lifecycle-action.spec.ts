@@ -3,6 +3,7 @@ import {
     buildBotLifecycleActionRequest,
     parseBotLifecycleActionResponse,
 } from "./bot-lifecycle-action.js";
+import { WEB_MANAGEMENT_BODY_LIMIT_BYTES } from "./management-response.js";
 
 describe("bot lifecycle action response", () => {
     it("binds a Web action to the instance that supplied the account snapshot", () => {
@@ -58,5 +59,17 @@ describe("bot lifecycle action response", () => {
         if (result.success === true) throw new Error("expected failure result");
         expect(result.message).toHaveLength(500);
         expect(result.message).not.toContain("\n");
+    });
+
+    it("reports an oversized lifecycle error without consuming it", async () => {
+        const response = new Response("{}", {
+            status: 500,
+            headers: { "content-length": String(WEB_MANAGEMENT_BODY_LIMIT_BYTES + 1) },
+        });
+
+        await expect(parseBotLifecycleActionResponse(response, "停止机器人失败")).resolves.toEqual({
+            success: false,
+            message: "停止机器人失败：响应正文超过 4 MiB 上限",
+        });
     });
 });

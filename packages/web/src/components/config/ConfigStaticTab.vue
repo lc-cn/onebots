@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { IconRefresh, IconUpload, IconTrash } from '@tabler/icons-vue';
 import { buildApiUrl } from '../../config';
 import { authFetch } from '../../composables/useAuth';
+import { readManagementJsonResponse } from '../../management-response.js';
 import UiButton from '../../ui/UiButton.vue';
 import UiAlert from '../../ui/UiAlert.vue';
 import UiEmpty from '../../ui/UiEmpty.vue';
@@ -50,7 +51,7 @@ const loadStaticFiles = async () => {
     staticError.value = '';
     try {
         const response = await authFetch(buildApiUrl('/api/public-static/files'));
-        const data = (await response.json().catch(() => ({}))) as {
+        const data = (await readManagementJsonResponse(response)) as {
             success?: boolean;
             message?: string;
             files?: string[];
@@ -65,10 +66,10 @@ const loadStaticFiles = async () => {
         }
         staticFiles.value = (data.files || []).map(name => ({ name }));
         staticRootDisplay.value = data.root || '';
-    } catch {
+    } catch (error) {
         staticFiles.value = [];
         staticRootDisplay.value = '';
-        staticError.value = '加载静态文件列表失败';
+        staticError.value = error instanceof Error ? error.message : '加载静态文件列表失败';
     } finally {
         staticLoading.value = false;
     }
@@ -98,7 +99,7 @@ const submitStaticUpload = async (file: File) => {
             method: 'POST',
             body: fd
         });
-        const data = (await res.json().catch(() => ({}))) as {
+        const data = (await readManagementJsonResponse(res)) as {
             message?: string;
             hf_backup?: StaticApiHfBackup;
         };
@@ -108,8 +109,12 @@ const submitStaticUpload = async (file: File) => {
         }
         notifyStaticHfBackup(data.hf_backup, data.message || '上传成功');
         await loadStaticFiles();
-    } catch {
-        toast.error('上传失败，请检查网络、登录状态或文件是否过大（≤2MB）');
+    } catch (error) {
+        toast.error(
+            error instanceof Error
+                ? error.message
+                : '上传失败，请检查网络、登录状态或文件是否过大（≤2MB）'
+        );
     } finally {
         staticUploading.value = false;
     }
@@ -123,19 +128,23 @@ const handleDeleteStaticFile = async (name: string) => {
         danger: true
     });
     if (!ok) return;
-    const response = await authFetch(
-        buildApiUrl(`/api/public-static/${encodeURIComponent(name)}`),
-        { method: 'DELETE' }
-    );
-    const result = (await response.json().catch(() => ({}))) as {
-        message?: string;
-        hf_backup?: StaticApiHfBackup;
-    };
-    if (response.ok) {
-        notifyStaticHfBackup(result.hf_backup, result.message || '已删除');
-        await loadStaticFiles();
-    } else {
-        toast.error(result.message || '删除失败');
+    try {
+        const response = await authFetch(
+            buildApiUrl(`/api/public-static/${encodeURIComponent(name)}`),
+            { method: 'DELETE' }
+        );
+        const result = (await readManagementJsonResponse(response)) as {
+            message?: string;
+            hf_backup?: StaticApiHfBackup;
+        };
+        if (response.ok) {
+            notifyStaticHfBackup(result.hf_backup, result.message || '已删除');
+            await loadStaticFiles();
+        } else {
+            toast.error(result.message || '删除失败');
+        }
+    } catch (error) {
+        toast.error(error instanceof Error ? error.message : '删除失败');
     }
 };
 

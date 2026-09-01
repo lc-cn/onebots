@@ -95,6 +95,7 @@ import { UiButton, UiBadge, UiInput, UiSelect, UiEmpty } from '../ui/index';
 import { useToast } from '../ui/toast';
 import { buildApiUrl } from '../config';
 import { authFetch } from '../composables/useAuth';
+import { readManagementJsonResponse } from '../management-response.js';
 import {
     openAuthenticatedEventStream,
     type AuthenticatedEventStream,
@@ -207,7 +208,7 @@ async function loadHistory() {
     try {
         const response = await authFetch(buildApiUrl('/api/message-debug/history'));
         if (response.ok) {
-            entries.value = await response.json();
+            entries.value = (await readManagementJsonResponse(response)) as DebugEntry[];
         }
     } catch (error) {
         console.error('获取消息调试历史失败:', error);

@@ -23,6 +23,7 @@ import {
     type ManagementEvidenceIdentity,
 } from "../management-evidence-identity.js";
 import { parseSystemInfoSnapshot } from "../system-info.js";
+import { readManagementJsonResponse } from "../management-response.js";
 
 export interface UseApiResources {
     adapters?: boolean;
@@ -58,7 +59,7 @@ export function useApi(resources: UseApiResources = {}) {
             const response = await authFetch(buildApiUrl("/api/adapters"), { cache: "no-store" });
             if (!response.ok) throw new Error(`账号运行态请求失败（HTTP ${response.status}）`);
             const nextIdentity = parseManagementEvidenceIdentity(response);
-            const nextAdapters = parseAdapterInventory(await response.json());
+            const nextAdapters = parseAdapterInventory(await readManagementJsonResponse(response));
             adapterInventoryIdentity.value = nextIdentity;
             adapters.value = nextAdapters;
             adapterInventoryStatus.value = "ready";
@@ -78,7 +79,10 @@ export function useApi(resources: UseApiResources = {}) {
                 signal: AbortSignal.timeout(5_000),
             });
             if (!response.ok) throw new Error(`系统信息请求失败（HTTP ${response.status}）`);
-            const snapshot = parseSystemInfoSnapshot(response, await response.json());
+            const snapshot = parseSystemInfoSnapshot(
+                response,
+                await readManagementJsonResponse(response),
+            );
             systemInfoIdentity.value = snapshot.identity;
             systemInfo.value = snapshot.info;
             systemInfoStatus.value = "ready";

@@ -20,7 +20,18 @@ export async function parseBotLifecycleActionResponse(
     fallback: string,
 ): Promise<BotLifecycleActionResult> {
     if (response.ok) return { success: true };
-    const payload: unknown = await response.json().catch(() => null);
+    let payload: unknown;
+    try {
+        payload = await readManagementJsonResponse(response);
+    } catch (error) {
+        return {
+            success: false,
+            message:
+                error instanceof ResponseBodyTooLargeError
+                    ? `${fallback}：${error.message}`
+                    : `${fallback}（HTTP ${response.status}）`,
+        };
+    }
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
         return { success: false, message: `${fallback}（HTTP ${response.status}）` };
     }
@@ -35,3 +46,5 @@ export async function parseBotLifecycleActionResponse(
             : undefined;
     return code ? { success: false, code, message } : { success: false, message };
 }
+import { ResponseBodyTooLargeError } from "./bounded-response.js";
+import { readManagementJsonResponse } from "./management-response.js";

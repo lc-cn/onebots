@@ -1,5 +1,6 @@
 import { buildApiUrl } from "../config";
-import { readBoundedJsonResponse } from "../bounded-response.js";
+import { readBoundedJsonResponse, ResponseBodyTooLargeError } from "../bounded-response.js";
+import { readManagementJsonResponse } from "../management-response.js";
 import {
     DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
     runServiceProbe,
@@ -91,8 +92,11 @@ export async function requestServiceRestart(
     });
     let payload: unknown;
     try {
-        payload = await response.json();
-    } catch {
+        payload = await readManagementJsonResponse(response);
+    } catch (error) {
+        if (error instanceof ResponseBodyTooLargeError) {
+            throw new Error(`重启回执无效：${error.message}`);
+        }
         throw new Error(
             response.ok
                 ? "重启端点未返回有效 JSON 回执"

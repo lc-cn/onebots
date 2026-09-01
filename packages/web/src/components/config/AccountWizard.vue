@@ -14,6 +14,7 @@ import UiTabs from "../../ui/UiTabs.vue";
 import UiEmpty from "../../ui/UiEmpty.vue";
 import { buildApiUrl } from "../../config";
 import { authFetch } from "../../composables/useAuth";
+import { readManagementJsonResponse } from "../../management-response.js";
 import { useToast } from "../../ui/toast.js";
 import type { SchemaBundle, SchemaGroup, SchemaFieldDef, AccountRow } from "./types.js";
 import {
@@ -277,23 +278,27 @@ const handleSubmit = async () => {
     };
 
     const url = isEdit.value ? "/api/edit" : "/api/add";
-    const response = await authFetch(buildApiUrl(url), {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: props.instanceId,
-            [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: props.configRevision,
-        },
-        body: JSON.stringify(payload),
-    });
+    try {
+        const response = await authFetch(buildApiUrl(url), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: props.instanceId,
+                [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: props.configRevision,
+            },
+            body: JSON.stringify(payload),
+        });
 
-    if (response.ok) {
-        toast.success("保存成功");
-        dialogVisible.value = false;
-        emit("saved");
-    } else {
-        const result = await response.json().catch(() => ({}));
-        toast.error(result.message || "保存失败");
+        if (response.ok) {
+            toast.success("保存成功");
+            dialogVisible.value = false;
+            emit("saved");
+        } else {
+            const result = (await readManagementJsonResponse(response)) as { message?: string };
+            toast.error(result.message || "保存失败");
+        }
+    } catch (error) {
+        toast.error(error instanceof Error ? error.message : "保存失败");
     }
 };
 
