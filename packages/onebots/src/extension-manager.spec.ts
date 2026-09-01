@@ -284,6 +284,36 @@ describe("ExtensionManager", () => {
         });
     });
 
+    it("分别发布磁盘安装版本与当前进程实际加载版本", () => {
+        const { root, configPath } = fixture();
+        const targetVersion = catalogVersion("@onebots/adapter-slack");
+        installFixturePackage("@onebots/adapter-slack", targetVersion, root);
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            preflight: successfulPreflight,
+        });
+
+        const slack = manager
+            .list([
+                {
+                    type: "adapter",
+                    name: "slack",
+                    packageName: "@onebots/adapter-slack",
+                    version: "0.9.0",
+                    entryPath: "/runtime/slack.js",
+                },
+            ])
+            .find(item => item.id === "adapter:slack");
+
+        expect(slack).toMatchObject({
+            installedVersion: targetVersion,
+            loaded: true,
+            loadedVersion: "0.9.0",
+            versionAligned: true,
+        });
+    });
+
     it("目录闭合失败时隔离静态能力证据并保留运行时信息", () => {
         const { root, configPath } = fixture();
         const manager = new ExtensionManager({

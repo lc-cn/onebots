@@ -151,6 +151,8 @@ export interface ExtensionInfo {
     installed: boolean;
     enabled: boolean;
     loaded: boolean;
+    /** 当前进程实际完成加载契约的插件版本；旧版服务端可能不返回。 */
+    loadedVersion?: string | null;
     /** 当前服务实例能否在退出后由监督器自动拉起。 */
     restartSupported?: boolean;
     installing: boolean;

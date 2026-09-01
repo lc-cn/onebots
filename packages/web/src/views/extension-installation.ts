@@ -28,6 +28,19 @@ export interface ExtensionInstallCompletion {
     message: string | null;
 }
 
+/** 只有磁盘与当前进程都提供版本证据时才判定需要进程切换。 */
+export function hasExtensionRuntimeVersionDrift(
+    extension: Pick<ExtensionInfo, "loaded"> &
+        Partial<Pick<ExtensionInfo, "installedVersion" | "loadedVersion">>,
+): boolean {
+    return Boolean(
+        extension.loaded &&
+        extension.installedVersion &&
+        extension.loadedVersion &&
+        extension.installedVersion !== extension.loadedVersion,
+    );
+}
+
 /** 新服务端显式声明监督能力；旧服务端保持原有自动重启行为。 */
 export function getExtensionInstallCompletion(result: {
     restartRequired?: boolean;
@@ -109,7 +122,8 @@ export function getExtensionInstallationAction(
         | "restartSupported"
         | "targetVersion"
         | "versionAligned"
-    >,
+    > &
+        Partial<Pick<ExtensionInfo, "installedVersion" | "loadedVersion">>,
 ): ExtensionInstallationAction {
     const restartLabel = extension.restartSupported === false ? "并在完成后手动重启" : "并重启";
     if (extension.catalogError) {
@@ -153,12 +167,18 @@ export function getExtensionInstallationAction(
             ? { visible: true, available: false, label: "请手动重启以加载" }
             : { visible: true, available: true, label: "重启以加载" };
     }
+    if (hasExtensionRuntimeVersionDrift(extension)) {
+        return extension.restartSupported === false
+            ? { visible: true, available: false, label: "请手动重启以切换版本" }
+            : { visible: true, available: true, label: "重启以切换版本" };
+    }
     return { visible: false, available: false, label: "已加载" };
 }
 
 /** 区分磁盘依赖、启动配置与当前进程，避免把半完成安装误报为已启用。 */
 export function getExtensionRuntimeStatus(
-    extension: Pick<ExtensionInfo, "enabled" | "installed" | "loaded">,
+    extension: Pick<ExtensionInfo, "enabled" | "installed" | "loaded"> &
+        Partial<Pick<ExtensionInfo, "installedVersion" | "loadedVersion">>,
 ): ExtensionRuntimeStatus | null {
     if (extension.loaded && !extension.enabled && !extension.installed) {
         return { variant: "danger", label: "已加载，配置与依赖均缺失" };
@@ -168,6 +188,9 @@ export function getExtensionRuntimeStatus(
     }
     if (extension.loaded && !extension.installed) {
         return { variant: "danger", label: "已加载，依赖缺失" };
+    }
+    if (hasExtensionRuntimeVersionDrift(extension)) {
+        return { variant: "warning", label: "已加载，等待版本切换" };
     }
     if (extension.loaded) return { variant: "success", label: "已加载" };
     if (extension.enabled && !extension.installed) {

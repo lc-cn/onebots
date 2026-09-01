@@ -102,12 +102,30 @@
                                 <span v-if="extension.installedVersion">
                                     已安装 v{{ extension.installedVersion }}
                                 </span>
+                                <span v-if="extension.loaded">
+                                    <template v-if="extension.loadedVersion">
+                                        当前进程 v{{ extension.loadedVersion }}
+                                    </template>
+                                    <template v-else>当前进程版本未知</template>
+                                </span>
                             </div>
                         </div>
 
                         <UiAlert v-if="extension.installedError" variant="danger">
                             已安装依赖无法验证：{{ extension.installedError }}。重新安装会使用当前
                             OneBots 固定的包名和版本修复该目录。
+                        </UiAlert>
+
+                        <UiAlert
+                            v-if="hasExtensionRuntimeVersionDrift(extension)"
+                            variant="warning">
+                            磁盘已安装 v{{ extension.installedVersion }}，当前进程仍运行 v{{
+                                extension.loadedVersion
+                            }}。{{
+                                extension.versionAligned
+                                    ? "请重启 OneBots 以切换到已验证版本。"
+                                    : "请先切换到当前 OneBots 的验证版本，再重启应用。"
+                            }}
                         </UiAlert>
 
                         <UiAlert
@@ -232,6 +250,7 @@ import {
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
+    hasExtensionRuntimeVersionDrift,
 } from "./extension-installation.js";
 
 const route = useRoute();

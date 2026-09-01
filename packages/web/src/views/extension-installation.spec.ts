@@ -5,6 +5,7 @@ import {
     getExtensionInstallationAction,
     getExtensionInstallationProgress,
     getExtensionRuntimeStatus,
+    hasExtensionRuntimeVersionDrift,
 } from "./extension-installation.js";
 
 describe("extension install completion", () => {
@@ -26,6 +27,44 @@ describe("extension install completion", () => {
                 message: "请手动重启 OneBots",
             }),
         ).toEqual({ restart: false, message: "请手动重启 OneBots" });
+    });
+});
+
+describe("extension runtime version evidence", () => {
+    it("只在磁盘版本与当前进程版本都有证据且不一致时标记漂移", () => {
+        expect(
+            hasExtensionRuntimeVersionDrift({
+                installedVersion: "2.0.0",
+                loaded: true,
+                loadedVersion: "1.0.0",
+            }),
+        ).toBe(true);
+        expect(
+            hasExtensionRuntimeVersionDrift({
+                installedVersion: "2.0.0",
+                loaded: true,
+                loadedVersion: "2.0.0",
+            }),
+        ).toBe(false);
+        expect(
+            hasExtensionRuntimeVersionDrift({
+                installedVersion: "2.0.0",
+                loaded: true,
+                loadedVersion: null,
+            }),
+        ).toBe(false);
+    });
+
+    it("把尚未切换到磁盘版本的已加载扩展标为等待切换", () => {
+        expect(
+            getExtensionRuntimeStatus({
+                enabled: true,
+                installed: true,
+                installedVersion: "2.0.0",
+                loaded: true,
+                loadedVersion: "1.0.0",
+            }),
+        ).toEqual({ variant: "warning", label: "已加载，等待版本切换" });
     });
 });
 
@@ -137,6 +176,28 @@ describe("extension installation action", () => {
                 versionAligned: true,
             }),
         ).toEqual({ visible: false, available: false, label: "已加载" });
+    });
+
+    it("为磁盘与当前进程版本漂移提供明确切换操作", () => {
+        const drifted = {
+            ...base,
+            installed: true,
+            installedVersion: "1.2.3",
+            enabled: true,
+            loaded: true,
+            loadedVersion: "1.1.0",
+            versionAligned: true,
+        };
+        expect(getExtensionInstallationAction(drifted)).toEqual({
+            visible: true,
+            available: true,
+            label: "重启以切换版本",
+        });
+        expect(getExtensionInstallationAction({ ...drifted, restartSupported: false })).toEqual({
+            visible: true,
+            available: false,
+            label: "请手动重启以切换版本",
+        });
     });
 });
 

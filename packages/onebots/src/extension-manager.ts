@@ -191,9 +191,10 @@ export class ExtensionManager {
             const installedVersion = installedPackage.version;
             const versionAligned =
                 packageCatalog !== undefined && installedVersion === packageCatalog.packageVersion;
-            const loaded = loadedPlugins.some(
+            const loadedPlugin = loadedPlugins.find(
                 plugin => plugin.type === entry.type && plugin.name === entry.name,
             );
+            const loaded = loadedPlugin !== undefined;
             const catalogCapability =
                 entry.type === "adapter"
                     ? getExtensionCapabilityCatalogEntry(entry.name)
@@ -223,6 +224,7 @@ export class ExtensionManager {
                     : selection.protocols
                 ).includes(entry.name),
                 loaded,
+                loadedVersion: loadedPlugin?.version ?? null,
                 installing: installation !== null,
                 installation,
                 lastInstallation: this.lastInstallations.get(entry.id) ?? null,
