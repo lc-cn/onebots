@@ -67,6 +67,37 @@ describe("service status", () => {
         expect(fetcher).not.toHaveBeenCalled();
     });
 
+    it("does not misreport a failed process-manager query as stopped", async () => {
+        const spec = serviceSpec();
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "systemd bus unavailable",
+            error: "进程管理器状态查询失败",
+        });
+        const fetcher = vi.fn<typeof fetch>();
+
+        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+        expect(result).toMatchObject({ exitCode: 1, raw: true });
+        expect(report).toMatchObject({
+            status: "unavailable",
+            ok: false,
+            target: { configPath: spec.configPath, baseUrl: null },
+            processManager: {
+                installed: true,
+                running: null,
+                detail: "systemd bus unavailable",
+                error: "进程管理器状态查询失败",
+            },
+            probe: { checks: [], error: "进程管理器状态不可用，未执行 HTTP 探测" },
+        });
+        expect(fetcher).not.toHaveBeenCalled();
+    });
+
     it("emits stable machine-readable evidence for uninstalled and stopped services", async () => {
         vi.spyOn(ServiceController.prototype, "status")
             .mockReturnValueOnce({

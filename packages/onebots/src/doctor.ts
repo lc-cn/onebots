@@ -323,10 +323,16 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             : useInstalledService
               ? {
                     name: "service",
-                    level: status?.installed && status.running ? "ok" : "warning",
-                    message: status?.installed
-                        ? `服务${status.running ? "正在运行" : "已安装但未运行"}`
-                        : "服务未安装",
+                    level: status?.error
+                        ? "error"
+                        : status?.installed && status.running
+                          ? "ok"
+                          : "warning",
+                    message: status?.error
+                        ? `${status.error}${status.detail ? `：${status.detail}` : ""}`
+                        : status?.installed
+                          ? `服务${status.running ? "正在运行" : "已安装但未运行"}`
+                          : "服务未安装",
                 }
               : {
                     name: "service",

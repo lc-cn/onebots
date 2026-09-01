@@ -73,10 +73,19 @@ export async function inspectServiceStatus(
     const status = controller.status(metadata.spec);
     const processManager = {
         installed: status.installed,
-        running: status.running,
+        running: status.error ? null : status.running,
         detail: status.detail?.trim() || null,
-        error: null,
+        error: status.error ?? null,
     };
+    if (status.error) {
+        return formatServiceStatusResult(
+            createServiceStatusReport(scope, "unavailable", processManager, {
+                ...(metadata.spec ? { configPath: metadata.spec.configPath } : {}),
+                error: "进程管理器状态不可用，未执行 HTTP 探测",
+            }),
+            options.json,
+        );
+    }
     if (!status.installed) {
         return formatServiceStatusResult(
             createServiceStatusReport(scope, "uninstalled", processManager),

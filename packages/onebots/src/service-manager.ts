@@ -297,7 +297,9 @@ export class ServiceController {
                 detail = this.host
                     .exec("systemctl", [
                         ...(this.scope === "user" ? ["--user"] : []),
-                        "is-active",
+                        "show",
+                        "--property=ActiveState",
+                        "--value",
                         SERVICE_NAME,
                     ])
                     .trim();
@@ -328,11 +330,21 @@ export class ServiceController {
             detail = this.host.exec("sc.exe", ["query", WINDOWS_SYSTEM_SERVICE_ID]).trim();
             return { installed: true, running: /RUNNING/.test(detail), scope: this.scope, detail };
         } catch (error) {
+            const detail = serviceStatusErrorDetail(error);
+            if (this.host.platform === "darwin" && launchdServiceIsNotLoaded(detail)) {
+                return {
+                    installed: true,
+                    running: false,
+                    scope: this.scope,
+                    detail: "launchd 任务未加载",
+                };
+            }
             return {
                 installed: true,
                 running: false,
                 scope: this.scope,
-                detail: (error as Error).message,
+                detail,
+                error: "进程管理器状态查询失败",
             };
         }
     }
@@ -445,6 +457,20 @@ export class ServiceController {
     private launchdDomain(): string {
         return this.scope === "system" ? "system" : `gui/${this.host.uid ?? 0}`;
     }
+}
+
+function serviceStatusErrorDetail(error: unknown): string {
+    const commandError = error as Error & { stderr?: string | Buffer; stdout?: string | Buffer };
+    const output = [commandError.stderr, commandError.stdout]
+        .map(value => value?.toString().trim())
+        .find(Boolean);
+    return output || commandError.message || String(error);
+}
+
+function launchdServiceIsNotLoaded(detail: string): boolean {
+    return /could not find service|service .* not found|unknown service|no such process/iu.test(
+        detail,
+    );
 }
 
 function isServiceSpec(value: unknown): value is ServiceSpec {

@@ -117,7 +117,7 @@ describe("service definition", () => {
             env: {},
             exec(file, args) {
                 commands.push([file, ...args].join(" "));
-                return args.includes("is-active") ? "inactive\n" : "";
+                return args.some(argument => argument.includes("ActiveState")) ? "inactive\n" : "";
             },
             async spawn() {
                 return 0;

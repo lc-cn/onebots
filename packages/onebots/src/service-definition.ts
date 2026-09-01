@@ -21,6 +21,8 @@ export interface ServiceStatus {
     running: boolean;
     scope: ServiceScope;
     detail: string;
+    /** 存在时表示 running 只是保守占位，进程管理器没有给出权威状态。 */
+    error?: string;
 }
 
 export interface ServiceCommandOptions {

@@ -191,7 +191,14 @@ export async function startService(
 ): Promise<CommandResult> {
     const controller = new ServiceController(scopeFrom(options));
     const spec = await preflightInstalledService(controller, "启动");
-    const alreadyRunning = controller.status().running;
+    const initialStatus = controller.status(spec);
+    if (initialStatus.error) {
+        throw new CliError(
+            `无法确认服务当前状态：${initialStatus.error}${initialStatus.detail ? `（${initialStatus.detail}）` : ""}；未执行启动命令`,
+            1,
+        );
+    }
+    const alreadyRunning = initialStatus.running;
     if (alreadyRunning) {
         await verifyActivatedService(spec, "启动", null, dependencies, false);
         return { output: "OneBots 服务已在运行并通过在线验证" };

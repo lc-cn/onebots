@@ -138,6 +138,12 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     const names = changed.map(item => `${item.name}@${item.target}`);
     const projectRoot = resolvePackageUpdateProjectRoot(runtimeRoot);
     const invocation = buildPackageUpdateInvocation(runtimeRoot, names, projectRoot);
+    const initialServiceStatus = spec ? controller.status(spec) : null;
+    if (initialServiceStatus?.error) {
+        throw new Error(
+            `无法确认更新前服务状态，未修改软件包：${initialServiceStatus.error}${initialServiceStatus.detail ? `：${initialServiceStatus.detail}` : ""}`,
+        );
+    }
     execFileSync(invocation.executable, invocation.args, {
         cwd: invocation.cwd,
         env: invocation.environment,
@@ -159,6 +165,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             {
                 expectedVersion: targetOnebotsVersion,
                 yes: options.yes,
+                initiallyRunning: initialServiceStatus?.running,
                 recoverPreflightFailure: () =>
                     rollbackUpdatedPackages(
                         updates,
@@ -195,7 +202,7 @@ function rollbackPackagesBeforeServiceSwitch(
 }
 
 interface UpdateServiceController {
-    status(): { running: boolean };
+    status(spec?: ServiceSpec): { running: boolean; detail?: string; error?: string };
     install(spec: ServiceSpec): Promise<void>;
     restart(): Promise<void>;
 }
@@ -214,6 +221,8 @@ interface RefreshServiceDependencies {
 interface RefreshServiceOptions {
     expectedVersion: string;
     yes?: boolean;
+    /** runUpdate 在修改依赖前取得的权威进程状态，避免变更后再次查询产生竞态。 */
+    initiallyRunning?: boolean;
     recoverPreflightFailure?: () => void | Promise<void>;
     dependencies?: RefreshServiceDependencies;
 }
@@ -237,7 +246,27 @@ export async function refreshServiceAfterUpdate(
         verifyOnline: (targetSpec, expectedVersion, previousInstanceId) =>
             verifyServiceOnline(targetSpec, expectedVersion, { previousInstanceId }),
     };
-    const wasRunning = controller.status().running;
+    const serviceStatus =
+        options.initiallyRunning === undefined
+            ? controller.status()
+            : { running: options.initiallyRunning };
+    if (serviceStatus.error) {
+        const statusError = new Error(
+            `${serviceStatus.error}${serviceStatus.detail ? `：${serviceStatus.detail}` : ""}`,
+        );
+        if (options.recoverPreflightFailure) {
+            try {
+                await options.recoverPreflightFailure();
+            } catch (rollbackError) {
+                throw packageRollbackAggregate(statusError, rollbackError);
+            }
+        }
+        throw new Error(
+            `${options.recoverPreflightFailure ? "无法确认更新前服务状态，已恢复更新前依赖" : "无法确认更新前服务状态"}；服务定义与当前运行实例保持不变：${statusError.message}`,
+            { cause: statusError },
+        );
+    }
+    const wasRunning = serviceStatus.running;
     try {
         await dependencies.preflight(spec);
     } catch (error) {

@@ -104,6 +104,71 @@ describe.runIf(process.platform !== "win32")("service definition persistence", (
     });
 });
 
+describe("service status evidence", () => {
+    it("distinguishes a failed process-manager query from a confirmed stopped service", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-status-"));
+        temporaryDirectories.push(root);
+        const host = {
+            ...linuxHost(root),
+            exec: vi.fn(() => {
+                throw new Error("systemd bus unavailable");
+            }),
+        };
+        const controller = new ServiceController("user", host);
+        const spec: ServiceSpec = {
+            scope: "user",
+            configPath: path.join(root, "config.yaml"),
+            adapters: [],
+            protocols: [],
+            nodePath: process.execPath,
+            binPath: process.argv[1],
+            workingDirectory: root,
+        };
+
+        expect(controller.status(spec)).toEqual({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "systemd bus unavailable",
+            error: "进程管理器状态查询失败",
+        });
+    });
+
+    it("treats a known unloaded launchd job as authoritatively stopped", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-launchd-status-"));
+        temporaryDirectories.push(root);
+        const commandError = Object.assign(new Error("launchctl failed"), {
+            stderr: "Could not find service com.onebots.onebots-gateway in domain for user",
+        });
+        const controller = new ServiceController("user", {
+            platform: "darwin",
+            homedir: root,
+            uid: 501,
+            env: {},
+            exec: vi.fn(() => {
+                throw commandError;
+            }),
+            spawn: vi.fn(async () => 0),
+        });
+        const spec: ServiceSpec = {
+            scope: "user",
+            configPath: path.join(root, "config.yaml"),
+            adapters: [],
+            protocols: [],
+            nodePath: process.execPath,
+            binPath: process.argv[1],
+            workingDirectory: root,
+        };
+
+        expect(controller.status(spec)).toEqual({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "launchd 任务未加载",
+        });
+    });
+});
+
 describe("Windows user task persistence", () => {
     it("同时验证并原子恢复计划任务 XML 与无 shell runner", async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-windows-service-"));

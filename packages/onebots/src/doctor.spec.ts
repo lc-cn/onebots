@@ -982,6 +982,36 @@ describe("doctor persisted plugin selection", () => {
         });
     });
 
+    it("fails diagnosis when the process manager cannot prove service state", async () => {
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "systemd bus unavailable",
+            error: "进程管理器状态查询失败",
+        });
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-status-error-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+
+        const report = await runDoctor({
+            configPath,
+            adapters: [],
+            protocols: [],
+            scope: "user",
+        });
+
+        expect(report.ok).toBe(false);
+        expect(report.checks.find(check => check.name === "service")).toEqual({
+            name: "service",
+            level: "error",
+            message: "进程管理器状态查询失败：systemd bus unavailable",
+        });
+    });
+
     it("uses config defaults when no service or explicit plugin flags exist", async () => {
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
         vi.spyOn(ServiceController.prototype, "status").mockReturnValue({

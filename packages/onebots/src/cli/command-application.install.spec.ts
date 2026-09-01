@@ -172,6 +172,34 @@ describe("service install preflight", () => {
         expect(verifyOnline).toHaveBeenCalledWith(spec, expect.any(String), "occupied-instance");
     });
 
+    it("does not start while the process manager cannot prove the current state", async () => {
+        const config = createConfig("general: {}\n");
+        const spec = serviceSpec(config);
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "systemd bus unavailable",
+            error: "进程管理器状态查询失败",
+        });
+        const start = vi.spyOn(ServiceController.prototype, "start").mockResolvedValue();
+        const readInstanceId = vi.fn(async () => null);
+        const verifyOnline = vi.fn(async () => undefined);
+
+        await expect(
+            startService({ system: false }, { readInstanceId, verifyOnline }),
+        ).rejects.toMatchObject({
+            message: expect.stringMatching(
+                /无法确认服务当前状态.*进程管理器状态查询失败.*systemd bus unavailable.*未执行启动命令/,
+            ),
+            exitCode: 1,
+        });
+        expect(start).not.toHaveBeenCalled();
+        expect(readInstanceId).not.toHaveBeenCalled();
+        expect(verifyOnline).not.toHaveBeenCalled();
+    });
+
     it("keeps start idempotent when the installed service is already online", async () => {
         const config = createConfig("general: {}\n");
         const spec = serviceSpec(config);

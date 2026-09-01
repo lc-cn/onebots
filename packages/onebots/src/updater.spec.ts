@@ -44,7 +44,9 @@ function temporaryServiceSpec(): ServiceSpec {
 
 function fakeController(running: boolean) {
     return {
-        status: vi.fn(() => ({ running })),
+        status: vi.fn<() => { running: boolean; detail?: string; error?: string }>(() => ({
+            running,
+        })),
         install: vi.fn(async (_spec: ServiceSpec) => undefined),
         restart: vi.fn(async () => undefined),
     };
@@ -326,6 +328,32 @@ EOF
         expect(controller.install).not.toHaveBeenCalled();
         expect(controller.restart).not.toHaveBeenCalled();
         expect(confirmRestart).not.toHaveBeenCalled();
+    });
+
+    it("restores updated packages when service state cannot be established", async () => {
+        const controller = fakeController(false);
+        controller.status.mockReturnValue({
+            running: false,
+            detail: "systemd bus unavailable",
+            error: "进程管理器状态查询失败",
+        });
+        const recoverPreflightFailure = vi.fn(async () => undefined);
+        const preflight = vi.fn(async () => undefined);
+
+        await expect(
+            refreshServiceAfterUpdate(controller, temporaryServiceSpec(), {
+                expectedVersion: "1.3.0",
+                yes: true,
+                recoverPreflightFailure,
+                dependencies: refreshDependencies({ preflight }),
+            }),
+        ).rejects.toThrow(
+            /无法确认更新前服务状态，已恢复更新前依赖.*进程管理器状态查询失败：systemd bus unavailable/,
+        );
+        expect(recoverPreflightFailure).toHaveBeenCalledOnce();
+        expect(preflight).not.toHaveBeenCalled();
+        expect(controller.install).not.toHaveBeenCalled();
+        expect(controller.restart).not.toHaveBeenCalled();
     });
 
     it("新运行环境预检与依赖恢复都失败时保留双方证据", async () => {

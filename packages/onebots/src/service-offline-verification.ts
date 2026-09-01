@@ -20,13 +20,21 @@ export async function verifyServiceStopped(
                 setTimeout(resolve, milliseconds);
             }));
     let lastEvidence = "进程管理器仍报告服务运行中";
+    let statusUnavailable = false;
 
     for (let attempt = 0; attempt < attempts; attempt += 1) {
         const status = readStatus();
-        if (!status.running) return;
-        lastEvidence = status.detail.trim() || lastEvidence;
+        statusUnavailable = Boolean(status.error);
+        if (!statusUnavailable && !status.running) return;
+        lastEvidence = status.error
+            ? `${status.error}${status.detail.trim() ? `：${status.detail.trim()}` : ""}`
+            : status.detail.trim() || lastEvidence;
         if (attempt < attempts - 1) await sleep(intervalMs);
     }
 
-    throw new Error(`服务在重试窗口内仍处于运行状态（${lastEvidence}）`);
+    throw new Error(
+        statusUnavailable
+            ? `重试窗口结束时仍无法确认服务已停止（${lastEvidence}）`
+            : `服务在重试窗口内仍处于运行状态（${lastEvidence}）`,
+    );
 }
