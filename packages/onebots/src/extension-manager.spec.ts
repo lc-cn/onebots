@@ -135,6 +135,34 @@ describe("ExtensionManager", () => {
         expect(install).not.toHaveBeenCalled();
     });
 
+    it("包管理器证据冲突时在读取配置或调用安装器前拒绝写操作", async () => {
+        const { root, configPath } = fixture();
+        fs.writeFileSync(
+            path.join(root, "package.json"),
+            `${JSON.stringify({
+                private: true,
+                packageManager: "npm@11.17.0",
+                dependencies: { onebots: packageMetadata.version },
+            })}\n`,
+        );
+        fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+        const originalConfig = fs.readFileSync(configPath, "utf8");
+        const install = vi.fn();
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install },
+            preflight: successfulPreflight,
+        });
+
+        expect(
+            manager.list([]).find(item => item.id === "adapter:slack")?.packageManagerError,
+        ).toContain("包管理器证据冲突");
+        await expect(manager.install("adapter:slack")).rejects.toThrow("包管理器证据冲突");
+        expect(install).not.toHaveBeenCalled();
+        expect(fs.readFileSync(configPath, "utf8")).toBe(originalConfig);
+    });
+
     it("向已加载适配器发布注册表中的权威能力清单", () => {
         const { root, configPath } = fixture();
         const capabilities = defineAdapterCapabilities({

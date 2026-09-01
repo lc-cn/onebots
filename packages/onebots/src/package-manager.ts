@@ -14,9 +14,14 @@ export interface PackageUpdateInvocation extends PackageInstallInvocation {
 }
 
 export interface RuntimePackageManagerInspection {
-    manager: SupportedPackageManager;
-    executable: string;
+    manager: SupportedPackageManager | null;
+    executable: string | null;
     resolvedPath: string | null;
+    error: string | null;
+}
+
+interface RuntimePackageManagerResolution {
+    manager: SupportedPackageManager | null;
     error: string | null;
 }
 
@@ -30,32 +35,28 @@ export function detectRuntimePackageManager(
     runtimeRoot: string,
     environment: NodeJS.ProcessEnv = process.env,
 ): SupportedPackageManager {
+    const resolution = resolveRuntimePackageManager(runtimeRoot, environment);
+    if (resolution.error || !resolution.manager) {
+        throw new Error(resolution.error ?? "无法确定扩展运行目录的包管理器");
+    }
+    return resolution.manager;
+}
+
+function resolveRuntimePackageManager(
+    runtimeRoot: string,
+    environment: NodeJS.ProcessEnv,
+): RuntimePackageManagerResolution {
     let directory = path.resolve(runtimeRoot);
     while (true) {
-        if (
-            fs.existsSync(path.join(directory, "pnpm-lock.yaml")) ||
-            fs.existsSync(path.join(directory, "pnpm-workspace.yaml"))
-        ) {
-            return "pnpm";
-        }
-        if (fs.existsSync(path.join(directory, "package-lock.json"))) return "npm";
-
-        try {
-            const manifest = JSON.parse(
-                fs.readFileSync(path.join(directory, "package.json"), "utf8"),
-            ) as { packageManager?: string };
-            if (manifest.packageManager?.startsWith("pnpm@")) return "pnpm";
-            if (manifest.packageManager?.startsWith("npm@")) return "npm";
-        } catch {
-            // 当前层没有可用清单时继续查找最近的项目根。
-        }
+        const evidence = inspectPackageManagerEvidence(directory);
+        if (evidence.error || evidence.manager) return evidence;
 
         const parent = path.dirname(directory);
         if (parent === directory) break;
         directory = parent;
     }
 
-    return environment.npm_execpath?.includes("pnpm") ? "pnpm" : "npm";
+    return resolveInvokingPackageManager(environment);
 }
 
 /** 验证运行目录选出的包管理器能由当前进程实际启动。 */
@@ -65,7 +66,16 @@ export function inspectRuntimePackageManager(
     platform: NodeJS.Platform = process.platform,
     access: (target: string, mode: number) => void = fs.accessSync,
 ): RuntimePackageManagerInspection {
-    const manager = detectRuntimePackageManager(runtimeRoot, environment);
+    const resolution = resolveRuntimePackageManager(runtimeRoot, environment);
+    if (resolution.error || !resolution.manager) {
+        return {
+            manager: null,
+            executable: null,
+            resolvedPath: null,
+            error: resolution.error ?? "无法确定扩展运行目录的包管理器",
+        };
+    }
+    const manager = resolution.manager;
     const executable = platform === "win32" ? `${manager}.cmd` : manager;
     const searchPath = getEnvironmentPath(environment, platform);
     const mode = platform === "win32" ? fs.constants.F_OK : fs.constants.X_OK;
@@ -91,6 +101,91 @@ export function inspectRuntimePackageManager(
         executable,
         resolvedPath: null,
         error: `扩展运行目录需要 ${manager}，但当前进程的 PATH 中找不到可执行入口。${remedy}`,
+    };
+}
+
+function inspectPackageManagerEvidence(directory: string): RuntimePackageManagerResolution {
+    const npmEvidence: string[] = [];
+    const pnpmEvidence: string[] = [];
+    const unsupportedEvidence: string[] = [];
+
+    if (fs.existsSync(path.join(directory, "package-lock.json")))
+        npmEvidence.push("package-lock.json");
+    if (fs.existsSync(path.join(directory, "pnpm-lock.yaml"))) pnpmEvidence.push("pnpm-lock.yaml");
+    if (fs.existsSync(path.join(directory, "pnpm-workspace.yaml")))
+        pnpmEvidence.push("pnpm-workspace.yaml");
+    for (const lockfile of ["yarn.lock", "bun.lock", "bun.lockb"]) {
+        if (fs.existsSync(path.join(directory, lockfile))) unsupportedEvidence.push(lockfile);
+    }
+
+    const manifestPath = path.join(directory, "package.json");
+    if (fs.existsSync(manifestPath)) {
+        let manifest: Record<string, unknown>;
+        try {
+            const parsed: unknown = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                return { manager: null, error: `包管理器清单根节点无效: ${manifestPath}` };
+            }
+            manifest = parsed as Record<string, unknown>;
+        } catch {
+            return { manager: null, error: `包管理器清单无法读取或不是有效 JSON: ${manifestPath}` };
+        }
+        if ("packageManager" in manifest) {
+            const declared = manifest.packageManager;
+            if (typeof declared !== "string" || !declared.trim()) {
+                return { manager: null, error: `packageManager 声明无效: ${manifestPath}` };
+            }
+            const declaration = declared.match(/^([a-z0-9._-]+)@([^\s]+)$/iu);
+            if (!declaration) {
+                return { manager: null, error: `packageManager 声明无效: ${manifestPath}` };
+            }
+            if (declaration[1] === "npm") npmEvidence.push(`packageManager=${declared}`);
+            else if (declaration[1] === "pnpm") pnpmEvidence.push(`packageManager=${declared}`);
+            else unsupportedEvidence.push(`packageManager=${declared}`);
+        }
+    }
+
+    if (unsupportedEvidence.length) {
+        return {
+            manager: null,
+            error: `扩展运行目录使用 OneBots 尚不支持的包管理器（${unsupportedEvidence.join("、")}）: ${directory}。请改用 npm 或 pnpm，并只保留对应锁文件。`,
+        };
+    }
+    if (npmEvidence.length && pnpmEvidence.length) {
+        return {
+            manager: null,
+            error: `扩展运行目录的包管理器证据冲突（npm: ${npmEvidence.join("、")}；pnpm: ${pnpmEvidence.join("、")}）: ${directory}。请确认实际使用的包管理器并只保留对应锁文件与 packageManager 声明。`,
+        };
+    }
+    if (pnpmEvidence.length) return { manager: "pnpm", error: null };
+    if (npmEvidence.length) return { manager: "npm", error: null };
+    return { manager: null, error: null };
+}
+
+function resolveInvokingPackageManager(
+    environment: NodeJS.ProcessEnv,
+): RuntimePackageManagerResolution {
+    const userAgentManager = environment.npm_config_user_agent?.split(/[\s/]/u)[0]?.toLowerCase();
+    const executable = environment.npm_execpath
+        ?.replaceAll("\\", "/")
+        .split("/")
+        .at(-1)
+        ?.toLowerCase();
+    const executableManager = executable?.startsWith("pnpm")
+        ? "pnpm"
+        : executable?.startsWith("npm")
+          ? "npm"
+          : executable?.startsWith("yarn")
+            ? "yarn"
+            : executable?.startsWith("bun")
+              ? "bun"
+              : executable?.replace(/\.(?:c?js|cmd)$/u, "");
+    const invoked = userAgentManager || executableManager;
+    if (invoked === "pnpm") return { manager: "pnpm", error: null };
+    if (invoked === "npm" || !invoked) return { manager: "npm", error: null };
+    return {
+        manager: null,
+        error: `当前进程由 OneBots 尚不支持的包管理器 ${invoked} 启动，且项目没有明确的 npm/pnpm 证据。请改用 npm 或 pnpm 启动。`,
     };
 }
 

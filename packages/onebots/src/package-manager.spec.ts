@@ -132,10 +132,66 @@ describe("runtime package manager", () => {
     });
 
     it("锁文件优先于启动进程环境决定运行目录的包管理器", () => {
-        const root = fixture({ packageManager: "npm@11.17.0" });
+        const root = fixture();
         fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
 
-        expect(detectRuntimePackageManager(root)).toBe("pnpm");
+        expect(
+            detectRuntimePackageManager(root, {
+                npm_execpath: "/usr/local/lib/node_modules/npm/bin/npm-cli.js",
+            }),
+        ).toBe("pnpm");
+    });
+
+    it("同层 npm 与 pnpm 证据冲突时在生成安装命令前失败", () => {
+        const root = fixture({ packageManager: "pnpm@9.15.9" });
+        fs.writeFileSync(path.join(root, "package-lock.json"), "{}\n");
+
+        expect(inspectRuntimePackageManager(root, {}, "linux", () => undefined)).toEqual({
+            manager: null,
+            executable: null,
+            resolvedPath: null,
+            error: expect.stringMatching(
+                /包管理器证据冲突.*package-lock\.json.*packageManager=pnpm@9\.15\.9/,
+            ),
+        });
+        expect(() => buildExtensionInstallInvocation(root, "@onebots/adapter-slack@3.0.8")).toThrow(
+            /包管理器证据冲突/,
+        );
+        expect(() => buildPackageUpdateInvocation(root, ["onebots@1.2.9"], root)).toThrow(
+            /包管理器证据冲突/,
+        );
+    });
+
+    it("拒绝 Yarn、Bun 与无效 packageManager 声明而不降级为 npm", () => {
+        const yarnRoot = fixture({ packageManager: "yarn@4.9.2" });
+        fs.writeFileSync(path.join(yarnRoot, "yarn.lock"), "# yarn lock\n");
+        const yarnError = inspectRuntimePackageManager(yarnRoot).error;
+        expect(yarnError).toContain("尚不支持的包管理器");
+        expect(yarnError).toContain("packageManager=yarn@4.9.2");
+        expect(yarnError).toContain("yarn.lock");
+        expect(() => detectRuntimePackageManager(yarnRoot)).toThrow(/尚不支持的包管理器/);
+
+        const invalidRoot = fixture({ packageManager: 42 });
+        expect(inspectRuntimePackageManager(invalidRoot).error).toBe(
+            `packageManager 声明无效: ${path.join(invalidRoot, "package.json")}`,
+        );
+        const incompleteRoot = fixture({ packageManager: "pnpm" });
+        expect(inspectRuntimePackageManager(incompleteRoot).error).toBe(
+            `packageManager 声明无效: ${path.join(incompleteRoot, "package.json")}`,
+        );
+    });
+
+    it("没有项目证据时拒绝从 Yarn 启动的进程", () => {
+        const root = fixture();
+
+        expect(
+            inspectRuntimePackageManager(root, {
+                npm_execpath: "/opt/corepack/yarn.js",
+                npm_config_user_agent: "yarn/4.9.2 npm/? node/v24.0.0",
+            }).error,
+        ).toBe(
+            "当前进程由 OneBots 尚不支持的包管理器 yarn 启动，且项目没有明确的 npm/pnpm 证据。请改用 npm 或 pnpm 启动。",
+        );
     });
 
     it("从 workspace 成员目录直接启动时沿目录向上识别 pnpm", () => {
