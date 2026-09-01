@@ -5,6 +5,7 @@ import * as path from "node:path";
 import * as net from "node:net";
 import {
     compareDoctorEndpointIdentities,
+    inspectConfiguredPublicStaticDirectory,
     inspectDataDirectory,
     inspectSensitiveDirectoryPermissions,
     inspectSensitiveFilePermissions,
@@ -195,6 +196,57 @@ describe.runIf(process.platform !== "win32")("doctor data directory permissions"
             name: "data-dir-mode",
             level: "error",
             message: `数据目录权限无法验证: ${missing} (ENOENT)`,
+        });
+    });
+});
+
+describe("doctor public static directory", () => {
+    it("将未创建目录作为警告，并且仅在 --fix 时创建", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-static-doctor-"));
+        temporaryDirectories.push(directory);
+        const expected = path.join(directory, "public");
+
+        expect(inspectConfiguredPublicStaticDirectory(directory, "public")).toEqual({
+            check: {
+                name: "public-static-dir",
+                level: "warning",
+                message: `站点根静态目录尚未创建: ${expected}（--fix 可修复）`,
+            },
+            path: expected,
+        });
+        expect(fs.existsSync(expected)).toBe(false);
+        const fixed = inspectConfiguredPublicStaticDirectory(directory, "public", true);
+        const resolved = fs.realpathSync(expected);
+        expect(fixed).toEqual({
+            check: {
+                name: "public-static-dir",
+                level: "ok",
+                message: `已创建并验证站点根静态目录: ${resolved}`,
+                fixed: true,
+            },
+            path: resolved,
+        });
+    });
+
+    it("区分未启用与无效配置类型", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-static-doctor-"));
+        temporaryDirectories.push(directory);
+
+        expect(inspectConfiguredPublicStaticDirectory(directory, undefined)).toEqual({
+            check: {
+                name: "public-static-dir",
+                level: "ok",
+                message: "未启用站点根静态目录",
+            },
+            path: null,
+        });
+        expect(inspectConfiguredPublicStaticDirectory(directory, 42)).toEqual({
+            check: {
+                name: "public-static-dir",
+                level: "error",
+                message: "public_static_dir 必须是字符串路径",
+            },
+            path: null,
         });
     });
 });
@@ -865,8 +917,9 @@ describe("doctor persisted plugin selection", () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-strict-"));
         temporaryDirectories.push(directory);
         const configPath = path.join(directory, "config.yaml");
-        fs.writeFileSync(configPath, "general: {}\n", { mode: 0o600 });
+        fs.writeFileSync(configPath, "general: {}\npublic_static_dir: static\n", { mode: 0o600 });
         fs.mkdirSync(path.join(directory, "data"), { mode: 0o700 });
+        fs.mkdirSync(path.join(directory, "static"));
         const extensionRoot = createExtensionRuntimeRoot();
 
         const normal = await runDoctor({
@@ -896,6 +949,9 @@ describe("doctor persisted plugin selection", () => {
             level: "ok",
             message: expect.stringContaining(`onebots@${packageMetadata.version}`),
         });
+        expect(normal.target.publicStaticDirectory).toBe(
+            fs.realpathSync(path.join(directory, "static")),
+        );
     });
 
     it("将错误的扩展运行目录作为部署失败证据", async () => {

@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as net from "node:net";
 import { createRequire } from "node:module";
+import { inspectPublicStaticRoot } from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
 import { pluginCandidates, tryLoadRegisteredPlugin } from "./plugin-loader.js";
 import {
@@ -71,6 +72,7 @@ export interface DoctorTarget {
     webUrl: string | null;
     dataDirectory: string;
     databasePath: string | null;
+    publicStaticDirectory: string | null;
     extensionRoot: string;
     workingDirectory: string;
     service: {
@@ -210,6 +212,13 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             }
         }
     }
+
+    const publicStatic = inspectConfiguredPublicStaticDirectory(
+        path.dirname(options.configPath),
+        config?.public_static_dir,
+        options.fix,
+    );
+    if (config) checks.push(publicStatic.check);
 
     const dataDir = path.resolve(path.dirname(options.configPath), "data");
     const dataDirectoryCheck = inspectDataDirectory(dataDir, options.fix);
@@ -503,6 +512,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             webUrl,
             dataDirectory: dataDir,
             databasePath: database.path,
+            publicStaticDirectory: publicStatic.path,
             extensionRoot: extensionRuntime.root,
             workingDirectory: path.resolve(selection.workingDirectory),
             service: {
@@ -530,6 +540,84 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         strict,
         checks,
     };
+}
+
+export interface DoctorPublicStaticInspection {
+    check: DoctorCheck;
+    path: string | null;
+}
+
+/** 使用运行时相同的真实路径规则验证可选静态目录，并单独证明管理上传写权限。 */
+export function inspectConfiguredPublicStaticDirectory(
+    configDir: string,
+    configured: unknown,
+    fix = false,
+): DoctorPublicStaticInspection {
+    if (configured !== undefined && configured !== null && typeof configured !== "string") {
+        return {
+            check: {
+                name: "public-static-dir",
+                level: "error",
+                message: "public_static_dir 必须是字符串路径",
+            },
+            path: null,
+        };
+    }
+    const configuredPath = typeof configured === "string" ? configured : undefined;
+    const inspection = inspectPublicStaticRoot(configDir, configuredPath, fix);
+    if (inspection.status === "disabled") {
+        return {
+            check: {
+                name: "public-static-dir",
+                level: "ok",
+                message: "未启用站点根静态目录",
+            },
+            path: null,
+        };
+    }
+    if (inspection.status === "invalid") {
+        return {
+            check: {
+                name: "public-static-dir",
+                level: "error",
+                message: inspection.error,
+            },
+            path: inspection.root,
+        };
+    }
+    if (inspection.status === "missing") {
+        return {
+            check: {
+                name: "public-static-dir",
+                level: "warning",
+                message: `站点根静态目录尚未创建: ${inspection.root}（--fix 可修复）`,
+            },
+            path: inspection.root,
+        };
+    }
+    try {
+        fs.accessSync(inspection.root, fs.constants.W_OK);
+        return {
+            check: {
+                name: "public-static-dir",
+                level: "ok",
+                message: inspection.created
+                    ? `已创建并验证站点根静态目录: ${inspection.root}`
+                    : `站点根静态目录可读取且管理端可写: ${inspection.root}`,
+                ...(inspection.created ? { fixed: true } : {}),
+            },
+            path: inspection.root,
+        };
+    } catch {
+        return {
+            check: {
+                name: "public-static-dir",
+                level: "warning",
+                message: `站点根静态目录可用于读取，但当前进程无法通过管理端写入: ${inspection.root}`,
+            },
+            path: inspection.root,
+        };
+    }
 }
 
 /** 验证数据库、审计与管理日志、适配器状态使用的数据目录，不以路径存在代替可用性。 */

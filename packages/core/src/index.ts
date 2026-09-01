@@ -27,6 +27,7 @@ export * from "./ordered-event-delivery-queue.js";
 export * from "./protocol.js";
 export * from "./event-filter.js";
 export * from "./gateway-path.js";
+export * from "./public-static-root.js";
 export * from "./registry.js";
 export * from "./db.js";
 
