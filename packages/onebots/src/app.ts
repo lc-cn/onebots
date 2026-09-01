@@ -75,6 +75,7 @@ import {
     createServiceRuntimeContractId,
     type ServiceRuntimeContract,
 } from "./service-runtime-contract.js";
+import { MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES } from "./management-websocket.js";
 
 const require = createRequire(pathToFileURL(path.join(process.cwd(), "node_modules")));
 
@@ -159,6 +160,7 @@ export class App extends BaseApp {
         this._messageDebug = new MessageDebugManager();
         this.ws = this.router.ws("/", {
             authorize: request => authorizeManagementUpgrade(this, request),
+            maxPayloadBytes: MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES,
         });
 
         const cleanupLogCacheOnExit = () => this._logCache.cleanupSync();
@@ -378,6 +380,9 @@ export class App extends BaseApp {
         process.once("disconnect", closeLogWatcher);
 
         this.ws.on("connection", async (client, request) => {
+            client.on("error", error => {
+                this.logger.warn("管理 WebSocket 连接错误", { error });
+            });
             const managementToken = extractManagementToken(request);
             const stopAuthorizationMonitor = startManagementAuthorizationMonitor(
                 this,

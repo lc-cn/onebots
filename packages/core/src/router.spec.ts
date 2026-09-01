@@ -2,7 +2,12 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import { HttpRouteConflictError, Router, WebSocketRouteConflictError } from "./router.js";
+import {
+    DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES,
+    HttpRouteConflictError,
+    Router,
+    WebSocketRouteConflictError,
+} from "./router.js";
 
 const servers = new Set<ReturnType<typeof createServer>>();
 
@@ -63,6 +68,43 @@ describe("Router WebSocket lifecycle", () => {
         expect(router.removeWs("/events")).toBe(true);
         expect(router.getWsPaths()).toEqual([]);
         expect(() => router.ws("//example.com/events")).toThrow("绝对 pathname");
+    });
+
+    it("保留既有默认载荷上限并拒绝无效的路由上限", () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+
+        expect(router.ws("/default").options.maxPayload).toBe(DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES);
+        expect(router.ws("/limited", { maxPayloadBytes: 1024 }).options.maxPayload).toBe(1024);
+        expect(() => router.ws("/zero", { maxPayloadBytes: 0 })).toThrow("1 到 100 MiB");
+        expect(() =>
+            router.ws("/too-large", {
+                maxPayloadBytes: DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES + 1,
+            }),
+        ).toThrow("1 到 100 MiB");
+        expect(router.getWsPaths()).toEqual(["/default", "/limited"]);
+    });
+
+    it("单条入站消息超过路由上限时以 1009 关闭连接", async () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+        router.ws("/limited", { maxPayloadBytes: 8 });
+
+        server.listen(0, "127.0.0.1");
+        await once(server, "listening");
+        const address = server.address();
+        if (!address || typeof address === "string") throw new Error("测试服务器未监听 TCP");
+
+        const client = new WebSocket(`ws://127.0.0.1:${address.port}/limited`);
+        await once(client, "open");
+        const closed = once(client, "close");
+        client.send(Buffer.alloc(9));
+
+        const [code] = await closed;
+        expect(code).toBe(1009);
+        await router.cleanupAsync();
     });
 
     it("cleanupAsync 会先终止活跃客户端并移除 upgrade 监听器", async () => {

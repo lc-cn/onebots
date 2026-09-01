@@ -10,6 +10,7 @@ import {
 } from "../management-auth.js";
 import { startManagementAuthorizationMonitor } from "../management-authorization-monitor.js";
 import { scheduleProcessRestart } from "../process-restart.js";
+import { TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES } from "../management-websocket.js";
 
 /** SSE 心跳间隔（毫秒） */
 const SSE_HEARTBEAT_INTERVAL_MS = 30000;
@@ -28,8 +29,12 @@ export function registerTerminalRoutes(app: App, router: Router): void {
 
     const terminalWs = router.ws("/api/terminal", {
         authorize: request => authorizeManagementUpgrade(app, request),
+        maxPayloadBytes: TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES,
     });
     terminalWs.on("connection", (client, request) => {
+        client.on("error", error => {
+            app.logger.warn("终端 WebSocket 连接错误", { error });
+        });
         const managementToken = extractManagementToken(request);
         const stopAuthorizationMonitor = startManagementAuthorizationMonitor(app, managementToken, {
             onUnauthorized: () => client.close(1008, "Unauthorized"),

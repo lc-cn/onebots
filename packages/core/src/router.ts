@@ -20,9 +20,14 @@ export type { Next } from "koa";
 
 export type WebSocketUpgradeAuthorizer = (request: IncomingMessage) => boolean;
 
+/** 与 ws 既有默认值一致，保持未显式配置的协议路由向后兼容。 */
+export const DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES = 100 * 1024 * 1024;
+
 export interface WebSocketRouteOptions {
     /** 在协议升级前授权请求；返回 false 或抛错时以 HTTP 401 拒绝。 */
     authorize?: WebSocketUpgradeAuthorizer;
+    /** 单条入站 WebSocket 消息的最大字节数，超限连接以 1009 关闭。 */
+    maxPayloadBytes?: number;
 }
 
 export interface RouterRegistrationOwner {
@@ -216,6 +221,8 @@ export class Router extends KoaRouter {
             }
 
             wsServer.handleUpgrade(request, socket, head, ws => {
+                // 路由消费方仍可注册自己的 error 监听器；该兜底避免协议错误成为未处理异常。
+                ws.on("error", () => undefined);
                 wsServer.emit("connection", ws, request);
             });
         };
@@ -322,6 +329,14 @@ export class Router extends KoaRouter {
     /** 注册不受 Koa prefix 影响的 WebSocket pathname。 */
     ws(path: string, options: WebSocketRouteOptions = {}): WsServer {
         const normalized = this.normalizeWsPath(path);
+        const maxPayloadBytes = options.maxPayloadBytes ?? DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES;
+        if (
+            !Number.isSafeInteger(maxPayloadBytes) ||
+            maxPayloadBytes <= 0 ||
+            maxPayloadBytes > DEFAULT_WEBSOCKET_MAX_PAYLOAD_BYTES
+        ) {
+            throw new RangeError("WebSocket maxPayloadBytes 必须是 1 到 100 MiB 之间的安全整数");
+        }
         const scope = this.registrationScope.getStore();
         if (this.wsMap.has(normalized)) {
             throw new WebSocketRouteConflictError(
@@ -331,7 +346,11 @@ export class Router extends KoaRouter {
             );
         }
 
-        const wsServer = new WsServer({ noServer: true, path: normalized });
+        const wsServer = new WsServer({
+            noServer: true,
+            path: normalized,
+            maxPayload: maxPayloadBytes,
+        });
         this.wsMap.set(normalized, wsServer);
         if (options.authorize) this.wsAuthorizers.set(normalized, options.authorize);
         if (scope?.owner) this.wsOwners.set(normalized, scope.owner);
