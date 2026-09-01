@@ -16,7 +16,7 @@ import {
     setRuntimePluginSelection,
 } from "./runtime-plugin-selection.js";
 import { formatRuntimeConfigDiagnostic, parseRuntimeConfig } from "./runtime-config-validator.js";
-import { inspectPlugin, type LoadedPluginInfo } from "./plugin-loader.js";
+import { inspectPackageManifest, inspectPlugin, type LoadedPluginInfo } from "./plugin-loader.js";
 import type { ExtensionInstallOptions } from "./package-manager.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
@@ -500,10 +500,11 @@ export class ExtensionManager {
         const manifestPath = path.join(this.runtimeRoot, "node_modules", ...parts, "package.json");
         if (!fs.existsSync(manifestPath)) return { version: null, error: null };
         try {
-            const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
-                name?: unknown;
-                version?: unknown;
-            };
+            const manifestInspection = inspectPackageManifest(manifestPath);
+            if ("error" in manifestInspection) {
+                return { version: null, error: `${packageName} 的 ${manifestInspection.error}` };
+            }
+            const manifest = manifestInspection.manifest;
             const actualName = typeof manifest.name === "string" ? manifest.name.trim() : "";
             if (actualName !== packageName) {
                 return {
@@ -540,10 +541,10 @@ export class ExtensionManager {
                 error: null,
             };
         } catch {
-            // 不回显解析器片段，避免损坏清单把不受信任的文件内容带到管理端。
+            // 不回显底层异常，避免损坏依赖把不受信任的诊断带到管理端。
             return {
                 version: null,
-                error: `${packageName} 的 package.json 不是有效 JSON`,
+                error: `${packageName} 的依赖无法验证`,
             };
         }
     }

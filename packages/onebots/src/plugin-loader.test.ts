@@ -194,6 +194,90 @@ describe("plugin loader", () => {
         },
     );
 
+    it("在解析前拒绝超过上限的插件清单", async () => {
+        const directory = createImportOnlyPlugin(
+            "oversized-manifest-adapter",
+            "globalThis.__onebotsOversizedManifestExecuted = true;\n",
+        );
+        const manifestPath = path.join(
+            directory,
+            "node_modules",
+            "oversized-manifest-adapter",
+            "package.json",
+        );
+        fs.writeFileSync(manifestPath, Buffer.alloc(1024 * 1024 + 1, 0x20));
+        const globals = globalThis as typeof globalThis & {
+            __onebotsOversizedManifestExecuted?: boolean;
+        };
+
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "adapter",
+                "oversized-manifest",
+                ["oversized-manifest-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({
+                loaded: false,
+                message: expect.stringContaining("package.json 超过 1048576 字节上限"),
+            });
+            expect(globals.__onebotsOversizedManifestExecuted).toBeUndefined();
+        } finally {
+            delete globals.__onebotsOversizedManifestExecuted;
+        }
+    });
+
+    it.skipIf(process.platform === "win32")("在读取前拒绝不是常规文件的插件清单", async () => {
+        const directory = createImportOnlyPlugin("directory-manifest-adapter");
+        const manifestPath = path.join(
+            directory,
+            "node_modules",
+            "directory-manifest-adapter",
+            "package.json",
+        );
+        fs.rmSync(manifestPath);
+        fs.mkdirSync(manifestPath);
+
+        const result = await tryLoadRegisteredPlugin(
+            "adapter",
+            "directory-manifest",
+            ["directory-manifest-adapter"],
+            createRequire(path.join(directory, "package.json")),
+        );
+
+        expect(result).toMatchObject({
+            loaded: false,
+            message: expect.stringContaining("package.json 不是常规文件"),
+        });
+        expect(getLoadedPlugins()).toEqual([]);
+    });
+
+    it("拒绝把目录误判为可加载的插件入口", async () => {
+        const directory = createImportOnlyPlugin("directory-entry-adapter");
+        const entryPath = path.join(
+            directory,
+            "node_modules",
+            "directory-entry-adapter",
+            "index.js",
+        );
+        fs.rmSync(entryPath);
+        fs.mkdirSync(entryPath);
+
+        const result = await tryLoadRegisteredPlugin(
+            "adapter",
+            "directory-entry",
+            ["directory-entry-adapter"],
+            createRequire(path.join(directory, "package.json")),
+        );
+
+        expect(result).toMatchObject({
+            loaded: false,
+            message: expect.stringContaining("插件入口不是常规文件"),
+        });
+        expect(getLoadedPlugins()).toEqual([]);
+    });
+
     it("rolls back every registration made before plugin initialization fails", async () => {
         const directory = createImportOnlyPlugin(
             "partial-adapter",
