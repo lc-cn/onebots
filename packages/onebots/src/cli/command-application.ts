@@ -35,7 +35,7 @@ import {
 import type { UpdateRunResult } from "../updater.js";
 import { inspectDoctorServiceMetadata } from "../doctor-service-metadata.js";
 import { assertInstalledServiceDefinitionCurrent } from "../service-definition-preflight.js";
-import { inspectServiceStatus } from "../service-status.js";
+import { inspectServiceStatus, type ServiceStatusDependencies } from "../service-status.js";
 import { createServiceRuntimeContractId } from "../service-runtime-contract.js";
 import { loadMcpStdioTransport, type McpStdioTransportStarter } from "../mcp-stdio-runtime.js";
 export type { ServiceStatusKind, ServiceStatusReport } from "../service-status.js";
@@ -340,8 +340,9 @@ async function verifyActivatedService(
 export async function serviceStatus(
     options: ScopeOptions & { json?: boolean },
     fetcher: typeof fetch = fetch,
+    dependencies?: ServiceStatusDependencies,
 ): Promise<CommandResult> {
-    return inspectServiceStatus(options, fetcher);
+    return inspectServiceStatus(options, fetcher, dependencies);
 }
 
 /** 读取或持续跟随当前 scope 的服务日志。 */

@@ -7,6 +7,27 @@ import { ServiceController, type ServiceSpec } from "../service-manager.js";
 import packageMetadata from "../../package.json" with { type: "json" };
 
 const temporaryDirectories: string[] = [];
+const validStatusDependencies = {
+    inspectNode: (nodePath: string) => ({
+        supported: true,
+        check: {
+            name: "service-node",
+            level: "ok" as const,
+            message: `服务 Node 可用: ${nodePath}`,
+        },
+    }),
+    inspectEntry: (binPath: string) => ({
+        valid: true,
+        check: { name: "service-entry", level: "ok" as const, message: `服务入口有效: ${binPath}` },
+    }),
+};
+
+function runServiceStatus(
+    options: Parameters<typeof serviceStatus>[0],
+    fetcher: typeof fetch = fetch,
+) {
+    return serviceStatus(options, fetcher, validStatusDependencies);
+}
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -58,7 +79,7 @@ describe("service status", () => {
             detail: "服务未安装",
         });
 
-        await expect(serviceStatus({ system: false })).resolves.toEqual({
+        await expect(runServiceStatus({ system: false })).resolves.toEqual({
             output: "未安装\n进程管理器: 服务未安装",
             exitCode: 2,
         });
@@ -69,8 +90,8 @@ describe("service status", () => {
         mockInstalledService(false, spec);
         const fetcher = vi.fn<typeof fetch>();
 
-        await expect(serviceStatus({ system: false }, fetcher)).resolves.toEqual({
-            output: `已安装，未运行\n进程管理器: inactive\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})`,
+        await expect(runServiceStatus({ system: false }, fetcher)).resolves.toEqual({
+            output: `已安装，未运行\n进程管理器: inactive\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}`,
             exitCode: 1,
         });
         expect(fetcher).not.toHaveBeenCalled();
@@ -89,7 +110,7 @@ describe("service status", () => {
         mockCurrentDefinition(spec);
         const fetcher = vi.fn<typeof fetch>();
 
-        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const result = await runServiceStatus({ system: false, json: true }, fetcher);
         const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
 
         expect(result).toMatchObject({ exitCode: 1, raw: true });
@@ -133,8 +154,8 @@ describe("service status", () => {
                 detail: "inactive",
             });
 
-        const uninstalled = await serviceStatus({ system: false, json: true });
-        const stopped = await serviceStatus({ system: false, json: true });
+        const uninstalled = await runServiceStatus({ system: false, json: true });
+        const stopped = await runServiceStatus({ system: false, json: true });
         const uninstalledReport = JSON.parse(uninstalled.output ?? "{}") as ServiceStatusReport;
         const stoppedReport = JSON.parse(stopped.output ?? "{}") as ServiceStatusReport;
 
@@ -151,6 +172,7 @@ describe("service status", () => {
                 detail: "服务未安装",
                 error: null,
             },
+            serviceRuntime: { valid: null, checks: [] },
             probe: { checks: [], error: null },
         });
         expect(new Date(uninstalledReport.generatedAt).toISOString()).toBe(
@@ -168,6 +190,13 @@ describe("service status", () => {
             },
             target: { configPath: expect.any(String) },
             serviceDefinition: { current: true, error: null },
+            serviceRuntime: {
+                valid: true,
+                checks: [
+                    { name: "service-node", level: "ok" },
+                    { name: "service-entry", level: "ok" },
+                ],
+            },
             probe: { checks: [], error: null },
         });
     });
@@ -177,7 +206,7 @@ describe("service status", () => {
         mockInstalledService(true, spec);
         const fetcher = vi.fn<typeof fetch>();
 
-        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const result = await runServiceStatus({ system: false, json: true }, fetcher);
         const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
 
         expect(result).toMatchObject({ exitCode: 1, raw: true });
@@ -213,7 +242,7 @@ describe("service status", () => {
             metadata: metadataPath,
         });
 
-        const result = await serviceStatus({ system: false, json: true });
+        const result = await runServiceStatus({ system: false, json: true });
         const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
 
         expect(result).toMatchObject({ exitCode: 1, raw: true });

@@ -15,6 +15,11 @@ import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import type { ScopeOptions } from "./cli/command-options.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
+import {
+    inspectServiceNodeRuntime,
+    type DoctorServiceRuntimeInspection,
+} from "./doctor-service-runtime.js";
+import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
 
 export type ServiceStatusKind =
     | "uninstalled"
@@ -50,6 +55,10 @@ export interface ServiceStatusReport {
         current: boolean | null;
         error: string | null;
     };
+    serviceRuntime: {
+        valid: boolean | null;
+        checks: DoctorCheck[];
+    };
     probe: {
         checks: DoctorCheck[];
         error: string | null;
@@ -62,10 +71,21 @@ export interface ServiceStatusResult {
     raw?: boolean;
 }
 
+export interface ServiceStatusDependencies {
+    inspectNode(nodePath: string): DoctorServiceRuntimeInspection;
+    inspectEntry(binPath: string): DoctorServiceEntryInspection;
+}
+
+const serviceStatusDependencies: ServiceStatusDependencies = {
+    inspectNode: inspectServiceNodeRuntime,
+    inspectEntry: inspectServiceEntry,
+};
+
 /** 同时检查进程管理器与网关探针，并生成文本或稳定 JSON 证据。 */
 export async function inspectServiceStatus(
     options: ScopeOptions & { json?: boolean },
     fetcher: typeof fetch = fetch,
+    dependencies: ServiceStatusDependencies = serviceStatusDependencies,
 ): Promise<ServiceStatusResult> {
     const scope = options.system ? "system" : "user";
     const controller = new ServiceController(scope);
@@ -83,6 +103,7 @@ export async function inspectServiceStatus(
     }
     const status = controller.status(metadata.spec);
     const serviceDefinition = inspectStatusServiceDefinition(controller, metadata.spec);
+    const serviceRuntime = inspectStatusServiceRuntime(metadata.spec, dependencies);
     const processManager = {
         installed: status.installed,
         running: status.error ? null : status.running,
@@ -94,6 +115,7 @@ export async function inspectServiceStatus(
             createServiceStatusReport(scope, "unavailable", processManager, {
                 ...(metadata.spec ? { configPath: metadata.spec.configPath } : {}),
                 serviceDefinition,
+                serviceRuntime,
                 error: "进程管理器状态不可用，未执行 HTTP 探测",
             }),
             options.json,
@@ -104,6 +126,7 @@ export async function inspectServiceStatus(
             createServiceStatusReport(scope, "uninstalled", processManager, {
                 ...(metadata.spec ? { configPath: metadata.spec.configPath } : {}),
                 serviceDefinition,
+                serviceRuntime,
             }),
             options.json,
         );
@@ -113,6 +136,7 @@ export async function inspectServiceStatus(
             createServiceStatusReport(scope, "stopped", processManager, {
                 ...(metadata.spec ? { configPath: metadata.spec.configPath } : {}),
                 serviceDefinition,
+                serviceRuntime,
             }),
             options.json,
         );
@@ -132,6 +156,7 @@ export async function inspectServiceStatus(
             createServiceStatusReport(scope, "unavailable", processManager, {
                 configPath: spec.configPath,
                 serviceDefinition,
+                serviceRuntime,
                 error: `${serviceDefinition.error ?? "服务平台定义与元数据不一致"}，未执行 HTTP 探测`,
             }),
             options.json,
@@ -167,7 +192,8 @@ export async function inspectServiceStatus(
         ) {
             checks.push(await probeDoctorManagementPage(webUrl, config.path, fetcher));
         }
-        const hasError = checks.some(check => check.level === "error");
+        const hasError =
+            serviceRuntime.valid === false || checks.some(check => check.level === "error");
         const hasWarning = checks.some(check => check.level === "warning");
         const runtimeVersionUnverified = checks[0]?.level === "warning";
         const kind: ServiceStatusKind = hasError
@@ -184,6 +210,7 @@ export async function inspectServiceStatus(
                 webUrl,
                 checks,
                 serviceDefinition,
+                serviceRuntime,
             }),
             options.json,
         );
@@ -192,6 +219,7 @@ export async function inspectServiceStatus(
             createServiceStatusReport(scope, "unavailable", processManager, {
                 configPath: spec.configPath,
                 serviceDefinition,
+                serviceRuntime,
                 error: `配置读取失败: ${error instanceof Error ? error.message : String(error)}`,
             }),
             options.json,
@@ -206,6 +234,7 @@ interface ServiceStatusReportEvidence {
     checks?: DoctorCheck[];
     error?: string;
     serviceDefinition?: ServiceStatusReport["serviceDefinition"];
+    serviceRuntime?: ServiceStatusReport["serviceRuntime"];
 }
 
 function createServiceStatusReport(
@@ -231,6 +260,10 @@ function createServiceStatusReport(
             path: null,
             current: null,
             error: null,
+        },
+        serviceRuntime: evidence.serviceRuntime ?? {
+            valid: null,
+            checks: [],
         },
         probe: {
             checks: evidence.checks ?? [],
@@ -271,10 +304,24 @@ function formatServiceStatusResult(report: ServiceStatusReport, json = false): S
                           : `服务定义: ${report.serviceDefinition.error ?? "与元数据不一致"}`,
                   ]
                 : []),
+            ...report.serviceRuntime.checks.map(check => check.message),
             ...report.probe.checks.map(check => check.message),
             ...(report.probe.error ? [report.probe.error] : []),
         ].join("\n"),
         exitCode,
+    };
+}
+
+function inspectStatusServiceRuntime(
+    spec: ServiceSpec | null,
+    dependencies: ServiceStatusDependencies,
+): ServiceStatusReport["serviceRuntime"] {
+    if (!spec) return { valid: null, checks: [] };
+    const runtime = dependencies.inspectNode(spec.nodePath);
+    const entry = dependencies.inspectEntry(spec.binPath);
+    return {
+        valid: runtime.supported && entry.valid,
+        checks: [runtime.check, entry.check],
     };
 }
 

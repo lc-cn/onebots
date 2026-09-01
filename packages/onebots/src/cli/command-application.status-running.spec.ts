@@ -10,6 +10,27 @@ import { renderManagementIndexHtml } from "../management-index.js";
 
 const temporaryDirectories: string[] = [];
 let activeRuntimeContractId = "";
+const validStatusDependencies = {
+    inspectNode: (nodePath: string) => ({
+        supported: true,
+        check: {
+            name: "service-node",
+            level: "ok" as const,
+            message: `服务 Node 可用: ${nodePath}`,
+        },
+    }),
+    inspectEntry: (binPath: string) => ({
+        valid: true,
+        check: { name: "service-entry", level: "ok" as const, message: `服务入口有效: ${binPath}` },
+    }),
+};
+
+function runServiceStatus(
+    options: Parameters<typeof serviceStatus>[0],
+    fetcher: typeof fetch = fetch,
+) {
+    return serviceStatus(options, fetcher, validStatusDependencies);
+}
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -105,16 +126,73 @@ describe("service status", () => {
             );
         });
 
-        const result = await serviceStatus({ system: false }, fetcher);
+        const result = await runServiceStatus({ system: false }, fetcher);
 
         expect(result).toEqual({
-            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance\n在线进程的启动契约与服务元数据一致\nWeb 管理页可访问，Router 前缀为 /gateway`,
+            output: `运行中，已就绪\n进程管理器: active\n服务定义: 与元数据一致 (${path.join(spec.workingDirectory, "onebots.service")})\n服务 Node 可用: ${spec.nodePath}\n服务入口有效: ${spec.binPath}\nhealth: HTTP 200；状态 ok；onebots@${packageMetadata.version}；@onebots/core@1.2.5\nready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance\nhealth 与 ready 均来自 onebots@${packageMetadata.version} 实例 status-instance\n在线进程的启动契约与服务元数据一致\nWeb 管理页可访问，Router 前缀为 /gateway`,
             exitCode: undefined,
         });
         expect(fetcher).toHaveBeenCalledWith(
             "http://127.0.0.1:7788/gateway/health",
             expect.anything(),
         );
+    });
+
+    it("保存的 OneBots 入口失效时不把健康旧进程报告为已就绪", async () => {
+        const spec = serviceSpec();
+        mockInstalledService(true, spec);
+        const fetcher = createStatusFetcher(
+            async input =>
+                new Response(
+                    JSON.stringify({
+                        ...(String(input).endsWith("/health") ? { status: "ok" } : { ready: true }),
+                        application: "onebots",
+                        version: packageMetadata.version,
+                        instance_id: "status-instance",
+                        runtime_contract_id: activeRuntimeContractId,
+                    }),
+                    { status: 200 },
+                ),
+        );
+
+        const result = await serviceStatus({ system: false, json: true }, fetcher, {
+            ...validStatusDependencies,
+            inspectEntry: binPath => ({
+                valid: false,
+                check: {
+                    name: "service-entry",
+                    level: "error",
+                    message: `服务入口不可读取: ${binPath}`,
+                },
+            }),
+        });
+        const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
+
+        expect(result).toMatchObject({ exitCode: 1, raw: true });
+        expect(report).toMatchObject({
+            status: "unavailable",
+            ok: false,
+            serviceRuntime: {
+                valid: false,
+                checks: [
+                    { name: "service-node", level: "ok" },
+                    {
+                        name: "service-entry",
+                        level: "error",
+                        message: `服务入口不可读取: ${spec.binPath}`,
+                    },
+                ],
+            },
+            probe: {
+                checks: [
+                    { name: "health", level: "ok" },
+                    { name: "ready", level: "ok" },
+                    { name: "probe-instance", level: "ok" },
+                    { name: "service-runtime-contract", level: "ok" },
+                    { name: "management-page", level: "ok" },
+                ],
+            },
+        });
     });
 
     it("拒绝把同版本但启动契约不同的进程报告为当前服务", async () => {
@@ -134,7 +212,7 @@ describe("service status", () => {
                 ),
         );
 
-        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const result = await runServiceStatus({ system: false, json: true }, fetcher);
         const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
 
         expect(result).toMatchObject({ exitCode: 1, raw: true });
@@ -171,7 +249,7 @@ describe("service status", () => {
         vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(false);
         const fetcher = vi.fn<typeof fetch>();
 
-        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const result = await runServiceStatus({ system: false, json: true }, fetcher);
         const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
 
         expect(result).toMatchObject({ exitCode: 1, raw: true });
@@ -220,7 +298,7 @@ describe("service status", () => {
                   ),
         );
 
-        const result = await serviceStatus({ system: false }, fetcher);
+        const result = await runServiceStatus({ system: false }, fetcher);
 
         expect(result.exitCode).toBeUndefined();
         expect(result.output).toContain("运行中，待配置");
@@ -228,7 +306,7 @@ describe("service status", () => {
             `ready: HTTP 200；onebots@${packageMetadata.version}；实例 status-instance；未配置账号；账号 0/0 在线`,
         );
 
-        const jsonResult = await serviceStatus({ system: false, json: true }, fetcher);
+        const jsonResult = await runServiceStatus({ system: false, json: true }, fetcher);
         expect(JSON.parse(jsonResult.output ?? "{}")).toMatchObject({
             status: "pending_configuration",
             ok: true,
@@ -268,7 +346,7 @@ describe("service status", () => {
                   ),
         );
 
-        const result = await serviceStatus({ system: false }, fetcher);
+        const result = await runServiceStatus({ system: false }, fetcher);
 
         expect(result.exitCode).toBe(1);
         expect(result.output).toContain("运行中，不可用");
@@ -294,7 +372,7 @@ describe("service status", () => {
                 ),
         );
 
-        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const result = await runServiceStatus({ system: false, json: true }, fetcher);
 
         expect(result).toMatchObject({ exitCode: 1, raw: true });
         expect(JSON.parse(result.output ?? "{}")).toMatchObject({
@@ -338,7 +416,7 @@ describe("service status", () => {
                   ),
         );
 
-        const result = await serviceStatus({ system: false }, fetcher);
+        const result = await runServiceStatus({ system: false }, fetcher);
 
         expect(result.exitCode).toBe(1);
         expect(result.output).toContain("运行中，不可用");
@@ -371,13 +449,13 @@ describe("service status", () => {
                   ),
         );
 
-        const result = await serviceStatus({ system: false }, fetcher);
+        const result = await runServiceStatus({ system: false }, fetcher);
 
         expect(result.exitCode).toBe(1);
         expect(result.output).toContain("运行中，不可用");
         expect(result.output).toContain("ready: HTTP 503；账号 0/1 在线；未就绪: mock(0/1)");
 
-        const jsonResult = await serviceStatus({ system: false, json: true }, fetcher);
+        const jsonResult = await runServiceStatus({ system: false, json: true }, fetcher);
         expect(jsonResult).toMatchObject({ exitCode: 1, raw: true });
         expect(JSON.parse(jsonResult.output ?? "{}")).toMatchObject({
             status: "unavailable",

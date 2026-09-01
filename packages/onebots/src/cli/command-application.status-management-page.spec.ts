@@ -10,6 +10,27 @@ import { renderManagementIndexHtml } from "../management-index.js";
 
 const temporaryDirectories: string[] = [];
 let activeRuntimeContractId = "";
+const validStatusDependencies = {
+    inspectNode: (nodePath: string) => ({
+        supported: true,
+        check: {
+            name: "service-node",
+            level: "ok" as const,
+            message: `服务 Node 可用: ${nodePath}`,
+        },
+    }),
+    inspectEntry: (binPath: string) => ({
+        valid: true,
+        check: { name: "service-entry", level: "ok" as const, message: `服务入口有效: ${binPath}` },
+    }),
+};
+
+function runServiceStatus(
+    options: Parameters<typeof serviceStatus>[0],
+    fetcher: typeof fetch = fetch,
+) {
+    return serviceStatus(options, fetcher, validStatusDependencies);
+}
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -104,7 +125,7 @@ describe("service status", () => {
                   ),
         );
 
-        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const result = await runServiceStatus({ system: false, json: true }, fetcher);
         const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
 
         expect(result).toMatchObject({ exitCode: undefined, raw: true });
@@ -173,7 +194,7 @@ describe("service status", () => {
             () => managementPageResponse("/gateway", 404),
         );
 
-        const result = await serviceStatus({ system: false, json: true }, fetcher);
+        const result = await runServiceStatus({ system: false, json: true }, fetcher);
         const report = JSON.parse(result.output ?? "{}") as ServiceStatusReport;
 
         expect(result).toMatchObject({ exitCode: 1, raw: true });
