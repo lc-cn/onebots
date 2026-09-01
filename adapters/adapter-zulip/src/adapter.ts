@@ -324,10 +324,10 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
             this.logger.warn(`Zulip Event Queue 暂时断开: ${error.message}`);
         });
         client.on("client_error", error => this.logger.error("Zulip 客户端错误", error));
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             account.status = AccountStatus.Pending;
             try {
-                await client.start();
+                await client.start(signal);
                 const me = client.getCachedMe() || (await client.getMe());
                 account.nickname = me.full_name;
                 account.avatar = me.avatar_url || "";

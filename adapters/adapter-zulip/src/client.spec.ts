@@ -245,6 +245,91 @@ describe("ZulipClient", () => {
         expect(client.getCachedMe()).toBeUndefined();
     });
 
+    it("账号启动取消会中止进行中的身份请求且不发出 ready", async () => {
+        let requestSignal: AbortSignal | undefined;
+        const transport: ZulipTransport = request => {
+            requestSignal = request.signal;
+            return new Promise((_resolve, reject) =>
+                request.signal?.addEventListener("abort", () => reject(request.signal?.reason), {
+                    once: true,
+                }),
+            );
+        };
+        const client = new ZulipClient({ ...config, receive_mode: "manual" }, { transport });
+        const ready = vi.fn();
+        client.on("ready", ready);
+        const controller = new AbortController();
+
+        const start = client.start(controller.signal);
+        await vi.waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
+        controller.abort(new DOMException("账号启动超时", "AbortError"));
+
+        await expect(start).rejects.toMatchObject({ name: "AbortError" });
+        expect(client.getCachedMe()).toBeUndefined();
+        expect(ready).not.toHaveBeenCalled();
+    });
+
+    it("取消后清理忽略信号而迟到返回的服务器队列", async () => {
+        const requests: ZulipHttpRequest[] = [];
+        let releaseRegistration: (() => void) | undefined;
+        const transport: ZulipTransport = request => {
+            requests.push(request);
+            if (request.path === "users/me") return Promise.resolve(user());
+            if (request.path === "register") {
+                return new Promise(resolve => {
+                    releaseRegistration = () =>
+                        resolve({
+                            result: "success",
+                            msg: "",
+                            queue_id: "late-queue",
+                            last_event_id: -1,
+                        });
+                });
+            }
+            return Promise.resolve({ result: "success", msg: "" });
+        };
+        const client = new ZulipClient(config, { transport });
+        const ready = vi.fn();
+        const connected = vi.fn();
+        client.on("ready", ready);
+        client.on("connected", connected);
+        const controller = new AbortController();
+
+        const start = client.start(controller.signal);
+        await vi.waitFor(() => expect(releaseRegistration).toBeTypeOf("function"));
+        controller.abort(new DOMException("账号启动超时", "AbortError"));
+        releaseRegistration?.();
+
+        await expect(start).rejects.toMatchObject({ name: "AbortError" });
+        await vi.waitFor(() =>
+            expect(requests.map(request => `${request.method} ${request.path}`)).toContain(
+                "DELETE events",
+            ),
+        );
+        expect(
+            requests.find(request => request.path === "events" && request.method === "DELETE")
+                ?.params,
+        ).toEqual({ queue_id: "late-queue" });
+        expect(connected).not.toHaveBeenCalled();
+        expect(ready).not.toHaveBeenCalled();
+    });
+
+    it("身份就绪后仍保留账号启动信号以覆盖协议启动阶段", async () => {
+        const client = new ZulipClient(
+            { ...config, receive_mode: "manual" },
+            { transport: async () => user() },
+        );
+        const stop = vi.spyOn(client, "stop");
+        const controller = new AbortController();
+
+        await client.start(controller.signal);
+        expect(client.getCachedMe()).toEqual(user());
+        controller.abort();
+
+        await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(client.getCachedMe()).toBeUndefined());
+    });
+
     it("快速重启时旧 stop 不会清除新 generation 的轮询引用", async () => {
         const client = new ZulipClient(
             { ...config, receive_mode: "manual" },

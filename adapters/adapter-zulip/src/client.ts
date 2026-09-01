@@ -63,6 +63,8 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
     private lifecycleAbort?: AbortController;
     private lifecycleGeneration = 0;
     private startRequest?: Promise<void>;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private pollRequest?: Promise<void>;
     private registration?: ZulipQueueRegistration;
     private me?: ZulipUser;
@@ -81,15 +83,18 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
     }
 
     /** 校验凭证并注册 Event Queue；重复调用保持幂等。 */
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.startRequest) return this.startRequest;
         if (this.started) return;
+        this.bindStartSignal(signal);
         const request = this.initialize();
         this.startRequest = request;
         try {
             await request;
         } finally {
             if (this.startRequest === request) this.startRequest = undefined;
+            if (!this.started) this.unbindStartSignal();
         }
     }
 
@@ -99,14 +104,34 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         this.lifecycleAbort = controller;
         this.started = true;
         try {
-            this.me = await this.getMe(controller.signal);
+            const me = await this.getMe(controller.signal);
+            if (!this.isCurrent(generation, controller.signal)) {
+                controller.signal.throwIfAborted();
+                return;
+            }
+            this.me = me;
             if (resolveZulipReceiveMode(this.config) === "event_queue") {
-                this.registration = await this.registerQueue(controller.signal);
-                this.safeEmit("connected", this.registration);
+                const registration = await this.registerQueue(controller.signal);
+                if (!this.isCurrent(generation, controller.signal)) {
+                    try {
+                        await this.deleteQueue(registration);
+                    } catch (error) {
+                        throw ZulipError.wrap(error, "ZULIP_QUEUE_DELETE_FAILED");
+                    }
+                    controller.signal.throwIfAborted();
+                    return;
+                }
+                this.registration = registration;
+                this.safeEmit("connected", registration);
                 this.pollRequest = this.pollEvents(generation, controller.signal);
+            }
+            if (!this.isCurrent(generation, controller.signal)) {
+                controller.signal.throwIfAborted();
+                return;
             }
             this.safeEmit("ready", this.registration);
         } catch (error) {
+            const abortReason = controller.signal.aborted ? controller.signal.reason : undefined;
             controller.abort();
             if (generation === this.lifecycleGeneration) {
                 this.started = false;
@@ -114,12 +139,14 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
                 this.registration = undefined;
                 this.me = undefined;
             }
+            if (abortReason !== undefined && error === abortReason) throw abortReason;
             throw ZulipError.wrap(error, "ZULIP_START_FAILED");
         }
     }
 
     /** 停止长轮询并删除服务器队列；重复调用安全。 */
     async stop(): Promise<void> {
+        this.unbindStartSignal();
         if (!this.started && !this.startRequest) return;
         const failures = new FailureCollector();
         const registration = this.registration;
@@ -141,7 +168,7 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         }
         if (registration?.queue_id) {
             try {
-                await this.call("events", "DELETE", { queue_id: registration.queue_id });
+                await this.deleteQueue(registration);
             } catch (error) {
                 const wrapped = ZulipError.wrap(error, "ZULIP_QUEUE_DELETE_FAILED");
                 failures.add(wrapped);
@@ -150,6 +177,35 @@ export class ZulipClient extends EventEmitter<ZulipClientEvents> {
         }
         this.safeEmit("stop");
         failures.throwIfAny("Zulip 客户端停止失败");
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error =>
+                this.reportError(ZulipError.wrap(error, "ZULIP_STOP_FAILED")),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
+    }
+
+    private isCurrent(generation: number, signal: AbortSignal): boolean {
+        return this.started && generation === this.lifecycleGeneration && !signal.aborted;
+    }
+
+    private deleteQueue(registration: ZulipQueueRegistration): Promise<unknown> {
+        return this.call("events", "DELETE", { queue_id: registration.queue_id });
     }
 
     /** 调用官方相对 API 路径；路径、方法、编码和平台错误均统一校验。 */

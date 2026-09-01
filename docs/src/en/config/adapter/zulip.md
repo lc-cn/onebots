@@ -36,6 +36,8 @@ The Web form can add and remove event types directly. `receive_mode` is either `
 
 Manual mode does not register or poll a queue. Existing consumers call `await client.ingest(rawEvent)`; deduplication is committed only after raw, typed, canonical, and protocol delivery succeeds.
 
+Identity verification, Event Queue registration, and subsequent protocol outlets share the account startup boundary. When the global `timeout` expires or a hot reload is cancelled, the adapter aborts registration and long polling and deletes both established queues and queues returned late by a server that ignored cancellation. An obsolete startup task cannot mark the account ready again.
+
 Optional HTTP(S) and SOCKS proxy settings are available under `proxy.url`, `proxy.username`, and `proxy.password`. Missing proxy support fails startup explicitly instead of silently using a direct connection.
 
 See [Zulip platform support](/en/platform/zulip) for scene IDs and native actions.

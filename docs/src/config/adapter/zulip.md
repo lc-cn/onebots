@@ -45,6 +45,8 @@ zulip.team-bot:
 
 `manual` 模式不注册或轮询 Event Queue。已有消费者应调用 `await client.ingest(rawEvent)`；raw、精确类型、canonical 监听器和协议投影全部成功后才提交去重状态。旧的 `event_queue.enabled` 不再接受。
 
+身份验证、Event Queue 注册与后续协议出口共用账号启动边界。达到全局 `timeout` 或取消热重载时，适配器会中止注册与长轮询，并删除已经创建或忽略取消后迟到返回的服务器队列，避免旧启动任务重新把账号标记为就绪。
+
 ## 代理
 
 ```yaml
