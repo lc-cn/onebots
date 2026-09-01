@@ -17,6 +17,47 @@ const json = (value: unknown, status = 200) =>
     });
 
 describe("WeComClient", () => {
+    it("账号启动信号会中止首次凭证请求", async () => {
+        const fetcher = vi.fn<typeof fetch>().mockImplementation(
+            (_input, init) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init?.signal?.addEventListener("abort", () =>
+                        reject(new DOMException("aborted", "AbortError")),
+                    );
+                }),
+        );
+        const client = new WeComClient(config, fetcher);
+        const controller = new AbortController();
+
+        const starting = client.start(controller.signal);
+        await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+        controller.abort();
+
+        await expect(starting).rejects.toMatchObject({ code: "WECOM_START_CANCELLED" });
+        expect(fetcher.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it("就绪后仍响应账号信号并阻止协议失败后的旧状态存活", async () => {
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(
+                json({ errcode: 0, errmsg: "ok", access_token: "token", expires_in: 7200 }),
+            )
+            .mockResolvedValueOnce(
+                json({ errcode: 0, errmsg: "ok", agentid: 1000001, name: "Bot" }),
+            );
+        const client = new WeComClient(config, fetcher);
+        const controller = new AbortController();
+        const stopped = vi.fn();
+        client.on("stop", stopped);
+
+        await client.start(controller.signal);
+        controller.abort();
+
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+        expect(client.getCachedAgent()).toBeUndefined();
+    });
+
     it("token 失效时并发安全地刷新并重试一次", async () => {
         const fetcher = vi
             .fn<typeof fetch>()

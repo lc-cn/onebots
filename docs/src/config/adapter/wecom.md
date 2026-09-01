@@ -30,3 +30,5 @@ wecom.internal_app:
 | `api_base_url` | 否 | `https://qyapi.weixin.qq.com` | 官方兼容 HTTPS 代理或测试入口 |
 
 `manual` 模式不注册路由，且不要求 `token` / `encoding_aes_key`；可信来源需直接 `await client.ingest(decryptedEvent)`。Webhook 模式不接受明文回调，也不提供历史配置别名。
+
+首次应用凭证与身份校验请求、异步就绪监听器和后续协议出口共用 OneBots 全局 `timeout`。启动超时、人工停止或配置热重载会中止在途请求，并通过启动代次阻止忽略取消的迟到响应恢复在线状态；账号就绪后仍保留启动信号，因此协议启动失败也能完整回滚客户端状态。

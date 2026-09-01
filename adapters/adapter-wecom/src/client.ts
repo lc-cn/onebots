@@ -48,6 +48,9 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
     private readonly jsApiTickets = new WeComJsApiTickets();
     private agent?: WeComAgent;
     private startPromise?: Promise<WeComAgent>;
+    private startupAbort?: AbortController;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private generation = 0;
     private running = false;
     private lifecycleActive = false;
@@ -68,40 +71,54 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         this.apiBaseUrl = resolveWeComApiBaseUrl(config.api_base_url || DEFAULT_API_BASE);
     }
 
-    async start(): Promise<WeComAgent> {
-        if (this.running && this.agent) return this.agent;
+    async start(signal?: AbortSignal): Promise<WeComAgent> {
+        this.assertSignalActive(signal);
+        if (this.running && this.agent) {
+            this.bindStartSignal(signal);
+            return this.agent;
+        }
         if (this.startPromise) return this.startPromise;
+        this.bindStartSignal(signal);
         this.lifecycleActive = true;
         const generation = this.generation;
-        const start = this.startInternal(generation);
+        const controller = new AbortController();
+        this.startupAbort = controller;
+        const start = this.startInternal(generation, controller.signal);
         this.startPromise = start;
         try {
             return await start;
         } finally {
             if (this.startPromise === start) this.startPromise = undefined;
+            if (this.startupAbort === controller) this.startupAbort = undefined;
+            if (!this.running && this.startSignal === signal) this.unbindStartSignal();
         }
     }
 
-    private async startInternal(generation: number): Promise<WeComAgent> {
-        await this.getAccessToken();
-        const agent = await this.getAgent();
-        this.assertStartGeneration(generation);
-        this.agent = agent;
+    private async startInternal(generation: number, signal: AbortSignal): Promise<WeComAgent> {
         try {
+            await this.getAccessToken(false, signal);
+            this.assertStartGeneration(generation, signal);
+            const agent = await this.getAgent(signal);
+            this.assertStartGeneration(generation, signal);
+            this.agent = agent;
             await emitAllAwaited(this, "ready", agent);
-            this.assertStartGeneration(generation);
+            this.assertStartGeneration(generation, signal);
             this.running = true;
             return agent;
         } catch (error) {
             if (generation === this.generation) this.agent = undefined;
+            if (signal.aborted || generation !== this.generation) throw this.startCancelled();
             throw error;
         }
     }
 
     async stop(): Promise<void> {
+        this.unbindStartSignal();
         const wasActive = this.lifecycleActive;
         this.lifecycleActive = false;
         this.generation += 1;
+        this.startupAbort?.abort();
+        this.startupAbort = undefined;
         this.running = false;
         this.startPromise = undefined;
         this.agent = undefined;
@@ -112,12 +129,39 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         if (wasActive) await emitAllAwaited(this, "stop");
     }
 
-    private assertStartGeneration(generation: number): void {
-        if (generation !== this.generation) {
-            throw new WeComApiError("企业微信启动已被停止", {
-                code: "WECOM_START_CANCELLED",
-            });
+    private assertStartGeneration(generation: number, signal?: AbortSignal): void {
+        if (generation !== this.generation || signal?.aborted) throw this.startCancelled();
+    }
+
+    private assertSignalActive(signal?: AbortSignal): void {
+        if (signal?.aborted) throw this.startCancelled();
+    }
+
+    private startCancelled(): WeComApiError {
+        return new WeComApiError("企业微信启动已被停止", {
+            code: "WECOM_START_CANCELLED",
+        });
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = (): void => {
+            void this.stop().catch(error =>
+                this.emit("client_error", WeComApiError.wrap(error, "WECOM_STOP_FAILED")),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
         }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
     }
 
     getCachedAgent(): WeComAgent | undefined {
@@ -128,19 +172,19 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         return this.config.receive_mode || "webhook";
     }
 
-    async getAccessToken(force = false): Promise<string> {
-        return this.tokens.get(() => this.fetchToken(this.config.corp_secret), force);
+    async getAccessToken(force = false, signal?: AbortSignal): Promise<string> {
+        return this.tokens.get(() => this.fetchToken(this.config.corp_secret, signal), force);
     }
 
     /** 获取独立的通讯录同步 token，避免以应用 token 伪装写通讯录权限。 */
-    async getDirectoryAccessToken(force = false): Promise<string> {
+    async getDirectoryAccessToken(force = false, signal?: AbortSignal): Promise<string> {
         const secret = this.config.directory_secret;
         if (!secret) {
             throw new WeComApiError("通讯录写入动作需要配置 directory_secret", {
                 code: "WECOM_DIRECTORY_SECRET_REQUIRED",
             });
         }
-        return this.directoryTokens.get(() => this.fetchToken(secret), force);
+        return this.directoryTokens.get(() => this.fetchToken(secret, signal), force);
     }
 
     /** 获取企业级 wx.config ticket；与应用级 agentConfig ticket 分开缓存。 */
@@ -162,8 +206,12 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         return this.performCall<T>(options, true, "directory");
     }
 
-    getAgent(): Promise<WeComAgent> {
-        return this.call({ path: "/cgi-bin/agent/get", query: { agentid: this.config.agent_id } });
+    getAgent(signal?: AbortSignal): Promise<WeComAgent> {
+        return this.call({
+            path: "/cgi-bin/agent/get",
+            query: { agentid: this.config.agent_id },
+            signal,
+        });
     }
 
     async sendApplicationMessage(message: Record<string, unknown>): Promise<string> {
@@ -358,12 +406,16 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         }
     }
 
-    private async fetchToken(secret: string): Promise<{ value: string; ttlMs: number }> {
+    private async fetchToken(
+        secret: string,
+        signal?: AbortSignal,
+    ): Promise<{ value: string; ttlMs: number }> {
         const result = await this.performCall<WeComTokenResponse>(
             {
                 path: "/cgi-bin/gettoken",
                 token: false,
                 query: { corpid: this.config.corp_id, corpsecret: secret },
+                signal,
             },
             false,
             "application",
@@ -387,8 +439,8 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
             options.token === false
                 ? undefined
                 : scope === "directory"
-                  ? await this.getDirectoryAccessToken()
-                  : await this.getAccessToken();
+                  ? await this.getDirectoryAccessToken(false, options.signal)
+                  : await this.getAccessToken(false, options.signal);
         if (requestToken) url.searchParams.set("access_token", requestToken);
         const headers = new Headers();
         let body: BodyInit | undefined;
@@ -422,8 +474,8 @@ export class WeComClient extends EventEmitter<WeComClientEvents> {
         if (retryToken && INVALID_TOKEN_CODES.has(errorCode)) {
             const tokenStore = scope === "directory" ? this.directoryTokens : this.tokens;
             if (requestToken && tokenStore.invalidate(requestToken)) {
-                if (scope === "directory") await this.getDirectoryAccessToken(true);
-                else await this.getAccessToken(true);
+                if (scope === "directory") await this.getDirectoryAccessToken(true, options.signal);
+                else await this.getAccessToken(true, options.signal);
             }
             return this.performCall<T>(options, false, scope);
         }

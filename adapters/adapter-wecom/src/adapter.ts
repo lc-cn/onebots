@@ -186,15 +186,16 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
                 }),
             );
         });
+        client.on("client_error", error => this.logger.error("企业微信客户端错误", error));
         if (client.receiveMode === "webhook") {
             this.app.router.all(webhook.path, ctx =>
                 webhook.acceptHttp(ctx as unknown as WeComHttpContext),
             );
         }
 
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                const agent = await client.start();
+                const agent = await client.start(signal);
                 account.status = AccountStatus.Online;
                 account.nickname = agent.name || config.account_id;
                 account.avatar = agent.square_logo_url || this.icon;

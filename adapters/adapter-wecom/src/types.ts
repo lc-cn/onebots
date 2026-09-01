@@ -1,3 +1,5 @@
+import type { WeComApiError } from "./errors.js";
+
 /** 企业微信自建应用官方 API 类型。 */
 export interface WeComConfig {
     account_id: string;
@@ -160,6 +162,7 @@ export interface WeComIngestResult {
 export interface WeComClientEvents {
     ready: [agent: WeComAgent];
     stop: [];
+    client_error: [error: WeComApiError];
     raw_event: [event: WeComEvent];
     event: [event: WeComEvent];
     message: [event: WeComEvent];
