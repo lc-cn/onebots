@@ -45,6 +45,8 @@ describe("doctor configuration scope", () => {
             application: { name: string; version: string };
             target: {
                 configPath: string;
+                baseUrl: string | null;
+                webUrl: string | null;
                 dataDirectory: string;
                 databasePath: string | null;
                 extensionRoot: string;
@@ -66,6 +68,8 @@ describe("doctor configuration scope", () => {
             application: { name: "onebots", version: packageMetadata.version },
             target: {
                 configPath,
+                baseUrl: "http://127.0.0.1:6727",
+                webUrl: "http://127.0.0.1:6727",
                 dataDirectory: path.join(directory, "data"),
                 databasePath: path.join(directory, "data", "onebots.db"),
                 extensionRoot: directory,
@@ -141,6 +145,40 @@ describe("doctor configuration scope", () => {
         });
         expect(readSpec).toHaveBeenCalledTimes(1);
         expect(status).not.toHaveBeenCalled();
+    });
+
+    it("keeps unresolved gateway targets explicit in JSON evidence", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-address-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        fs.writeFileSync(configPath, "port: 6727\ngeneral: {}\n", { mode: 0o600 });
+        fs.mkdirSync(path.join(directory, "data"));
+        fs.writeFileSync(
+            path.join(directory, "package.json"),
+            JSON.stringify({ name: "onebots", version: packageMetadata.version }),
+        );
+        vi.stubEnv("ONEBOTS_EXTENSION_ROOT", directory);
+        vi.stubEnv("PORT", "invalid");
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
+
+        const result = await diagnose({
+            config: configPath,
+            register: [],
+            protocol: [],
+            system: false,
+            fix: false,
+            json: true,
+        });
+        const report = JSON.parse(result.output || "{}") as {
+            target: { baseUrl: string | null; webUrl: string | null };
+            checks: Array<{ name: string; level: string }>;
+        };
+
+        expect(report.target).toMatchObject({ baseUrl: null, webUrl: null });
+        expect(report.checks.find(check => check.name === "gateway-address")).toMatchObject({
+            level: "error",
+        });
+        expect(result.exitCode).toBe(1);
     });
 
     it("diagnoses an explicit candidate config independently from another installed service", async () => {
@@ -257,6 +295,8 @@ describe("doctor configuration scope", () => {
         });
         const report = JSON.parse(result.output || "{}") as {
             target: {
+                baseUrl: string | null;
+                webUrl: string | null;
                 service: { mode: string };
                 plugins: { adapters: { source: string; names: string[] } };
             };
@@ -267,6 +307,8 @@ describe("doctor configuration scope", () => {
             "适配器 服务定义 [service-missing]",
         );
         expect(report.target).toMatchObject({
+            baseUrl: "http://127.0.0.1:61997",
+            webUrl: "http://127.0.0.1:61997",
             service: { mode: "managed" },
             plugins: { adapters: { source: "service", names: ["service-missing"] } },
         });

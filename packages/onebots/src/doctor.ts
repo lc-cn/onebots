@@ -65,6 +65,10 @@ export interface DoctorPluginTarget {
 }
 export interface DoctorTarget {
     configPath: string;
+    /** 实际用于公开探针与管理 API 的地址；配置无法解析时为 null。 */
+    baseUrl: string | null;
+    /** 实际用于 Web 管理页探针的 origin；配置无法解析时为 null。 */
+    webUrl: string | null;
     dataDirectory: string;
     databasePath: string | null;
     extensionRoot: string;
@@ -414,15 +418,15 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         }
     }
 
+    let baseUrl: string | null = null;
+    let webUrl: string | null = null;
     if (config) {
-        let base: string | undefined;
-        let webUrl: string | undefined;
         let port: number | undefined;
         try {
             const environmentPort = spec
                 ? undefined
                 : (options.environmentPort ?? process.env.PORT);
-            base = resolveGatewayBaseUrl(config, environmentPort);
+            baseUrl = resolveGatewayBaseUrl(config, environmentPort);
             webUrl = resolveManagementWebUrl(config, environmentPort);
             port = resolveGatewayPort(config, environmentPort);
         } catch (error) {
@@ -432,14 +436,19 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 message: `网关地址配置无效: ${error instanceof Error ? error.message : String(error)}`,
             });
         }
-        if (base && webUrl && port !== undefined) {
-            const managementBaseUrl = base;
+        if (baseUrl && webUrl && port !== undefined) {
+            const managementBaseUrl = baseUrl;
             const managementWebUrl = webUrl;
             const portOpen = status?.running || (await isPortOpen(port));
             if (portOpen) {
                 const endpointChecks = await Promise.all([
-                    probeDoctorEndpoint(base, "health", fetch, packageMetadata.version),
-                    probeDoctorEndpoint(base, "ready", fetch),
+                    probeDoctorEndpoint(
+                        managementBaseUrl,
+                        "health",
+                        fetch,
+                        packageMetadata.version,
+                    ),
+                    probeDoctorEndpoint(managementBaseUrl, "ready", fetch),
                 ]);
                 const identityCheck = compareDoctorEndpointIdentities(...endpointChecks);
                 checks.push(...endpointChecks, identityCheck);
@@ -486,6 +495,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         },
         target: {
             configPath: path.resolve(options.configPath),
+            baseUrl,
+            webUrl,
             dataDirectory: dataDir,
             databasePath: database.path,
             extensionRoot: extensionRuntime.root,
