@@ -17,6 +17,12 @@ function setup(overrides: Partial<App> = {}) {
     const app = {
         adapterInfos: [],
         adapterCapabilityReport: { complete: true, errors: [], adapters: [] },
+        runtimeContractId: "sha256:contract-a",
+        info: {
+            application_name: "onebots",
+            application_version: "1.2.8",
+            instance_id: "instance-a",
+        },
         accounts: [],
         adapters: new Map(),
         logger: { error: vi.fn() },
@@ -44,13 +50,19 @@ describe("adapter account routes", () => {
             adapters: [{ name: "qq", source: "catalog", status: "verified" }],
         };
         const { gets } = setup({ adapterInfos, adapterCapabilityReport: report } as Partial<App>);
-        const adaptersContext = {} as RouterContext;
+        const adaptersContext = { set: vi.fn() } as unknown as RouterContext;
         const capabilitiesContext = { set: vi.fn() } as unknown as RouterContext;
 
         gets.get("/api/adapters")!(adaptersContext);
         gets.get("/api/adapter-capabilities")!(capabilitiesContext);
 
         expect(adaptersContext.body).toBe(adapterInfos);
+        expect(adaptersContext.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
+        expect(adaptersContext.set).toHaveBeenCalledWith(
+            "X-OneBots-Runtime-Contract-Id",
+            "sha256:contract-a",
+        );
+        expect(adaptersContext.set).toHaveBeenCalledWith("Cache-Control", "no-store");
         expect(capabilitiesContext.body).toBe(report);
         expect(capabilitiesContext.set).toHaveBeenCalledWith("Cache-Control", "no-store");
     });
@@ -150,6 +162,31 @@ describe("adapter account routes", () => {
             code: "ACCOUNT_TARGET_NOT_FOUND",
             message: "适配器 missing 不存在",
         });
+    });
+
+    it("拒绝由其他实例快照发起的账号操作", async () => {
+        const account = { info: { uin: "demo", status: "online" } };
+        const adapter = lifecycleAdapter(account);
+        const { posts } = setup({ adapters: new Map([["mock", adapter]]) } as Partial<App>);
+        const ctx = {
+            request: {
+                body: {
+                    platform: "mock",
+                    uin: "demo",
+                    expected_instance_id: "instance-before-restart",
+                },
+            },
+        } as RouterContext;
+
+        await posts.get("/api/bots/start")!(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            code: "ACCOUNT_INSTANCE_MISMATCH",
+            message: "账号操作期望实例 instance-before-restart，当前已由实例 instance-a 接管",
+        });
+        expect(adapter.setOnline).not.toHaveBeenCalled();
     });
 
     it("停止不存在的账号时返回 404 且不调用适配器", async () => {

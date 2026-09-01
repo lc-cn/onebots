@@ -13,9 +13,15 @@ import {
     type ServiceProbeResult,
 } from "../utils/service-probes.js";
 import {
+    buildBotLifecycleActionRequest,
     parseBotLifecycleActionResponse,
     type BotLifecycleActionResult,
 } from "../bot-lifecycle-action.js";
+import { parseAdapterInventory } from "../adapter-inventory.js";
+import {
+    parseManagementEvidenceIdentity,
+    type ManagementEvidenceIdentity,
+} from "../management-evidence-identity.js";
 
 export interface UseApiResources {
     adapters?: boolean;
@@ -30,6 +36,9 @@ export function useApi(resources: UseApiResources = {}) {
         readiness: resources.readiness !== false,
     };
     const adapters = ref<AdapterInfo[]>([]);
+    const adapterInventoryIdentity = ref<ManagementEvidenceIdentity | null>(null);
+    const adapterInventoryStatus = ref<"loading" | "ready" | "unavailable">("loading");
+    const adapterInventoryError = ref("");
     const systemInfo = ref<SystemInfo | null>(null);
     const logs = ref<string[]>([]);
     const readinessProbe = ref<ServiceProbeResult>(pendingReadinessProbe());
@@ -42,11 +51,18 @@ export function useApi(resources: UseApiResources = {}) {
 
     const fetchAdapters = async () => {
         try {
-            const response = await authFetch(buildApiUrl("/api/adapters"));
-            if (response.ok) {
-                adapters.value = await response.json();
-            }
+            const response = await authFetch(buildApiUrl("/api/adapters"), { cache: "no-store" });
+            if (!response.ok) throw new Error(`账号运行态请求失败（HTTP ${response.status}）`);
+            const nextIdentity = parseManagementEvidenceIdentity(response);
+            const nextAdapters = parseAdapterInventory(await response.json());
+            adapterInventoryIdentity.value = nextIdentity;
+            adapters.value = nextAdapters;
+            adapterInventoryStatus.value = "ready";
+            adapterInventoryError.value = "";
         } catch (error) {
+            adapterInventoryStatus.value = "unavailable";
+            adapterInventoryError.value =
+                error instanceof Error ? error.message : "账号运行态请求失败";
             reportClientError("获取适配器列表失败", error);
         }
     };
@@ -85,7 +101,13 @@ export function useApi(resources: UseApiResources = {}) {
             const response = await authFetch(buildApiUrl("/api/bots/start"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ platform, uin }),
+                body: JSON.stringify(
+                    buildBotLifecycleActionRequest(
+                        platform,
+                        uin,
+                        adapterInventoryIdentity.value?.instanceId,
+                    ),
+                ),
             });
             const result = await parseBotLifecycleActionResponse(
                 response,
@@ -106,7 +128,13 @@ export function useApi(resources: UseApiResources = {}) {
             const response = await authFetch(buildApiUrl("/api/bots/stop"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ platform, uin }),
+                body: JSON.stringify(
+                    buildBotLifecycleActionRequest(
+                        platform,
+                        uin,
+                        adapterInventoryIdentity.value?.instanceId,
+                    ),
+                ),
             });
             const result = await parseBotLifecycleActionResponse(
                 response,
@@ -158,6 +186,9 @@ export function useApi(resources: UseApiResources = {}) {
 
     return {
         adapters,
+        adapterInventoryIdentity,
+        adapterInventoryStatus,
+        adapterInventoryError,
         systemInfo,
         readinessProbe,
         logs,

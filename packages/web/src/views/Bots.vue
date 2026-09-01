@@ -14,6 +14,13 @@
                     </UiButton>
                 </div>
             </div>
+            <UiAlert
+                v-if="managementSnapshotStatus === 'unavailable'"
+                variant="danger"
+                title="账号运行态证据不可用"
+                class="mb-4">
+                {{ managementSnapshotError }}。页面不会展示或操作来源不一致的账号快照。
+            </UiAlert>
 
             <UiEmpty
                 v-if="totalBotCount === 0"
@@ -35,7 +42,7 @@
             <div
                 v-else
                 class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,320px),1fr))] gap-4">
-                <template v-for="adapter of adapters" :key="adapter.platform">
+                <template v-for="adapter of trustedAdapters" :key="adapter.platform">
                     <BotCard
                         v-for="bot of adapter.accounts"
                         :key="`${bot.platform}:${bot.uin}`"
@@ -51,18 +58,19 @@
         <AdapterCapabilitiesDrawer
             v-model="capabilitiesOpen"
             :adapters="capabilityAdapters"
-            :catalog-status="capabilityCatalogStatus"
-            :catalog-error="capabilityCatalogError"
+            :catalog-status="managementSnapshotStatus"
+            :catalog-error="managementSnapshotError"
             @retry="loadCapabilityCatalog" />
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { IconListCheck, IconRobot } from "@tabler/icons-vue";
 import UiBadge from "../ui/UiBadge.vue";
 import UiButton from "../ui/UiButton.vue";
 import UiEmpty from "../ui/UiEmpty.vue";
+import UiAlert from "../ui/UiAlert.vue";
 import { useToast } from "../ui/toast";
 import { useApi } from "../composables/useApi";
 import { authFetch } from "../composables/useAuth";
@@ -77,14 +85,22 @@ import {
 } from "../components/capability-presentation.js";
 import { getBotOnboardingState } from "./bot-onboarding.js";
 import type { ProtocolInventoryState } from "./bot-onboarding.js";
+import { parseExtensionInventory } from "./extension-inventory.js";
 import {
-    parseExtensionEvidenceIdentity,
-    parseExtensionInventory,
-    sameExtensionEvidenceIdentity,
-    type ExtensionEvidenceIdentity,
-} from "./extension-inventory.js";
+    parseManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+    type ManagementEvidenceIdentity,
+} from "../management-evidence-identity.js";
+import { resolveManagementSnapshot } from "../management-snapshot.js";
 
-const { adapters, totalBotCount, startBot, stopBot } = useApi({
+const {
+    adapters,
+    adapterInventoryIdentity,
+    adapterInventoryStatus,
+    adapterInventoryError,
+    startBot,
+    stopBot,
+} = useApi({
     systemInfo: false,
     readiness: false,
 });
@@ -93,7 +109,7 @@ const toast = useToast();
 const loadingBots = ref<Set<string>>(new Set());
 const capabilitiesOpen = ref(false);
 const extensions = ref<ExtensionInfo[]>([]);
-const extensionInventoryIdentity = ref<ExtensionEvidenceIdentity | null>(null);
+const extensionInventoryIdentity = ref<ManagementEvidenceIdentity | null>(null);
 const extensionInventoryStatus = ref<"loading" | "ready" | "unavailable">("loading");
 const capabilityReport = ref<AdapterCapabilityReport>({
     schemaVersion: 1,
@@ -105,28 +121,56 @@ const capabilityReport = ref<AdapterCapabilityReport>({
 });
 const capabilityCatalogStatus = ref<"loading" | "ready" | "unavailable">("loading");
 const capabilityCatalogError = ref("");
+const adapterInventoryIdentityKey = computed(() => identityKey(adapterInventoryIdentity.value));
+const capabilityIdentity = computed<ManagementEvidenceIdentity | null>(() => {
+    const application = capabilityReport.value.application;
+    if (!application.name || !application.version || !application.instanceId) return null;
+    return {
+        application: application.name,
+        version: application.version,
+        instanceId: application.instanceId,
+        ...(application.runtimeContractId
+            ? { runtimeContractId: application.runtimeContractId }
+            : {}),
+    };
+});
+const managementSnapshot = computed(() =>
+    resolveManagementSnapshot({
+        adapterStatus: adapterInventoryStatus.value,
+        adapterIdentity: adapterInventoryIdentity.value,
+        adapterError: adapterInventoryError.value,
+        capabilityStatus: capabilityCatalogStatus.value,
+        capabilityIdentity: capabilityIdentity.value,
+        capabilityError: capabilityCatalogError.value,
+    }),
+);
+const managementSnapshotStatus = computed(() => managementSnapshot.value.status);
+const managementSnapshotError = computed(() => managementSnapshot.value.error);
+const trustedAdapters = computed(() =>
+    managementSnapshotStatus.value === "ready" ? adapters.value : [],
+);
+const totalBotCount = computed(() =>
+    trustedAdapters.value.reduce((count, adapter) => count + adapter.accounts.length, 0),
+);
 const capabilityAdapters = computed(() =>
-    mergeCapabilityReportAdapters(adapters.value, capabilityReport.value),
+    mergeCapabilityReportAdapters(trustedAdapters.value, capabilityReport.value),
 );
 const protocolInventory = computed<ProtocolInventoryState>(() => {
-    if (extensionInventoryStatus.value === "loading" || capabilityCatalogStatus.value === "loading")
+    if (
+        extensionInventoryStatus.value === "loading" ||
+        managementSnapshotStatus.value === "loading"
+    )
         return "loading";
     if (
         extensionInventoryStatus.value === "unavailable" ||
-        capabilityCatalogStatus.value === "unavailable"
+        managementSnapshotStatus.value === "unavailable"
     )
         return "unavailable";
     const inventoryIdentity = extensionInventoryIdentity.value;
     if (
         !inventoryIdentity ||
-        !sameExtensionEvidenceIdentity(inventoryIdentity, {
-            application: capabilityReport.value.application.name,
-            version: capabilityReport.value.application.version,
-            instanceId: capabilityReport.value.application.instanceId,
-            ...(capabilityReport.value.application.runtimeContractId
-                ? { runtimeContractId: capabilityReport.value.application.runtimeContractId }
-                : {}),
-        })
+        !capabilityIdentity.value ||
+        !sameManagementEvidenceIdentity(inventoryIdentity, capabilityIdentity.value)
     ) {
         return "unavailable";
     }
@@ -135,14 +179,14 @@ const protocolInventory = computed<ProtocolInventoryState>(() => {
         : "missing";
 });
 const onboarding = computed(() =>
-    getBotOnboardingState(adapters.value.length > 0, protocolInventory.value),
+    getBotOnboardingState(trustedAdapters.value.length > 0, protocolInventory.value),
 );
 
 async function loadExtensionInventory() {
     try {
         const response = await authFetch(buildApiUrl("/api/extensions"));
         if (!response.ok) throw new Error("无法读取适配器能力目录");
-        const identity = parseExtensionEvidenceIdentity(response);
+        const identity = parseManagementEvidenceIdentity(response);
         const inventory = parseExtensionInventory(await response.json());
         extensionInventoryIdentity.value = identity;
         extensions.value = inventory;
@@ -178,6 +222,20 @@ onMounted(() => {
     void loadExtensionInventory();
     void loadCapabilityCatalog();
 });
+
+watch(adapterInventoryIdentityKey, (current, previous) => {
+    if (current && current !== previous && capabilityCatalogStatus.value !== "loading") {
+        void loadCapabilityCatalog();
+    }
+});
+
+function identityKey(identity: ManagementEvidenceIdentity | null): string {
+    return identity
+        ? [identity.application, identity.version, identity.instanceId, identity.runtimeContractId]
+              .filter(Boolean)
+              .join("\n")
+        : "";
+}
 
 const botKey = (bot: AccountInfo) => `${bot.platform}:${bot.uin}`;
 

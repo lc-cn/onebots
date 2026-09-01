@@ -10,6 +10,10 @@ import {
 import { probeAuthenticatedExtensions } from "./doctor-management-extensions.js";
 import { probeAuthenticatedCapabilityCatalog } from "./doctor-management-capability-catalog.js";
 import { readDoctorManagementJson } from "./doctor-management-response.js";
+import {
+    readManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+} from "./management-evidence-identity.js";
 
 type DoctorFetch = ManagementFetch;
 
@@ -54,7 +58,12 @@ export async function probeDoctorManagement(
                   fetcher,
                   dependencies.expectedIdentity,
               ),
-              probeAuthenticatedRuntime(base, credential.token, fetcher),
+              probeAuthenticatedRuntime(
+                  base,
+                  credential.token,
+                  fetcher,
+                  dependencies.expectedIdentity,
+              ),
               probeAuthenticatedManagementWebSocket(websocketUrl, credential.token, upgrade),
           ])
         : null;
@@ -200,6 +209,7 @@ async function probeAuthenticatedRuntime(
     base: string,
     token: string,
     fetcher: DoctorFetch,
+    expectedIdentity?: DoctorEndpointIdentity,
 ): Promise<DoctorCheck[]> {
     try {
         const response = await fetcher(`${base}/api/adapters`, {
@@ -209,6 +219,17 @@ async function probeAuthenticatedRuntime(
         const payload = await readDoctorManagementJson(response);
         if (!response.ok || !Array.isArray(payload)) {
             return unavailableRuntimeChecks(`管理运行态响应无效: HTTP ${response.status}`);
+        }
+        if (expectedIdentity) {
+            const identity = readManagementEvidenceIdentity(response.headers);
+            if (!identity) {
+                return unavailableRuntimeChecks("管理运行态响应缺少完整 OneBots 实例身份");
+            }
+            if (!sameManagementEvidenceIdentity(identity, expectedIdentity)) {
+                return unavailableRuntimeChecks(
+                    `管理运行态实例 ${managementIdentityLabel(identity)} 与公开探针 ${managementIdentityLabel(expectedIdentity)} 不一致`,
+                );
+            }
         }
 
         const issues: string[] = [];
@@ -301,6 +322,11 @@ async function probeAuthenticatedRuntime(
             failedManagementCheck("management-capabilities", "账号能力证据", error),
         ];
     }
+}
+
+function managementIdentityLabel(identity: DoctorEndpointIdentity): string {
+    const contract = identity.runtimeContractId ? ` 契约 ${identity.runtimeContractId}` : "";
+    return `${identity.application}@${identity.version} 实例 ${identity.instanceId}${contract}`;
 }
 
 function inspectAccountCapabilityOverrides(

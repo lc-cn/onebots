@@ -46,7 +46,7 @@ describe("doctor management probes", () => {
                             ],
                         },
                     ]),
-                    { status: 200 },
+                    { status: 200, headers: managementIdentityHeaders() },
                 );
             }
             if (input.endsWith("/api/system")) return inSyncSystemResponse();
@@ -109,6 +109,54 @@ describe("doctor management probes", () => {
         );
         expect(upgrade).toHaveBeenNthCalledWith(1, "http://127.0.0.1:6727/");
         expect(upgrade).toHaveBeenNthCalledWith(2, "http://127.0.0.1:6727/", "secret");
+    });
+
+    it("拒绝把其他实例的账号运行态拼接到公开探针", async () => {
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/adapters")) {
+                return new Response("[]", {
+                    status: 200,
+                    headers: managementIdentityHeaders("instance-b"),
+                });
+            }
+            if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            if (input.endsWith("/api/extensions/package-mutation")) {
+                return idlePackageMutationResponse();
+            }
+            if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
+            if (input.endsWith("/api/adapter-capabilities")) {
+                return completeCapabilityCatalogResponse();
+            }
+            return new Headers(init?.headers).has("authorization")
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "secret" },
+            {
+                fetcher,
+                upgrade: async (_url, token) => ({
+                    upgraded: Boolean(token),
+                    status: token ? 101 : 401,
+                }),
+                expectedIdentity: {
+                    application: "onebots",
+                    version: packageMetadata.version,
+                    instanceId: "instance-a",
+                },
+            },
+        );
+
+        expect(checks.find(check => check.name === "management-runtime")).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("instance-b"),
+        });
+        expect(checks.find(check => check.name === "management-capabilities")).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("管理运行态响应不可用"),
+        });
     });
 
     it("starts every independent configured-token probe before a slow peer completes", async () => {
@@ -782,7 +830,7 @@ function convergedExtensionsResponse(): Response {
     });
     return new Response(JSON.stringify(inventory), {
         status: 200,
-        headers: extensionIdentityHeaders(),
+        headers: managementIdentityHeaders(),
     });
 }
 
@@ -805,15 +853,15 @@ function completeCapabilityCatalogResponse(): Response {
 function idlePackageMutationResponse(): Response {
     return new Response(
         JSON.stringify({ state: "idle", available: true, owner: null, error: null }),
-        { status: 200, headers: extensionIdentityHeaders() },
+        { status: 200, headers: managementIdentityHeaders() },
     );
 }
 
-function extensionIdentityHeaders(): Record<string, string> {
+function managementIdentityHeaders(instanceId = "instance-a"): Record<string, string> {
     return {
         "X-OneBots-Application": packageMetadata.name,
         "X-OneBots-Version": packageMetadata.version,
-        "X-OneBots-Instance-Id": "instance-a",
+        "X-OneBots-Instance-Id": instanceId,
     };
 }
 

@@ -1,7 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { parseBotLifecycleActionResponse } from "./bot-lifecycle-action.js";
+import {
+    buildBotLifecycleActionRequest,
+    parseBotLifecycleActionResponse,
+} from "./bot-lifecycle-action.js";
 
 describe("bot lifecycle action response", () => {
+    it("binds a Web action to the instance that supplied the account snapshot", () => {
+        expect(buildBotLifecycleActionRequest("mock", "demo", "instance-a")).toEqual({
+            platform: "mock",
+            uin: "demo",
+            expected_instance_id: "instance-a",
+        });
+        expect(buildBotLifecycleActionRequest("mock", "demo")).toEqual({
+            platform: "mock",
+            uin: "demo",
+        });
+    });
+
     it("accepts a successful response without requiring an error envelope", async () => {
         await expect(
             parseBotLifecycleActionResponse(new Response(null, { status: 200 }), "启动失败"),

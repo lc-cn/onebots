@@ -13,6 +13,7 @@ export type ManagementAccountLifecycleAction = "bot.start" | "bot.stop";
 export type ManagementAccountLifecycleErrorCode =
     | "ACCOUNT_REQUEST_INVALID"
     | "ACCOUNT_TARGET_NOT_FOUND"
+    | "ACCOUNT_INSTANCE_MISMATCH"
     | "ACCOUNT_LIFECYCLE_CONFLICT"
     | "ACCOUNT_LIFECYCLE_UNSUPPORTED"
     | "ACCOUNT_LIFECYCLE_FAILED";
@@ -48,7 +49,9 @@ export type ManagementAccountLifecycleSocketResponse =
 type ManagementAccountLifecycleHost = Pick<
     BaseApp,
     "adapters" | "isReloading" | "logger" | "runtimeOperation"
->;
+> & {
+    info?: { instance_id?: unknown };
+};
 interface ActiveAccountLifecycleOperations {
     readonly operations: Map<string, ManagementAccountLifecycleAction>;
     readonly runtimeLease: RuntimeOperationLease;
@@ -69,6 +72,7 @@ export async function executeManagementAccountLifecycle(
         const request = parseRequest(data);
         const platform = requiredString("platform", request.platform);
         const uin = requiredString("uin", request.uin);
+        assertExpectedInstance(host, request.expected_instance_id);
         const adapter = host.adapters.get(platform);
         if (!adapter) throw new AccountLifecycleTargetNotFoundError(`适配器 ${platform} 不存在`);
         const account = adapter.getAccount(uin);
@@ -87,6 +91,22 @@ export async function executeManagementAccountLifecycle(
             ErrorHandler.wrap(error, { action }),
         );
         return classifyLifecycleError(error);
+    }
+}
+
+function assertExpectedInstance(host: ManagementAccountLifecycleHost, value: unknown): void {
+    if (value === undefined) return;
+    const expected = requiredString("expected_instance_id", value).trim();
+    const current = host.info?.instance_id;
+    if (typeof current !== "string" || !current.trim()) {
+        throw new AccountLifecycleInstanceMismatchError(
+            "当前 OneBots 实例无法证明账号操作身份，请刷新页面后重试",
+        );
+    }
+    if (expected !== current.trim()) {
+        throw new AccountLifecycleInstanceMismatchError(
+            `账号操作期望实例 ${expected}，当前已由实例 ${current.trim()} 接管`,
+        );
     }
 }
 
@@ -143,6 +163,9 @@ function classifyLifecycleError(
     }
     if (error instanceof AccountLifecycleTargetNotFoundError) {
         return { success: false, status: 404, code: "ACCOUNT_TARGET_NOT_FOUND", message };
+    }
+    if (error instanceof AccountLifecycleInstanceMismatchError) {
+        return { success: false, status: 409, code: "ACCOUNT_INSTANCE_MISMATCH", message };
     }
     if (error instanceof AccountLifecycleConflictError) {
         return { success: false, status: 409, code: "ACCOUNT_LIFECYCLE_CONFLICT", message };
@@ -217,4 +240,5 @@ function withEcho<T extends ManagementAccountLifecycleSocketResponse>(
 }
 
 class AccountLifecycleTargetNotFoundError extends Error {}
+class AccountLifecycleInstanceMismatchError extends Error {}
 class AccountLifecycleConflictError extends Error {}

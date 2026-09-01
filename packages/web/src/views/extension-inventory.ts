@@ -9,43 +9,6 @@ import { assertCapabilityManifest } from "../components/capability-presentation.
 const CAPABILITY_CATEGORIES = ["actions", "events", "segments", "transports"] as const;
 const INSTALLATION_PHASES = ["installing_package", "preflighting", "restoring_package"] as const;
 
-export interface ExtensionEvidenceIdentity {
-    application: string;
-    version: string;
-    instanceId: string;
-    runtimeContractId?: string;
-}
-
-export function parseExtensionEvidenceIdentity(
-    response: Pick<Response, "headers">,
-): ExtensionEvidenceIdentity {
-    const application = response.headers.get("X-OneBots-Application")?.trim() ?? "";
-    const version = response.headers.get("X-OneBots-Version")?.trim() ?? "";
-    const instanceId = response.headers.get("X-OneBots-Instance-Id")?.trim() ?? "";
-    const runtimeContractId = response.headers.get("X-OneBots-Runtime-Contract-Id")?.trim() ?? "";
-    if (application !== "onebots" || !version || !instanceId) {
-        throw new Error("扩展管理响应缺少完整 OneBots 实例身份");
-    }
-    return {
-        application,
-        version,
-        instanceId,
-        ...(runtimeContractId ? { runtimeContractId } : {}),
-    };
-}
-
-export function sameExtensionEvidenceIdentity(
-    left: ExtensionEvidenceIdentity,
-    right: ExtensionEvidenceIdentity,
-): boolean {
-    return (
-        left.application === right.application &&
-        left.version === right.version &&
-        left.instanceId === right.instanceId &&
-        left.runtimeContractId === right.runtimeContractId
-    );
-}
-
 /** 在扩展目录进入安装决策与机器人引导前校验完整响应及状态闭合。 */
 export function parseExtensionInventory(value: unknown): ExtensionInfo[] {
     if (!Array.isArray(value)) throw new Error("功能扩展目录响应必须是数组");

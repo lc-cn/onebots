@@ -2,6 +2,18 @@ export type BotLifecycleActionResult =
     | { success: true }
     | { success: false; code?: string; message: string };
 
+export function buildBotLifecycleActionRequest(
+    platform: string,
+    uin: string,
+    expectedInstanceId?: string,
+): Record<string, string> {
+    return {
+        platform,
+        uin,
+        ...(expectedInstanceId ? { expected_instance_id: expectedInstanceId } : {}),
+    };
+}
+
 /** 从管理 API 保留稳定错误证据，同时限制不可信响应进入界面的大小。 */
 export async function parseBotLifecycleActionResponse(
     response: Response,

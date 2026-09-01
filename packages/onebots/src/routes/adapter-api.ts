@@ -5,6 +5,7 @@ import {
     executeManagementAccountLifecycle,
     type ManagementAccountLifecycleAction,
 } from "../management-account-lifecycle.js";
+import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
 
 /**
  * Register adapter / account management and message-sending routes.
@@ -22,6 +23,7 @@ import {
  */
 export function registerAdapterRoutes(app: App, router: Router): void {
     router.get("/api/adapters", (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
         ctx.body = app.adapterInfos;
     });
 

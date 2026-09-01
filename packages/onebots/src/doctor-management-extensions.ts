@@ -3,9 +3,9 @@ import type { ManagementFetch } from "./management-credential.js";
 import { validateManagementExtensionInventory } from "./doctor-management-extension-contract.js";
 import { readDoctorManagementJson } from "./doctor-management-response.js";
 import {
-    readExtensionEvidenceIdentity,
-    type ExtensionEvidenceIdentity,
-} from "./extension-evidence-identity.js";
+    readManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+} from "./management-evidence-identity.js";
 import packageMetadata from "../package.json" with { type: "json" };
 
 interface RuntimeExtensionSummary {
@@ -67,8 +67,8 @@ export async function probeAuthenticatedExtensions(
             };
         }
 
-        const inventoryIdentity = readExtensionEvidenceIdentity(extensionsResponse.headers);
-        const mutationIdentity = readExtensionEvidenceIdentity(mutationResponse.headers);
+        const inventoryIdentity = readManagementEvidenceIdentity(extensionsResponse.headers);
+        const mutationIdentity = readManagementEvidenceIdentity(mutationResponse.headers);
         const identityIssue = inspectExtensionEvidenceIdentities(
             inventoryIdentity,
             mutationIdentity,
@@ -105,12 +105,12 @@ export async function probeAuthenticatedExtensions(
 }
 
 function inspectExtensionEvidenceIdentities(
-    inventory: ReturnType<typeof readExtensionEvidenceIdentity>,
-    mutation: ReturnType<typeof readExtensionEvidenceIdentity>,
+    inventory: ReturnType<typeof readManagementEvidenceIdentity>,
+    mutation: ReturnType<typeof readManagementEvidenceIdentity>,
     expected?: DoctorEndpointIdentity,
 ): string | null {
     if (!inventory || !mutation) return "扩展目录或包变更租约响应缺少完整实例身份";
-    if (!sameIdentity(inventory, mutation)) {
+    if (!sameManagementEvidenceIdentity(inventory, mutation)) {
         return `扩展目录与包变更租约来自不同实例：${identityLabel(inventory)}；${identityLabel(mutation)}`;
     }
     const target = expected ?? {
@@ -119,19 +119,10 @@ function inspectExtensionEvidenceIdentities(
         instanceId: inventory.instanceId,
         ...(inventory.runtimeContractId ? { runtimeContractId: inventory.runtimeContractId } : {}),
     };
-    if (!sameIdentity(inventory, target)) {
+    if (!sameManagementEvidenceIdentity(inventory, target)) {
         return `扩展管理实例 ${identityLabel(inventory)} 与公开探针 ${identityLabel(target)} 不一致`;
     }
     return null;
-}
-
-function sameIdentity(left: ExtensionEvidenceIdentity, right: DoctorEndpointIdentity): boolean {
-    return (
-        left.application === right.application &&
-        left.version === right.version &&
-        left.instanceId === right.instanceId &&
-        left.runtimeContractId === right.runtimeContractId
-    );
 }
 
 function identityLabel(identity: DoctorEndpointIdentity): string {
