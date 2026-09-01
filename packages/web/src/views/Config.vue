@@ -24,8 +24,10 @@ import type { SchemaLoadStatus } from "../components/config/account-adapter-sele
 import { isAccountWizardRequest } from "./bot-onboarding.js";
 import { parseProtocolConfigurationRequest } from "./protocol-configuration-request.js";
 import { buildAccountRemovalRequest } from "../account-removal-request.js";
+import { parseAccountConfigurationMutationResponse } from "../account-configuration-mutation.js";
 import {
     assertConfigurationMutationAcknowledgement,
+    configurationMutationFailureMessage,
     parseConfigurationSnapshot,
     type ConfigurationMutationResult,
 } from "../configuration-snapshot.js";
@@ -264,16 +266,21 @@ const handleSave = async () => {
                 [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: expectedRevision,
             },
             body: config.value,
+            cache: "no-store",
+            redirect: "error",
         });
         const result = (await readManagementJsonResponse(response)) as ConfigurationMutationResult;
         if (response.ok) {
-            assertConfigurationMutationAcknowledgement(result, expectedIdentity.instanceId);
-            configRevision.value = result.config_revision as string;
+            configRevision.value = assertConfigurationMutationAcknowledgement(
+                response,
+                result,
+                expectedIdentity,
+            );
             const message = typeof result.message === "string" ? result.message : undefined;
             if (result.restartRequired) toast.warning(message ?? "配置已保存，需要重启");
             else toast.success(message ?? "配置已保存并生效");
         } else {
-            toast.error(typeof result.message === "string" ? result.message : "保存失败");
+            toast.error(configurationMutationFailureMessage(response, result, expectedIdentity));
         }
     } catch (error) {
         console.error("保存配置失败:", error);
@@ -304,16 +311,23 @@ const handleRemoveAccount = async (row: AccountRow) => {
             buildAccountRemovalRequest(
                 row.platform,
                 row.account_id,
-                expectedIdentity.instanceId,
+                expectedIdentity,
                 expectedRevision,
             ),
         );
-        if (response.ok) {
-            toast.success("删除成功");
+        const result = await parseAccountConfigurationMutationResponse(
+            response,
+            expectedIdentity,
+            "remove",
+            row.platform,
+            row.account_id,
+            "删除失败",
+        );
+        if (result.success) {
+            toast.success(result.message);
             await loadConfigurationSnapshot();
         } else {
-            const result = (await readManagementJsonResponse(response)) as { message?: string };
-            toast.error(result.message || "删除失败");
+            toast.error(result.message);
         }
     } catch (error) {
         toast.error(error instanceof Error ? error.message : "删除失败");
@@ -434,7 +448,7 @@ watch(activeTab, name => {
         ref="accountWizardRef"
         :schema="schema"
         :schema-status="schemaStatus"
-        :instance-id="configurationIdentity?.instanceId"
+        :identity="configurationIdentity"
         :config-revision="configRevision"
         @saved="loadConfigurationSnapshot"
         @reload-schema="loadConfigurationSnapshot" />

@@ -13,6 +13,7 @@ import {
 import {
     assertManagementConfigRevisionPrecondition,
     ManagementConfigRevisionMismatchError,
+    setManagementConfigRevision,
 } from "../management-config-revision.js";
 
 /**
@@ -46,29 +47,59 @@ export function registerAdapterRoutes(app: App, router: Router): void {
     });
 
     router.post("/api/add", async (ctx: RouterContext) => {
-        const config = ctx.request.body;
+        setManagementEvidenceIdentity(app, ctx);
         try {
             assertManagementInstancePrecondition(app, ctx, "账号新增");
             assertManagementConfigRevisionPrecondition(ctx, "账号新增", app.configPath);
-            await app.addAccount(config);
-            ctx.body = { success: true, message: "添加成功" };
+            const config = ctx.request.body;
+            const body = requiredBodyRecord(config);
+            const platform = requiredBodyString("platform", body.platform);
+            const accountId = requiredBodyString("account_id", body.account_id);
+            const content = await app.addAccount(config);
+            if (typeof content !== "string") {
+                throw new ValidationError(`无法添加账号 ${platform}.${accountId}：适配器不可用`);
+            }
+            ctx.body = accountMutationSuccess(
+                app,
+                ctx,
+                "add",
+                platform,
+                accountId,
+                content,
+                "添加成功",
+            );
         } catch (error) {
             ctx.status = accountMutationStatus(error);
-            ctx.body = { success: false, message: (error as Error).message };
+            ctx.body = accountMutationFailure(app, error);
             app.logger.error("管理端新增账号失败", { error });
         }
     });
 
     router.post("/api/edit", async (ctx: RouterContext) => {
-        const config = ctx.request.body;
+        setManagementEvidenceIdentity(app, ctx);
         try {
             assertManagementInstancePrecondition(app, ctx, "账号编辑");
             assertManagementConfigRevisionPrecondition(ctx, "账号编辑", app.configPath);
-            await app.updateAccount(config);
-            ctx.body = { success: true, message: "修改成功" };
+            const config = ctx.request.body;
+            const body = requiredBodyRecord(config);
+            const platform = requiredBodyString("platform", body.platform);
+            const accountId = requiredBodyString("account_id", body.account_id);
+            const content = await app.updateAccount(config);
+            if (typeof content !== "string") {
+                throw new ValidationError(`无法编辑账号 ${platform}.${accountId}：适配器不可用`);
+            }
+            ctx.body = accountMutationSuccess(
+                app,
+                ctx,
+                "edit",
+                platform,
+                accountId,
+                content,
+                "修改成功",
+            );
         } catch (error) {
             ctx.status = accountMutationStatus(error);
-            ctx.body = { success: false, message: (error as Error).message };
+            ctx.body = accountMutationFailure(app, error);
             app.logger.error("管理端编辑账号失败", { error });
         }
     });
@@ -197,18 +228,61 @@ async function handleAccountRemoval(
     ctx: RouterContext,
     readRequest: () => AccountRemovalRequest,
 ): Promise<void> {
+    setManagementEvidenceIdentity(app, ctx);
     try {
         assertManagementInstancePrecondition(app, ctx, "账号删除");
         assertManagementConfigRevisionPrecondition(ctx, "账号删除", app.configPath);
         const request = readRequest();
-        await app.removeAccount(request.platform, request.uin, request.force);
-        ctx.set("Cache-Control", "no-store");
-        ctx.body = { success: true, message: "移除成功" };
+        const content = await app.removeAccount(request.platform, request.uin, request.force);
+        if (typeof content !== "string") {
+            throw new ValidationError(`无法删除账号 ${request.platform}.${request.uin}：账号不存在`);
+        }
+        ctx.body = accountMutationSuccess(
+            app,
+            ctx,
+            "remove",
+            request.platform,
+            request.uin,
+            content,
+            "移除成功",
+        );
     } catch (error) {
         ctx.status = accountMutationStatus(error);
-        ctx.body = { success: false, message: (error as Error).message };
+        ctx.body = accountMutationFailure(app, error);
         app.logger.error("管理端删除账号失败", { error });
     }
+}
+
+type AccountMutationOperation = "add" | "edit" | "remove";
+
+function accountMutationSuccess(
+    app: App,
+    ctx: RouterContext,
+    operation: AccountMutationOperation,
+    platform: string,
+    accountId: string,
+    content: string,
+    message: string,
+) {
+    const configRevision = setManagementConfigRevision(ctx, content);
+    return {
+        success: true,
+        application: app.info.application_name,
+        instance_id: app.info.instance_id,
+        config_revision: configRevision,
+        operation,
+        target: { platform, account_id: accountId },
+        message,
+    };
+}
+
+function accountMutationFailure(app: App, error: unknown) {
+    return {
+        success: false,
+        application: app.info.application_name,
+        instance_id: app.info.instance_id,
+        message: error instanceof Error ? error.message : "账号配置操作失败",
+    };
 }
 
 function parseBooleanQuery(value: unknown): boolean {

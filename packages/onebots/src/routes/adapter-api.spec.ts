@@ -7,9 +7,11 @@ import {
 } from "@onebots/core";
 import { describe, expect, it, vi } from "vitest";
 import type { App } from "../app.js";
+import { createManagementConfigRevision } from "../management-config-revision.js";
 import { registerAdapterRoutes } from "./adapter-api.js";
 
 type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
+const persistedConfig = "mock.demo:\n  account_id: demo\n";
 
 function setup(overrides: Partial<App> = {}) {
     const gets = new Map<string, RouteHandler>();
@@ -26,9 +28,9 @@ function setup(overrides: Partial<App> = {}) {
         accounts: [],
         adapters: new Map(),
         logger: { error: vi.fn() },
-        addAccount: vi.fn(async () => undefined),
-        updateAccount: vi.fn(async () => undefined),
-        removeAccount: vi.fn(async () => undefined),
+        addAccount: vi.fn(async () => persistedConfig),
+        updateAccount: vi.fn(async () => persistedConfig),
+        removeAccount: vi.fn(async () => persistedConfig),
         ...overrides,
     } as unknown as App;
     registerAdapterRoutes(app, {
@@ -77,15 +79,15 @@ describe("adapter account routes", () => {
             throw new AccountMutationConflictError();
         });
         const { posts } = setup({ addAccount } as Partial<App>);
-        const ctx = {
-            request: { body: { platform: "mock", account_id: "10001" } },
-        } as RouterContext;
+        const ctx = accountMutationContext({ platform: "mock", account_id: "10001" });
 
         await posts.get("/api/add")!(ctx);
 
         expect(ctx.status).toBe(409);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             message: "OneBots 配置正在变更，请稍后重试账号操作",
         });
     });
@@ -95,15 +97,15 @@ describe("adapter account routes", () => {
             throw new ValidationError("运行时配置无效：mock.demo.token: is required");
         });
         const { posts } = setup({ addAccount } as Partial<App>);
-        const ctx = {
-            request: { body: { platform: "mock", account_id: "demo" } },
-        } as RouterContext;
+        const ctx = accountMutationContext({ platform: "mock", account_id: "demo" });
 
         await posts.get("/api/add")!(ctx);
 
         expect(ctx.status).toBe(400);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             message: "运行时配置无效：mock.demo.token: is required",
         });
     });
@@ -115,6 +117,7 @@ describe("adapter account routes", () => {
         const { app, posts } = setup();
         const ctx = {
             get: () => "instance-before-restart",
+            set: vi.fn(),
             request: { body: { platform: "mock", account_id: "demo" } },
         } as unknown as RouterContext;
 
@@ -123,6 +126,8 @@ describe("adapter account routes", () => {
         expect(ctx.status).toBe(409);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             message: `${operation}请求期望实例 instance-before-restart，当前已由实例 instance-a 接管`,
         });
         expect(app[method]).not.toHaveBeenCalled();
@@ -133,6 +138,7 @@ describe("adapter account routes", () => {
         const ctx = {
             get: (name: string) =>
                 name === "X-OneBots-Expected-Instance-Id" ? "instance-a" : "stale",
+            set: vi.fn(),
             request: { body: { platform: "mock", account_id: "demo" } },
         } as unknown as RouterContext;
 
@@ -141,9 +147,49 @@ describe("adapter account routes", () => {
         expect(ctx.status).toBe(400);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             message: "账号新增请求的配置修订号无效",
         });
         expect(app.addAccount).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["/api/add", "add", "addAccount", "添加成功"],
+        ["/api/edit", "edit", "updateAccount", "修改成功"],
+    ] as const)("%s 返回处理实例、目标和精确提交修订", async (route, operation, method, message) => {
+        const { app, posts } = setup();
+        const ctx = accountMutationContext(
+            { platform: "mock", account_id: "demo" },
+            "instance-a",
+        );
+
+        await posts.get(route)!(ctx);
+
+        expect(app[method]).toHaveBeenCalledOnce();
+        expect(ctx.body).toEqual(accountMutationSuccess(operation, "mock", "demo", message));
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Application", "onebots");
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
+        expect(ctx.set).toHaveBeenCalledWith(
+            "X-OneBots-Config-Revision",
+            createManagementConfigRevision(persistedConfig),
+        );
+    });
+
+    it("适配器未实际提交账号时不返回伪成功", async () => {
+        const addAccount = vi.fn(async () => undefined);
+        const { posts } = setup({ addAccount } as Partial<App>);
+        const ctx = accountMutationContext({ platform: "missing", account_id: "demo" });
+
+        await posts.get("/api/add")!(ctx);
+
+        expect(ctx.status).toBe(400);
+        expect(ctx.body).toEqual({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-a",
+            message: "无法添加账号 missing.demo：适配器不可用",
+        });
     });
 
     it("删除账号缺少身份参数时返回 400 且不调用 Core", async () => {
@@ -158,6 +204,8 @@ describe("adapter account routes", () => {
         expect(ctx.status).toBe(400);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             message: "查询参数 uin 必须是非空字符串",
         });
         expect(app.removeAccount).not.toHaveBeenCalled();
@@ -176,6 +224,8 @@ describe("adapter account routes", () => {
         expect(ctx.status).toBe(409);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             message: "账号删除请求期望实例 instance-before-restart，当前已由实例 instance-a 接管",
         });
         expect(app.removeAccount).not.toHaveBeenCalled();
@@ -194,6 +244,8 @@ describe("adapter account routes", () => {
         expect(ctx.status).toBe(409);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             message: "账号删除请求期望实例 instance-before-restart，当前已由实例 instance-a 接管",
         });
         expect(app.removeAccount).not.toHaveBeenCalled();
@@ -214,7 +266,9 @@ describe("adapter account routes", () => {
         await gets.get("/api/remove")!(ctx);
 
         expect(app.removeAccount).toHaveBeenCalledWith("mock", "10001", expected);
-        expect(ctx.body).toEqual({ success: true, message: "移除成功" });
+        expect(ctx.body).toEqual(
+            accountMutationSuccess("remove", "mock", "10001", "移除成功"),
+        );
     });
 
     it("使用 POST 请求体删除账号并严格校验 force", async () => {
@@ -227,7 +281,13 @@ describe("adapter account routes", () => {
         await posts.get("/api/remove")!(valid);
 
         expect(app.removeAccount).toHaveBeenCalledWith("mock", "10001", true);
-        expect(valid.body).toEqual({ success: true, message: "移除成功" });
+        expect(valid.body).toEqual(
+            accountMutationSuccess("remove", "mock", "10001", "移除成功"),
+        );
+        expect(valid.set).toHaveBeenCalledWith(
+            "X-OneBots-Config-Revision",
+            createManagementConfigRevision(persistedConfig),
+        );
         expect(valid.set).toHaveBeenCalledWith("Cache-Control", "no-store");
 
         const invalid = {
@@ -238,6 +298,8 @@ describe("adapter account routes", () => {
         expect(invalid.status).toBe(400);
         expect(invalid.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             message: "请求字段 force 必须是布尔值",
         });
         expect(app.removeAccount).toHaveBeenCalledTimes(1);
@@ -512,6 +574,32 @@ function lifecycleContext(body: unknown, expectedInstanceId = ""): RouterContext
         set: vi.fn(),
         request: { body },
     } as unknown as RouterContext;
+}
+
+function accountMutationContext(body: unknown, expectedInstanceId = ""): RouterContext {
+    return {
+        get: (name: string) =>
+            name === "X-OneBots-Expected-Instance-Id" ? expectedInstanceId : "",
+        set: vi.fn(),
+        request: { body },
+    } as unknown as RouterContext;
+}
+
+function accountMutationSuccess(
+    operation: "add" | "edit" | "remove",
+    platform: string,
+    accountId: string,
+    message: string,
+) {
+    return {
+        success: true,
+        application: "onebots",
+        instance_id: "instance-a",
+        config_revision: createManagementConfigRevision(persistedConfig),
+        operation,
+        target: { platform, account_id: accountId },
+        message,
+    };
 }
 
 function sendAdapter() {

@@ -14,7 +14,6 @@ import UiTabs from "../../ui/UiTabs.vue";
 import UiEmpty from "../../ui/UiEmpty.vue";
 import { buildApiUrl } from "../../config";
 import { authFetch } from "../../composables/useAuth";
-import { readManagementJsonResponse } from "../../management-response.js";
 import { useToast } from "../../ui/toast.js";
 import type { SchemaBundle, SchemaGroup, SchemaFieldDef, AccountRow } from "./types.js";
 import {
@@ -38,15 +37,16 @@ import {
     getAccountAdapterSelectionState,
     type SchemaLoadStatus,
 } from "./account-adapter-selection.js";
+import type { ManagementEvidenceIdentity } from "../../management-evidence-identity.js";
 import {
-    MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER,
-    MANAGEMENT_EXPECTED_INSTANCE_HEADER,
-} from "../../management-evidence-identity.js";
+    buildAccountConfigurationMutationRequest,
+    parseAccountConfigurationMutationResponse,
+} from "../../account-configuration-mutation.js";
 
 const props = defineProps<{
     schema: SchemaBundle | null;
     schemaStatus: SchemaLoadStatus;
-    instanceId?: string;
+    identity?: ManagementEvidenceIdentity | null;
     configRevision?: string;
 }>();
 
@@ -206,7 +206,9 @@ const onSelectStep = (index: number) => {
 };
 
 const handleSubmit = async () => {
-    if (!props.instanceId || !props.configRevision) {
+    const expectedIdentity = props.identity ? { ...props.identity } : null;
+    const expectedRevision = props.configRevision;
+    if (!expectedIdentity || !expectedRevision) {
         toast.error("配置快照不可用，请重新读取后再保存账号");
         return;
     }
@@ -277,25 +279,32 @@ const handleSubmit = async () => {
         account_id: accountForm.value.account_id,
     };
 
-    const url = isEdit.value ? "/api/edit" : "/api/add";
+    const operation = isEdit.value ? "edit" : "add";
+    const url = operation === "edit" ? "/api/edit" : "/api/add";
     try {
-        const response = await authFetch(buildApiUrl(url), {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: props.instanceId,
-                [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: props.configRevision,
-            },
-            body: JSON.stringify(payload),
-        });
+        const response = await authFetch(
+            buildApiUrl(url),
+            buildAccountConfigurationMutationRequest(
+                payload,
+                expectedIdentity,
+                expectedRevision,
+            ),
+        );
+        const result = await parseAccountConfigurationMutationResponse(
+            response,
+            expectedIdentity,
+            operation,
+            accountForm.value.platform,
+            accountForm.value.account_id,
+            "保存失败",
+        );
 
-        if (response.ok) {
-            toast.success("保存成功");
+        if (result.success) {
+            toast.success(result.message);
             dialogVisible.value = false;
             emit("saved");
         } else {
-            const result = (await readManagementJsonResponse(response)) as { message?: string };
-            toast.error(result.message || "保存失败");
+            toast.error(result.message);
         }
     } catch (error) {
         toast.error(error instanceof Error ? error.message : "保存失败");

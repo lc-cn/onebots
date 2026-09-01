@@ -13,7 +13,6 @@ import {
 } from "../management-instance-precondition.js";
 import {
     assertManagementConfigRevisionPrecondition,
-    createManagementConfigRevision,
     ManagementConfigRevisionMismatchError,
     setManagementConfigRevision,
 } from "../management-config-revision.js";
@@ -41,15 +40,18 @@ export function registerConfigRoutes(app: App, router: Router): void {
     });
 
     router.post("/api/config", async (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
         const configContent = ctx.request.body as string;
         try {
             assertManagementInstancePrecondition(app, ctx, "配置保存");
             assertManagementConfigRevisionPrecondition(ctx, "配置保存", app.configPath);
+            const result = await saveManagedRuntimeConfig(app, configContent, app.configPath);
+            const configRevision = setManagementConfigRevision(ctx, configContent);
             ctx.body = {
-                ...(await saveManagedRuntimeConfig(app, configContent, app.configPath)),
+                ...result,
                 application: app.info.application_name,
                 instance_id: app.info.instance_id,
-                config_revision: createManagementConfigRevision(configContent),
+                config_revision: configRevision,
             };
         } catch (error) {
             ctx.status =

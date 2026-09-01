@@ -7,16 +7,29 @@ import {
 
 describe("account removal request", () => {
     it("使用 POST JSON 并绑定实例与配置修订号", () => {
+        const identity = {
+            application: "onebots",
+            version: "1.2.8",
+            instanceId: "instance-a",
+            runtimeContractId: "sha256:contract-a",
+        };
         expect(
-            buildAccountRemovalRequest("mock", "demo", "instance-a", "sha256:revision-a"),
+            buildAccountRemovalRequest(
+                "mock",
+                "demo",
+                identity,
+                `sha256:${"a".repeat(64)}`,
+            ),
         ).toEqual({
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: "instance-a",
-                [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: "sha256:revision-a",
+                [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: `sha256:${"a".repeat(64)}`,
             },
             body: JSON.stringify({ platform: "mock", uin: "demo" }),
+            cache: "no-store",
+            redirect: "error",
         });
     });
 });

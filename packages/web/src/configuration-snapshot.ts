@@ -44,19 +44,51 @@ export interface ConfigurationMutationResult {
 
 /** 保存成功必须由处理请求的同一实例明确确认。 */
 export function assertConfigurationMutationAcknowledgement(
+    response: Pick<Response, "headers">,
     payload: ConfigurationMutationResult,
-    expectedInstanceId: string,
-): void {
+    expectedIdentity: ManagementEvidenceIdentity,
+): string {
+    assertConfigurationMutationIdentity(response, payload, expectedIdentity);
     if (payload.success !== true) throw new Error("配置保存回执未声明成功");
-    if (payload.application !== "onebots" || payload.instance_id !== expectedInstanceId) {
-        throw new Error(
-            `配置保存回执实例不匹配：期望 ${expectedInstanceId}，实际 ${typeof payload.instance_id === "string" ? payload.instance_id : "缺失"}`,
-        );
-    }
+    const headerRevision =
+        response.headers.get(MANAGEMENT_CONFIG_REVISION_HEADER)?.trim() ?? "";
     if (
         typeof payload.config_revision !== "string" ||
-        !/^sha256:[a-f0-9]{64}$/u.test(payload.config_revision)
+        !/^sha256:[a-f0-9]{64}$/u.test(payload.config_revision) ||
+        headerRevision !== payload.config_revision
     ) {
-        throw new Error("配置保存回执缺少有效配置修订号");
+        throw new Error("配置保存回执缺少一致的配置修订号");
+    }
+    return payload.config_revision;
+}
+
+/** 失败诊断也必须来自处理该快照的同一实例，避免展示代理拼接的正文。 */
+export function configurationMutationFailureMessage(
+    response: Pick<Response, "headers">,
+    payload: ConfigurationMutationResult,
+    expectedIdentity: ManagementEvidenceIdentity,
+): string {
+    assertConfigurationMutationIdentity(response, payload, expectedIdentity);
+    if (payload.success !== false) throw new Error("配置保存失败回执未声明失败");
+    return typeof payload.message === "string" && payload.message.trim()
+        ? payload.message.trim().replace(/\s+/gu, " ").slice(0, 500)
+        : "保存失败";
+}
+
+function assertConfigurationMutationIdentity(
+    response: Pick<Response, "headers">,
+    payload: ConfigurationMutationResult,
+    expectedIdentity: ManagementEvidenceIdentity,
+): void {
+    const responseIdentity = parseManagementEvidenceIdentity(response);
+    if (!sameManagementEvidenceIdentity(responseIdentity, expectedIdentity)) {
+        throw new Error(
+            `配置保存响应实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${responseIdentity.instanceId}`,
+        );
+    }
+    if (payload.application !== "onebots" || payload.instance_id !== expectedIdentity.instanceId) {
+        throw new Error(
+            `配置保存回执实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${typeof payload.instance_id === "string" ? payload.instance_id : "缺失"}`,
+        );
     }
 }

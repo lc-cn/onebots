@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
     assertConfigurationMutationAcknowledgement,
+    configurationMutationFailureMessage,
     parseConfigurationSnapshot,
 } from "./configuration-snapshot.js";
 
-const response = (instanceId: string) =>
+const response = (instanceId: string, revision = `sha256:${"a".repeat(64)}`) =>
     new Response(null, {
         headers: {
             "X-OneBots-Application": "onebots",
             "X-OneBots-Version": "1.2.8",
             "X-OneBots-Instance-Id": instanceId,
             "X-OneBots-Runtime-Contract-Id": "sha256:contract",
-            "X-OneBots-Config-Revision": `sha256:${"a".repeat(64)}`,
+            "X-OneBots-Config-Revision": revision,
         },
     });
 
@@ -49,27 +50,78 @@ describe("configuration snapshot", () => {
     });
 
     it("验证配置保存由预期实例处理", () => {
+        const expectedIdentity = {
+            application: "onebots",
+            version: "1.2.8",
+            instanceId: "instance-a",
+            runtimeContractId: "sha256:contract",
+        };
+        const nextRevision = `sha256:${"b".repeat(64)}`;
         expect(() =>
             assertConfigurationMutationAcknowledgement(
+                response("instance-a", nextRevision),
                 {
                     success: true,
                     application: "onebots",
                     instance_id: "instance-a",
-                    config_revision: `sha256:${"b".repeat(64)}`,
+                    config_revision: nextRevision,
                 },
-                "instance-a",
+                expectedIdentity,
             ),
         ).not.toThrow();
         expect(() =>
             assertConfigurationMutationAcknowledgement(
+                response("instance-b", nextRevision),
                 {
                     success: true,
                     application: "onebots",
                     instance_id: "instance-b",
-                    config_revision: `sha256:${"b".repeat(64)}`,
+                    config_revision: nextRevision,
                 },
-                "instance-a",
+                expectedIdentity,
             ),
-        ).toThrow("配置保存回执实例不匹配");
+        ).toThrow("配置保存响应实例不匹配");
+        expect(() =>
+            assertConfigurationMutationAcknowledgement(
+                response("instance-a"),
+                {
+                    success: true,
+                    application: "onebots",
+                    instance_id: "instance-a",
+                    config_revision: nextRevision,
+                },
+                expectedIdentity,
+            ),
+        ).toThrow("配置保存回执缺少一致的配置修订号");
+    });
+
+    it("只采用同一实例的限长配置保存失败诊断", () => {
+        const expectedIdentity = {
+            application: "onebots",
+            version: "1.2.8",
+            instanceId: "instance-a",
+            runtimeContractId: "sha256:contract",
+        };
+        const payload = {
+            success: false,
+            application: "onebots",
+            instance_id: "instance-a",
+            message: `配置冲突\n${"x".repeat(700)}`,
+        };
+
+        const message = configurationMutationFailureMessage(
+            response("instance-a"),
+            payload,
+            expectedIdentity,
+        );
+        expect(message).toHaveLength(500);
+        expect(message).not.toContain("\n");
+        expect(() =>
+            configurationMutationFailureMessage(
+                response("instance-b"),
+                payload,
+                expectedIdentity,
+            ),
+        ).toThrow("配置保存响应实例不匹配");
     });
 });

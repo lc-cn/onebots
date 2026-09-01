@@ -318,7 +318,7 @@ export class BaseApp extends Koa {
                     `账号 ${config.platform}.${config.account_id} 已存在，请使用编辑操作`,
                 );
             }
-            await mutateAccountAtomically({
+            return await mutateAccountAtomically({
                 host: this,
                 adapter,
                 accountId: config.account_id,
@@ -350,7 +350,7 @@ export class BaseApp extends Koa {
             deepClone(config),
         ) as Account.Config<P>;
         this.validateAccountConfigCandidate(key, newConfig);
-        await mutateAccountAtomically({
+        return await mutateAccountAtomically({
             host: this,
             adapter,
             accountId: config.account_id,
@@ -370,7 +370,7 @@ export class BaseApp extends Koa {
         if (!adapter) return this.logger.warn(`未找到适配器${p}`);
         const account = adapter.accounts.get(uin);
         if (!account) return this.logger.warn(`未找到账号${uin}`);
-        await mutateAccountAtomically({
+        return await mutateAccountAtomically({
             host: this,
             adapter,
             accountId: uin,

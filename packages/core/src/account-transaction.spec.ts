@@ -84,6 +84,27 @@ afterEach(() => {
 });
 
 describe("account transaction", () => {
+    it("返回已原子持久化并交给宿主的精确配置字节", async () => {
+        const fixture = createFixture();
+        const next = { platform: "mock", account_id: "10001", token: "next" };
+        const persisted = "general: {}\nmock.10001:\n  platform: mock\n  account_id: '10001'\n";
+        vi.mocked(fixture.adapter.createAccount).mockReturnValue(
+            createAccount(fixture.adapter, next),
+        );
+        const transactionOptions = options(fixture, next);
+        transactionOptions.dependencies = {
+            serialize: vi.fn(() => persisted),
+        };
+
+        await expect(mutateAccountAtomically(transactionOptions)).resolves.toBe(persisted);
+
+        expect(fs.readFileSync(fixture.configPath, "utf8")).toBe(persisted);
+        expect(transactionOptions.onPersisted).toHaveBeenCalledWith(
+            fixture.configPath,
+            persisted,
+        );
+    });
+
     it("新增账号启动失败时清理候选运行态并保留原配置文件", async () => {
         const fixture = createFixture();
         const next = { platform: "mock", account_id: "10001", token: "next" };

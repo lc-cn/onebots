@@ -54,7 +54,7 @@ export class AccountMutationConflictError extends ConfigError {
  * 作为公开诊断原因；运行态或写盘失败时会重建旧账号并恢复旧文件。回滚也失败时
  * 同时保留所有证据。
  */
-export async function mutateAccountAtomically(options: AccountTransactionOptions): Promise<void> {
+export async function mutateAccountAtomically(options: AccountTransactionOptions): Promise<string> {
     const { host } = options;
     const runtimeLease = acquireRuntimeOperation(
         host,
@@ -81,6 +81,7 @@ export async function mutateAccountAtomically(options: AccountTransactionOptions
         try {
             dependencies.write(options.configPath, content, true);
             options.onPersisted(options.configPath, content);
+            return content;
         } catch (error) {
             restoreConfigEntry(host.config, options.configKey, previousEntry);
             const failures = new FailureCollector();
