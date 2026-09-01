@@ -43,6 +43,8 @@ export class FacebookMessengerClient extends EventEmitter<FacebookMessengerClien
     private page?: MessengerPageProfile;
     private startTask?: Promise<void>;
     private startAbort?: AbortController;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private generation = 0;
     private started = false;
 
@@ -89,9 +91,11 @@ export class FacebookMessengerClient extends EventEmitter<FacebookMessengerClien
         return this.page ? structuredClone(this.page) : undefined;
     }
 
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.started) return;
         if (this.startTask) return this.startTask;
+        this.bindStartSignal(signal);
         const generation = ++this.generation;
         const controller = new AbortController();
         this.startAbort = controller;
@@ -102,15 +106,40 @@ export class FacebookMessengerClient extends EventEmitter<FacebookMessengerClien
         } finally {
             if (this.startTask === task) this.startTask = undefined;
             if (this.startAbort === controller) this.startAbort = undefined;
+            if (!this.started) this.unbindStartSignal();
         }
     }
 
     async stop(): Promise<void> {
+        this.unbindStartSignal();
         ++this.generation;
         this.startAbort?.abort();
         await this.startTask?.catch(() => undefined);
         this.started = false;
         await this.webhook.stop();
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error =>
+                this.reportError(
+                    FacebookMessengerError.wrap(error, "FACEBOOK_MESSENGER_STOP_FAILED"),
+                ),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
     }
 
     call<T = unknown>(

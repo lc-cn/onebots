@@ -206,9 +206,9 @@ export class FacebookMessengerAdapter extends Adapter<
             ),
         );
         this.httpHost.mount(account.account_id, client);
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                await client.start();
+                await client.start(signal);
                 account.status = AccountStatus.Online;
                 account.nickname = client.pageProfile?.name || client.config.page_id;
                 this.logger.info(

@@ -40,6 +40,48 @@ describe("FacebookMessengerClient", () => {
         );
     });
 
+    it("账号启动取消会中止进行中的 Graph 请求并阻止迟到就绪", async () => {
+        let requestSignal: AbortSignal | undefined;
+        const fetcher = vi.fn<typeof fetch>((_input, init) => {
+            requestSignal = init?.signal ?? undefined;
+            return new Promise((_resolve, reject) => {
+                requestSignal?.addEventListener("abort", () => reject(requestSignal?.reason), {
+                    once: true,
+                });
+            });
+        });
+        const client = new FacebookMessengerClient(config(), { fetcher });
+        const ready = vi.fn();
+        client.on("ready", ready);
+        const controller = new AbortController();
+
+        const start = client.start(controller.signal);
+        await vi.waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
+        controller.abort(new DOMException("账号启动超时", "AbortError"));
+
+        await expect(start).rejects.toBeDefined();
+        expect(requestSignal?.aborted).toBe(true);
+        expect(client.isStarted).toBe(false);
+        expect(ready).not.toHaveBeenCalled();
+    });
+
+    it("平台就绪后仍保留账号启动信号以覆盖协议启动阶段", async () => {
+        const client = new FacebookMessengerClient(config({ receive_mode: "manual" }), {
+            fetcher: vi
+                .fn<typeof fetch>()
+                .mockResolvedValue(Response.json({ id: "100", name: "My Page" })),
+        });
+        const stop = vi.spyOn(client, "stop");
+        const controller = new AbortController();
+
+        await client.start(controller.signal);
+        expect(client.isStarted).toBe(true);
+        controller.abort();
+
+        await vi.waitFor(() => expect(stop).toHaveBeenCalledOnce());
+        await vi.waitFor(() => expect(client.isStarted).toBe(false));
+    });
+
     it("Send API 使用 Page edge、默认 messaging type 与结构化响应", async () => {
         const fetcher = vi
             .fn<typeof fetch>()
