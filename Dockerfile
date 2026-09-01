@@ -33,9 +33,12 @@ RUN pnpm prune --prod
 # ---------- 运行阶段 ----------
 FROM node:24-alpine
 
+ENV COREPACK_HOME=/usr/local/share/corepack
+
 RUN apk add --no-cache su-exec \
   && corepack enable \
   && corepack prepare pnpm@9.15.9 --activate \
+  && chown -R node:node "$COREPACK_HOME" \
   && mkdir -p /data/static \
   && chown -R node:node /data
 WORKDIR /app

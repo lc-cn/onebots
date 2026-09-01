@@ -51,7 +51,8 @@ if [ "$(id -u)" = "0" ]; then
     echo "[onebots] 错误: 无法将 /data 交给 node 用户，请检查挂载卷权限"
     exit 1
   fi
-  exec su-exec node:node node /app/packages/onebots/lib/bin.js "$@"
+  exec su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
+    node /app/packages/onebots/lib/bin.js "$@"
 fi
 
 # 显式 --user 启动时尊重调用方身份，并在启动前给出清晰的卷权限错误。

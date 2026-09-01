@@ -119,7 +119,8 @@ if [ "$(id -u)" = "0" ]; then
     echo "[onebots] 错误: 无法将 /data 交给 node 用户，请检查持久化存储权限"
     exit 1
   fi
-  exec su-exec node:node node /app/packages/onebots/lib/bin.js "$@"
+  exec su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
+    node /app/packages/onebots/lib/bin.js "$@"
 fi
 
 if [ ! -r /data/config.yaml ] || [ ! -w /data ]; then
