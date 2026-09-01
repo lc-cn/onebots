@@ -2,15 +2,13 @@ import * as fs from "node:fs";
 import yaml from "js-yaml";
 import type { Account } from "./account.js";
 import type { Adapter } from "./adapter.js";
-import type { RuntimeOperation } from "./app-observability.js";
 import { FailureCollector } from "./async-utils.js";
 import { writeConfigFileAtomic } from "./config-file.js";
 import { ConfigError } from "./errors.js";
+import { acquireRuntimeOperation, type RuntimeOperationHost } from "./runtime-operation.js";
 import { deepClone } from "./utils.js";
 
-export interface AccountTransactionHost {
-    isReloading: boolean;
-    runtimeOperation?: RuntimeOperation;
+export interface AccountTransactionHost extends RuntimeOperationHost {
     config: Record<string, unknown>;
 }
 
@@ -55,21 +53,23 @@ export class AccountMutationConflictError extends ConfigError {
  */
 export async function mutateAccountAtomically(options: AccountTransactionOptions): Promise<void> {
     const { host } = options;
-    if (host.isReloading) throw new AccountMutationConflictError();
-    host.isReloading = true;
-    host.runtimeOperation = "account_configuration";
-
-    const dependencies: AccountTransactionDependencies = {
-        serialize: options.dependencies?.serialize ?? defaultDependencies.serialize,
-        write: options.dependencies?.write ?? defaultDependencies.write,
-    };
-    const previousEntry = host.config[options.configKey];
-    const previousFile = fs.existsSync(options.configPath)
-        ? fs.readFileSync(options.configPath, "utf8")
-        : undefined;
-    let previousRuntimeConfig: Account.Config | undefined;
+    const runtimeLease = acquireRuntimeOperation(
+        host,
+        "account_configuration",
+        () => new AccountMutationConflictError(),
+    );
 
     try {
+        const dependencies: AccountTransactionDependencies = {
+            serialize: options.dependencies?.serialize ?? defaultDependencies.serialize,
+            write: options.dependencies?.write ?? defaultDependencies.write,
+        };
+        const previousEntry = host.config[options.configKey];
+        const previousFile = fs.existsSync(options.configPath)
+            ? fs.readFileSync(options.configPath, "utf8")
+            : undefined;
+        let previousRuntimeConfig: Account.Config | undefined;
+
         previousRuntimeConfig = await switchAccountRuntime(options, options.nextConfig);
         if (options.nextConfig) host.config[options.configKey] = options.nextConfig;
         else delete host.config[options.configKey];
@@ -93,8 +93,7 @@ export async function mutateAccountAtomically(options: AccountTransactionOptions
             throwCollectedFailures(failures, "账号配置持久化失败且回滚未完整完成");
         }
     } finally {
-        host.runtimeOperation = "idle";
-        host.isReloading = false;
+        runtimeLease.release();
     }
 }
 

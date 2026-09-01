@@ -34,7 +34,6 @@ import {
     getRuntimeProcessIdentity,
     registerObservabilityEndpoints,
     type ApplicationIdentity,
-    type RuntimeOperation,
 } from "./app-observability.js";
 export type { ApplicationIdentity } from "./app-observability.js";
 import { resolvePublicStaticRoot } from "./public-static-root.js";
@@ -44,6 +43,7 @@ import { rollbackFailedStart as rollbackStartup } from "./startup-rollback.js";
 import { normalizeGatewayPathPrefix } from "./gateway-path.js";
 import { AccountMutationConflictError, mutateAccountAtomically } from "./account-transaction.js";
 import { assertAccountIdentifier, assertAccountIdentity } from "./account-config.js";
+import { acquireRuntimeOperation, type RuntimeOperation } from "./runtime-operation.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -464,62 +464,64 @@ export class BaseApp extends Koa {
         }
     }
     async reload(config: BaseApp.Config) {
-        if (this.isReloading) {
-            throw new ConfigError("OneBots 配置正在重载，请等待当前操作完成");
-        }
-        const merged = deepMerge(deepClone(BaseApp.defaultConfig), deepClone(config));
-        const next = ConfigValidator.validateWithDefaults(
-            merged as Partial<Required<BaseApp.Config>>,
-            BaseAppConfigSchema,
+        const runtimeLease = acquireRuntimeOperation(
+            this,
+            "configuration_reload",
+            () => new ConfigError("OneBots 运行态正在变更，请等待当前操作完成"),
         );
-        assertHostConfigReloadable(this.config, next);
-
-        const previous = this.config;
-        const wasStarted = this.isStarted;
-        this.isReloading = true;
-        this.runtimeOperation = "configuration_reload";
-        let previousStopped = false;
 
         try {
-            await this.stopAdapters(true);
-            previousStopped = true;
-            this.adapters.clear();
-            this.config = next;
-            this.logger.level = next.log_level;
-            this.enhancedLogger.setLevel(next.log_level);
-            this.initAdapters();
-            if (wasStarted) await this.startAdapters(true);
-        } catch (error) {
-            if (!previousStopped) {
-                throw ErrorHandler.wrap(error, {
-                    operation: "reload",
-                    phase: "stop-previous",
-                });
-            }
+            const merged = deepMerge(deepClone(BaseApp.defaultConfig), deepClone(config));
+            const next = ConfigValidator.validateWithDefaults(
+                merged as Partial<Required<BaseApp.Config>>,
+                BaseAppConfigSchema,
+            );
+            assertHostConfigReloadable(this.config, next);
 
-            const failures = new FailureCollector();
-            failures.add(error);
-            await failures.capture(() => this.stopAdapters(true));
-            this.adapters.clear();
-            this.config = previous;
-            this.logger.level = previous.log_level;
-            await failures.capture(() => this.enhancedLogger.setLevel(previous.log_level));
-            let previousInitialized = false;
-            await failures.capture(() => {
-                this.initAdapters();
-                previousInitialized = true;
-            });
-            if (wasStarted && previousInitialized) {
-                await failures.capture(() => this.startAdapters(true));
-            }
+            const previous = this.config;
+            const wasStarted = this.isStarted;
+            let previousStopped = false;
+
             try {
-                failures.throwIfAny("配置重载失败且运行态回滚未完整完成");
-            } catch (finalError) {
-                throw ErrorHandler.wrap(finalError, { operation: "reload" });
+                await this.stopAdapters(true);
+                previousStopped = true;
+                this.adapters.clear();
+                this.config = next;
+                this.logger.level = next.log_level;
+                this.enhancedLogger.setLevel(next.log_level);
+                this.initAdapters();
+                if (wasStarted) await this.startAdapters(true);
+            } catch (error) {
+                if (!previousStopped) {
+                    throw ErrorHandler.wrap(error, {
+                        operation: "reload",
+                        phase: "stop-previous",
+                    });
+                }
+
+                const failures = new FailureCollector();
+                failures.add(error);
+                await failures.capture(() => this.stopAdapters(true));
+                this.adapters.clear();
+                this.config = previous;
+                this.logger.level = previous.log_level;
+                await failures.capture(() => this.enhancedLogger.setLevel(previous.log_level));
+                let previousInitialized = false;
+                await failures.capture(() => {
+                    this.initAdapters();
+                    previousInitialized = true;
+                });
+                if (wasStarted && previousInitialized) {
+                    await failures.capture(() => this.startAdapters(true));
+                }
+                try {
+                    failures.throwIfAny("配置重载失败且运行态回滚未完整完成");
+                } catch (finalError) {
+                    throw ErrorHandler.wrap(finalError, { operation: "reload" });
+                }
             }
         } finally {
-            this.runtimeOperation = "idle";
-            this.isReloading = false;
+            runtimeLease.release();
         }
     }
     async stop() {

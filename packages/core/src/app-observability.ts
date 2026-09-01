@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Adapter } from "./adapter.js";
 import { metrics } from "./metrics.js";
 import type { Router } from "./router.js";
+import type { RuntimeOperation } from "./runtime-operation.js";
 
 const runtimeInstanceId = randomUUID();
 const runtimeStartedAt = new Date(Date.now() - process.uptime() * 1_000).toISOString();
@@ -31,13 +32,6 @@ interface ObservableApp {
     /** 主应用可提供不包含原始路径或参数的启动契约摘要。 */
     readonly runtimeContractId?: string;
 }
-
-export type RuntimeOperation =
-    | "idle"
-    | "configuration_reload"
-    | "account_configuration"
-    | "account_lifecycle"
-    | "unknown";
 
 export interface ApplicationIdentity {
     name: string;

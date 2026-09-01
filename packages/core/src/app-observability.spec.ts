@@ -4,8 +4,8 @@ import {
     getReadinessSnapshot,
     getRuntimeProcessIdentity,
     registerObservabilityEndpoints,
-    type RuntimeOperation,
 } from "./app-observability.js";
+import type { RuntimeOperation } from "./runtime-operation.js";
 
 function observableApp(
     accounts: Array<{ status: string; protocols: Array<{ lifecycleStatus: string }> }>,

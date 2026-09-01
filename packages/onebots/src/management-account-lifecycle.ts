@@ -1,10 +1,12 @@
 import {
     AccountMutationConflictError,
+    acquireRuntimeOperation,
     ErrorHandler,
     UnsupportedCapabilityError,
     ValidationError,
     type Account,
     type BaseApp,
+    type RuntimeOperationLease,
 } from "@onebots/core";
 
 export type ManagementAccountLifecycleAction = "bot.start" | "bot.stop";
@@ -47,9 +49,14 @@ type ManagementAccountLifecycleHost = Pick<
     BaseApp,
     "adapters" | "isReloading" | "logger" | "runtimeOperation"
 >;
+interface ActiveAccountLifecycleOperations {
+    readonly operations: Map<string, ManagementAccountLifecycleAction>;
+    readonly runtimeLease: RuntimeOperationLease;
+}
+
 const activeOperations = new WeakMap<
     ManagementAccountLifecycleHost,
-    Map<string, ManagementAccountLifecycleAction>
+    ActiveAccountLifecycleOperations
 >();
 
 /** HTTP 与旧管理 WebSocket 共用的账号生命周期执行边界。 */
@@ -166,14 +173,19 @@ async function runAccountLifecycleOperation(
     action: ManagementAccountLifecycleAction,
     operation: () => Promise<void>,
 ): Promise<void> {
-    let operations = activeOperations.get(host);
-    if (!operations) {
-        if (host.isReloading) throw new AccountMutationConflictError();
-        operations = new Map();
-        activeOperations.set(host, operations);
-        host.isReloading = true;
-        host.runtimeOperation = "account_lifecycle";
+    let state = activeOperations.get(host);
+    if (!state) {
+        state = {
+            operations: new Map(),
+            runtimeLease: acquireRuntimeOperation(
+                host,
+                "account_lifecycle",
+                () => new AccountMutationConflictError(),
+            ),
+        };
+        activeOperations.set(host, state);
     }
+    const { operations } = state;
     const key = `${platform}\0${uin}`;
     const activeAction = operations.get(key);
     if (activeAction) {
@@ -188,8 +200,7 @@ async function runAccountLifecycleOperation(
         operations.delete(key);
         if (operations.size === 0) {
             activeOperations.delete(host);
-            host.runtimeOperation = "idle";
-            host.isReloading = false;
+            state.runtimeLease.release();
         }
     }
 }

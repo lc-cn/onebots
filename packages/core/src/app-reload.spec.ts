@@ -307,13 +307,25 @@ describe("BaseApp reload boundary", () => {
         });
         await vi.waitFor(() => expect(app.isReloading).toBe(true));
         expect(app.runtimeOperation).toBe("configuration_reload");
-        await expect(BaseApp.prototype.reload.call(app, config)).rejects.toThrow("配置正在重载");
+        await expect(BaseApp.prototype.reload.call(app, config)).rejects.toThrow("运行态正在变更");
 
         releaseStop?.();
         await firstReload;
         expect(app.isReloading).toBe(false);
         expect(app.runtimeOperation).toBe("idle");
         expect(app.config.access_token).toBe("next-token");
+    });
+
+    it("候选配置校验失败时仍释放运行态租约", async () => {
+        const app = {
+            config,
+            isReloading: false,
+            runtimeOperation: "idle",
+        } as unknown as BaseApp;
+
+        await expect(BaseApp.prototype.reload.call(app, { port: 0 })).rejects.toThrow();
+
+        expect(app).toMatchObject({ isReloading: false, runtimeOperation: "idle" });
     });
 
     it("重载失败回滚后恢复 readiness 状态", async () => {

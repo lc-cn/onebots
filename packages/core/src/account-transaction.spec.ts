@@ -170,6 +170,21 @@ describe("account transaction", () => {
         expect(fixture.host.runtimeOperation).toBe("idle");
     });
 
+    it("读取旧配置失败时仍释放运行态租约", async () => {
+        const fixture = createFixture();
+        const next = { platform: "mock", account_id: "10001", token: "next" };
+        const transactionOptions = options(fixture, next);
+        transactionOptions.configPath = path.dirname(fixture.configPath);
+
+        await expect(mutateAccountAtomically(transactionOptions)).rejects.toThrow();
+
+        expect(fixture.host).toMatchObject({
+            isReloading: false,
+            runtimeOperation: "idle",
+        });
+        expect(fixture.adapter.createAccount).not.toHaveBeenCalled();
+    });
+
     it("运行态回滚失败时聚合原始错误和清理证据", async () => {
         const previousConfig = { platform: "mock", account_id: "10001", token: "old" };
         const next = { ...previousConfig, token: "next" };
