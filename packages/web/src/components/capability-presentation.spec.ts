@@ -175,6 +175,54 @@ describe("capability presentation", () => {
         expect(() =>
             parseAdapterCapabilityReport({ ...capabilityReport([]), adapters: [{}] }),
         ).toThrow("条目结构无效");
+        expect(() =>
+            parseAdapterCapabilityReport(
+                capabilityReport([
+                    {
+                        ...reportAdapter("broken", manifest),
+                        capabilities: {
+                            ...manifest,
+                            actions: { send: { support: "invented" } },
+                        },
+                    } as never,
+                ]),
+            ),
+        ).toThrow("清单结构无效");
+        expect(() =>
+            parseAdapterCapabilityReport(
+                capabilityReport([
+                    reportAdapter("duplicate", manifest),
+                    reportAdapter("duplicate", manifest),
+                ]),
+            ),
+        ).toThrow("重复平台");
+        expect(() =>
+            parseAdapterCapabilityReport(
+                capabilityReport([
+                    { ...reportAdapter("contradiction", manifest), declared: false },
+                ]),
+            ),
+        ).toThrow("声明状态与能力清单矛盾");
+        expect(() =>
+            parseAdapterCapabilityReport(
+                capabilityReport([
+                    { ...reportAdapter("unversioned", manifest), packageVersion: null },
+                ]),
+            ),
+        ).toThrow("缺少版本绑定的已验证清单");
+        expect(() =>
+            parseAdapterCapabilityReport(
+                capabilityReport([
+                    reportAdapter("unavailable", manifest, "catalog", "unavailable"),
+                ]),
+            ),
+        ).toThrow("不可用时不得携带能力快照");
+        expect(() =>
+            parseAdapterCapabilityReport({
+                ...capabilityReport([reportAdapter("unknown", null, "catalog", "unavailable")]),
+                complete: true,
+            }),
+        ).toThrow("complete 与条目状态或错误不一致");
         expect(parseAdapterCapabilityReport(capabilityReport([]))).toEqual(capabilityReport([]));
     });
 

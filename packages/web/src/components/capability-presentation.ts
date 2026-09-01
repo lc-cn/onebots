@@ -44,8 +44,7 @@ export function parseAdapterCapabilityReport(value: unknown): AdapterCapabilityR
         typeof report.generatedAt !== "string" ||
         Number.isNaN(Date.parse(report.generatedAt)) ||
         !report.application ||
-        typeof report.application.name !== "string" ||
-        !report.application.name.trim() ||
+        report.application.name !== "onebots" ||
         typeof report.application.version !== "string" ||
         !report.application.version.trim() ||
         typeof report.application.instanceId !== "string" ||
@@ -55,11 +54,12 @@ export function parseAdapterCapabilityReport(value: unknown): AdapterCapabilityR
                 !report.application.runtimeContractId.trim())) ||
         typeof report.complete !== "boolean" ||
         !Array.isArray(report.errors) ||
-        !report.errors.every(error => typeof error === "string") ||
+        !report.errors.every(error => typeof error === "string" && Boolean(error.trim())) ||
         !Array.isArray(report.adapters)
     ) {
         throw new Error("适配器能力响应结构无效");
     }
+    const names = new Set<string>();
     for (const adapter of report.adapters) {
         if (
             !adapter ||
@@ -67,17 +67,141 @@ export function parseAdapterCapabilityReport(value: unknown): AdapterCapabilityR
             !["catalog", "runtime"].includes(adapter.source) ||
             !["verified", "unknown", "unavailable"].includes(adapter.status) ||
             typeof adapter.name !== "string" ||
+            !adapter.name.trim() ||
             typeof adapter.displayName !== "string" ||
             typeof adapter.description !== "string" ||
             typeof adapter.packageName !== "string" ||
-            (adapter.packageVersion !== null && typeof adapter.packageVersion !== "string") ||
+            !adapter.packageName.trim() ||
+            (adapter.packageVersion !== null &&
+                (typeof adapter.packageVersion !== "string" || !adapter.packageVersion.trim())) ||
             typeof adapter.declared !== "boolean" ||
-            (adapter.capabilities !== null && typeof adapter.capabilities !== "object")
+            (adapter.capabilities !== null &&
+                (typeof adapter.capabilities !== "object" || Array.isArray(adapter.capabilities)))
         ) {
             throw new Error("适配器能力条目结构无效");
         }
+        const name = adapter.name.trim();
+        if (names.has(name)) throw new Error(`适配器能力响应包含重复平台: ${name}`);
+        names.add(name);
+        const hasManifest = adapter.capabilities !== null;
+        if (adapter.declared !== hasManifest) {
+            throw new Error(`适配器能力条目 ${name} 的声明状态与能力清单矛盾`);
+        }
+        if (adapter.status === "verified" && (!hasManifest || adapter.packageVersion === null)) {
+            throw new Error(`适配器能力条目 ${name} 缺少版本绑定的已验证清单`);
+        }
+        if (adapter.status === "unavailable" && hasManifest) {
+            throw new Error(`适配器能力条目 ${name} 不可用时不得携带能力快照`);
+        }
+        if (hasManifest) {
+            try {
+                assertCapabilityManifest(adapter.capabilities);
+            } catch {
+                throw new Error(`适配器能力条目 ${name} 的清单结构无效`);
+            }
+        }
+    }
+    const evidenceComplete =
+        report.errors.length === 0 &&
+        report.adapters.every(adapter => adapter.status === "verified");
+    if (report.complete !== evidenceComplete) {
+        throw new Error("适配器能力响应的 complete 与条目状态或错误不一致");
     }
     return report as AdapterCapabilityReport;
+}
+
+/** 浏览器边界的纯数据校验，避免为解析 API 响应引入 core 的 Node.js 运行时入口。 */
+function assertCapabilityManifest(value: unknown): asserts value is AdapterCapabilityManifest {
+    if (!isRecord(value) || value.version !== 1) throw new Error("能力清单版本无效");
+    if (
+        Object.keys(value).some(
+            field => !["version", "actions", "events", "segments", "transports"].includes(field),
+        )
+    ) {
+        throw new Error("能力清单包含未知字段");
+    }
+    for (const category of ["actions", "events", "segments", "transports"] as const) {
+        const descriptors = value[category];
+        if (!isRecord(descriptors)) throw new Error("能力分类必须是对象");
+        for (const [name, descriptor] of Object.entries(descriptors)) {
+            assertCapabilityDescriptor(category, name, descriptor);
+        }
+    }
+}
+
+function assertCapabilityDescriptor(
+    category: "actions" | "events" | "segments" | "transports",
+    name: string,
+    value: unknown,
+): void {
+    if (!name.trim() || !isRecord(value)) throw new Error("能力描述无效");
+    const categoryFields =
+        category === "segments" ? ["direction"] : category === "transports" ? ["mode"] : [];
+    const allowedFields = new Set([
+        "support",
+        "availability",
+        "scenes",
+        "permissions",
+        "note",
+        ...categoryFields,
+    ]);
+    if (Object.keys(value).some(field => !allowedFields.has(field))) {
+        throw new Error("能力描述包含未知字段");
+    }
+    if (!isOneOf(value.support, ["native", "emulated", "unsupported"] as const)) {
+        throw new Error("能力支持状态无效");
+    }
+    if (
+        value.availability !== undefined &&
+        !isOneOf(value.availability, ["always", "permission", "context"] as const)
+    ) {
+        throw new Error("能力可用性无效");
+    }
+    assertOptionalStringArray(value.scenes, ["private", "group", "channel", "direct"]);
+    assertOptionalStringArray(value.permissions);
+    if (value.note !== undefined && typeof value.note !== "string") {
+        throw new Error("能力说明无效");
+    }
+    if (
+        category === "segments" &&
+        !isOneOf(value.direction, ["send", "receive", "both"] as const)
+    ) {
+        throw new Error("消息段方向无效");
+    }
+    if (
+        category === "transports" &&
+        !isOneOf(value.mode, [
+            "webhook",
+            "websocket",
+            "reverse_websocket",
+            "polling",
+            "sse",
+            "native",
+        ] as const)
+    ) {
+        throw new Error("传输模式无效");
+    }
+}
+
+function assertOptionalStringArray(value: unknown, allowed?: readonly string[]): void {
+    if (value === undefined) return;
+    if (
+        !Array.isArray(value) ||
+        value.length === 0 ||
+        value.some(item => typeof item !== "string" || !item.trim()) ||
+        new Set(value).size !== value.length ||
+        (allowed && value.some(item => !allowed.includes(item)))
+    ) {
+        throw new Error("能力字符串列表无效");
+    }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isOneOf<T extends string>(value: unknown, values: readonly T[]): value is T {
+    return typeof value === "string" && values.includes(value as T);
 }
 
 export function capabilitySupportLabel(support: CapabilitySupport): string {
