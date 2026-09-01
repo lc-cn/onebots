@@ -38,11 +38,7 @@ interface PromptRule {
 /** 使用配置 schema 引导创建或安全更新 OneBots 配置。 */
 export async function runSetup(configPath: string, options: SetupOptions = {}): Promise<void> {
     const exists = fs.existsSync(configPath);
-    if (exists && !options.force && !process.stdin.isTTY) {
-        writeCliOutput(`配置文件已存在: ${configPath}`);
-        writeCliOutput("非交互环境不会覆盖；如需更新请使用 --force。");
-        return;
-    }
+    const preserveExisting = exists && !options.force && !process.stdin.isTTY;
 
     let config: Record<string, unknown>;
     if (exists) {
@@ -126,6 +122,12 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     const failures = await loadPlugins(adapters, protocols);
     if (failures.length > 0) {
         throw new Error(`无法加载插件: ${failures.join(", ")}`);
+    }
+    if (preserveExisting) {
+        await validateConfig(config);
+        writeCliOutput(`配置文件已存在并通过验证: ${configPath}`);
+        writeCliOutput("非交互环境不会覆盖；如需更新请使用 --force。");
+        return;
     }
     if (adapters.length > 0 || protocols.length > 0 || configuredPlugins) {
         setRuntimePluginSelection(config, { adapters, protocols });

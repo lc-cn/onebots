@@ -44,13 +44,35 @@ describe("setup workflow", () => {
         expect(renderedOutput).toContain(`onebots install -c ${configPath}`);
     });
 
-    it("does not overwrite an existing config in a non-interactive session", async () => {
+    it("validates but does not overwrite an existing config in a non-interactive session", async () => {
         const configPath = temporaryConfigPath();
         fs.writeFileSync(configPath, "port: 7000\n", "utf8");
+        const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
         await runSetup(configPath);
 
         expect(fs.readFileSync(configPath, "utf8")).toBe("port: 7000\n");
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect(output.mock.calls.map(call => String(call[0])).join("")).toContain(
+            "配置文件已存在并通过验证",
+        );
+    });
+
+    it("rejects a broken existing config instead of reporting non-interactive success", async () => {
+        const configPath = temporaryConfigPath();
+        const original = "access_token: secret-never-return\nplugins: [\n";
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+
+        const error = await runSetup(configPath).then(
+            () => null,
+            error => error,
+        );
+
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toContain("现有配置无法读取：YAML 解析失败:");
+        expect((error as Error).message).toContain("请修复配置，或使用 --force 备份并重建");
+        expect((error as Error).message).not.toContain("secret-never-return");
+        expect(fs.readFileSync(configPath, "utf8")).toBe(original);
         expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
     });
 
