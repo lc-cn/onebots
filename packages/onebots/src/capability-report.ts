@@ -32,6 +32,25 @@ export interface AdapterCapabilityReport {
     adapters: AdapterCapabilityReportItem[];
 }
 
+export type AdapterCapabilitySelectionSource = "cli" | "config" | "catalog";
+
+/** 可归档的 CLI 能力证据，保留生成器身份与实际选择范围。 */
+export interface AdapterCapabilityEvidenceReport extends AdapterCapabilityReport {
+    schemaVersion: 1;
+    generatedAt: string;
+    application: {
+        name: string;
+        version: string;
+    };
+    target: {
+        configPath: string;
+        adapterSelection: {
+            source: AdapterCapabilitySelectionSource;
+            names: string[];
+        };
+    };
+}
+
 const CATEGORIES: CapabilityCategory[] = ["actions", "events", "segments", "transports"];
 
 /** 从已完成加载契约校验的插件生成无连接能力报告。 */
@@ -96,8 +115,11 @@ export function formatAdapterCapabilityReport(
     json = false,
 ): string {
     if (json) return JSON.stringify(report, null, 2);
+    const lines: string[] = [];
+    if (isEvidenceReport(report)) lines.push(formatEvidenceScope(report));
     if (!report.adapters.length && !report.errors.length) {
-        return "未选择适配器。请在 config.plugins.adapters 中配置，或通过 -r 指定。";
+        lines.push("未选择适配器。请在 config.plugins.adapters 中配置，或通过 -r 指定。");
+        return lines.join("\n");
     }
     const labels: Record<CapabilityCategory, string> = {
         actions: "动作",
@@ -105,7 +127,6 @@ export function formatAdapterCapabilityReport(
         segments: "消息段",
         transports: "连接方式",
     };
-    const lines: string[] = [];
     for (const error of report.errors) lines.push(`✗ 加载失败: ${error}`);
     for (const adapter of report.adapters) {
         const title =
@@ -138,6 +159,21 @@ export function formatAdapterCapabilityReport(
         lines.push("目录快照随当前 OneBots 版本发布，不代表适配器已安装或账号已授权。");
     }
     return lines.join("\n");
+}
+
+function isEvidenceReport(
+    report: AdapterCapabilityReport,
+): report is AdapterCapabilityEvidenceReport {
+    return "schemaVersion" in report;
+}
+
+function formatEvidenceScope(report: AdapterCapabilityEvidenceReport): string {
+    const selection = report.target.adapterSelection;
+    const scope =
+        selection.source === "catalog"
+            ? `随包目录全部平台（${selection.names.length} 个）`
+            : `${selection.source === "cli" ? "CLI 显式选择" : "配置选择"} [${selection.names.join(", ") || "无"}]`;
+    return `能力证据: ${report.application.name}@${report.application.version} · ${scope} · 配置 ${report.target.configPath}`;
 }
 
 export function summarizeManifest(

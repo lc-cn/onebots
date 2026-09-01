@@ -12,6 +12,8 @@ import { getLoadedPlugins, type LoadedPluginInfo } from "../plugin-loader.js";
 import {
     buildAdapterCapabilityReport,
     formatAdapterCapabilityReport,
+    type AdapterCapabilityEvidenceReport,
+    type AdapterCapabilitySelectionSource,
 } from "../capability-report.js";
 import {
     getInstallableAdapterNames,
@@ -91,6 +93,7 @@ export async function showCapabilities(
     options: RuntimeOptions & { json: boolean },
     dependencies?: CapabilityCommandDependencies,
 ): Promise<CommandResult> {
+    const explicitRuntime = normalizeRuntimeOptions(options);
     let runtime: ReturnType<typeof normalizeRuntimeOptions>;
     let runtimeConfigError: string | null = null;
     try {
@@ -116,17 +119,38 @@ export async function showCapabilities(
         ...catalogIssues.map(issue => `extension-catalog: ${issue}`),
     ];
     const selected = new Set(runtime.adapters);
+    const catalogPlatforms = (resolved.catalogPlatforms ?? getInstallableAdapterNames)();
+    const selectionSource: AdapterCapabilitySelectionSource = explicitRuntime.adapters.length
+        ? "cli"
+        : runtime.adapters.length
+          ? "config"
+          : "catalog";
+    const reportPlatforms = runtime.adapters.length ? runtime.adapters : catalogPlatforms;
     const report = buildAdapterCapabilityReport(
         resolved
             .getLoadedPlugins()
             .filter(plugin => plugin.type === "adapter" && selected.has(plugin.name)),
         reportErrors,
-        runtime.adapters.length
-            ? runtime.adapters
-            : (resolved.catalogPlatforms ?? getInstallableAdapterNames)(),
+        reportPlatforms,
     );
+    const evidence = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        application: {
+            name: packageMetadata.name,
+            version: packageMetadata.version,
+        },
+        target: {
+            configPath: runtime.configPath,
+            adapterSelection: {
+                source: selectionSource,
+                names: [...reportPlatforms],
+            },
+        },
+        ...report,
+    } satisfies AdapterCapabilityEvidenceReport;
     return {
-        output: formatAdapterCapabilityReport(report, options.json),
+        output: formatAdapterCapabilityReport(evidence, options.json),
         raw: options.json,
         exitCode: failures.length ? 2 : report.complete ? undefined : 1,
     };

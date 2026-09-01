@@ -30,6 +30,13 @@ describe("capabilities command", () => {
             },
         );
         const report = JSON.parse(result.output || "{}") as {
+            schemaVersion: number;
+            generatedAt: string;
+            application: { name: string; version: string };
+            target: {
+                configPath: string;
+                adapterSelection: { source: string; names: string[] };
+            };
             complete: boolean;
             adapters: Array<{
                 source: string;
@@ -41,7 +48,20 @@ describe("capabilities command", () => {
 
         expect(calls).toEqual([{ adapters: [], protocols: [] }]);
         expect(result).toMatchObject({ raw: true, exitCode: undefined });
+        expect(report).toMatchObject({
+            schemaVersion: 1,
+            generatedAt: expect.any(String),
+            application: { name: "onebots", version: expect.any(String) },
+            target: {
+                configPath: path.resolve("config.yaml"),
+                adapterSelection: { source: "catalog", names: expect.any(Array) },
+            },
+        });
+        expect(Number.isNaN(Date.parse(report.generatedAt))).toBe(false);
         expect(report.complete).toBe(true);
+        expect(report.target.adapterSelection.names).toEqual(
+            report.adapters.map(adapter => adapter.name),
+        );
         expect(report.adapters.length).toBeGreaterThan(0);
         expect(report.adapters.find(adapter => adapter.name === "slack")).toMatchObject({
             source: "catalog",
@@ -86,6 +106,11 @@ describe("capabilities command", () => {
         expect(calls).toEqual([{ adapters: ["mock"], protocols: [] }]);
         expect(result).toMatchObject({ raw: true, exitCode: undefined });
         expect(JSON.parse(result.output || "{}")).toMatchObject({
+            schemaVersion: 1,
+            target: {
+                configPath: config,
+                adapterSelection: { source: "config", names: ["mock"] },
+            },
             complete: true,
             errors: [],
             adapters: [{ name: "mock", packageName: "@onebots/adapter-mock" }],
@@ -159,6 +184,7 @@ describe("capabilities command", () => {
         );
 
         expect(result.exitCode).toBe(1);
+        expect(result.output).toContain("CLI 显式选择 [third-party]");
         expect(result.output).toContain("未声明默认能力清单");
     });
 
@@ -172,7 +198,11 @@ describe("capabilities command", () => {
         );
 
         expect(result).toMatchObject({ raw: true, exitCode: 2 });
-        expect(JSON.parse(result.output || "{}")).toEqual({
+        expect(JSON.parse(result.output || "{}")).toMatchObject({
+            schemaVersion: 1,
+            target: {
+                adapterSelection: { source: "cli", names: ["missing"] },
+            },
             complete: false,
             errors: ["adapter:missing"],
             adapters: [],
