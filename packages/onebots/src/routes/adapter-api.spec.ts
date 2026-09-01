@@ -64,6 +64,11 @@ describe("adapter account routes", () => {
         );
         expect(adaptersContext.set).toHaveBeenCalledWith("Cache-Control", "no-store");
         expect(capabilitiesContext.body).toBe(report);
+        expect(capabilitiesContext.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
+        expect(capabilitiesContext.set).toHaveBeenCalledWith(
+            "X-OneBots-Runtime-Contract-Id",
+            "sha256:contract-a",
+        );
         expect(capabilitiesContext.set).toHaveBeenCalledWith("Cache-Control", "no-store");
     });
 

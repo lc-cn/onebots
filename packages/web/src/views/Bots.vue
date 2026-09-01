@@ -83,7 +83,7 @@ import type { AccountInfo, AdapterCapabilityReport, ExtensionInfo } from "../typ
 import {
     createEmptyAdapterCapabilityReport,
     mergeCapabilityReportAdapters,
-    parseAdapterCapabilityReport,
+    parseAdapterCapabilitySnapshot,
 } from "../components/capability-presentation.js";
 import { getBotOnboardingState } from "./bot-onboarding.js";
 import type { ProtocolInventoryState } from "./bot-onboarding.js";
@@ -117,21 +117,10 @@ const extensions = ref<ExtensionInfo[]>([]);
 const extensionInventoryIdentity = ref<ManagementEvidenceIdentity | null>(null);
 const extensionInventoryStatus = ref<"loading" | "ready" | "unavailable">("loading");
 const capabilityReport = ref<AdapterCapabilityReport>(createEmptyAdapterCapabilityReport());
+const capabilityIdentity = ref<ManagementEvidenceIdentity | null>(null);
 const capabilityCatalogStatus = ref<"loading" | "ready" | "unavailable">("loading");
 const capabilityCatalogError = ref("");
 const adapterInventoryIdentityKey = computed(() => identityKey(adapterInventoryIdentity.value));
-const capabilityIdentity = computed<ManagementEvidenceIdentity | null>(() => {
-    const application = capabilityReport.value.application;
-    if (!application.name || !application.version || !application.instanceId) return null;
-    return {
-        application: application.name,
-        version: application.version,
-        instanceId: application.instanceId,
-        ...(application.runtimeContractId
-            ? { runtimeContractId: application.runtimeContractId }
-            : {}),
-    };
-});
 const managementSnapshot = computed(() =>
     resolveManagementSnapshot({
         adapterStatus: adapterInventoryStatus.value,
@@ -208,15 +197,19 @@ async function loadCapabilityCatalog() {
     try {
         const response = await authFetch(buildApiUrl("/api/adapter-capabilities"));
         if (!response.ok) throw new Error(`能力清单请求失败（HTTP ${response.status}）`);
-        capabilityReport.value = parseAdapterCapabilityReport(
+        const snapshot = parseAdapterCapabilitySnapshot(
+            response,
             await readManagementJsonResponse(response),
         );
+        capabilityReport.value = snapshot.report;
+        capabilityIdentity.value = snapshot.identity;
         capabilityCatalogError.value =
             capabilityReport.value.errors.join("；") ||
             (capabilityReport.value.complete ? "" : "存在未完成版本绑定的能力证据");
         capabilityCatalogStatus.value = "ready";
     } catch (error) {
         capabilityReport.value = createEmptyAdapterCapabilityReport();
+        capabilityIdentity.value = null;
         capabilityCatalogStatus.value = "unavailable";
         capabilityCatalogError.value = error instanceof Error ? error.message : "能力清单请求失败";
         reportClientError("获取独立适配器能力清单失败", error);

@@ -12,6 +12,7 @@ import {
     hasAccountCapabilityOverride,
     mergeCapabilityReportAdapters,
     parseAdapterCapabilityReport,
+    parseAdapterCapabilitySnapshot,
     resolveAccountCapabilityError,
     resolveAccountCapabilities,
 } from "./capability-presentation.js";
@@ -258,6 +259,35 @@ describe("capability presentation", () => {
             }),
         ).toThrow("complete 与条目状态或错误不一致");
         expect(parseAdapterCapabilityReport(capabilityReport([]))).toEqual(capabilityReport([]));
+    });
+
+    it("只采用响应头与正文身份完全一致的能力目录", () => {
+        const response = {
+            headers: new Headers({
+                "X-OneBots-Application": "onebots",
+                "X-OneBots-Version": "1.2.8",
+                "X-OneBots-Instance-Id": "instance-a",
+            }),
+        };
+        const report = capabilityReport([]);
+
+        expect(parseAdapterCapabilitySnapshot(response, report)).toEqual({
+            report,
+            identity: {
+                application: "onebots",
+                version: "1.2.8",
+                instanceId: "instance-a",
+            },
+        });
+        expect(() =>
+            parseAdapterCapabilitySnapshot(response, {
+                ...report,
+                application: { ...report.application, instanceId: "instance-b" },
+            }),
+        ).toThrow("响应头与正文来自不同 OneBots 实例");
+        expect(() => parseAdapterCapabilitySnapshot({ headers: new Headers() }, report)).toThrow(
+            "缺少完整 OneBots 实例身份",
+        );
     });
 
     it("preserves an unversioned runtime warning over the account API manifest status", () => {

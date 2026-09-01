@@ -937,7 +937,7 @@ function completeCapabilityCatalogResponse(): Response {
             },
             ...buildAdapterCapabilityReport([], [], getInstallableAdapterNames()),
         }),
-        { status: 200 },
+        { status: 200, headers: managementIdentityHeaders() },
     );
 }
 

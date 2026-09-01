@@ -10,6 +10,10 @@ import { TRUSTED_EXTENSION_CATALOG } from "./trusted-extension-catalog.js";
 import type { DoctorCheck, DoctorEndpointIdentity } from "./doctor.js";
 import type { ManagementFetch } from "./management-credential.js";
 import { readDoctorManagementJson } from "./doctor-management-response.js";
+import {
+    readManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+} from "./management-evidence-identity.js";
 
 interface CapabilityInventoryItem {
     source?: unknown;
@@ -41,7 +45,19 @@ export async function probeAuthenticatedCapabilityCatalog(
         if (!response.ok) {
             return capabilityCatalogError(`在线能力目录响应无效: HTTP ${response.status}`);
         }
-        return inspectCapabilityCatalogPayload(payload, expectedIdentity);
+        const responseIdentity = readManagementEvidenceIdentity(response.headers);
+        if (!responseIdentity) {
+            return capabilityCatalogError("在线能力目录响应缺少完整实例身份头");
+        }
+        if (
+            expectedIdentity &&
+            !sameManagementEvidenceIdentity(responseIdentity, expectedIdentity)
+        ) {
+            return capabilityCatalogError(
+                `能力目录响应头 ${identityLabel(responseIdentity)} 与公开探针 ${identityLabel(expectedIdentity)} 不一致`,
+            );
+        }
+        return inspectCapabilityCatalogPayload(payload, responseIdentity);
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return capabilityCatalogError(`在线能力目录请求失败: ${message}`);

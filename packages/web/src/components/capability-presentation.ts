@@ -9,6 +9,11 @@ import type {
     TransportCapabilityDescriptor,
 } from "@onebots/core";
 import type { AdapterCapabilityReport, AdapterInfo, ExtensionCapabilityInfo } from "../types";
+import {
+    parseManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+    type ManagementEvidenceIdentity,
+} from "../management-evidence-identity.js";
 
 const EMPTY_CAPABILITY_MANIFEST: AdapterCapabilityManifest = {
     version: 1,
@@ -120,6 +125,33 @@ export function parseAdapterCapabilityReport(value: unknown): AdapterCapabilityR
         throw new Error("适配器能力响应的 complete 与条目状态或错误不一致");
     }
     return report as AdapterCapabilityReport;
+}
+
+export interface AdapterCapabilitySnapshot {
+    report: AdapterCapabilityReport;
+    identity: ManagementEvidenceIdentity;
+}
+
+/** 只有标准响应头与正文声明同一实例时，才采用能力目录快照。 */
+export function parseAdapterCapabilitySnapshot(
+    response: Pick<Response, "headers">,
+    value: unknown,
+): AdapterCapabilitySnapshot {
+    const identity = parseManagementEvidenceIdentity(response);
+    const report = parseAdapterCapabilityReport(value);
+    const application = report.application;
+    const reportIdentity: ManagementEvidenceIdentity = {
+        application: application.name,
+        version: application.version,
+        instanceId: application.instanceId,
+        ...(application.runtimeContractId
+            ? { runtimeContractId: application.runtimeContractId }
+            : {}),
+    };
+    if (!sameManagementEvidenceIdentity(identity, reportIdentity)) {
+        throw new Error("能力目录响应头与正文来自不同 OneBots 实例");
+    }
+    return { report, identity };
 }
 
 /** 浏览器边界的纯数据校验，避免为解析 API 响应引入 core 的 Node.js 运行时入口。 */

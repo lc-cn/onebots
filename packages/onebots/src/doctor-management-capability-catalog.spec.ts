@@ -120,7 +120,48 @@ describe("doctor management capability catalog", () => {
             message: expect.stringContaining("响应正文超过 4 MiB 上限"),
         });
     });
+
+    it("requires capability response headers to match the body and public probe", async () => {
+        const report = completeReport();
+        const matching = vi.fn(async () =>
+            Response.json(report, { headers: managementHeaders("instance-a") }),
+        );
+
+        await expect(
+            probeAuthenticatedCapabilityCatalog("http://127.0.0.1:6727", "secret", matching, {
+                application: packageMetadata.name,
+                version: packageMetadata.version,
+                instanceId: "instance-a",
+            }),
+        ).resolves.toMatchObject({ level: "ok", identity: { instanceId: "instance-a" } });
+
+        const split = vi.fn(async () =>
+            Response.json(report, { headers: managementHeaders("instance-b") }),
+        );
+        await expect(
+            probeAuthenticatedCapabilityCatalog("http://127.0.0.1:6727", "secret", split),
+        ).resolves.toMatchObject({
+            level: "error",
+            message: expect.stringContaining("能力目录实例"),
+        });
+
+        const missing = vi.fn(async () => Response.json(report));
+        await expect(
+            probeAuthenticatedCapabilityCatalog("http://127.0.0.1:6727", "secret", missing),
+        ).resolves.toMatchObject({
+            level: "error",
+            message: "在线能力目录响应缺少完整实例身份头",
+        });
+    });
 });
+
+function managementHeaders(instanceId: string): HeadersInit {
+    return {
+        "X-OneBots-Application": packageMetadata.name,
+        "X-OneBots-Version": packageMetadata.version,
+        "X-OneBots-Instance-Id": instanceId,
+    };
+}
 
 function completeReport() {
     return {
