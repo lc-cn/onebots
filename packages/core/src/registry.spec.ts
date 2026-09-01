@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { Adapter, Protocol } from "./index.js";
+import { Account, Adapter, Protocol } from "./index.js";
 import { ValidationError } from "./errors.js";
 import {
     AdapterRegistry,
@@ -24,6 +24,50 @@ const adapterFactory = (() => undefined) as unknown as Adapter.Factory;
 const anotherAdapterFactory = (() => undefined) as unknown as Adapter.Factory;
 const protocolFactory = (() => undefined) as unknown as Protocol.Factory;
 const anotherProtocolFactory = (() => undefined) as unknown as Protocol.Factory;
+
+function fakeAdapter(
+    app: BaseApp,
+    platform: string,
+    capabilities: ReturnType<typeof defineAdapterCapabilities>,
+    implemented: boolean,
+) {
+    return {
+        app,
+        platform,
+        accounts: new Map(),
+        callAction: async () => undefined,
+        createAccount: () => {
+            throw new Error("测试桩不创建账号");
+        },
+        createId: () => ({}),
+        describeCapabilities: () => capabilities,
+        emit: () => true,
+        getAccount: () => undefined,
+        isActionImplemented: () => implemented,
+        off: () => undefined,
+        on: () => undefined,
+        resolveId: () => ({}),
+        start: async () => undefined,
+        stop: async () => undefined,
+    };
+}
+
+function fakeProtocol(adapter: Adapter, account: Account, name: string, version: string) {
+    return {
+        name,
+        version,
+        adapter,
+        account,
+        config: { protocol: name, version },
+        start: async () => undefined,
+        stop: async () => undefined,
+        dispatch: async () => undefined,
+        format: () => ({}),
+        apply: async () => undefined,
+        on: () => undefined,
+        off: () => undefined,
+    };
+}
 
 describe("extension registries", () => {
     afterEach(() => {
@@ -112,13 +156,12 @@ describe("extension registries", () => {
             segments: {},
             transports: {},
         });
-        const factory = (() => ({
-            describeCapabilities: () => runtimeCapabilities,
-            isActionImplemented: () => true,
-        })) as unknown as Adapter.Factory;
+        const app = {} as BaseApp;
+        const factory = (() =>
+            fakeAdapter(app, "drifted", runtimeCapabilities, true)) as unknown as Adapter.Factory;
         AdapterRegistry.register("drifted", factory, { capabilities: registeredCapabilities });
 
-        expect(() => AdapterRegistry.create("drifted", {} as BaseApp)).toThrow(
+        expect(() => AdapterRegistry.create("drifted", app)).toThrow(
             "注册能力清单与实例默认能力不一致",
         );
     });
@@ -130,14 +173,101 @@ describe("extension registries", () => {
             segments: {},
             transports: {},
         });
-        const factory = (() => ({
-            describeCapabilities: () => capabilities,
-            isActionImplemented: () => false,
-        })) as unknown as Adapter.Factory;
+        const app = {} as BaseApp;
+        const factory = (() =>
+            fakeAdapter(app, "incomplete", capabilities, false)) as unknown as Adapter.Factory;
         AdapterRegistry.register("incomplete", factory, { capabilities });
 
-        expect(() => AdapterRegistry.create("incomplete", {} as BaseApp)).toThrow(
+        expect(() => AdapterRegistry.create("incomplete", app)).toThrow(
             "适配器能力清单声明了未实现动作: ping",
+        );
+    });
+
+    it("rejects an adapter factory that returns another platform identity", () => {
+        const app = {} as BaseApp;
+        const capabilities = defineAdapterCapabilities({
+            actions: {},
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        AdapterRegistry.register("expected", (() =>
+            fakeAdapter(app, "other", capabilities, true)) as unknown as Adapter.Factory);
+
+        expect(() => AdapterRegistry.create("expected", app)).toThrow(
+            "适配器 expected 工厂返回的平台身份不一致：实际为 other",
+        );
+    });
+
+    it("rejects an adapter factory detached from the current App", () => {
+        const app = {} as BaseApp;
+        const otherApp = {} as BaseApp;
+        const capabilities = defineAdapterCapabilities({
+            actions: {},
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        AdapterRegistry.register("expected", (() =>
+            fakeAdapter(otherApp, "expected", capabilities, true)) as unknown as Adapter.Factory);
+
+        expect(() => AdapterRegistry.create("expected", app)).toThrow(
+            "适配器 expected 工厂返回了不属于当前宿主的实例",
+        );
+    });
+
+    it("rejects a protocol factory whose runtime identity differs from registration", () => {
+        const adapter = {} as Adapter;
+        const account = {} as Account;
+        ProtocolRegistry.register("expected", "v1", (() =>
+            fakeProtocol(adapter, account, "expected", "v2")) as unknown as Protocol.Factory);
+
+        expect(() => ProtocolRegistry.create("expected", "v1", adapter, account, {})).toThrow(
+            "协议 expected/v1 工厂返回的协议身份不一致：实际为 expected/v2",
+        );
+    });
+
+    it("rejects a protocol factory detached from the current account", () => {
+        const adapter = {} as Adapter;
+        const account = {} as Account;
+        const otherAccount = {} as Account;
+        ProtocolRegistry.register("expected", "v1", (() =>
+            fakeProtocol(adapter, otherAccount, "expected", "v1")) as unknown as Protocol.Factory);
+
+        expect(() => ProtocolRegistry.create("expected", "v1", adapter, account, {})).toThrow(
+            "协议 expected/v1 工厂返回了不属于当前账号的实例",
+        );
+    });
+
+    it("rejects a protocol factory that omits a required runtime method", () => {
+        const adapter = {} as Adapter;
+        const account = {} as Account;
+        const protocol = fakeProtocol(adapter, account, "expected", "v1");
+        Reflect.deleteProperty(protocol, "apply");
+        ProtocolRegistry.register(
+            "expected",
+            "v1",
+            (() => protocol) as unknown as Protocol.Factory,
+        );
+
+        expect(() => ProtocolRegistry.create("expected", "v1", adapter, account, {})).toThrow(
+            "协议 expected/v1 工厂返回值缺少必需方法：apply",
+        );
+    });
+
+    it("rejects a protocol factory whose path configuration claims another identity", () => {
+        const adapter = {} as Adapter;
+        const account = {} as Account;
+        const protocol = fakeProtocol(adapter, account, "expected", "v1");
+        protocol.config.protocol = "other";
+        ProtocolRegistry.register(
+            "expected",
+            "v1",
+            (() => protocol) as unknown as Protocol.Factory,
+        );
+
+        expect(() => ProtocolRegistry.create("expected", "v1", adapter, account, {})).toThrow(
+            "协议 expected/v1 工厂返回的配置身份不一致：实际为 other/v1",
         );
     });
 

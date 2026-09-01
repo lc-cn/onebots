@@ -10,6 +10,10 @@ import {
 } from "./adapter-capability.js";
 import { isDeepStrictEqual } from "node:util";
 import { AsyncLocalStorage } from "node:async_hooks";
+import {
+    assertAdapterFactoryContract,
+    assertProtocolFactoryContract,
+} from "./extension-factory-contract.js";
 
 interface ExtensionRegistrationScope {
     open: boolean;
@@ -211,10 +215,11 @@ export class ProtocolRegistry {
         if (!factory) {
             throw new Error(`Protocol ${name}/${version} not registered`);
         }
-        if (Protocol.isClassFactory(factory)) {
-            return new factory(adapter, account, config);
-        }
-        return factory(adapter, account, config);
+        const protocol = Protocol.isClassFactory(factory)
+            ? new factory(adapter, account, config)
+            : factory(adapter, account, config);
+        assertProtocolFactoryContract(protocol, name, version, adapter, account);
+        return protocol;
     }
 
     /**
@@ -427,6 +432,7 @@ export class AdapterRegistry {
             throw new Error(`Adapter ${name} not registered`);
         }
         const adapter = Adapter.isClassAdapter(factory) ? new factory(app) : factory(app);
+        assertAdapterFactoryContract(adapter, name, app);
         const runtimeCapabilities = normalizeAdapterCapabilities(adapter.describeCapabilities());
         const registeredCapabilities = this.metadata.get(name)?.capabilities;
         if (
