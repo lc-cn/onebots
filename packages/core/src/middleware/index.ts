@@ -12,12 +12,14 @@ export {
 } from "./rate-limit.js";
 export {
     initSecurityAudit,
+    createSecurityAudit,
     securityAudit,
     logAuthFailure,
     logInvalidToken,
     logSuspiciousRequest,
     logRateLimit,
     closeSecurityAudit,
+    type SecurityAuditMiddleware,
 } from "./security-audit.js";
 export {
     createTokenValidator,

@@ -5,6 +5,7 @@ import type { Context } from "koa";
 import { afterEach, describe, expect, it } from "vitest";
 import {
     closeSecurityAudit,
+    createSecurityAudit,
     initSecurityAudit,
     logInvalidToken,
     securityAudit,
@@ -37,6 +38,47 @@ function requestContext(): Context {
 }
 
 describe("security audit shutdown", () => {
+    it("实例写入器隔离辅助事件，关闭一个实例不影响另一个实例", async () => {
+        const firstDirectory = fixture();
+        const secondDirectory = fixture();
+        const firstAudit = createSecurityAudit(firstDirectory);
+        const secondAudit = createSecurityAudit(secondDirectory);
+        const firstToken = "first-secret-token";
+        const secondToken = "second-secret-token";
+        const remainingToken = "remaining-secret-token";
+        const firstContext = requestContext();
+        const secondContext = requestContext();
+        const remainingContext = requestContext();
+
+        await firstAudit(firstContext, async () => {
+            logInvalidToken(firstContext, firstToken);
+        });
+        await secondAudit(secondContext, async () => {
+            logInvalidToken(secondContext, secondToken);
+        });
+        await firstAudit.close();
+        await expect(firstAudit.close()).resolves.toBeUndefined();
+        await secondAudit(remainingContext, async () => {
+            logInvalidToken(remainingContext, remainingToken);
+        });
+        await secondAudit.close();
+
+        const firstContent = fs.readFileSync(
+            path.join(firstDirectory, fs.readdirSync(firstDirectory)[0]),
+            "utf8",
+        );
+        const secondContent = fs.readFileSync(
+            path.join(secondDirectory, fs.readdirSync(secondDirectory)[0]),
+            "utf8",
+        );
+        expect(firstContent.match(/"type":"invalid_token"/gu)).toHaveLength(1);
+        expect(secondContent.match(/"type":"invalid_token"/gu)).toHaveLength(2);
+        for (const token of [firstToken, secondToken, remainingToken]) {
+            expect(firstContent).not.toContain(token);
+            expect(secondContent).not.toContain(token);
+        }
+    });
+
     it("关闭返回前刷新排队中的审计记录，并允许重复关闭", async () => {
         const directory = fixture();
         initSecurityAudit(directory);

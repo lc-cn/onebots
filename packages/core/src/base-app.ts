@@ -23,11 +23,7 @@ import { ConfigValidator, BaseAppConfigSchema } from "./config-validator.js";
 import { LifecycleManager } from "./lifecycle.js";
 import { ErrorHandler, ConfigError, ResourceError, ValidationError } from "./errors.js";
 import { Logger as EnhancedLogger, createLogger } from "./logger.js";
-import {
-    initSecurityAudit,
-    securityAudit,
-    closeSecurityAudit,
-} from "./middleware/security-audit.js";
+import { createSecurityAudit, type SecurityAuditMiddleware } from "./middleware/security-audit.js";
 import { createDefaultRateLimit } from "./middleware/rate-limit.js";
 import { metricsCollector } from "./middleware/metrics-collector.js";
 import {
@@ -83,6 +79,7 @@ export class BaseApp extends Koa {
     public logger: Logger;
     public enhancedLogger: EnhancedLogger;
     public lifecycle: LifecycleManager;
+    private securityAuditMiddleware?: SecurityAuditMiddleware;
     static get configPath() {
         return path.join(BaseApp.configDir, BaseApp.configFileName);
     }
@@ -182,8 +179,8 @@ export class BaseApp extends Koa {
             });
         });
 
-        // 初始化安全审计日志
-        initSecurityAudit(path.join(BaseApp.dataDir, "audit"));
+        // 每个应用实例持有自己的审计写入器，避免嵌入式宿主串写或互相关闭。
+        this.securityAuditMiddleware = createSecurityAudit(path.join(BaseApp.dataDir, "audit"));
 
         // 注册健康检查端点（无需认证）
         registerObservabilityEndpoints(this, {
@@ -223,7 +220,7 @@ export class BaseApp extends Koa {
             // 性能指标收集（最早执行，以便记录所有请求）
             .use(metricsCollector())
             // 安全审计日志
-            .use(securityAudit())
+            .use(this.securityAuditMiddleware)
             // 速率限制（在认证之前，防止暴力破解）
             .use(requestRateLimit)
             .use(async (_ctx, next) => {
@@ -563,7 +560,7 @@ export class BaseApp extends Koa {
         await failures.capture(() => this.stopAdapters(true));
         this.adapters.clear();
         await failures.capture(() => this.lifecycle.cleanup({ throwOnFailure: true }));
-        await failures.capture(() => closeSecurityAudit());
+        await failures.capture(() => this.securityAuditMiddleware?.close());
         await failures.capture(() => emitAllAwaited(this, "close"));
 
         this.isStarted = false;

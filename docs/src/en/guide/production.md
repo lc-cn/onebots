@@ -39,6 +39,8 @@ Records all security-related events to meet compliance requirements.
 
 **Auto-Enabled**: Automatically integrated in `BaseApp`
 
+Each `BaseApp` binds its own audit directory and writer. Helper events such as authentication failures, invalid tokens, and rate limits follow the current request to its owning instance; stopping one embedded application cannot close or redirect the audit stream of another live instance. Third-party hosts can create the same instance-scoped middleware with `createSecurityAudit()` and await its `close()` at the end of their lifecycle. The older `initSecurityAudit()`, `securityAudit()`, and `closeSecurityAudit()` functions remain compatible for integrations that intentionally use one global writer.
+
 Invalid-token audits and token creation, refresh, and revocation logs never retain token plaintext or plaintext prefixes. When events from the same process need correlation, logs contain only a 16-character HMAC fingerprint produced with a random process key. The key is never persisted, so fingerprints change after restart. This value is diagnostic correlation only and is not token identity or authentication evidence.
 
 ### Management authentication boundary
