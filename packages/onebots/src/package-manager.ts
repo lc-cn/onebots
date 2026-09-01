@@ -17,6 +17,17 @@ export interface PackageInstallInvocation {
 
 export interface ExtensionInstallOptions {
     force?: boolean;
+    packageManager?: VerifiedPackageManager;
+}
+
+/** 已完成可执行性与版本校验、可直接用于依赖变更的包管理器入口。 */
+export interface VerifiedPackageManager {
+    manager: SupportedPackageManager;
+    resolvedPath: string;
+}
+
+export interface ExtensionRestoreOptions {
+    packageManager?: VerifiedPackageManager;
 }
 
 export interface PackageUpdateInvocation extends PackageInstallInvocation {
@@ -454,9 +465,10 @@ export function buildPackageManagerInvocation(
     args: string[],
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
+    resolvedPath?: string,
 ): PackageInstallInvocation {
     return {
-        executable: platform === "win32" ? `${manager}.cmd` : manager,
+        executable: resolvedPath ?? (platform === "win32" ? `${manager}.cmd` : manager),
         args,
         environment: manager === "npm" ? sanitizeNpmEnvironment(environment) : environment,
     };
@@ -470,7 +482,8 @@ export function buildExtensionInstallInvocation(
     environment: NodeJS.ProcessEnv = process.env,
     options: ExtensionInstallOptions = {},
 ): PackageInstallInvocation {
-    const manager = detectRuntimePackageManager(runtimeRoot, environment);
+    const manager =
+        options.packageManager?.manager ?? detectRuntimePackageManager(runtimeRoot, environment);
     return buildPackageManagerInvocation(
         manager,
         manager === "pnpm"
@@ -492,6 +505,7 @@ export function buildExtensionInstallInvocation(
               ],
         platform,
         environment,
+        options.packageManager?.resolvedPath,
     );
 }
 
@@ -502,8 +516,10 @@ export function buildExtensionRestoreInvocation(
     previousVersion: string | null,
     platform: NodeJS.Platform = process.platform,
     environment: NodeJS.ProcessEnv = process.env,
+    options: ExtensionRestoreOptions = {},
 ): PackageInstallInvocation {
-    const manager = detectRuntimePackageManager(runtimeRoot, environment);
+    const manager =
+        options.packageManager?.manager ?? detectRuntimePackageManager(runtimeRoot, environment);
     const workspaceRoot =
         manager === "pnpm" && fs.existsSync(path.join(runtimeRoot, "pnpm-workspace.yaml"))
             ? ["--workspace-root"]
@@ -515,7 +531,13 @@ export function buildExtensionRestoreInvocation(
         : manager === "pnpm"
           ? ["remove", ...workspaceRoot, packageName]
           : ["uninstall", "--save", "--omit=dev", packageName];
-    return buildPackageManagerInvocation(manager, args, platform, environment);
+    return buildPackageManagerInvocation(
+        manager,
+        args,
+        platform,
+        environment,
+        options.packageManager?.resolvedPath,
+    );
 }
 
 /** 生成项目或全局运行时的批量更新调用；项目更新不恢复开发依赖。 */

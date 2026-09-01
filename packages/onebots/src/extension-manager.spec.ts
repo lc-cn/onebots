@@ -209,6 +209,58 @@ describe("ExtensionManager", () => {
         expect(install).not.toHaveBeenCalled();
     });
 
+    it("安装与失败恢复始终沿用通过版本校验的包管理器入口", async () => {
+        const { root, configPath } = fixture();
+        const verifiedPackageManager = {
+            manager: "pnpm" as const,
+            resolvedPath: "/verified/corepack/pnpm",
+        };
+        const install = vi.fn(
+            async (
+                packageName: string,
+                packageVersion: string,
+                runtimeRoot: string,
+                options?: { packageManager?: typeof verifiedPackageManager },
+            ) => {
+                expect(options?.packageManager).toEqual(verifiedPackageManager);
+                installFixturePackage(packageName, packageVersion, runtimeRoot);
+            },
+        );
+        const restore = vi.fn(
+            async (
+                packageName: string,
+                previousVersion: string | null,
+                runtimeRoot: string,
+                options?: { packageManager?: typeof verifiedPackageManager },
+            ) => {
+                expect(previousVersion).toBeNull();
+                expect(options?.packageManager).toEqual(verifiedPackageManager);
+                removeFixturePackage(packageName, runtimeRoot);
+            },
+        );
+        const packageManagerInspector = vi.fn(async () => ({
+            ...verifiedPackageManager,
+            executable: "pnpm",
+            version: "9.15.9",
+            error: null,
+        }));
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: { install, restore },
+            preflight: async () => {
+                throw new Error("候选扩展无法启动");
+            },
+            packageManagerInspector,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow("候选扩展无法启动");
+
+        expect(packageManagerInspector).toHaveBeenCalledOnce();
+        expect(install).toHaveBeenCalledOnce();
+        expect(restore).toHaveBeenCalledOnce();
+    });
+
     it("向已加载适配器发布注册表中的权威能力清单", () => {
         const { root, configPath } = fixture();
         const capabilities = defineAdapterCapabilities({
@@ -498,6 +550,12 @@ describe("ExtensionManager", () => {
             "@onebots/adapter-slack",
             catalogVersion("@onebots/adapter-slack"),
             root,
+            {
+                packageManager: {
+                    manager: expect.stringMatching(/^(?:npm|pnpm)$/u),
+                    resolvedPath: expect.any(String),
+                },
+            },
         );
         const config = yaml.load(fs.readFileSync(configPath, "utf8")) as Record<string, unknown>;
         expect(config.plugins).toEqual({
@@ -619,9 +677,14 @@ describe("ExtensionManager", () => {
                     installedName: string,
                     version: string,
                     runtimeRoot: string,
-                    options?: { force?: boolean },
+                    options?: { force?: boolean; packageManager?: unknown },
                 ) => {
-                    expect(options).toEqual({ force: true });
+                    expect(options).toEqual(
+                        expect.objectContaining({
+                            force: true,
+                            packageManager: expect.any(Object),
+                        }),
+                    );
                     installFixturePackage(installedName, version, runtimeRoot);
                 },
             );
@@ -648,9 +711,17 @@ describe("ExtensionManager", () => {
                     restartRequired: true,
                 });
 
-                expect(install).toHaveBeenCalledWith(packageName, targetVersion, root, {
-                    force: true,
-                });
+                expect(install).toHaveBeenCalledWith(
+                    packageName,
+                    targetVersion,
+                    root,
+                    expect.objectContaining({
+                        force: true,
+                        packageManager: expect.objectContaining({
+                            resolvedPath: expect.any(String),
+                        }),
+                    }),
+                );
                 expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
                     installed: true,
                     installedVersion: targetVersion,
@@ -938,6 +1009,9 @@ describe("ExtensionManager", () => {
             "@onebots/adapter-slack",
             catalogVersion("@onebots/adapter-slack"),
             root,
+            expect.objectContaining({
+                packageManager: expect.objectContaining({ resolvedPath: expect.any(String) }),
+            }),
         );
         expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
             installedVersion: catalogVersion("@onebots/adapter-slack"),
@@ -1054,7 +1128,14 @@ describe("ExtensionManager", () => {
             }),
         );
         expect(fs.readFileSync(configPath, "utf8")).toBe(original);
-        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", null, root);
+        expect(restore).toHaveBeenCalledWith(
+            "@onebots/adapter-slack",
+            null,
+            root,
+            expect.objectContaining({
+                packageManager: expect.objectContaining({ resolvedPath: expect.any(String) }),
+            }),
+        );
         expect(restorePhase).toBe("restoring_package");
         expect(manager.list([]).find(item => item.id === "adapter:slack")?.installed).toBe(false);
     });
@@ -1084,7 +1165,12 @@ describe("ExtensionManager", () => {
 
         await expect(manager.install("adapter:slack")).rejects.toThrow("候选版本无法加载");
 
-        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", "3.0.7", root);
+        expect(restore).toHaveBeenCalledWith(
+            "@onebots/adapter-slack",
+            "3.0.7",
+            root,
+            expect.objectContaining({ packageManager: expect.any(Object) }),
+        );
         expect(manager.list([]).find(item => item.id === "adapter:slack")?.installedVersion).toBe(
             "3.0.7",
         );
@@ -1120,7 +1206,12 @@ describe("ExtensionManager", () => {
         await expect(manager.install("adapter:slack")).rejects.toThrow("postinstall failed");
 
         expect(preflight).not.toHaveBeenCalled();
-        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", "3.0.7", root);
+        expect(restore).toHaveBeenCalledWith(
+            "@onebots/adapter-slack",
+            "3.0.7",
+            root,
+            expect.objectContaining({ packageManager: expect.any(Object) }),
+        );
         expect(restorePhase).toBe("restoring_package");
         expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
             installedVersion: "3.0.7",
@@ -1154,7 +1245,12 @@ describe("ExtensionManager", () => {
 
         await expect(manager.install("adapter:slack")).rejects.toThrow("registry connection reset");
 
-        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", null, root);
+        expect(restore).toHaveBeenCalledWith(
+            "@onebots/adapter-slack",
+            null,
+            root,
+            expect.objectContaining({ packageManager: expect.any(Object) }),
+        );
         expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
             installed: false,
             installedVersion: null,
@@ -1194,7 +1290,12 @@ describe("ExtensionManager", () => {
             "lockfile write interrupted",
         );
 
-        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", null, root);
+        expect(restore).toHaveBeenCalledWith(
+            "@onebots/adapter-slack",
+            null,
+            root,
+            expect.objectContaining({ packageManager: expect.any(Object) }),
+        );
         expect(fs.readFileSync(manifestPath, "utf8")).toBe(originalManifest);
     });
 

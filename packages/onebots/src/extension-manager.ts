@@ -23,7 +23,9 @@ import { inspectPlugin, type LoadedPluginInfo } from "./plugin-loader.js";
 import { inspectPackageManifest } from "./package-manifest.js";
 import type {
     ExtensionInstallOptions,
+    ExtensionRestoreOptions,
     RuntimePackageManagerVersionInspection,
+    VerifiedPackageManager,
 } from "./package-manager.js";
 import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
@@ -58,6 +60,7 @@ export interface ExtensionInstaller {
         packageName: string,
         previousVersion: string | null,
         runtimeRoot: string,
+        options?: ExtensionRestoreOptions,
     ): Promise<void>;
 }
 
@@ -87,11 +90,15 @@ class RuntimeExtensionInstaller implements ExtensionInstaller {
         packageName: string,
         previousVersion: string | null,
         runtimeRoot: string,
+        options: ExtensionRestoreOptions = {},
     ): Promise<void> {
         const invocation = buildExtensionRestoreInvocation(
             runtimeRoot,
             packageName,
             previousVersion,
+            process.platform,
+            process.env,
+            options,
         );
         await execFileAsync(invocation.executable, invocation.args, {
             cwd: runtimeRoot,
@@ -343,6 +350,7 @@ export class ExtensionManager {
             let previousPackage: InstalledPackageInspection = { version: null, error: null };
             let previousVersion: string | null = null;
             let packageMetadata: ReturnType<typeof capturePackageManagerMetadata> | null = null;
+            let packageManager: VerifiedPackageManager | null = null;
             let packageInstallAttempted = false;
             let packageInstallCompleted = false;
             try {
@@ -353,7 +361,7 @@ export class ExtensionManager {
                     previousPackage.error !== null;
                 const packageNeedsInstall =
                     repairsCurrentVersion || previousVersion !== packageCatalog.packageVersion;
-                if (packageNeedsInstall) await this.assertPackageManager();
+                if (packageNeedsInstall) packageManager = await this.assertPackageManager();
                 packageMetadata = packageNeedsInstall
                     ? capturePackageManagerMetadata(this.runtimeRoot)
                     : null;
@@ -373,13 +381,14 @@ export class ExtensionManager {
                             entry.packageName,
                             packageCatalog.packageVersion,
                             this.runtimeRoot,
-                            { force: true },
+                            { force: true, packageManager: packageManager! },
                         );
                     } else {
                         await this.installer.install(
                             entry.packageName,
                             packageCatalog.packageVersion,
                             this.runtimeRoot,
+                            { packageManager: packageManager! },
                         );
                     }
                     packageInstallCompleted = true;
@@ -429,6 +438,7 @@ export class ExtensionManager {
                         previousVersion,
                         error,
                         packageMetadata,
+                        packageManager,
                     );
                 }
                 throw error;
@@ -478,9 +488,12 @@ export class ExtensionManager {
         previousVersion: string | null,
         originalError: unknown,
         packageMetadata: ReturnType<typeof capturePackageManagerMetadata> | null,
+        packageManager: VerifiedPackageManager | null,
     ): Promise<void> {
         try {
-            await this.installer.restore!(packageName, previousVersion, this.runtimeRoot);
+            await this.installer.restore!(packageName, previousVersion, this.runtimeRoot, {
+                packageManager: packageManager!,
+            });
             const restoredPackage = this.inspectInstalledPackage(packageName);
             if (restoredPackage.error || restoredPackage.version !== previousVersion) {
                 throw new Error(
@@ -619,9 +632,16 @@ export class ExtensionManager {
         if (error) throw new Error(error);
     }
 
-    private async assertPackageManager(): Promise<void> {
-        const error = (await this.packageManagerInspector(this.runtimeRoot)).error;
-        if (error) throw new Error(error);
+    private async assertPackageManager(): Promise<VerifiedPackageManager> {
+        const inspection = await this.packageManagerInspector(this.runtimeRoot);
+        if (inspection.error) throw new Error(inspection.error);
+        if (!inspection.manager || !inspection.resolvedPath) {
+            throw new Error("扩展包管理器校验未返回可执行入口");
+        }
+        return {
+            manager: inspection.manager,
+            resolvedPath: inspection.resolvedPath,
+        };
     }
 }
 

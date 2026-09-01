@@ -227,6 +227,40 @@ describe("runtime package manager", () => {
         });
     });
 
+    it("安装与恢复命令使用已经过版本校验的绝对入口", () => {
+        const root = fixture({ packageManager: "pnpm@9.15.9" });
+        const packageManager = {
+            manager: "pnpm" as const,
+            resolvedPath: path.join(root, "verified", "pnpm"),
+        };
+
+        expect(
+            buildExtensionInstallInvocation(
+                root,
+                "@onebots/adapter-slack@3.0.8",
+                "linux",
+                { PATH: path.join(root, "untrusted") },
+                { packageManager },
+            ),
+        ).toMatchObject({
+            executable: packageManager.resolvedPath,
+            args: ["add", "--save-prod", "@onebots/adapter-slack@3.0.8"],
+        });
+        expect(
+            buildExtensionRestoreInvocation(
+                root,
+                "@onebots/adapter-slack",
+                "3.0.7",
+                "linux",
+                { PATH: path.join(root, "untrusted") },
+                { packageManager },
+            ),
+        ).toMatchObject({
+            executable: packageManager.resolvedPath,
+            args: ["add", "--save-prod", "@onebots/adapter-slack@3.0.7"],
+        });
+    });
+
     it("把 catalog: 依赖作为 pnpm 证据而不交给 npm 解析", () => {
         const root = fixture({
             dependencies: { onebots: "1.2.8" },
