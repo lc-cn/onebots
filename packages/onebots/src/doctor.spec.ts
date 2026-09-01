@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import * as net from "node:net";
 import {
     compareDoctorEndpointIdentities,
     inspectDataDirectory,
@@ -14,6 +15,7 @@ import {
 import { ServiceController, type ServiceSpec } from "./service-manager.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import { verifyDoctorRuntimeContract } from "./doctor-endpoint.js";
+import { inspectGatewayPortAvailability } from "./doctor-port.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -582,6 +584,36 @@ describe("doctor health probes", () => {
             name: "health",
             level: "error",
             message: "health: HTTP 200；响应 OK；响应不是有效 JSON",
+        });
+    });
+});
+
+describe("doctor gateway port availability", () => {
+    it("使用网关的实际监听方式区分可用端口与已占用端口", async () => {
+        const occupyingServer = net.createServer();
+        await new Promise<void>((resolve, reject) => {
+            occupyingServer.once("error", reject);
+            occupyingServer.listen(0, resolve);
+        });
+        const address = occupyingServer.address();
+        if (!address || typeof address === "string") throw new Error("测试服务器未取得 TCP 端口");
+
+        await expect(inspectGatewayPortAvailability(address.port)).resolves.toMatchObject({
+            name: "port",
+            level: "error",
+            message: expect.stringContaining("EADDRINUSE"),
+        });
+
+        await new Promise<void>((resolve, reject) => {
+            occupyingServer.close(error => {
+                if (error) reject(error);
+                else resolve();
+            });
+        });
+        await expect(inspectGatewayPortAvailability(address.port)).resolves.toEqual({
+            name: "port",
+            level: "ok",
+            message: `端口 ${address.port} 可用（已验证实际监听）`,
         });
     });
 });

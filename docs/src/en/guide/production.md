@@ -329,6 +329,8 @@ readinessProbe:
   periodSeconds: 5
 ```
 
+If the port does not accept a loopback connection and no managed service is running, doctor also binds and immediately releases the port using the same listen mode as gateway startup. A conflict on another interface or IPv6, or insufficient bind permission, therefore becomes a `port` error instead of a false **available** result.
+
 ## Auto Integration
 
 All production-ready features are automatically integrated in `BaseApp`, ready to use without additional configuration.

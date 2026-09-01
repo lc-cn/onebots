@@ -53,6 +53,7 @@ import {
     type DoctorCheck,
 } from "./doctor-endpoint.js";
 import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
+import { inspectGatewayPortAvailability } from "./doctor-port.js";
 
 export { compareDoctorEndpointIdentities, probeDoctorEndpoint, resolveGatewayBaseUrl };
 export type { CheckLevel, DoctorCheck, DoctorEndpointIdentity } from "./doctor-endpoint.js";
@@ -446,7 +447,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 }
                 checks.push(...(await probeDoctorManagement(base, config)));
             } else {
-                checks.push({ name: "port", level: "ok", message: `端口 ${port} 可用` });
+                checks.push(await inspectGatewayPortAvailability(port));
             }
         }
     }
