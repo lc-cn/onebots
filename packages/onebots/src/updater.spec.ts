@@ -7,6 +7,7 @@ import type { ServiceSpec } from "./service-manager.js";
 import {
     loadTargetExtensionVersionCatalog,
     packageNamesFor,
+    preflightPackagesOnlyUpdate,
     refreshServiceAfterUpdate,
     resolveInstalledPackageVersion,
     resolvePackageUpdateProjectRoot,
@@ -298,6 +299,50 @@ EOF
             spec,
             runtimeRoot: spec.workingDirectory,
         });
+    });
+
+    it("packages-only 通过真实配置预检后保留新依赖", async () => {
+        const spec = temporaryServiceSpec();
+        const preflight = vi.fn(async () => undefined);
+        const rollback = vi.fn(async () => undefined);
+
+        await expect(
+            preflightPackagesOnlyUpdate(spec, { preflight, rollback }),
+        ).resolves.toBeUndefined();
+        expect(preflight).toHaveBeenCalledWith(spec);
+        expect(rollback).not.toHaveBeenCalled();
+    });
+
+    it("packages-only 预检失败时恢复依赖且不触碰服务", async () => {
+        const spec = temporaryServiceSpec();
+        const rollback = vi.fn(async () => undefined);
+
+        await expect(
+            preflightPackagesOnlyUpdate(spec, {
+                preflight: async () => {
+                    throw new Error("new adapter rejected config");
+                },
+                rollback,
+            }),
+        ).rejects.toThrow(
+            /新依赖隔离预检失败，已恢复更新前依赖.*服务定义与当前运行实例保持不变.*new adapter rejected config/,
+        );
+        expect(rollback).toHaveBeenCalledOnce();
+    });
+
+    it("packages-only 预检与依赖恢复都失败时保留双方证据", async () => {
+        const spec = temporaryServiceSpec();
+
+        await expect(
+            preflightPackagesOnlyUpdate(spec, {
+                preflight: async () => {
+                    throw new Error("new protocol cannot load");
+                },
+                rollback: async () => {
+                    throw new Error("package lock is read-only");
+                },
+            }),
+        ).rejects.toThrow(/new protocol cannot load.*package lock is read-only/);
     });
 
     it("旧配置缺少 plugins 时回退服务快照", () => {

@@ -47,6 +47,11 @@ export interface PackageUpdateChange extends PackageUpdateEvidence {
     current: string | null;
 }
 
+interface PackagesOnlyPreflightDependencies {
+    preflight(spec: ServiceSpec): void | Promise<void>;
+    rollback(): void | Promise<void>;
+}
+
 export type UpdateRunResult =
     | { status: "current"; changes: [] }
     | { status: "updates_available" | "updated" | "cancelled"; changes: PackageUpdateChange[] };
@@ -99,6 +104,9 @@ export function resolveUpdateRuntimeTarget(
 
 /** 检查并更新 OneBots 与当前服务使用的插件。 */
 export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult> {
+    if (options.packagesOnly && (!options.configPath || !fs.existsSync(options.configPath))) {
+        throw new Error("--packages-only 需要可读取的配置文件，以便在保留新依赖前完成隔离预检");
+    }
     const controller = new ServiceController(options.scope);
     const installedSpec = options.packagesOnly ? null : controller.readSpec();
     const { spec, runtimeRoot } = resolveUpdateRuntimeTarget(options.packagesOnly, installedSpec);
@@ -176,6 +184,29 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     } catch (error) {
         rollbackPackagesBeforeServiceSwitch(updates, runtimeRoot, projectRoot, error);
     }
+    if (options.packagesOnly) {
+        await preflightPackagesOnlyUpdate(
+            {
+                scope: options.scope,
+                configPath: path.resolve(options.configPath!),
+                adapters,
+                protocols,
+                nodePath: process.execPath,
+                binPath: path.resolve(process.argv[1]),
+                workingDirectory: runtimeRoot,
+            },
+            {
+                preflight: runUpdatedServicePreflight,
+                rollback: () =>
+                    rollbackUpdatedPackages(
+                        updates,
+                        runtimeRoot,
+                        projectRoot,
+                        resolveInstalledPackageVersion,
+                    ),
+            },
+        );
+    }
     if (spec) {
         const result = await refreshServiceAfterUpdate(
             controller,
@@ -208,6 +239,26 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             : "OneBots 及插件更新完成",
     );
     return { status: "updated", changes: changed };
+}
+
+/** packages-only 更新只有通过真实配置预检后才会保留新依赖。 */
+export async function preflightPackagesOnlyUpdate(
+    spec: ServiceSpec,
+    dependencies: PackagesOnlyPreflightDependencies,
+): Promise<void> {
+    try {
+        await dependencies.preflight(spec);
+    } catch (error) {
+        try {
+            await dependencies.rollback();
+        } catch (rollbackError) {
+            throw packageRollbackAggregate(error, rollbackError);
+        }
+        throw new Error(
+            `新依赖隔离预检失败，已恢复更新前依赖；服务定义与当前运行实例保持不变：${errorMessage(error)}`,
+            { cause: error instanceof Error ? error : undefined },
+        );
+    }
 }
 
 function rollbackPackagesBeforeServiceSwitch(
