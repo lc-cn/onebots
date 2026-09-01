@@ -2,10 +2,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ConfigRestartRequiredError, HostConfigRestartRequiredError } from "@onebots/core";
+import {
+    ConfigRestartRequiredError,
+    HostConfigRestartRequiredError,
+    writeConfigFileAtomic,
+} from "@onebots/core";
 import {
     applyRuntimeConfigFile,
     RuntimeConfigApplicationConflictError,
+    RuntimeConfigRollbackConflictError,
     saveAndApplyRuntimeConfig,
 } from "./runtime-config-application.js";
 import { RuntimeConfigStateTracker } from "./runtime-config-state.js";
@@ -100,6 +105,42 @@ describe("runtime config application", () => {
             saveAndApplyRuntimeConfig(host, "access_token: next-token\n", file),
         ).rejects.toThrow("适配器初始化失败");
         expect(fs.readFileSync(file, "utf8")).toBe("access_token: old-token\n");
+        expect(fs.readFileSync(`${file}.bak`, "utf8")).toBe("access_token: old-token\n");
+        expect(host.markRuntimeConfigApplied).not.toHaveBeenCalled();
+    });
+
+    it("运行态应用失败时不覆盖另一进程已经写入的新配置", async () => {
+        const file = configFile();
+        const concurrent = "access_token: external-token\nlog_level: debug\n";
+        const host = {
+            isReloading: false,
+            markRuntimeConfigApplied: vi.fn(),
+            reload: vi.fn(async () => {
+                writeConfigFileAtomic(file, concurrent);
+                throw new Error("适配器初始化失败");
+            }),
+        };
+
+        const failure = await saveAndApplyRuntimeConfig(
+            host,
+            "access_token: next-token\n",
+            file,
+        ).then(
+            () => null,
+            error => error,
+        );
+
+        expect(failure).toBeInstanceOf(RuntimeConfigRollbackConflictError);
+        expect((failure as AggregateError).message).toBe(
+            "配置应用失败，且磁盘配置已被另一操作更新；已保留最新文件",
+        );
+        expect((failure as AggregateError).errors).toEqual([
+            expect.objectContaining({ message: "适配器初始化失败" }),
+            expect.objectContaining({
+                message: expect.stringContaining("配置在运行时预检后发生变化"),
+            }),
+        ]);
+        expect(fs.readFileSync(file, "utf8")).toBe(concurrent);
         expect(fs.readFileSync(`${file}.bak`, "utf8")).toBe("access_token: old-token\n");
         expect(host.markRuntimeConfigApplied).not.toHaveBeenCalled();
     });

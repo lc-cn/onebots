@@ -5,7 +5,7 @@ import {
     type ManagedRuntimeConfigHost,
     type ManagedRuntimeConfigResult,
 } from "./managed-runtime-config.js";
-import { RuntimeConfigApplicationConflictError } from "./runtime-config-application.js";
+import { isRuntimeConfigApplicationConflict } from "./runtime-config-application.js";
 
 export interface ManagementConfigSocketRequest {
     action?: unknown;
@@ -45,12 +45,11 @@ export async function handleManagementConfigSocketAction(
     } catch (error) {
         return response(request, {
             success: false,
-            code:
-                error instanceof RuntimeConfigApplicationConflictError
-                    ? "CONFIG_CONFLICT"
-                    : error instanceof ValidationError
-                      ? "CONFIG_INVALID"
-                      : "CONFIG_APPLY_FAILED",
+            code: isRuntimeConfigApplicationConflict(error)
+                ? "CONFIG_CONFLICT"
+                : error instanceof ValidationError
+                  ? "CONFIG_INVALID"
+                  : "CONFIG_APPLY_FAILED",
             message: error instanceof Error ? error.message : String(error),
         });
     }

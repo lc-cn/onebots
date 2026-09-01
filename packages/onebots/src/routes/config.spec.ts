@@ -2,7 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BaseApp, HostConfigRestartRequiredError, type RouterContext } from "@onebots/core";
+import {
+    BaseApp,
+    HostConfigRestartRequiredError,
+    writeConfigFileAtomic,
+    type RouterContext,
+} from "@onebots/core";
 import type { App } from "../app.js";
 import { registerConfigRoutes } from "./config.js";
 
@@ -273,6 +278,25 @@ describe("configuration route", () => {
         expect(ctx.body).toMatchObject({ success: false });
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe("access_token: old-token\n");
         expect(reload).not.toHaveBeenCalled();
+    });
+
+    it("外部配置写入导致回滚冲突时返回 409 并保留新文件", async () => {
+        const concurrent = "access_token: external-token\nlog_level: debug\n";
+        const reload = vi.fn(async () => {
+            writeConfigFileAtomic(BaseApp.configPath, concurrent);
+            throw new Error("adapter failed");
+        }) as App["reload"];
+        const { handler } = setup(reload);
+        const ctx = { request: { body: "access_token: next-token\n" } } as RouterContext;
+
+        await handler(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toEqual({
+            success: false,
+            message: "配置应用失败，且磁盘配置已被另一操作更新；已保留最新文件",
+        });
+        expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe(concurrent);
     });
 
     it("无效 YAML 返回 400 且不写入文件", async () => {

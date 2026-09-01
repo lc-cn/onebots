@@ -6,6 +6,10 @@ import {
     writeConfigFileAtomic,
 } from "@onebots/core";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
+import {
+    assertServiceActivationConfigCurrent,
+    captureServiceActivationConfig,
+} from "./service-activation-config.js";
 
 export interface RuntimeConfigApplicationHost {
     readonly isReloading: boolean;
@@ -24,6 +28,20 @@ export class RuntimeConfigApplicationConflictError extends ConfigError {
         super("另一项配置保存或热重载正在进行，请稍后重试");
         this.name = "RuntimeConfigApplicationConflictError";
     }
+}
+
+export class RuntimeConfigRollbackConflictError extends AggregateError {
+    constructor(errors: Iterable<unknown>) {
+        super(errors, "配置应用失败，且磁盘配置已被另一操作更新；已保留最新文件");
+        this.name = "RuntimeConfigRollbackConflictError";
+    }
+}
+
+export function isRuntimeConfigApplicationConflict(error: unknown): boolean {
+    return (
+        error instanceof RuntimeConfigApplicationConflictError ||
+        error instanceof RuntimeConfigRollbackConflictError
+    );
 }
 
 const activeApplications = new WeakSet<object>();
@@ -77,10 +95,16 @@ async function saveAndApplyRuntimeConfigUnlocked(
     const existed = fs.existsSync(configPath);
     const previousContent = existed ? fs.readFileSync(configPath, "utf8") : undefined;
     writeConfigFileAtomic(configPath, content, { backup: true });
+    const candidateSnapshot = captureServiceActivationConfig(configPath);
 
     try {
         return await reloadRuntimeConfig(host, config as BaseApp.Config, configPath, content);
     } catch (error) {
+        try {
+            assertServiceActivationConfigCurrent(configPath, candidateSnapshot);
+        } catch (conflictError) {
+            throw new RuntimeConfigRollbackConflictError([error, conflictError]);
+        }
         try {
             if (previousContent === undefined) fs.rmSync(configPath, { force: true });
             else writeConfigFileAtomic(configPath, previousContent);

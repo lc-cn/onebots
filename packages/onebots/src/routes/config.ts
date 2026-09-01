@@ -4,7 +4,7 @@ import { readFileSync } from "fs";
 import type { App } from "../app.js";
 import { getAppConfigSchema } from "../config-schema.js";
 import { saveManagedRuntimeConfig } from "../managed-runtime-config.js";
-import { RuntimeConfigApplicationConflictError } from "../runtime-config-application.js";
+import { isRuntimeConfigApplicationConflict } from "../runtime-config-application.js";
 import { scheduleProcessRestart } from "../process-restart.js";
 
 /**
@@ -30,12 +30,11 @@ export function registerConfigRoutes(app: App, router: Router): void {
         try {
             ctx.body = await saveManagedRuntimeConfig(app, configContent);
         } catch (error) {
-            ctx.status =
-                error instanceof RuntimeConfigApplicationConflictError
-                    ? 409
-                    : error instanceof ValidationError
-                      ? 400
-                      : 500;
+            ctx.status = isRuntimeConfigApplicationConflict(error)
+                ? 409
+                : error instanceof ValidationError
+                  ? 400
+                  : 500;
             ctx.body = { success: false, message: (error as Error).message };
         }
     });

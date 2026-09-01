@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { writeConfigFileAtomic } from "@onebots/core";
 import { handleManagementConfigSocketAction } from "./management-config-socket.js";
 import type { ManagedRuntimeConfigHost } from "./managed-runtime-config.js";
 
@@ -106,11 +107,7 @@ describe("management config WebSocket actions", () => {
         const app = host(true);
 
         await expect(
-            handleManagementConfigSocketAction(
-                app,
-                { action: "system.reload", echo: 7 },
-                file,
-            ),
+            handleManagementConfigSocketAction(app, { action: "system.reload", echo: 7 }, file),
         ).resolves.toMatchObject({
             echo: 7,
             data: { success: false, code: "CONFIG_CONFLICT" },
@@ -136,6 +133,32 @@ describe("management config WebSocket actions", () => {
             },
         });
         expect(fs.readFileSync(file, "utf8")).toBe("access_token: old-token\n");
+        expect(app.backupDataToHf).not.toHaveBeenCalled();
+    });
+
+    it("外部配置写入导致回滚冲突时返回 CONFIG_CONFLICT", async () => {
+        const file = configFile();
+        const concurrent = "access_token: external-token\nlog_level: debug\n";
+        const app = host();
+        app.reload.mockImplementation(async () => {
+            writeConfigFileAtomic(file, concurrent);
+            throw new Error("adapter failed");
+        });
+
+        const response = await handleManagementConfigSocketAction(
+            app,
+            { action: "system.saveConfig", data: "access_token: next-token\n" },
+            file,
+        );
+
+        expect(response).toMatchObject({
+            data: {
+                success: false,
+                code: "CONFIG_CONFLICT",
+                message: "配置应用失败，且磁盘配置已被另一操作更新；已保留最新文件",
+            },
+        });
+        expect(fs.readFileSync(file, "utf8")).toBe(concurrent);
         expect(app.backupDataToHf).not.toHaveBeenCalled();
     });
 
