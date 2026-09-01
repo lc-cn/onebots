@@ -77,12 +77,28 @@ describe("Docker 构建上下文", () => {
 
     test("HF 入口恢复轻量扩展清单并使用受信任恢复模式", async () => {
         const source = await readFile(resolve(repositoryRoot, "docker-entrypoint-hf.sh"), "utf8");
+        const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile.hf"), "utf8");
 
         expect(source).toContain("extensions_backup.json");
         expect(source).toContain("/data/extensions/hf-restore.json");
+        expect(source).toContain("hf-repository-download.mjs data_backup.tar.gz");
+        expect(source).toContain("hf-repository-download.mjs config_backup.yaml");
+        expect(source).toContain("hf-repository-download.mjs extensions_backup.json");
+        expect(source).not.toContain("curl ");
+        const clearStaleArchive = source.indexOf("rm -f /tmp/data_backup.tar.gz");
+        const downloadArchive = source.indexOf("hf-repository-download.mjs data_backup.tar.gz");
+        expect(clearStaleArchive).toBeGreaterThanOrEqual(0);
+        expect(clearStaleArchive).toBeLessThan(downloadArchive);
+        expect(source.indexOf("rm -f /tmp/data_backup.tar.gz", downloadArchive)).toBeGreaterThan(
+            downloadArchive,
+        );
         expect(source).toContain("docker-extension-runtime.mjs --restore");
         expect(source.indexOf("extensions_backup.json")).toBeLessThan(
             source.indexOf("docker-extension-runtime.mjs --restore"),
         );
+        expect(dockerfile).toContain(
+            "COPY --chown=node:node scripts/hf-repository-download.mjs /app/scripts/hf-repository-download.mjs",
+        );
+        expect(dockerfile).not.toContain("apk add --no-cache curl");
     });
 });

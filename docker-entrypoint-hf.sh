@@ -31,66 +31,43 @@ fi
 
 # 无持久化卷时从 Space 仓库恢复整个 data 或仅配置（免付费：备份在仓库的 data_backup.tar.gz / config_backup.yaml）
 # 只要设置了 HF_REPO_ID 就尝试恢复，不依赖本地是否已有 config（否则重启后本地有残留就不会拉备份）
-if command -v curl >/dev/null 2>&1; then
-  if [ -z "${HF_REPO_ID}" ]; then
-    echo "[onebots] 未设置 HF_REPO_ID，跳过从仓库恢复（请在 Space → Settings → Variables 中添加 HF_REPO_ID，如 用户名/Space名）"
-  else
-    echo "[onebots] 尝试从 Space 仓库恢复: ${HF_REPO_ID}"
-    _hf_url_tar="https://huggingface.co/spaces/${HF_REPO_ID}/resolve/main/data_backup.tar.gz"
-    _hf_url_yaml="https://huggingface.co/spaces/${HF_REPO_ID}/resolve/main/config_backup.yaml"
-    _hf_url_extensions="https://huggingface.co/spaces/${HF_REPO_ID}/resolve/main/extensions_backup.json"
-    # 私有仓库需在 Secrets 中设置 HF_TOKEN
-    if [ -n "${HF_TOKEN}" ]; then
-      _curl_auth="-H"
-      _curl_auth_val="Authorization: Bearer ${HF_TOKEN}"
+if [ -z "${HF_REPO_ID}" ]; then
+  echo "[onebots] 未设置 HF_REPO_ID，跳过从仓库恢复（请在 Space → Settings → Variables 中添加 HF_REPO_ID，如 用户名/Space名）"
+else
+  echo "[onebots] 尝试从 Space 仓库恢复: ${HF_REPO_ID}"
+  # 下载器固定仓库域名、制品名、60 秒超时与字节上限，并以 0600 原子替换目标。
+  rm -f /tmp/data_backup.tar.gz
+  node /app/scripts/hf-repository-download.mjs data_backup.tar.gz || true
+  if [ -s /tmp/data_backup.tar.gz ] && command -v tar >/dev/null 2>&1; then
+    if tar -xzf /tmp/data_backup.tar.gz -C /data 2>/dev/null; then
+      echo "[onebots] 已从仓库恢复整个 data 目录 (data_backup.tar.gz)"
     else
-      _curl_auth=""
-      _curl_auth_val=""
-    fi
-    # 优先恢复整个 data 目录（data_backup.tar.gz）
-    if [ -n "${_curl_auth_val}" ]; then
-      curl -sfL -o /tmp/data_backup.tar.gz "${_curl_auth}" "${_curl_auth_val}" "${_hf_url_tar}" 2>/dev/null || true
-    else
-      curl -sfL -o /tmp/data_backup.tar.gz "${_hf_url_tar}" 2>/dev/null || true
-    fi
-    if [ -s /tmp/data_backup.tar.gz ] && command -v tar >/dev/null 2>&1; then
-      if tar -xzf /tmp/data_backup.tar.gz -C /data 2>/dev/null; then
-        echo "[onebots] 已从仓库恢复整个 data 目录 (data_backup.tar.gz)"
-      else
-        echo "[onebots] 解压 data_backup.tar.gz 失败，将尝试仅恢复配置"
-        rm -f /tmp/data_backup.tar.gz
-      fi
-    else
+      echo "[onebots] 解压 data_backup.tar.gz 失败，将尝试仅恢复配置"
       rm -f /tmp/data_backup.tar.gz
-      echo "[onebots] 未找到或下载 data_backup.tar.gz 失败（请先在 Web 端保存配置以生成备份；私有仓库需在 Secrets 中设置 HF_TOKEN）"
     fi
-    # 若未有完整备份，再尝试仅恢复配置文件
-    if [ ! -f /data/config.yaml ]; then
-      if [ -n "${_curl_auth_val}" ]; then
-        curl -sfL -o /data/config.yaml "${_curl_auth}" "${_curl_auth_val}" "${_hf_url_yaml}" 2>/dev/null || true
-      else
-        curl -sfL -o /data/config.yaml "${_hf_url_yaml}" 2>/dev/null || true
-      fi
-      if [ -s /data/config.yaml ]; then
-        echo "[onebots] 已从仓库恢复 config_backup.yaml 到 /data/config.yaml"
-      else
-        rm -f /data/config.yaml
-        echo "[onebots] 未找到或下载 config_backup.yaml 失败，将使用默认配置"
-      fi
+  else
+    rm -f /tmp/data_backup.tar.gz
+    echo "[onebots] 未找到或下载 data_backup.tar.gz 失败（请先在 Web 端保存配置以生成备份；私有仓库需在 Secrets 中设置 HF_TOKEN）"
+  fi
+  rm -f /tmp/data_backup.tar.gz
+  # 若未有完整备份，再尝试仅恢复配置文件
+  if [ ! -f /data/config.yaml ]; then
+    node /app/scripts/hf-repository-download.mjs config_backup.yaml || true
+    if [ -s /data/config.yaml ]; then
+      echo "[onebots] 已从仓库恢复 config_backup.yaml 到 /data/config.yaml"
+    else
+      rm -f /data/config.yaml
+      echo "[onebots] 未找到或下载 config_backup.yaml 失败，将使用默认配置"
     fi
-    # 新卷只恢复受信任扩展的轻量清单；已有持久化扩展目录保持本地依赖不变。
-    if [ ! -f /data/extensions/package.json ]; then
-      mkdir -p /data/extensions
-      if [ -n "${_curl_auth_val}" ]; then
-        curl -sfL -o /data/extensions/hf-restore.json "${_curl_auth}" "${_curl_auth_val}" "${_hf_url_extensions}" 2>/dev/null || true
-      else
-        curl -sfL -o /data/extensions/hf-restore.json "${_hf_url_extensions}" 2>/dev/null || true
-      fi
-      if [ -s /data/extensions/hf-restore.json ]; then
-        echo "[onebots] 已恢复扩展依赖清单，启动前将按当前镜像目录校验并安装"
-      else
-        rm -f /data/extensions/hf-restore.json
-      fi
+  fi
+  # 新卷只恢复受信任扩展的轻量清单；已有持久化扩展目录保持本地依赖不变。
+  if [ ! -f /data/extensions/package.json ]; then
+    mkdir -p /data/extensions
+    node /app/scripts/hf-repository-download.mjs extensions_backup.json || true
+    if [ -s /data/extensions/hf-restore.json ]; then
+      echo "[onebots] 已恢复扩展依赖清单，启动前将按当前镜像目录校验并安装"
+    else
+      rm -f /data/extensions/hf-restore.json
     fi
   fi
 fi
