@@ -40,6 +40,7 @@ import {
     repairDoctorUserService,
     type DoctorServiceDefinitionInspection,
 } from "./doctor-service-definition.js";
+import { inspectDoctorServiceStateDirectory } from "./doctor-service-state.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import {
     compareDoctorEndpointIdentities,
@@ -317,20 +318,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             options.serviceDefinitionInspector ?? inspectDoctorServiceDefinition;
         const serviceDefinition = inspectDefinition(controller, spec);
         const stateDirectory = controller.paths().stateDir;
-        try {
-            fs.accessSync(stateDirectory, fs.constants.R_OK | fs.constants.W_OK);
-            checks.push({
-                name: "service-permissions",
-                level: "ok",
-                message: `服务状态目录可读写: ${stateDirectory}`,
-            });
-        } catch (error) {
-            checks.push({
-                name: "service-permissions",
-                level: "error",
-                message: `服务状态目录权限不足: ${(error as Error).message}`,
-            });
-        }
+        checks.push(inspectDoctorServiceStateDirectory(stateDirectory));
         const requestedPluginsDiffer =
             (options.adapters.length > 0 &&
                 options.adapters.join("\0") !== spec.adapters.join("\0")) ||
