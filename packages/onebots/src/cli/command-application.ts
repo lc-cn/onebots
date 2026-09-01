@@ -460,7 +460,7 @@ export function getConfig(options: RuntimeOptions, key: string): CommandResult {
 export function setConfig(options: RuntimeOptions, key: string, value: string): CommandResult {
     const file = normalizeRuntimeOptions(options).configPath;
     const data = readConfig(file);
-    const keys = key.split(".");
+    const keys = parseWritableConfigPath(key);
     let current = data;
     for (const part of keys.slice(0, -1)) {
         if (!current[part] || typeof current[part] !== "object" || Array.isArray(current[part]))
@@ -722,6 +722,19 @@ function readConfig(file: string): Record<string, unknown> {
 }
 
 type ConfigSetScalarType = "string" | "number" | "boolean";
+const RESERVED_CONFIG_PATH_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
+
+function parseWritableConfigPath(key: string): string[] {
+    const keys = key.split(".");
+    if (keys.some(part => !part.trim())) {
+        throw new CliError("配置路径不能包含空字段", 2);
+    }
+    const reserved = keys.find(part => RESERVED_CONFIG_PATH_SEGMENTS.has(part));
+    if (reserved) {
+        throw new CliError(`配置路径包含不允许写入的保留字段: ${reserved}`, 2);
+    }
+    return keys;
+}
 
 /** 顶层基础 Schema 优先于损坏的现有值；嵌套字段沿用其当前标量类型。 */
 function resolveConfigSetType(keys: string[], existing: unknown): ConfigSetScalarType | undefined {

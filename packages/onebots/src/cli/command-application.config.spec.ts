@@ -53,6 +53,25 @@ describe("config command parsing", () => {
         expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
     });
 
+    it.each([
+        ["mock..token", "配置路径不能包含空字段"],
+        ["__proto__.polluted", "配置路径包含不允许写入的保留字段: __proto__"],
+        ["mock.constructor.token", "配置路径包含不允许写入的保留字段: constructor"],
+    ])("拒绝不安全的写入路径 %s", (key, message) => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-config-command-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "config.yaml");
+        const original = "general: {}\n";
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+
+        expect(() =>
+            setConfig({ config: configPath, register: [], protocol: [] }, key, "unsafe"),
+        ).toThrow(message);
+        expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
+    });
+
     it("原子写入配置和备份，并保留私有权限", () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-config-command-"));
         temporaryDirectories.push(directory);
