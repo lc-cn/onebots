@@ -69,6 +69,53 @@ describe("setup workflow", () => {
         );
     });
 
+    it.runIf(process.platform !== "win32")(
+        "拒绝把公开可读的持久化管理凭据报告为配置就绪",
+        async () => {
+            const configPath = temporaryConfigPath();
+            const original = "port: 7000\naccess_token: configured-token\n";
+            fs.writeFileSync(configPath, original, { mode: 0o644 });
+
+            await expect(runSetup(configPath)).rejects.toThrow(
+                "现有管理凭据权限不安全：配置文件权限 644",
+            );
+
+            expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+            expect(fs.statSync(configPath).mode & 0o777).toBe(0o644);
+            expect(fs.existsSync(path.join(path.dirname(configPath), "data"))).toBe(false);
+        },
+    );
+
+    it.runIf(process.platform !== "win32")(
+        "保留有意设置的组只读权限并明确输出安全提示",
+        async () => {
+            const configPath = temporaryConfigPath();
+            fs.writeFileSync(configPath, "access_token: configured-token\n", { mode: 0o640 });
+            const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+            await runSetup(configPath);
+
+            expect(fs.statSync(configPath).mode & 0o777).toBe(0o640);
+            expect(output.mock.calls.map(call => String(call[0])).join("")).toContain(
+                "安全提示：配置文件权限 640 允许同组用户读取",
+            );
+        },
+    );
+
+    it.runIf(process.platform !== "win32")("复用管理凭据时同时拒绝公开的配置备份", async () => {
+        const configPath = temporaryConfigPath();
+        fs.writeFileSync(configPath, "access_token: configured-token\n", { mode: 0o600 });
+        fs.writeFileSync(`${configPath}.bak`, "access_token: previous-token\n", {
+            mode: 0o644,
+        });
+
+        await expect(runSetup(configPath)).rejects.toThrow("配置备份权限 644");
+
+        expect(fs.statSync(configPath).mode & 0o777).toBe(0o600);
+        expect(fs.statSync(`${configPath}.bak`).mode & 0o777).toBe(0o644);
+        expect(fs.existsSync(path.join(path.dirname(configPath), "data"))).toBe(false);
+    });
+
     it("uses the listener PORT override without appending the API path or credentials", async () => {
         const configPath = temporaryConfigPath();
         fs.writeFileSync(

@@ -22,6 +22,10 @@ import {
 } from "./runtime-plugin-selection.js";
 import { ensureRuntimeDataDirectory } from "./runtime-data-directory.js";
 import { resolveManagementWebUrl } from "./doctor-endpoint.js";
+import {
+    inspectSensitiveDirectoryMutationPermissions,
+    inspectSensitiveFilePermissions,
+} from "./doctor-permissions.js";
 
 export interface SetupOptions {
     force?: boolean;
@@ -142,6 +146,7 @@ export async function runSetup(
                 "现有配置缺少管理凭据，非交互环境不会自动写入。请设置 ONEBOTS_ACCESS_TOKEN，或使用 --force 备份配置并生成鉴权码。",
             );
         }
+        verifyPersistedCredentialPermissions(configPath, config);
         const managementUrls = formatSetupManagementUrls(config, environmentPort);
         ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
         writeCliOutput(`配置文件已存在并通过验证: ${configPath}`);
@@ -159,6 +164,9 @@ export async function runSetup(
     config = managementCredentials.config;
 
     await validateConfig(config);
+    if (exists && !managementCredentials.generated) {
+        verifyPersistedCredentialPermissions(configPath, config);
+    }
     const managementUrls = formatSetupManagementUrls(config, environmentPort);
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
@@ -189,6 +197,33 @@ export async function runSetup(
         writeCliOutput("可取消该环境变量后使用 setup --force 自动生成持久化鉴权码。");
     } else {
         writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
+    }
+}
+
+/** setup 只有在能够证明既有持久化管理凭据未暴露时，才报告配置已就绪。 */
+function verifyPersistedCredentialPermissions(
+    configPath: string,
+    config: Record<string, unknown>,
+): void {
+    if (process.platform === "win32") return;
+    const resolvedConfigPath = fs.realpathSync(configPath);
+    const backupPath = `${resolvedConfigPath}.bak`;
+    if (!hasManagementCredentials(config, "") && !fs.existsSync(backupPath)) return;
+    const checks = [
+        inspectSensitiveFilePermissions(resolvedConfigPath, "config-mode", "配置文件"),
+        inspectSensitiveDirectoryMutationPermissions(path.dirname(resolvedConfigPath)),
+        ...(fs.existsSync(backupPath)
+            ? [inspectSensitiveFilePermissions(backupPath, "config-backup-mode", "配置备份")]
+            : []),
+    ];
+    const errors = checks.filter(check => check.level === "error");
+    if (errors.length > 0) {
+        throw new Error(
+            `现有管理凭据权限不安全：${errors.map(check => check.message).join("；")}。请先运行 ${formatConfiguredCommand(configPath, "doctor")} --fix，或按提示调整目录权限。`,
+        );
+    }
+    for (const warning of checks.filter(check => check.level === "warning")) {
+        writeCliOutput(`安全提示：${warning.message}`);
     }
 }
 
