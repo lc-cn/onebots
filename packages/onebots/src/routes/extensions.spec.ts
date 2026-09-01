@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { fileURLToPath } from "node:url";
 import type { RouterContext } from "@onebots/core";
 import type { App } from "../app.js";
 import {
@@ -7,8 +8,21 @@ import {
     ExtensionRuntimeConfigError,
 } from "../extension-manager.js";
 import { registerExtensionRoutes } from "./extensions.js";
+import { MANAGEMENT_EXPECTED_INSTANCE_HEADER } from "../management-instance-precondition.js";
+import { MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER } from "../management-config-revision.js";
 
 type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
+const configPath = fileURLToPath(new URL("../config.sample.yaml", import.meta.url));
+
+function postContext(
+    headers: Record<string, string> = {},
+): RouterContext & { set: ReturnType<typeof vi.fn> } {
+    return {
+        params: { id: "adapter:slack" },
+        get: (name: string) => headers[name] ?? "",
+        set: vi.fn(),
+    } as unknown as RouterContext & { set: ReturnType<typeof vi.fn> };
+}
 
 function setup(
     install = vi.fn(async () => ({ restartRequired: true as const })),
@@ -29,6 +43,7 @@ function setup(
             install,
         },
         logger: { error: vi.fn() },
+        configPath,
         restartSupported,
         runtimeContractId: "sha256:contract-a",
         info: {
@@ -46,14 +61,22 @@ function setup(
 
 describe("extension routes", () => {
     it("返回带安装状态的白名单目录", () => {
-        const { gets } = setup();
+        const { app, gets } = setup();
         const ctx = { set: vi.fn() } as unknown as RouterContext;
 
         gets.get("/api/extensions")!(ctx);
 
         expect(ctx.body).toEqual([{ id: "adapter:slack", restartSupported: true }]);
+        expect(app.extensionManager.list).toHaveBeenCalledWith(
+            [],
+            expect.stringContaining("general:"),
+        );
         expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
         expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Runtime-Contract-Id", "sha256:contract-a");
+        expect(ctx.set).toHaveBeenCalledWith(
+            "X-OneBots-Config-Revision",
+            expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        );
         expect(ctx.set).toHaveBeenCalledWith("Cache-Control", "no-store");
     });
 
@@ -70,7 +93,7 @@ describe("extension routes", () => {
 
     it("安装固定扩展并明确要求重启", async () => {
         const { posts, install } = setup();
-        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+        const ctx = postContext();
 
         await posts.get("/api/extensions/:id/install")!(ctx);
 
@@ -79,12 +102,43 @@ describe("extension routes", () => {
             success: true,
             restartRequired: true,
             restartSupported: true,
+            application: "onebots",
+            instance_id: "instance-a",
+            config_revision: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
         });
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
+    });
+
+    it("拒绝由旧实例或过期配置快照发起的安装", async () => {
+        const { posts, install } = setup();
+        const staleInstance = postContext({
+            [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: "instance-old",
+        });
+        await posts.get("/api/extensions/:id/install")!(staleInstance);
+        expect(staleInstance.status).toBe(409);
+        expect(staleInstance.body).toMatchObject({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-a",
+            message: expect.stringContaining("当前已由实例 instance-a 接管"),
+        });
+
+        const staleRevision = postContext({
+            [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: "instance-a",
+            [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: `sha256:${"0".repeat(64)}`,
+        });
+        await posts.get("/api/extensions/:id/install")!(staleRevision);
+        expect(staleRevision.status).toBe(409);
+        expect(staleRevision.body).toMatchObject({
+            success: false,
+            message: "扩展安装使用的配置已经过期，请重新读取后再操作",
+        });
+        expect(install).not.toHaveBeenCalled();
     });
 
     it("前台运行时完成安装但要求用户手动重启", async () => {
         const { posts } = setup(undefined, false);
-        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+        const ctx = postContext();
 
         await posts.get("/api/extensions/:id/install")!(ctx);
 
@@ -101,12 +155,17 @@ describe("extension routes", () => {
             throw new ExtensionInstallConflictError("正在安装");
         });
         const { posts } = setup(install);
-        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+        const ctx = postContext();
 
         await posts.get("/api/extensions/:id/install")!(ctx);
 
         expect(ctx.status).toBe(409);
-        expect(ctx.body).toEqual({ success: false, message: "正在安装" });
+        expect(ctx.body).toEqual({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-a",
+            message: "正在安装",
+        });
     });
 
     it("目录完整性失败返回可重试的服务不可用状态", async () => {
@@ -114,12 +173,17 @@ describe("extension routes", () => {
             throw new ExtensionCatalogIntegrityError("扩展目录完整性校验失败");
         });
         const { posts } = setup(install);
-        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+        const ctx = postContext();
 
         await posts.get("/api/extensions/:id/install")!(ctx);
 
         expect(ctx.status).toBe(503);
-        expect(ctx.body).toEqual({ success: false, message: "扩展目录完整性校验失败" });
+        expect(ctx.body).toEqual({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-a",
+            message: "扩展目录完整性校验失败",
+        });
     });
 
     it("启动配置损坏时返回可修复的语义错误", async () => {
@@ -127,13 +191,15 @@ describe("extension routes", () => {
             throw new ExtensionRuntimeConfigError("扩展启动配置无法读取：plugins 必须是对象");
         });
         const { posts } = setup(install);
-        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+        const ctx = postContext();
 
         await posts.get("/api/extensions/:id/install")!(ctx);
 
         expect(ctx.status).toBe(422);
         expect(ctx.body).toEqual({
             success: false,
+            application: "onebots",
+            instance_id: "instance-a",
             message: "扩展启动配置无法读取：plugins 必须是对象",
         });
     });
@@ -143,13 +209,18 @@ describe("extension routes", () => {
             throw new Error("fetch https://user:secret@registry.example/pkg?token=secret");
         });
         const { app, posts } = setup(install);
-        const ctx = { params: { id: "adapter:slack" } } as unknown as RouterContext;
+        const ctx = postContext();
 
         await posts.get("/api/extensions/:id/install")!(ctx);
 
         const message = "fetch https://***@registry.example/pkg?token=***";
         expect(ctx.status).toBe(500);
-        expect(ctx.body).toEqual({ success: false, message });
+        expect(ctx.body).toEqual({
+            success: false,
+            application: "onebots",
+            instance_id: "instance-a",
+            message,
+        });
         expect(app.logger.error).toHaveBeenCalledWith("管理端安装扩展失败", {
             error: message,
         });

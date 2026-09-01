@@ -179,6 +179,28 @@ describe("doctor extension runtime evidence", () => {
         ).resolves.toMatchObject({ level: "ok" });
     });
 
+    it("拒绝没有配置修订号的扩展目录", async () => {
+        const fetcher = vi.fn(async (input: string) =>
+            input.endsWith("/package-mutation")
+                ? new Response(
+                      JSON.stringify({ state: "idle", available: true, owner: null, error: null }),
+                      { status: 200, headers: extensionIdentityHeaders("instance-a") },
+                  )
+                : new Response(JSON.stringify(managementInventoryEvidence()), {
+                      status: 200,
+                      headers: extensionIdentityHeaders("instance-a", false),
+                  }),
+        );
+
+        await expect(
+            probeAuthenticatedExtensions("http://127.0.0.1:6727", "secret", fetcher),
+        ).resolves.toEqual({
+            name: "management-extensions",
+            level: "error",
+            message: "扩展目录响应缺少有效配置修订号",
+        });
+    });
+
     it("拒绝扩展目录、租约与公开探针之间的实例分裂", async () => {
         const fetcher = vi.fn(async (input: string) =>
             input.endsWith("/package-mutation")
@@ -266,10 +288,16 @@ function managementInventoryEvidence(): Array<Record<string, unknown>> {
     });
 }
 
-function extensionIdentityHeaders(instanceId: string): Record<string, string> {
+function extensionIdentityHeaders(
+    instanceId: string,
+    includeConfigRevision = true,
+): Record<string, string> {
     return {
         "X-OneBots-Application": "onebots",
         "X-OneBots-Version": packageMetadata.version,
         "X-OneBots-Instance-Id": instanceId,
+        ...(includeConfigRevision
+            ? { "X-OneBots-Config-Revision": `sha256:${"a".repeat(64)}` }
+            : {}),
     };
 }

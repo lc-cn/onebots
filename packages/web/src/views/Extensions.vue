@@ -219,6 +219,8 @@
                                     restarting ||
                                     Boolean(installingId) ||
                                     Boolean(activeInstallation) ||
+                                    !extensionSnapshotIdentity ||
+                                    !extensionConfigRevision ||
                                     packageMutationStatus?.available === false ||
                                     !installationAction(extension).available
                                 "
@@ -250,11 +252,12 @@ import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiEmpty, UiInput, UiSpinner } from "../ui";
 import { matchesExtensionSearch } from "../components/capability-search.js";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
-import { parseExtensionInventory, parsePackageMutationStatus } from "./extension-inventory.js";
 import {
-    parseManagementEvidenceIdentity,
-    sameManagementEvidenceIdentity,
-} from "../management-evidence-identity.js";
+    assertExtensionInstallAcknowledgement,
+    buildExtensionInstallRequestHeaders,
+    parseExtensionManagementSnapshot,
+} from "./extension-inventory.js";
+import type { ManagementEvidenceIdentity } from "../management-evidence-identity.js";
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
 import {
     getExtensionInstallRequestRecovery,
@@ -268,6 +271,8 @@ import {
 const route = useRoute();
 const extensions = ref<ExtensionInfo[]>([]);
 const packageMutationStatus = ref<PackageMutationStatus | null>(null);
+const extensionSnapshotIdentity = ref<ManagementEvidenceIdentity | null>(null);
+const extensionConfigRevision = ref("");
 const loading = ref(true);
 const filter = ref<ExtensionFilter>("all");
 const searchKeyword = ref("");
@@ -398,20 +403,23 @@ async function loadExtensions(background = false): Promise<void> {
         ]);
         if (!extensionsResponse.ok) throw new Error("无法读取扩展目录");
         if (!mutationResponse.ok) throw new Error("无法读取包变更状态");
-        const inventoryIdentity = parseManagementEvidenceIdentity(extensionsResponse);
-        const mutationIdentity = parseManagementEvidenceIdentity(mutationResponse);
-        if (!sameManagementEvidenceIdentity(inventoryIdentity, mutationIdentity)) {
-            throw new Error("扩展目录与包变更状态来自不同 OneBots 实例");
-        }
-        const nextExtensions = parseExtensionInventory(
-            await readManagementJsonResponse(extensionsResponse),
+        const [inventoryValue, mutationValue] = await Promise.all([
+            readManagementJsonResponse(extensionsResponse),
+            readManagementJsonResponse(mutationResponse),
+        ]);
+        const snapshot = parseExtensionManagementSnapshot(
+            extensionsResponse,
+            mutationResponse,
+            inventoryValue,
+            mutationValue,
         );
-        const nextMutationStatus = parsePackageMutationStatus(
-            await readManagementJsonResponse(mutationResponse),
-        );
-        extensions.value = nextExtensions;
-        packageMutationStatus.value = nextMutationStatus;
+        extensions.value = snapshot.extensions;
+        packageMutationStatus.value = snapshot.packageMutationStatus;
+        extensionSnapshotIdentity.value = snapshot.identity;
+        extensionConfigRevision.value = snapshot.configRevision;
     } catch (error) {
+        extensionSnapshotIdentity.value = null;
+        extensionConfigRevision.value = "";
         errorMessage.value = error instanceof Error ? error.message : String(error);
     } finally {
         if (!background) loading.value = false;
@@ -468,6 +476,12 @@ async function resumeDisconnectedInstallation(): Promise<void> {
 }
 
 async function install(extension: ExtensionInfo): Promise<void> {
+    const expectedIdentity = extensionSnapshotIdentity.value;
+    const expectedConfigRevision = extensionConfigRevision.value;
+    if (!expectedIdentity || !expectedConfigRevision) {
+        errorMessage.value = "扩展管理快照尚未验证，请重新加载后再安装";
+        return;
+    }
     const previousOperationId = extension.lastInstallation?.operationId ?? null;
     installingId.value = extension.id;
     errorMessage.value = "";
@@ -477,7 +491,13 @@ async function install(extension: ExtensionInfo): Promise<void> {
         try {
             const response = await authFetch(
                 buildApiUrl(`/api/extensions/${encodeURIComponent(extension.id)}/install`),
-                { method: "POST" },
+                {
+                    method: "POST",
+                    headers: buildExtensionInstallRequestHeaders(
+                        expectedIdentity,
+                        expectedConfigRevision,
+                    ),
+                },
             );
             const result = (await readManagementJsonResponse(response)) as {
                 success: boolean;
@@ -488,6 +508,11 @@ async function install(extension: ExtensionInfo): Promise<void> {
             if (!response.ok || !result.success) {
                 throw new Error(result.message || "扩展安装失败");
             }
+            extensionConfigRevision.value = assertExtensionInstallAcknowledgement(
+                response,
+                result,
+                expectedIdentity,
+            );
             const completion = getExtensionInstallCompletion(result);
             shouldRestart = completion.restart;
             if (!completion.restart) {

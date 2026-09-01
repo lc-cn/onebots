@@ -921,7 +921,10 @@ function convergedExtensionsResponse(): Response {
     });
     return new Response(JSON.stringify(inventory), {
         status: 200,
-        headers: managementIdentityHeaders(),
+        headers: {
+            ...managementIdentityHeaders(),
+            "X-OneBots-Config-Revision": `sha256:${"a".repeat(64)}`,
+        },
     });
 }
 

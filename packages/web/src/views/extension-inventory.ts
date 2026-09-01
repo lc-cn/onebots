@@ -5,9 +5,90 @@ import type {
     PackageMutationStatus,
 } from "../types.js";
 import { assertCapabilityManifest } from "../components/capability-presentation.js";
+import {
+    MANAGEMENT_CONFIG_REVISION_HEADER,
+    MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER,
+    MANAGEMENT_EXPECTED_INSTANCE_HEADER,
+    parseManagementEvidenceIdentity,
+    sameManagementEvidenceIdentity,
+    type ManagementEvidenceIdentity,
+} from "../management-evidence-identity.js";
 
 const CAPABILITY_CATEGORIES = ["actions", "events", "segments", "transports"] as const;
 const INSTALLATION_PHASES = ["installing_package", "preflighting", "restoring_package"] as const;
+
+export interface ExtensionManagementSnapshot {
+    identity: ManagementEvidenceIdentity;
+    configRevision: string;
+    extensions: ExtensionInfo[];
+    packageMutationStatus: PackageMutationStatus;
+}
+
+/** 将安装请求绑定到生成扩展目录的实例和配置内容。 */
+export function buildExtensionInstallRequestHeaders(
+    identity: ManagementEvidenceIdentity,
+    configRevision: string,
+): Record<string, string> {
+    if (!/^sha256:[a-f0-9]{64}$/u.test(configRevision)) {
+        throw new Error("扩展安装请求缺少有效配置修订号");
+    }
+    return {
+        [MANAGEMENT_EXPECTED_INSTANCE_HEADER]: identity.instanceId,
+        [MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER]: configRevision,
+    };
+}
+
+/** 原子采用扩展目录、配置修订和包变更租约，拒绝跨实例或无修订的可执行快照。 */
+export function parseExtensionManagementSnapshot(
+    inventoryResponse: Pick<Response, "headers">,
+    mutationResponse: Pick<Response, "headers">,
+    inventoryValue: unknown,
+    mutationValue: unknown,
+): ExtensionManagementSnapshot {
+    const identity = parseManagementEvidenceIdentity(inventoryResponse);
+    const mutationIdentity = parseManagementEvidenceIdentity(mutationResponse);
+    if (!sameManagementEvidenceIdentity(identity, mutationIdentity)) {
+        throw new Error("扩展目录与包变更状态来自不同 OneBots 实例");
+    }
+    const configRevision =
+        inventoryResponse.headers.get(MANAGEMENT_CONFIG_REVISION_HEADER)?.trim() ?? "";
+    if (!/^sha256:[a-f0-9]{64}$/u.test(configRevision)) {
+        throw new Error("扩展目录缺少有效配置修订号，安装操作已禁用");
+    }
+    return {
+        identity,
+        configRevision,
+        extensions: parseExtensionInventory(inventoryValue),
+        packageMutationStatus: parsePackageMutationStatus(mutationValue),
+    };
+}
+
+/** 安装完成必须由读取目录时的同一实例确认，并返回提交后的配置修订。 */
+export function assertExtensionInstallAcknowledgement(
+    response: Pick<Response, "headers">,
+    value: unknown,
+    expectedIdentity: ManagementEvidenceIdentity,
+): string {
+    const identity = parseManagementEvidenceIdentity(response);
+    if (!sameManagementEvidenceIdentity(identity, expectedIdentity)) {
+        throw new Error(
+            `扩展安装回执实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${identity.instanceId}`,
+        );
+    }
+    if (
+        !isRecord(value) ||
+        value.success !== true ||
+        value.application !== "onebots" ||
+        value.instance_id !== expectedIdentity.instanceId
+    ) {
+        throw new Error("扩展安装回执未由预期 OneBots 实例确认");
+    }
+    const configRevision = value.config_revision;
+    if (typeof configRevision !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(configRevision)) {
+        throw new Error("扩展安装回执缺少有效配置修订号");
+    }
+    return configRevision;
+}
 
 /** 在扩展目录进入安装决策与机器人引导前校验完整响应及状态闭合。 */
 export function parseExtensionInventory(value: unknown): ExtensionInfo[] {

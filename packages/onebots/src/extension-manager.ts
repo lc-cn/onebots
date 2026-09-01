@@ -195,11 +195,14 @@ export class ExtensionManager {
             options.packageManagerInspector ?? inspectRuntimePackageManagerVersion;
     }
 
-    list(loadedPlugins: readonly LoadedPluginInfo[]) {
+    list(loadedPlugins: readonly LoadedPluginInfo[], configSource?: string) {
         let selection: RuntimePluginSelection = { adapters: [], protocols: [] };
         let runtimeConfigError: string | null = null;
         try {
-            selection = this.readSelection();
+            selection =
+                configSource === undefined
+                    ? this.readSelection()
+                    : this.readSelectionFromSource(configSource);
         } catch (error) {
             runtimeConfigError = formatExtensionRuntimeConfigError(error);
         }
@@ -546,7 +549,11 @@ export class ExtensionManager {
 
     private readSelection() {
         if (!fs.existsSync(this.configPath)) return { adapters: [], protocols: [] };
-        const config = parseRuntimeConfig(fs.readFileSync(this.configPath, "utf8"));
+        return this.readSelectionFromSource(fs.readFileSync(this.configPath, "utf8"));
+    }
+
+    private readSelectionFromSource(source: string) {
+        const config = parseRuntimeConfig(source);
         return getRuntimePluginSelection(config) ?? { adapters: [], protocols: [] };
     }
 

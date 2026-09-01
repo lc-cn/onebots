@@ -6,6 +6,7 @@ import {
     readManagementEvidenceIdentity,
     sameManagementEvidenceIdentity,
 } from "./management-evidence-identity.js";
+import { MANAGEMENT_CONFIG_REVISION_HEADER } from "./management-config-revision.js";
 import packageMetadata from "../package.json" with { type: "json" };
 
 interface RuntimeExtensionSummary {
@@ -79,6 +80,15 @@ export async function probeAuthenticatedExtensions(
                 name: "management-extensions",
                 level: "error",
                 message: identityIssue,
+            };
+        }
+        const configRevision =
+            extensionsResponse.headers.get(MANAGEMENT_CONFIG_REVISION_HEADER)?.trim() ?? "";
+        if (!/^sha256:[a-f0-9]{64}$/u.test(configRevision)) {
+            return {
+                name: "management-extensions",
+                level: "error",
+                message: "扩展目录响应缺少有效配置修订号",
             };
         }
 
