@@ -11,6 +11,12 @@ import UiSpinner from '../../ui/UiSpinner.vue';
 import { useToast } from '../../ui/toast.js';
 import { useConfirm } from '../../ui/confirm.js';
 import type { StaticApiHfBackup } from './types';
+import {
+    assertPublicStaticMutationAcknowledgement,
+    buildPublicStaticMutationHeaders,
+    parsePublicStaticSnapshot
+} from '../../public-static-snapshot.js';
+import type { ManagementEvidenceIdentity } from '../../management-evidence-identity.js';
 
 const toast = useToast();
 const { confirm } = useConfirm();
@@ -21,6 +27,8 @@ const staticError = ref('');
 const staticLoading = ref(false);
 const staticUploading = ref(false);
 const staticFileInput = ref<HTMLInputElement | null>(null);
+const staticSnapshotIdentity = ref<ManagementEvidenceIdentity | null>(null);
+const staticRevision = ref('');
 
 /** Hugging Face Space 典型域名，用于提示上传后会触发仓库备份 */
 const staticHfHint =
@@ -49,6 +57,8 @@ const notifyStaticHfBackup = (hf: StaticApiHfBackup | undefined, primaryOk: stri
 const loadStaticFiles = async () => {
     staticLoading.value = true;
     staticError.value = '';
+    staticSnapshotIdentity.value = null;
+    staticRevision.value = '';
     try {
         const response = await authFetch(buildApiUrl('/api/public-static/files'));
         const data = (await readManagementJsonResponse(response)) as {
@@ -64,11 +74,16 @@ const loadStaticFiles = async () => {
                 data.message || '无法加载列表（请检查是否已配置 public_static_dir 并保存）';
             return;
         }
-        staticFiles.value = (data.files || []).map(name => ({ name }));
-        staticRootDisplay.value = data.root || '';
+        const snapshot = parsePublicStaticSnapshot(response, data);
+        staticFiles.value = snapshot.files.map(name => ({ name }));
+        staticRootDisplay.value = snapshot.root;
+        staticSnapshotIdentity.value = snapshot.identity;
+        staticRevision.value = snapshot.revision;
     } catch (error) {
         staticFiles.value = [];
         staticRootDisplay.value = '';
+        staticSnapshotIdentity.value = null;
+        staticRevision.value = '';
         staticError.value = error instanceof Error ? error.message : '加载静态文件列表失败';
     } finally {
         staticLoading.value = false;
@@ -76,7 +91,14 @@ const loadStaticFiles = async () => {
 };
 
 const triggerStaticUpload = () => {
-    if (staticUploading.value) return;
+    if (
+        staticLoading.value ||
+        staticUploading.value ||
+        !staticSnapshotIdentity.value ||
+        !staticRevision.value
+    ) {
+        return;
+    }
     staticFileInput.value?.click();
 };
 
@@ -91,12 +113,19 @@ const onStaticFileChange = (event: Event) => {
 
 /** 使用 authFetch 以便 401 时刷新 Token，与下载配置等行为一致 */
 const submitStaticUpload = async (file: File) => {
+    const expectedIdentity = staticSnapshotIdentity.value;
+    const expectedRevision = staticRevision.value;
+    if (!expectedIdentity || !expectedRevision) {
+        toast.error('静态文件列表尚未验证，请刷新后再上传');
+        return;
+    }
     staticUploading.value = true;
     try {
         const fd = new FormData();
         fd.append('file', file, file.name);
         const res = await authFetch(buildApiUrl('/api/public-static/upload'), {
             method: 'POST',
+            headers: buildPublicStaticMutationHeaders(expectedIdentity, expectedRevision),
             body: fd
         });
         const data = (await readManagementJsonResponse(res)) as {
@@ -104,9 +133,20 @@ const submitStaticUpload = async (file: File) => {
             hf_backup?: StaticApiHfBackup;
         };
         if (!res.ok) {
-            toast.error(data.message || '上传失败');
+            const message = data.message || '上传失败';
+            if (res.status === 409) {
+                await loadStaticFiles();
+                toast.error(`${message}；列表已刷新，请重新选择文件`);
+            } else {
+                toast.error(message);
+            }
             return;
         }
+        staticRevision.value = assertPublicStaticMutationAcknowledgement(
+            res,
+            data,
+            expectedIdentity
+        );
         notifyStaticHfBackup(data.hf_backup, data.message || '上传成功');
         await loadStaticFiles();
     } catch (error) {
@@ -128,20 +168,40 @@ const handleDeleteStaticFile = async (name: string) => {
         danger: true
     });
     if (!ok) return;
+    const expectedIdentity = staticSnapshotIdentity.value;
+    const expectedRevision = staticRevision.value;
+    if (!expectedIdentity || !expectedRevision) {
+        toast.error('静态文件列表尚未验证，请刷新后再删除');
+        return;
+    }
     try {
         const response = await authFetch(
             buildApiUrl(`/api/public-static/${encodeURIComponent(name)}`),
-            { method: 'DELETE' }
+            {
+                method: 'DELETE',
+                headers: buildPublicStaticMutationHeaders(expectedIdentity, expectedRevision)
+            }
         );
         const result = (await readManagementJsonResponse(response)) as {
             message?: string;
             hf_backup?: StaticApiHfBackup;
         };
         if (response.ok) {
+            staticRevision.value = assertPublicStaticMutationAcknowledgement(
+                response,
+                result,
+                expectedIdentity
+            );
             notifyStaticHfBackup(result.hf_backup, result.message || '已删除');
             await loadStaticFiles();
         } else {
-            toast.error(result.message || '删除失败');
+            const message = result.message || '删除失败';
+            if (response.status === 409) {
+                await loadStaticFiles();
+                toast.error(`${message}；列表已刷新，请重新确认删除`);
+            } else {
+                toast.error(message);
+            }
         }
     } catch (error) {
         toast.error(error instanceof Error ? error.message : '删除失败');
@@ -171,6 +231,7 @@ defineExpose({ refresh });
             <UiButton
                 variant="primary"
                 :loading="staticUploading"
+                :disabled="staticLoading || !staticSnapshotIdentity || !staticRevision"
                 @click="triggerStaticUpload">
                 <IconUpload :size="16" aria-hidden="true" />
                 上传文件
@@ -215,6 +276,7 @@ defineExpose({ refresh });
                             <UiButton
                                 variant="ghost"
                                 size="sm"
+                                :disabled="staticLoading || !staticSnapshotIdentity || !staticRevision"
                                 @click="handleDeleteStaticFile(file.name)">
                                 <IconTrash :size="14" aria-hidden="true" />
                                 删除
