@@ -203,10 +203,9 @@ function verifyPersistedCredentialPermissions(
     config: Record<string, unknown>,
 ): void {
     if (process.platform === "win32") return;
-    const resolvedConfigPath = fs.realpathSync(configPath);
-    const backupPath = `${resolvedConfigPath}.bak`;
+    const backupPath = `${fs.realpathSync(configPath)}.bak`;
     if (!hasManagementCredentials(config, "") && !fs.existsSync(backupPath)) return;
-    const checks = inspectPersistedCredentialPermissions(resolvedConfigPath);
+    const checks = inspectPersistedCredentialPermissions(configPath);
     const errors = checks.filter(check => check.level === "error");
     if (errors.length > 0) {
         throw new Error(

@@ -65,6 +65,7 @@ import {
     inspectSensitiveFilePermissions,
 } from "./doctor-permissions.js";
 import { probeDoctorManagementAfterIdentity } from "./doctor-management-boundary.js";
+import { inspectPersistedCredentialPermissions } from "./persisted-credential-permissions.js";
 
 export { compareDoctorEndpointIdentities, probeDoctorEndpoint, resolveGatewayBaseUrl };
 export type { CheckLevel, DoctorCheck, DoctorEndpointIdentity } from "./doctor-endpoint.js";
@@ -207,29 +208,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             });
         }
         if (process.platform !== "win32") {
-            const resolvedConfigPath = fs.realpathSync(options.configPath);
-            checks.push(
-                inspectSensitiveFilePermissions(
-                    resolvedConfigPath,
-                    "config-mode",
-                    "配置文件",
-                    options.fix,
-                ),
-            );
-            checks.push(
-                inspectSensitiveDirectoryMutationPermissions(path.dirname(resolvedConfigPath)),
-            );
-            const backupPath = `${resolvedConfigPath}.bak`;
-            if (fs.existsSync(backupPath)) {
-                checks.push(
-                    inspectSensitiveFilePermissions(
-                        backupPath,
-                        "config-backup-mode",
-                        "配置备份",
-                        options.fix,
-                    ),
-                );
-            }
+            checks.push(...inspectPersistedCredentialPermissions(options.configPath, options.fix));
         }
     }
 
