@@ -138,6 +138,43 @@ describe.runIf(process.platform !== "win32")("service definition persistence", (
             expect.anything(),
         );
     });
+
+    it("systemd 定义删除失败时恢复定义并保留私有元数据", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-uninstall-restore-"));
+        temporaryDirectories.push(root);
+        let failDisable = false;
+        const exec = vi.fn((_file: string, args: string[]) => {
+            if (failDisable && args.includes("disable")) {
+                failDisable = false;
+                throw new Error("systemctl disable failed");
+            }
+            return "";
+        });
+        const controller = new ServiceController("user", { ...linuxHost(root), exec });
+        const spec: ServiceSpec = {
+            scope: "user",
+            configPath: path.join(root, "config.yaml"),
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            nodePath: "/opt/node/bin/node",
+            binPath: "/opt/onebots/lib/bin.js",
+            workingDirectory: root,
+        };
+        await controller.install(spec);
+        failDisable = true;
+
+        await expect(
+            controller.uninstall({ verifyStopped: async () => undefined }),
+        ).rejects.toThrow("服务卸载失败，已恢复平台定义并保留私有元数据：systemctl disable failed");
+
+        expect(controller.readSpec()).toEqual(spec);
+        expect(controller.definitionIsCurrent(spec)).toBe(true);
+        expect(exec).toHaveBeenCalledWith("systemctl", ["--user", "disable", "onebots-gateway"], {
+            inherit: true,
+            ignoreError: false,
+        });
+        expect(exec.mock.calls.filter(([, args]) => args.includes("enable"))).toHaveLength(2);
+    });
 });
 
 describe("service status evidence", () => {
@@ -251,6 +288,44 @@ describe("Windows user task persistence", () => {
 
         await controller.uninstall();
         expect(fs.readdirSync(paths.stateDir)).toEqual([]);
+    });
+
+    it("计划任务删除失败时重新注册任务并保留管理契约", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-windows-uninstall-"));
+        temporaryDirectories.push(root);
+        let failDelete = false;
+        const exec = vi.fn((_file: string, args: string[]) => {
+            if (failDelete && args.includes("/Delete")) {
+                failDelete = false;
+                throw new Error("schtasks delete failed");
+            }
+            return "";
+        });
+        const controller = new ServiceController("user", { ...windowsHost(root), exec });
+        const spec: ServiceSpec = {
+            scope: "user",
+            configPath: "C:\\One Bots\\config.yaml",
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            nodePath: "C:\\Program Files\\nodejs\\node.exe",
+            binPath: "C:\\One Bots\\lib\\bin.js",
+            workingDirectory: "C:\\One Bots",
+        };
+        await controller.install(spec);
+        failDelete = true;
+
+        await expect(
+            controller.uninstall({ verifyStopped: async () => undefined }),
+        ).rejects.toThrow("服务卸载失败，已恢复平台定义并保留私有元数据：schtasks delete failed");
+
+        expect(controller.readSpec()).toEqual(spec);
+        expect(controller.definitionIsCurrent(spec)).toBe(true);
+        expect(exec).toHaveBeenCalledWith(
+            "schtasks.exe",
+            ["/Delete", "/F", "/TN", "OneBots Gateway"],
+            { inherit: true, ignoreError: false },
+        );
+        expect(exec.mock.calls.filter(([, args]) => args.includes("/Create"))).toHaveLength(2);
     });
 });
 

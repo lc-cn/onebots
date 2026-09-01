@@ -15,6 +15,7 @@ import {
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import { runServiceInstallTransaction } from "./service-install-transaction.js";
 import { verifyServiceStopped } from "./service-offline-verification.js";
+import { runServiceUninstallTransaction } from "./service-uninstall-transaction.js";
 import { getServiceFiles, writePrivateJson, writeServiceFile } from "./service-files.js";
 import {
     WINDOWS_SYSTEM_SERVICE_ID,
@@ -414,29 +415,36 @@ export class ServiceController {
                 `服务卸载已中止，平台定义和元数据已保留：${error instanceof Error ? error.message : String(error)}`,
             );
         }
-        await this.removePlatformDefinition(spec);
-        if (fs.existsSync(paths.metadata)) fs.unlinkSync(paths.metadata);
+        await runServiceUninstallTransaction({
+            remove: () => this.removePlatformDefinition(spec, true),
+            restore: () => this.applyPlatformDefinition(spec, null),
+            verifyRestored: () => this.definitionIsCurrent(spec),
+            commit: () => {
+                if (fs.existsSync(paths.metadata)) fs.unlinkSync(paths.metadata);
+            },
+            definitionPath: this.definitionPath(spec),
+        });
     }
 
-    private async removePlatformDefinition(spec: ServiceSpec): Promise<void> {
+    private async removePlatformDefinition(spec: ServiceSpec, strict = false): Promise<void> {
         const paths = this.paths();
         if (this.host.platform === "linux") {
             const base = this.scope === "user" ? ["--user"] : [];
             this.host.exec("systemctl", [...base, "disable", SERVICE_NAME], {
                 inherit: true,
-                ignoreError: true,
+                ignoreError: !strict,
             });
             if (fs.existsSync(paths.definition)) fs.unlinkSync(paths.definition);
             this.host.exec("systemctl", [...base, "daemon-reload"], {
                 inherit: true,
-                ignoreError: true,
+                ignoreError: !strict,
             });
         } else if (this.host.platform === "darwin") {
             if (fs.existsSync(paths.definition)) fs.unlinkSync(paths.definition);
         } else if (this.scope === "user") {
             this.host.exec("schtasks.exe", ["/Delete", "/F", "/TN", WINDOWS_TASK_NAME], {
                 inherit: true,
-                ignoreError: true,
+                ignoreError: !strict,
             });
             const files = getWindowsUserServiceFiles(paths.stateDir);
             for (const file of [files.definition, files.runner, files.legacyRunner]) {
