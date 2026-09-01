@@ -17,6 +17,7 @@ import { authFetch } from "../../composables/useAuth";
 import { useToast } from "../../ui/toast.js";
 import type { SchemaBundle, SchemaGroup, SchemaFieldDef, AccountRow } from "./types.js";
 import {
+    accountIdentifierIssue,
     buildSchemaFields,
     deleteValueByPath,
     getValueByPath,
@@ -179,8 +180,9 @@ const goNextStep = () => {
             toast.warning("请先选择平台");
             return;
         }
-        if (!accountForm.value.account_id?.trim()) {
-            toast.warning("请填写账号ID");
+        const accountIdIssue = accountIdentifierIssue(accountForm.value.account_id);
+        if (accountIdIssue) {
+            toast.warning(accountIdIssue);
             return;
         }
     }
@@ -202,8 +204,9 @@ const handleSubmit = async () => {
         toast.warning(adapterSelection.value.description);
         return;
     }
-    if (!accountForm.value.platform || !accountForm.value.account_id) {
-        toast.warning("请填写平台与账号ID");
+    const accountIdIssue = accountIdentifierIssue(accountForm.value.account_id);
+    if (!accountForm.value.platform || accountIdIssue) {
+        toast.warning(accountIdIssue ?? "请填写平台");
         return;
     }
     if (!protocolSelection.value.valid) {

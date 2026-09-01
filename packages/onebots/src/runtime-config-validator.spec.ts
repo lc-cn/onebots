@@ -127,6 +127,20 @@ describe("runtime config validation", () => {
         ).not.toThrow();
     });
 
+    it.each(["mock.", "mock.   ", "mock..", "mock.bot/name", "mock.bot%2Fchild"])(
+        "拒绝不能稳定组成配置键或 URL 路径的账号键 %s",
+        key => {
+            registerTestPlugins();
+
+            expect(() =>
+                validateRuntimeConfig({
+                    general: { "test.v1": { use_http: true } },
+                    [key]: { token: "secret", "test.v1": {} },
+                }),
+            ).toThrow(/账号配置字段/);
+        },
+    );
+
     it("使用完整运行时 Schema 校验单账号候选且不改写当前配置", () => {
         registerTestPlugins();
         const current = {

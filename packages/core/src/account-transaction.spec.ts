@@ -272,19 +272,25 @@ describe("account transaction", () => {
         expect(fixture.adapter.accounts.size).toBe(0);
     });
 
-    it.each([null, [], {}, { platform: "", account_id: "10001" }, { platform: "mock" }])(
-        "BaseApp 在接触适配器前拒绝畸形账号身份 %#",
-        async config => {
-            const findOrCreateAdapter = vi.fn();
-            const app = { isReloading: false, adapters: new Map(), findOrCreateAdapter };
+    it.each([
+        null,
+        [],
+        {},
+        { platform: "", account_id: "10001" },
+        { platform: "mock" },
+        { platform: "mock", account_id: "bot/name" },
+        { platform: "mock", account_id: "bot%2Fchild" },
+        { platform: "mock", account_id: ".." },
+    ])("BaseApp 在接触适配器前拒绝畸形账号身份 %#", async config => {
+        const findOrCreateAdapter = vi.fn();
+        const app = { isReloading: false, adapters: new Map(), findOrCreateAdapter };
 
-            await expect(BaseApp.prototype.addAccount.call(app, config as never)).rejects.toThrow(
-                /账号配置|platform|account_id/,
-            );
+        await expect(BaseApp.prototype.addAccount.call(app, config as never)).rejects.toThrow(
+            /账号配置|platform|account_id/,
+        );
 
-            expect(findOrCreateAdapter).not.toHaveBeenCalled();
-        },
-    );
+        expect(findOrCreateAdapter).not.toHaveBeenCalled();
+    });
 
     it("BaseApp 候选配置校验失败时不创建适配器或账号", async () => {
         const fixture = createFixture();

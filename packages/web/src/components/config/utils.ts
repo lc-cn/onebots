@@ -339,6 +339,16 @@ const PROTOCOL_TITLES: Record<string, string> = {
 
 export const protocolTitle = (key: string): string => PROTOCOL_TITLES[key] ?? key;
 
+/** 与 core 的账号身份边界保持一致，先在向导中给出可操作反馈。 */
+export const accountIdentifierIssue = (value: string): string | null => {
+    if (!value.trim()) return "请填写账号ID";
+    if (/\s|[\u0000-\u001f\u007f/\\%?#]/u.test(value)) {
+        return "账号ID不能包含空白或 URL 保留字符 / \\ % ? #";
+    }
+    if (value === "." || value === "..") return "账号ID不能是 . 或 ..";
+    return null;
+};
+
 /** 从已解析配置对象中提取账号行 */
 export const extractAccountRows = (configObject: Record<string, unknown>): AccountRow[] => {
     const rows: AccountRow[] = [];

@@ -1,5 +1,6 @@
 // Core modules
 export * from "./account.js";
+export * from "./account-config.js";
 export * from "./adapter.js";
 export * from "./adapter-capability.js";
 export * from "./adapter-id-manager.js";

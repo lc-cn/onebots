@@ -42,7 +42,11 @@ import { emitAllAwaited, FailureCollector } from "./async-utils.js";
 import { rollbackFailedStart as rollbackStartup } from "./startup-rollback.js";
 import { normalizeGatewayPathPrefix } from "./gateway-path.js";
 import { AccountMutationConflictError, mutateAccountAtomically } from "./account-transaction.js";
-import { assertAccountIdentifier, assertAccountIdentity } from "./account-config.js";
+import {
+    assertAccountIdentifier,
+    assertAccountIdentity,
+    parseAccountConfigKey,
+} from "./account-config.js";
 import { acquireRuntimeOperation, type RuntimeOperation } from "./runtime-operation.js";
 import { createAccountWithRouteScope } from "./scoped-account.js";
 export { configure, yaml, connectLogger };
@@ -249,9 +253,9 @@ export class BaseApp extends Koa {
     get adapterConfigs(): Map<string, Account.Config[]> {
         const map = new Map<string, Account.Config[]>();
         Object.keys(this.config).forEach(key => {
-            const [platform, ...accountId] = key.split(".");
-            const account_id = accountId.join(".");
-            if (!account_id) return;
+            const identity = parseAccountConfigKey(key);
+            if (!identity) return;
+            const { platform, account_id } = identity;
             if (!AdapterRegistry.has(platform)) {
                 this.logger.warn(`未找到对应的适配器：${platform}`);
                 return;

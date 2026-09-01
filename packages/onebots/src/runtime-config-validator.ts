@@ -5,6 +5,7 @@ import {
     ValidationError,
     deepClone,
     deepMerge,
+    parseAccountConfigKey,
     type Schema,
 } from "@onebots/core";
 import yaml from "js-yaml";
@@ -80,9 +81,18 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
             });
             continue;
         }
-        const [platform, ...accountParts] = rootKey.split(".");
-        const accountId = accountParts.join(".");
-        if (!accountId) continue;
+        let identity;
+        try {
+            identity = parseAccountConfigKey(rootKey);
+        } catch (error) {
+            issues.push({
+                path: rootKey,
+                message: error instanceof Error ? error.message : String(error),
+            });
+            continue;
+        }
+        if (!identity) continue;
+        const { platform, account_id: accountId } = identity;
 
         const accountConfig = asConfigObject(value);
         if (!accountConfig) {

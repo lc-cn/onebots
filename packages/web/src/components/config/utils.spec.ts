@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { reactive } from "vue";
 import {
+    accountIdentifierIssue,
     buildSchemaFields,
     buildConfigGroups,
     deleteValueByPath,
@@ -10,6 +11,19 @@ import {
     resolveSchemaFieldInitialValue,
 } from "./utils.js";
 import type { SchemaBundle, ValidationRule } from "./types.js";
+
+describe("accountIdentifierIssue", () => {
+    test.each(["bot-1", "mail@example.com", "中文.主账号"])("接受安全账号标识 %s", value => {
+        expect(accountIdentifierIssue(value)).toBeNull();
+    });
+
+    test.each(["", " ", "bot name", "bot/name", "bot%2Fchild", "bot?x", "bot#x", ".", ".."])(
+        "拒绝歧义账号标识 %#",
+        value => {
+            expect(accountIdentifierIssue(value)).toEqual(expect.any(String));
+        },
+    );
+});
 
 const endpointRule: ValidationRule = {
     type: "array",
