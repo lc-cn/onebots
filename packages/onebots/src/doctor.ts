@@ -452,6 +452,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                         identity: identityCheck,
                         ...(runtimeContractCheck ? { runtimeContract: runtimeContractCheck } : {}),
                         probe: () => probeDoctorManagement(base, config),
+                        confirm: () =>
+                            probeDoctorEndpoint(base, "health", fetch, packageMetadata.version),
                     })),
                 );
             } else {
