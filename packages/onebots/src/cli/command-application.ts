@@ -290,12 +290,13 @@ export async function uninstallService(options: ScopeOptions): Promise<CommandRe
 
 /** 运行配置 schema 驱动的 setup 流程。 */
 export async function setupConfiguration(
-    options: RuntimeOptions & { force: boolean },
+    options: RuntimeOptions & { force: boolean; reset: boolean },
 ): Promise<CommandResult> {
     const runtime = normalizeRuntimeOptions(options);
     const { runSetup } = await import("../setup.js");
     await runSetup(runtime.configPath, {
         force: options.force,
+        reset: options.reset,
         adapters: runtime.adapters,
         protocols: runtime.protocols,
     });

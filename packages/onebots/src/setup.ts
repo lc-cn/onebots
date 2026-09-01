@@ -24,6 +24,7 @@ import { ensureRuntimeDataDirectory } from "./runtime-data-directory.js";
 
 export interface SetupOptions {
     force?: boolean;
+    reset?: boolean;
     adapters?: string[];
     protocols?: string[];
 }
@@ -38,10 +39,16 @@ interface PromptRule {
 /** 使用配置 schema 引导创建或安全更新 OneBots 配置。 */
 export async function runSetup(configPath: string, options: SetupOptions = {}): Promise<void> {
     const exists = fs.existsSync(configPath);
+    if (options.reset && !options.force) {
+        throw new Error("--reset 会重建配置，必须同时使用 --force 以创建备份");
+    }
     const preserveExisting = exists && !options.force && !process.stdin.isTTY;
 
     let config: Record<string, unknown>;
-    if (exists) {
+    if (exists && options.reset) {
+        config = createBaseSetupConfig();
+        writeCliOutput(`将备份现有配置至 ${configPath}.bak，并从安全默认值重建。`);
+    } else if (exists) {
         try {
             config = parseRuntimeConfig(fs.readFileSync(configPath, "utf8"));
         } catch (error) {

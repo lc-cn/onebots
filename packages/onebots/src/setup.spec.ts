@@ -133,6 +133,55 @@ describe("setup workflow", () => {
         });
     });
 
+    it("refuses to reset an existing config without the backup boundary", async () => {
+        const configPath = temporaryConfigPath();
+        const original = "port: 7000\naccess_token: keep-secret\n";
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+
+        await expect(runSetup(configPath, { reset: true })).rejects.toThrow(
+            "--reset 会重建配置，必须同时使用 --force 以创建备份",
+        );
+
+        expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+    });
+
+    it("backs up and rebuilds a valid config that references unavailable plugins", async () => {
+        const configPath = temporaryConfigPath();
+        const original = [
+            "port: 7000",
+            "access_token: old-secret",
+            "plugins:",
+            "  adapters: [removed-adapter]",
+            "  protocols: [removed-protocol]",
+            "removed-adapter.account:",
+            "  removed-protocol.v1: {}",
+            "",
+        ].join("\n");
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+        const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+        await runSetup(configPath, {
+            force: true,
+            reset: true,
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+        });
+
+        expect(fs.readFileSync(`${configPath}.bak`, "utf8")).toBe(original);
+        const config = parseConfig(configPath);
+        expect(config.plugins).toEqual({
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+        });
+        expect(config).not.toHaveProperty("removed-adapter.account");
+        expect(config.access_token).toMatch(/^[a-f0-9]{64}$/u);
+        expect(config.access_token).not.toBe("old-secret");
+        expect(output.mock.calls.map(call => String(call[0])).join("")).toContain(
+            "从安全默认值重建",
+        );
+    });
+
     it("强制更新时备份损坏配置并在不泄露凭据的前提下安全重建", async () => {
         const configPath = temporaryConfigPath();
         const original = "access_token: secret-never-return\nplugins: [\n";
