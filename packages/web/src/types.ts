@@ -2,7 +2,7 @@ import type { AdapterCapabilityManifest } from "@onebots/core";
 
 export interface AccountInfo {
     uin: string;
-    status: string;
+    status: "pending" | "online" | "offline";
     avatar: string;
     platform: string;
     nickname: string;

@@ -88,7 +88,8 @@ export function getAdapterInfo(adapter: AdapterInfoSource, packageVersion: strin
         }
     }
     return {
-        ...info,
+        platform,
+        icon: info.icon,
         capabilities: defaultCapabilities,
         displayName: metadata?.displayName || platform,
         description: metadata?.description || "",
@@ -100,6 +101,28 @@ export function getAdapterInfo(adapter: AdapterInfoSource, packageVersion: strin
                 ? ("verified" as const)
                 : ("unknown" as const),
         capabilityPackageVersion: packageVersion,
+        accountLifecycleControl: {
+            online: info.accountLifecycleControl?.online,
+            offline: info.accountLifecycleControl?.offline,
+        },
+        accounts: info.accounts.map(account => ({
+            uin: account.uin,
+            status: account.status,
+            avatar: account.avatar,
+            platform: account.platform,
+            nickname: account.nickname,
+            dependency: account.dependency,
+            startupTimeoutSeconds: account.startupTimeoutSeconds,
+            urls: Array.isArray(account.urls) ? [...account.urls] : account.urls,
+            protocols: Array.isArray(account.protocols)
+                ? account.protocols.map(protocol => ({
+                      name: protocol.name,
+                      version: protocol.version,
+                      path: protocol.path,
+                      lifecycleStatus: protocol.lifecycleStatus,
+                  }))
+                : account.protocols,
+        })),
         accountCapabilities,
         accountCapabilityErrors,
     };

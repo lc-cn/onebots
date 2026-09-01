@@ -262,4 +262,50 @@ describe("adapter management info", () => {
             expect.any(Error),
         );
     });
+
+    it("只投影宿主声明的运行态字段，不透传插件附加数据", () => {
+        const adapter = {
+            platform: "mock",
+            logger: { error: vi.fn() },
+            info: {
+                platform: "mock",
+                icon: "",
+                capabilities: EMPTY_ADAPTER_CAPABILITIES,
+                accountLifecycleControl: { online: true, offline: false },
+                secret: "adapter-secret",
+                accounts: [
+                    {
+                        uin: "safe",
+                        status: "online",
+                        avatar: "",
+                        platform: "mock",
+                        nickname: "Safe",
+                        dependency: "mock-sdk",
+                        startupTimeoutSeconds: 30,
+                        urls: ["/onebot/v11"],
+                        token: "account-secret",
+                        protocols: [
+                            {
+                                name: "onebot",
+                                version: "v11",
+                                path: "/onebot/v11",
+                                lifecycleStatus: "ready",
+                                credential: "protocol-secret",
+                            },
+                        ],
+                    },
+                ],
+            },
+            describeCapabilities: () => EMPTY_ADAPTER_CAPABILITIES,
+        } as unknown as Adapter;
+
+        const info = getAdapterInfo(adapter) as unknown as Record<string, unknown>;
+        const account = (info.accounts as Array<Record<string, unknown>>)[0];
+        const protocol = (account.protocols as Array<Record<string, unknown>>)[0];
+
+        expect(info).not.toHaveProperty("secret");
+        expect(account).not.toHaveProperty("token");
+        expect(protocol).not.toHaveProperty("credential");
+        expect(account).toMatchObject({ uin: "safe", urls: ["/onebot/v11"] });
+    });
 });
