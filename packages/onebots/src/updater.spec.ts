@@ -235,6 +235,22 @@ describe("post-update service safety", () => {
         expect(resolveVersion).toHaveBeenCalledTimes(2);
     });
 
+    it("可直接从目标版本证据生成租约内检查快照", () => {
+        expect(
+            refreshUpdatePackageSnapshots(
+                [
+                    { name: "onebots", target: "1.3.0" },
+                    { name: "@onebots/adapter-mock", target: "2.5.0" },
+                ],
+                "/runtime",
+                name => (name === "onebots" ? "1.3.0" : null),
+            ),
+        ).toEqual([
+            { name: "onebots", target: "1.3.0", current: "1.3.0" },
+            { name: "@onebots/adapter-mock", target: "2.5.0", current: null },
+        ]);
+    });
+
     it("写租约内拒绝执行已经发生插件选择漂移的更新计划", () => {
         expect(() =>
             assertUpdatePluginSelectionUnchanged(

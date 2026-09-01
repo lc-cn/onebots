@@ -168,32 +168,41 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
         runtimeRoot,
         targetOnebotsVersion,
     );
-    const updates = resolveVerifiedUpdateTargets(packages, targetOnebotsVersion, targetCatalog).map(
-        item => ({
-            ...item,
-            current: resolveInstalledPackageVersion(item.name, runtimeRoot),
-        }),
-    );
-    for (const item of updates) {
-        writeCliOutput(`${item.name}: ${item.current ?? "未安装"} -> ${item.target}`);
-    }
-    const changed = updates.filter(item => item.current !== item.target);
-    if (!changed.length) {
-        if (options.packagesOnly) {
-            await preflightCurrentPackagesOnlyRuntime({
-                scope: options.scope,
-                configPath: path.resolve(options.configPath!),
-                adapters,
-                protocols,
-                nodePath: process.execPath,
-                binPath: path.resolve(process.argv[1]),
-                workingDirectory: runtimeRoot,
-            });
+    const targets = resolveVerifiedUpdateTargets(packages, targetOnebotsVersion, targetCatalog);
+    let updates: PackageUpdateChange[] = [];
+    let changed: PackageUpdateChange[] = [];
+    const evidenceLock = acquireUpdatePackageMutationLock(runtimeRoot);
+    try {
+        const lockedSelection = resolveUpdatePluginSelection(
+            options,
+            options.packagesOnly ? null : installedSpec,
+            options.packagesOnly ? options.configPath : undefined,
+        );
+        assertUpdatePluginSelectionUnchanged({ adapters, protocols }, lockedSelection);
+        updates = refreshUpdatePackageSnapshots(targets, runtimeRoot);
+        for (const item of updates) {
+            writeCliOutput(`${item.name}: ${item.current ?? "未安装"} -> ${item.target}`);
         }
-        writeCliOutput("已是最新稳定版本");
-        return { status: "current", changes: [] };
+        changed = updates.filter(item => item.current !== item.target);
+        if (!changed.length) {
+            if (options.packagesOnly) {
+                await preflightCurrentPackagesOnlyRuntime({
+                    scope: options.scope,
+                    configPath: path.resolve(options.configPath!),
+                    adapters,
+                    protocols,
+                    nodePath: process.execPath,
+                    binPath: path.resolve(process.argv[1]),
+                    workingDirectory: runtimeRoot,
+                });
+            }
+            writeCliOutput("已是最新稳定版本");
+            return { status: "current", changes: [] };
+        }
+        if (options.check) return { status: "updates_available", changes: changed };
+    } finally {
+        evidenceLock.release();
     }
-    if (options.check) return { status: "updates_available", changes: changed };
 
     if (!options.yes) {
         if (!process.stdin.isTTY) throw new Error("非交互环境执行更新需要 --yes");
@@ -373,11 +382,11 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
 }
 
 /** 取得写租约后重读包版本，确保失败恢复不会使用确认前的陈旧基线。 */
-export function refreshUpdatePackageSnapshots(
-    updates: readonly PackageUpdateChange[],
+export function refreshUpdatePackageSnapshots<T extends PackageUpdateEvidence>(
+    updates: readonly T[],
     runtimeRoot: string,
     resolveVersion: (name: string, root: string) => string | null = resolveInstalledPackageVersion,
-): PackageUpdateChange[] {
+): Array<T & PackageUpdateChange> {
     return updates.map(item => ({
         ...item,
         current: resolveVersion(item.name, runtimeRoot),

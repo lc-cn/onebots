@@ -357,6 +357,8 @@ An update catalog is inseparable from the OneBots package root that supplies it.
 
 Automation can use `onebots update --check` without modifying the production runtime directory. It returns exit code `0` when the current combination already matches the target, `2` when updates verified by the target OneBots version catalog are available, and `1` when version lookup, catalog staging, or validation fails. A pipeline can therefore distinguish no action, schedule an update, and a failed check without parsing prose output.
 
+The installed-version snapshot used by `--check` and the “already current” decision also acquire the shared package-mutation lease and revalidate plugin selection inside it. They cannot publish a partially installed dependency set or a selection captured before another extension transaction as automation evidence. Network version lookup and target-catalog staging remain outside the lease, so they do not block installation for their full duration; an installation or update already active when evidence is collected instead causes an explicit retryable failure. A no-change `--packages-only` isolated preflight keeps this short lease until its child process exits, preventing replacement of the dependency set being verified.
+
 **Kubernetes Configuration Example**:
 
 ```yaml
