@@ -39,10 +39,12 @@ export class FeishuApiTransport {
         return this.request<T>(path, options);
     }
 
-    async getTenantAccessToken(): Promise<string> {
+    async getTenantAccessToken(signal?: AbortSignal): Promise<string> {
+        signal?.throwIfAborted();
         if (this.tenantAccessToken && Date.now() < this.tokenExpireTime) {
             return this.tenantAccessToken;
         }
+        if (signal) return this.loadTenantAccessToken(signal);
         if (this.tokenRequest) return this.tokenRequest;
         const request = this.loadTenantAccessToken();
         this.tokenRequest = request;
@@ -62,19 +64,25 @@ export class FeishuApiTransport {
         options: FeishuApiRequestOptions = {},
         retryAuth = true,
     ): Promise<T> {
-        const { method = "GET", headers = {}, body, params, skipAuth = false } = options;
+        const { method = "GET", headers = {}, body, params, skipAuth = false, signal } = options;
         const url = buildFeishuApiUrl(this.endpoint, path, params);
         const requestHeaders: Record<string, string> = {
             "Content-Type": "application/json",
             ...headers,
         };
         const requestBody = serializeFeishuRequestBody(body, `${method} ${path}`);
-        const requestToken = skipAuth ? undefined : await this.getTenantAccessToken();
+        const requestToken = skipAuth ? undefined : await this.getTenantAccessToken(signal);
+        signal?.throwIfAborted();
         if (requestToken) requestHeaders.Authorization = `Bearer ${requestToken}`;
 
         let response: Response;
         try {
-            response = await fetch(url, { method, headers: requestHeaders, body: requestBody });
+            response = await fetch(url, {
+                method,
+                headers: requestHeaders,
+                body: requestBody,
+                signal,
+            });
         } catch (error) {
             throw FeishuError.wrap(error, "FEISHU_NETWORK_ERROR", `${method} ${path}`);
         }
@@ -84,6 +92,7 @@ export class FeishuApiTransport {
         } catch (error) {
             throw FeishuError.wrap(error, "FEISHU_NETWORK_ERROR", `${method} ${path}`);
         }
+        signal?.throwIfAborted();
         let result: unknown;
         try {
             result = text ? JSON.parse(text) : {};
@@ -130,7 +139,7 @@ export class FeishuApiTransport {
         return result as unknown as T;
     }
 
-    private async loadTenantAccessToken(): Promise<string> {
+    private async loadTenantAccessToken(signal?: AbortSignal): Promise<string> {
         const data = await this.request<FeishuTokenResponse>(
             "/auth/v3/tenant_access_token/internal",
             {
@@ -140,8 +149,10 @@ export class FeishuApiTransport {
                     app_secret: this.config.app_secret,
                 },
                 skipAuth: true,
+                signal,
             },
         );
+        signal?.throwIfAborted();
         if (!data.tenant_access_token) {
             throw new FeishuError("获取租户访问令牌失败: 响应缺少 tenant_access_token", {
                 code: "FEISHU_TOKEN_MISSING",

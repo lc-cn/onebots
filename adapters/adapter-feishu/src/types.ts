@@ -26,6 +26,7 @@ export interface FeishuApiRequestOptions {
     body?: string | Record<string, unknown>;
     params?: Record<string, string | number | boolean>;
     skipAuth?: boolean;
+    signal?: AbortSignal;
 }
 
 /** 飞书开放平台所有 JSON API 响应共享的最小结构。 */

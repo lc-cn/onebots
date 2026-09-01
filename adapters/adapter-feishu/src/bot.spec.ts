@@ -306,11 +306,13 @@ describe("FeishuBot 请求与事件边界", () => {
 
     it("stop 使尚未完成的启动代失效", async () => {
         let release!: (response: Response) => void;
+        let requestSignal: AbortSignal | undefined;
         vi.stubGlobal(
             "fetch",
             vi.fn(
-                () =>
+                (_url: string | URL | Request, init?: RequestInit) =>
                     new Promise<Response>(resolve => {
+                        requestSignal = init?.signal ?? undefined;
                         release = resolve;
                     }),
             ),
@@ -320,11 +322,124 @@ describe("FeishuBot 请求与事件边界", () => {
         bot.on("ready", ready);
 
         const starting = bot.start();
+        await vi.waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
         await bot.stop();
         release(jsonResponse({ code: 0, msg: "ok", tenant_access_token: "token", expire: 7200 }));
-        await starting;
+        await expect(starting).rejects.toMatchObject({ code: "FEISHU_START_CANCELLED" });
 
+        expect(requestSignal?.aborted).toBe(true);
         expect(ready).not.toHaveBeenCalled();
+    });
+
+    it("账号启动取消会中止令牌请求并保留取消原因", async () => {
+        let requestSignal: AbortSignal | undefined;
+        vi.stubGlobal(
+            "fetch",
+            vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+                requestSignal = init?.signal ?? undefined;
+                return new Promise<Response>((_resolve, reject) => {
+                    requestSignal?.addEventListener("abort", () => reject(requestSignal?.reason), {
+                        once: true,
+                    });
+                });
+            }),
+        );
+        const bot = createBot();
+        const controller = new AbortController();
+        const starting = bot.start(controller.signal);
+        await vi.waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
+
+        const reason = new Error("account startup timeout");
+        controller.abort(reason);
+
+        await expect(starting).rejects.toBe(reason);
+        expect(requestSignal?.aborted).toBe(true);
+        expect(bot.getCachedMe()).toBeNull();
+    });
+
+    it("账号启动取消会强制关闭尚未完成的官方长连接", async () => {
+        const request = vi
+            .fn()
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    code: 0,
+                    msg: "ok",
+                    tenant_access_token: "token",
+                    expire: 7200,
+                }),
+            )
+            .mockResolvedValueOnce(
+                jsonResponse({
+                    code: 0,
+                    msg: "ok",
+                    bot: { open_id: "ou_bot", app_name: "Bot" },
+                }),
+            );
+        vi.stubGlobal("fetch", request);
+        let rejectStart!: (error: Error) => void;
+        const wsClient = {
+            start: vi.fn(
+                () =>
+                    new Promise<void>((_resolve, reject) => {
+                        rejectStart = reject;
+                    }),
+            ),
+            close: vi.fn(() => rejectStart(new Error("connection closed"))),
+        };
+        const bot = new FeishuBot({
+            account_id: "A1",
+            app_id: "cli_1",
+            app_secret: "secret",
+        });
+        Object.assign(bot as unknown as Record<string, unknown>, {
+            sdkLogger: {},
+            wsClient,
+            eventDispatcher: {},
+        });
+        const controller = new AbortController();
+        const starting = bot.start(controller.signal);
+        await vi.waitFor(() => expect(wsClient.start).toHaveBeenCalledOnce());
+
+        const reason = new Error("account startup timeout");
+        controller.abort(reason);
+
+        await expect(starting).rejects.toBe(reason);
+        expect(wsClient.close).toHaveBeenCalledWith({ force: true });
+        expect(request.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+        expect(request.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+        expect(request.mock.calls[1]?.[1]?.signal?.aborted).toBe(true);
+    });
+
+    it("身份就绪后继续响应账号信号以支持协议启动回滚", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValueOnce(
+                    jsonResponse({
+                        code: 0,
+                        msg: "ok",
+                        tenant_access_token: "token",
+                        expire: 7200,
+                    }),
+                )
+                .mockResolvedValueOnce(
+                    jsonResponse({
+                        code: 0,
+                        msg: "ok",
+                        bot: { open_id: "ou_bot", app_name: "Bot" },
+                    }),
+                ),
+        );
+        const bot = createBot();
+        const stopped = vi.fn();
+        bot.on("stopped", stopped);
+        const controller = new AbortController();
+
+        await bot.start(controller.signal);
+        controller.abort(new Error("protocol startup failed"));
+
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
     });
 
     it("长连接关闭失败时仍完成异步停止通知", async () => {

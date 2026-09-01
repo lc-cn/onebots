@@ -62,6 +62,9 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     private eventDispatcher?: EventDispatcher;
     private sdkLogger?: Logger;
     private startPromise?: Promise<void>;
+    private lifecycleAbort?: AbortController;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private running = false;
     private generation = 0;
     private readonly eventIngress = new FeishuEventIngress();
@@ -123,8 +126,9 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     async get<T extends FeishuApiEnvelope = FeishuAPIResponse>(
         path: string,
         params?: Record<string, string | number | boolean>,
+        signal?: AbortSignal,
     ): Promise<{ data: T }> {
-        const data = await this.callApi<T>(path, { params });
+        const data = await this.callApi<T>(path, { params, signal });
         return { data };
     }
 
@@ -166,8 +170,8 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     /**
      * 获取租户访问令牌
      */
-    async getTenantAccessToken(): Promise<string> {
-        return this.transport.getTenantAccessToken();
+    async getTenantAccessToken(signal?: AbortSignal): Promise<string> {
+        return this.transport.getTenantAccessToken(signal);
     }
 
     /** 仅当调用方持有的确是当前令牌时才失效缓存，避免并发刷新相互覆盖。 */
@@ -178,28 +182,47 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     /**
      * 启动 Bot
      */
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.running) return;
         if (this.startPromise) return this.startPromise;
+        this.bindStartSignal(signal);
         const generation = this.generation;
-        const start = this.startInternal(generation);
+        const controller = new AbortController();
+        this.lifecycleAbort = controller;
+        const start = this.startInternal(generation, controller.signal);
         this.startPromise = start;
         try {
             await start;
+        } catch (error) {
+            if (signal?.aborted) throw signal.reason;
+            if (controller.signal.aborted) {
+                throw new FeishuError("飞书客户端启动已取消", {
+                    code: "FEISHU_START_CANCELLED",
+                    operation: "start",
+                    cause: error,
+                });
+            }
+            throw error;
         } finally {
             if (this.startPromise === start) this.startPromise = undefined;
+            if (this.lifecycleAbort === controller && !this.running) {
+                this.lifecycleAbort = undefined;
+                this.unbindStartSignal();
+            }
         }
     }
 
-    private async startInternal(generation: number): Promise<void> {
+    private async startInternal(generation: number, signal: AbortSignal): Promise<void> {
         let startingWs: WSClient | undefined;
         try {
             assertLongConnectionConfigured(this.config, this.sdkLogger);
-            await this.getTenantAccessToken();
-            if (generation !== this.generation) return;
+            await this.getTenantAccessToken(signal);
+            this.assertLifecycle(generation, signal);
 
-            this.me = await this.getBotInfo();
-            if (generation !== this.generation) return;
+            const me = await this.getBotInfo(signal);
+            this.assertLifecycle(generation, signal);
+            this.me = me;
 
             if (
                 this.config.receive_mode === "long_connection" &&
@@ -212,12 +235,10 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
                 startingWs = this.wsClient;
                 await startingWs.start({ eventDispatcher: this.eventDispatcher });
             }
-            if (generation !== this.generation) {
-                startingWs?.close({ force: true });
-                return;
-            }
+            this.assertLifecycle(generation, signal);
             this.running = true;
             await emitAllAwaited(this, "ready");
+            this.assertLifecycle(generation, signal);
         } catch (error) {
             if (generation === this.generation) {
                 const failures = new FailureCollector();
@@ -243,9 +264,12 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
      */
     async stop(): Promise<void> {
         const wasActive = this.running || Boolean(this.startPromise);
+        this.unbindStartSignal();
         this.generation += 1;
         this.running = false;
         this.startPromise = undefined;
+        this.lifecycleAbort?.abort();
+        this.lifecycleAbort = undefined;
         const wsClient = this.wsClient;
         this.wsClient = undefined;
         this.eventDispatcher = undefined;
@@ -256,6 +280,40 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
             failures.throwIfAny("飞书客户端停止期间发生多个错误");
         } catch (error) {
             throw FeishuError.wrap(error, "FEISHU_STOP_FAILED", "stop");
+        }
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error =>
+                this.safeEmit(
+                    "client_error",
+                    FeishuError.wrap(error, "FEISHU_STOP_FAILED", "stop"),
+                ),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
+    }
+
+    private assertLifecycle(generation: number, signal: AbortSignal): void {
+        signal.throwIfAborted();
+        if (generation !== this.generation) {
+            throw new FeishuError("飞书客户端启动已取消", {
+                code: "FEISHU_START_CANCELLED",
+                operation: "start",
+            });
         }
     }
 
@@ -343,8 +401,8 @@ export class FeishuBot extends EventEmitter<FeishuBotEvents> {
     /**
      * 获取 Bot 信息
      */
-    async getBotInfo(): Promise<FeishuUser> {
-        return fetchFeishuBotInfo(this);
+    async getBotInfo(signal?: AbortSignal): Promise<FeishuUser> {
+        return fetchFeishuBotInfo(this, signal);
     }
 
     /**

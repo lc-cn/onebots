@@ -17,6 +17,7 @@ export interface FeishuResourceClient {
     get<T extends FeishuApiEnvelope = FeishuAPIResponse>(
         path: string,
         params?: Record<string, string | number | boolean>,
+        signal?: AbortSignal,
     ): Promise<{ data: T }>;
     post<T extends FeishuApiEnvelope = FeishuAPIResponse>(
         path: string,
@@ -25,12 +26,15 @@ export interface FeishuResourceClient {
     ): Promise<{ data: T }>;
 }
 
-export async function fetchFeishuBotInfo(client: FeishuResourceClient): Promise<FeishuUser> {
+export async function fetchFeishuBotInfo(
+    client: FeishuResourceClient,
+    signal?: AbortSignal,
+): Promise<FeishuUser> {
     const { data } = await client.get<
         FeishuAPIResponse & {
             bot?: { open_id?: string; app_name?: string; avatar_url?: string };
         }
-    >("/bot/v3/info");
+    >("/bot/v3/info", undefined, signal);
     if (!data.bot?.open_id)
         throw missing("FEISHU_BOT_INFO_MISSING", "获取 Bot 信息失败: 响应缺少 bot.open_id", data);
     return {
