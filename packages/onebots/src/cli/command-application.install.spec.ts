@@ -133,7 +133,49 @@ describe("service install preflight", () => {
         expect(install).toHaveBeenCalledOnce();
         expect(install).toHaveBeenCalledWith(
             expect.objectContaining({ configPath: config, adapters: [], protocols: [] }),
+            expect.any(Function),
         );
+    });
+
+    it("服务定义提交期间配置发生变化时拒绝安装成功", async () => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const concurrent = "access_token: concurrent-token\ngeneral: {}\n";
+        vi.spyOn(ServiceController.prototype, "install").mockImplementation(
+            async (_spec, validateBeforeCommit) => {
+                fs.writeFileSync(config, concurrent, { mode: 0o600 });
+                validateBeforeCommit?.(_spec);
+            },
+        );
+
+        await expect(installService(options(config))).rejects.toMatchObject({
+            message: expect.stringMatching(
+                /服务安装提交前复验失败.*配置在运行时预检后发生变化.*候选服务定义未提交/u,
+            ),
+            exitCode: 2,
+        });
+        expect(fs.readFileSync(config, "utf8")).toBe(concurrent);
+    });
+
+    it("插件预检期间配置发生变化时不写入服务定义", async () => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const concurrent = "access_token: concurrent-token\ngeneral: {}\n";
+        const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+
+        await expect(
+            installService(options(config), {
+                preflight: async () => {
+                    fs.writeFileSync(config, concurrent, { mode: 0o600 });
+                },
+            }),
+        ).rejects.toMatchObject({
+            message: expect.stringMatching(
+                /服务安装最终预检失败.*配置在运行时预检后发生变化.*未写入服务定义/u,
+            ),
+            exitCode: 2,
+        });
+
+        expect(install).not.toHaveBeenCalled();
+        expect(fs.readFileSync(config, "utf8")).toBe(concurrent);
     });
 
     it.runIf(process.platform !== "win32")("凭据权限不安全时不写入服务定义", async () => {
@@ -258,6 +300,7 @@ describe("service install preflight", () => {
                 adapters: ["mock"],
                 protocols: ["onebot-v11"],
             }),
+            expect.any(Function),
         );
     });
 

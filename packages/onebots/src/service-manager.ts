@@ -171,7 +171,10 @@ export class ServiceController {
         return true;
     }
 
-    async install(spec: ServiceSpec): Promise<void> {
+    async install(
+        spec: ServiceSpec,
+        validateBeforeCommit?: (spec: ServiceSpec) => void,
+    ): Promise<void> {
         ensureSystemPermission(this.scope, this.host);
         const normalized: ServiceSpec = { ...spec, scope: this.scope };
         const paths = this.paths();
@@ -190,6 +193,7 @@ export class ServiceController {
             apply: (target, replaced) => this.applyPlatformDefinition(target, replaced),
             remove: target => this.removePlatformDefinition(target),
             verify: target => this.definitionIsCurrent(target),
+            validateBeforeCommit,
             commit: target => writePrivateJson(paths.metadata, target),
             definitionPath: target => this.definitionPath(target),
         });

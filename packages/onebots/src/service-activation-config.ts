@@ -40,6 +40,7 @@ export function captureServiceActivationConfig(
 export function assertServiceActivationConfigCurrent(
     configPath: string,
     expected: ServiceActivationConfigSnapshot,
+    retryAction = "启动或重启",
 ): void {
     const current = captureServiceActivationConfig(configPath);
     if (
@@ -48,7 +49,7 @@ export function assertServiceActivationConfigCurrent(
         current.inode !== expected.inode ||
         current.fingerprint !== expected.fingerprint
     ) {
-        throw new Error("服务配置在运行时预检后发生变化，请重新执行启动或重启命令");
+        throw new Error(`服务配置在运行时预检后发生变化，请重新执行${retryAction}命令`);
     }
     let permissionErrors;
     try {

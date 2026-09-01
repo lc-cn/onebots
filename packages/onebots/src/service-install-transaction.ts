@@ -6,6 +6,7 @@ export interface ServiceInstallTransactionOptions {
     apply(spec: ServiceSpec, replaced: ServiceSpec | null): Promise<void>;
     remove(spec: ServiceSpec): Promise<void>;
     verify(spec: ServiceSpec): boolean;
+    validateBeforeCommit?(spec: ServiceSpec): void;
     commit(spec: ServiceSpec): void;
     definitionPath(spec: ServiceSpec): string;
 }
@@ -17,6 +18,7 @@ export async function runServiceInstallTransaction(
     try {
         await options.apply(options.target, options.previous);
         assertDefinition(options, options.target, "安装");
+        options.validateBeforeCommit?.(options.target);
         options.commit(options.target);
     } catch (error) {
         try {

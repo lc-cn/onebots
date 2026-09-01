@@ -183,11 +183,19 @@ export async function runForeground(options: RuntimeOptions): Promise<CommandRes
 }
 
 /** 校验运行环境并安装或更新固定的 OneBots 服务定义。 */
+export interface ServiceInstallDependencies {
+    preflight(spec: ServicePreflightSpec): Promise<void>;
+}
+
 export async function installService(
     options: RuntimeOptions & ScopeOptions,
+    dependencies: ServiceInstallDependencies = { preflight: preflightServiceRuntime },
 ): Promise<CommandResult> {
     let runtime: ReturnType<typeof normalizeRuntimeOptions>;
+    let configSnapshot: ServiceActivationConfigSnapshot;
     try {
+        const configPath = normalizeRuntimeOptions(options).configPath;
+        configSnapshot = captureServiceActivationConfig(configPath);
         runtime = resolveConfiguredRuntimeOptions(options);
     } catch (error) {
         throw new CliError(
@@ -205,11 +213,14 @@ export async function installService(
         binPath: path.resolve(process.argv[1]),
         workingDirectory: process.cwd(),
     };
-    await preflightService(spec, "安装");
+    await preflightService(spec, "安装", dependencies.preflight);
+    assertInstallConfigCurrent(spec.configPath, configSnapshot, "最终预检", "未写入服务定义");
     const controller = new ServiceController(scope);
     const previousSpec = controller.readSpec();
     const previousStatus = previousSpec ? controller.status(previousSpec) : null;
-    await controller.install(spec);
+    await controller.install(spec, () =>
+        assertInstallConfigCurrent(spec.configPath, configSnapshot, "提交前复验", "候选服务定义未提交"),
+    );
     const currentStatus = controller.status(spec);
     const suffix = scope === "system" ? " --system" : "";
     const scopeLabel = scope === "system" ? "系统级" : "用户级";
@@ -247,6 +258,22 @@ export async function installService(
     return {
         output: `已安装${scopeLabel} OneBots 服务（未立即启动）\n启动: onebots start${suffix}`,
     };
+}
+
+function assertInstallConfigCurrent(
+    configPath: string,
+    snapshot: ServiceActivationConfigSnapshot,
+    phase: string,
+    outcome: string,
+): void {
+    try {
+        assertServiceActivationConfigCurrent(configPath, snapshot, "安装");
+    } catch (error) {
+        throw new CliError(
+            `服务安装${phase}失败：${error instanceof Error ? error.message : String(error)}；${outcome}`,
+            2,
+        );
+    }
 }
 
 export interface ServiceActivationDependencies {
@@ -787,9 +814,13 @@ function assertInstalledServiceControlPlane(
     assertInstalledServiceDefinitionCurrent(controller, spec);
 }
 
-async function preflightService(spec: ServicePreflightSpec, action: string): Promise<void> {
+async function preflightService(
+    spec: ServicePreflightSpec,
+    action: string,
+    preflight: (spec: ServicePreflightSpec) => Promise<void>,
+): Promise<void> {
     try {
-        await preflightServiceRuntime(spec);
+        await preflight(spec);
     } catch (error) {
         throw new CliError(
             `服务${action}预检失败：${error instanceof Error ? error.message : String(error)}`,
