@@ -173,11 +173,11 @@ describe("runtime package manager", () => {
 
         const invalidRoot = fixture({ packageManager: 42 });
         expect(inspectRuntimePackageManager(invalidRoot).error).toBe(
-            `packageManager 声明无效: ${path.join(invalidRoot, "package.json")}`,
+            `packageManager 声明无效: ${path.join(fs.realpathSync(invalidRoot), "package.json")}`,
         );
         const incompleteRoot = fixture({ packageManager: "pnpm" });
         expect(inspectRuntimePackageManager(incompleteRoot).error).toBe(
-            `packageManager 声明无效: ${path.join(incompleteRoot, "package.json")}`,
+            `packageManager 声明无效: ${path.join(fs.realpathSync(incompleteRoot), "package.json")}`,
         );
     });
 
@@ -217,6 +217,37 @@ describe("runtime package manager", () => {
             environment: {},
         });
     });
+
+    it.runIf(process.platform !== "win32")(
+        "通过符号链接部署 workspace 成员时按真实路径识别 pnpm",
+        () => {
+            const root = fixture({ packageManager: "pnpm@9.15.9" });
+            fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages: ['apps/*']\n");
+            const member = path.join(root, "apps", "gateway");
+            fs.mkdirSync(member, { recursive: true });
+            fs.writeFileSync(
+                path.join(member, "package.json"),
+                `${JSON.stringify({ dependencies: { onebots: "workspace:*" } })}\n`,
+            );
+            const links = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-package-manager-link-"));
+            directories.push(links);
+            const linkedRuntime = path.join(links, "gateway");
+            fs.symlinkSync(member, linkedRuntime, "dir");
+
+            expect(
+                buildExtensionInstallInvocation(
+                    linkedRuntime,
+                    "@onebots/protocol-mcp-v1@0.1.5",
+                    "darwin",
+                    { npm_config_user_agent: "npm/11.0.0 node/v24.0.0" },
+                ),
+            ).toEqual({
+                executable: "pnpm",
+                args: ["add", "--save-prod", "@onebots/protocol-mcp-v1@0.1.5"],
+                environment: { npm_config_user_agent: "npm/11.0.0 node/v24.0.0" },
+            });
+        },
+    );
 
     it("转调 npm 时移除 pnpm 专用配置并保留凭据和标准 npm 配置", () => {
         const source = {

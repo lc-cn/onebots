@@ -46,7 +46,14 @@ function resolveRuntimePackageManager(
     runtimeRoot: string,
     environment: NodeJS.ProcessEnv,
 ): RuntimePackageManagerResolution {
-    let directory = path.resolve(runtimeRoot);
+    const resolvedRoot = path.resolve(runtimeRoot);
+    let directory: string;
+    try {
+        directory = fs.realpathSync(resolvedRoot);
+    } catch {
+        // 由后续运行目录检查报告缺失或不可访问；包管理器检测仍保留原路径诊断。
+        directory = resolvedRoot;
+    }
     while (true) {
         const evidence = inspectPackageManagerEvidence(directory);
         if (evidence.error || evidence.manager) return evidence;
