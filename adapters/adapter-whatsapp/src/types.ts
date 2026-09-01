@@ -440,6 +440,7 @@ export interface WhatsAppVerifiedWebhook {
 export interface WhatsAppClientEvents {
     ready: [info: WhatsAppPhoneNumberInfo];
     stop: [];
+    error: [error: unknown];
     raw_event: [event: WhatsAppWebhookEvent];
     webhook: [event: WhatsAppWebhookEvent];
     change: [change: WhatsAppWebhookChange, entryId: string];

@@ -7,6 +7,10 @@ export class WhatsAppClientLifecycle<T extends object> {
     private running = false;
     private value?: T;
 
+    get isRunning(): boolean {
+        return this.running;
+    }
+
     start(load: () => Promise<T>, onReady: (value: T) => void | PromiseLike<void>): Promise<T> {
         if (this.startPromise) return this.startPromise;
         if (this.running && this.value) return Promise.resolve({ ...this.value });

@@ -31,10 +31,11 @@ export interface WhatsAppVerificationCodeResponse extends WhatsAppSuccessRespons
 export class WhatsAppPhoneNumbers {
     constructor(private readonly client: WhatsAppClient) {}
 
-    async getInfo(): Promise<WhatsAppPhoneNumberInfo> {
+    async getInfo(signal?: AbortSignal): Promise<WhatsAppPhoneNumberInfo> {
         return phoneNumberInfo(
             await this.client.call<unknown>({
                 resource: this.client.config.phone_number_id,
+                signal,
                 query: {
                     fields: "id,display_phone_number,verified_name,quality_rating,code_verification_status,name_status",
                 },

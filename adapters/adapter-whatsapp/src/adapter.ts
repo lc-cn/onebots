@@ -229,6 +229,12 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
                 await account.dispatchAwaited(projected);
             }
         });
+        client.on("error", error => {
+            this.logger.error(`WhatsApp Bot ${config.account_id} 生命周期错误`, error);
+        });
+        client.on("stop", () => {
+            account.status = AccountStatus.OffLine;
+        });
 
         if (client.receiveMode === "webhook") {
             this.app.router.get(webhook.path, ctx => {
@@ -242,9 +248,9 @@ export class WhatsAppAdapter extends Adapter<WhatsAppClient, "whatsapp"> {
             );
         }
 
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                const info = await client.start();
+                const info = await client.start(signal);
                 account.status = AccountStatus.Online;
                 account.nickname =
                     info.verified_name || info.display_phone_number || config.account_id;

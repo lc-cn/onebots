@@ -43,4 +43,8 @@ whatsapp.my_bot:
 
 旧版 camelCase 字段、`webhook.url`、`webhook.fields` 和适配器私有代理配置已移除，避免配置存在两套事实来源。
 
+## 启动超时与取消
+
+WhatsApp 账号启动会在 Graph API 校验 `phone_number_id` 对应的号码身份，并受 OneBots 全局 `timeout` 约束。超时或配置热重载取消启动时，适配器会中止尚未完成的 Graph 请求，并以启动代次阻止不响应取消的迟到结果把账号重新标记为在线。身份就绪后，取消信号会保留到协议出口完成；若协议启动失败触发回滚，账号生命周期也会同步停止。
+
 更多能力和原生调用示例见 [WhatsApp 平台文档](/platform/whatsapp)。

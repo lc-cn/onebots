@@ -34,4 +34,8 @@ Configure the public callback URL in Meta, use the same verify token, subscribe 
 
 Legacy camelCase fields, `webhook.url`, `webhook.fields`, and adapter-specific proxy settings have been removed so configuration has one canonical source.
 
+## Startup Timeout and Cancellation
+
+WhatsApp account startup verifies the phone identity behind `phone_number_id` through the Graph API and observes the global OneBots `timeout`. A timeout or configuration-reload cancellation aborts the in-flight Graph request, while lifecycle generations prevent a transport that ignores cancellation from restoring online state with a late result. The signal remains active until protocol outlets finish, so a failed outlet startup also stops the account during rollback.
+
 See [WhatsApp platform](/en/platform/whatsapp) for native actions and message coverage.

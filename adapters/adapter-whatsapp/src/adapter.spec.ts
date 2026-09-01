@@ -2,11 +2,23 @@ import { randomUUID } from "node:crypto";
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SqliteDB, type CommonTypes } from "onebots";
+import { AccountStatus, SqliteDB, type CommonTypes } from "onebots";
 import { describe, expect, it, vi } from "vitest";
 import { WhatsAppAdapter } from "./adapter.js";
 
 describe("WhatsApp 标准群能力", () => {
+    it("Client 生命周期停止时立即同步账号离线状态", async () => {
+        await withAdapter(async (_adapter, client, account) => {
+            vi.spyOn(client, "getPhoneNumberInfo").mockResolvedValue({ id: "phone" });
+            await client.start();
+            account.status = AccountStatus.Online;
+
+            await client.stop();
+
+            expect(account.status).toBe(AccountStatus.OffLine);
+        });
+    });
+
     it("用 recipient_type=group 发送标准群消息", async () => {
         await withAdapter(async (adapter, client) => {
             const sendMessage = vi.spyOn(client, "sendMessage").mockResolvedValue({
@@ -146,6 +158,7 @@ async function withAdapter(
     run: (
         adapter: WhatsAppAdapter,
         client: ReturnType<WhatsAppAdapter["createAccount"]>["client"],
+        account: ReturnType<WhatsAppAdapter["createAccount"]>,
     ) => Promise<void>,
 ): Promise<void> {
     const filename = join(tmpdir(), `onebots-whatsapp-adapter-${randomUUID()}.db`);
@@ -169,7 +182,7 @@ async function withAdapter(
             receive_mode: "manual",
         });
         adapter.accounts.set("bot", account);
-        await run(adapter, account.client);
+        await run(adapter, account.client, account);
     } finally {
         db.close();
         rmSync(filename, { force: true });

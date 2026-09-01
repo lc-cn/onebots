@@ -57,6 +57,10 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
     private readonly processedEvents = new Set<string>();
     private readonly processingEvents = new KeyedSingleFlight<string, WhatsAppIngestResult>();
     private readonly lifecycle = new WhatsAppClientLifecycle<WhatsAppPhoneNumberInfo>();
+    private startTask?: Promise<WhatsAppPhoneNumberInfo>;
+    private startAbort?: AbortController;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     /** 受控 Groups API 领域入口；与通用 call() 共用同一 Graph 传输。 */
     readonly groups: WhatsAppGroups;
     /** Calling API 控制平面；媒体协商与传输由调用方负责。 */
@@ -144,15 +148,70 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         return this.graph.apiBaseUrl;
     }
 
-    async start(): Promise<WhatsAppPhoneNumberInfo> {
-        return this.lifecycle.start(
-            () => this.getPhoneNumberInfo(),
+    async start(signal?: AbortSignal): Promise<WhatsAppPhoneNumberInfo> {
+        signal?.throwIfAborted();
+        if (this.startTask) return this.startTask;
+        if (this.lifecycle.isRunning) {
+            return this.lifecycle.start(
+                () => this.getPhoneNumberInfo(),
+                info => emitAllAwaited(this, "ready", info),
+            );
+        }
+        this.bindStartSignal(signal);
+        const controller = new AbortController();
+        this.startAbort = controller;
+        const task = this.lifecycle.start(
+            () => this.getPhoneNumberInfo(controller.signal),
             info => emitAllAwaited(this, "ready", info),
         );
+        this.startTask = task;
+        try {
+            return await task;
+        } catch (error) {
+            if (signal?.aborted) throw signal.reason;
+            throw error;
+        } finally {
+            if (this.startTask === task) this.startTask = undefined;
+            if (this.startAbort === controller && !this.lifecycle.isRunning) {
+                this.startAbort = undefined;
+                this.unbindStartSignal();
+            }
+        }
     }
 
     async stop(): Promise<void> {
-        if (this.lifecycle.stop()) await emitAllAwaited(this, "stop");
+        this.unbindStartSignal();
+        const controller = this.startAbort;
+        this.startAbort = undefined;
+        controller?.abort();
+        this.startTask = undefined;
+        const wasActive = this.lifecycle.stop();
+        if (wasActive) await emitAllAwaited(this, "stop");
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error =>
+                this.reportError(WhatsAppApiError.wrap(error, "WHATSAPP_STOP_FAILED")),
+            );
+        };
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
+    }
+
+    private reportError(error: unknown): void {
+        if (this.listenerCount("error") > 0) this.emit("error", error);
     }
 
     get receiveMode(): "webhook" | "manual" {
@@ -300,8 +359,8 @@ export class WhatsAppClient extends EventEmitter<WhatsAppClientEvents> {
         });
     }
 
-    getPhoneNumberInfo(): Promise<WhatsAppPhoneNumberInfo> {
-        return this.phoneNumbers.getInfo();
+    getPhoneNumberInfo(signal?: AbortSignal): Promise<WhatsAppPhoneNumberInfo> {
+        return this.phoneNumbers.getInfo(signal);
     }
 }
 

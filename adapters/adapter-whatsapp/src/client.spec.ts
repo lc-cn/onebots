@@ -30,12 +30,15 @@ describe("WhatsAppClient", () => {
             );
         const client = new WhatsAppClient(config, fetcher);
         const ready = vi.fn();
+        const stopped = vi.fn();
         client.on("ready", ready);
+        client.on("stop", stopped);
 
         const first = client.start();
         const concurrent = client.start();
         await client.stop();
-        const restarted = client.start();
+        const restartController = new AbortController();
+        const restarted = client.start(restartController.signal);
         await expect(restarted).resolves.toMatchObject({ verified_name: "OneBots" });
         release?.(
             new Response(JSON.stringify({ id: "phone" }), {
@@ -47,6 +50,55 @@ describe("WhatsAppClient", () => {
         await expect(concurrent).rejects.toMatchObject({ code: "WHATSAPP_START_CANCELLED" });
         expect(fetcher).toHaveBeenCalledTimes(2);
         expect(ready).toHaveBeenCalledOnce();
+        stopped.mockClear();
+        restartController.abort(new Error("protocol startup failed"));
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+    });
+
+    it("启动取消会中止 Phone Number 身份请求并保留取消原因", async () => {
+        let requestSignal: AbortSignal | undefined;
+        const fetcher = vi.fn<typeof fetch>((_url, init) => {
+            requestSignal = init?.signal ?? undefined;
+            return new Promise<Response>((_resolve, reject) => {
+                requestSignal?.addEventListener("abort", () => reject(requestSignal?.reason), {
+                    once: true,
+                });
+            });
+        });
+        const client = new WhatsAppClient(config, fetcher);
+        const stopped = vi.fn();
+        client.on("stop", stopped);
+        const controller = new AbortController();
+        const starting = client.start(controller.signal);
+        await vi.waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
+
+        const reason = new Error("account startup timeout");
+        controller.abort(reason);
+
+        await expect(starting).rejects.toBe(reason);
+        expect(requestSignal?.aborted).toBe(true);
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+    });
+
+    it("身份就绪后继续响应账号信号以支持协议启动回滚", async () => {
+        const fetcher = vi.fn<typeof fetch>().mockImplementation(
+            async () =>
+                new Response(JSON.stringify({ id: "phone", verified_name: "OneBots" }), {
+                    headers: { "content-type": "application/json" },
+                }),
+        );
+        const client = new WhatsAppClient(config, fetcher);
+        const stopped = vi.fn();
+        client.on("stop", stopped);
+        const controller = new AbortController();
+
+        await expect(client.start(controller.signal)).resolves.toMatchObject({ id: "phone" });
+        controller.abort(new Error("protocol startup failed"));
+
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+        await expect(client.start()).resolves.toMatchObject({ id: "phone" });
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        await client.stop();
     });
 
     it("使用版本化 Graph API 路径并携带 Bearer Token", async () => {
