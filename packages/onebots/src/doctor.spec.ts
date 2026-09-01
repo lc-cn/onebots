@@ -527,8 +527,33 @@ describe("doctor health probes", () => {
         });
         expect(fetcher).toHaveBeenCalledWith(
             "http://127.0.0.1:6727/health",
-            expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
+            expect.objectContaining({
+                cache: "no-store",
+                redirect: "error",
+                signal: expect.any(AbortSignal),
+            }),
         );
+    });
+
+    it("拒绝把重定向到其他实例的公开响应作为本机身份", async () => {
+        let cancelled = false;
+        const body = new ReadableStream<Uint8Array>({
+            cancel() {
+                cancelled = true;
+            },
+        });
+        const redirected = new Response(body, { status: 200 });
+        Object.defineProperty(redirected, "redirected", { value: true });
+        const fetcher = vi.fn(async () => redirected);
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "health", fetcher),
+        ).resolves.toEqual({
+            name: "health",
+            level: "error",
+            message: "health: 拒绝接受重定向后的探针响应",
+        });
+        expect(cancelled).toBe(true);
     });
 
     it("reports the running OneBots and Core versions when they match the CLI", async () => {

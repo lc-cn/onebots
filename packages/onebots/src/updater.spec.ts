@@ -449,7 +449,7 @@ EOF
         );
     });
 
-    it("只记录采用已安装运行契约的旧版本 OneBots 实例并绕过缓存", async () => {
+    it("只记录采用已安装运行契约的旧版本 OneBots 实例并绕过缓存与重定向", async () => {
         const spec = temporaryServiceSpec();
         const runtimeContractId = resolveServiceRuntimeContractId(spec);
         const fetcher = vi.fn<typeof fetch>(
@@ -469,7 +469,11 @@ EOF
         await expect(readServiceInstanceId(spec, fetcher)).resolves.toBe("current-instance");
         expect(fetcher).toHaveBeenCalledWith(
             "http://127.0.0.1:6727/health",
-            expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
+            expect.objectContaining({
+                cache: "no-store",
+                redirect: "error",
+                signal: expect.any(AbortSignal),
+            }),
         );
     });
 

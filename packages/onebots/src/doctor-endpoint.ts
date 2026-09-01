@@ -65,10 +65,20 @@ export async function probeDoctorEndpoint(
     expectedVersion?: string,
 ): Promise<DoctorCheck> {
     try {
-        const response = await fetcher(`${base}/${endpoint}`, {
+        const target = `${base}/${endpoint}`;
+        const response = await fetcher(target, {
             cache: "no-store",
+            redirect: "error",
             signal: AbortSignal.timeout(2_000),
         });
+        if (response.redirected) {
+            await response.body?.cancel();
+            return {
+                name: endpoint,
+                level: "error",
+                message: `${endpoint}: 拒绝接受重定向后的探针响应`,
+            };
+        }
         let body: string;
         try {
             body = await readBoundedResponseBody(response, DOCTOR_ENDPOINT_BODY_LIMIT_BYTES);
