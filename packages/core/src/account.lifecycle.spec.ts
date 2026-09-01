@@ -7,7 +7,7 @@ function createAccount(): Account {
         {
             platform: "mock",
             app: {
-                config: { general: {} },
+                config: { general: {}, timeout: 30 },
                 getLogger: () => ({
                     debug: vi.fn(),
                     info: vi.fn(),
@@ -111,6 +111,94 @@ describe("Account lifecycle", () => {
         await expect(account.start()).rejects.toThrow("protocol failed");
         expect(failed.lifecycleStatus).toBe("failed");
         expect(pending.lifecycleStatus).toBe("pending");
+    });
+
+    it("账号登录超过配置时间后中止启动信号并拒绝迟到的协议就绪", async () => {
+        vi.useFakeTimers();
+        const account = createAccount();
+        account.app.config.timeout = 1;
+        let startSignal: AbortSignal | undefined;
+        let releaseLogin: (() => void) | undefined;
+        account.on("start", async (signal: AbortSignal) => {
+            startSignal = signal;
+            await new Promise<void>(resolve => {
+                releaseLogin = resolve;
+            });
+        });
+        const startProtocol = vi.fn(async () => undefined);
+        account.protocols = [protocol({ start: startProtocol })];
+
+        const starting = account.start();
+        const rejected = expect(starting).rejects.toThrow("账号 mock/bot 启动超过 1 秒");
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        await rejected;
+        expect(startSignal?.aborted).toBe(true);
+        expect(account.status).toBe("offline");
+        expect(startProtocol).not.toHaveBeenCalled();
+
+        releaseLogin?.();
+        await vi.runAllTimersAsync();
+        expect(startProtocol).not.toHaveBeenCalled();
+        expect(account.protocols[0].lifecycleStatus).toBe("pending");
+        vi.useRealTimers();
+    });
+
+    it("协议启动超时后不会被迟到完成覆盖为就绪", async () => {
+        vi.useFakeTimers();
+        const account = createAccount();
+        account.app.config.timeout = 1;
+        let signal: AbortSignal | undefined;
+        let releaseProtocol: (() => void) | undefined;
+        account.protocols = [
+            protocol({
+                start: vi.fn(async receivedSignal => {
+                    signal = receivedSignal;
+                    await new Promise<void>(resolve => {
+                        releaseProtocol = resolve;
+                    });
+                }),
+            }),
+        ];
+
+        const starting = account.start();
+        const rejected = expect(starting).rejects.toThrow("账号 mock/bot 启动超过 1 秒");
+        await vi.advanceTimersByTimeAsync(1_000);
+
+        await rejected;
+        expect(signal?.aborted).toBe(true);
+        expect(account.protocols[0].lifecycleStatus).toBe("failed");
+
+        releaseProtocol?.();
+        await vi.runAllTimersAsync();
+        expect(account.protocols[0].lifecycleStatus).toBe("failed");
+        vi.useRealTimers();
+    });
+
+    it("停止账号会中止未完成的启动并拒绝迟到任务覆盖停止状态", async () => {
+        const account = createAccount();
+        let signal: AbortSignal | undefined;
+        let releaseProtocol: (() => void) | undefined;
+        account.protocols = [
+            protocol({
+                start: vi.fn(async receivedSignal => {
+                    signal = receivedSignal;
+                    await new Promise<void>(resolve => {
+                        releaseProtocol = resolve;
+                    });
+                }),
+            }),
+        ];
+
+        const starting = account.start();
+        await Promise.resolve();
+        await account.stop();
+
+        expect(signal?.aborted).toBe(true);
+        expect(account.protocols[0].lifecycleStatus).toBe("stopped");
+        releaseProtocol?.();
+        await expect(starting).rejects.toThrow("启动任务已失效");
+        expect(account.protocols[0].lifecycleStatus).toBe("stopped");
     });
 
     it("停止时尝试全部协议与账号监听器并在最后汇总失败", async () => {

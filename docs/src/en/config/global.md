@@ -8,7 +8,7 @@ Global configuration is the top-level configuration in `config.yaml`, which appl
 # Global configuration
 port: 6727              # HTTP server port
 log_level: info         # Log level: trace, debug, info, warn, error
-timeout: 30             # Login timeout (seconds)
+timeout: 30             # Account and protocol startup timeout (seconds)
 access_token: "replace-with-a-long-random-token" # Management token (sensitive)
 
 # Plugins loaded when -r / -p are omitted
@@ -38,7 +38,7 @@ general:
 |-------|------|-------------|---------|
 | `port` | number | HTTP server port | `6727` |
 | `log_level` | string | Log level: `trace`, `debug`, `info`, `warn`, `error` | `info` |
-| `timeout` | number | Login timeout in seconds | `30` |
+| `timeout` | number | Maximum seconds for account login listeners and protocol outlets to start. On timeout OneBots aborts the signal passed to extensions, marks a starting protocol as failed, and continues with other accounts. Extensions should observe the signal and cancel pending network work. | `30` |
 | `database` | non-empty string | SQLite file; relative paths resolve below the `data` directory, absolute paths remain unchanged, and a missing `.db` suffix is appended; requires restart | `onebots.db` |
 | `access_token` | string | Bearer token for the Web console, management API, and root management WebSocket | generated when no complete credentials exist |
 | `username` / `password` | string | Alternative Web console credentials; both fields must be configured together | none |

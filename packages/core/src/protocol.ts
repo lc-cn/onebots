@@ -55,7 +55,8 @@ export abstract class Protocol<V extends string = string, C = unknown> extends E
     /**
      * Start the protocol service
      */
-    abstract start(): void | Promise<void>;
+    /** 启动协议出口；账号启动超时时 signal 会被中止，协议应据此尽快释放未完成工作。 */
+    abstract start(signal?: AbortSignal): void | Promise<void>;
 
     /**
      * Stop the protocol service

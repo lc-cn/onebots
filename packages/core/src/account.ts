@@ -6,6 +6,7 @@ import { ProtocolRegistry } from "./registry.js";
 import { Protocol, type ProtocolLifecycleStatus } from "./protocol.js";
 import { CommonEvent } from "./types.js";
 import { emitAllAwaited, FailureCollector } from "./async-utils.js";
+import { ResourceError } from "./errors.js";
 
 export interface ProtocolRuntimeInfo {
     name: string;
@@ -27,6 +28,9 @@ export class Account<
     nickname: string;
     dependency: string;
     #logger: Logger;
+    #startGeneration = 0;
+    #starting?: Promise<void>;
+    #startController?: AbortController;
     protocols: Protocol[];
     get account_id() {
         return this.config.account_id;
@@ -124,22 +128,78 @@ export class Account<
         return `/${this.platform}/${this.account_id}`;
     }
 
-    async start(): Promise<void> {
+    /**
+     * 在全局 timeout 边界内启动账号监听器和协议出口。
+     * start 监听器会收到 AbortSignal；超时或 stop 时扩展应据此取消底层异步工作。
+     */
+    start(): Promise<void> {
+        if (this.#starting) return this.#starting;
+        const generation = ++this.#startGeneration;
+        const controller = new AbortController();
+        this.#startController = controller;
+        const timeoutSeconds = this.app.config.timeout ?? 30;
+        let timeout: NodeJS.Timeout | undefined;
+        const operation = this.#startAttempt(controller.signal, generation);
+        const bounded = Promise.race([
+            operation,
+            new Promise<never>((_, reject) => {
+                timeout = setTimeout(() => {
+                    if (generation !== this.#startGeneration) return;
+                    this.#startGeneration += 1;
+                    controller.abort();
+                    this.status = AccountStatus.OffLine;
+                    for (const protocol of this.protocols) {
+                        if (protocol.lifecycleStatus === "starting") {
+                            protocol.lifecycleStatus = "failed";
+                        }
+                    }
+                    reject(
+                        new ResourceError(
+                            `账号 ${this.platform}/${this.account_id} 启动超过 ${timeoutSeconds} 秒`,
+                        ),
+                    );
+                }, timeoutSeconds * 1000);
+                timeout.unref?.();
+            }),
+        ]).finally(() => {
+            if (timeout) clearTimeout(timeout);
+            if (this.#starting === bounded) {
+                this.#starting = undefined;
+                this.#startController = undefined;
+            }
+        });
+        this.#starting = bounded;
+        return bounded;
+    }
+
+    async #startAttempt(signal: AbortSignal, generation: number): Promise<void> {
         this.logger.info(`Starting account ${this.account_id}`);
-        await emitAllAwaited(this, "start");
+        await emitAllAwaited(this, "start", signal);
+        this.#assertStartCurrent(generation);
         for (const protocol of this.protocols) {
             protocol.lifecycleStatus = "starting";
             try {
-                await protocol.start();
+                await protocol.start(signal);
+                this.#assertStartCurrent(generation);
                 protocol.lifecycleStatus = "ready";
             } catch (error) {
-                protocol.lifecycleStatus = "failed";
+                if (generation === this.#startGeneration) protocol.lifecycleStatus = "failed";
                 throw error;
             }
         }
     }
 
+    #assertStartCurrent(generation: number): void {
+        if (generation !== this.#startGeneration) {
+            throw new ResourceError(`账号 ${this.platform}/${this.account_id} 的启动任务已失效`);
+        }
+    }
+
     async stop(force?: boolean): Promise<void> {
+        this.#startGeneration += 1;
+        this.#startController?.abort();
+        this.#startController = undefined;
+        this.#starting = undefined;
         const failures = new FailureCollector();
         for (const protocol of this.protocols) {
             await failures.capture(async () => {

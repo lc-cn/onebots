@@ -28,7 +28,11 @@ const createBaseWithLabels = (plugins: LoadedPluginInfo[]): Schema => ({
     port: withLabel("port", "监听端口", "服务监听端口，范围 1-65535"),
     path: withLabel("path", "服务路径前缀", "HTTP 服务前缀路径，可为空"),
     database: withLabel("database", "数据库文件", "数据库文件名或路径"),
-    timeout: withLabel("timeout", "登录超时(秒)", "账号登录超时秒数"),
+    timeout: withLabel(
+        "timeout",
+        "账号启动超时(秒)",
+        "等待账号登录监听器与协议出口启动的最长时间；超时后中止协作式启动任务并继续处理其他账号",
+    ),
     username: withLabel(
         "username",
         "管理端用户名",
