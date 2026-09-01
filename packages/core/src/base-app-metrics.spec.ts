@@ -16,6 +16,43 @@ async function request(app: BaseApp, path: string): Promise<string> {
 }
 
 describe("BaseApp metrics ownership", () => {
+    it("通过实际 HTTP 响应固定观测端点的缓存与内容类型契约", async () => {
+        const originalConfigDir = BaseApp.configDir;
+        const originalPort = process.env.PORT;
+        const directory = mkdtempSync(join(tmpdir(), "onebots-observability-response-"));
+        let app: BaseApp | undefined;
+
+        try {
+            process.env.PORT = "0";
+            BaseApp.configDir = directory;
+            app = new BaseApp({ database: "observability.db" });
+            await app.start();
+
+            for (const path of ["/health", "/ready"]) {
+                const response = await fetch(`http://127.0.0.1:${listeningPort(app)}${path}`);
+                expect(response.status).toBe(200);
+                expect(response.headers.get("cache-control")).toBe("no-store, no-transform");
+                expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+                await response.body?.cancel();
+            }
+
+            const metrics = await fetch(`http://127.0.0.1:${listeningPort(app)}/metrics`);
+            expect(metrics.status).toBe(200);
+            expect(metrics.headers.get("cache-control")).toBe("no-store, no-transform");
+            expect(metrics.headers.get("x-content-type-options")).toBe("nosniff");
+            expect(metrics.headers.get("content-type")).toBe(
+                "text/plain; version=0.0.4; charset=utf-8",
+            );
+            await metrics.body?.cancel();
+        } finally {
+            await app?.stop();
+            BaseApp.configDir = originalConfigDir;
+            if (originalPort === undefined) delete process.env.PORT;
+            else process.env.PORT = originalPort;
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
     it("每个应用只导出自身请求，停止一个应用不影响另一个应用", async () => {
         const originalConfigDir = BaseApp.configDir;
         const originalPort = process.env.PORT;

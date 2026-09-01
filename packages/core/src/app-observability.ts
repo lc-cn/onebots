@@ -268,9 +268,12 @@ function escapePrometheusLabel(value: string): string {
     return value.replace(/\\/gu, "\\\\").replace(/\n/gu, "\\n").replace(/"/gu, '\\"');
 }
 
-/** 观测结果描述当前进程瞬时状态，禁止浏览器或中间代理复用旧证据。 */
-function preventObservabilityCaching(ctx: { set(field: string, value: string): unknown }): void {
-    ctx.set("Cache-Control", "no-store");
+/** 观测结果描述当前进程瞬时状态，禁止缓存、内容转换与 MIME 猜测。 */
+function prepareObservabilityResponse(
+    ctx: { set(field: string, value: string): unknown },
+): void {
+    ctx.set("Cache-Control", "no-store, no-transform");
+    ctx.set("X-Content-Type-Options", "nosniff");
 }
 
 /** 注册不依赖管理端鉴权的存活、就绪与 Prometheus 端点。 */
@@ -279,7 +282,7 @@ export function registerObservabilityEndpoints(
     identity: RuntimeIdentity,
 ): void {
     app.router.get("/health", ctx => {
-        preventObservabilityCaching(ctx);
+        prepareObservabilityResponse(ctx);
         const processIdentity = getRuntimeProcessIdentity();
         ctx.body = {
             status: "ok",
@@ -295,7 +298,7 @@ export function registerObservabilityEndpoints(
     });
 
     app.router.get("/ready", ctx => {
-        preventObservabilityCaching(ctx);
+        prepareObservabilityResponse(ctx);
         const snapshot = getReadinessSnapshot(app);
         const processIdentity = getRuntimeProcessIdentity();
         ctx.status = snapshot.ready ? 200 : 503;
@@ -311,7 +314,7 @@ export function registerObservabilityEndpoints(
     });
 
     app.router.get("/metrics", ctx => {
-        preventObservabilityCaching(ctx);
+        prepareObservabilityResponse(ctx);
         const memory = process.memoryUsage();
         const readiness = getReadinessSnapshot(app);
         const lines = [
@@ -388,7 +391,8 @@ export function registerObservabilityEndpoints(
 
         const performance = (app.metrics ?? globalMetrics).exportPrometheus().trim();
         if (performance) lines.push("", "# Performance metrics", performance);
-        ctx.type = "text/plain; charset=utf-8";
         ctx.body = `${lines.join("\n")}\n`;
+        // Koa 会在字符串正文赋值时推断并覆盖 MIME，因此必须最后固定格式版本。
+        ctx.set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
     });
 }

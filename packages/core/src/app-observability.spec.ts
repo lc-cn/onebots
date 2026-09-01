@@ -32,8 +32,10 @@ function observableApp(
 }
 
 function observabilityContext(): Record<string, unknown> {
+    const headers = new Map<string, string>();
     return {
-        set: () => undefined,
+        headers,
+        set: (field: string, value: string) => headers.set(field, value),
     };
 }
 
@@ -235,6 +237,12 @@ describe("application readiness", () => {
                 config: { status: "drifted", in_sync: false },
             },
         });
+        expect(readyContext.headers).toEqual(
+            new Map([
+                ["Cache-Control", "no-store, no-transform"],
+                ["X-Content-Type-Options", "nosniff"],
+            ]),
+        );
 
         const metricsContext = observabilityContext();
         handlers.get("/metrics")?.(metricsContext);
@@ -258,6 +266,13 @@ describe("application readiness", () => {
         );
         expect(metricsContext.body).toContain(
             'onebots_websocket_capacity_rejections_total{route="management"} 3',
+        );
+        expect(metricsContext.headers).toEqual(
+            new Map([
+                ["Cache-Control", "no-store, no-transform"],
+                ["X-Content-Type-Options", "nosniff"],
+                ["Content-Type", "text/plain; version=0.0.4; charset=utf-8"],
+            ]),
         );
 
         app.isReloading = true;
@@ -284,6 +299,12 @@ describe("application readiness", () => {
             instance_id: getRuntimeProcessIdentity().instanceId,
             started_at: getRuntimeProcessIdentity().startedAt,
         });
+        expect(healthContext.headers).toEqual(
+            new Map([
+                ["Cache-Control", "no-store, no-transform"],
+                ["X-Content-Type-Options", "nosniff"],
+            ]),
+        );
         expect(readyContext.body).toMatchObject({
             instance_id: (healthContext.body as Record<string, unknown>).instance_id,
             started_at: (healthContext.body as Record<string, unknown>).started_at,
