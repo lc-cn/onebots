@@ -131,6 +131,11 @@ export async function runSetup(
 
     adapters = normalizePluginNames(adapters);
     protocols = normalizePluginNames(protocols);
+    if (preserveExisting && !hasSamePluginSelection(configuredPlugins, { adapters, protocols })) {
+        throw new Error(
+            "非交互环境不会修改现有插件选择。请添加 --force 以备份配置并写入本次 -r/-p 选择。",
+        );
+    }
     const { loadPlugins } = await import("./runtime.js");
     const failures = await loadPlugins(adapters, protocols);
     if (failures.length > 0) {
@@ -195,6 +200,22 @@ export async function runSetup(
     } else {
         writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
     }
+}
+
+function hasSamePluginSelection(
+    current: { adapters: string[]; protocols: string[] } | undefined,
+    requested: { adapters: string[]; protocols: string[] },
+): boolean {
+    return (
+        sameStringSet(current?.adapters ?? [], requested.adapters) &&
+        sameStringSet(current?.protocols ?? [], requested.protocols)
+    );
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+    if (left.length !== right.length) return false;
+    const rightValues = new Set(right);
+    return left.every(value => rightValues.has(value));
 }
 
 /** setup 只有在能够证明既有持久化管理凭据未暴露时，才报告配置已就绪。 */

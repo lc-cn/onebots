@@ -69,6 +69,55 @@ describe("setup workflow", () => {
         );
     });
 
+    it("拒绝把未持久化的非交互插件变更报告为 setup 成功", async () => {
+        const configPath = temporaryConfigPath();
+        const original = [
+            "access_token: configured-token",
+            "plugins:",
+            "  adapters: [mock]",
+            "  protocols: []",
+            "",
+        ].join("\n");
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+
+        await expect(
+            runSetup(configPath, {
+                adapters: ["never-installed"],
+                protocols: ["never-installed"],
+            }),
+        ).rejects.toThrow(
+            "非交互环境不会修改现有插件选择。请添加 --force 以备份配置并写入本次 -r/-p 选择。",
+        );
+
+        expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect(fs.existsSync(path.join(path.dirname(configPath), "data"))).toBe(false);
+    });
+
+    it("允许非交互 setup 幂等验证相同的插件集合", async () => {
+        const configPath = temporaryConfigPath();
+        const original = [
+            "access_token: configured-token",
+            "plugins:",
+            "  adapters: [mock]",
+            "  protocols: [onebot-v11]",
+            "",
+        ].join("\n");
+        fs.writeFileSync(configPath, original, { mode: 0o600 });
+        const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+        await runSetup(configPath, {
+            adapters: ["mock", "mock"],
+            protocols: ["onebot-v11"],
+        });
+
+        expect(fs.readFileSync(configPath, "utf8")).toBe(original);
+        expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
+        expect(output.mock.calls.map(call => String(call[0])).join("")).toContain(
+            "配置文件已存在并通过验证",
+        );
+    });
+
     it.runIf(process.platform !== "win32")(
         "拒绝把公开可读的持久化管理凭据报告为配置就绪",
         async () => {
