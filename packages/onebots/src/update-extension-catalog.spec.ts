@@ -64,6 +64,55 @@ exit 1
         expect(failure?.cause).toBeUndefined();
     });
 
+    it("目标包暂存沿用运行目录的项目级 registry 配置", () => {
+        const root = createRuntimeRoot();
+        fs.writeFileSync(
+            path.join(root, ".npmrc"),
+            "registry=https://registry.example.invalid/\nstrict-ssl=true\n",
+            { mode: 0o600 },
+        );
+        const configMarker = path.join(root, "staged-config.txt");
+        const npm = installFakeNpm(
+            root,
+            { name: "onebots", version: "1.3.0" },
+            "2.5.0",
+            undefined,
+            configMarker,
+        );
+
+        expect(
+            loadTargetExtensionVersionCatalog(
+                { manager: "npm", resolvedPath: npm },
+                root,
+                "1.3.0",
+                null,
+            ),
+        ).toEqual({
+            schemaVersion: 2,
+            packages: { "@onebots/adapter-mock": { version: "2.5.0" } },
+        });
+        expect(fs.readFileSync(configMarker, "utf8")).toBe(
+            "registry=https://registry.example.invalid/\nstrict-ssl=true\n",
+        );
+    });
+
+    it("在启动暂存下载前拒绝异常的运行目录包管理器配置", () => {
+        const root = createRuntimeRoot();
+        fs.mkdirSync(path.join(root, ".npmrc"));
+        const marker = path.join(root, "staged.txt");
+        const npm = installFakeNpm(root, { name: "onebots", version: "1.3.0" }, "2.5.0", marker);
+
+        expect(() =>
+            loadTargetExtensionVersionCatalog(
+                { manager: "npm", resolvedPath: npm },
+                root,
+                "1.3.0",
+                null,
+            ),
+        ).toThrow("运行目录的包管理器配置不是普通文件");
+        expect(fs.existsSync(marker)).toBe(false);
+    });
+
     it.each([
         {
             manifest: { name: "substituted-package", version: "1.3.0" },
@@ -150,6 +199,7 @@ function installFakeNpm(
     manifest: { name: string; version: string },
     adapterVersion: string,
     marker?: string,
+    configMarker?: string,
 ): string {
     const bin = path.join(root, "bin");
     fs.mkdirSync(bin, { recursive: true });
@@ -164,10 +214,12 @@ cat > node_modules/onebots/lib/extension-capability-catalog.json <<'EOF'
 {"schemaVersion":2,"packages":{"@onebots/adapter-mock":{"version":"${adapterVersion}"}}}
 EOF
 ${marker ? 'printf staged > "$UPDATE_CATALOG_MARKER"' : ""}
+${configMarker ? 'cat .npmrc > "$UPDATE_CONFIG_MARKER"' : ""}
 `,
         { mode: 0o755 },
     );
     vi.stubEnv("PATH", `${bin}:${process.env.PATH ?? ""}`);
     if (marker) vi.stubEnv("UPDATE_CATALOG_MARKER", marker);
+    if (configMarker) vi.stubEnv("UPDATE_CONFIG_MARKER", configMarker);
     return path.join(bin, "npm");
 }

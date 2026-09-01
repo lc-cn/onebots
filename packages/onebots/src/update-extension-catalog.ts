@@ -16,6 +16,8 @@ export interface ExtensionVersionCatalogSnapshot {
     packages?: unknown;
 }
 
+const MAX_PACKAGE_MANAGER_PROJECT_CONFIG_BYTES = 1024 * 1024;
+
 /** 使用目标 OneBots 随包发布的目录解析一组共同验证过的精确更新版本。 */
 export function resolveVerifiedUpdateTargets(
     packageNames: readonly string[],
@@ -54,6 +56,7 @@ export function loadTargetExtensionVersionCatalog(
 
     const stagingRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-update-catalog-"));
     try {
+        stageRuntimePackageManagerConfig(runtimeRoot, stagingRoot);
         fs.writeFileSync(
             path.join(stagingRoot, "package.json"),
             '{"name":"onebots-update-catalog","private":true}\n',
@@ -98,6 +101,25 @@ export function loadTargetExtensionVersionCatalog(
     } finally {
         fs.rmSync(stagingRoot, { recursive: true, force: true });
     }
+}
+
+function stageRuntimePackageManagerConfig(runtimeRoot: string, stagingRoot: string): void {
+    const source = path.join(runtimeRoot, ".npmrc");
+    if (!fs.existsSync(source)) return;
+    const stat = fs.statSync(source);
+    if (!stat.isFile()) throw new Error(`运行目录的包管理器配置不是普通文件: ${source}`);
+    if (stat.size > MAX_PACKAGE_MANAGER_PROJECT_CONFIG_BYTES) {
+        throw new Error(
+            `运行目录的包管理器配置超过 ${MAX_PACKAGE_MANAGER_PROJECT_CONFIG_BYTES} 字节上限: ${source}`,
+        );
+    }
+    const snapshot = fs.readFileSync(source);
+    if (snapshot.byteLength > MAX_PACKAGE_MANAGER_PROJECT_CONFIG_BYTES) {
+        throw new Error(
+            `运行目录的包管理器配置超过 ${MAX_PACKAGE_MANAGER_PROJECT_CONFIG_BYTES} 字节上限: ${source}`,
+        );
+    }
+    fs.writeFileSync(path.join(stagingRoot, ".npmrc"), snapshot, { mode: 0o600 });
 }
 
 function assertExactPackageVersion(packageName: string, version: string): void {
