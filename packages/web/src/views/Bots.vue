@@ -136,7 +136,9 @@ async function loadCapabilityCatalog() {
         const response = await authFetch(buildApiUrl("/api/adapter-capabilities"));
         if (!response.ok) throw new Error(`能力清单请求失败（HTTP ${response.status}）`);
         capabilityReport.value = parseAdapterCapabilityReport(await response.json());
-        capabilityCatalogError.value = capabilityReport.value.errors.join("；");
+        capabilityCatalogError.value =
+            capabilityReport.value.errors.join("；") ||
+            (capabilityReport.value.complete ? "" : "存在未完成版本绑定的能力证据");
         capabilityCatalogStatus.value = "ready";
     } catch (error) {
         capabilityCatalogStatus.value = "unavailable";

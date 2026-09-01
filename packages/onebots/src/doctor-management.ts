@@ -8,6 +8,7 @@ import {
     type ManagementFetch,
 } from "./management-credential.js";
 import { probeAuthenticatedExtensions } from "./doctor-management-extensions.js";
+import { probeAuthenticatedCapabilityCatalog } from "./doctor-management-capability-catalog.js";
 import { readDoctorManagementJson } from "./doctor-management-response.js";
 
 type DoctorFetch = ManagementFetch;
@@ -41,6 +42,7 @@ export async function probeDoctorManagement(
               probeAuthenticatedManagementHttp(base, credential.token, fetcher),
               probeAuthenticatedConfigState(base, credential.token, fetcher),
               probeAuthenticatedExtensions(base, credential.token, fetcher),
+              probeAuthenticatedCapabilityCatalog(base, credential.token, fetcher),
               probeAuthenticatedRuntime(base, credential.token, fetcher),
               probeAuthenticatedManagementWebSocket(websocketUrl, credential.token, upgrade),
           ])
@@ -53,9 +55,15 @@ export async function probeDoctorManagement(
 
     checks.push(anonymousHttp);
     if (credential.token) {
-        const [authenticatedHttp, configState, extensions, runtime, authenticatedWebSocket] =
-            authenticated!;
-        checks.push(authenticatedHttp, configState, extensions, ...runtime);
+        const [
+            authenticatedHttp,
+            configState,
+            extensions,
+            capabilityCatalog,
+            runtime,
+            authenticatedWebSocket,
+        ] = authenticated!;
+        checks.push(authenticatedHttp, configState, extensions, capabilityCatalog, ...runtime);
         checks.push(anonymousWebSocket, authenticatedWebSocket);
     } else {
         checks.push({
@@ -73,6 +81,11 @@ export async function probeDoctorManagement(
             name: "management-extensions",
             level: "warning",
             message: "未获得管理令牌，无法验证磁盘扩展与在线进程加载版本是否一致",
+        });
+        checks.push({
+            name: "management-capability-catalog",
+            level: "warning",
+            message: "未获得管理令牌，无法验证全平台能力目录",
         });
         checks.push({
             name: "management-runtime",

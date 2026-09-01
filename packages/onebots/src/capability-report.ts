@@ -67,9 +67,10 @@ export function buildAdapterCapabilityReport(
         .map(plugin => {
             const metadata = AdapterRegistry.getMetadata(plugin.name);
             const capabilities = metadata?.capabilities ?? null;
+            const versionBound = capabilities !== null && plugin.version !== null;
             return {
                 source: "runtime" as const,
-                status: capabilities ? ("verified" as const) : ("unknown" as const),
+                status: versionBound ? ("verified" as const) : ("unknown" as const),
                 name: plugin.name,
                 displayName: metadata?.displayName || plugin.name,
                 description: metadata?.description || "",
@@ -139,7 +140,7 @@ export function formatAdapterCapabilityReport(
         const version = adapter.packageVersion ? `@${adapter.packageVersion}` : "";
         const source = adapter.source === "catalog" ? "目录快照" : "运行时清单";
         lines.push(
-            `${adapter.declared ? "✓" : "✗"} ${title} · ${adapter.packageName}${version} · ${source}`,
+            `${adapter.status === "verified" ? "✓" : "✗"} ${title} · ${adapter.packageName}${version} · ${source}`,
         );
         if (!adapter.summary) {
             lines.push(
@@ -148,6 +149,9 @@ export function formatAdapterCapabilityReport(
                     : "  未声明默认能力清单，无法在启动账号前验证平台边界",
             );
             continue;
+        }
+        if (adapter.status === "unknown" && !adapter.packageVersion) {
+            lines.push("  插件版本未知，清单内容无法绑定到可归档的软件包版本");
         }
         lines.push(
             "  " +

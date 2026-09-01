@@ -114,6 +114,14 @@
                 </UiAlert>
 
                 <UiAlert
+                    v-else-if="selectedAdapter.capabilityStatus === 'unknown'"
+                    variant="warning"
+                    title="插件版本无法验证">
+                    清单内容来自当前运行时，但无法绑定到明确的软件包版本；可用于临时查看，不能作为可归档的平台能力证据。请修复插件
+                    package.json 后重启。
+                </UiAlert>
+
+                <UiAlert
                     v-if="selectedAccountCapabilityError"
                     variant="warning"
                     title="账号能力证据不可用">

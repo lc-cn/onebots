@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { probeDoctorManagement } from "./doctor-management.js";
 import { DOCTOR_MANAGEMENT_BODY_LIMIT_BYTES } from "./doctor-management-response.js";
+import packageMetadata from "../package.json" with { type: "json" };
+import { buildAdapterCapabilityReport } from "./capability-report.js";
+import { getInstallableAdapterNames } from "./extension-catalog-integrity.js";
 
 const capabilityEvidence = () => ({
     capabilityDeclared: true,
@@ -46,6 +49,9 @@ describe("doctor management probes", () => {
                 return idlePackageMutationResponse();
             }
             if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
+            if (input.endsWith("/api/adapter-capabilities")) {
+                return completeCapabilityCatalogResponse();
+            }
             expect(input).toBe("http://127.0.0.1:6727/gateway/api/auth/me");
             return authorization
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -66,6 +72,7 @@ describe("doctor management probes", () => {
             ["management-http-authenticated", "ok"],
             ["management-config", "ok"],
             ["management-extensions", "ok"],
+            ["management-capability-catalog", "ok"],
             ["management-runtime", "ok"],
             ["management-capabilities", "ok"],
             ["management-ws-anonymous", "ok"],
@@ -94,18 +101,21 @@ describe("doctor management probes", () => {
             const authorization = new Headers(init?.headers).has("authorization");
             const name = input.endsWith("/api/adapters")
                 ? "runtime"
-                : input.endsWith("/api/system")
-                  ? "config"
-                  : input.endsWith("/api/extensions/package-mutation")
-                    ? "package-mutation"
-                  : input.endsWith("/api/extensions")
-                    ? "extensions"
-                    : authorization
-                      ? "http-authenticated"
-                      : "http-anonymous";
+                : input.endsWith("/api/adapter-capabilities")
+                  ? "capability-catalog"
+                  : input.endsWith("/api/system")
+                    ? "config"
+                    : input.endsWith("/api/extensions/package-mutation")
+                      ? "package-mutation"
+                      : input.endsWith("/api/extensions")
+                        ? "extensions"
+                        : authorization
+                          ? "http-authenticated"
+                          : "http-anonymous";
             started.add(name);
             await gate;
             if (name === "runtime") return new Response("[]", { status: 200 });
+            if (name === "capability-catalog") return completeCapabilityCatalogResponse();
             if (name === "config") return inSyncSystemResponse();
             if (name === "package-mutation") return idlePackageMutationResponse();
             if (name === "extensions") return convergedExtensionsResponse();
@@ -126,6 +136,7 @@ describe("doctor management probes", () => {
         );
         await vi.waitFor(() => {
             expect([...started].sort()).toEqual([
+                "capability-catalog",
                 "config",
                 "extensions",
                 "http-anonymous",
@@ -144,6 +155,7 @@ describe("doctor management probes", () => {
             "management-http-authenticated",
             "management-config",
             "management-extensions",
+            "management-capability-catalog",
             "management-runtime",
             "management-capabilities",
             "management-ws-anonymous",
@@ -300,6 +312,7 @@ describe("doctor management probes", () => {
             ["management-http-authenticated", "warning"],
             ["management-config", "warning"],
             ["management-extensions", "warning"],
+            ["management-capability-catalog", "warning"],
             ["management-runtime", "warning"],
             ["management-capabilities", "warning"],
             ["management-ws-anonymous", "ok"],
@@ -609,6 +622,9 @@ describe("doctor management probes", () => {
                 return idlePackageMutationResponse();
             }
             if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
+            if (input.endsWith("/api/adapter-capabilities")) {
+                return completeCapabilityCatalogResponse();
+            }
             return new Headers(init?.headers).get("authorization") === "Bearer deployment-token"
                 ? new Response(JSON.stringify({ success: true }), { status: 200 })
                 : new Response(null, { status: 401 });
@@ -706,6 +722,18 @@ async function probeWithAdapters(adapters: unknown[]) {
 
 function convergedExtensionsResponse(): Response {
     return new Response("[]", { status: 200 });
+}
+
+function completeCapabilityCatalogResponse(): Response {
+    return new Response(
+        JSON.stringify({
+            schemaVersion: 1,
+            generatedAt: "2026-09-01T00:00:00.000Z",
+            application: { name: packageMetadata.name, version: packageMetadata.version },
+            ...buildAdapterCapabilityReport([], [], getInstallableAdapterNames()),
+        }),
+        { status: 200 },
+    );
 }
 
 function idlePackageMutationResponse(): Response {

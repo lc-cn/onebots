@@ -143,6 +143,29 @@ describe("capability presentation", () => {
         ).toThrow("条目结构无效");
         expect(parseAdapterCapabilityReport(capabilityReport([]))).toEqual(capabilityReport([]));
     });
+
+    it("preserves an unversioned runtime warning over the account API manifest status", () => {
+        const runtimeAdapter = {
+            platform: "custom",
+            displayName: "Custom",
+            description: "runtime",
+            icon: "",
+            capabilities: manifest,
+            capabilityDeclared: true,
+            capabilitySource: "runtime" as const,
+            capabilityStatus: "verified" as const,
+            accounts: [],
+        } satisfies AdapterInfo;
+        const report = capabilityReport([
+            { ...reportAdapter("custom", manifest, "runtime", "unknown"), packageVersion: null },
+        ]);
+
+        expect(mergeCapabilityReportAdapters([runtimeAdapter], report)[0]).toMatchObject({
+            capabilityStatus: "unknown",
+            capabilityPackageVersion: null,
+            capabilities: manifest,
+        });
+    });
 });
 
 function reportAdapter(

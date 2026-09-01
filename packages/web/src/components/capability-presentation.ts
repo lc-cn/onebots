@@ -109,11 +109,14 @@ export function mergeCapabilityReportAdapters(
     return [
         ...runtimeAdapters.map(adapter => {
             const evidence = reportByPlatform.get(adapter.platform);
+            const evidenceStatus =
+                evidence && evidence.status !== "verified" ? evidence.status : undefined;
             return {
                 ...adapter,
                 capabilityDeclared: adapter.capabilityDeclared ?? evidence?.declared ?? true,
                 capabilitySource: "runtime" as const,
                 capabilityStatus:
+                    evidenceStatus ??
                     adapter.capabilityStatus ??
                     evidence?.status ??
                     (adapter.capabilityDeclared === false ? "unknown" : "verified"),

@@ -141,6 +141,38 @@ describe("adapter capability report", () => {
         expect(formatAdapterCapabilityReport(report)).toContain("未声明默认能力清单");
     });
 
+    it("does not call a runtime manifest verified when its package version is unknown", () => {
+        const capabilities = defineAdapterCapabilities({
+            actions: {},
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        AdapterRegistry.register("unversioned", (() => undefined) as unknown as Adapter.Factory, {
+            capabilities,
+        });
+        AdapterRegistry.registerSchema("unversioned", schema);
+
+        const report = buildAdapterCapabilityReport([{ ...plugin("unversioned"), version: null }]);
+
+        expect(report).toMatchObject({
+            complete: false,
+            adapters: [
+                {
+                    name: "unversioned",
+                    source: "runtime",
+                    status: "unknown",
+                    packageVersion: null,
+                    declared: true,
+                    capabilities,
+                },
+            ],
+        });
+        expect(formatAdapterCapabilityReport(report)).toContain(
+            "插件版本未知，清单内容无法绑定到可归档的软件包版本",
+        );
+    });
+
     it("keeps plugin load failures in JSON and human reports", () => {
         const report = buildAdapterCapabilityReport([], ["adapter:missing"]);
 
