@@ -27,6 +27,7 @@ import {
     capturePackageManagerMetadata,
     hasPackageManagerMetadataChanged,
     inspectRuntimePackageManager,
+    PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
 } from "./package-manager.js";
 import {
     acquirePackageMutationLock,
@@ -69,7 +70,7 @@ class RuntimeExtensionInstaller implements ExtensionInstaller {
         await execFileAsync(invocation.executable, invocation.args, {
             cwd: runtimeRoot,
             env: invocation.environment,
-            timeout: 10 * 60 * 1000,
+            timeout: PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
             maxBuffer: 4 * 1024 * 1024,
         });
     }
@@ -87,7 +88,7 @@ class RuntimeExtensionInstaller implements ExtensionInstaller {
         await execFileAsync(invocation.executable, invocation.args, {
             cwd: runtimeRoot,
             env: invocation.environment,
-            timeout: 10 * 60 * 1000,
+            timeout: PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
             maxBuffer: 4 * 1024 * 1024,
         });
     }
@@ -310,6 +311,7 @@ export class ExtensionManager {
                 packageLock = acquirePackageMutationLock(this.runtimeRoot, {
                     token: randomUUID(),
                     operationId,
+                    operation: "extension_install",
                     extensionId: id,
                 });
             } catch (error) {

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import {
     buildPackageRemovalInvocation,
     buildPackageUpdateInvocation,
+    PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
     type PackageUpdateInvocation,
 } from "./package-manager.js";
 
@@ -29,6 +30,7 @@ const executePackageInvocation: PackageInvocationExecutor = invocation => {
         cwd: invocation.cwd,
         env: invocation.environment,
         stdio: "inherit",
+        timeout: PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
     });
 };
 

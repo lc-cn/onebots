@@ -5,6 +5,7 @@ import * as path from "node:path";
 import packageMetadata from "../package.json" with { type: "json" };
 import type { ServiceSpec } from "./service-manager.js";
 import {
+    acquireUpdatePackageMutationLock,
     loadTargetExtensionVersionCatalog,
     packageNamesFor,
     preflightCurrentPackagesOnlyRuntime,
@@ -84,6 +85,19 @@ function refreshDependencies(
 }
 
 describe("post-update service safety", () => {
+    it("CLI 更新在同一运行目录中取得跨进程租约", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-update-lock-"));
+        temporaryDirectories.push(root);
+        const first = acquireUpdatePackageMutationLock(root, "update-operation-1");
+
+        expect(() => acquireUpdatePackageMutationLock(root, "update-operation-2")).toThrow(
+            /OneBots 软件包更新事务.*update-operation-1/,
+        );
+        first.release();
+        const retry = acquireUpdatePackageMutationLock(root, "update-operation-3");
+        retry.release();
+    });
+
     it("不会把仅依赖 core 的普通项目当成 OneBots 更新目标", () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-core-consumer-"));
         temporaryDirectories.push(root);

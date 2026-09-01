@@ -24,6 +24,7 @@ describe("package mutation lock", () => {
         const first = acquirePackageMutationLock(root, {
             token: "first-token",
             operationId: "operation-1",
+            operation: "extension_install",
             extensionId: "adapter:slack",
         });
 
@@ -31,9 +32,10 @@ describe("package mutation lock", () => {
             acquirePackageMutationLock(root, {
                 token: "second-token",
                 operationId: "operation-2",
+                operation: "extension_install",
                 extensionId: "protocol:mcp-v1",
             }),
-        ).toThrow(/adapter:slack.*进程.*安装事务.*operation-1.*请等待完成后重试/);
+        ).toThrow(/adapter:slack.*安装事务.*进程.*operation-1.*请等待完成后重试/);
 
         first.release();
         expect(fs.existsSync(path.join(root, ".onebots-package-mutation.lock"))).toBe(false);
@@ -46,6 +48,7 @@ describe("package mutation lock", () => {
             {
                 token: "abandoned-token",
                 operationId: "operation-1",
+                operation: "extension_install",
                 extensionId: "adapter:slack",
             },
             { isProcessAlive: () => true },
@@ -56,11 +59,31 @@ describe("package mutation lock", () => {
             {
                 token: "replacement-token",
                 operationId: "operation-2",
+                operation: "extension_install",
                 extensionId: "protocol:mcp-v1",
             },
             { isProcessAlive: () => false },
         );
         replacement.release();
+    });
+
+    it("软件包更新会阻止扩展安装进入同一运行目录", () => {
+        const root = fixture();
+        const update = acquirePackageMutationLock(root, {
+            token: "update-token",
+            operationId: "update-operation",
+            operation: "package_update",
+        });
+
+        expect(() =>
+            acquirePackageMutationLock(root, {
+                token: "extension-token",
+                operationId: "extension-operation",
+                operation: "extension_install",
+                extensionId: "adapter:slack",
+            }),
+        ).toThrow(/OneBots 软件包更新事务.*进程.*update-operation.*请等待完成后重试/);
+        update.release();
     });
 
     it("不同主机无法用本地 PID 探测提前回收新鲜租约", () => {
@@ -70,9 +93,10 @@ describe("package mutation lock", () => {
             {
                 token: "remote-token",
                 operationId: "operation-1",
+                operation: "extension_install",
                 extensionId: "adapter:slack",
             },
-            { hostname: () => "host-a" },
+            { hostIdentity: () => "host-a" },
         );
 
         expect(() =>
@@ -81,23 +105,26 @@ describe("package mutation lock", () => {
                 {
                     token: "local-token",
                     operationId: "operation-2",
-                    extensionId: "protocol:mcp-v1",
+                    operation: "package_update",
                 },
-                { hostname: () => "host-b", isProcessAlive: () => false },
+                { hostIdentity: () => "host-b", isProcessAlive: () => false },
             ),
         ).toThrow(/host-a.*进程.*请等待完成后重试/);
     });
 
-    it("超过完整事务上限后不被复用的进程号永久阻塞", () => {
+    it("超过保护期后回收无法直接探测的远端租约", () => {
         const root = fixture();
         acquirePackageMutationLock(
             root,
             {
                 token: "old-token",
                 operationId: "operation-1",
-                extensionId: "adapter:slack",
+                operation: "package_update",
             },
-            { now: () => new Date("2026-09-01T00:00:00.000Z") },
+            {
+                now: () => new Date("2026-09-01T00:00:00.000Z"),
+                hostIdentity: () => "host-a",
+            },
         );
 
         const replacement = acquirePackageMutationLock(
@@ -105,10 +132,12 @@ describe("package mutation lock", () => {
             {
                 token: "replacement-token",
                 operationId: "operation-2",
+                operation: "extension_install",
                 extensionId: "protocol:mcp-v1",
             },
             {
                 now: () => new Date("2026-09-01T00:31:00.000Z"),
+                hostIdentity: () => "host-b",
                 isProcessAlive: () => true,
             },
         );
@@ -120,6 +149,7 @@ describe("package mutation lock", () => {
         const first = acquirePackageMutationLock(root, {
             token: "first-token",
             operationId: "operation-1",
+            operation: "extension_install",
             extensionId: "adapter:slack",
         });
         const lockPath = path.join(root, ".onebots-package-mutation.lock");
@@ -128,7 +158,7 @@ describe("package mutation lock", () => {
         const second = acquirePackageMutationLock(root, {
             token: "second-token",
             operationId: "operation-2",
-            extensionId: "protocol:mcp-v1",
+            operation: "package_update",
         });
 
         expect(() => first.release()).toThrow(/租约所有权已丢失/);

@@ -5,6 +5,9 @@ import { inspectPackageManifest } from "./package-manifest.js";
 
 export type SupportedPackageManager = "npm" | "pnpm";
 
+/** 包变更命令的单次上限；失败恢复允许再执行一次同等长度的反向命令。 */
+export const PACKAGE_MANAGER_MUTATION_TIMEOUT_MS = 10 * 60 * 1000;
+
 export interface PackageInstallInvocation {
     executable: string;
     args: string[];

@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
     buildServiceArgs,
     ServiceController,
@@ -17,7 +18,9 @@ import {
     capturePackageManagerMetadata,
     detectRuntimePackageManager,
     hasPackageManagerMetadataChanged,
+    PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
 } from "./package-manager.js";
+import { acquirePackageMutationLock } from "./package-mutation-lock.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
 import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
 import {
@@ -183,100 +186,121 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     const names = changed.map(item => `${item.name}@${item.target}`);
     const projectRoot = resolvePackageUpdateProjectRoot(runtimeRoot);
     const invocation = buildPackageUpdateInvocation(runtimeRoot, names, projectRoot);
-    const packageMetadata = projectRoot ? capturePackageManagerMetadata(projectRoot) : null;
     const initialServiceStatus = spec ? controller.status(spec) : null;
     if (initialServiceStatus?.error) {
         throw new Error(
             `无法确认更新前服务状态，未修改软件包：${initialServiceStatus.error}${initialServiceStatus.detail ? `：${initialServiceStatus.detail}` : ""}`,
         );
     }
+    const packageLock = acquireUpdatePackageMutationLock(runtimeRoot);
     try {
-        execFileSync(invocation.executable, invocation.args, {
-            cwd: invocation.cwd,
-            env: invocation.environment,
-            stdio: "inherit",
-        });
-    } catch (error) {
-        recoverPackagesAfterFailedUpdate(
-            updates,
-            runtimeRoot,
-            projectRoot,
-            resolveInstalledPackageVersion,
-            error,
-            {
-                metadataChanged:
-                    packageMetadata !== null && hasPackageManagerMetadataChanged(packageMetadata),
-                verifyMetadata:
-                    packageMetadata === null
-                        ? undefined
-                        : () => {
-                              if (hasPackageManagerMetadataChanged(packageMetadata)) {
-                                  throw new Error("包管理器恢复后依赖声明或锁文件仍与更新前不一致");
-                              }
-                          },
-            },
-        );
-    }
-    try {
-        assertUpdatedPackageVersions(updates, runtimeRoot, resolveInstalledPackageVersion);
-    } catch (error) {
-        rollbackPackagesBeforeServiceSwitch(updates, runtimeRoot, projectRoot, error);
-    }
-    if (options.packagesOnly) {
-        await preflightPackagesOnlyUpdate(
-            {
-                scope: options.scope,
-                configPath: path.resolve(options.configPath!),
-                adapters,
-                protocols,
-                nodePath: process.execPath,
-                binPath: path.resolve(process.argv[1]),
-                workingDirectory: runtimeRoot,
-            },
-            {
-                preflight: runUpdatedServicePreflight,
-                rollback: () =>
-                    rollbackUpdatedPackages(
-                        updates,
-                        runtimeRoot,
-                        projectRoot,
-                        resolveInstalledPackageVersion,
-                    ),
-            },
-        );
-    }
-    if (spec) {
-        const result = await refreshServiceAfterUpdate(
-            controller,
-            {
-                ...spec,
-                nodePath: process.execPath,
-                binPath: path.resolve(process.argv[1]),
-            },
-            {
-                expectedVersion: targetOnebotsVersion,
-                yes: options.yes,
-                initiallyRunning: initialServiceStatus?.running,
-                recoverPreflightFailure: () =>
-                    rollbackUpdatedPackages(
-                        updates,
-                        runtimeRoot,
-                        projectRoot,
-                        resolveInstalledPackageVersion,
-                    ),
-            },
-        );
-        if (result.wasRunning && !result.restarted) {
-            writeCliOutput("软件包已更新，但运行中的旧实例尚未重启；请执行 onebots restart");
-            return { status: "updated", changes: changed };
+        const packageMetadata = projectRoot ? capturePackageManagerMetadata(projectRoot) : null;
+        try {
+            execFileSync(invocation.executable, invocation.args, {
+                cwd: invocation.cwd,
+                env: invocation.environment,
+                stdio: "inherit",
+                timeout: PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
+            });
+        } catch (error) {
+            recoverPackagesAfterFailedUpdate(
+                updates,
+                runtimeRoot,
+                projectRoot,
+                resolveInstalledPackageVersion,
+                error,
+                {
+                    metadataChanged:
+                        packageMetadata !== null &&
+                        hasPackageManagerMetadataChanged(packageMetadata),
+                    verifyMetadata:
+                        packageMetadata === null
+                            ? undefined
+                            : () => {
+                                  if (hasPackageManagerMetadataChanged(packageMetadata)) {
+                                      throw new Error(
+                                          "包管理器恢复后依赖声明或锁文件仍与更新前不一致",
+                                      );
+                                  }
+                              },
+                },
+            );
         }
+        try {
+            assertUpdatedPackageVersions(updates, runtimeRoot, resolveInstalledPackageVersion);
+        } catch (error) {
+            rollbackPackagesBeforeServiceSwitch(updates, runtimeRoot, projectRoot, error);
+        }
+        if (options.packagesOnly) {
+            await preflightPackagesOnlyUpdate(
+                {
+                    scope: options.scope,
+                    configPath: path.resolve(options.configPath!),
+                    adapters,
+                    protocols,
+                    nodePath: process.execPath,
+                    binPath: path.resolve(process.argv[1]),
+                    workingDirectory: runtimeRoot,
+                },
+                {
+                    preflight: runUpdatedServicePreflight,
+                    rollback: () =>
+                        rollbackUpdatedPackages(
+                            updates,
+                            runtimeRoot,
+                            projectRoot,
+                            resolveInstalledPackageVersion,
+                        ),
+                },
+            );
+        }
+        if (spec) {
+            const result = await refreshServiceAfterUpdate(
+                controller,
+                {
+                    ...spec,
+                    nodePath: process.execPath,
+                    binPath: path.resolve(process.argv[1]),
+                },
+                {
+                    expectedVersion: targetOnebotsVersion,
+                    yes: options.yes,
+                    initiallyRunning: initialServiceStatus?.running,
+                    recoverPreflightFailure: () =>
+                        rollbackUpdatedPackages(
+                            updates,
+                            runtimeRoot,
+                            projectRoot,
+                            resolveInstalledPackageVersion,
+                        ),
+                },
+            );
+            if (result.wasRunning && !result.restarted) {
+                writeCliOutput("软件包已更新，但运行中的旧实例尚未重启；请执行 onebots restart");
+                return { status: "updated", changes: changed };
+            }
+        }
+        writeCliOutput(
+            options.packagesOnly
+                ? "OneBots 及已选插件依赖同步完成；未修改或重启服务"
+                : "OneBots 及插件更新完成",
+        );
+        return { status: "updated", changes: changed };
+    } finally {
+        packageLock.release();
     }
-    writeCliOutput(
-        options.packagesOnly
-            ? "OneBots 及已选插件依赖同步完成；未修改或重启服务"
-            : "OneBots 及插件更新完成",
-    );
-    return { status: "updated", changes: changed };
+}
+
+/** 为 CLI 更新取得与 Web 扩展安装共享的运行目录租约。 */
+export function acquireUpdatePackageMutationLock(
+    runtimeRoot: string,
+    operationId: string = randomUUID(),
+) {
+    return acquirePackageMutationLock(runtimeRoot, {
+        token: randomUUID(),
+        operationId,
+        operation: "package_update",
+    });
 }
 
 /** 未发生包变更时仍验证整组依赖，避免安装器过早提交主包升级。 */
@@ -448,6 +472,7 @@ export function runUpdatedServicePreflight(spec: ServiceSpec): void {
             cwd: spec.workingDirectory,
             encoding: "utf8",
             stdio: ["ignore", "pipe", "pipe"],
+            timeout: 60_000,
         });
     } catch (error) {
         const stderr =

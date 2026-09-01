@@ -765,7 +765,7 @@ describe("ExtensionManager", () => {
         await vi.waitFor(() => expect(firstInstall).toHaveBeenCalledOnce());
 
         await expect(secondManager.install("protocol:mcp-v1")).rejects.toThrow(
-            /adapter:slack.*进程.*安装事务.*请等待完成后重试/,
+            /adapter:slack.*安装事务.*进程.*请等待完成后重试/,
         );
         expect(secondInstall).not.toHaveBeenCalled();
 

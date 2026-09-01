@@ -10,8 +10,8 @@ const DEFAULT_STALE_AFTER_MS = 30 * 60 * 1000;
 export interface PackageMutationLockOwner {
     token: string;
     operationId: string;
-    operation: "extension_install";
-    extensionId: string;
+    operation: "extension_install" | "package_update";
+    extensionId: string | null;
     host: string;
     pid: number;
     startedAt: string;
@@ -23,7 +23,7 @@ export interface PackageMutationLock {
 
 interface PackageMutationLockOptions {
     now?: () => Date;
-    hostname?: () => string;
+    hostIdentity?: () => string;
     isProcessAlive?: (pid: number) => boolean;
     staleAfterMs?: number;
 }
@@ -44,14 +44,16 @@ export class PackageMutationLockConflictError extends Error {}
  */
 export function acquirePackageMutationLock(
     runtimeRoot: string,
-    input: Pick<PackageMutationLockOwner, "operationId" | "extensionId"> & {
-        token: string;
-    },
+    input: { token: string; operationId: string } & (
+        | { operation: "extension_install"; extensionId: string }
+        | { operation: "package_update" }
+    ),
     options: PackageMutationLockOptions = {},
 ): PackageMutationLock {
     const lockPath = path.join(path.resolve(runtimeRoot), LOCK_DIRECTORY_NAME);
     const now = options.now ?? (() => new Date());
-    const hostname = options.hostname ?? os.hostname;
+    const hostIdentity = options.hostIdentity ?? defaultHostIdentity;
+    const currentHost = hostIdentity();
     const isProcessAlive = options.isProcessAlive ?? defaultIsProcessAlive;
     const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
 
@@ -59,8 +61,8 @@ export function acquirePackageMutationLock(
         const acquiredAt = now();
         const owner: PackageMutationLockOwner = {
             ...input,
-            operation: "extension_install",
-            host: hostname(),
+            extensionId: input.operation === "extension_install" ? input.extensionId : null,
+            host: currentHost,
             pid: process.pid,
             startedAt: acquiredAt.toISOString(),
         };
@@ -80,10 +82,12 @@ export function acquirePackageMutationLock(
         const inspection = inspectLock(lockPath);
         if (inspection === null) continue;
         const age = Math.max(0, acquiredAt.getTime() - inspection.updatedAtMs);
-        const ownerAlive = inspection.owner
-            ? inspection.owner.host !== hostname() || isProcessAlive(inspection.owner.pid)
-            : true;
-        if (age <= staleAfterMs && ownerAlive) {
+        const reclaimable = inspection.owner
+            ? inspection.owner.host === currentHost
+                ? !isProcessAlive(inspection.owner.pid)
+                : age > staleAfterMs
+            : age > staleAfterMs;
+        if (!reclaimable) {
             throw conflictError(lockPath, inspection);
         }
         if (!reclaimLock(lockPath, input.token)) continue;
@@ -168,11 +172,17 @@ function parseOwner(value: unknown): PackageMutationLockOwner | null {
         !owner.token ||
         typeof owner.operationId !== "string" ||
         !owner.operationId ||
-        owner.operation !== "extension_install" ||
-        typeof owner.extensionId !== "string" ||
-        !owner.extensionId ||
+        !["extension_install", "package_update"].includes(String(owner.operation)) ||
+        !(
+            (owner.operation === "extension_install" &&
+                typeof owner.extensionId === "string" &&
+                owner.extensionId) ||
+            (owner.operation === "package_update" && owner.extensionId === null)
+        ) ||
         typeof owner.host !== "string" ||
         !owner.host ||
+        owner.host.length > 256 ||
+        /[\u0000-\u001f\u007f]/u.test(owner.host) ||
         !Number.isSafeInteger(owner.pid) ||
         Number(owner.pid) <= 0 ||
         !isValidDate(owner.startedAt)
@@ -213,8 +223,12 @@ function conflictError(
             `扩展运行目录存在无法验证的包变更租约（${inspection.error ?? "未知原因"}）：${lockPath}。若确认没有安装操作正在运行，请等待 30 分钟自动回收或人工检查该目录。`,
         );
     }
+    const operation =
+        inspection.owner.operation === "extension_install"
+            ? `扩展 ${inspection.owner.extensionId} 的安装事务`
+            : "OneBots 软件包更新事务";
     return new PackageMutationLockConflictError(
-        `扩展 ${inspection.owner.extensionId} 正由 ${inspection.owner.host} 的进程 ${inspection.owner.pid} 执行安装事务（操作 ${inspection.owner.operationId}，开始于 ${inspection.owner.startedAt}），请等待完成后重试。`,
+        `${operation}正由 ${inspection.owner.host} 的进程 ${inspection.owner.pid} 执行（操作 ${inspection.owner.operationId}，开始于 ${inspection.owner.startedAt}），请等待完成后重试。`,
     );
 }
 
@@ -224,5 +238,16 @@ function defaultIsProcessAlive(pid: number): boolean {
         return true;
     } catch (error) {
         return (error as NodeJS.ErrnoException).code === "EPERM";
+    }
+}
+
+function defaultHostIdentity(): string {
+    const hostname = os.hostname();
+    if (process.platform !== "linux") return hostname;
+    try {
+        return `${hostname}/${fs.readlinkSync("/proc/self/ns/pid")}`;
+    } catch {
+        // /proc 可被容器策略隐藏；此时回退主机名，并继续依赖远端租约保护期。
+        return hostname;
     }
 }
