@@ -78,6 +78,8 @@ const connectWebSocket = () => {
             } else if (data.type === 'exit') {
                 terminal?.writeln('\r\n\x1b[31m[终端已退出]\x1b[0m');
                 isConnected.value = false;
+            } else if (data.type === 'error' && typeof data.message === 'string') {
+                terminal?.writeln(`\r\n\x1b[31m[${data.message}]\x1b[0m`);
             }
         } catch (error) {
             console.error('解析终端数据失败:', error);

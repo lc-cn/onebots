@@ -17,6 +17,7 @@ import {
     type BoundedWebSocketSendResult,
 } from "../management-websocket.js";
 import type { WebSocket } from "ws";
+import { parseTerminalClientMessage } from "../terminal-message.js";
 
 /** SSE 心跳间隔（毫秒） */
 const SSE_HEARTBEAT_INTERVAL_MS = 30000;
@@ -68,11 +69,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
 
             // 监听 PTY 退出
             app.ptyTerminal.onExit(() => {
-                app.ptyTerminal = null;
-                app.terminalClients.forEach(c => {
-                    sendTerminalMessage(app, c, { type: "exit" }, "终端退出事件");
-                });
-                app.terminalClients.clear();
+                handleTerminalProcessExit(app);
             });
         }
 
@@ -85,17 +82,29 @@ export function registerTerminalRoutes(app: App, router: Router): void {
                 client.close(1008, "Unauthorized");
                 return;
             }
-            try {
-                const payload = JSON.parse(msg.toString());
-                if (payload.type === "input" && app.ptyTerminal) {
-                    app.ptyTerminal.write(payload.data);
-                } else if (payload.type === "resize" && app.ptyTerminal) {
-                    app.ptyTerminal.resize(payload.cols, payload.rows);
-                } else if (payload.type === "restart") {
-                    void requestTerminalRestart(app);
-                }
-            } catch (error) {
-                app.logger.error("终端消息处理失败:", error);
+            const result = parseTerminalClientMessage(msg.toString());
+            if ("error" in result) {
+                sendTerminalMessage(app, client, result.error, "终端输入错误回执");
+                return;
+            }
+            const command = result.command;
+            if (command.type === "restart") {
+                void requestTerminalRestart(app);
+                return;
+            }
+            if (!app.ptyTerminal) {
+                sendTerminalMessage(
+                    app,
+                    client,
+                    { type: "error", code: "TERMINAL_UNAVAILABLE", message: "终端进程不可用" },
+                    "终端不可用回执",
+                );
+                return;
+            }
+            if (command.type === "input") {
+                app.ptyTerminal.write(command.data);
+            } else {
+                app.ptyTerminal.resize(command.cols, command.rows);
             }
         });
 
@@ -167,6 +176,16 @@ export function registerTerminalRoutes(app: App, router: Router): void {
             app.removeLogClient(ctx.res);
         });
     });
+}
+
+/** PTY 退出后关闭仍存活的客户端，使浏览器进入统一的重连路径。 */
+export function handleTerminalProcessExit(app: App): void {
+    app.ptyTerminal = null;
+    app.terminalClients.forEach(client => {
+        sendTerminalMessage(app, client, { type: "exit" }, "终端退出事件");
+        client.close(1000, "Terminal exited");
+    });
+    app.terminalClients.clear();
 }
 
 async function requestTerminalRestart(app: App): Promise<void> {

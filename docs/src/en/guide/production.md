@@ -61,6 +61,8 @@ When a username/password session token expires naturally, established root-manag
 
 Legacy clients may still submit one string line to process stdin through the root management WebSocket's `system.input` action. The server returns a correlatable `system.input.result`, rejects non-string payloads, and does not synthesize a global stdin `end` event for an individual message. One connection can therefore submit repeated input without prematurely closing other stdin consumers in the process. The current Web console uses the isolated `/api/terminal` PTY and does not depend on this compatibility path.
 
+`/api/terminal` parses a complete JSON contract before invoking the native PTY. Input must be a string of at most 64 KiB, and terminal columns and rows must be safe integers from `1` through `1000`. Malformed JSON, unknown actions, and invalid fields receive structured errors without reaching the native module. When the PTY exits naturally, the server sends `exit` to every terminal client and then closes those WebSockets normally. The Web console consequently follows its standard disconnect and reconnect path to create a new PTY instead of remaining attached to a socket whose terminal process no longer exists.
+
 ### Token Management
 
 Complete token lifecycle management.
