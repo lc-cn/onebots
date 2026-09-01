@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
     assertUpdatedPackageVersions,
+    recoverPackagesAfterFailedUpdate,
     rollbackUpdatedPackages,
 } from "./update-package-transaction.js";
 
@@ -61,5 +62,66 @@ describe("update package transaction", () => {
         ).toThrow(
             "包更新版本校验失败：onebots 期望 1.3.0，实际 1.2.9；@onebots/adapter-mock 期望 2.4.0，实际 未安装。服务预检、定义改写与重启均未执行",
         );
+    });
+
+    it("包管理器失败但已部分更新时恢复整组依赖", () => {
+        const versions = new Map<string, string | null>([
+            ["onebots", "1.3.0"],
+            ["@onebots/adapter-mock", "2.3.0"],
+        ]);
+        const execute = vi.fn(invocation => {
+            if (invocation.args[0] === "up") {
+                versions.set("onebots", "1.2.8");
+                versions.set("@onebots/adapter-mock", "2.3.0");
+            }
+        });
+
+        expect(() =>
+            recoverPackagesAfterFailedUpdate(
+                [
+                    { name: "onebots", current: "1.2.8" },
+                    { name: "@onebots/adapter-mock", current: "2.3.0" },
+                ],
+                "/runtime",
+                "/runtime",
+                name => versions.get(name) ?? null,
+                new Error("postinstall failed"),
+                execute,
+            ),
+        ).toThrow(/已恢复更新前依赖.*postinstall failed/);
+        expect(execute).toHaveBeenCalledOnce();
+        expect(versions.get("onebots")).toBe("1.2.8");
+    });
+
+    it("包管理器失败且未改写版本时保留原错误且不做反向安装", () => {
+        const original = new Error("registry unavailable");
+        const execute = vi.fn();
+
+        expect(() =>
+            recoverPackagesAfterFailedUpdate(
+                [{ name: "onebots", current: "1.2.8" }],
+                "/runtime",
+                "/runtime",
+                () => "1.2.8",
+                original,
+                execute,
+            ),
+        ).toThrow(original);
+        expect(execute).not.toHaveBeenCalled();
+    });
+
+    it("包管理器部分更新与恢复同时失败时保留双方证据", () => {
+        expect(() =>
+            recoverPackagesAfterFailedUpdate(
+                [{ name: "onebots", current: "1.2.8" }],
+                "/runtime",
+                "/runtime",
+                () => "1.3.0",
+                new Error("install timeout"),
+                () => {
+                    throw new Error("lockfile readonly");
+                },
+            ),
+        ).toThrow(/包管理器执行失败且依赖恢复失败.*install timeout.*lockfile readonly/);
     });
 });

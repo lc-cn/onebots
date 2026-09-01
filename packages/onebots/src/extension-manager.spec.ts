@@ -871,6 +871,81 @@ describe("ExtensionManager", () => {
         );
     });
 
+    it("包管理器改写候选版本后非零退出时仍恢复原扩展", async () => {
+        const { root, configPath } = fixture();
+        installFixturePackage("@onebots/adapter-slack", "3.0.7", root);
+        const preflight = vi.fn(successfulPreflight);
+        let manager: ExtensionManager;
+        let restorePhase: string | undefined;
+        const restore = vi.fn(
+            async (packageName: string, previousVersion: string | null, runtimeRoot: string) => {
+                if (!previousVersion) throw new Error("测试缺少原版本");
+                restorePhase = manager.list([]).find(item => item.id === "adapter:slack")
+                    ?.installation?.phase;
+                installFixturePackage(packageName, previousVersion, runtimeRoot);
+            },
+        );
+        manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: {
+                install: async (packageName, packageVersion, runtimeRoot) => {
+                    installFixturePackage(packageName, packageVersion, runtimeRoot);
+                    throw new Error("postinstall failed");
+                },
+                restore,
+            },
+            preflight,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow("postinstall failed");
+
+        expect(preflight).not.toHaveBeenCalled();
+        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", "3.0.7", root);
+        expect(restorePhase).toBe("restoring_package");
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+            installedVersion: "3.0.7",
+            lastInstallation: {
+                status: "failed",
+                message: "postinstall failed",
+            },
+        });
+    });
+
+    it("首次安装已落盘后非零退出时移除半安装扩展", async () => {
+        const { root, configPath } = fixture();
+        const restore = vi.fn(
+            async (packageName: string, previousVersion: string | null, runtimeRoot: string) => {
+                expect(previousVersion).toBeNull();
+                removeFixturePackage(packageName, runtimeRoot);
+            },
+        );
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: {
+                install: async (packageName, packageVersion, runtimeRoot) => {
+                    installFixturePackage(packageName, packageVersion, runtimeRoot);
+                    throw new Error("registry connection reset");
+                },
+                restore,
+            },
+            preflight: successfulPreflight,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow("registry connection reset");
+
+        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", null, root);
+        expect(manager.list([]).find(item => item.id === "adapter:slack")).toMatchObject({
+            installed: false,
+            installedVersion: null,
+            lastInstallation: {
+                status: "failed",
+                message: "registry connection reset",
+            },
+        });
+    });
+
     it("依赖恢复失败时同时保留原错误与恢复错误", async () => {
         const { root, configPath } = fixture();
         const manager = new ExtensionManager({

@@ -270,7 +270,8 @@ export class ExtensionManager {
         this.assertCatalogIntegrity();
         this.assertRuntimeRoot();
         const packageCatalog = this.requirePackageCatalogEntry(entry.packageName);
-        const previousVersion = this.inspectInstalledPackage(entry.packageName).version;
+        const previousPackage = this.inspectInstalledPackage(entry.packageName);
+        const previousVersion = previousPackage.version;
         const packageNeedsInstall = previousVersion !== packageCatalog.packageVersion;
         if (packageNeedsInstall) this.assertPackageManager();
         const preparedConfig = this.prepareConfig(entry.type, entry.name);
@@ -281,9 +282,11 @@ export class ExtensionManager {
         const operationId = randomUUID();
         const startedAt = new Date().toISOString();
         const promise = startGate.then(async (): Promise<{ restartRequired: true }> => {
+            let packageInstallAttempted = false;
             let packageInstallCompleted = false;
             try {
                 if (packageNeedsInstall) {
+                    packageInstallAttempted = true;
                     await this.installer.install(
                         entry.packageName,
                         packageCatalog.packageVersion,
@@ -323,7 +326,11 @@ export class ExtensionManager {
                     "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
                 );
             } catch (error) {
-                if (packageInstallCompleted && this.installer.restore) {
+                const packageChanged =
+                    packageInstallCompleted ||
+                    (packageInstallAttempted &&
+                        this.packageStateChanged(entry.packageName, previousPackage));
+                if (packageChanged && this.installer.restore) {
                     this.setInstallationPhase(operationId, "restoring_package");
                     await this.restorePackageAfterFailure(
                         entry.packageName,
@@ -393,6 +400,15 @@ export class ExtensionManager {
                 `扩展安装失败且依赖恢复失败：安装错误：${installMessage}；恢复错误：${restoreMessage}`,
             );
         }
+    }
+
+    /** 包管理器非零退出也可能已改写依赖；只有磁盘证据变化时才启动反向恢复。 */
+    private packageStateChanged(
+        packageName: string,
+        previous: InstalledPackageInspection,
+    ): boolean {
+        const current = this.inspectInstalledPackage(packageName);
+        return current.version !== previous.version || current.error !== previous.error;
     }
 
     /** 在调用包管理器前验证配置，并生成不会丢失现有插件选择的候选内容。 */

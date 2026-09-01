@@ -20,6 +20,7 @@ import { readServiceInstanceId, verifyServiceOnline } from "./service-online-ver
 import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
 import {
     assertUpdatedPackageVersions,
+    recoverPackagesAfterFailedUpdate,
     rollbackUpdatedPackages,
     type PackageUpdateEvidence,
 } from "./update-package-transaction.js";
@@ -185,11 +186,21 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             `无法确认更新前服务状态，未修改软件包：${initialServiceStatus.error}${initialServiceStatus.detail ? `：${initialServiceStatus.detail}` : ""}`,
         );
     }
-    execFileSync(invocation.executable, invocation.args, {
-        cwd: invocation.cwd,
-        env: invocation.environment,
-        stdio: "inherit",
-    });
+    try {
+        execFileSync(invocation.executable, invocation.args, {
+            cwd: invocation.cwd,
+            env: invocation.environment,
+            stdio: "inherit",
+        });
+    } catch (error) {
+        recoverPackagesAfterFailedUpdate(
+            updates,
+            runtimeRoot,
+            projectRoot,
+            resolveInstalledPackageVersion,
+            error,
+        );
+    }
     try {
         assertUpdatedPackageVersions(updates, runtimeRoot, resolveInstalledPackageVersion);
     } catch (error) {
