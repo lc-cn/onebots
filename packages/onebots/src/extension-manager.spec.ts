@@ -281,6 +281,44 @@ describe("ExtensionManager", () => {
         });
     });
 
+    it("插件版本未知时不把已声明的运行时能力清单标记为已验证", () => {
+        const { root, configPath } = fixture();
+        const capabilities = defineAdapterCapabilities({
+            actions: { send_message: { support: "native" } },
+            events: {},
+            segments: {},
+            transports: {},
+        });
+        AdapterRegistry.register("slack", (() => undefined) as unknown as Adapter.Factory, {
+            capabilities,
+        });
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            preflight: successfulPreflight,
+        });
+
+        const capability = manager
+            .list([
+                {
+                    type: "adapter",
+                    name: "slack",
+                    packageName: "third-party-slack",
+                    version: null,
+                    entryPath: "/runtime/slack.js",
+                },
+            ])
+            .find(item => item.id === "adapter:slack")?.capability;
+
+        expect(capability).toMatchObject({
+            source: "runtime",
+            status: "unknown",
+            packageVersion: null,
+            declared: true,
+            manifest: capabilities,
+        });
+    });
+
     it("在安装和创建账号前提供带版本的目录能力快照", () => {
         const { root, configPath } = fixture();
         const manager = new ExtensionManager({

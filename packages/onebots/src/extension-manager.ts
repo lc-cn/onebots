@@ -205,7 +205,7 @@ export class ExtensionManager {
                 adapter.name,
                 {
                     source: "runtime" as const,
-                    status: adapter.declared ? ("verified" as const) : ("unknown" as const),
+                    status: adapter.status,
                     packageVersion: adapter.packageVersion,
                     declared: adapter.declared,
                     summary: adapter.summary,

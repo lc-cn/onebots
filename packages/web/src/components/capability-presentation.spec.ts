@@ -6,6 +6,7 @@ import {
     capabilitySceneLabel,
     capabilitySupportLabel,
     countSupportedCapabilities,
+    extensionCapabilityNotice,
     getCapabilityEntries,
     hasAccountCapabilityOverride,
     mergeCapabilityReportAdapters,
@@ -43,6 +44,33 @@ describe("capability presentation", () => {
         expect(
             (["private", "group", "channel", "direct"] as const).map(capabilitySceneLabel),
         ).toEqual(["私聊", "群聊", "频道", "直接会话"]);
+    });
+
+    it("keeps an unversioned runtime manifest browsable but labels its evidence unknown", () => {
+        expect(
+            extensionCapabilityNotice({
+                source: "runtime",
+                status: "unknown",
+                declared: true,
+                manifest,
+            }),
+        ).toContain("插件版本未知");
+        expect(
+            extensionCapabilityNotice({
+                source: "runtime",
+                status: "verified",
+                declared: true,
+                manifest,
+            }),
+        ).toBeNull();
+        expect(
+            extensionCapabilityNotice({
+                source: "runtime",
+                status: "verified",
+                declared: false,
+                manifest: null,
+            }),
+        ).toContain("未声明默认能力清单");
     });
 
     it("keeps unsupported declarations visible but excludes them from the supported count", () => {

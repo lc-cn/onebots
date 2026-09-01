@@ -8,7 +8,7 @@ import type {
     SegmentCapabilityDescriptor,
     TransportCapabilityDescriptor,
 } from "@onebots/core";
-import type { AdapterCapabilityReport, AdapterInfo } from "../types";
+import type { AdapterCapabilityReport, AdapterInfo, ExtensionCapabilityInfo } from "../types";
 
 const EMPTY_CAPABILITY_MANIFEST: AdapterCapabilityManifest = {
     version: 1,
@@ -99,6 +99,25 @@ export function capabilitySceneLabel(scene: CommonTypes.Scene): string {
         channel: "频道",
         direct: "直接会话",
     }[scene];
+}
+
+/** 解释扩展能力证据为何尚不能视为版本绑定的已验证事实。 */
+export function extensionCapabilityNotice(
+    capability: Pick<ExtensionCapabilityInfo, "declared" | "manifest" | "source" | "status">,
+): string | null {
+    if (capability.status === "unavailable") {
+        return "能力目录校验失败，当前无法提供可信快照；请修复目录错误后重试。";
+    }
+    if (!capability.declared || !capability.manifest) {
+        return capability.source === "runtime"
+            ? "当前插件未声明默认能力清单，请将未声明能力视为未知。"
+            : "能力目录暂未收录此适配器，请安装后查看插件运行时清单。";
+    }
+    if (capability.status === "verified") return null;
+    if (capability.source === "runtime") {
+        return "当前插件已声明默认能力清单，但插件版本未知；该清单无法绑定到可归档的软件包版本。";
+    }
+    return "能力目录暂未收录此适配器，请安装后查看插件运行时清单。";
 }
 
 /**

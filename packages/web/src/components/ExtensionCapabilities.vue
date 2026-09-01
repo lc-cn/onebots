@@ -1,18 +1,12 @@
 <template>
     <div
-        v-if="!capability.declared || !capability.manifest || !capability.summary"
+        v-if="notice"
         class="rounded-card border border-warning/30 bg-warning-soft px-3 py-2.5 text-xs leading-5 text-fg-secondary">
-        {{
-            capability.status === "unavailable"
-                ? "能力目录校验失败，当前无法提供可信快照；请修复目录错误后重试。"
-                : capability.source === "runtime"
-                  ? "当前插件未声明默认能力清单，请将未声明能力视为未知。"
-                  : "能力目录暂未收录此适配器，请安装后查看插件运行时清单。"
-        }}
+        {{ notice }}
     </div>
 
     <details
-        v-else
+        v-if="capability.declared && capability.manifest && capability.summary"
         :open="expanded"
         class="group rounded-card border border-border-subtle"
         @toggle="handleToggle">
@@ -120,6 +114,7 @@ import {
     capabilityDirectionLabel,
     capabilitySceneLabel,
     capabilitySupportLabel,
+    extensionCapabilityNotice,
     getCapabilityEntries,
     type CapabilityCategory,
 } from "./capability-presentation.js";
@@ -130,6 +125,7 @@ const props = withDefaults(defineProps<{ capability: ExtensionCapabilityInfo; qu
 });
 const categories = CAPABILITY_CATEGORIES;
 const expanded = ref(false);
+const notice = computed(() => extensionCapabilityNotice(props.capability));
 const matchingEntries = computed(() =>
     props.capability.manifest
         ? getCapabilitySearchMatches(props.capability.manifest, props.query)
