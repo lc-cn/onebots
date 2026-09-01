@@ -196,6 +196,8 @@ On a fresh extension volume, startup accepts only packages present in the curren
 
 If the compressed data exceeds 15 MiB or tar fails, the operation still uploads the configuration and extension recovery catalog and replaces any stale remote archive with an empty file. The Web result states whether the full data archive was included, so a successful configuration backup cannot be mistaken for a complete database backup.
 
+Archive creation has a 30-second deadline, the HF commit has a 60-second deadline, and an upstream error body is limited to 64 KiB. A disk stall, half-open connection, or oversized proxy error therefore returns a bounded backup diagnostic instead of leaving configuration or static-file management waiting indefinitely.
+
 Test the HF image locally (port 7860):
 
 ```bash

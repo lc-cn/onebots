@@ -18,10 +18,14 @@ describe("Hugging Face backup", () => {
     it("publishes a bounded data archive and an exact extension recovery catalog", async () => {
         const fixture = createFixture();
         const archive = Buffer.from("compressed-data");
+        const uploadSignal = new AbortController().signal;
+        const archiveData = vi.fn((_directory: string, _timeoutMs: number) => archive);
+        const createUploadSignal = vi.fn((_timeoutMs: number) => uploadSignal);
         const fetcher = vi.fn<typeof fetch>(async () => Response.json({ ok: true }));
         configureHfEnvironment();
         const service = new HfBackupService({}, fixture.root, fixture.configPath, {
-            archiveData: () => archive,
+            archiveData,
+            createUploadSignal,
             fetcher,
         });
 
@@ -46,11 +50,14 @@ describe("Hugging Face backup", () => {
         );
         const recoveryFile = body.files.find(file => file.path === "extensions_backup.json");
         expect(JSON.parse(String(recoveryFile?.content))).toEqual(fixture.recovery);
+        expect(archiveData).toHaveBeenCalledWith(fixture.root, 30_000);
+        expect(createUploadSignal).toHaveBeenCalledWith(60_000);
         expect(fetcher).toHaveBeenCalledWith(
             "https://huggingface.co/api/spaces/owner/space/commit/main",
             expect.objectContaining({
                 method: "POST",
                 headers: expect.objectContaining({ Authorization: "Bearer hf-secret" }),
+                signal: uploadSignal,
             }),
         );
     });
@@ -103,6 +110,47 @@ describe("Hugging Face backup", () => {
             message: expect.stringContaining("dependencies 不是对象"),
         });
         expect(fetcher).not.toHaveBeenCalled();
+    });
+
+    it("cancels a stalled repository upload at the fixed deadline", async () => {
+        const fixture = createFixture();
+        const timeout = new DOMException("expired", "TimeoutError");
+        const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+            const signal = init?.signal;
+            if (signal?.aborted) throw signal.reason;
+            return Response.json({ ok: true });
+        });
+        configureHfEnvironment();
+        const service = new HfBackupService({}, fixture.root, fixture.configPath, {
+            archiveData: () => Buffer.from("archive"),
+            createUploadSignal: timeoutMs => {
+                expect(timeoutMs).toBe(60_000);
+                return AbortSignal.abort(timeout);
+            },
+            fetcher,
+        });
+
+        await expect(service.backupData("port: 7860\n")).resolves.toEqual({
+            success: false,
+            message: "HF 仓库上传超过 60 秒，已取消",
+        });
+    });
+
+    it("bounds an upstream error response before exposing its diagnostic", async () => {
+        const fixture = createFixture();
+        const fetcher = vi.fn<typeof fetch>(async () =>
+            Promise.resolve(new Response("x".repeat(64 * 1024 + 1), { status: 502 })),
+        );
+        configureHfEnvironment();
+        const service = new HfBackupService({}, fixture.root, fixture.configPath, {
+            archiveData: () => Buffer.from("archive"),
+            fetcher,
+        });
+
+        await expect(service.backupData("port: 7860\n")).resolves.toEqual({
+            success: false,
+            message: "响应正文超过 64 KiB 上限",
+        });
     });
 
     function createFixture() {
