@@ -286,7 +286,7 @@ export async function serviceLogs(
 /** 移除服务定义并保留配置、日志和数据库。 */
 export async function uninstallService(options: ScopeOptions): Promise<CommandResult> {
     await new ServiceController(scopeFrom(options)).uninstall();
-    return { output: "OneBots 服务已卸载，配置和数据已保留" };
+    return { output: "OneBots 服务已确认停止并卸载，配置和数据已保留" };
 }
 
 /** 运行配置 schema 驱动的 setup 流程。 */

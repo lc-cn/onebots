@@ -102,6 +102,42 @@ describe.runIf(process.platform !== "win32")("service definition persistence", (
         expect(controller.status()).toMatchObject({ installed: false, running: false });
         expect(exec.mock.calls.some(([, args]) => args.includes("disable"))).toBe(true);
     });
+
+    it("停止状态无法验证时保留平台定义与私有元数据", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-uninstall-guard-"));
+        temporaryDirectories.push(root);
+        const host = linuxHost(root);
+        const controller = new ServiceController("user", host);
+        const spec: ServiceSpec = {
+            scope: "user",
+            configPath: path.join(root, "config.yaml"),
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            nodePath: "/opt/node/bin/node",
+            binPath: "/opt/onebots/lib/bin.js",
+            workingDirectory: root,
+        };
+        await controller.install(spec);
+        const paths = controller.paths();
+
+        await expect(
+            controller.uninstall({
+                verifyStopped: async () => {
+                    throw new Error("systemd 仍报告 active");
+                },
+            }),
+        ).rejects.toThrow("服务卸载已中止，平台定义和元数据已保留：systemd 仍报告 active");
+
+        expect(fs.existsSync(paths.definition)).toBe(true);
+        expect(fs.existsSync(paths.metadata)).toBe(true);
+        expect(controller.readSpec()).toEqual(spec);
+        expect(controller.definitionIsCurrent(spec)).toBe(true);
+        expect(host.exec).not.toHaveBeenCalledWith(
+            "systemctl",
+            ["--user", "disable", "onebots-gateway"],
+            expect.anything(),
+        );
+    });
 });
 
 describe("service status evidence", () => {

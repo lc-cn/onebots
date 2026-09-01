@@ -7,6 +7,7 @@ import {
     restartService,
     startService,
     stopService,
+    uninstallService,
 } from "./command-application.js";
 import { ServiceController, type ServiceSpec } from "../service-manager.js";
 
@@ -302,5 +303,14 @@ describe("service install preflight", () => {
             exitCode: 1,
         });
         expect(stop).toHaveBeenCalledOnce();
+    });
+
+    it("只有卸载事务确认停止并完成清理后才报告成功", async () => {
+        const uninstall = vi.spyOn(ServiceController.prototype, "uninstall").mockResolvedValue();
+
+        await expect(uninstallService({ system: false })).resolves.toEqual({
+            output: "OneBots 服务已确认停止并卸载，配置和数据已保留",
+        });
+        expect(uninstall).toHaveBeenCalledOnce();
     });
 });

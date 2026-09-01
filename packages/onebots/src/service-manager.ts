@@ -14,6 +14,7 @@ import {
 } from "./service-definition.js";
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import { runServiceInstallTransaction } from "./service-install-transaction.js";
+import { verifyServiceStopped } from "./service-offline-verification.js";
 import { getServiceFiles, writePrivateJson, writeServiceFile } from "./service-files.js";
 import {
     WINDOWS_SYSTEM_SERVICE_ID,
@@ -60,6 +61,11 @@ interface NodeWindowsService {
     uninstall(): void;
     start(): void;
     stop(): void;
+}
+
+export interface ServiceUninstallOptions {
+    /** 测试或嵌入场景可替换有界停止验证。 */
+    verifyStopped?: () => Promise<void>;
 }
 
 function waitForNodeWindows(
@@ -393,12 +399,21 @@ export class ServiceController {
         return tailFile(logFile, lines);
     }
 
-    async uninstall(): Promise<void> {
+    async uninstall(options: ServiceUninstallOptions = {}): Promise<void> {
         ensureSystemPermission(this.scope, this.host);
         const paths = this.paths();
         const spec = this.readSpec();
         if (!spec) return;
         await this.stop(true);
+        try {
+            await (
+                options.verifyStopped ?? (() => verifyServiceStopped(() => this.status(spec)))
+            )();
+        } catch (error) {
+            throw new Error(
+                `服务卸载已中止，平台定义和元数据已保留：${error instanceof Error ? error.message : String(error)}`,
+            );
+        }
         await this.removePlatformDefinition(spec);
         if (fs.existsSync(paths.metadata)) fs.unlinkSync(paths.metadata);
     }
