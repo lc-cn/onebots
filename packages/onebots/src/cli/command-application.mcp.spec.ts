@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Account, Protocol } from "@onebots/core";
+import type { McpStdioTransportOptions } from "../mcp-stdio-runtime.js";
 import { CliError, runStartedMcpStdio } from "./command-application.js";
 
 describe("MCP stdio application handoff", () => {
@@ -59,8 +60,10 @@ describe("MCP stdio application handoff", () => {
         const protocol = { name: "mcp", version: "v1" } as Protocol;
         const app = fakeApp([mcpAccount(protocol)]);
         let onClose: (() => void | Promise<void>) | undefined;
-        const startTransport = vi.fn(options => {
+        let onError: ((error: unknown) => void) | undefined;
+        const startTransport = vi.fn((options: McpStdioTransportOptions) => {
             onClose = options.onClose;
+            onError = options.onError;
         });
 
         await runStartedMcpStdio(
@@ -70,7 +73,15 @@ describe("MCP stdio application handoff", () => {
             async () => undefined,
         );
 
-        expect(startTransport).toHaveBeenCalledWith({ protocol, onClose: expect.any(Function) });
+        expect(startTransport).toHaveBeenCalledWith({
+            protocol,
+            onClose: expect.any(Function),
+            onError: expect.any(Function),
+        });
+        onError?.(new Error("message failed"));
+        expect(app.enhancedLogger.error).toHaveBeenCalledWith("MCP stdio 消息处理失败", {
+            error: "message failed",
+        });
         await onClose?.();
         await onClose?.();
         expect(app.stop).toHaveBeenCalledOnce();

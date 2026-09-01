@@ -4,6 +4,7 @@ import { getLoadedPlugins, type LoadedPluginInfo } from "./plugin-loader.js";
 export interface McpStdioTransportOptions {
     protocol: Protocol;
     onClose?: () => void | Promise<void>;
+    onError?: (error: unknown) => void;
 }
 
 export type McpStdioTransportStarter = (options: McpStdioTransportOptions) => void;

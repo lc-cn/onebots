@@ -641,6 +641,10 @@ export async function runStartedMcpStdio(
         startStdioTransport({
             protocol: mcpProtocol,
             onClose: stopApp,
+            onError: error =>
+                app.enhancedLogger.error("MCP stdio 消息处理失败", {
+                    error: error instanceof Error ? error.message : String(error),
+                }),
         });
         await waitForClose();
     } catch (error) {

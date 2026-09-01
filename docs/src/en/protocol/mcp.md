@@ -103,7 +103,7 @@ JSON-RPC over stdin/stdout. The standard connection method for desktop AI Agents
 onebots mcp --config config.yaml --account qq/my-bot
 ```
 
-The stdio command reuses the exact MCP plugin entry that passed the registration contract during this startup. It does not resolve another copy relative to the `onebots` package, so npm projects, strict pnpm layouts, and workspace members all use the same version the gateway loaded. If account selection, protocol configuration, or the stdio export check fails, the command stops the accounts, protocols, and listeners it already started before returning the error. Repeated stdin close signals also trigger only one stop.
+The stdio command reuses the exact MCP plugin entry that passed the registration contract during this startup. It does not resolve another copy relative to the `onebots` package, so npm projects, strict pnpm layouts, and workspace members all use the same version the gateway loaded. Requests are processed in arrival order. If a handler fails asynchronously, a request with an `id` receives JSON-RPC error `-32603`, while a notification without an `id` receives no response; details go to the OneBots log without contaminating the stdout protocol stream. If account selection, protocol configuration, or the stdio export check fails, the command stops the accounts, protocols, and listeners it already started before returning the error. Closing stdin waits for accepted requests to finish, and repeated close signals trigger only one stop.
 
 ### HTTP/SSE (Remote)
 
