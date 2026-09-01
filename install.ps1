@@ -136,6 +136,15 @@ try {
         Invoke-Checked -FilePath $OneBots -Arguments @("start")
     }
     Wait-OneBotsReady -OneBotsCommand $OneBots
+    $StatusJson = @(& $OneBots status --json)
+    if ($LASTEXITCODE -ne 0) {
+        throw "服务虽已通过等待门禁，但无法取得最终状态证据"
+    }
+    $StatusReport = ($StatusJson -join [Environment]::NewLine) | ConvertFrom-Json
+    $ManagementUrl = [string]$StatusReport.target.baseUrl
+    if (-not $StatusReport.ok -or -not $ManagementUrl) {
+        throw "最终状态证据缺少已验证的管理地址"
+    }
 } catch {
     $InstallError = $_
     if ($RollbackOneBots -and $PreviousOneBotsVersion) {
@@ -160,17 +169,15 @@ try {
     Pop-Location
 }
 
-$Port = 6727
 $Token = ""
 foreach ($Line in Get-Content $ConfigFile) {
-    if ($Line -match '^port:\s*(\d+)') { $Port = $Matches[1] }
     if (-not $ConfigExists) {
         if ($Line -match '^access_token:\s*["'']?([^"'']+)["'']?') { $Token = $Matches[1].Trim() }
     }
 }
 
 Write-Step "安装完成。"
-Write-Step "管理地址：http://127.0.0.1:$Port"
+Write-Step "管理地址：$ManagementUrl"
 if (-not $ConfigExists -and $Token) {
     Write-Step "首次登录鉴权码：$Token"
     Write-Step "请登录后立即保存到密码管理器；后续重复安装不会提取或显示已有鉴权码。"

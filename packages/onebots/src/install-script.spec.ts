@@ -30,7 +30,15 @@ function createFakeRuntime() {
         path.join(bin, "node"),
         `#!/bin/sh
 if [ "$1" = "-p" ]; then
-    if [ -n "\${ONEBOTS_CATALOG_FILE:-}" ]; then
+    if [ -n "\${ONEBOTS_STATUS_JSON:-}" ]; then
+        case "$ONEBOTS_STATUS_JSON" in
+            *'"ok":true'*'"baseUrl":"'*)
+                printf '%s\\n' "$ONEBOTS_STATUS_JSON" | \
+                    sed -n 's/.*"baseUrl":"\\([^"]*\\)".*/\\1/p'
+                ;;
+            *) exit 2 ;;
+        esac
+    elif [ -n "\${ONEBOTS_CATALOG_FILE:-}" ]; then
         printf '3.0.8\\n'
     elif [ -n "\${ONEBOTS_PROTOCOL_MANIFEST:-}" ]; then
         awk -F'"' '{ print $4; exit }' "$ONEBOTS_PROTOCOL_MANIFEST"
@@ -66,6 +74,7 @@ case "$command_name" in
         cat > "$config_file" <<'EOF'
 access_token: first-token
 port: 6727
+path: /gateway
 plugins:
   adapters: []
   protocols: [onebot-v11]
@@ -86,7 +95,13 @@ EOF
     status)
         [ -f "$FAKE_SERVICE_MARKER" ] || exit 1
         [ "\${FAKE_STATUS_FAIL:-0}" = "1" ] && exit 3
-        printf '运行中，已就绪\\n'
+        if [ "$1" = "--json" ]; then
+            [ "\${FAKE_STATUS_JSON_INVALID:-0}" = "1" ] && printf '{"ok":true,"target":{}}\\n' && exit 0
+            printf '{"schemaVersion":1,"ok":true,"target":{"baseUrl":"%s"}}\\n' \
+                "\${FAKE_MANAGEMENT_URL:-http://127.0.0.1:6727/gateway}"
+        else
+            printf '运行中，已就绪\\n'
+        fi
         ;;
     *) exit 2 ;;
 esac
@@ -163,6 +178,7 @@ describe("one-command installer", () => {
 
         const firstCommands = fs.readFileSync(runtime.log, "utf8");
         expect(firstOutput).toContain("首次登录鉴权码：first-token");
+        expect(firstOutput).toContain("管理地址：http://127.0.0.1:6727/gateway");
         expect(firstCommands).toContain("npm install --omit=dev onebots@latest");
         expect(firstCommands).toContain(
             "npm install --omit=dev @onebots/protocol-onebot-v11@3.0.8",
@@ -181,6 +197,7 @@ describe("one-command installer", () => {
 
         const customized = `access_token: preserved-token
 port: 7788
+path: /custom
 plugins:
   adapters: [slack]
   protocols: [milky-v1]
@@ -190,13 +207,16 @@ slack.production:
         fs.writeFileSync(configPath, customized, "utf8");
         fs.writeFileSync(runtime.log, "", "utf8");
 
-        const output = runInstaller(runtime);
+        const output = runInstaller(runtime, {
+            FAKE_MANAGEMENT_URL: "http://127.0.0.1:7788/custom",
+        });
 
         expect(fs.readFileSync(configPath, "utf8")).toBe(customized);
         expect(output).toContain("检测到已有配置，保留账号、凭据和插件选择");
         expect(output).toContain("已保留现有管理凭据且未显示");
         expect(output).not.toContain("preserved-token");
         expect(output).not.toContain("首次登录鉴权码：");
+        expect(output).toContain("管理地址：http://127.0.0.1:7788/custom");
         const secondCommands = fs.readFileSync(runtime.log, "utf8");
         expect(secondCommands).not.toContain("onebots setup");
         expect(secondCommands).toContain(
@@ -207,6 +227,7 @@ slack.production:
         expect(secondCommands).toContain("onebots restart");
         expect(secondCommands).not.toContain("onebots start");
         expect(secondCommands).toContain("onebots status");
+        expect(secondCommands).toContain("onebots status --json");
     });
 
     it("PowerShell 安装脚本显式闭合原生命令失败并保留已有配置", () => {
@@ -220,6 +241,8 @@ slack.production:
         expect(source).toContain('Invoke-Checked -FilePath $OneBots -Arguments @("start")');
         expect(source).toContain("function Wait-OneBotsReady");
         expect(source).toContain("Wait-OneBotsReady -OneBotsCommand $OneBots");
+        expect(source).toContain("& $OneBots status --json");
+        expect(source).toContain("$StatusReport.target.baseUrl");
         expect(source).toMatch(
             /if \(-not \$ConfigExists\) \{\s+if \(\$Line -match '\^access_token/,
         );
@@ -388,6 +411,26 @@ slack.production:
         expect(output).not.toContain("安装完成");
         const commands = fs.readFileSync(runtime.log, "utf8");
         expect(commands.match(/onebots status/g)).toHaveLength(15);
+    });
+
+    it("最终状态证据缺少管理地址时不会宣告安装完成", () => {
+        const runtime = createFakeRuntime();
+        let stdout = "";
+        let stderr = "";
+
+        expect(() => {
+            try {
+                runInstaller(runtime, { FAKE_STATUS_JSON_INVALID: "1" });
+            } catch (error) {
+                stdout = String((error as { stdout?: string }).stdout ?? "");
+                stderr = String((error as { stderr?: string }).stderr ?? "");
+                throw error;
+            }
+        }).toThrow();
+
+        expect(stdout).not.toContain("安装完成");
+        expect(stderr).toContain("最终状态证据缺少已验证的管理地址");
+        expect(fs.readFileSync(runtime.log, "utf8")).toContain("onebots status --json");
     });
 
     it("npm 失败时立即停止且不创建配置或安装服务", () => {

@@ -213,11 +213,19 @@ rollback_onebots=false
     wait_for_service || fail "服务启动后未通过在线验证；请运行 onebots status 并检查服务日志"
 )
 
-port=$(awk '$1 == "port:" { print $2; exit }' "$CONFIG_FILE")
-[ -n "$port" ] || port=6727
+if ! status_json=$(ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" status --json); then
+    fail "服务虽已通过等待门禁，但无法取得最终状态证据"
+fi
+if ! management_url=$(
+    ONEBOTS_STATUS_JSON="$status_json" "$NODE_BIN" -p \
+        'const report = JSON.parse(process.env.ONEBOTS_STATUS_JSON); if (report.ok !== true || typeof report.target?.baseUrl !== "string" || !report.target.baseUrl) throw new Error("invalid status evidence"); report.target.baseUrl' \
+        2>/dev/null
+); then
+    fail "最终状态证据缺少已验证的管理地址"
+fi
 
 say "安装完成。"
-say "管理地址：http://127.0.0.1:$port"
+say "管理地址：$management_url"
 if [ "$config_exists" = false ]; then
     token=$(awk '$1 == "access_token:" { print $2; exit }' "$CONFIG_FILE" | tr -d "'\"")
     if [ -n "$token" ]; then
