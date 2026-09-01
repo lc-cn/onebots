@@ -216,7 +216,11 @@ export class App extends BaseApp {
         } catch {
             return;
         }
-        const configResponse = await handleManagementConfigSocketAction(this, payload);
+        const configResponse = await handleManagementConfigSocketAction(
+            this,
+            payload,
+            this.configPath,
+        );
         if (configResponse) {
             this.sendManagementWebSocketMessage(client, configResponse, "管理端配置回执");
             return;
@@ -240,16 +244,16 @@ export class App extends BaseApp {
         this.runtimeContractId = runtimeContract
             ? createServiceRuntimeContractId(runtimeContract)
             : undefined;
-        this.runtimeConfigStateTracker = new RuntimeConfigStateTracker(BaseApp.configPath);
-        this.extensionManager = new ExtensionManager({ configPath: BaseApp.configPath });
+        this.runtimeConfigStateTracker = new RuntimeConfigStateTracker(this.configPath);
+        this.extensionManager = new ExtensionManager({ configPath: this.configPath });
 
         if (client) this.logger.info(`使用 Web 前端目录: ${client}`);
         else this.logger.warn("未找到 @onebots/web/dist，管理端页面将不可用");
 
-        this._logCache = new LogCacheManager(path.join(BaseApp.dataDir, "terminal-logs.txt"));
+        this._logCache = new LogCacheManager(path.join(this.dataDir, "terminal-logs.txt"));
         this._logCache.interceptStdio();
         this._verification = new VerificationManager();
-        this._hfBackup = new HfBackupService(this.logger);
+        this._hfBackup = new HfBackupService(this.logger, this.configDir, this.configPath);
         this._messageDebug = new MessageDebugManager();
         this.ws = this.router.ws("/", {
             authorize: request => authorizeManagementUpgrade(this, request),
@@ -374,7 +378,7 @@ export class App extends BaseApp {
     }
 
     markRuntimeConfigApplied(configPath: string, source: string): void {
-        if (configPath === BaseApp.configPath) this.runtimeConfigStateTracker.markApplied(source);
+        if (configPath === this.configPath) this.runtimeConfigStateTracker.markApplied(source);
     }
 
     /** 验证监督器启动契约，并使用真实解析目录检查磁盘配置和全部待启动插件。 */
@@ -382,17 +386,17 @@ export class App extends BaseApp {
         if (process.argv.includes("--service-runtime")) {
             if (!process.argv[1]) throw new Error("无法确定当前 OneBots 服务入口");
             assertManagedRuntimeDefinitionsCurrent({
-                configPath: BaseApp.configPath,
+                configPath: this.configPath,
                 nodePath: process.execPath,
                 binPath: path.resolve(process.argv[1]),
                 workingDirectory: process.cwd(),
             });
         }
-        const config = parseRuntimeConfig(fs.readFileSync(BaseApp.configPath, "utf8"));
+        const config = parseRuntimeConfig(fs.readFileSync(this.configPath, "utf8"));
         const selection = getRuntimePluginSelection(config);
         const loadedPlugins = this.pluginInfos;
         await preflightServiceRuntimeIsolated({
-            configPath: BaseApp.configPath,
+            configPath: this.configPath,
             adapters:
                 selection?.adapters ??
                 loadedPlugins
@@ -446,10 +450,10 @@ export class App extends BaseApp {
         registerMessageDebugRoutes(this, this.router);
         registerExtensionRoutes(this, this.router);
 
-        if (!existsSync(BaseApp.logFile)) {
-            const dir = path.dirname(BaseApp.logFile);
+        if (!existsSync(this.logFile)) {
+            const dir = path.dirname(this.logFile);
             if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-            writeFileSync(BaseApp.logFile, "", "utf8");
+            writeFileSync(this.logFile, "", "utf8");
         }
         let logBroadcastRunning = false;
         let logBroadcastQueued = false;
@@ -462,7 +466,7 @@ export class App extends BaseApp {
             try {
                 do {
                     logBroadcastQueued = false;
-                    const data = await readLine(1, BaseApp.logFile);
+                    const data = await readLine(1, this.logFile);
                     this.ws.clients.forEach(client => {
                         this.sendManagementWebSocketMessage(
                             client,
@@ -481,7 +485,7 @@ export class App extends BaseApp {
         const fileListener = (eventType: string) => {
             if (eventType === "change") void broadcastLatestLog();
         };
-        const logWatcher = fs.watch(BaseApp.logFile, fileListener);
+        const logWatcher = fs.watch(this.logFile, fileListener);
         let logWatcherClosed = false;
         const closeLogWatcher = () => {
             if (logWatcherClosed) return;
@@ -535,15 +539,15 @@ export class App extends BaseApp {
                     {
                         event: "system.sync",
                         data: {
-                            config: fs.readFileSync(BaseApp.configPath, "utf8"),
+                            config: fs.readFileSync(this.configPath, "utf8"),
                             adapters: this.adapterInfos,
                             protocol: ProtocolRegistry.getAllMetadata(),
                             plugins: this.pluginInfos,
                             configState: this.runtimeConfigState,
                             app: this.info,
                             schema: getAppConfigSchema(),
-                            logs: fs.existsSync(BaseApp.logFile)
-                                ? await readLine(100, BaseApp.logFile)
+                            logs: fs.existsSync(this.logFile)
+                                ? await readLine(100, this.logFile)
                                 : "",
                         },
                     },

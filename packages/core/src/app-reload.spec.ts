@@ -373,6 +373,7 @@ describe("BaseApp reload boundary", () => {
         const onConfigPersisted = vi.fn();
         const app = {
             config: { ...config },
+            configPath: BaseApp.configPath,
             isStarted: false,
             isReloading: false,
             adapters: new Map(),

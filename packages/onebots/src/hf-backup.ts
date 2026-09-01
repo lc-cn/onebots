@@ -1,4 +1,3 @@
-import { BaseApp } from "@onebots/core";
 import { existsSync, readFileSync } from "fs";
 import { execFileSync } from "node:child_process";
 
@@ -7,7 +6,11 @@ interface MinimalLogger {
 }
 
 export class HfBackupService {
-    constructor(private logger: MinimalLogger) {}
+    constructor(
+        private logger: MinimalLogger,
+        private readonly configDir: string,
+        private readonly configPath: string,
+    ) {}
 
     async backupData(configContent: string): Promise<{ success: boolean; message?: string }> {
         const hfToken = process.env.HF_TOKEN;
@@ -20,7 +23,7 @@ export class HfBackupService {
             { path: "config_backup.yaml", content: configContent },
         ];
         try {
-            const dataDir = BaseApp.configDir;
+            const dataDir = this.configDir;
             if (existsSync(dataDir)) {
                 const tarBuf = execFileSync("tar", ["-czf", "-", "-C", dataDir, "."], {
                     encoding: "buffer",
@@ -67,7 +70,7 @@ export class HfBackupService {
             return { attempted: false };
         }
         try {
-            const configContent = readFileSync(BaseApp.configPath, "utf8");
+            const configContent = readFileSync(this.configPath, "utf8");
             const r = await this.backupData(configContent);
             if (!r.success && r.message) {
                 this.logger?.warn?.(`Hugging Face 备份（站点静态变更后）: ${r.message}`);

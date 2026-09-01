@@ -48,7 +48,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
         const config = ctx.request.body;
         try {
             assertManagementInstancePrecondition(app, ctx, "账号新增");
-            assertManagementConfigRevisionPrecondition(ctx, "账号新增");
+            assertManagementConfigRevisionPrecondition(ctx, "账号新增", app.configPath);
             await app.addAccount(config);
             ctx.body = { success: true, message: "添加成功" };
         } catch (error) {
@@ -62,7 +62,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
         const config = ctx.request.body;
         try {
             assertManagementInstancePrecondition(app, ctx, "账号编辑");
-            assertManagementConfigRevisionPrecondition(ctx, "账号编辑");
+            assertManagementConfigRevisionPrecondition(ctx, "账号编辑", app.configPath);
             await app.updateAccount(config);
             ctx.body = { success: true, message: "修改成功" };
         } catch (error) {
@@ -75,7 +75,7 @@ export function registerAdapterRoutes(app: App, router: Router): void {
     router.get("/api/remove", async (ctx: RouterContext) => {
         try {
             assertManagementInstancePrecondition(app, ctx, "账号删除");
-            assertManagementConfigRevisionPrecondition(ctx, "账号删除");
+            assertManagementConfigRevisionPrecondition(ctx, "账号删除", app.configPath);
             const { uin, platform, force } = ctx.request.query;
             await app.removeAccount(
                 requiredQueryString("platform", platform),

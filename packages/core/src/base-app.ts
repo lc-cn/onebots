@@ -81,6 +81,12 @@ export class BaseApp extends Koa {
     public enhancedLogger: EnhancedLogger;
     public lifecycle: LifecycleManager;
     public readonly metrics = new MetricsCollector();
+    /** 构造时固化的运行目录，后续实例不能通过静态兼容配置改写它。 */
+    public readonly configDir: string;
+    public readonly configFileName: string;
+    public readonly configPath: string;
+    public readonly dataDir: string;
+    public readonly logFile: string;
     private securityAuditMiddleware?: SecurityAuditMiddleware;
     static get configPath() {
         return path.join(BaseApp.configDir, BaseApp.configFileName);
@@ -128,6 +134,11 @@ export class BaseApp extends Koa {
         applicationIdentity: ApplicationIdentity = { name: pkg.name, version: pkg.version },
     ) {
         super(config);
+        this.configDir = BaseApp.configDir;
+        this.configFileName = BaseApp.configFileName;
+        this.configPath = path.join(this.configDir, this.configFileName);
+        this.dataDir = path.join(this.configDir, "data");
+        this.logFile = path.join(this.configDir, "onebots.log");
         this.applicationIdentity = normalizeApplicationIdentity(applicationIdentity);
 
         this.lifecycle = new LifecycleManager();
@@ -158,7 +169,7 @@ export class BaseApp extends Koa {
         this.enhancedLogger = createLogger("[onebots]", this.config.log_level);
 
         // 注册数据库资源到生命周期管理器
-        this.db = new SqliteDB(resolveDatabaseFilePath(BaseApp.dataDir, this.config.database));
+        this.db = new SqliteDB(resolveDatabaseFilePath(this.dataDir, this.config.database));
         this.lifecycle.register("database", () => this.db.close());
 
         // 创建 HTTP 服务器
@@ -182,7 +193,7 @@ export class BaseApp extends Koa {
         });
 
         // 每个应用实例持有自己的审计写入器，避免嵌入式宿主串写或互相关闭。
-        this.securityAuditMiddleware = createSecurityAudit(path.join(BaseApp.dataDir, "audit"));
+        this.securityAuditMiddleware = createSecurityAudit(path.join(this.dataDir, "audit"));
 
         // 注册健康检查端点（无需认证）
         registerObservabilityEndpoints(this, {
@@ -255,7 +266,7 @@ export class BaseApp extends Koa {
     /** 管理端 API：当前解析后的站点根静态目录。 */
     getPublicStaticRoot(): string | null {
         return resolvePublicStaticRoot(
-            BaseApp.configDir,
+            this.configDir,
             this.config.public_static_dir,
             this.enhancedLogger,
         );
@@ -313,7 +324,7 @@ export class BaseApp extends Koa {
                 accountId: config.account_id,
                 nextConfig,
                 configKey,
-                configPath: BaseApp.configPath,
+                configPath: this.configPath,
                 runtimeStarted: this.isStarted,
                 onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
             });
@@ -345,7 +356,7 @@ export class BaseApp extends Koa {
             accountId: config.account_id,
             nextConfig: newConfig,
             configKey: key,
-            configPath: BaseApp.configPath,
+            configPath: this.configPath,
             runtimeStarted: this.isStarted,
             onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
         });
@@ -364,7 +375,7 @@ export class BaseApp extends Koa {
             adapter,
             accountId: uin,
             configKey: `${p}.${uin}`,
-            configPath: BaseApp.configPath,
+            configPath: this.configPath,
             runtimeStarted: this.isStarted,
             forceStop: force,
             onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
