@@ -140,6 +140,10 @@ describe("BaseApp reload boundary", () => {
             { database: "prefix.db", path: " gateway/ " },
             { name: "embedded-gateway", version: "9.8.7" },
         );
+        app.router.post("/api/auth/login", ctx => {
+            ctx.status = 401;
+            ctx.body = { success: false };
+        });
 
         try {
             await app.start();
@@ -157,6 +161,18 @@ describe("BaseApp reload boundary", () => {
                 application: "embedded-gateway",
                 version: "9.8.7",
             });
+            const repeatedProbes = await Promise.all(
+                Array.from({ length: 105 }, () => fetch(`http://127.0.0.1:${port}/gateway/health`)),
+            );
+            expect(repeatedProbes.every(response => response.status === 200)).toBe(true);
+            await Promise.all(repeatedProbes.map(response => response.body?.cancel()));
+            const authenticationAttempts = await Promise.all(
+                Array.from({ length: 105 }, () =>
+                    fetch(`http://127.0.0.1:${port}/gateway/api/auth/login`, { method: "POST" }),
+                ),
+            );
+            expect(authenticationAttempts.every(response => response.status === 401)).toBe(true);
+            await Promise.all(authenticationAttempts.map(response => response.body?.cancel()));
             expect(root.status).toBe(404);
             await root.body?.cancel();
         } finally {

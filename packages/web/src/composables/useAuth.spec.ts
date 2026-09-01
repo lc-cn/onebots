@@ -75,6 +75,32 @@ describe("Web 鉴权码登录", () => {
         expect(getToken()).toBe("existing-token");
     });
 
+    it("登录受限时显示服务端的重试时间并保留已有会话", async () => {
+        setToken("existing-token", null, null);
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValueOnce(healthResponse())
+                .mockResolvedValueOnce(
+                    authenticationResponse(
+                        {
+                            message: "登录失败次数过多，请稍后再试",
+                            retryAfter: 275,
+                        },
+                        429,
+                    ),
+                ),
+        );
+
+        await expect(loginWithToken("candidate-token")).resolves.toEqual({
+            ok: false,
+            unavailable: true,
+            message: "登录失败次数过多，请稍后再试（请在 275 秒后重试）",
+        });
+        expect(getToken()).toBe("existing-token");
+    });
+
     it("服务端确认候选鉴权码后才替换会话", async () => {
         setToken("existing-token", null, null);
         const fetcher = vi

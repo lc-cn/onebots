@@ -10,11 +10,15 @@ Prevents API abuse and protects server resources.
 
 **Features**:
 - Time-window based rate limiting
-- Custom key generation support (default uses IP)
+- Custom key generation support
 - Automatic response headers (X-RateLimit-*)
 - Integrated security audit logging
 
-**Default Configuration**: 100 requests per minute
+**Default Configuration**: Each OneBots instance maintains a general budget of 100 ordinary requests per minute for every client IP. `/health`, `/ready`, and `/metrics` bypass that limiter completely, so page polling, Webhooks, or login attempts cannot make probes return 429. Management login also does not consume this shared budget and enters the stricter failure-only boundary below. Exact endpoint matching follows a custom `path` prefix.
+
+Management login's failure-only boundary allows one source to make 10 failed access-token or username/password attempts in five minutes. Successful login does not count, and preflight failures such as an instance switch do not consume the credential budget. Once limited, the service returns HTTP 429, `Retry-After`, and the remaining seconds; the Web login page shows that retry time directly while preserving any existing session. Every application instance independently owns both limiter stores and releases them during lifecycle cleanup, so embedded instances do not consume each other's budgets.
+
+When a third-party host supplies a custom key to `createRateLimit()`, the key is treated as an opaque string in a `Map`; names such as `__proto__` and `constructor` cannot access or modify an object prototype. The returned middleware provides `close()`, which an embedding host should call at the end of its lifecycle to release the cleanup timer and in-memory counters.
 
 **Auto-Enabled**: Automatically integrated in `BaseApp`, no additional configuration needed
 

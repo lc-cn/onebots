@@ -2,7 +2,7 @@ import type { IncomingMessage } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TokenManager, type RouterContext } from "@onebots/core";
 import type { App } from "../app.js";
-import { registerAuthRoutes } from "./auth.js";
+import { MANAGEMENT_LOGIN_FAILURE_LIMIT, registerAuthRoutes } from "./auth.js";
 
 type Handler = (ctx: RouterContext, next: () => Promise<void>) => void | Promise<void>;
 
@@ -29,6 +29,7 @@ function setup() {
             instance_id: "instance-current",
         },
         logger: { error: vi.fn() },
+        lifecycle: { register: vi.fn() },
     } as unknown as App;
     registerAuthRoutes(app, router as never);
     return {
@@ -40,7 +41,14 @@ function setup() {
 }
 
 function loginContext(body: Record<string, unknown>): RouterContext {
-    return { request: { body }, set: vi.fn() } as unknown as RouterContext;
+    return {
+        ip: "127.0.0.1",
+        method: "POST",
+        path: "/api/auth/login",
+        request: { body, ip: "127.0.0.1" },
+        get: () => "",
+        set: vi.fn(),
+    } as unknown as RouterContext;
 }
 
 function apiContext(token?: string, url = "/api/config"): RouterContext {
@@ -88,6 +96,50 @@ describe("management HTTP authentication", () => {
         const tokenLogin = loginContext({ access_token: "new-token" });
         await login(tokenLogin, async () => undefined);
         expect(tokenLogin.body).toMatchObject({ success: true, token: "new-token" });
+    });
+
+    it("只按来源限制失败登录，并返回可重试时间", async () => {
+        const { login } = setup();
+
+        for (let attempt = 0; attempt < MANAGEMENT_LOGIN_FAILURE_LIMIT; attempt++) {
+            const rejected = loginContext({ access_token: "wrong-token" });
+            await login(rejected, async () => undefined);
+            expect(rejected.status).toBe(401);
+        }
+
+        const limited = loginContext({ access_token: "old-token" });
+        await login(limited, async () => undefined);
+        expect(limited.status).toBe(429);
+        expect(limited.body).toMatchObject({
+            error: "RateLimitExceeded",
+            message: "登录失败次数过多，请稍后再试",
+            retryAfter: expect.any(Number),
+        });
+        expect(limited.set).toHaveBeenCalledWith("Retry-After", expect.any(String));
+
+        const otherSource = loginContext({ access_token: "old-token" });
+        otherSource.ip = "127.0.0.2";
+        otherSource.request.ip = "127.0.0.2";
+        await login(otherSource, async () => undefined);
+        expect(otherSource.status).not.toBe(429);
+        expect(otherSource.body).toMatchObject({ success: true });
+    });
+
+    it("成功登录和实例切换拒绝不消耗失败凭据预算", async () => {
+        const { login } = setup();
+
+        for (let attempt = 0; attempt < MANAGEMENT_LOGIN_FAILURE_LIMIT + 1; attempt++) {
+            const stale = loginContext({ access_token: "old-token" });
+            stale.get = () => "instance-before-restart";
+            await login(stale, async () => undefined);
+            expect(stale.status).toBe(409);
+        }
+        for (let attempt = 0; attempt < MANAGEMENT_LOGIN_FAILURE_LIMIT + 1; attempt++) {
+            const accepted = loginContext({ access_token: "old-token" });
+            await login(accepted, async () => undefined);
+            expect(accepted.status).not.toBe(429);
+            expect(accepted.body).toMatchObject({ success: true });
+        }
     });
 
     it("登录和刷新响应发布当前 OneBots 实例身份", async () => {

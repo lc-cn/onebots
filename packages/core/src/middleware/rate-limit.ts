@@ -3,11 +3,11 @@
  * 防止 API 滥用，保护服务器资源
  */
 
-import type { Context, Next } from "koa";
+import type { Context, Middleware, Next } from "koa";
 import { createLogger } from "../logger.js";
 import { logRateLimit } from "./security-audit.js";
 
-interface RateLimitConfig {
+export interface RateLimitConfig {
     /** 时间窗口（毫秒） */
     windowMs: number;
     /** 每个 IP 在时间窗口内的最大请求数 */
@@ -26,11 +26,16 @@ interface RateLimitConfig {
     statusCode?: number;
 }
 
-interface RateLimitStore {
-    [key: string]: {
-        count: number;
-        resetTime: number;
-    };
+export type RateLimitMiddleware = Middleware & { close(): void };
+
+export interface DefaultRateLimitOptions {
+    /** 不计入通用预算的宿主端点，例如健康与指标探针。 */
+    skip?: (ctx: Context) => boolean;
+}
+
+interface RateLimitRecord {
+    count: number;
+    resetTime: number;
 }
 
 /**
@@ -38,7 +43,7 @@ interface RateLimitStore {
  * 生产环境建议使用 Redis
  */
 class MemoryStore {
-    private store: RateLimitStore = {};
+    private readonly store = new Map<string, RateLimitRecord>();
     private cleanupInterval: NodeJS.Timeout;
 
     constructor() {
@@ -46,9 +51,9 @@ class MemoryStore {
         this.cleanupInterval = setInterval(
             () => {
                 const now = Date.now();
-                for (const key in this.store) {
-                    if (this.store[key].resetTime < now) {
-                        delete this.store[key];
+                for (const [key, record] of this.store) {
+                    if (record.resetTime < now) {
+                        this.store.delete(key);
                     }
                 }
             },
@@ -61,14 +66,14 @@ class MemoryStore {
      * 获取当前计数
      */
     get(key: string): { count: number; resetTime: number } | null {
-        const record = this.store[key];
+        const record = this.store.get(key);
         if (!record) {
             return null;
         }
 
         // 如果已过期，删除记录
         if (record.resetTime < Date.now()) {
-            delete this.store[key];
+            this.store.delete(key);
             return null;
         }
 
@@ -80,15 +85,16 @@ class MemoryStore {
      */
     increment(key: string, windowMs: number): { count: number; resetTime: number } {
         const now = Date.now();
-        const record = this.store[key];
+        const record = this.store.get(key);
 
         if (!record || record.resetTime < now) {
             // 创建新记录
-            this.store[key] = {
+            const next = {
                 count: 1,
                 resetTime: now + windowMs,
             };
-            return this.store[key];
+            this.store.set(key, next);
+            return next;
         }
 
         // 增加计数
@@ -100,14 +106,14 @@ class MemoryStore {
      * 重置计数
      */
     reset(key: string): void {
-        delete this.store[key];
+        this.store.delete(key);
     }
 
     /**
      * 清理所有记录
      */
     cleanup(): void {
-        this.store = {};
+        this.store.clear();
     }
 
     /**
@@ -124,7 +130,7 @@ class MemoryStore {
 /**
  * 创建速率限制中间件
  */
-export function createRateLimit(config: RateLimitConfig) {
+export function createRateLimit(config: RateLimitConfig): RateLimitMiddleware {
     const logger = createLogger("RateLimit");
     const store = new MemoryStore();
 
@@ -142,7 +148,7 @@ export function createRateLimit(config: RateLimitConfig) {
         statusCode = 429,
     } = config;
 
-    return async (ctx: Context, next: Next) => {
+    const middleware = async (ctx: Context, next: Next) => {
         // 检查是否跳过
         if (skip(ctx)) {
             return next();
@@ -203,13 +209,20 @@ export function createRateLimit(config: RateLimitConfig) {
             ctx.set("X-RateLimit-Reset", String(Math.ceil(newRecord.resetTime / 1000)));
         }
     };
+    return Object.assign(middleware, {
+        close: () => store.destroy(),
+    });
 }
 
-/**
- * 默认速率限制配置
- */
-export const defaultRateLimit = createRateLimit({
-    windowMs: 60 * 1000, // 1 分钟
-    max: 100, // 100 次请求
-    message: "Too many requests, please try again later.",
-});
+/** 默认速率限制工厂。BaseApp 每个实例单独创建，避免嵌入式宿主共享内存预算。 */
+export function createDefaultRateLimit(options: DefaultRateLimitOptions = {}): RateLimitMiddleware {
+    return createRateLimit({
+        windowMs: 60 * 1000, // 1 分钟
+        max: 100, // 100 次请求
+        skip: options.skip,
+        message: "Too many requests, please try again later.",
+    });
+}
+
+/** @deprecated BaseApp 使用每实例工厂；仅为既有嵌入式调用保留共享中间件。 */
+export const defaultRateLimit = createDefaultRateLimit();

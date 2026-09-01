@@ -28,7 +28,7 @@ import {
     securityAudit,
     closeSecurityAudit,
 } from "./middleware/security-audit.js";
-import { defaultRateLimit } from "./middleware/rate-limit.js";
+import { createDefaultRateLimit } from "./middleware/rate-limit.js";
 import { metricsCollector } from "./middleware/metrics-collector.js";
 import {
     getRuntimeProcessIdentity,
@@ -191,6 +191,16 @@ export class BaseApp extends Koa {
             coreVersion: pkg.version,
         });
 
+        const independentlyLimitedPaths = new Set(
+            ["/health", "/ready", "/metrics", "/api/auth/login"].map(
+                route => `${gatewayPath}${route}`,
+            ),
+        );
+        const requestRateLimit = createDefaultRateLimit({
+            skip: ctx => independentlyLimitedPaths.has(ctx.path),
+        });
+        this.lifecycle.register("requestRateLimit", () => requestRateLimit.close());
+
         // 用户配置的站点根静态目录（需在 Router 等功能路由之前，便于 GET /xxx.txt 等直出）
         const publicStaticDir = this.getPublicStaticRoot();
         if (publicStaticDir) {
@@ -215,7 +225,7 @@ export class BaseApp extends Koa {
             // 安全审计日志
             .use(securityAudit())
             // 速率限制（在认证之前，防止暴力破解）
-            .use(defaultRateLimit)
+            .use(requestRateLimit)
             .use(async (_ctx, next) => {
                 // 本层不做鉴权。管理端鉴权仅针对 /api（由 onebots 应用层负责）；各平台对外 API（如 /{platform}/{accountId}/onebot/v11/...）由各自协议/适配器单独鉴权。
                 return next();

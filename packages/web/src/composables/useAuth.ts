@@ -143,7 +143,10 @@ export const loginWithToken = async (accessToken: string): Promise<LoginResult> 
             response.status === 401 ? "鉴权码错误" : `登录请求失败（HTTP ${response.status}）`;
         const result = await readAuthenticationResponse(response);
         if (!result.ok) return { ok: false, unavailable: true, message: result.message };
-        const failure = { ok: false as const, message: readMessage(result.value) || fallback };
+        const failure = {
+            ok: false as const,
+            message: authenticationFailureMessage(response, result.value, fallback),
+        };
         return response.status === 401 ? failure : { ...failure, unavailable: true };
     }
 
@@ -192,7 +195,10 @@ export const login = async (username: string, password: string): Promise<LoginRe
                 : `登录请求失败（HTTP ${response.status}）`;
         const result = await readAuthenticationResponse(response);
         if (!result.ok) return { ok: false, unavailable: true, message: result.message };
-        const failure = { ok: false as const, message: readMessage(result.value) || fallback };
+        const failure = {
+            ok: false as const,
+            message: authenticationFailureMessage(response, result.value, fallback),
+        };
         return response.status === 401 ? failure : { ...failure, unavailable: true };
     }
 
@@ -311,3 +317,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const readMessage = (value: unknown) =>
     isRecord(value) && typeof value.message === "string" ? value.message.trim() : "";
+
+const authenticationFailureMessage = (response: Response, value: unknown, fallback: string) => {
+    const message = readMessage(value) || fallback;
+    if (response.status !== 429) return message;
+    const bodyRetryAfter = isRecord(value) ? value.retryAfter : undefined;
+    const retryAfter = normalizeRetryAfter(bodyRetryAfter ?? response.headers.get("Retry-After"));
+    return retryAfter === null ? message : `${message}（请在 ${retryAfter} 秒后重试）`;
+};
+
+const normalizeRetryAfter = (value: unknown): number | null => {
+    const parsed = typeof value === "number" ? value : Number(value);
+    return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 24 * 60 * 60 ? parsed : null;
+};
