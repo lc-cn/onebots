@@ -25,6 +25,18 @@ export interface WebSocketRouteOptions {
     authorize?: WebSocketUpgradeAuthorizer;
 }
 
+export class HttpRouteConflictError extends Error {
+    readonly path: string;
+    readonly methods: string[];
+
+    constructor(path: string, methods: string[]) {
+        super(`HTTP 路由冲突：${methods.join(", ")} ${path} 已注册`);
+        this.name = "HttpRouteConflictError";
+        this.path = path;
+        this.methods = methods;
+    }
+}
+
 export class WsServer<
     T extends typeof WebSocket = typeof WebSocket,
     U extends typeof IncomingMessage = typeof IncomingMessage,
@@ -101,6 +113,7 @@ export class Router extends KoaRouter {
     private readonly wsMap = new Map<string, WsServer>();
     private readonly wsAuthorizers = new Map<string, WebSocketUpgradeAuthorizer>();
     private readonly registrationScope = new AsyncLocalStorage<RouterRegistrationScope>();
+    private registrationDepth = 0;
     private upgradeHandler?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
 
     constructor(
@@ -191,15 +204,58 @@ export class Router extends KoaRouter {
         middleware: RouterMiddleware | RouterMiddleware[],
         additionalOptions?: LayerOptions,
     ): Layer | KoaRouter {
-        const previousLayers = new Set(this.stack);
-        const result = super.register(path, methods, middleware, additionalOptions);
-        const scope = this.registrationScope.getStore();
-        if (scope) {
-            for (const layer of this.stack) {
-                if (!previousLayers.has(layer)) scope.trackHttp(layer);
-            }
+        if (this.registrationDepth > 0) {
+            return super.register(path, methods, middleware, additionalOptions);
         }
-        return result;
+
+        const previousLayers = new Set(this.stack);
+        this.registrationDepth += 1;
+        try {
+            const result = super.register(path, methods, middleware, additionalOptions);
+            const addedLayers = this.stack.filter(layer => !previousLayers.has(layer));
+            this.assertNoHttpRouteConflicts(addedLayers, previousLayers);
+
+            const scope = this.registrationScope.getStore();
+            if (scope) {
+                for (const layer of addedLayers) scope.trackHttp(layer);
+            }
+            return result;
+        } catch (error) {
+            for (let index = this.stack.length - 1; index >= 0; index -= 1) {
+                if (!previousLayers.has(this.stack[index])) this.stack.splice(index, 1);
+            }
+            throw error;
+        } finally {
+            this.registrationDepth -= 1;
+        }
+    }
+
+    private assertNoHttpRouteConflicts(
+        addedLayers: Layer[],
+        previousLayers: ReadonlySet<Layer>,
+    ): void {
+        const checkedLayers = [...previousLayers];
+        for (const layer of addedLayers) {
+            for (const existing of checkedLayers) {
+                if (!this.isSameHttpPath(layer.path, existing.path)) continue;
+                const methods = layer.methods.filter(method => existing.methods.includes(method));
+                if (methods.length === 0) continue;
+                throw new HttpRouteConflictError(
+                    this.formatHttpPath(layer.path),
+                    [...new Set(methods)].sort(),
+                );
+            }
+            checkedLayers.push(layer);
+        }
+    }
+
+    private isSameHttpPath(left: string | RegExp, right: string | RegExp): boolean {
+        if (typeof left === "string" || typeof right === "string") return left === right;
+        return left.source === right.source && left.flags === right.flags;
+    }
+
+    private formatHttpPath(path: string | RegExp): string {
+        return typeof path === "string" ? path : path.toString();
     }
 
     /** 注册不受 Koa prefix 影响的 WebSocket pathname。 */

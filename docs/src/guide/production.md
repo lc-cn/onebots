@@ -365,6 +365,8 @@ readinessProbe:
 
 所有 `/health` 与 `/ready` 验证只读取最多 64 KiB 的响应正文，并同时检查声明的 `Content-Length` 与实际流式字节数。超限响应会立即取消读取并作为显式探针错误进入 doctor、status 以及 start/restart/update 的上线门禁；服务切换前记录旧 `instance_id` 的尽力探测也复用同一边界，避免错误端口上的未知 HTTP 服务用巨大或无限响应消耗 CLI 内存。
 
+共享 Router 会拒绝重复的 HTTP 方法与精确路径，并原子撤销数组路径等同一次注册产生的全部 Layer。冲突会在后注册处理器进入运行态前明确失败，而同一路径的不同方法仍可分别注册。
+
 ## 自动集成
 
 所有生产就绪功能已在 `BaseApp` 中自动集成，无需额外配置即可使用。

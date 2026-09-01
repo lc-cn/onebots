@@ -2,7 +2,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import { Router } from "./router.js";
+import { HttpRouteConflictError, Router } from "./router.js";
 
 const servers = new Set<ReturnType<typeof createServer>>();
 
@@ -121,6 +121,53 @@ describe("Router WebSocket lifecycle", () => {
         authorized.close();
         await once(authorized, "close");
         await router.cleanupAsync();
+    });
+});
+
+describe("Router HTTP route registration", () => {
+    it("拒绝完全相同的方法与路径，并回滚新增 Layer", () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+        router.get("/callback", ctx => {
+            ctx.body = "first";
+        });
+
+        expect(() =>
+            router.get("/callback", ctx => {
+                ctx.body = "second";
+            }),
+        ).toThrowError(
+            expect.objectContaining({
+                name: "HttpRouteConflictError",
+                path: "/callback",
+                methods: ["GET", "HEAD"],
+            }),
+        );
+        expect(router.stack).toHaveLength(1);
+    });
+
+    it("允许同一路径注册不同方法", () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server);
+
+        router.get("/callback", () => undefined);
+        router.post("/callback", () => undefined);
+
+        expect(router.stack).toHaveLength(2);
+    });
+
+    it("数组路径中的任一路径冲突时原子回滚整次注册", () => {
+        const server = createServer();
+        servers.add(server);
+        const router = new Router(server, { prefix: "/gateway" });
+        router.get("/existing", () => undefined);
+
+        expect(() => router.get(["/new", "/existing"], () => undefined)).toThrow(
+            new HttpRouteConflictError("/gateway/existing", ["GET", "HEAD"]),
+        );
+        expect(router.stack.map(layer => layer.path)).toEqual(["/gateway/existing"]);
     });
 });
 
