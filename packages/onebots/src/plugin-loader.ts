@@ -108,6 +108,14 @@ export function inspectPlugin(
                 };
             }
             if (fs.existsSync(entryPath)) {
+                const boundaryError = inspectPackageEntryBoundary(packageJsonPath, entryPath);
+                if (boundaryError) {
+                    return {
+                        status: "broken",
+                        candidate,
+                        reason: boundaryError,
+                    };
+                }
                 return readyInspection(candidate, entryPath, manifest);
             }
             return {
@@ -584,6 +592,32 @@ function readPackageJson(file: string): PackageManifest {
         return JSON.parse(fs.readFileSync(file, "utf8")) as PackageManifest;
     } catch {
         return {};
+    }
+}
+
+/** 允许整个包目录由 workspace/pnpm 软链接提供，但包内 manifest 与入口必须留在实际包根。 */
+function inspectPackageEntryBoundary(
+    packageJsonPath: string,
+    entryPath: string,
+): string | undefined {
+    try {
+        const packageRoot = fs.realpathSync(path.dirname(packageJsonPath));
+        const manifestPath = fs.realpathSync(packageJsonPath);
+        if (path.dirname(manifestPath) !== packageRoot) {
+            return `package.json 解析到实际包目录外: ${manifestPath}`;
+        }
+        const resolvedEntry = fs.realpathSync(entryPath);
+        const relative = path.relative(packageRoot, resolvedEntry);
+        if (
+            relative === ".." ||
+            relative.startsWith(`..${path.sep}`) ||
+            path.isAbsolute(relative)
+        ) {
+            return `插件入口解析到实际包目录外: ${resolvedEntry}`;
+        }
+        return undefined;
+    } catch (error) {
+        return `无法确认插件入口的实际归属: ${error instanceof Error ? error.message : String(error)}`;
     }
 }
 

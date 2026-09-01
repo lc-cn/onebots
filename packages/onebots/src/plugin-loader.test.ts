@@ -123,6 +123,77 @@ describe("plugin loader", () => {
         }
     });
 
+    it.skipIf(process.platform === "win32")(
+        "在执行代码前拒绝通过包内软链接逃逸的插件入口",
+        async () => {
+            const directory = createImportOnlyPlugin("linked-entry-adapter");
+            const packageDirectory = path.join(directory, "node_modules", "linked-entry-adapter");
+            const externalEntry = path.join(directory, "external-entry.js");
+            fs.writeFileSync(externalEntry, "globalThis.__onebotsExternalEntryExecuted = true;\n");
+            fs.rmSync(path.join(packageDirectory, "index.js"));
+            fs.symlinkSync(externalEntry, path.join(packageDirectory, "index.js"));
+            const globals = globalThis as typeof globalThis & {
+                __onebotsExternalEntryExecuted?: boolean;
+            };
+
+            try {
+                const result = await tryLoadRegisteredPlugin(
+                    "adapter",
+                    "linked-entry",
+                    ["linked-entry-adapter"],
+                    createRequire(path.join(directory, "package.json")),
+                );
+
+                expect(result).toMatchObject({
+                    loaded: false,
+                    message: expect.stringContaining("插件入口解析到实际包目录外"),
+                });
+                expect(globals.__onebotsExternalEntryExecuted).toBeUndefined();
+                expect(getLoadedPlugins()).toEqual([]);
+            } finally {
+                delete globals.__onebotsExternalEntryExecuted;
+            }
+        },
+    );
+
+    it.skipIf(process.platform === "win32")(
+        "允许整个插件包目录由 workspace 或包管理器软链接提供",
+        async () => {
+            const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
+            temporaryDirectories.push(directory);
+            fs.writeFileSync(
+                path.join(directory, "package.json"),
+                JSON.stringify({ type: "module" }),
+            );
+            const sourceDirectory = path.join(directory, "workspace-adapter");
+            fs.mkdirSync(sourceDirectory, { recursive: true });
+            fs.writeFileSync(
+                path.join(sourceDirectory, "package.json"),
+                JSON.stringify({
+                    name: "workspace-linked-adapter",
+                    type: "module",
+                    exports: "./index.js",
+                }),
+            );
+            fs.writeFileSync(
+                path.join(sourceDirectory, "index.js"),
+                "export const loaded = true;\n",
+            );
+            const nodeModules = path.join(directory, "node_modules");
+            fs.mkdirSync(nodeModules);
+            fs.symlinkSync(sourceDirectory, path.join(nodeModules, "workspace-linked-adapter"));
+
+            const result = await tryLoadPlugin(
+                "适配器",
+                "workspace-linked",
+                ["workspace-linked-adapter"],
+                createRequire(path.join(directory, "package.json")),
+            );
+
+            expect(result).toMatchObject({ loaded: true });
+        },
+    );
+
     it("rolls back every registration made before plugin initialization fails", async () => {
         const directory = createImportOnlyPlugin(
             "partial-adapter",
