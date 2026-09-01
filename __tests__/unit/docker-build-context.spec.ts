@@ -84,6 +84,8 @@ describe("Docker 构建上下文", () => {
         expect(source).toContain("hf-repository-download.mjs data_backup.tar.gz");
         expect(source).toContain("hf-repository-download.mjs config_backup.yaml");
         expect(source).toContain("hf-repository-download.mjs extensions_backup.json");
+        expect(source).toContain("node /app/scripts/hf-data-archive-restore.mjs");
+        expect(source).not.toContain("tar -xzf");
         expect(source).not.toContain("curl ");
         const clearStaleArchive = source.indexOf("rm -f /tmp/data_backup.tar.gz");
         const downloadArchive = source.indexOf("hf-repository-download.mjs data_backup.tar.gz");
@@ -98,6 +100,9 @@ describe("Docker 构建上下文", () => {
         );
         expect(dockerfile).toContain(
             "COPY --chown=node:node scripts/hf-repository-download.mjs /app/scripts/hf-repository-download.mjs",
+        );
+        expect(dockerfile).toContain(
+            "COPY --chown=node:node scripts/hf-data-archive-restore.mjs /app/scripts/hf-data-archive-restore.mjs",
         );
         expect(dockerfile).not.toContain("apk add --no-cache curl");
     });

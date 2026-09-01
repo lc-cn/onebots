@@ -38,11 +38,11 @@ else
   # 下载器固定仓库域名、制品名、60 秒超时与字节上限，并以 0600 原子替换目标。
   rm -f /tmp/data_backup.tar.gz
   node /app/scripts/hf-repository-download.mjs data_backup.tar.gz || true
-  if [ -s /tmp/data_backup.tar.gz ] && command -v tar >/dev/null 2>&1; then
-    if tar -xzf /tmp/data_backup.tar.gz -C /data 2>/dev/null; then
+  if [ -s /tmp/data_backup.tar.gz ]; then
+    if node /app/scripts/hf-data-archive-restore.mjs; then
       echo "[onebots] 已从仓库恢复整个 data 目录 (data_backup.tar.gz)"
     else
-      echo "[onebots] 解压 data_backup.tar.gz 失败，将尝试仅恢复配置"
+      echo "[onebots] 验证或恢复 data_backup.tar.gz 失败，将尝试仅恢复配置"
       rm -f /tmp/data_backup.tar.gz
     fi
   else

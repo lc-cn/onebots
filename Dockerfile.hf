@@ -12,6 +12,7 @@ EXPOSE 7860
 
 COPY docker-entrypoint-hf.sh /docker-entrypoint-hf.sh
 COPY --chown=node:node scripts/hf-repository-download.mjs /app/scripts/hf-repository-download.mjs
+COPY --chown=node:node scripts/hf-data-archive-restore.mjs /app/scripts/hf-data-archive-restore.mjs
 RUN chmod +x /docker-entrypoint-hf.sh
 ENTRYPOINT ["/docker-entrypoint-hf.sh"]
 

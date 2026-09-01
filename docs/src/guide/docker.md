@@ -173,14 +173,15 @@ docker run -d \
 **使用步骤：**
 
 1. 在 Hugging Face 创建 Space，SDK 选择 **Docker**。
-2. 在 Space 仓库中放入以下三个文件（可从本仓库复制，并保留 `scripts/` 子目录）：
+2. 在 Space 仓库中放入以下四个文件（可从本仓库复制，并保留 `scripts/` 子目录）：
    - **Dockerfile**：复制自仓库的 `Dockerfile.hf`（或把 `Dockerfile.hf` 重命名为 `Dockerfile`）。
    - **docker-entrypoint-hf.sh**：与 `Dockerfile.hf` 同目录的入口脚本。
    - **scripts/hf-repository-download.mjs**：有界恢复下载器，路径需与 `Dockerfile` 中的 `COPY` 保持一致。
+   - **scripts/hf-data-archive-restore.mjs**：数据归档检查与隔离恢复器，同样保留该相对路径。
 3. 在 Space → **Settings** → **Secrets** 中新增 `ONEBOTS_ACCESS_TOKEN`，值使用密码管理器或 `openssl rand -hex 32` 生成。部署完成后用该值登录管理端；不要放在公开的 Variables 中。
 4. 如需持久化配置与数据，见下方「HF 上持久化并查看 /data」。
 
-`Dockerfile.hf` 基于官方镜像 `ghcr.io/lc-cn/onebots:master`，仅增加 HF 的端口、入口脚本与无外部依赖的恢复下载器，构建快且不需要 GitHub Packages 的 build secret。
+`Dockerfile.hf` 基于官方镜像 `ghcr.io/lc-cn/onebots:master`，仅增加 HF 的端口、入口脚本与两个无外部依赖的恢复边界，构建快且不需要 GitHub Packages 的 build secret。
 
 `ONEBOTS_ACCESS_TOKEN` 是部署级覆盖项，即使恢复的 `config.yaml` 已含旧 `access_token`，管理端仍使用 Secret 中的值。修改 Secret 后需要重启 Space。启动日志只会说明环境鉴权已启用，不会输出鉴权码。HF 入口会把下载、解压与新建文件置于私有 `umask` 下，并在启动前把恢复后的 `/data/config.yaml` 验证为 `0600`；不能提供私有文件权限的存储不会被误报为安全启动。
 
@@ -212,6 +213,7 @@ docker run -d \
    - 若数据归档超过限制或 tar 失败，备份仍会成功提交配置与扩展恢复清单，并用空文件覆盖远端旧归档，避免下次启动误恢复过期数据。管理端会明确说明本次是否包含完整数据归档。
    - tar 最多运行 30 秒，HF 提交最多等待 60 秒；上游失败正文最多读取 64 KiB。磁盘异常、半开连接或代理返回异常大响应时，配置保存和静态文件操作会在明确边界内返回备份失败诊断，不会无限等待。
    - 容器启动恢复同样最多等待每个制品 60 秒；压缩归档上限为 15 MiB，配置与扩展清单各为 1 MiB。下载内容先写入权限 `0600` 的同目录临时文件，完整且未超限后才原子替换目标；断流、超限或目标父目录是符号链接时保留已有持久化文件并继续使用安全回退，不会把半份配置当作可启动状态。临时数据归档会在下载前与解压后清理，进程重启不会因新下载失败而重复恢复旧归档。
+   - 备份打包前与启动恢复时都只允许相对路径中的常规文件和目录，最多 10,000 个条目、展开后 128 MiB；不符合恢复契约的数据树会直接降级为配置与扩展清单备份，不会上传一个稍后必然拒绝的“完整归档”。目录读取、类型检查与隔离解压各最多运行 30 秒。恢复内容先进入 `/data` 下权限 `0700` 的暂存目录，核对条目集合、真实文件类型、硬链接和总大小，再预检全部目标类型并以 `0600` 文件覆盖；任一检查失败都会清理暂存目录且不覆盖既有文件。
 
 3. **仅手动备份**  
    - 不设置 `HF_TOKEN`，只设置 **`HF_REPO_ID`**。  

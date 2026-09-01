@@ -7,8 +7,11 @@ import {
 } from "./extension-capability-catalog.js";
 import { readBoundedResponseBody } from "./bounded-response.js";
 
-const HF_DATA_ARCHIVE_LIMIT_BYTES = 15 * 1024 * 1024;
-const HF_DATA_ARCHIVE_TIMEOUT_MS = 30_000;
+export const HF_DATA_ARCHIVE_LIMIT_BYTES = 15 * 1024 * 1024;
+export const HF_DATA_ARCHIVE_TIMEOUT_MS = 30_000;
+export const HF_DATA_EXPANDED_LIMIT_BYTES = 128 * 1024 * 1024;
+export const HF_DATA_ENTRY_LIMIT = 10_000;
+const HF_DATA_ENTRY_PATH_LIMIT_BYTES = 1024;
 const HF_UPLOAD_TIMEOUT_MS = 60_000;
 const HF_ERROR_RESPONSE_LIMIT_BYTES = 64 * 1024;
 const EXTENSION_MANIFEST_LIMIT_BYTES = 1024 * 1024;
@@ -96,6 +99,7 @@ export class HfBackupService {
             let archiveIncluded = false;
             if (fs.existsSync(this.configDir)) {
                 try {
+                    assertHfBackupTreeRestorable(this.configDir);
                     const tarBuffer = this.dependencies.archiveData(
                         this.configDir,
                         HF_DATA_ARCHIVE_TIMEOUT_MS,
@@ -207,6 +211,62 @@ export function buildHfExtensionRecovery(configDirectory: string): HfExtensionRe
         if (catalogEntry) packages[packageName] = catalogEntry.packageVersion;
     }
     return { schemaVersion: 1, packages };
+}
+
+export function assertHfBackupTreeRestorable(configDirectory: string): void {
+    const rootStat = fs.lstatSync(configDirectory);
+    if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
+        throw new Error(`HF 数据备份根目录不是常规目录: ${configDirectory}`);
+    }
+    let entries = 0;
+    let bytes = 0;
+    const visit = (directory: string, relativeDirectory: string): void => {
+        for (const name of fs.readdirSync(directory)) {
+            const relative = relativeDirectory ? `${relativeDirectory}/${name}` : name;
+            if (isExcludedHfBackupEntry(relative)) continue;
+            if (Buffer.byteLength(relative) > HF_DATA_ENTRY_PATH_LIMIT_BYTES) {
+                throw new Error(
+                    `HF 数据备份条目路径超过 ${HF_DATA_ENTRY_PATH_LIMIT_BYTES} 字节上限`,
+                );
+            }
+            if (/[\0-\x1f\x7f]/u.test(relative)) {
+                throw new Error(`HF 数据备份路径包含控制字符: ${relative}`);
+            }
+            if (relative.startsWith(".hf-restore-")) {
+                throw new Error(`HF 数据备份占用内部暂存路径: ${relative}`);
+            }
+            const absolute = path.join(directory, name);
+            const stat = fs.lstatSync(absolute);
+            entries++;
+            if (entries > HF_DATA_ENTRY_LIMIT) {
+                throw new Error(`HF 数据备份超过 ${HF_DATA_ENTRY_LIMIT} 个条目上限`);
+            }
+            if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) {
+                throw new Error(`HF 数据备份包含链接或特殊条目: ${relative}`);
+            }
+            if (stat.isDirectory()) {
+                visit(absolute, relative);
+                continue;
+            }
+            if (stat.nlink !== 1) throw new Error(`HF 数据备份包含硬链接条目: ${relative}`);
+            bytes += stat.size;
+            if (bytes > HF_DATA_EXPANDED_LIMIT_BYTES) {
+                throw new Error("HF 数据备份展开大小超过 128 MiB 上限");
+            }
+        }
+    };
+    visit(configDirectory, "");
+}
+
+function isExcludedHfBackupEntry(relative: string): boolean {
+    return (
+        relative === "extensions/node_modules" ||
+        relative.startsWith("extensions/node_modules/") ||
+        relative === "extensions/.pnpm-store" ||
+        relative.startsWith("extensions/.pnpm-store/") ||
+        relative === "extensions/package.json" ||
+        relative === "extensions/pnpm-lock.yaml"
+    );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

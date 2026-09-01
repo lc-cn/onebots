@@ -95,6 +95,34 @@ describe("Hugging Face backup", () => {
         );
     });
 
+    it("degrades before packing a data tree that the restore boundary would reject", async () => {
+        const fixture = createFixture();
+        fs.symlinkSync(fixture.configPath, path.join(fixture.root, "linked-config"));
+        const logger = { warn: vi.fn() };
+        const archiveData = vi.fn(() => Buffer.from("must-not-run"));
+        const fetcher = vi.fn<typeof fetch>(async () => Response.json({ ok: true }));
+        configureHfEnvironment();
+        const service = new HfBackupService(logger, fixture.root, fixture.configPath, {
+            archiveData,
+            fetcher,
+        });
+
+        await expect(service.backupData("port: 7860\n")).resolves.toEqual({
+            success: true,
+            dataArchiveIncluded: false,
+            message: "已备份配置和扩展恢复清单；完整数据归档超过限制或生成失败",
+        });
+        expect(archiveData).not.toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith(
+            "完整数据归档超过限制或生成失败，改为备份配置与扩展恢复清单",
+            {
+                error: expect.objectContaining({
+                    message: "HF 数据备份包含链接或特殊条目: linked-config",
+                }),
+            },
+        );
+    });
+
     it("rejects malformed extension state before uploading a misleading recovery file", async () => {
         const fixture = createFixture();
         fs.writeFileSync(fixture.manifestPath, JSON.stringify({ dependencies: [] }));
