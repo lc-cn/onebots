@@ -151,6 +151,7 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
     writeConfigFileAtomic(configPath, yaml.dump(config, { noRefs: true }), {
         backup: exists,
+        ...(managementCredentials.generated ? { mode: 0o600 } : {}),
     });
     writeCliOutput(`配置已就绪: ${configPath}`);
     if (managementCredentials.generated) {

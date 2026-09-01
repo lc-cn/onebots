@@ -118,7 +118,7 @@ describe("setup workflow", () => {
         expect(fs.readFileSync(dataPath, "utf8")).toBe("keep this mount evidence");
     });
 
-    it("atomically backs up an existing config before a forced update", async () => {
+    it("backs up a forced update and makes newly generated credentials private", async () => {
         const configPath = temporaryConfigPath();
         const original = "port: 7000\nlog_level: info\ntimeout: 30\ngeneral: {}\n";
         fs.writeFileSync(configPath, original, { mode: 0o640 });
@@ -126,11 +126,25 @@ describe("setup workflow", () => {
         await runSetup(configPath, { force: true });
 
         expect(fs.readFileSync(`${configPath}.bak`, "utf8")).toBe(original);
-        expect(fs.statSync(configPath).mode & 0o777).toBe(0o640);
+        expect(fs.statSync(configPath).mode & 0o777).toBe(0o600);
+        expect(fs.statSync(`${configPath}.bak`).mode & 0o777).toBe(0o600);
         expect(yaml.load(fs.readFileSync(configPath, "utf8"))).toMatchObject({
             port: 7000,
             general: {},
         });
+    });
+
+    it("preserves an intentional shared mode when no credential is persisted", async () => {
+        vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "deployment-secret");
+        const configPath = temporaryConfigPath();
+        const original = "port: 7000\ngeneral: {}\n";
+        fs.writeFileSync(configPath, original, { mode: 0o640 });
+
+        await runSetup(configPath, { force: true });
+
+        expect(parseConfig(configPath)).not.toHaveProperty("access_token");
+        expect(fs.statSync(configPath).mode & 0o777).toBe(0o640);
+        expect(fs.statSync(`${configPath}.bak`).mode & 0o777).toBe(0o640);
     });
 
     it("refuses to reset an existing config without the backup boundary", async () => {
