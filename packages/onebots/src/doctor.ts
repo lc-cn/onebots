@@ -191,15 +191,19 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             });
         }
         if (process.platform !== "win32") {
+            const resolvedConfigPath = fs.realpathSync(options.configPath);
             checks.push(
                 inspectSensitiveFilePermissions(
-                    options.configPath,
+                    resolvedConfigPath,
                     "config-mode",
                     "配置文件",
                     options.fix,
                 ),
             );
-            const backupPath = `${fs.realpathSync(options.configPath)}.bak`;
+            checks.push(
+                inspectSensitiveDirectoryMutationPermissions(path.dirname(resolvedConfigPath)),
+            );
+            const backupPath = `${resolvedConfigPath}.bak`;
             if (fs.existsSync(backupPath)) {
                 checks.push(
                     inspectSensitiveFilePermissions(
@@ -804,6 +808,51 @@ export function inspectSensitiveFilePermissions(
         level: "ok",
         message: `${label}权限 ${formattedMode} 未向组或其他用户开放`,
     };
+}
+
+/** 配置文件即使为 0600，也不能抵御其他用户在可写父目录中替换同一路径。 */
+export function inspectSensitiveDirectoryMutationPermissions(directoryPath: string): DoctorCheck {
+    try {
+        const stats = fs.statSync(directoryPath);
+        if (!stats.isDirectory()) {
+            return {
+                name: "config-dir-mode",
+                level: "error",
+                message: `配置父路径不是目录: ${directoryPath}`,
+            };
+        }
+        const mode = stats.mode & 0o1777;
+        const formattedMode = formatMode(mode);
+        if ((mode & 0o022) !== 0) {
+            if ((mode & 0o1000) !== 0) {
+                return {
+                    name: "config-dir-mode",
+                    level: "warning",
+                    message: `配置目录权限 ${formattedMode} 允许共享写入但启用了 sticky bit；请确认这是隔离后的临时部署目录`,
+                };
+            }
+            return {
+                name: "config-dir-mode",
+                level: "error",
+                message: `配置目录权限 ${formattedMode} 允许组或其他用户替换配置路径；请由目录所有者移除对应写权限`,
+            };
+        }
+        return {
+            name: "config-dir-mode",
+            level: "ok",
+            message: `配置目录权限 ${formattedMode} 不允许组或其他用户替换配置路径`,
+        };
+    } catch (error) {
+        const code =
+            error instanceof Error && "code" in error && typeof error.code === "string"
+                ? error.code
+                : "UNKNOWN";
+        return {
+            name: "config-dir-mode",
+            level: "error",
+            message: `配置目录权限无法验证: ${directoryPath} (${code})`,
+        };
+    }
 }
 
 function formatMode(mode: number): string {

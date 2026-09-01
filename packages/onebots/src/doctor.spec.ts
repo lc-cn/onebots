@@ -8,6 +8,7 @@ import {
     inspectConfiguredPublicStaticDirectory,
     inspectDataDirectory,
     inspectSensitiveDirectoryPermissions,
+    inspectSensitiveDirectoryMutationPermissions,
     inspectSensitiveFilePermissions,
     probeDoctorEndpoint,
     resolveGatewayBaseUrl,
@@ -80,6 +81,44 @@ describe.runIf(process.platform !== "win32")("doctor config permissions", () => 
             fixed: true,
         });
         expect(fs.statSync(backupPath).mode & 0o777).toBe(0o600);
+    });
+
+    it("拒绝允许其他用户替换配置路径的父目录权限", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-config-dir-mode-"));
+        temporaryDirectories.push(directory);
+        fs.chmodSync(directory, 0o770);
+
+        expect(inspectSensitiveDirectoryMutationPermissions(directory)).toEqual({
+            name: "config-dir-mode",
+            level: "error",
+            message: "配置目录权限 770 允许组或其他用户替换配置路径；请由目录所有者移除对应写权限",
+        });
+        expect(fs.statSync(directory).mode & 0o777).toBe(0o770);
+    });
+
+    it("允许组和其他用户遍历但不可修改的常见部署目录", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-config-dir-mode-"));
+        temporaryDirectories.push(directory);
+        fs.chmodSync(directory, 0o755);
+
+        expect(inspectSensitiveDirectoryMutationPermissions(directory)).toEqual({
+            name: "config-dir-mode",
+            level: "ok",
+            message: "配置目录权限 755 不允许组或其他用户替换配置路径",
+        });
+    });
+
+    it("把 sticky bit 保护的共享临时目录保留为严格模式可见的警告", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-config-dir-mode-"));
+        temporaryDirectories.push(directory);
+        fs.chmodSync(directory, 0o1777);
+
+        expect(inspectSensitiveDirectoryMutationPermissions(directory)).toEqual({
+            name: "config-dir-mode",
+            level: "warning",
+            message:
+                "配置目录权限 1777 允许共享写入但启用了 sticky bit；请确认这是隔离后的临时部署目录",
+        });
     });
 });
 
