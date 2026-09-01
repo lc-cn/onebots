@@ -211,12 +211,15 @@ export class ConnectionManager {
     private active = false;
     private generation = 0;
     private connectingGeneration?: number;
+    private connectController?: AbortController;
+    private externalSignal?: AbortSignal;
+    private externalAbort?: () => void;
     private options: Required<RetryOptions>;
     private logger: LoggerLike;
     private callbacks: ConnectionManagerCallbacks;
 
     constructor(
-        private connect: () => Promise<void>,
+        private connect: (signal?: AbortSignal) => Promise<void>,
         options: RetryOptions = RetryPresets.websocket,
         { logger, ...callbacks }: { logger?: LoggerLike } & ConnectionManagerCallbacks = {},
     ) {
@@ -228,11 +231,20 @@ export class ConnectionManager {
     /**
      * 开始连接
      */
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
         this.stop();
+        signal?.throwIfAborted();
+        const controller = new AbortController();
+        this.connectController = controller;
+        if (signal) {
+            const abort = () => this.stop();
+            this.externalSignal = signal;
+            this.externalAbort = abort;
+            signal.addEventListener("abort", abort, { once: true });
+        }
         this.active = true;
         this.reconnectAttempt = 0;
-        await this.tryConnect(this.generation);
+        await this.tryConnect(this.generation, controller.signal);
     }
 
     /**
@@ -241,6 +253,13 @@ export class ConnectionManager {
     stop(): void {
         this.active = false;
         this.generation++;
+        this.connectController?.abort();
+        this.connectController = undefined;
+        if (this.externalSignal && this.externalAbort) {
+            this.externalSignal.removeEventListener("abort", this.externalAbort);
+        }
+        this.externalSignal = undefined;
+        this.externalAbort = undefined;
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
@@ -285,7 +304,8 @@ export class ConnectionManager {
 
         this.reconnectTimer = setTimeout(() => {
             this.reconnectTimer = null;
-            void this.tryConnect(generation);
+            const signal = this.connectController?.signal;
+            if (signal) void this.tryConnect(generation, signal);
         }, delay);
     }
 
@@ -303,10 +323,11 @@ export class ConnectionManager {
         return this.reconnectAttempt;
     }
 
-    private async tryConnect(generation: number): Promise<void> {
+    private async tryConnect(generation: number, signal: AbortSignal): Promise<void> {
         if (
             !this.active ||
             generation !== this.generation ||
+            signal.aborted ||
             this.connectingGeneration === generation
         ) {
             return;
@@ -314,7 +335,7 @@ export class ConnectionManager {
         this.connectingGeneration = generation;
         let failure: Error | undefined;
         try {
-            await this.connect();
+            await this.connect(signal);
         } catch (error) {
             failure = error instanceof Error ? error : new Error(String(error));
         } finally {

@@ -60,12 +60,12 @@ export function createSlackAccount(
         }
     });
 
-    const manager = new ConnectionManager(() => bot.start(), RetryPresets.websocket, {
+    const manager = new ConnectionManager(signal => bot.start(signal), RetryPresets.websocket, {
         logger: adapter.logger,
     });
-    account.on("start", async () => {
+    account.on("start", async (signal: AbortSignal) => {
         account.status = AccountStatus.Pending;
-        await manager.start();
+        await manager.start(signal);
     });
     account.on("stop", async () => {
         manager.stop();

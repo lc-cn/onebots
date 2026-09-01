@@ -6,6 +6,70 @@ import { TelegramError } from "./errors.js";
 import type { Update } from "grammy/types";
 
 describe("TelegramBot 边界", () => {
+    it("平台就绪后仍保留账号启动信号以覆盖后续协议阶段", async () => {
+        const nativeBot = {
+            api: {},
+            botInfo: botInfo(),
+            isInited: () => true,
+        } as unknown as Bot;
+        const bot = new TelegramBot({
+            account_id: "bot",
+            token: "1:token",
+            receive_mode: "manual",
+        });
+        Object.assign(bot as unknown as { initialized: boolean; bot: Bot }, {
+            initialized: true,
+            bot: nativeBot,
+        });
+        const stopped = vi.fn();
+        bot.on("stopped", stopped);
+        const controller = new AbortController();
+
+        await bot.start(controller.signal);
+        controller.abort();
+
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+    });
+
+    it("启动取消后不再把迟到的 getMe 结果发布为 ready", async () => {
+        let releaseInit: (() => void) | undefined;
+        const nativeBot = {
+            api: {},
+            botInfo: botInfo(),
+            isInited: () => false,
+            init: vi.fn(
+                () =>
+                    new Promise<void>(resolve => {
+                        releaseInit = resolve;
+                    }),
+            ),
+        } as unknown as Bot;
+        const bot = new TelegramBot({
+            account_id: "bot",
+            token: "1:token",
+            receive_mode: "manual",
+        });
+        Object.assign(bot as unknown as { initialized: boolean; bot: Bot }, {
+            initialized: true,
+            bot: nativeBot,
+        });
+        const ready = vi.fn();
+        const stopped = vi.fn();
+        bot.on("ready", ready);
+        bot.on("stopped", stopped);
+        const controller = new AbortController();
+
+        const starting = bot.start(controller.signal);
+        const rejected = expect(starting).rejects.toMatchObject({ name: "AbortError" });
+        await vi.waitFor(() => expect(nativeBot.init).toHaveBeenCalledOnce());
+        controller.abort();
+        releaseInit?.();
+
+        await rejected;
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+        expect(ready).not.toHaveBeenCalled();
+    });
+
     it("在建立 grammY 客户端前拒绝空 token", () => {
         expect(() => new TelegramBot({ account_id: "bot", token: "" })).toThrowError(
             expect.objectContaining({ code: "TELEGRAM_TOKEN_REQUIRED" }),

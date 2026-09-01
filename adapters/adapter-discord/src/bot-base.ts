@@ -23,6 +23,8 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
     private ready = false;
     private running = false;
     private user: DiscordUser | null = null;
+    private startSignal?: AbortSignal;
+    private startAbort?: () => void;
 
     constructor(config: DiscordConfig) {
         super();
@@ -81,8 +83,10 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
         });
     }
 
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.running) return;
+        this.bindStartSignal(signal);
         this.running = true;
         try {
             if (
@@ -96,14 +100,19 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
                     this.client.initInteractions();
                 }
                 const user = wrapDiscordUser(await this.getREST().getCurrentUser());
+                signal?.throwIfAborted();
+                if (!this.running) return;
                 this.ready = true;
                 this.user = user;
                 await emitAllAwaited(this, "ready", user);
                 return;
             }
-            await this.client.start();
+            await this.client.start(signal);
+            signal?.throwIfAborted();
         } catch (error) {
             this.running = false;
+            this.unbindStartSignal();
+            if (signal?.aborted) throw signal.reason;
             const wrapped = DiscordError.wrap(error, "DISCORD_START_FAILED");
             this.emit("client_error", wrapped);
             throw wrapped;
@@ -111,13 +120,33 @@ export abstract class DiscordBotBase extends EventEmitter<DiscordBotEvents> {
     }
 
     async stop(): Promise<void> {
-        if (!this.running) return;
+        if (!this.running && !this.ready) return;
+        this.unbindStartSignal();
         this.running = false;
         this.ready = false;
         const failures = new FailureCollector();
         await failures.capture(() => this.client.stop());
         await failures.capture(() => emitAllAwaited(this, "stopped"));
         failures.throwIfAny("Discord 客户端停止期间发生多个错误");
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error => this.emit("client_error", error));
+        };
+        this.startSignal = signal;
+        this.startAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startAbort) {
+            this.startSignal.removeEventListener("abort", this.startAbort);
+        }
+        this.startSignal = undefined;
+        this.startAbort = undefined;
     }
 
     isReady(): boolean {

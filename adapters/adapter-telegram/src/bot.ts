@@ -48,6 +48,8 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
     private initPromise?: Promise<void>;
     private botInitPromise?: Promise<void>;
     private startPromise?: Promise<void>;
+    private startSignal?: AbortSignal;
+    private startAbort?: () => void;
     private running = false;
     private generation = 0;
     private pollingAbort?: AbortController;
@@ -127,23 +129,27 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
         });
     }
 
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.running) return;
         if (this.startPromise) return this.startPromise;
+        this.bindStartSignal(signal);
         const generation = this.generation;
-        const start = this.startInternal(generation);
+        const start = this.startInternal(generation, signal);
         this.startPromise = start;
         try {
             await start;
         } finally {
+            if (!this.running) this.unbindStartSignal();
             if (this.startPromise === start) this.startPromise = undefined;
         }
     }
 
-    private async startInternal(generation: number): Promise<void> {
+    private async startInternal(generation: number, signal?: AbortSignal): Promise<void> {
         let webhookInstalled = false;
         try {
             await this.initBot();
+            signal?.throwIfAborted();
             if (generation !== this.generation) return;
             if (this.receiveConfig.mode === "manual") {
                 await this.ensureBotInited();
@@ -162,6 +168,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
                     }),
                 );
                 webhookInstalled = true;
+                signal?.throwIfAborted();
                 // stop() 可能在请求期间发生；过期启动不能遗留远端 Webhook。
                 if (generation !== this.generation) {
                     await this.callApi("deleteWebhook", () => this.bot.api.deleteWebhook());
@@ -174,10 +181,12 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
                 this.pollingAbort = abort;
                 this.pollingTask = this.runPolling(generation, abort.signal);
             }
+            signal?.throwIfAborted();
             if (generation !== this.generation) return;
             this.running = true;
             await emitAllAwaited(this, "ready");
         } catch (error) {
+            if (signal?.aborted && generation !== this.generation) throw signal.reason;
             const failures = new FailureCollector();
             failures.add(error);
             if (generation === this.generation) {
@@ -208,6 +217,7 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
 
     async stop(): Promise<void> {
         const wasActive = this.running || Boolean(this.startPromise || this.pollingTask);
+        this.unbindStartSignal();
         const pollingTask = this.pollingTask;
         this.generation += 1;
         this.running = false;
@@ -239,6 +249,30 @@ export class TelegramBot extends EventEmitter<TelegramBotEvents> {
             this.emit("client_error", wrapped);
             throw wrapped;
         }
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error => {
+                this.emit(
+                    "client_error",
+                    TelegramError.wrap(error, "TELEGRAM_STOP_FAILED", "start.abort"),
+                );
+            });
+        };
+        this.startSignal = signal;
+        this.startAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startAbort) {
+            this.startSignal.removeEventListener("abort", this.startAbort);
+        }
+        this.startSignal = undefined;
+        this.startAbort = undefined;
     }
 
     async ingest(rawEvent: unknown): Promise<Update> {

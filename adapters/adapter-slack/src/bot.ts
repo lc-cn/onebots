@@ -47,6 +47,8 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     private socketClient?: SocketModeClient;
     private me: SlackUser | null = null;
     private startPromise?: Promise<void>;
+    private startSignal?: AbortSignal;
+    private startAbort?: () => void;
     private running = false;
     private generation = 0;
     private readonly messageContexts = new Map<string, { channel: string; threadTs?: string }>();
@@ -65,15 +67,18 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     /**
      * 启动 Bot
      */
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         if (this.running) return;
         if (this.startPromise) return this.startPromise;
+        this.bindStartSignal(signal);
         const generation = this.generation;
-        const start = this.startInternal(generation);
+        const start = this.startInternal(generation, signal);
         this.startPromise = start;
         try {
             await start;
         } finally {
+            if (!this.running) this.unbindStartSignal();
             if (this.startPromise === start) this.startPromise = undefined;
         }
     }
@@ -84,6 +89,7 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
     async stop(): Promise<void> {
         const failures = new FailureCollector();
         const wasActive = this.running || Boolean(this.startPromise || this.socketClient);
+        this.unbindStartSignal();
         this.generation += 1;
         this.running = false;
         this.startPromise = undefined;
@@ -103,17 +109,44 @@ export class SlackBot extends EventEmitter<SlackBotEvents> {
         failures.throwIfAny("Slack Bot 停止失败");
     }
 
-    private async startInternal(generation: number): Promise<void> {
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = () => {
+            void this.stop().catch(error => {
+                this.emit(
+                    "client_error",
+                    SlackError.wrap(error, "start.abort", "SLACK_SOCKET_STOP_FAILED"),
+                );
+            });
+        };
+        this.startSignal = signal;
+        this.startAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startAbort) {
+            this.startSignal.removeEventListener("abort", this.startAbort);
+        }
+        this.startSignal = undefined;
+        this.startAbort = undefined;
+    }
+
+    private async startInternal(generation: number, signal?: AbortSignal): Promise<void> {
         try {
             this.validateReceiveConfig();
             const authTest = await this.api.getBotInfo();
+            signal?.throwIfAborted();
             if (generation !== this.generation) return;
             this.me = authTest;
             if (this.receiveMode === "socket") await this.startSocket(generation);
+            signal?.throwIfAborted();
             if (generation !== this.generation) return;
             this.running = true;
             await emitAllAwaited(this, "ready");
         } catch (error) {
+            if (signal?.aborted && generation !== this.generation) throw signal.reason;
             if (generation === this.generation) {
                 const socket = this.socketClient;
                 this.running = false;

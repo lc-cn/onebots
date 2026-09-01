@@ -87,9 +87,9 @@ export function createDiscordAccount(
         }
     });
 
-    account.on("start", async () => {
+    account.on("start", async (signal: AbortSignal) => {
         try {
-            await bot.start();
+            await bot.start(signal);
         } catch (error) {
             adapter.logger.error(`启动 Discord Bot 失败:`, error);
             account.status = AccountStatus.OffLine;

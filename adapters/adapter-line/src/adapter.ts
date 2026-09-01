@@ -289,8 +289,11 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
     private bindLifecycle(account: Account<"line", LineBot>, bot: LineBot): void {
         let connectedInfo: Awaited<ReturnType<LineBot["getBotInfo"]>> | undefined;
         const manager = new ConnectionManager(
-            async () => {
-                connectedInfo = await bot.getBotInfo();
+            async signal => {
+                signal?.throwIfAborted();
+                const info = await bot.getBotInfo();
+                signal?.throwIfAborted();
+                connectedInfo = info;
             },
             RetryPresets.websocket,
             {
@@ -304,9 +307,9 @@ export class LineAdapter extends Adapter<LineBot, "line"> {
                 },
             },
         );
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             account.status = AccountStatus.Pending;
-            await manager.start();
+            await manager.start(signal);
         });
         account.on("stop", () => {
             manager.stop();

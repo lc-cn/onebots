@@ -234,6 +234,58 @@ describe("SlackBot HTTP Events", () => {
 });
 
 describe("SlackBot lifecycle", () => {
+    it("平台就绪后仍保留账号启动信号以覆盖后续协议阶段", async () => {
+        const bot = new SlackBot({
+            account_id: "A1",
+            token: "xoxb-test",
+            receive_mode: "webhook",
+            signing_secret: "secret",
+        });
+        bot.getWebClient().auth.test = vi
+            .fn()
+            .mockResolvedValue({ ok: true, user_id: "B1", user: "bot" });
+        const stopped = vi.fn();
+        bot.on("stopped", stopped);
+        const controller = new AbortController();
+
+        await bot.start(controller.signal);
+        controller.abort();
+
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+    });
+
+    it("启动取消后不再把迟到鉴权结果发布为 ready", async () => {
+        const bot = new SlackBot({
+            account_id: "A1",
+            token: "xoxb-test",
+            receive_mode: "webhook",
+            signing_secret: "secret",
+        });
+        let resolveAuth: ((value: { ok: true; user_id: string; user: string }) => void) | undefined;
+        bot.getWebClient().auth.test = vi.fn(
+            () =>
+                new Promise(resolve => {
+                    resolveAuth = resolve;
+                }),
+        );
+        const ready = vi.fn();
+        const stopped = vi.fn();
+        bot.on("ready", ready);
+        bot.on("stopped", stopped);
+        const controller = new AbortController();
+
+        const starting = bot.start(controller.signal);
+        const rejected = expect(starting).rejects.toMatchObject({ name: "AbortError" });
+        await Promise.resolve();
+        controller.abort();
+        resolveAuth?.({ ok: true, user_id: "B1", user: "bot" });
+
+        await rejected;
+        await vi.waitFor(() => expect(stopped).toHaveBeenCalledOnce());
+        expect(ready).not.toHaveBeenCalled();
+        expect(bot.getCachedMe()).toBeNull();
+    });
+
     it("并发启动只鉴权一次且重复停止不重复发事件", async () => {
         const bot = new SlackBot({
             account_id: "A1",
