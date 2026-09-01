@@ -2,7 +2,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import yaml from "js-yaml";
-import { writeConfigFileAtomic, type Account, type Protocol } from "@onebots/core";
+import {
+    BaseAppConfigSchema,
+    writeConfigFileAtomic,
+    type Account,
+    type Protocol,
+} from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "../service-manager.js";
 import { preflightServiceRuntime, type ServicePreflightSpec } from "../service-preflight.js";
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
@@ -462,15 +467,9 @@ export function setConfig(options: RuntimeOptions, key: string, value: string): 
             current[part] = {};
         current = current[part] as Record<string, unknown>;
     }
-    const numeric = Number(value);
-    current[keys.at(-1)!] =
-        value === "true"
-            ? true
-            : value === "false"
-              ? false
-              : Number.isNaN(numeric)
-                ? value
-                : numeric;
+    const leaf = keys.at(-1)!;
+    const expectedType = resolveConfigSetType(keys, current[leaf]);
+    current[leaf] = parseConfigSetValue(key, value, expectedType);
     writeConfigFileAtomic(file, yaml.dump(data), { backup: true });
     return { output: `已设置 ${key}` };
 }
@@ -720,4 +719,42 @@ function readConfig(file: string): Record<string, unknown> {
     } catch (error) {
         throw new CliError(`配置文件无效: ${formatRuntimeConfigDiagnostic(error)}`, 2);
     }
+}
+
+type ConfigSetScalarType = "string" | "number" | "boolean";
+
+/** 顶层基础 Schema 优先于损坏的现有值；嵌套字段沿用其当前标量类型。 */
+function resolveConfigSetType(keys: string[], existing: unknown): ConfigSetScalarType | undefined {
+    if (keys.length === 1) {
+        const rule = BaseAppConfigSchema[keys[0]] as { type?: unknown } | undefined;
+        if (rule && ["string", "number", "boolean"].includes(String(rule.type))) {
+            return rule.type as ConfigSetScalarType;
+        }
+    }
+    return ["string", "number", "boolean"].includes(typeof existing)
+        ? (typeof existing as ConfigSetScalarType)
+        : undefined;
+}
+
+function parseConfigSetValue(
+    key: string,
+    value: string,
+    expectedType: ConfigSetScalarType | undefined,
+): string | number | boolean {
+    if (expectedType === "string") return value;
+    if (expectedType === "boolean") {
+        if (value === "true") return true;
+        if (value === "false") return false;
+        throw new CliError(`配置项 ${key} 需要布尔值 true 或 false`, 2);
+    }
+    const numeric = Number(value);
+    if (expectedType === "number") {
+        if (!value.trim() || !Number.isFinite(numeric)) {
+            throw new CliError(`配置项 ${key} 需要有限数字`, 2);
+        }
+        return numeric;
+    }
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return Number.isFinite(numeric) && value.trim() ? numeric : value;
 }
