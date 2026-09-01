@@ -16,9 +16,19 @@ export interface GoogleChatTokenVerifier {
     ): Promise<void>;
 }
 
-export class GoogleChatAuth implements GoogleChatTokenVerifier {
+export interface GoogleChatAccessTokenProvider {
+    accessToken(signal?: AbortSignal): Promise<string>;
+    reset(): void;
+}
+
+type ServiceAuth = Pick<GoogleAuth, "getAccessToken">;
+type ServiceAuthFactory = (signal?: AbortSignal) => ServiceAuth;
+
+export class GoogleChatAuth implements GoogleChatTokenVerifier, GoogleChatAccessTokenProvider {
     private readonly oauth: Pick<OAuth2Client, "verifyIdToken" | "verifySignedJwtWithCertsAsync">;
-    private readonly auth?: GoogleAuth;
+    private serviceAuth?: ServiceAuth;
+    private serviceAuthSignal?: AbortSignal;
+    private serviceAuthGeneration = 0;
     private certs?: { value: Record<string, string>; expiresAt: number };
 
     constructor(
@@ -28,30 +38,55 @@ export class GoogleChatAuth implements GoogleChatTokenVerifier {
             OAuth2Client,
             "verifyIdToken" | "verifySignedJwtWithCertsAsync"
         > = new OAuth2Client(),
-    ) {
-        this.oauth = oauth;
-        if ((config.auth_mode || "service-account") === "service-account") {
-            this.auth = new GoogleAuth({
+        private readonly serviceAuthFactory: ServiceAuthFactory = signal =>
+            new GoogleAuth({
                 credentials: {
                     client_email: config.service_account_email,
                     private_key: config.service_account_private_key,
                 },
                 scopes: config.oauth_scopes?.length ? config.oauth_scopes : [DEFAULT_SCOPE],
-            });
-        }
+                ...(signal ? { clientOptions: { transporterOptions: { signal } } } : {}),
+            }),
+    ) {
+        this.oauth = oauth;
     }
 
-    async accessToken(): Promise<string> {
+    async accessToken(signal?: AbortSignal): Promise<string> {
+        signal?.throwIfAborted();
         if ((this.config.auth_mode || "service-account") === "access-token") {
             if (!this.config.access_token) throw GoogleChatError.invalid("access_token 未配置");
             return this.config.access_token;
         }
-        const token = await this.auth?.getAccessToken();
+        if (!this.serviceAuth || (signal && signal !== this.serviceAuthSignal)) {
+            this.serviceAuth = this.serviceAuthFactory(signal);
+            this.serviceAuthSignal = signal;
+            this.serviceAuthGeneration += 1;
+        }
+        const auth = this.serviceAuth;
+        const generation = this.serviceAuthGeneration;
+        const token = await auth.getAccessToken();
+        if (generation !== this.serviceAuthGeneration || auth !== this.serviceAuth) {
+            throw this.authCancelled();
+        }
+        signal?.throwIfAborted();
         if (!token)
             throw new GoogleChatError("Google OAuth 未返回 access token", {
                 code: "GOOGLE_CHAT_AUTH_ERROR",
             });
         return token;
+    }
+
+    /** 丢弃当前 OAuth 客户端，使迟到 token 不能进入后续生命周期。 */
+    reset(): void {
+        this.serviceAuthGeneration += 1;
+        this.serviceAuth = undefined;
+        this.serviceAuthSignal = undefined;
+    }
+
+    private authCancelled(): GoogleChatError {
+        return new GoogleChatError("Google OAuth 凭证请求已取消", {
+            code: "GOOGLE_CHAT_AUTH_CANCELLED",
+        });
     }
 
     async verify(

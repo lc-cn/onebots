@@ -26,6 +26,8 @@ google-chat.chat_app:
 
 For an existing user OAuth flow, choose `access-token`, set `principal_name: users/me`, and list the scopes granted to the token. The external OAuth service remains responsible for refreshing a static token.
 
+The initial service-account OAuth token exchange and subsequent protocol outlets share OneBots' global `timeout`. A startup timeout, explicit stop, or configuration reload passes cancellation into Google Auth's HTTP transport and discards that lifecycle's OAuth client. Even if a custom transport ignores cancellation, late credentials cannot enter the next startup attempt. The signal remains attached until protocol startup finishes, so rollback also clears authentication state.
+
 Leaving as the app requires `chat.memberships.app`. For canonical `leave_group` under user authentication, configure `principal_name` as `users/{id|email}`: the `users/me` alias works for many user APIs but cannot uniquely match a membership resource.
 
 ## Interaction HTTPS

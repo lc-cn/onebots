@@ -1,6 +1,10 @@
 import { EventEmitter } from "node:events";
 import { emitAllAwaited, ReliableEventIngress, sha256Json, ValidationError } from "onebots";
-import { GoogleChatAuth, type GoogleChatTokenVerifier } from "./auth.js";
+import {
+    GoogleChatAuth,
+    type GoogleChatAccessTokenProvider,
+    type GoogleChatTokenVerifier,
+} from "./auth.js";
 import { GoogleChatError } from "./errors.js";
 import {
     interactionIdentity,
@@ -34,6 +38,7 @@ const JSON_HEADERS = Object.freeze({ "content-type": "application/json" });
 export interface GoogleChatClientDependencies {
     fetcher?: typeof fetch;
     verifier?: GoogleChatTokenVerifier;
+    auth?: GoogleChatAccessTokenProvider;
     reportError?(error: Error): void;
     /** 为交互事件生成同步文本、卡片或 dialog 响应。 */
     interactionResponse?(
@@ -44,13 +49,16 @@ export interface GoogleChatClientDependencies {
 /** 交互 HTTP、Pub/Sub push 与 manual 事件共用的 Google Chat Client。 */
 export class GoogleChatClient extends EventEmitter<GoogleChatClientEvents> {
     private readonly ingress = new ReliableEventIngress<string>();
-    private readonly auth: GoogleChatAuth;
+    private readonly auth: GoogleChatAccessTokenProvider;
     private readonly verifier: GoogleChatTokenVerifier;
     private readonly transport: GoogleChatTransport;
     private readonly spaces = new Map<string, GoogleChatSpace>();
     private readonly users = new Map<string, GoogleChatUser>();
     private readonly messages = new Map<string, GoogleChatMessage>();
     private startTask?: Promise<void>;
+    private startAbort?: AbortController;
+    private startSignal?: AbortSignal;
+    private startSignalAbort?: () => void;
     private started = false;
     private generation = 0;
 
@@ -60,8 +68,9 @@ export class GoogleChatClient extends EventEmitter<GoogleChatClientEvents> {
     ) {
         super();
         assertGoogleChatConfig(config);
-        this.auth = new GoogleChatAuth(config, dependencies.fetcher);
-        this.verifier = dependencies.verifier || this.auth;
+        const defaultAuth = new GoogleChatAuth(config, dependencies.fetcher);
+        this.auth = dependencies.auth ?? defaultAuth;
+        this.verifier = dependencies.verifier ?? defaultAuth;
         this.transport = new GoogleChatTransport(config, this.auth, dependencies.fetcher);
     }
 
@@ -78,37 +87,80 @@ export class GoogleChatClient extends EventEmitter<GoogleChatClientEvents> {
         );
     }
 
-    async start(): Promise<void> {
-        if (this.started) return;
+    async start(signal?: AbortSignal): Promise<void> {
+        if (signal?.aborted) throw this.startCancelled(signal.reason);
+        if (this.started) {
+            this.bindStartSignal(signal);
+            return;
+        }
         if (this.startTask) return this.startTask;
         const generation = ++this.generation;
-        const task = this.startInternal(generation);
+        const controller = new AbortController();
+        this.startAbort = controller;
+        this.bindStartSignal(signal);
+        const task = this.startInternal(generation, controller.signal).catch(error => {
+            if (controller.signal.aborted || generation !== this.generation) {
+                throw this.startCancelled(error);
+            }
+            throw error;
+        });
         this.startTask = task;
         try {
             await task;
         } finally {
             if (this.startTask === task) this.startTask = undefined;
+            if (!this.started && this.startAbort === controller) {
+                this.startAbort = undefined;
+                this.unbindStartSignal();
+            }
         }
     }
 
-    private async startInternal(generation: number): Promise<void> {
-        await this.auth.accessToken();
-        if (generation !== this.generation)
-            throw new GoogleChatError("Google Chat Client 启动已取消", {
-                code: "GOOGLE_CHAT_START_CANCELLED",
-            });
+    private async startInternal(generation: number, signal: AbortSignal): Promise<void> {
+        await this.auth.accessToken(signal);
+        this.assertStartCurrent(generation, signal);
         await emitAllAwaited(this, "ready");
-        if (generation !== this.generation)
-            throw new GoogleChatError("Google Chat Client 启动已取消", {
-                code: "GOOGLE_CHAT_START_CANCELLED",
-            });
+        this.assertStartCurrent(generation, signal);
         this.started = true;
     }
 
     async stop(): Promise<void> {
+        this.unbindStartSignal();
         this.generation += 1;
         this.started = false;
+        this.startTask = undefined;
+        this.startAbort?.abort(this.startCancelled());
+        this.startAbort = undefined;
+        this.auth.reset();
         await emitAllAwaited(this, "stop");
+    }
+
+    private bindStartSignal(signal?: AbortSignal): void {
+        this.unbindStartSignal();
+        if (!signal) return;
+        const abort = (): void => this.startAbort?.abort(this.startCancelled(signal.reason));
+        this.startSignal = signal;
+        this.startSignalAbort = abort;
+        signal.addEventListener("abort", abort, { once: true });
+    }
+
+    private unbindStartSignal(): void {
+        if (this.startSignal && this.startSignalAbort) {
+            this.startSignal.removeEventListener("abort", this.startSignalAbort);
+        }
+        this.startSignal = undefined;
+        this.startSignalAbort = undefined;
+    }
+
+    private assertStartCurrent(generation: number, signal: AbortSignal): void {
+        if (generation !== this.generation || signal.aborted) throw this.startCancelled();
+    }
+
+    private startCancelled(cause?: unknown): GoogleChatError {
+        return new GoogleChatError("Google Chat Client 启动已取消", {
+            code: "GOOGLE_CHAT_START_CANCELLED",
+            cause,
+        });
     }
 
     call(method: string, path: string, options?: GoogleChatCallOptions): Promise<unknown> {

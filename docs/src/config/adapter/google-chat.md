@@ -47,6 +47,8 @@ google-chat.user:
 
 静态 access token 的刷新由提供它的系统负责，适配器不会猜测 refresh token 流程。
 
+Service Account 的首次 OAuth token 交换与后续协议出口共用 OneBots 全局 `timeout`。启动超时、人工停止或配置热重载会把取消信号传入 Google Auth 的 HTTP transport，并丢弃该生命周期的 OAuth 客户端；即使自定义 transport 忽略取消，迟到凭证也不能进入重试后的新生命周期。账号就绪后信号会保留到协议启动结束，失败回滚会同时清理认证状态。
+
 ## Interaction HTTPS
 
 ```yaml

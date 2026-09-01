@@ -397,9 +397,9 @@ export class GoogleChatAdapter extends Adapter<GoogleChatClient, "google-chat"> 
             ),
         );
         this.httpHost.mount(account.account_id, client);
-        account.on("start", async () => {
+        account.on("start", async (signal: AbortSignal) => {
             try {
-                await client.start();
+                await client.start(signal);
                 account.status = AccountStatus.Online;
                 account.nickname = config.app_display_name || client.principalName;
                 this.logger.info(

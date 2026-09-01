@@ -168,6 +168,55 @@ describe("GoogleChatClient", () => {
         await expect(retry.start()).rejects.toThrow("bootstrap failed");
         await expect(retry.start()).resolves.toBeUndefined();
     });
+
+    it("启动信号会取消 OAuth 初始化并在 stop 时丢弃凭证状态", async () => {
+        const auth = {
+            accessToken: vi.fn(
+                (signal?: AbortSignal) =>
+                    new Promise<string>((_resolve, reject) => {
+                        signal?.addEventListener("abort", () =>
+                            reject(new DOMException("aborted", "AbortError")),
+                        );
+                    }),
+            ),
+            reset: vi.fn(),
+        };
+        const client = new GoogleChatClient(manualConfig, { auth });
+        const controller = new AbortController();
+
+        const starting = client.start(controller.signal);
+        await vi.waitFor(() => expect(auth.accessToken).toHaveBeenCalledOnce());
+        expect(auth.accessToken).toHaveBeenCalledWith(expect.any(AbortSignal));
+        controller.abort();
+
+        await expect(starting).rejects.toMatchObject({ code: "GOOGLE_CHAT_START_CANCELLED" });
+        await client.stop();
+        expect(auth.reset).toHaveBeenCalledOnce();
+    });
+
+    it("ready 监听器执行期间取消时不会提交旧账号状态", async () => {
+        const client = new GoogleChatClient(manualConfig);
+        const controller = new AbortController();
+        let readyEntered!: () => void;
+        let releaseReady!: () => void;
+        const entered = new Promise<void>(resolve => {
+            readyEntered = resolve;
+        });
+        const blocked = new Promise<void>(resolve => {
+            releaseReady = resolve;
+        });
+        client.on("ready", () => {
+            readyEntered();
+            return blocked;
+        });
+
+        const starting = client.start(controller.signal);
+        await entered;
+        controller.abort();
+        releaseReady();
+
+        await expect(starting).rejects.toMatchObject({ code: "GOOGLE_CHAT_START_CANCELLED" });
+    });
 });
 
 function cloudMessage(): Record<string, unknown> {
