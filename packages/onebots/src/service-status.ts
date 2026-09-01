@@ -165,6 +165,18 @@ export async function inspectServiceStatus(
             options.json,
         );
     }
+    const untrustedPathCheck = findUntrustedServicePathCheck(serviceRuntime.checks);
+    if (untrustedPathCheck) {
+        return formatServiceStatusResult(
+            createServiceStatusReport(scope, "unavailable", processManager, {
+                configPath: spec.configPath,
+                serviceDefinition,
+                serviceRuntime,
+                error: `${untrustedPathCheck.message}，服务控制面或配置路径不可信，未执行 HTTP 探测`,
+            }),
+            options.json,
+        );
+    }
     try {
         const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
         const baseUrl = resolveGatewayBaseUrl(config);
@@ -228,6 +240,23 @@ export async function inspectServiceStatus(
             options.json,
         );
     }
+}
+
+const SERVICE_PATH_TRUST_CHECKS = new Set([
+    "config-mode",
+    "config-backup-mode",
+    "config-dir-mode",
+    "config-entry-dir-mode",
+    "service-permissions",
+    "service-metadata-mode",
+    "service-definition-mode",
+    "service-definition-dir-mode",
+]);
+
+function findUntrustedServicePathCheck(checks: readonly DoctorCheck[]): DoctorCheck | undefined {
+    return checks.find(
+        check => check.level === "error" && SERVICE_PATH_TRUST_CHECKS.has(check.name),
+    );
 }
 
 interface ServiceStatusReportEvidence {

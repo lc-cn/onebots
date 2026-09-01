@@ -286,9 +286,11 @@ describe("service status", () => {
                     }),
                 ]),
             );
-            expect(report.probe.checks).toContainEqual(
-                expect.objectContaining({ name: "health", level: "ok" }),
-            );
+            expect(report.probe).toMatchObject({
+                checks: [],
+                error: expect.stringMatching(/服务控制面或配置路径不可信.*未执行 HTTP 探测/u),
+            });
+            expect(fetcher).not.toHaveBeenCalled();
         },
     );
 
@@ -328,9 +330,11 @@ describe("service status", () => {
                 level: "error",
                 message: expect.stringContaining("配置文件权限 644"),
             });
-            expect(report.probe.checks).toContainEqual(
-                expect.objectContaining({ name: "health", level: "ok" }),
-            );
+            expect(report.probe).toMatchObject({
+                checks: [],
+                error: expect.stringMatching(/服务控制面或配置路径不可信.*未执行 HTTP 探测/u),
+            });
+            expect(fetcher).not.toHaveBeenCalled();
         },
     );
 
