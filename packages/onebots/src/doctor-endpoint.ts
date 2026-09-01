@@ -1,5 +1,6 @@
 import packageMetadata from "../package.json" with { type: "json" };
 import { normalizeGatewayPathPrefix } from "@onebots/core";
+import { readBoundedResponseBody, ResponseBodyTooLargeError } from "./bounded-response.js";
 
 export type CheckLevel = "ok" | "warning" | "error";
 
@@ -62,9 +63,9 @@ export async function probeDoctorEndpoint(
         });
         let body: string;
         try {
-            body = await readBoundedDoctorEndpointBody(response);
+            body = await readBoundedResponseBody(response, DOCTOR_ENDPOINT_BODY_LIMIT_BYTES);
         } catch (error) {
-            if (error instanceof EndpointResponseTooLargeError) {
+            if (error instanceof ResponseBodyTooLargeError) {
                 return {
                     name: endpoint,
                     level: "error",
@@ -100,41 +101,6 @@ export async function probeDoctorEndpoint(
             message: `${endpoint} 不可达: ${error instanceof Error ? error.message : String(error)}`,
         };
     }
-}
-
-/** 读取本地诊断端点的有限响应，供 doctor 与服务切换证据复用。 */
-export async function readBoundedDoctorEndpointBody(response: Response): Promise<string> {
-    const declaredLength = Number(response.headers.get("content-length"));
-    if (Number.isFinite(declaredLength) && declaredLength > DOCTOR_ENDPOINT_BODY_LIMIT_BYTES) {
-        await response.body?.cancel();
-        throw new EndpointResponseTooLargeError();
-    }
-    if (!response.body) return "";
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let bytesRead = 0;
-    let body = "";
-    while (true) {
-        const chunk = await reader.read();
-        if (chunk.done) return body + decoder.decode();
-        bytesRead += chunk.value.byteLength;
-        if (bytesRead > DOCTOR_ENDPOINT_BODY_LIMIT_BYTES) {
-            await reader.cancel();
-            throw new EndpointResponseTooLargeError();
-        }
-        body += decoder.decode(chunk.value, { stream: true });
-    }
-}
-
-class EndpointResponseTooLargeError extends Error {
-    constructor() {
-        super(`响应正文超过 ${formatByteLimit(DOCTOR_ENDPOINT_BODY_LIMIT_BYTES)} 上限`);
-    }
-}
-
-function formatByteLimit(bytes: number): string {
-    return `${bytes / 1024} KiB`;
 }
 
 /** 证明两份独立 HTTP 探针来自同一个应用版本和进程实例。 */

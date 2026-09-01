@@ -1,5 +1,6 @@
 import type { DoctorCheck } from "./doctor-endpoint.js";
 import type { ManagementFetch } from "./management-credential.js";
+import { readDoctorManagementJson } from "./doctor-management-response.js";
 
 interface RuntimeExtensionSummary {
     id?: unknown;
@@ -28,7 +29,7 @@ export async function probeAuthenticatedExtensions(
             headers: { authorization: `Bearer ${token}` },
             signal: AbortSignal.timeout(2_000),
         });
-        const payload: unknown = await response.json();
+        const payload = await readDoctorManagementJson(response);
         if (!response.ok || !Array.isArray(payload)) {
             return {
                 name: "management-extensions",

@@ -8,6 +8,7 @@ import {
     type ManagementFetch,
 } from "./management-credential.js";
 import { probeAuthenticatedExtensions } from "./doctor-management-extensions.js";
+import { readDoctorManagementJson } from "./doctor-management-response.js";
 
 type DoctorFetch = ManagementFetch;
 
@@ -129,7 +130,7 @@ async function probeAuthenticatedConfigState(
             headers: { authorization: `Bearer ${token}` },
             signal: AbortSignal.timeout(2_000),
         });
-        const payload: unknown = await response.json();
+        const payload = await readDoctorManagementJson(response);
         if (!response.ok || !isRecord(payload) || !isRecord(payload.configState)) {
             return {
                 name: "management-config",
@@ -181,7 +182,7 @@ async function probeAuthenticatedRuntime(
             headers: { authorization: `Bearer ${token}` },
             signal: AbortSignal.timeout(2_000),
         });
-        const payload: unknown = await response.json();
+        const payload = await readDoctorManagementJson(response);
         if (!response.ok || !Array.isArray(payload)) {
             return unavailableRuntimeChecks(`管理运行态响应无效: HTTP ${response.status}`);
         }
@@ -425,7 +426,7 @@ async function probeAuthenticatedManagementHttp(
             headers: { authorization: `Bearer ${token}` },
             signal: AbortSignal.timeout(2_000),
         });
-        const payload = (await response.json()) as { success?: unknown };
+        const payload = (await readDoctorManagementJson(response)) as { success?: unknown };
         const valid = response.ok && payload.success === true;
         return {
             name: "management-http-authenticated",

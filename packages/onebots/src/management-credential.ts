@@ -1,3 +1,5 @@
+import { readDoctorManagementJson } from "./doctor-management-response.js";
+
 export type ManagementFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 export interface ManagementCredential {
@@ -33,7 +35,7 @@ export async function acquireManagementCredential(
             body: JSON.stringify({ username, password }),
             signal: AbortSignal.timeout(2_000),
         });
-        const payload: unknown = await response.json();
+        const payload = await readDoctorManagementJson(response);
         const token =
             isRecord(payload) && typeof payload.token === "string" ? payload.token.trim() : "";
         if (!response.ok || !token) {

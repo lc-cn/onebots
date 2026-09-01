@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { probeDoctorManagement } from "./doctor-management.js";
+import { DOCTOR_MANAGEMENT_BODY_LIMIT_BYTES } from "./doctor-management-response.js";
 
 const capabilityEvidence = () => ({
     capabilityDeclared: true,
@@ -183,6 +184,66 @@ describe("doctor management probes", () => {
                 headers: { authorization: "Bearer session-token" },
             }),
         );
+    });
+
+    it("拒绝超限登录响应且不继续发送认证信息", async () => {
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/auth/login")) {
+                return oversizedManagementResponse();
+            }
+            expect(new Headers(init?.headers).has("authorization")).toBe(false);
+            return new Response(null, { status: 401 });
+        });
+        const upgrade = vi.fn(async (_url: string, token?: string) => ({
+            upgraded: false,
+            status: token ? 500 : 401,
+        }));
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { username: "operator", password: "password" },
+            { fetcher, upgrade },
+        );
+
+        expect(checks.find(check => check.name === "management-http-authenticated")).toEqual({
+            name: "management-http-authenticated",
+            level: "error",
+            message: "管理登录不可达: 响应正文超过 4 MiB 上限",
+        });
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        expect(upgrade).toHaveBeenCalledTimes(1);
+    });
+
+    it("将超限运行态响应隔离为运行态与能力诊断错误", async () => {
+        const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
+            if (input.endsWith("/api/adapters")) return oversizedManagementResponse();
+            if (input.endsWith("/api/system")) return inSyncSystemResponse();
+            if (input.endsWith("/api/extensions")) return convergedExtensionsResponse();
+            return new Headers(init?.headers).has("authorization")
+                ? new Response(JSON.stringify({ success: true }), { status: 200 })
+                : new Response(null, { status: 401 });
+        });
+
+        const checks = await probeDoctorManagement(
+            "http://127.0.0.1:6727",
+            { access_token: "secret" },
+            {
+                fetcher,
+                upgrade: async (_url, token) => ({
+                    upgraded: Boolean(token),
+                    status: token ? 101 : 401,
+                }),
+            },
+        );
+
+        expect(checks.find(check => check.name === "management-runtime")).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("响应正文超过 4 MiB 上限"),
+        });
+        expect(checks.find(check => check.name === "management-capabilities")).toMatchObject({
+            level: "error",
+            message: expect.stringContaining("响应正文超过 4 MiB 上限"),
+        });
     });
 
     it("fails when either anonymous management boundary is exposed", async () => {
@@ -635,4 +696,13 @@ function inSyncSystemResponse(): Response {
         }),
         { status: 200 },
     );
+}
+
+function oversizedManagementResponse(): Response {
+    return new Response("", {
+        status: 200,
+        headers: {
+            "content-length": String(DOCTOR_MANAGEMENT_BODY_LIMIT_BYTES + 1),
+        },
+    });
 }

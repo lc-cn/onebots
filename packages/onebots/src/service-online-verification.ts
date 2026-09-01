@@ -3,12 +3,13 @@ import type { ServiceSpec } from "./service-manager.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import {
     compareDoctorEndpointIdentities,
+    DOCTOR_ENDPOINT_BODY_LIMIT_BYTES,
     probeDoctorEndpoint,
-    readBoundedDoctorEndpointBody,
     resolveGatewayBaseUrl,
     verifyDoctorRuntimeContract,
 } from "./doctor-endpoint.js";
 import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
+import { readBoundedResponseBody } from "./bounded-response.js";
 
 export interface ServiceOnlineVerificationOptions {
     fetcher?: typeof fetch;
@@ -30,7 +31,9 @@ export async function readServiceInstanceId(
             signal: AbortSignal.timeout(2_000),
         });
         if (!response.ok) return null;
-        const payload: unknown = JSON.parse(await readBoundedDoctorEndpointBody(response));
+        const payload: unknown = JSON.parse(
+            await readBoundedResponseBody(response, DOCTOR_ENDPOINT_BODY_LIMIT_BYTES),
+        );
         if (!payload || typeof payload !== "object" || !("instance_id" in payload)) return null;
         const instanceId = payload.instance_id;
         return typeof instanceId === "string" && instanceId.trim() ? instanceId.trim() : null;
