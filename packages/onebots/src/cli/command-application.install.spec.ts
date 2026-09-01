@@ -313,6 +313,43 @@ describe("service install preflight", () => {
     it.each([
         ["启动", startService, "start"],
         ["重启", restartService, "restart"],
+    ] as const)("%s 命令前再次拒绝预检后漂移的控制面权限", async (action, command, method) => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const spec = serviceSpec(config);
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+            installed: true,
+            running: false,
+            scope: "user",
+            detail: "inactive",
+        });
+        const control = vi.spyOn(ServiceController.prototype, method).mockResolvedValue();
+        const inspectControlPlane = vi
+            .fn<ServiceActivationDependencies["inspectControlPlane"]>()
+            .mockReturnValueOnce([])
+            .mockReturnValue([
+                {
+                    name: "service-definition-mode",
+                    level: "error",
+                    message: "服务定义权限 0664 允许同组用户修改",
+                },
+            ]);
+
+        await expect(
+            command({ system: false }, activationDependencies({ inspectControlPlane })),
+        ).rejects.toMatchObject({
+            message: expect.stringMatching(
+                new RegExp(`服务${action}最终预检失败.*0664.*未执行${action}命令`),
+            ),
+            exitCode: 2,
+        });
+        expect(inspectControlPlane).toHaveBeenCalledTimes(2);
+        expect(control).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["启动", startService, "start"],
+        ["重启", restartService, "restart"],
     ] as const)("%s 前拒绝不安全的服务控制面权限", async (action, command, method) => {
         const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
         vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(serviceSpec(config));

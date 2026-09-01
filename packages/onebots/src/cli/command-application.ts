@@ -278,6 +278,7 @@ export async function startService(
         return { output: "OneBots 服务已在运行并通过在线验证" };
     }
     const previousInstanceId = await dependencies.readInstanceId(spec);
+    revalidateInstalledService(controller, spec, "启动", dependencies.inspectControlPlane);
     await controller.start();
     await verifyActivatedService(spec, "启动", previousInstanceId, dependencies);
     return { output: "OneBots 服务已启动并通过在线验证" };
@@ -317,6 +318,7 @@ export async function restartService(
     const controller = new ServiceController(scopeFrom(options));
     const spec = await preflightInstalledService(controller, "重启", dependencies);
     const previousInstanceId = await dependencies.readInstanceId(spec);
+    revalidateInstalledService(controller, spec, "重启", dependencies.inspectControlPlane);
     await controller.restart();
     await verifyActivatedService(spec, "重启", previousInstanceId, dependencies);
     return { output: "OneBots 服务已重启并通过在线验证" };
@@ -709,15 +711,7 @@ async function preflightInstalledService(
     const spec = controller.readSpec();
     if (!spec) throw new CliError("OneBots 服务尚未安装", 2);
     try {
-        const permissionErrors = dependencies
-            .inspectControlPlane(controller, spec)
-            .filter(check => check.level === "error");
-        if (permissionErrors.length > 0) {
-            throw new Error(
-                `服务控制面权限不安全：${permissionErrors.map(check => check.message).join("；")}。请先运行 onebots doctor --fix，或按提示由目录或文件所有者调整权限`,
-            );
-        }
-        assertInstalledServiceDefinitionCurrent(controller, spec);
+        assertInstalledServiceControlPlane(controller, spec, dependencies.inspectControlPlane);
         await dependencies.preflight(spec);
     } catch (error) {
         throw new CliError(
@@ -726,6 +720,38 @@ async function preflightInstalledService(
         );
     }
     return spec;
+}
+
+function revalidateInstalledService(
+    controller: ServiceController,
+    spec: ServiceSpec,
+    action: "启动" | "重启",
+    inspectControlPlane: ServiceActivationDependencies["inspectControlPlane"],
+): void {
+    try {
+        assertInstalledServiceControlPlane(controller, spec, inspectControlPlane);
+    } catch (error) {
+        throw new CliError(
+            `服务${action}最终预检失败：${error instanceof Error ? error.message : String(error)}；未执行${action}命令`,
+            2,
+        );
+    }
+}
+
+function assertInstalledServiceControlPlane(
+    controller: ServiceController,
+    spec: ServiceSpec,
+    inspectControlPlane: ServiceActivationDependencies["inspectControlPlane"],
+): void {
+    const permissionErrors = inspectControlPlane(controller, spec).filter(
+        check => check.level === "error",
+    );
+    if (permissionErrors.length > 0) {
+        throw new Error(
+            `服务控制面权限不安全：${permissionErrors.map(check => check.message).join("；")}。请先运行 onebots doctor --fix，或按提示由目录或文件所有者调整权限`,
+        );
+    }
+    assertInstalledServiceDefinitionCurrent(controller, spec);
 }
 
 async function preflightService(spec: ServicePreflightSpec, action: string): Promise<void> {
