@@ -68,6 +68,7 @@ function activationDependencies(
 ): ServiceActivationDependencies {
     return {
         preflight: preflightServiceRuntime,
+        inspectControlPlane: () => [],
         readInstanceId: async () => null,
         verifyOnline: async () => undefined,
         ...overrides,
@@ -306,6 +307,39 @@ describe("service install preflight", () => {
             ),
             exitCode: 2,
         });
+        expect(control).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["启动", startService, "start"],
+        ["重启", restartService, "restart"],
+    ] as const)("%s 前拒绝不安全的服务控制面权限", async (action, command, method) => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(serviceSpec(config));
+        const control = vi.spyOn(ServiceController.prototype, method).mockResolvedValue();
+        const preflight = vi.fn(async () => undefined);
+
+        await expect(
+            command(
+                { system: false },
+                activationDependencies({
+                    preflight,
+                    inspectControlPlane: () => [
+                        {
+                            name: "service-definition-dir-mode",
+                            level: "error",
+                            message: "服务定义目录权限 0775 允许同组用户替换服务定义",
+                        },
+                    ],
+                }),
+            ),
+        ).rejects.toMatchObject({
+            message: expect.stringMatching(
+                new RegExp(`服务${action}预检失败.*服务控制面权限不安全.*0775.*doctor --fix`),
+            ),
+            exitCode: 2,
+        });
+        expect(preflight).not.toHaveBeenCalled();
         expect(control).not.toHaveBeenCalled();
     });
 

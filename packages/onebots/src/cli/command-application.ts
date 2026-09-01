@@ -38,6 +38,8 @@ import { assertInstalledServiceDefinitionCurrent } from "../service-definition-p
 import { inspectServiceStatus, type ServiceStatusDependencies } from "../service-status.js";
 import { createServiceRuntimeContractId } from "../service-runtime-contract.js";
 import { loadMcpStdioTransport, type McpStdioTransportStarter } from "../mcp-stdio-runtime.js";
+import type { DoctorCheck } from "../doctor-endpoint.js";
+import { inspectServiceControlPlanePermissions } from "../service-control-plane-permissions.js";
 export type { ServiceStatusKind, ServiceStatusReport } from "../service-status.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
@@ -239,6 +241,7 @@ export async function installService(
 
 export interface ServiceActivationDependencies {
     preflight(spec: ServiceSpec): Promise<void>;
+    inspectControlPlane(controller: ServiceController, spec: ServiceSpec): DoctorCheck[];
     readInstanceId(spec: ServiceSpec): Promise<string | null>;
     verifyOnline(
         spec: ServiceSpec,
@@ -249,6 +252,7 @@ export interface ServiceActivationDependencies {
 
 const serviceActivationDependencies: ServiceActivationDependencies = {
     preflight: preflightInstalledServiceRuntime,
+    inspectControlPlane: inspectServiceControlPlanePermissions,
     readInstanceId: readServiceInstanceId,
     verifyOnline: (spec, expectedVersion, previousInstanceId) =>
         verifyServiceOnline(spec, expectedVersion, { previousInstanceId }),
@@ -260,7 +264,7 @@ export async function startService(
     dependencies: ServiceActivationDependencies = serviceActivationDependencies,
 ): Promise<CommandResult> {
     const controller = new ServiceController(scopeFrom(options));
-    const spec = await preflightInstalledService(controller, "启动", dependencies.preflight);
+    const spec = await preflightInstalledService(controller, "启动", dependencies);
     const initialStatus = controller.status(spec);
     if (initialStatus.error) {
         throw new CliError(
@@ -311,7 +315,7 @@ export async function restartService(
     dependencies: ServiceActivationDependencies = serviceActivationDependencies,
 ): Promise<CommandResult> {
     const controller = new ServiceController(scopeFrom(options));
-    const spec = await preflightInstalledService(controller, "重启", dependencies.preflight);
+    const spec = await preflightInstalledService(controller, "重启", dependencies);
     const previousInstanceId = await dependencies.readInstanceId(spec);
     await controller.restart();
     await verifyActivatedService(spec, "重启", previousInstanceId, dependencies);
@@ -700,13 +704,21 @@ function selectMcpAccount(app: StartedMcpApp, accountOption?: string): Account {
 async function preflightInstalledService(
     controller: ServiceController,
     action: "启动" | "重启",
-    preflight: (spec: ServiceSpec) => Promise<void>,
+    dependencies: Pick<ServiceActivationDependencies, "inspectControlPlane" | "preflight">,
 ): Promise<ServiceSpec> {
     const spec = controller.readSpec();
     if (!spec) throw new CliError("OneBots 服务尚未安装", 2);
     try {
+        const permissionErrors = dependencies
+            .inspectControlPlane(controller, spec)
+            .filter(check => check.level === "error");
+        if (permissionErrors.length > 0) {
+            throw new Error(
+                `服务控制面权限不安全：${permissionErrors.map(check => check.message).join("；")}。请先运行 onebots doctor --fix，或按提示由目录或文件所有者调整权限`,
+            );
+        }
         assertInstalledServiceDefinitionCurrent(controller, spec);
-        await preflight(spec);
+        await dependencies.preflight(spec);
     } catch (error) {
         throw new CliError(
             `服务${action}预检失败：${error instanceof Error ? error.message : String(error)}`,
