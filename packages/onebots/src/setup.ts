@@ -21,6 +21,7 @@ import {
     setRuntimePluginSelection,
 } from "./runtime-plugin-selection.js";
 import { ensureRuntimeDataDirectory } from "./runtime-data-directory.js";
+import { resolveManagementWebUrl } from "./doctor-endpoint.js";
 
 export interface SetupOptions {
     force?: boolean;
@@ -37,7 +38,11 @@ interface PromptRule {
 }
 
 /** 使用配置 schema 引导创建或安全更新 OneBots 配置。 */
-export async function runSetup(configPath: string, options: SetupOptions = {}): Promise<void> {
+export async function runSetup(
+    configPath: string,
+    options: SetupOptions = {},
+    environmentPort: string | undefined = process.env.PORT,
+): Promise<void> {
     const exists = fs.existsSync(configPath);
     if (options.reset && !options.force) {
         throw new Error("--reset 会重建配置，必须同时使用 --force 以创建备份");
@@ -137,9 +142,11 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
                 "现有配置缺少管理凭据，非交互环境不会自动写入。请设置 ONEBOTS_ACCESS_TOKEN，或使用 --force 备份配置并生成鉴权码。",
             );
         }
+        const managementUrls = formatSetupManagementUrls(config, environmentPort);
         ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
         writeCliOutput(`配置文件已存在并通过验证: ${configPath}`);
         writeCliOutput("非交互环境不会覆盖；如需更新请使用 --force。");
+        for (const line of managementUrls) writeCliOutput(line);
         return;
     }
     if (adapters.length > 0 || protocols.length > 0 || configuredPlugins) {
@@ -152,6 +159,7 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     config = managementCredentials.config;
 
     await validateConfig(config);
+    const managementUrls = formatSetupManagementUrls(config, environmentPort);
     fs.mkdirSync(path.dirname(configPath), { recursive: true });
     ensureRuntimeDataDirectory(path.join(path.dirname(configPath), "data"));
     writeConfigFileAtomic(configPath, yaml.dump(config, { noRefs: true }), {
@@ -173,6 +181,7 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     writeCliOutput(`比较平台能力: ${formatConfiguredCommand(configPath, "capabilities")}`);
     writeCliOutput(`验证配置: ${formatConfiguredCommand(configPath, "doctor")}`);
     writeCliOutput(`前台启动: ${formatConfiguredCommand(configPath)}`);
+    for (const line of managementUrls) writeCliOutput(line);
     if (managementCredentials.source === "environment") {
         writeCliOutput(
             "安装服务前请先把管理凭据写入配置；守护服务不会保存当前 shell 的 ONEBOTS_ACCESS_TOKEN。",
@@ -181,6 +190,20 @@ export async function runSetup(configPath: string, options: SetupOptions = {}): 
     } else {
         writeCliOutput(`安装服务: ${formatConfiguredCommand(configPath, "install")}`);
     }
+}
+
+function formatSetupManagementUrls(
+    config: Record<string, unknown>,
+    environmentPort: string | undefined,
+): string[] {
+    const configured = resolveManagementWebUrl(config);
+    const foreground = resolveManagementWebUrl(config, environmentPort);
+    return foreground === configured
+        ? [`管理地址（启动后）: ${configured}`]
+        : [
+              `管理地址（当前 PORT 前台启动）: ${foreground}`,
+              `管理地址（守护服务配置）: ${configured}`,
+          ];
 }
 
 function parsePromptValue(value: string, type: PromptRule["type"]): string | number | boolean {

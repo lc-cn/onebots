@@ -3,11 +3,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import yaml from "js-yaml";
-import { runSetup } from "./setup.js";
+import { runSetup as runSetupWithEnvironment } from "./setup.js";
 
 const temporaryDirectories: string[] = [];
 
-beforeEach(() => vi.stubEnv("ONEBOTS_ACCESS_TOKEN", ""));
+const runSetup = (configPath: string, options?: Parameters<typeof runSetupWithEnvironment>[1]) =>
+    runSetupWithEnvironment(configPath, options, "");
+
+beforeEach(() => {
+    vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "");
+});
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -42,22 +47,55 @@ describe("setup workflow", () => {
         expect(renderedOutput).toContain(`onebots capabilities -c ${configPath}`);
         expect(renderedOutput).toContain(`onebots doctor -c ${configPath}`);
         expect(renderedOutput).toContain(`onebots install -c ${configPath}`);
+        expect(renderedOutput).toContain("管理地址（启动后）: http://127.0.0.1:6727");
     });
 
     it("validates but does not overwrite an existing config in a non-interactive session", async () => {
         vi.stubEnv("ONEBOTS_ACCESS_TOKEN", "deployment-secret");
         const configPath = temporaryConfigPath();
-        fs.writeFileSync(configPath, "port: 7000\n", "utf8");
+        fs.writeFileSync(configPath, "port: 7000\npath: /gateway\n", "utf8");
         const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
         await runSetup(configPath);
 
-        expect(fs.readFileSync(configPath, "utf8")).toBe("port: 7000\n");
+        expect(fs.readFileSync(configPath, "utf8")).toBe("port: 7000\npath: /gateway\n");
         expect(fs.existsSync(`${configPath}.bak`)).toBe(false);
         expect(fs.statSync(path.join(path.dirname(configPath), "data")).isDirectory()).toBe(true);
         expect(output.mock.calls.map(call => String(call[0])).join("")).toContain(
             "配置文件已存在并通过验证",
         );
+        expect(output.mock.calls.map(call => String(call[0])).join("")).toContain(
+            "管理地址（启动后）: http://127.0.0.1:7000",
+        );
+    });
+
+    it("uses the listener PORT override without appending the API path or credentials", async () => {
+        const configPath = temporaryConfigPath();
+        fs.writeFileSync(
+            configPath,
+            "port: 7000\npath: /gateway\naccess_token: secret-never-return\n",
+            { mode: 0o600 },
+        );
+        const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+        await runSetupWithEnvironment(configPath, {}, "7860");
+
+        const renderedOutput = output.mock.calls.map(call => String(call[0])).join("");
+        expect(renderedOutput).toContain("管理地址（当前 PORT 前台启动）: http://127.0.0.1:7860");
+        expect(renderedOutput).toContain("管理地址（守护服务配置）: http://127.0.0.1:7000");
+        expect(renderedOutput).not.toContain("/gateway");
+        expect(renderedOutput).not.toContain("secret-never-return");
+    });
+
+    it("rejects an invalid listener PORT before creating first-run state", async () => {
+        const configPath = temporaryConfigPath();
+
+        await expect(runSetupWithEnvironment(configPath, {}, "invalid")).rejects.toThrow(
+            "PORT 必须是 1 到 65535 之间的整数",
+        );
+
+        expect(fs.existsSync(configPath)).toBe(false);
+        expect(fs.existsSync(path.join(path.dirname(configPath), "data"))).toBe(false);
     });
 
     it("does not report a credential-free existing config as ready without write permission", async () => {

@@ -31,6 +31,14 @@ export function resolveGatewayBaseUrl(
     return `http://127.0.0.1:${port}${prefix}`;
 }
 
+/** Web 管理页固定由本机 origin 提供，Router 前缀只用于 API 与探针。 */
+export function resolveManagementWebUrl(
+    config: Record<string, unknown>,
+    environmentPort?: string,
+): string {
+    return new URL(resolveGatewayBaseUrl(config, environmentPort)).origin;
+}
+
 /** 使用与监听器一致的 PORT 优先级解析可探测的 TCP 端口。 */
 export function resolveGatewayPort(
     config: Record<string, unknown>,
