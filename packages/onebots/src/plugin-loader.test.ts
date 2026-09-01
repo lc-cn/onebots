@@ -715,6 +715,118 @@ throw new Error("初始化失败");
         }
     });
 
+    it("在执行入口前拒绝用另一包占用已加载的逻辑身份", async () => {
+        const firstDirectory = createImportOnlyPlugin(
+            "first-identity-adapter",
+            "globalThis.__onebotsRegisterLockedIdentity();\n",
+        );
+        const secondDirectory = createImportOnlyPlugin(
+            "second-identity-adapter",
+            "globalThis.__onebotsConflictingIdentityExecuted = true;\n",
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterLockedIdentity?: () => void;
+            __onebotsConflictingIdentityExecuted?: boolean;
+        };
+        globals.__onebotsRegisterLockedIdentity = () => {
+            AdapterRegistry.register("locked-identity", (() => undefined) as never);
+            AdapterRegistry.registerSchema("locked-identity", {});
+        };
+
+        try {
+            await expect(
+                tryLoadRegisteredPlugin(
+                    "adapter",
+                    "locked-identity",
+                    ["first-identity-adapter"],
+                    createRequire(path.join(firstDirectory, "package.json")),
+                ),
+            ).resolves.toMatchObject({ loaded: true });
+
+            await expect(
+                tryLoadRegisteredPlugin(
+                    "adapter",
+                    "locked-identity",
+                    ["second-identity-adapter"],
+                    createRequire(path.join(secondDirectory, "package.json")),
+                ),
+            ).resolves.toMatchObject({
+                loaded: false,
+                message: expect.stringMatching(
+                    /已由 first-identity-adapter@unknown.*当前解析为 second-identity-adapter@unknown.*拒绝在同一进程执行/,
+                ),
+            });
+            expect(globals.__onebotsConflictingIdentityExecuted).toBeUndefined();
+            expect(getLoadedPlugins()).toMatchObject([
+                { name: "locked-identity", packageName: "first-identity-adapter" },
+            ]);
+        } finally {
+            delete globals.__onebotsRegisterLockedIdentity;
+            delete globals.__onebotsConflictingIdentityExecuted;
+        }
+    });
+
+    it("拒绝把 ESM 缓存中的旧入口重新标记为磁盘上的新版本", async () => {
+        const directory = createImportOnlyPlugin(
+            "version-locked-adapter",
+            "globalThis.__onebotsRegisterVersionLocked();\n",
+        );
+        const packageJsonPath = path.join(
+            directory,
+            "node_modules",
+            "version-locked-adapter",
+            "package.json",
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterVersionLocked?: () => void;
+        };
+        globals.__onebotsRegisterVersionLocked = () => {
+            AdapterRegistry.register("version-locked", (() => undefined) as never);
+            AdapterRegistry.registerSchema("version-locked", {});
+        };
+        const writeManifest = (version: string) =>
+            fs.writeFileSync(
+                packageJsonPath,
+                JSON.stringify({
+                    name: "version-locked-adapter",
+                    version,
+                    type: "module",
+                    exports: "./index.js",
+                }),
+            );
+
+        try {
+            writeManifest("1.0.0");
+            const runtimeRequire = createRequire(path.join(directory, "package.json"));
+            await expect(
+                tryLoadRegisteredPlugin(
+                    "adapter",
+                    "version-locked",
+                    ["version-locked-adapter"],
+                    runtimeRequire,
+                ),
+            ).resolves.toMatchObject({ loaded: true });
+
+            writeManifest("2.0.0");
+            await expect(
+                tryLoadRegisteredPlugin(
+                    "adapter",
+                    "version-locked",
+                    ["version-locked-adapter"],
+                    runtimeRequire,
+                ),
+            ).resolves.toMatchObject({
+                loaded: false,
+                message: expect.stringMatching(/version-locked-adapter@1\.0\.0.*2\.0\.0/),
+            });
+            expect(getLoadedPlugins()).toMatchObject([
+                { name: "version-locked", version: "1.0.0" },
+            ]);
+        } finally {
+            delete globals.__onebotsRegisterVersionLocked;
+        }
+    });
+
     it("records package identity only after the promised registration contract succeeds", async () => {
         const directory = createImportOnlyPlugin(
             "inventory-adapter",

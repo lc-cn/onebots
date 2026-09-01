@@ -38,6 +38,9 @@ export interface LoadedPluginInfo {
     entryPath: string;
 }
 
+type ReadyPluginInspection = Extract<PluginInspection, { status: "ready" }>;
+type PluginInspectionGuard = (inspection: ReadyPluginInspection) => string | undefined;
+
 let pluginRegistrationTail = Promise.resolve();
 const loadedPlugins = new Map<string, LoadedPluginInfo>();
 const rejectedPluginImportAttempts = new Map<string, number>();
@@ -139,6 +142,7 @@ async function tryLoadPluginUnlocked(
     name: string,
     candidates: string[],
     runtimeRequire: NodeJS.Require,
+    inspectionGuard?: PluginInspectionGuard,
 ): Promise<PluginLoadResult> {
     const inspection = inspectPlugin(candidates, runtimeRequire);
     if (inspection.status === "missing") {
@@ -162,6 +166,14 @@ async function tryLoadPluginUnlocked(
             loaded: false,
             inspection,
             message: `加载${kind} ${name} 失败：${inspection.candidate} 解析到了独立的 ${runtimeMismatch.packageName} 运行时（插件: ${runtimeMismatch.pluginPackageJson}；网关: ${runtimeMismatch.hostPackageJson}）；请将 ${runtimeMismatch.packageName} 声明为 peerDependency，由同一安装根目录提供，并删除插件内的重复副本`,
+        };
+    }
+    const inspectionError = inspectionGuard?.(inspection);
+    if (inspectionError) {
+        return {
+            loaded: false,
+            inspection,
+            message: `加载${kind} ${name} 失败：${inspectionError}`,
         };
     }
     const registryState = captureExtensionRegistryState();
@@ -191,7 +203,13 @@ export async function tryLoadRegisteredPlugin(
     return serializePluginRegistration(async () => {
         const registryState = captureExtensionRegistryState();
         const kind = type === "adapter" ? "适配器" : "协议";
-        const result = await tryLoadPluginUnlocked(kind, name, candidates, runtimeRequire);
+        const result = await tryLoadPluginUnlocked(
+            kind,
+            name,
+            candidates,
+            runtimeRequire,
+            inspection => getLoadedPluginIdentityError(type, name, inspection),
+        );
         if (result.loaded === false) {
             restoreExtensionRegistryState(registryState);
             return result;
@@ -222,6 +240,33 @@ export async function tryLoadRegisteredPlugin(
             message: `加载${kind} ${name} 失败：${result.inspection.candidate} 已初始化，但${contractError}`,
         };
     });
+}
+
+function getLoadedPluginIdentityError(
+    type: PluginType,
+    name: string,
+    inspection: ReadyPluginInspection,
+): string | undefined {
+    const loadedKey = `${type}:${name}`;
+    const previous = loadedPlugins.get(loadedKey);
+    if (!previous) return undefined;
+    const entryPath = realPath(inspection.entryPath);
+    if (
+        previous.packageName === inspection.packageName &&
+        previous.version === inspection.version &&
+        previous.entryPath === entryPath
+    ) {
+        return undefined;
+    }
+    return `扩展身份 ${loadedKey} 已由 ${formatPluginIdentity(previous.packageName, previous.version, previous.entryPath)} 加载；当前解析为 ${formatPluginIdentity(inspection.packageName, inspection.version, entryPath)}，拒绝在同一进程执行不同的插件入口或版本；请重启 OneBots 后加载新版本`;
+}
+
+function formatPluginIdentity(
+    packageName: string,
+    version: string | null,
+    entryPath: string,
+): string {
+    return `${packageName}@${version ?? "unknown"}（${entryPath}）`;
 }
 
 /**
@@ -284,9 +329,10 @@ function getRegistrationContractError(
     if (previousPlugin) {
         if (
             previousPlugin.packageName !== inspection.packageName ||
+            previousPlugin.version !== inspection.version ||
             previousPlugin.entryPath !== realPath(inspection.entryPath)
         ) {
-            return `扩展身份 ${loadedKey} 已由 ${previousPlugin.packageName}@${previousPlugin.version ?? "unknown"} 从 ${previousPlugin.entryPath} 加载`;
+            return `扩展身份 ${loadedKey} 已由 ${formatPluginIdentity(previousPlugin.packageName, previousPlugin.version, previousPlugin.entryPath)} 加载`;
         }
     } else if (hasPromisedRegistration(type, name, before)) {
         return `承诺的扩展身份 ${loadedKey} 在本次插件加载前已经存在，无法证明注册归属`;
