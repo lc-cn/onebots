@@ -37,6 +37,10 @@ export interface UpdateOptions {
     scope: ServiceScope;
     check?: boolean;
     yes?: boolean;
+    /** 只同步当前项目依赖，不读取、改写或重启系统服务。 */
+    packagesOnly?: boolean;
+    /** packagesOnly 可用它读取配置中持久化的插件选择。 */
+    configPath?: string;
 }
 
 export interface PackageUpdateChange extends PackageUpdateEvidence {
@@ -62,12 +66,12 @@ export function packageNamesFor(adapters: string[], protocols: string[]): string
 export function resolveUpdatePluginSelection(
     options: Pick<UpdateOptions, "adapters" | "protocols">,
     spec: ServiceSpec | null,
+    configPath?: string,
 ): { adapters: string[]; protocols: string[] } {
+    const selectionPath = configPath ?? spec?.configPath;
     const configured =
-        spec && fs.existsSync(spec.configPath)
-            ? getRuntimePluginSelection(
-                  parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8")),
-              )
+        selectionPath && fs.existsSync(selectionPath)
+            ? getRuntimePluginSelection(parseRuntimeConfig(fs.readFileSync(selectionPath, "utf8")))
             : undefined;
     return {
         adapters: options.adapters.length
@@ -79,13 +83,31 @@ export function resolveUpdatePluginSelection(
     };
 }
 
+/** packages-only 模式始终以当前目录为目标，并与已安装服务彻底解耦。 */
+export function resolveUpdateRuntimeTarget(
+    packagesOnly: boolean | undefined,
+    installedSpec: ServiceSpec | null,
+    currentDirectory = process.cwd(),
+): { spec: ServiceSpec | null; runtimeRoot: string } {
+    return packagesOnly
+        ? { spec: null, runtimeRoot: currentDirectory }
+        : {
+              spec: installedSpec,
+              runtimeRoot: installedSpec?.workingDirectory ?? currentDirectory,
+          };
+}
+
 /** 检查并更新 OneBots 与当前服务使用的插件。 */
 export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult> {
     const controller = new ServiceController(options.scope);
-    const spec = controller.readSpec();
-    const { adapters, protocols } = resolveUpdatePluginSelection(options, spec);
+    const installedSpec = options.packagesOnly ? null : controller.readSpec();
+    const { spec, runtimeRoot } = resolveUpdateRuntimeTarget(options.packagesOnly, installedSpec);
+    const { adapters, protocols } = resolveUpdatePluginSelection(
+        options,
+        options.packagesOnly ? null : installedSpec,
+        options.packagesOnly ? options.configPath : undefined,
+    );
     const packages = packageNamesFor(adapters, protocols);
-    const runtimeRoot = spec?.workingDirectory ?? process.cwd();
     const manager = detectRuntimePackageManager(runtimeRoot);
     const targetOnebotsVersion = latestVersion(manager, "onebots");
     if (!targetOnebotsVersion) throw new Error("无法查询包版本: onebots");
@@ -180,7 +202,11 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             return { status: "updated", changes: changed };
         }
     }
-    writeCliOutput("OneBots 及插件更新完成");
+    writeCliOutput(
+        options.packagesOnly
+            ? "OneBots 及已选插件依赖同步完成；未修改或重启服务"
+            : "OneBots 及插件更新完成",
+    );
     return { status: "updated", changes: changed };
 }
 

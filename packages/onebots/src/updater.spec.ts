@@ -11,6 +11,7 @@ import {
     resolveInstalledPackageVersion,
     resolvePackageUpdateProjectRoot,
     resolveUpdatePluginSelection,
+    resolveUpdateRuntimeTarget,
     resolveVerifiedUpdateTargets,
     runUpdatedServicePreflight,
 } from "./updater.js";
@@ -269,6 +270,34 @@ EOF
         expect(
             resolveUpdatePluginSelection({ adapters: ["telegram"], protocols: [] }, spec),
         ).toEqual({ adapters: ["telegram"], protocols: ["milky-v1"] });
+    });
+
+    it("packages-only 无需服务快照即可读取指定配置中的插件", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-update-config-"));
+        temporaryDirectories.push(directory);
+        const configPath = path.join(directory, "managed.yaml");
+        fs.writeFileSync(
+            configPath,
+            "plugins:\n  adapters: [slack]\n  protocols: [milky-v1]\ngeneral: {}\n",
+        );
+
+        expect(
+            resolveUpdatePluginSelection({ adapters: [], protocols: [] }, null, configPath),
+        ).toEqual({ adapters: ["slack"], protocols: ["milky-v1"] });
+    });
+
+    it("packages-only 忽略已有服务并固定使用当前运行目录", () => {
+        const spec = temporaryServiceSpec();
+        const currentDirectory = path.join(spec.workingDirectory, "installer-runtime");
+
+        expect(resolveUpdateRuntimeTarget(true, spec, currentDirectory)).toEqual({
+            spec: null,
+            runtimeRoot: currentDirectory,
+        });
+        expect(resolveUpdateRuntimeTarget(false, spec, currentDirectory)).toEqual({
+            spec,
+            runtimeRoot: spec.workingDirectory,
+        });
     });
 
     it("旧配置缺少 plugins 时回退服务快照", () => {

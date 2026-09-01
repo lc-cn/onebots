@@ -394,12 +394,15 @@ export function updateCommandResult(result: UpdateRunResult): CommandResult {
 
 /** 检查或更新 OneBots 与当前选用的插件。 */
 export async function updatePackages(
-    options: RuntimeOptions & ScopeOptions & { check: boolean; yes: boolean },
+    options: RuntimeOptions &
+        ScopeOptions & { check: boolean; yes: boolean; packagesOnly?: boolean },
 ): Promise<CommandResult> {
     const scope = scopeFrom(options);
-    const runtime = new ServiceController(scope).readSpec()
-        ? normalizeRuntimeOptions(options)
-        : resolveConfiguredRuntimeOptions(options);
+    const serviceSpec = options.packagesOnly ? null : new ServiceController(scope).readSpec();
+    const runtime =
+        options.packagesOnly || !serviceSpec
+            ? resolveConfiguredRuntimeOptions(options)
+            : normalizeRuntimeOptions(options);
     const { runUpdate } = await import("../updater.js");
     const result = await runUpdate({
         adapters: runtime.adapters,
@@ -407,6 +410,8 @@ export async function updatePackages(
         scope,
         check: options.check,
         yes: options.yes,
+        packagesOnly: options.packagesOnly,
+        configPath: options.packagesOnly ? runtime.configPath : undefined,
     });
     return updateCommandResult(result);
 }

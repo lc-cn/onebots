@@ -148,6 +148,8 @@ say "正在创建安全配置并安装用户级常驻服务…"
     else
         say "检测到已有配置，保留账号、凭据和插件选择：$CONFIG_FILE"
     fi
+    say "正在同步配置中已选扩展的验证版本…"
+    ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" update -c "$CONFIG_FILE" --yes --packages-only
     ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" install -c "$CONFIG_FILE"
     if ! ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" restart; then
         ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" start

@@ -66,6 +66,7 @@ general: {}
 EOF
         ;;
     install) ;;
+    update) ;;
     restart)
         [ -f "$FAKE_SERVICE_MARKER" ] || exit 1
         ;;
@@ -149,6 +150,9 @@ describe("one-command installer", () => {
         expect(firstCommands).not.toContain("@onebots/protocol-onebot-v11@latest");
         expect(firstCommands).toContain("onebots setup -c");
         expect(firstCommands).not.toContain("setup --force");
+        expect(firstCommands).toContain(
+            "onebots update -c " + configPath + " --yes --packages-only",
+        );
         expect(firstCommands).toContain("onebots install -c");
         expect(firstCommands).toContain("onebots restart");
         expect(firstCommands).toContain("onebots start");
@@ -174,6 +178,9 @@ slack.production:
         expect(output).not.toContain("首次登录鉴权码：");
         const secondCommands = fs.readFileSync(runtime.log, "utf8");
         expect(secondCommands).not.toContain("onebots setup");
+        expect(secondCommands).toContain(
+            "onebots update -c " + configPath + " --yes --packages-only",
+        );
         expect(secondCommands).toContain("onebots install -c");
         expect(secondCommands).toContain("onebots restart");
         expect(secondCommands).not.toContain("onebots start");
@@ -199,6 +206,7 @@ slack.production:
         expect(source).toContain('Arguments @("install", "--omit=dev", "onebots@latest")');
         expect(source).toContain("$Catalog.packages.'@onebots/protocol-onebot-v11'.version");
         expect(source).toContain('"@onebots/protocol-onebot-v11@$ProtocolVersion"');
+        expect(source).toContain('"update", "-c", $ConfigFile, "--yes", "--packages-only"');
         expect(source).not.toContain('"@onebots/web@latest"');
         expect(source).not.toContain('"@onebots/protocol-onebot-v11@latest"');
     });

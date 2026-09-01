@@ -112,6 +112,10 @@ try {
     } else {
         Write-Step "检测到已有配置，保留账号、凭据和插件选择：$ConfigFile"
     }
+    Write-Step "正在同步配置中已选扩展的验证版本…"
+    Invoke-Checked -FilePath $OneBots -Arguments @(
+        "update", "-c", $ConfigFile, "--yes", "--packages-only"
+    )
     Invoke-Checked -FilePath $OneBots -Arguments @("install", "-c", $ConfigFile)
     & $OneBots restart
     if ($LASTEXITCODE -ne 0) {
