@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createHash } from "node:crypto";
 
 export type SupportedPackageManager = "npm" | "pnpm";
 
@@ -18,6 +19,11 @@ export interface RuntimePackageManagerInspection {
     executable: string | null;
     resolvedPath: string | null;
     error: string | null;
+}
+
+export interface PackageManagerMetadataSnapshot {
+    root: string;
+    files: ReadonlyArray<{ path: string; digest: string | null }>;
 }
 
 interface RuntimePackageManagerResolution {
@@ -207,6 +213,78 @@ function getEnvironmentPath(environment: NodeJS.ProcessEnv, platform: NodeJS.Pla
 function unquotePathEntry(entry: string): string {
     const trimmed = entry.trim();
     return trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1) : trimmed;
+}
+
+const PACKAGE_MANAGER_METADATA_FILES = [
+    "package.json",
+    "package-lock.json",
+    "npm-shrinkwrap.json",
+    "pnpm-lock.yaml",
+    "node_modules/.package-lock.json",
+    "node_modules/.modules.yaml",
+    "node_modules/.pnpm/lock.yaml",
+] as const;
+
+/** 捕获实际包管理器项目根中的依赖声明与锁文件证据。 */
+export function capturePackageManagerMetadata(runtimeRoot: string): PackageManagerMetadataSnapshot {
+    const root = resolvePackageManagerEvidenceRoot(runtimeRoot);
+    let resolvedRuntimeRoot: string;
+    try {
+        resolvedRuntimeRoot = fs.realpathSync(path.resolve(runtimeRoot));
+    } catch {
+        resolvedRuntimeRoot = path.resolve(runtimeRoot);
+    }
+    const roots = [...new Set([root, resolvedRuntimeRoot])];
+    return {
+        root,
+        files: roots.flatMap(directory =>
+            PACKAGE_MANAGER_METADATA_FILES.map(file => {
+                const metadataPath = path.join(directory, file);
+                return { path: metadataPath, digest: digestMetadataFile(metadataPath) };
+            }),
+        ),
+    };
+}
+
+/** 判断包管理器命令是否改写、创建、删除或破坏了依赖元数据。 */
+export function hasPackageManagerMetadataChanged(
+    snapshot: PackageManagerMetadataSnapshot,
+): boolean {
+    return snapshot.files.some(file => {
+        try {
+            return digestMetadataFile(file.path) !== file.digest;
+        } catch {
+            // 变更后的文件无法读取也属于需要恢复的磁盘漂移。
+            return true;
+        }
+    });
+}
+
+function resolvePackageManagerEvidenceRoot(runtimeRoot: string): string {
+    const resolvedRoot = path.resolve(runtimeRoot);
+    let directory: string;
+    try {
+        directory = fs.realpathSync(resolvedRoot);
+    } catch {
+        directory = resolvedRoot;
+    }
+    while (true) {
+        const evidence = inspectPackageManagerEvidence(directory);
+        if (evidence.error) throw new Error(evidence.error);
+        if (evidence.manager) return directory;
+        const parent = path.dirname(directory);
+        if (parent === directory) return resolvedRoot;
+        directory = parent;
+    }
+}
+
+function digestMetadataFile(file: string): string | null {
+    try {
+        return createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw error;
+    }
 }
 
 const PNPM_ONLY_NPM_CONFIGS = new Set([

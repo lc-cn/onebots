@@ -21,6 +21,8 @@ import { preflightServiceRuntimeIsolated } from "./service-preflight.js";
 import {
     buildExtensionInstallInvocation,
     buildExtensionRestoreInvocation,
+    capturePackageManagerMetadata,
+    hasPackageManagerMetadataChanged,
     inspectRuntimePackageManager,
 } from "./package-manager.js";
 import { validateExtensionConfigurationTarget } from "./extension-configuration-target.js";
@@ -274,6 +276,9 @@ export class ExtensionManager {
         const previousVersion = previousPackage.version;
         const packageNeedsInstall = previousVersion !== packageCatalog.packageVersion;
         if (packageNeedsInstall) this.assertPackageManager();
+        const packageMetadata = packageNeedsInstall
+            ? capturePackageManagerMetadata(this.runtimeRoot)
+            : null;
         const preparedConfig = this.prepareConfig(entry.type, entry.name);
         let startInstallation: (() => void) | undefined;
         const startGate = new Promise<void>(resolve => {
@@ -329,13 +334,16 @@ export class ExtensionManager {
                 const packageChanged =
                     packageInstallCompleted ||
                     (packageInstallAttempted &&
-                        this.packageStateChanged(entry.packageName, previousPackage));
+                        (this.packageStateChanged(entry.packageName, previousPackage) ||
+                            (packageMetadata !== null &&
+                                hasPackageManagerMetadataChanged(packageMetadata))));
                 if (packageChanged && this.installer.restore) {
                     this.setInstallationPhase(operationId, "restoring_package");
                     await this.restorePackageAfterFailure(
                         entry.packageName,
                         previousVersion,
                         error,
+                        packageMetadata,
                     );
                 }
                 throw error;
@@ -382,6 +390,7 @@ export class ExtensionManager {
         packageName: string,
         previousVersion: string | null,
         originalError: unknown,
+        packageMetadata: ReturnType<typeof capturePackageManagerMetadata> | null,
     ): Promise<void> {
         try {
             await this.installer.restore!(packageName, previousVersion, this.runtimeRoot);
@@ -391,6 +400,9 @@ export class ExtensionManager {
                     restoredPackage.error ??
                         `${packageName} 期望恢复为 ${previousVersion ?? "未安装"}，实际 ${restoredPackage.version ?? "未安装"}`,
                 );
+            }
+            if (packageMetadata && hasPackageManagerMetadataChanged(packageMetadata)) {
+                throw new Error("包管理器恢复后依赖声明或锁文件仍与安装前不一致");
             }
         } catch (restoreError) {
             const installMessage = formatExtensionInstallationError(originalError);

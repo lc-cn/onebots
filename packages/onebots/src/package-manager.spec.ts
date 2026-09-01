@@ -8,7 +8,9 @@ import {
     buildPackageManagerInvocation,
     buildPackageRemovalInvocation,
     buildPackageUpdateInvocation,
+    capturePackageManagerMetadata,
     detectRuntimePackageManager,
+    hasPackageManagerMetadataChanged,
     inspectRuntimePackageManager,
     sanitizeNpmEnvironment,
 } from "./package-manager.js";
@@ -29,6 +31,39 @@ function fixture(manifest: object = { private: true }): string {
 }
 
 describe("runtime package manager", () => {
+    it("从 workspace 证据根捕获依赖声明与锁文件变化", () => {
+        const root = fixture({ packageManager: "pnpm@9.15.9" });
+        fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages: ['packages/*']\n");
+        fs.writeFileSync(path.join(root, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+        const member = path.join(root, "packages", "gateway");
+        fs.mkdirSync(member, { recursive: true });
+        fs.writeFileSync(path.join(member, "package.json"), JSON.stringify({ private: true }));
+
+        const snapshot = capturePackageManagerMetadata(member);
+
+        expect(snapshot.root).toBe(fs.realpathSync(root));
+        expect(hasPackageManagerMetadataChanged(snapshot)).toBe(false);
+        fs.appendFileSync(path.join(root, "pnpm-lock.yaml"), "packages: {}\n");
+        expect(hasPackageManagerMetadataChanged(snapshot)).toBe(true);
+
+        const updatedSnapshot = capturePackageManagerMetadata(member);
+        fs.writeFileSync(
+            path.join(member, "package.json"),
+            JSON.stringify({ private: true, dependencies: { onebots: "partial" } }),
+        );
+        expect(hasPackageManagerMetadataChanged(updatedSnapshot)).toBe(true);
+    });
+
+    it("识别包管理器新建此前不存在的内部锁文件", () => {
+        const root = fixture({ packageManager: "npm@11.17.0" });
+        const snapshot = capturePackageManagerMetadata(root);
+
+        fs.mkdirSync(path.join(root, "node_modules"), { recursive: true });
+        fs.writeFileSync(path.join(root, "node_modules", ".package-lock.json"), "{}\n");
+
+        expect(hasPackageManagerMetadataChanged(snapshot)).toBe(true);
+    });
+
     it("证明运行目录选出的包管理器在 PATH 中具有可执行入口", () => {
         const root = fixture({ packageManager: "pnpm@9.15.9" });
         const access = vi.fn((target: string) => {

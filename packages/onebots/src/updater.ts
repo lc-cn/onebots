@@ -14,7 +14,9 @@ import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import {
     buildPackageManagerInvocation,
     buildPackageUpdateInvocation,
+    capturePackageManagerMetadata,
     detectRuntimePackageManager,
+    hasPackageManagerMetadataChanged,
 } from "./package-manager.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
 import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
@@ -180,6 +182,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     const names = changed.map(item => `${item.name}@${item.target}`);
     const projectRoot = resolvePackageUpdateProjectRoot(runtimeRoot);
     const invocation = buildPackageUpdateInvocation(runtimeRoot, names, projectRoot);
+    const packageMetadata = projectRoot ? capturePackageManagerMetadata(projectRoot) : null;
     const initialServiceStatus = spec ? controller.status(spec) : null;
     if (initialServiceStatus?.error) {
         throw new Error(
@@ -199,6 +202,18 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             projectRoot,
             resolveInstalledPackageVersion,
             error,
+            {
+                metadataChanged:
+                    packageMetadata !== null && hasPackageManagerMetadataChanged(packageMetadata),
+                verifyMetadata:
+                    packageMetadata === null
+                        ? undefined
+                        : () => {
+                              if (hasPackageManagerMetadataChanged(packageMetadata)) {
+                                  throw new Error("包管理器恢复后依赖声明或锁文件仍与更新前不一致");
+                              }
+                          },
+            },
         );
     }
     try {

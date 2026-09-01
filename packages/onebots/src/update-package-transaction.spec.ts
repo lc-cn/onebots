@@ -86,7 +86,7 @@ describe("update package transaction", () => {
                 "/runtime",
                 name => versions.get(name) ?? null,
                 new Error("postinstall failed"),
-                execute,
+                { execute },
             ),
         ).toThrow(/已恢复更新前依赖.*postinstall failed/);
         expect(execute).toHaveBeenCalledOnce();
@@ -104,7 +104,7 @@ describe("update package transaction", () => {
                 "/runtime",
                 () => "1.2.8",
                 original,
-                execute,
+                { execute },
             ),
         ).toThrow(original);
         expect(execute).not.toHaveBeenCalled();
@@ -118,10 +118,51 @@ describe("update package transaction", () => {
                 "/runtime",
                 () => "1.3.0",
                 new Error("install timeout"),
-                () => {
-                    throw new Error("lockfile readonly");
+                {
+                    execute: () => {
+                        throw new Error("lockfile readonly");
+                    },
                 },
             ),
         ).toThrow(/包管理器执行失败且依赖恢复失败.*install timeout.*lockfile readonly/);
+    });
+
+    it("仅依赖声明或锁文件变化时也恢复整组依赖", () => {
+        const execute = vi.fn();
+        const verifyMetadata = vi.fn();
+
+        expect(() =>
+            recoverPackagesAfterFailedUpdate(
+                [{ name: "onebots", current: "1.2.8" }],
+                "/runtime",
+                "/runtime",
+                () => "1.2.8",
+                new Error("lockfile write interrupted"),
+                { metadataChanged: true, execute, verifyMetadata },
+            ),
+        ).toThrow(/已恢复更新前依赖.*lockfile write interrupted/);
+        expect(execute).toHaveBeenCalledOnce();
+        expect(verifyMetadata).toHaveBeenCalledOnce();
+    });
+
+    it("包版本恢复但依赖元数据仍漂移时报告恢复失败", () => {
+        expect(() =>
+            recoverPackagesAfterFailedUpdate(
+                [{ name: "onebots", current: "1.2.8" }],
+                "/runtime",
+                "/runtime",
+                () => "1.2.8",
+                new Error("lockfile write interrupted"),
+                {
+                    metadataChanged: true,
+                    execute: () => undefined,
+                    verifyMetadata: () => {
+                        throw new Error("lockfile still changed");
+                    },
+                },
+            ),
+        ).toThrow(
+            /包管理器执行失败且依赖恢复失败.*lockfile write interrupted.*lockfile still changed/,
+        );
     });
 });

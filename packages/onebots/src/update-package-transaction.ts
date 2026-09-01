@@ -18,6 +18,12 @@ export interface PackageVersionSnapshot {
 type PackageVersionResolver = (name: string, runtimeRoot: string) => string | null;
 type PackageInvocationExecutor = (invocation: PackageUpdateInvocation) => void;
 
+interface FailedUpdateRecoveryOptions {
+    metadataChanged?: boolean;
+    execute?: PackageInvocationExecutor;
+    verifyMetadata?: () => void;
+}
+
 const executePackageInvocation: PackageInvocationExecutor = invocation => {
     execFileSync(invocation.executable, invocation.args, {
         cwd: invocation.cwd,
@@ -85,14 +91,23 @@ export function recoverPackagesAfterFailedUpdate(
     projectRoot: string | null,
     resolveVersion: PackageVersionResolver,
     originalError: unknown,
-    execute: PackageInvocationExecutor = executePackageInvocation,
+    options: FailedUpdateRecoveryOptions = {},
 ): never {
-    const changed = snapshots.some(item => resolveVersion(item.name, runtimeRoot) !== item.current);
+    const changed =
+        options.metadataChanged === true ||
+        snapshots.some(item => resolveVersion(item.name, runtimeRoot) !== item.current);
     if (!changed) {
         throw originalError instanceof Error ? originalError : new Error(String(originalError));
     }
     try {
-        rollbackUpdatedPackages(snapshots, runtimeRoot, projectRoot, resolveVersion, execute);
+        rollbackUpdatedPackages(
+            snapshots,
+            runtimeRoot,
+            projectRoot,
+            resolveVersion,
+            options.execute,
+        );
+        options.verifyMetadata?.();
     } catch (rollbackError) {
         throw new AggregateError(
             [originalError, rollbackError],

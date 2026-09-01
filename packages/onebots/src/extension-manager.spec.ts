@@ -946,6 +946,65 @@ describe("ExtensionManager", () => {
         });
     });
 
+    it("包版本未落盘但依赖声明已改写时仍执行恢复", async () => {
+        const { root, configPath } = fixture();
+        const manifestPath = path.join(root, "package.json");
+        const originalManifest = fs.readFileSync(manifestPath, "utf8");
+        const restore = vi.fn(async (_packageName: string, previousVersion: string | null) => {
+            expect(previousVersion).toBeNull();
+            fs.writeFileSync(manifestPath, originalManifest);
+        });
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: {
+                install: async packageName => {
+                    const manifest = JSON.parse(originalManifest) as {
+                        dependencies: Record<string, string>;
+                    };
+                    manifest.dependencies[packageName] = "partial-write";
+                    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
+                    throw new Error("lockfile write interrupted");
+                },
+                restore,
+            },
+            preflight: successfulPreflight,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow(
+            "lockfile write interrupted",
+        );
+
+        expect(restore).toHaveBeenCalledWith("@onebots/adapter-slack", null, root);
+        expect(fs.readFileSync(manifestPath, "utf8")).toBe(originalManifest);
+    });
+
+    it("恢复命令未还原依赖声明时保留原错误与元数据漂移", async () => {
+        const { root, configPath } = fixture();
+        const manifestPath = path.join(root, "package.json");
+        const originalManifest = fs.readFileSync(manifestPath, "utf8");
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: {
+                install: async packageName => {
+                    const manifest = JSON.parse(originalManifest) as {
+                        dependencies: Record<string, string>;
+                    };
+                    manifest.dependencies[packageName] = "partial-write";
+                    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
+                    throw new Error("postinstall failed");
+                },
+                restore: async () => undefined,
+            },
+            preflight: successfulPreflight,
+        });
+
+        await expect(manager.install("adapter:slack")).rejects.toThrow(
+            /扩展安装失败且依赖恢复失败.*postinstall failed.*依赖声明或锁文件仍与安装前不一致/,
+        );
+    });
+
     it("依赖恢复失败时同时保留原错误与恢复错误", async () => {
         const { root, configPath } = fixture();
         const manager = new ExtensionManager({
