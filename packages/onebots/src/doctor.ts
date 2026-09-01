@@ -43,6 +43,7 @@ import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor
 import {
     inspectDoctorServiceDefinition,
     inspectDoctorServiceDefinitionPermissions,
+    inspectServiceDefinitionDirectoryPermissions,
     repairDoctorUserService,
     type DoctorServiceDefinitionInspection,
 } from "./doctor-service-definition.js";
@@ -283,6 +284,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
                 servicePaths.definition,
                 options.fix === true && options.scope === "user",
             ),
+            inspectServiceDefinitionDirectoryPermissions(servicePaths.definition),
         );
     }
     const selection = resolveDoctorPluginSelection(options, configuredPlugins, spec);

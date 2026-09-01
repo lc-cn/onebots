@@ -11,6 +11,7 @@ import { inspectDoctorServiceMetadata } from "./doctor-service-metadata.js";
 import {
     inspectDoctorServiceDefinition,
     inspectDoctorServiceDefinitionPermissions,
+    inspectServiceDefinitionDirectoryPermissions,
 } from "./doctor-service-definition.js";
 import { probeDoctorManagementPage } from "./doctor-management-page.js";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
@@ -358,6 +359,7 @@ function inspectStatusServiceControlPlane(
         ...checks,
         inspectStatusServiceMetadataPermissions(paths.metadata),
         inspectDoctorServiceDefinitionPermissions(controller.definitionPath(spec)),
+        inspectServiceDefinitionDirectoryPermissions(controller.definitionPath(spec)),
     ];
 }
 

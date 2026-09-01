@@ -1,8 +1,10 @@
 import * as fs from "node:fs";
+import * as path from "node:path";
 import type { ServiceController, ServiceSpec } from "./service-manager.js";
 import type { DoctorCheck } from "./doctor-endpoint.js";
 import type { DoctorServiceEntryInspection } from "./doctor-service-entry.js";
 import type { DoctorServiceRuntimeInspection } from "./doctor-service-runtime.js";
+import { inspectSensitiveDirectoryMutationPermissions } from "./doctor-permissions.js";
 
 export interface DoctorServiceDefinitionInspection {
     current: boolean;
@@ -81,6 +83,16 @@ export function inspectDoctorServiceDefinitionPermissions(
             message: `服务定义权限无法验证: ${definitionPath}`,
         };
     }
+}
+
+/** 文件权限不能抵御可写父目录中的服务定义路径替换。 */
+export function inspectServiceDefinitionDirectoryPermissions(definitionPath: string): DoctorCheck {
+    return inspectSensitiveDirectoryMutationPermissions(
+        path.dirname(definitionPath),
+        "service-definition-dir-mode",
+        "服务定义目录",
+        "服务定义",
+    );
 }
 
 /** 修复用户级服务并重新取证；安装异常不得中断 doctor 或泄露底层命令输出。 */

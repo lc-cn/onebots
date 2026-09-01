@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { LAUNCHD_LABEL, SERVICE_NAME, type ServiceScope } from "./service-definition.js";
 import type { ServiceHost } from "./service-host.js";
+import { inspectServiceDefinitionDirectoryPermissions } from "./doctor-service-definition.js";
 
 export interface ServiceFiles {
     stateDir: string;
@@ -90,6 +91,10 @@ export function writeServiceFile(
     content: string,
     encoding: BufferEncoding = "utf8",
 ): void {
+    if (process.platform !== "win32") {
+        const directoryCheck = inspectServiceDefinitionDirectoryPermissions(file);
+        if (directoryCheck.level === "error") throw new Error(directoryCheck.message);
+    }
     const temporary = `${file}.${process.pid}.tmp`;
     try {
         fs.writeFileSync(temporary, content, { encoding, mode: 0o644 });

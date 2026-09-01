@@ -35,6 +35,7 @@ import {
     renderWindowsUserRunner,
     renderWindowsUserTaskXml,
 } from "./windows-user-service-definition.js";
+import { inspectServiceDefinitionDirectoryPermissions } from "./doctor-service-definition.js";
 
 export * from "./service-definition.js";
 export type { ServiceHost } from "./service-host.js";
@@ -175,6 +176,12 @@ export class ServiceController {
         const normalized: ServiceSpec = { ...spec, scope: this.scope };
         const paths = this.paths();
         ensurePrivateServiceDirectory(paths.stateDir);
+        if (this.host.platform !== "win32") {
+            const definitionPath = this.definitionPath(normalized);
+            fs.mkdirSync(path.dirname(definitionPath), { recursive: true, mode: 0o755 });
+            const directoryCheck = inspectServiceDefinitionDirectoryPermissions(definitionPath);
+            if (directoryCheck.level === "error") throw new Error(directoryCheck.message);
+        }
         const previous = this.readValidSpecForRollback();
 
         await runServiceInstallTransaction({

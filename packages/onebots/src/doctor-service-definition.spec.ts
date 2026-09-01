@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     inspectDoctorServiceDefinition,
     inspectDoctorServiceDefinitionPermissions,
+    inspectServiceDefinitionDirectoryPermissions,
 } from "./doctor-service-definition.js";
 import type { ServiceController, ServiceSpec } from "./service-manager.js";
 
@@ -72,6 +73,21 @@ describe("doctor service platform definition", () => {
             fixed: true,
         });
         expect(fs.statSync(definition).mode & 0o777).toBe(0o644);
+    });
+
+    it.runIf(process.platform !== "win32")("拒绝可替换服务定义路径的父目录", () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-definition-dir-"));
+        temporaryDirectories.push(directory);
+        fs.chmodSync(directory, 0o770);
+
+        expect(
+            inspectServiceDefinitionDirectoryPermissions(path.join(directory, "onebots.service")),
+        ).toEqual({
+            name: "service-definition-dir-mode",
+            level: "error",
+            message:
+                "服务定义目录权限 770 允许组或其他用户替换服务定义；请由目录所有者移除对应写权限",
+        });
     });
 });
 

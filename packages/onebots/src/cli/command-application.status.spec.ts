@@ -99,7 +99,7 @@ const expectedCredentialCheck = { name: "service-credentials", level: "ok" };
 function expectedControlPlaneOutput(spec: ServiceSpec): string {
     return process.platform === "win32"
         ? `\n服务状态目录可读写: ${spec.workingDirectory}`
-        : `\n服务状态目录可读写: ${spec.workingDirectory}\n服务元数据权限 600 未向组或其他用户开放\n服务定义权限 644 未向组或其他用户开放写入`;
+        : `\n服务状态目录可读写: ${spec.workingDirectory}\n服务元数据权限 600 未向组或其他用户开放\n服务定义权限 644 未向组或其他用户开放写入\n服务定义目录权限 700 不允许组或其他用户替换服务定义`;
 }
 
 function expectedControlPlaneChecks() {
@@ -109,6 +109,7 @@ function expectedControlPlaneChecks() {
               { name: "service-permissions", level: "ok" },
               { name: "service-metadata-mode", level: "ok" },
               { name: "service-definition-mode", level: "ok" },
+              { name: "service-definition-dir-mode", level: "ok" },
           ];
 }
 

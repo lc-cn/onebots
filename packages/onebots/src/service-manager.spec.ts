@@ -48,6 +48,37 @@ describe.runIf(process.platform !== "win32")("service definition persistence", (
         expect(fs.readdirSync(path.dirname(definition))).toEqual([path.basename(definition)]);
     });
 
+    it("在平台命令和元数据提交前拒绝可替换服务定义的父目录", async () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-manager-dir-"));
+        temporaryDirectories.push(root);
+        const host = linuxHost(root);
+        const controller = new ServiceController("user", host);
+        const definitionDirectory = path.dirname(controller.paths().definition);
+        fs.mkdirSync(definitionDirectory, { recursive: true });
+        fs.chmodSync(definitionDirectory, 0o770);
+        const spec: ServiceSpec = {
+            scope: "user",
+            configPath: path.join(root, "config.yaml"),
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            nodePath: "/opt/node/bin/node",
+            binPath: "/opt/onebots/lib/bin.js",
+            workingDirectory: root,
+        };
+
+        await expect(controller.install(spec)).rejects.toThrow(
+            "服务定义目录权限 770 允许组或其他用户替换服务定义",
+        );
+
+        expect(fs.existsSync(controller.paths().definition)).toBe(false);
+        expect(fs.existsSync(controller.paths().metadata)).toBe(false);
+        expect(host.exec).not.toHaveBeenCalledWith(
+            "systemctl",
+            expect.arrayContaining(["enable"]),
+            expect.anything(),
+        );
+    });
+
     it("平台命令失败时恢复上一份定义与元数据", async () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-rollback-"));
         temporaryDirectories.push(root);

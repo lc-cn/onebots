@@ -126,7 +126,7 @@ const expectedCredentialCheck = { name: "service-credentials", level: "ok" };
 function expectedControlPlaneOutput(spec: ServiceSpec): string {
     return process.platform === "win32"
         ? `\n服务状态目录可读写: ${spec.workingDirectory}`
-        : `\n服务状态目录可读写: ${spec.workingDirectory}\n服务元数据权限 600 未向组或其他用户开放\n服务定义权限 644 未向组或其他用户开放写入`;
+        : `\n服务状态目录可读写: ${spec.workingDirectory}\n服务元数据权限 600 未向组或其他用户开放\n服务定义权限 644 未向组或其他用户开放写入\n服务定义目录权限 700 不允许组或其他用户替换服务定义`;
 }
 
 function expectedControlPlaneChecks() {
@@ -136,6 +136,7 @@ function expectedControlPlaneChecks() {
               { name: "service-permissions", level: "ok" },
               { name: "service-metadata-mode", level: "ok" },
               { name: "service-definition-mode", level: "ok" },
+              { name: "service-definition-dir-mode", level: "ok" },
           ];
 }
 
@@ -246,7 +247,7 @@ describe("service status", () => {
             const spec = serviceSpec();
             mockInstalledService(true, spec);
             const paths = new ServiceController("user").paths();
-            fs.chmodSync(paths.stateDir, 0o755);
+            fs.chmodSync(paths.stateDir, 0o770);
             fs.chmodSync(paths.metadata, 0o644);
             fs.chmodSync(paths.definition, 0o666);
             const fetcher = createStatusFetcher(
@@ -279,6 +280,10 @@ describe("service status", () => {
                     expect.objectContaining({ name: "service-permissions", level: "error" }),
                     expect.objectContaining({ name: "service-metadata-mode", level: "error" }),
                     expect.objectContaining({ name: "service-definition-mode", level: "error" }),
+                    expect.objectContaining({
+                        name: "service-definition-dir-mode",
+                        level: "error",
+                    }),
                 ]),
             );
             expect(report.probe.checks).toContainEqual(
