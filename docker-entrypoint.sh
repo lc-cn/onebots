@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# 新建配置、数据库与日志默认仅允许容器运行用户访问。
+umask 077
+
 # 持久化数据目录（配置、数据库、可选 static 校验文件等）
 mkdir -p /data/static
 
@@ -9,6 +12,10 @@ if [ ! -f /data/config.yaml ]; then
   mkdir -p /data
   if [ -f /app/packages/onebots/lib/config.sample.yaml ]; then
     cp /app/packages/onebots/lib/config.sample.yaml /data/config.yaml
+    if ! chmod 600 /data/config.yaml; then
+      echo "[onebots] 错误: 无法将新配置权限收紧为 0600: /data/config.yaml"
+      exit 1
+    fi
     echo "[onebots] 已创建默认配置 /data/config.yaml，可按需修改后重启容器"
   else
     echo "[onebots] 错误: 未找到 config.sample.yaml，请挂载包含 config.yaml 的卷到 /data"

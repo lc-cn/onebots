@@ -27,4 +27,19 @@ describe("Docker 构建上下文", () => {
             'HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "/app/scripts/docker-healthcheck.mjs"]',
         );
     });
+
+    test.each(["docker-entrypoint.sh", "docker-entrypoint-hf.sh"])(
+        "%s 在任何持久化文件操作前启用私有权限，并验证配置模式",
+        async entrypoint => {
+            const source = await readFile(resolve(repositoryRoot, entrypoint), "utf8");
+            const privateUmask = source.indexOf("umask 077");
+            const firstDataWrite = source.indexOf("mkdir -p /data");
+
+            expect(privateUmask).toBeGreaterThanOrEqual(0);
+            expect(firstDataWrite).toBeGreaterThan(privateUmask);
+            expect(source).toContain("chmod 600 /data/config.yaml");
+            expect(source).toContain("无法将");
+            expect(source).toContain("配置权限收紧为 0600");
+        },
+    );
 });

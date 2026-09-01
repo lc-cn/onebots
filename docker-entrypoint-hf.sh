@@ -1,6 +1,9 @@
 #!/bin/sh
 # Hugging Face Spaces 入口：使用 PORT（默认 7860），并确保 config 中端口一致
 set -e
+
+# 下载与恢复内容可能包含平台凭据；新建文件默认仅允许容器运行用户访问。
+umask 077
 echo "[onebots] 入口脚本执行中 (Hugging Face) ..."
 
 # 从 development 目录启动，以便 require 能解析 workspace 的 node_modules（适配器、协议在此）
@@ -81,6 +84,11 @@ if [ ! -f /data/config.yaml ]; then
     echo "[onebots] 错误: 未找到 config.sample.yaml"
     exit 1
   fi
+fi
+
+if ! chmod 600 /data/config.yaml; then
+  echo "[onebots] 错误: 无法将恢复配置权限收紧为 0600: /data/config.yaml"
+  exit 1
 fi
 
 # 将配置文件中的 port 设为 HF 要求的端口（Spaces 只暴露该端口）

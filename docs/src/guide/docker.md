@@ -54,7 +54,7 @@ docker compose logs -f onebots
 docker compose down
 ```
 
-首次运行会在当前目录下创建 `./data`，并在其中生成默认 `config.yaml`。默认文件不包含平台账号，因此不会用空凭据连接外部平台；若没有环境鉴权或文件凭据，容器会把随机 256 位 `access_token` 写入该配置，但不会把鉴权码输出到容器日志。从 `./data/config.yaml` 读取鉴权码登录 Web 管理端。若部署环境不能直接读取挂载文件，可把高熵鉴权码作为 Secret 注入 `ONEBOTS_ACCESS_TOKEN`；它优先于文件 token，且不会被写入配置或日志。添加账号、设置协议访问令牌后，“保存并应用”会立即热重载账号与协议。Compose 示例把 `ONEBOTS_RESTARTABLE=1` 与 `restart: unless-stopped` 成对配置，因此 Web 安装扩展后可以安全切换实例；没有可验证监督器的前台进程会保留在线并要求人工重启。只有端口、路径、数据库等宿主参数变更时，页面才会明确提示执行 `docker compose restart`。
+首次运行会在当前目录下创建 `./data`，并在其中生成权限为 `0600` 的默认 `config.yaml`；入口脚本从第一次持久化写入起使用私有 `umask`，无法收紧配置权限时会拒绝启动。默认文件不包含平台账号，因此不会用空凭据连接外部平台；若没有环境鉴权或文件凭据，容器会把随机 256 位 `access_token` 写入该配置，但不会把鉴权码输出到容器日志。从 `./data/config.yaml` 读取鉴权码登录 Web 管理端。若部署环境不能直接读取挂载文件，可把高熵鉴权码作为 Secret 注入 `ONEBOTS_ACCESS_TOKEN`；它优先于文件 token，且不会被写入配置或日志。添加账号、设置协议访问令牌后，“保存并应用”会立即热重载账号与协议。Compose 示例把 `ONEBOTS_RESTARTABLE=1` 与 `restart: unless-stopped` 成对配置，因此 Web 安装扩展后可以安全切换实例；没有可验证监督器的前台进程会保留在线并要求人工重启。只有端口、路径、数据库等宿主参数变更时，页面才会明确提示执行 `docker compose restart`。
 
 仓库提供 `.env.example`。需要环境鉴权时复制为 `.env`，填写由密码管理器或 `openssl rand -hex 32` 生成的值，再执行 `docker compose up -d`；`.env` 已被 Git 忽略。修改后必须重启容器。
 
@@ -171,7 +171,7 @@ docker run -d \
 
 `Dockerfile.hf` 基于官方镜像 `ghcr.io/lc-cn/onebots:master`，仅增加 HF 的端口与入口脚本，构建快且不需要 GitHub Packages 的 build secret。
 
-`ONEBOTS_ACCESS_TOKEN` 是部署级覆盖项，即使恢复的 `config.yaml` 已含旧 `access_token`，管理端仍使用 Secret 中的值。修改 Secret 后需要重启 Space。启动日志只会说明环境鉴权已启用，不会输出鉴权码。
+`ONEBOTS_ACCESS_TOKEN` 是部署级覆盖项，即使恢复的 `config.yaml` 已含旧 `access_token`，管理端仍使用 Secret 中的值。修改 Secret 后需要重启 Space。启动日志只会说明环境鉴权已启用，不会输出鉴权码。HF 入口会把下载、解压与新建文件置于私有 `umask` 下，并在启动前把恢复后的 `/data/config.yaml` 验证为 `0600`；不能提供私有文件权限的存储不会被误报为安全启动。
 
 ### HF 上挂载并查看持久化的 /data
 
