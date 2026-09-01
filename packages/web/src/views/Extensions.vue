@@ -249,7 +249,12 @@ import ExtensionCapabilities from "../components/ExtensionCapabilities.vue";
 import { UiAlert, UiBadge, UiButton, UiCard, UiEmpty, UiInput, UiSpinner } from "../ui";
 import { matchesExtensionSearch } from "../components/capability-search.js";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
-import { parseExtensionInventory, parsePackageMutationStatus } from "./extension-inventory.js";
+import {
+    parseExtensionEvidenceIdentity,
+    parseExtensionInventory,
+    parsePackageMutationStatus,
+    sameExtensionEvidenceIdentity,
+} from "./extension-inventory.js";
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
 import {
     getExtensionInstallRequestRecovery,
@@ -393,6 +398,11 @@ async function loadExtensions(background = false): Promise<void> {
         ]);
         if (!extensionsResponse.ok) throw new Error("无法读取扩展目录");
         if (!mutationResponse.ok) throw new Error("无法读取包变更状态");
+        const inventoryIdentity = parseExtensionEvidenceIdentity(extensionsResponse);
+        const mutationIdentity = parseExtensionEvidenceIdentity(mutationResponse);
+        if (!sameExtensionEvidenceIdentity(inventoryIdentity, mutationIdentity)) {
+            throw new Error("扩展目录与包变更状态来自不同 OneBots 实例");
+        }
         const nextExtensions = parseExtensionInventory(await extensionsResponse.json());
         const nextMutationStatus = parsePackageMutationStatus(await mutationResponse.json());
         extensions.value = nextExtensions;

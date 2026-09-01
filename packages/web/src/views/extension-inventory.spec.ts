@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterCapabilityManifest } from "@onebots/core";
-import { parseExtensionInventory, parsePackageMutationStatus } from "./extension-inventory.js";
+import {
+    parseExtensionEvidenceIdentity,
+    parseExtensionInventory,
+    parsePackageMutationStatus,
+    sameExtensionEvidenceIdentity,
+} from "./extension-inventory.js";
 
 const manifest: AdapterCapabilityManifest = {
     version: 1,
@@ -70,6 +75,33 @@ function protocol(overrides: Record<string, unknown> = {}) {
 }
 
 describe("extension inventory response", () => {
+    it("要求响应携带完整实例身份并精确比较运行契约", () => {
+        const identity = parseExtensionEvidenceIdentity(
+            new Response(null, {
+                headers: {
+                    "X-OneBots-Application": "onebots",
+                    "X-OneBots-Version": "1.2.8",
+                    "X-OneBots-Instance-Id": "instance-a",
+                    "X-OneBots-Runtime-Contract-Id": "sha256:contract-a",
+                },
+            }),
+        );
+        expect(identity).toEqual({
+            application: "onebots",
+            version: "1.2.8",
+            instanceId: "instance-a",
+            runtimeContractId: "sha256:contract-a",
+        });
+        expect(sameExtensionEvidenceIdentity(identity, identity)).toBe(true);
+        expect(
+            sameExtensionEvidenceIdentity(identity, {
+                ...identity,
+                runtimeContractId: "sha256:contract-b",
+            }),
+        ).toBe(false);
+        expect(() => parseExtensionEvidenceIdentity(new Response())).toThrow("缺少完整");
+    });
+
     it("接受状态闭合的适配器和协议目录", () => {
         const value = [
             adapter(),

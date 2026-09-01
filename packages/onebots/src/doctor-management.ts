@@ -42,7 +42,12 @@ export async function probeDoctorManagement(
         ? Promise.all([
               probeAuthenticatedManagementHttp(base, credential.token, fetcher),
               probeAuthenticatedConfigState(base, credential.token, fetcher),
-              probeAuthenticatedExtensions(base, credential.token, fetcher),
+              probeAuthenticatedExtensions(
+                  base,
+                  credential.token,
+                  fetcher,
+                  dependencies.expectedIdentity,
+              ),
               probeAuthenticatedCapabilityCatalog(
                   base,
                   credential.token,

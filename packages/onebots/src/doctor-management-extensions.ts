@@ -1,7 +1,12 @@
-import type { DoctorCheck } from "./doctor-endpoint.js";
+import type { DoctorCheck, DoctorEndpointIdentity } from "./doctor-endpoint.js";
 import type { ManagementFetch } from "./management-credential.js";
 import { validateManagementExtensionInventory } from "./doctor-management-extension-contract.js";
 import { readDoctorManagementJson } from "./doctor-management-response.js";
+import {
+    readExtensionEvidenceIdentity,
+    type ExtensionEvidenceIdentity,
+} from "./extension-evidence-identity.js";
+import packageMetadata from "../package.json" with { type: "json" };
 
 interface RuntimeExtensionSummary {
     id?: unknown;
@@ -31,6 +36,7 @@ export async function probeAuthenticatedExtensions(
     base: string,
     token: string,
     fetcher: ManagementFetch,
+    expectedIdentity?: DoctorEndpointIdentity,
 ): Promise<DoctorCheck> {
     try {
         const request = (path: string) =>
@@ -61,6 +67,21 @@ export async function probeAuthenticatedExtensions(
             };
         }
 
+        const inventoryIdentity = readExtensionEvidenceIdentity(extensionsResponse.headers);
+        const mutationIdentity = readExtensionEvidenceIdentity(mutationResponse.headers);
+        const identityIssue = inspectExtensionEvidenceIdentities(
+            inventoryIdentity,
+            mutationIdentity,
+            expectedIdentity,
+        );
+        if (identityIssue) {
+            return {
+                name: "management-extensions",
+                level: "error",
+                message: identityIssue,
+            };
+        }
+
         const inventoryIssues = validateManagementExtensionInventory(extensionsPayload);
         if (inventoryIssues.length > 0) {
             return {
@@ -81,6 +102,41 @@ export async function probeAuthenticatedExtensions(
             message: `扩展运行证据探测失败: ${error instanceof Error ? error.message : String(error)}`,
         };
     }
+}
+
+function inspectExtensionEvidenceIdentities(
+    inventory: ReturnType<typeof readExtensionEvidenceIdentity>,
+    mutation: ReturnType<typeof readExtensionEvidenceIdentity>,
+    expected?: DoctorEndpointIdentity,
+): string | null {
+    if (!inventory || !mutation) return "扩展目录或包变更租约响应缺少完整实例身份";
+    if (!sameIdentity(inventory, mutation)) {
+        return `扩展目录与包变更租约来自不同实例：${identityLabel(inventory)}；${identityLabel(mutation)}`;
+    }
+    const target = expected ?? {
+        application: packageMetadata.name,
+        version: packageMetadata.version,
+        instanceId: inventory.instanceId,
+        ...(inventory.runtimeContractId ? { runtimeContractId: inventory.runtimeContractId } : {}),
+    };
+    if (!sameIdentity(inventory, target)) {
+        return `扩展管理实例 ${identityLabel(inventory)} 与公开探针 ${identityLabel(target)} 不一致`;
+    }
+    return null;
+}
+
+function sameIdentity(left: ExtensionEvidenceIdentity, right: DoctorEndpointIdentity): boolean {
+    return (
+        left.application === right.application &&
+        left.version === right.version &&
+        left.instanceId === right.instanceId &&
+        left.runtimeContractId === right.runtimeContractId
+    );
+}
+
+function identityLabel(identity: DoctorEndpointIdentity): string {
+    const contract = identity.runtimeContractId ? ` 契约 ${identity.runtimeContractId}` : "";
+    return `${identity.application}@${identity.version} 实例 ${identity.instanceId}${contract}`;
 }
 
 export function inspectPackageMutationStatus(payload: PackageMutationSummary): DoctorCheck {

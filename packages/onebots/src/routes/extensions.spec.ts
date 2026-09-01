@@ -30,6 +30,12 @@ function setup(
         },
         logger: { error: vi.fn() },
         restartSupported,
+        runtimeContractId: "sha256:contract-a",
+        info: {
+            application_name: "onebots",
+            application_version: "1.2.8",
+            instance_id: "instance-a",
+        },
     } as unknown as App;
     registerExtensionRoutes(app, {
         get: vi.fn((route: string, handler: RouteHandler) => gets.set(route, handler)),
@@ -41,21 +47,25 @@ function setup(
 describe("extension routes", () => {
     it("返回带安装状态的白名单目录", () => {
         const { gets } = setup();
-        const ctx = {} as RouterContext;
+        const ctx = { set: vi.fn() } as unknown as RouterContext;
 
         gets.get("/api/extensions")!(ctx);
 
         expect(ctx.body).toEqual([{ id: "adapter:slack", restartSupported: true }]);
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Runtime-Contract-Id", "sha256:contract-a");
+        expect(ctx.set).toHaveBeenCalledWith("Cache-Control", "no-store");
     });
 
     it("从独立端点返回不含所有权凭据的跨进程包变更状态", () => {
         const { app, gets } = setup();
-        const ctx = {} as RouterContext;
+        const ctx = { set: vi.fn() } as unknown as RouterContext;
 
         gets.get("/api/extensions/package-mutation")!(ctx);
 
         expect(app.extensionManager.packageMutationStatus).toHaveBeenCalledOnce();
         expect(ctx.body).toEqual({ state: "idle", available: true, owner: null, error: null });
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
     });
 
     it("安装固定扩展并明确要求重启", async () => {

@@ -780,7 +780,10 @@ function convergedExtensionsResponse(): Response {
                 : null,
         };
     });
-    return new Response(JSON.stringify(inventory), { status: 200 });
+    return new Response(JSON.stringify(inventory), {
+        status: 200,
+        headers: extensionIdentityHeaders(),
+    });
 }
 
 function completeCapabilityCatalogResponse(): Response {
@@ -802,8 +805,16 @@ function completeCapabilityCatalogResponse(): Response {
 function idlePackageMutationResponse(): Response {
     return new Response(
         JSON.stringify({ state: "idle", available: true, owner: null, error: null }),
-        { status: 200 },
+        { status: 200, headers: extensionIdentityHeaders() },
     );
+}
+
+function extensionIdentityHeaders(): Record<string, string> {
+    return {
+        "X-OneBots-Application": packageMetadata.name,
+        "X-OneBots-Version": packageMetadata.version,
+        "X-OneBots-Instance-Id": "instance-a",
+    };
 }
 
 function inSyncSystemResponse(): Response {

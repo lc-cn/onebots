@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import packageMetadata from "../package.json" with { type: "json" };
 import {
     inspectPackageMutationStatus,
     inspectRuntimeExtensions,
@@ -165,14 +166,42 @@ describe("doctor extension runtime evidence", () => {
             input.endsWith("/package-mutation")
                 ? new Response(
                       JSON.stringify({ state: "idle", available: true, owner: null, error: null }),
-                      { status: 200 },
+                      { status: 200, headers: extensionIdentityHeaders("instance-a") },
                   )
-                : new Response(JSON.stringify(managementInventoryEvidence()), { status: 200 }),
+                : new Response(JSON.stringify(managementInventoryEvidence()), {
+                      status: 200,
+                      headers: extensionIdentityHeaders("instance-a"),
+                  }),
         );
 
         await expect(
             probeAuthenticatedExtensions("http://127.0.0.1:6727", "secret", fetcher),
         ).resolves.toMatchObject({ level: "ok" });
+    });
+
+    it("拒绝扩展目录、租约与公开探针之间的实例分裂", async () => {
+        const fetcher = vi.fn(async (input: string) =>
+            input.endsWith("/package-mutation")
+                ? new Response(
+                      JSON.stringify({ state: "idle", available: true, owner: null, error: null }),
+                      { status: 200, headers: extensionIdentityHeaders("instance-b") },
+                  )
+                : new Response(JSON.stringify(managementInventoryEvidence()), {
+                      status: 200,
+                      headers: extensionIdentityHeaders("instance-a"),
+                  }),
+        );
+
+        await expect(
+            probeAuthenticatedExtensions("http://127.0.0.1:6727", "secret", fetcher, {
+                application: "onebots",
+                version: packageMetadata.version,
+                instanceId: "instance-a",
+            }),
+        ).resolves.toMatchObject({
+            level: "error",
+            message: expect.stringContaining("来自不同实例"),
+        });
     });
 });
 
@@ -235,4 +264,12 @@ function managementInventoryEvidence(): Array<Record<string, unknown>> {
                 : null,
         };
     });
+}
+
+function extensionIdentityHeaders(instanceId: string): Record<string, string> {
+    return {
+        "X-OneBots-Application": "onebots",
+        "X-OneBots-Version": packageMetadata.version,
+        "X-OneBots-Instance-Id": instanceId,
+    };
 }

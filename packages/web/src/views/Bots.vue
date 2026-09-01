@@ -77,7 +77,12 @@ import {
 } from "../components/capability-presentation.js";
 import { getBotOnboardingState } from "./bot-onboarding.js";
 import type { ProtocolInventoryState } from "./bot-onboarding.js";
-import { parseExtensionInventory } from "./extension-inventory.js";
+import {
+    parseExtensionEvidenceIdentity,
+    parseExtensionInventory,
+    sameExtensionEvidenceIdentity,
+    type ExtensionEvidenceIdentity,
+} from "./extension-inventory.js";
 
 const { adapters, totalBotCount, startBot, stopBot } = useApi({
     systemInfo: false,
@@ -88,6 +93,7 @@ const toast = useToast();
 const loadingBots = ref<Set<string>>(new Set());
 const capabilitiesOpen = ref(false);
 const extensions = ref<ExtensionInfo[]>([]);
+const extensionInventoryIdentity = ref<ExtensionEvidenceIdentity | null>(null);
 const extensionInventoryStatus = ref<"loading" | "ready" | "unavailable">("loading");
 const capabilityReport = ref<AdapterCapabilityReport>({
     schemaVersion: 1,
@@ -103,8 +109,27 @@ const capabilityAdapters = computed(() =>
     mergeCapabilityReportAdapters(adapters.value, capabilityReport.value),
 );
 const protocolInventory = computed<ProtocolInventoryState>(() => {
-    if (extensionInventoryStatus.value === "loading") return "loading";
-    if (extensionInventoryStatus.value === "unavailable") return "unavailable";
+    if (extensionInventoryStatus.value === "loading" || capabilityCatalogStatus.value === "loading")
+        return "loading";
+    if (
+        extensionInventoryStatus.value === "unavailable" ||
+        capabilityCatalogStatus.value === "unavailable"
+    )
+        return "unavailable";
+    const inventoryIdentity = extensionInventoryIdentity.value;
+    if (
+        !inventoryIdentity ||
+        !sameExtensionEvidenceIdentity(inventoryIdentity, {
+            application: capabilityReport.value.application.name,
+            version: capabilityReport.value.application.version,
+            instanceId: capabilityReport.value.application.instanceId,
+            ...(capabilityReport.value.application.runtimeContractId
+                ? { runtimeContractId: capabilityReport.value.application.runtimeContractId }
+                : {}),
+        })
+    ) {
+        return "unavailable";
+    }
     return extensions.value.some(extension => extension.type === "protocol" && extension.loaded)
         ? "available"
         : "missing";
@@ -117,7 +142,10 @@ async function loadExtensionInventory() {
     try {
         const response = await authFetch(buildApiUrl("/api/extensions"));
         if (!response.ok) throw new Error("无法读取适配器能力目录");
-        extensions.value = parseExtensionInventory(await response.json());
+        const identity = parseExtensionEvidenceIdentity(response);
+        const inventory = parseExtensionInventory(await response.json());
+        extensionInventoryIdentity.value = identity;
+        extensions.value = inventory;
         extensionInventoryStatus.value = "ready";
     } catch (error) {
         extensionInventoryStatus.value = "unavailable";

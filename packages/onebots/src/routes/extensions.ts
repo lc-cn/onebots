@@ -8,9 +8,11 @@ import {
     ExtensionRuntimeConfigError,
     formatExtensionInstallationError,
 } from "../extension-manager.js";
+import { buildExtensionEvidenceHeaders } from "../extension-evidence-identity.js";
 
 export function registerExtensionRoutes(app: App, router: Router): void {
     router.get("/api/extensions", (ctx: RouterContext) => {
+        setEvidenceIdentity(app, ctx);
         ctx.body = app.extensionManager.list(app.pluginInfos).map(extension => ({
             ...extension,
             restartSupported: app.restartSupported,
@@ -18,6 +20,7 @@ export function registerExtensionRoutes(app: App, router: Router): void {
     });
 
     router.get("/api/extensions/package-mutation", (ctx: RouterContext) => {
+        setEvidenceIdentity(app, ctx);
         ctx.body = app.extensionManager.packageMutationStatus();
     });
 
@@ -48,4 +51,14 @@ export function registerExtensionRoutes(app: App, router: Router): void {
             app.logger.error("管理端安装扩展失败", { error: message });
         }
     });
+}
+
+function setEvidenceIdentity(app: App, ctx: RouterContext): void {
+    const headers = buildExtensionEvidenceHeaders({
+        application: app.info.application_name,
+        version: app.info.application_version,
+        instanceId: app.info.instance_id,
+        ...(app.runtimeContractId ? { runtimeContractId: app.runtimeContractId } : {}),
+    });
+    for (const [name, value] of Object.entries(headers)) ctx.set(name, value);
 }
