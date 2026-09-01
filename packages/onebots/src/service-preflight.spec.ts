@@ -122,6 +122,50 @@ describe("service runtime preflight", () => {
         }
     });
 
+    it("在写入服务定义前拒绝缺少账号 ID 的适配器配置键", async () => {
+        const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cwd-"));
+        temporaryDirectories.push(workingDirectory);
+        const configPath = path.join(workingDirectory, "config.yaml");
+        fs.writeFileSync(
+            configPath,
+            "access_token: persisted-token\ngeneral: {}\ncustom-adapter:\n  token: secret\n",
+            "utf8",
+        );
+
+        const packageDirectory = path.join(workingDirectory, "node_modules", "custom-adapter");
+        fs.mkdirSync(packageDirectory, { recursive: true });
+        fs.writeFileSync(
+            path.join(packageDirectory, "package.json"),
+            JSON.stringify({ name: "custom-adapter", type: "module", exports: "./index.js" }),
+        );
+        fs.writeFileSync(
+            path.join(packageDirectory, "index.js"),
+            "globalThis.__onebotsRegisterMissingIdAdapter(); export const loaded = true;\n",
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterMissingIdAdapter?: () => void;
+        };
+        globals.__onebotsRegisterMissingIdAdapter = () => {
+            AdapterRegistry.register("custom-adapter", (() => undefined) as never);
+            AdapterRegistry.registerSchema("custom-adapter", {});
+        };
+
+        try {
+            await expect(
+                preflightServiceRuntime({
+                    configPath,
+                    adapters: ["custom-adapter"],
+                    protocols: [],
+                    workingDirectory,
+                }),
+            ).rejects.toThrow(
+                "custom-adapter: 账号配置键缺少账号 ID，应使用 custom-adapter.<account_id>",
+            );
+        } finally {
+            delete globals.__onebotsRegisterMissingIdAdapter;
+        }
+    });
+
     it("拒绝把当前 shell 的 Secret 当作守护服务持久化凭据", async () => {
         const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-cwd-"));
         temporaryDirectories.push(workingDirectory);

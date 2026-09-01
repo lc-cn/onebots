@@ -73,6 +73,13 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
     }
 
     for (const [rootKey, value] of Object.entries(config)) {
+        if (AdapterRegistry.has(rootKey)) {
+            issues.push({
+                path: rootKey,
+                message: `账号配置键缺少账号 ID，应使用 ${rootKey}.<account_id>`,
+            });
+            continue;
+        }
         const [platform, ...accountParts] = rootKey.split(".");
         const accountId = accountParts.join(".");
         if (!accountId) continue;

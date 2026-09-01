@@ -109,6 +109,24 @@ describe("runtime config validation", () => {
         ).toThrow(/mock\.demo.*至少需要配置一个已加载的协议出口/);
     });
 
+    it("拒绝静默忽略缺少账号 ID 的已加载适配器配置", () => {
+        registerTestPlugins();
+
+        expect(() =>
+            validateRuntimeConfig({
+                general: { "test.v1": { use_http: true } },
+                mock: { token: "secret", "test.v1": {} },
+            }),
+        ).toThrow(/mock.*账号配置键缺少账号 ID.*mock\.<account_id>/);
+
+        expect(() =>
+            validateRuntimeConfig({
+                general: { "test.v1": { use_http: true } },
+                third_party_extension: { enabled: true },
+            }),
+        ).not.toThrow();
+    });
+
     it("使用完整运行时 Schema 校验单账号候选且不改写当前配置", () => {
         registerTestPlugins();
         const current = {
