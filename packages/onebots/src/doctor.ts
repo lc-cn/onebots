@@ -267,6 +267,9 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checks.push(inspectDoctorPluginSelection(selection));
     const extensionRoot =
         options.extensionRoot ?? process.env.ONEBOTS_EXTENSION_ROOT ?? selection.workingDirectory;
+    if (useInstalledService && spec) {
+        checks.push(inspectExtensionRootAlignment(extensionRoot, spec.workingDirectory));
+    }
     const extensionRuntime = inspectExtensionRuntimeRoot(extensionRoot);
     checks.push({
         name: "extension-root",
@@ -538,6 +541,35 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         strict,
         checks,
     };
+}
+
+/** 已安装服务与扩展管理必须使用同一依赖根，否则重启后无法加载刚安装的插件。 */
+export function inspectExtensionRootAlignment(
+    extensionRoot: string,
+    serviceWorkingDirectory: string,
+): DoctorCheck {
+    const extension = canonicalDirectory(extensionRoot);
+    const service = canonicalDirectory(serviceWorkingDirectory);
+    return extension === service
+        ? {
+              name: "extension-root-alignment",
+              level: "ok",
+              message: `扩展运行目录与服务工作目录一致: ${extension}`,
+          }
+        : {
+              name: "extension-root-alignment",
+              level: "error",
+              message: `扩展运行目录 ${extension} 与服务工作目录 ${service} 不一致；请在 ONEBOTS_EXTENSION_ROOT 生效的同一环境重新执行 onebots install`,
+          };
+}
+
+function canonicalDirectory(directory: string): string {
+    const resolved = path.resolve(directory);
+    try {
+        return fs.realpathSync(resolved);
+    } catch {
+        return resolved;
+    }
 }
 
 export interface DoctorPublicStaticInspection {

@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as net from "node:net";
 import {
+    inspectExtensionRootAlignment,
     compareDoctorEndpointIdentities,
     inspectConfiguredPublicStaticDirectory,
     inspectDataDirectory,
@@ -211,6 +212,21 @@ describe("doctor plugin selection", () => {
     it("平台入口与协议出口都存在时才通过", () => {
         expect(inspectDoctorPluginSelection(selection(["qq"], ["onebot-v11"]))).toMatchObject({
             level: "ok",
+        });
+    });
+
+    it("验证扩展管理目录与已安装服务从同一位置解析依赖", () => {
+        expect(inspectExtensionRootAlignment("/srv/onebots", "/srv/onebots")).toEqual({
+            name: "extension-root-alignment",
+            level: "ok",
+            message: "扩展运行目录与服务工作目录一致: /srv/onebots",
+        });
+        expect(inspectExtensionRootAlignment("/srv/extensions", "/srv/service")).toMatchObject({
+            name: "extension-root-alignment",
+            level: "error",
+            message: expect.stringContaining(
+                "扩展运行目录 /srv/extensions 与服务工作目录 /srv/service 不一致",
+            ),
         });
     });
 });

@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
     installService,
+    resolveServiceWorkingDirectory,
     restartService,
     type ServiceActivationDependencies,
     startService,
@@ -28,6 +29,7 @@ beforeEach(() => {
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
     }
@@ -76,6 +78,36 @@ function activationDependencies(
 }
 
 describe("service install preflight", () => {
+    it("将显式扩展根写入服务工作目录，避免安装与运行从不同位置解析插件", async () => {
+        const config = createConfig("access_token: persisted-token\ngeneral: {}\n");
+        const extensionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-root-"));
+        temporaryDirectories.push(extensionRoot);
+        vi.stubEnv("ONEBOTS_EXTENSION_ROOT", extensionRoot);
+        const preflight = vi.fn(async () => undefined);
+        const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+
+        await installService(options(config), { preflight });
+
+        const expectedRoot = path.resolve(extensionRoot);
+        expect(preflight).toHaveBeenCalledWith(
+            expect.objectContaining({ workingDirectory: expectedRoot }),
+        );
+        expect(install).toHaveBeenCalledWith(
+            expect.objectContaining({ workingDirectory: expectedRoot }),
+            expect.any(Function),
+        );
+    });
+
+    it("未指定扩展根时继续使用当前目录", () => {
+        expect(resolveServiceWorkingDirectory({}, "/srv/onebots")).toBe("/srv/onebots");
+        expect(
+            resolveServiceWorkingDirectory(
+                { ONEBOTS_EXTENSION_ROOT: "  ./runtime  " },
+                "/srv/onebots",
+            ),
+        ).toBe("/srv/onebots/runtime");
+    });
+
     it("validates configuration before writing a service definition", async () => {
         const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
         const config = createConfig("- invalid-root\n");

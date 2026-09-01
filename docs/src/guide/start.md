@@ -88,6 +88,8 @@ setup 不会写入占位平台账号；它只为本次 `-p` 实际加载的协�
 
 `onebots ui --web -c config.yaml` 会打开管理页面实际所在的本机 origin。宿主 `path` 只作为 Router HTTP 前缀，不会被误拼到页面地址；页面会从运行时元数据读取它。`onebots send -c config.yaml --channel <platform.account> --target_type private <target> <message>` 同样复用规范前缀和管理鉴权优先级：`ONEBOTS_ACCESS_TOKEN` 优先于文件 token；只有用户名密码时会先登录取得 Bearer 会话，并在发送成功或失败后撤销。发送命令会先用不含凭据的 `/health` 探针确认目标是与当前 CLI 同版本的 OneBots，再把登录和发送绑定到该进程的 `instance_id`；只有响应头和 JSON 成功回执均证明来自同一实例时才报告成功。显式 `--url` 只接受不含 URL 凭据、查询串或 fragment 的 HTTP(S) 网关根地址，避免把管理令牌发送到歧义目标。
 
+如果通过 `ONEBOTS_EXTENSION_ROOT` 把依赖安装到独立运行目录，请在同一环境中执行 `onebots install`。安装命令会把该扩展根固化为服务的工作目录，使 Web 扩展中心安装依赖、隔离预检和守护进程重启后的插件解析始终使用同一位置；从其他 shell 目录执行不会再写入错误的 `WorkingDirectory`。`onebots doctor` 会单独验证扩展根与已安装服务工作目录的真实路径是否一致，发现旧定义或环境漂移时要求重新安装服务定义。
+
 ## 工作原理
 
 1. **配置平台账号**：在配置文件中填写平台机器人的认证信息

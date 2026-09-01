@@ -105,6 +105,17 @@ export function scopeFrom(options: ScopeOptions): ServiceScope {
     return options.system ? "system" : "user";
 }
 
+/** 服务与 Web 扩展安装必须从同一依赖根解析插件。 */
+export function resolveServiceWorkingDirectory(
+    environment: NodeJS.ProcessEnv = process.env,
+    currentWorkingDirectory: string = process.cwd(),
+): string {
+    const extensionRoot = environment.ONEBOTS_EXTENSION_ROOT?.trim();
+    return extensionRoot
+        ? path.resolve(currentWorkingDirectory, extensionRoot)
+        : path.resolve(currentWorkingDirectory);
+}
+
 interface CapabilityCommandDependencies {
     loadPlugins(adapters: string[], protocols: string[]): Promise<string[]>;
     getLoadedPlugins(): LoadedPluginInfo[];
@@ -222,7 +233,7 @@ export async function installService(
         protocols: runtime.protocols,
         nodePath: process.execPath,
         binPath: path.resolve(process.argv[1]),
-        workingDirectory: process.cwd(),
+        workingDirectory: resolveServiceWorkingDirectory(),
     };
     await preflightService(spec, "安装", dependencies.preflight);
     assertInstallConfigCurrent(spec.configPath, configSnapshot, "最终预检", "未写入服务定义");
@@ -230,7 +241,12 @@ export async function installService(
     const previousSpec = controller.readSpec();
     const previousStatus = previousSpec ? controller.status(previousSpec) : null;
     await controller.install(spec, () =>
-        assertInstallConfigCurrent(spec.configPath, configSnapshot, "提交前复验", "候选服务定义未提交"),
+        assertInstallConfigCurrent(
+            spec.configPath,
+            configSnapshot,
+            "提交前复验",
+            "候选服务定义未提交",
+        ),
     );
     const currentStatus = controller.status(spec);
     const suffix = scope === "system" ? " --system" : "";
