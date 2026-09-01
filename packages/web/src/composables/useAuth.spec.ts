@@ -23,6 +23,32 @@ function memoryStorage(): Storage {
     };
 }
 
+function healthResponse(instanceId = "instance-current"): Response {
+    return Response.json({
+        status: "ok",
+        application: "onebots",
+        version: "1.2.8",
+        instance_id: instanceId,
+        runtime_contract_id: "sha256:contract-current",
+    });
+}
+
+function authenticationResponse(
+    body: unknown,
+    status = 200,
+    instanceId = "instance-current",
+): Response {
+    return Response.json(body, {
+        status,
+        headers: {
+            "X-OneBots-Application": "onebots",
+            "X-OneBots-Version": "1.2.8",
+            "X-OneBots-Instance-Id": instanceId,
+            "X-OneBots-Runtime-Contract-Id": "sha256:contract-current",
+        },
+    });
+}
+
 describe("Web 鉴权码登录", () => {
     beforeEach(() => {
         vi.stubGlobal("localStorage", memoryStorage());
@@ -36,13 +62,10 @@ describe("Web 鉴权码登录", () => {
         setToken("existing-token", null, null);
         vi.stubGlobal(
             "fetch",
-            vi.fn(
-                async () =>
-                    new Response(JSON.stringify({ message: "鉴权码错误" }), {
-                        status: 401,
-                        headers: { "Content-Type": "application/json" },
-                    }),
-            ),
+            vi
+                .fn()
+                .mockResolvedValueOnce(healthResponse())
+                .mockResolvedValueOnce(authenticationResponse({ message: "鉴权码错误" }, 401)),
         );
 
         await expect(loginWithToken("wrong-token")).resolves.toEqual({
@@ -54,24 +77,32 @@ describe("Web 鉴权码登录", () => {
 
     it("服务端确认候选鉴权码后才替换会话", async () => {
         setToken("existing-token", null, null);
-        vi.stubGlobal(
-            "fetch",
-            vi.fn(
-                async () =>
-                    new Response(
-                        JSON.stringify({
-                            success: true,
-                            token: "verified-token",
-                            expiresAt: null,
-                            refreshToken: null,
-                        }),
-                        { status: 200, headers: { "Content-Type": "application/json" } },
-                    ),
-            ),
-        );
+        const fetcher = vi
+            .fn(async (_input: RequestInfo | URL, _init?: RequestInit) => healthResponse())
+            .mockResolvedValueOnce(healthResponse())
+            .mockResolvedValueOnce(
+                authenticationResponse({
+                    success: true,
+                    token: "verified-token",
+                    expiresAt: null,
+                    refreshToken: null,
+                }),
+            );
+        vi.stubGlobal("fetch", fetcher);
 
         await expect(loginWithToken("verified-token")).resolves.toMatchObject({ ok: true });
         expect(getToken()).toBe("verified-token");
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        expect(fetcher.mock.calls[0]?.[0]).toContain("/health");
+        expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
+            cache: "no-store",
+            redirect: "error",
+        });
+        const authenticationInit = fetcher.mock.calls[1]?.[1] as RequestInit;
+        expect(authenticationInit.redirect).toBe("error");
+        expect(new Headers(authenticationInit.headers).get("X-OneBots-Expected-Instance-Id")).toBe(
+            "instance-current",
+        );
     });
 
     it("登录超时返回可解释失败，刷新超时也会有界结束", async () => {
@@ -85,7 +116,7 @@ describe("Web 鉴权码登录", () => {
         await expect(login("user", "password")).resolves.toEqual({
             ok: false,
             unavailable: true,
-            message: "认证请求超时，请检查网关或反向代理",
+            message: "拒绝发送管理凭据：health 不可达：timeout",
         });
         await expect(refresh()).resolves.toEqual({ ok: false, unavailable: true });
         expect(getToken()).toBe("existing-token");
@@ -96,7 +127,20 @@ describe("Web 鉴权码登录", () => {
         setToken("existing-token", null, null);
         vi.stubGlobal(
             "fetch",
-            vi.fn(async () => new Response("not-json", { status: 200 })),
+            vi
+                .fn()
+                .mockResolvedValueOnce(healthResponse())
+                .mockResolvedValueOnce(
+                    new Response("not-json", {
+                        status: 200,
+                        headers: {
+                            "X-OneBots-Application": "onebots",
+                            "X-OneBots-Version": "1.2.8",
+                            "X-OneBots-Instance-Id": "instance-current",
+                            "X-OneBots-Runtime-Contract-Id": "sha256:contract-current",
+                        },
+                    }),
+                ),
         );
 
         await expect(loginWithToken("candidate-token")).resolves.toEqual({
@@ -105,6 +149,75 @@ describe("Web 鉴权码登录", () => {
             message: "登录响应格式无效",
         });
         expect(getToken()).toBe("existing-token");
+    });
+
+    it("公开身份无效时不发送候选凭据", async () => {
+        setToken("existing-token", null, null);
+        const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+            Response.json({ status: "ok" }),
+        );
+        vi.stubGlobal("fetch", fetcher);
+
+        await expect(loginWithToken("candidate-secret")).resolves.toMatchObject({
+            ok: false,
+            unavailable: true,
+            message: expect.stringContaining("拒绝发送管理凭据"),
+        });
+
+        expect(fetcher).toHaveBeenCalledOnce();
+        expect(fetcher.mock.calls[0]?.[0]).toContain("/health");
+        expect(JSON.stringify(fetcher.mock.calls[0])).not.toContain("candidate-secret");
+        expect(getToken()).toBe("existing-token");
+    });
+
+    it("认证回执来自另一个实例时不提交候选会话", async () => {
+        setToken("existing-token", null, null);
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValueOnce(healthResponse("instance-a"))
+                .mockResolvedValueOnce(
+                    authenticationResponse(
+                        { success: true, token: "candidate-token" },
+                        200,
+                        "instance-b",
+                    ),
+                ),
+        );
+
+        await expect(loginWithToken("candidate-token")).resolves.toEqual({
+            ok: false,
+            unavailable: true,
+            message: "认证响应实例不匹配：期望 instance-a，实际 instance-b",
+        });
+        expect(getToken()).toBe("existing-token");
+    });
+
+    it("刷新令牌也先验证公开身份并只接受同实例回执", async () => {
+        setToken("old-session", null, "refresh-token");
+        const fetcher = vi
+            .fn(async (_input: RequestInfo | URL, _init?: RequestInit) => healthResponse())
+            .mockResolvedValueOnce(healthResponse())
+            .mockResolvedValueOnce(
+                authenticationResponse({
+                    success: true,
+                    token: "new-session",
+                    expiresAt: null,
+                    refreshToken: "next-refresh-token",
+                }),
+            );
+        vi.stubGlobal("fetch", fetcher);
+
+        await expect(refresh()).resolves.toEqual({ ok: true });
+
+        expect(getToken()).toBe("new-session");
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        const refreshInit = fetcher.mock.calls[1]?.[1];
+        expect(new Headers(refreshInit?.headers).get("X-OneBots-Expected-Instance-Id")).toBe(
+            "instance-current",
+        );
+        expect(refreshInit?.redirect).toBe("error");
     });
 
     it("刷新服务暂时不可用时保留会话，只有明确拒绝才触发清理", async () => {

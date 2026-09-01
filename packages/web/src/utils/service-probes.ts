@@ -64,12 +64,14 @@ export function pendingReadinessProbe(): ServiceProbeResult {
 export async function probeHealth(
     fetcher: typeof fetch = fetch,
     timeoutMs = DEFAULT_SERVICE_PROBE_TIMEOUT_MS,
+    cancellationSignal?: AbortSignal | null,
 ): Promise<ServiceProbeResult> {
     try {
         const { response, payload } = await runServiceProbe(async signal => {
             const response = await fetcher(buildApiUrl("/health") || "/health", {
                 cache: "no-store",
-                signal,
+                redirect: "error",
+                signal: cancellationSignal ? AbortSignal.any([signal, cancellationSignal]) : signal,
             });
             const payload: unknown = response.ok ? await response.json() : null;
             return { response, payload };
@@ -120,6 +122,7 @@ export async function probeReadiness(
         const { response, payload } = await runServiceProbe(async signal => {
             const response = await fetcher(buildApiUrl("/ready") || "/ready", {
                 cache: "no-store",
+                redirect: "error",
                 signal,
             });
             const payload: unknown = await response.json();

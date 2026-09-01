@@ -9,7 +9,7 @@ describe("认证请求时间边界", () => {
         const init = authenticationRequestInit({ method: "POST" }, 1);
         const signal = init.signal!;
 
-        expect(init).toMatchObject({ method: "POST", cache: "no-store" });
+        expect(init).toMatchObject({ method: "POST", cache: "no-store", redirect: "error" });
         await new Promise<void>(resolve => signal.addEventListener("abort", () => resolve()));
         expect(signal.aborted).toBe(true);
         expect(signal.reason).toMatchObject({ name: "TimeoutError" });

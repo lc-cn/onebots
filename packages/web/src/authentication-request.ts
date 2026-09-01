@@ -9,7 +9,11 @@ export function authenticationRequestInit(
 ): RequestInit {
     const timeoutSignal = AbortSignal.timeout(timeoutMs);
     const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal;
-    return managementRequestInit({ ...init, signal });
+    return managementRequestInit({
+        ...init,
+        redirect: init.redirect ?? "error",
+        signal,
+    });
 }
 
 export function authenticationRequestErrorMessage(error: unknown): string {

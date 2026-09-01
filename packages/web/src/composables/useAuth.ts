@@ -4,6 +4,12 @@ import {
   authenticationRequestErrorMessage,
   authenticationRequestInit
 } from '../authentication-request.js'
+import {
+  assertAuthenticationResponseIdentity,
+  authenticationExchangeHeaders,
+  AuthenticationResponseIdentityError,
+  verifyAuthenticationTarget
+} from '../authentication-target.js'
 
 const TOKEN_KEY = 'onebots:authToken'
 const REFRESH_KEY = 'onebots:authRefreshToken'
@@ -105,15 +111,18 @@ export const authFetch = async (
 
 /** 使用鉴权码登录（Bearer Token，与 config 中 access_token 一致） */
 export const loginWithToken = async (accessToken: string): Promise<LoginResult> => {
+  const target = await verifyAuthenticationTarget()
+  if (!target.ok) return { ok: false, unavailable: true, message: target.message }
   let response: Response
   try {
     response = await fetch(buildApiUrl('/api/auth/login'), authenticationRequestInit({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authenticationExchangeHeaders(target.identity, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ access_token: accessToken.trim() })
     }))
+    assertAuthenticationResponseIdentity(response, target.identity)
   } catch (error) {
-    return { ok: false, unavailable: true, message: authenticationRequestErrorMessage(error) }
+    return { ok: false, unavailable: true, message: authenticationExchangeErrorMessage(error) }
   }
 
   if (!response.ok) {
@@ -133,15 +142,18 @@ export const loginWithToken = async (accessToken: string): Promise<LoginResult> 
 }
 
 export const login = async (username: string, password: string): Promise<LoginResult> => {
+  const target = await verifyAuthenticationTarget()
+  if (!target.ok) return { ok: false, unavailable: true, message: target.message }
   let response: Response
   try {
     response = await fetch(buildApiUrl('/api/auth/login'), authenticationRequestInit({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authenticationExchangeHeaders(target.identity, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ username, password })
     }))
+    assertAuthenticationResponseIdentity(response, target.identity)
   } catch (error) {
-    return { ok: false, unavailable: true, message: authenticationRequestErrorMessage(error) }
+    return { ok: false, unavailable: true, message: authenticationExchangeErrorMessage(error) }
   }
 
   if (!response.ok) {
@@ -179,14 +191,18 @@ export const refresh = async (signal?: AbortSignal | null): Promise<RefreshResul
   const refreshToken = getRefreshToken()
   if (!refreshToken) return { ok: false }
 
+  const target = await verifyAuthenticationTarget(fetch, signal)
+  if (!target.ok) return { ok: false, unavailable: true }
+
   let response: Response
   try {
     response = await fetch(buildApiUrl('/api/auth/refresh'), authenticationRequestInit({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authenticationExchangeHeaders(target.identity, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ refreshToken }),
       signal
     }))
+    assertAuthenticationResponseIdentity(response, target.identity)
   } catch {
     return { ok: false, unavailable: true }
   }
@@ -205,3 +221,8 @@ export const refresh = async (signal?: AbortSignal | null): Promise<RefreshResul
 
   return { ok: false, unavailable: true }
 }
+
+const authenticationExchangeErrorMessage = (error: unknown) =>
+  error instanceof AuthenticationResponseIdentityError
+    ? error.message
+    : authenticationRequestErrorMessage(error)

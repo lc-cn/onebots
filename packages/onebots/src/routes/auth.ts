@@ -1,4 +1,4 @@
-import { RouterContext, logInvalidToken } from "@onebots/core";
+import { RouterContext, ValidationError, logInvalidToken } from "@onebots/core";
 import type { App } from "../app.js";
 import type { Router } from "@onebots/core";
 import {
@@ -7,6 +7,11 @@ import {
     managementCredentialsMatch,
     validateManagementToken,
 } from "../management-auth.js";
+import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
+import {
+    assertManagementInstancePrecondition,
+    ManagementInstanceMismatchError,
+} from "../management-instance-precondition.js";
 
 /**
  * Register authentication-related routes.
@@ -24,6 +29,7 @@ export function registerAuthRoutes(app: App, router: Router): void {
 
     router.post("/api/auth/login", (ctx: RouterContext) => {
         disableManagementCaching(ctx);
+        if (!acceptAuthenticationInstance(app, ctx, "登录")) return;
         const body = ctx.request.body as {
             username?: string;
             password?: string;
@@ -65,6 +71,7 @@ export function registerAuthRoutes(app: App, router: Router): void {
 
     router.post("/api/auth/refresh", (ctx: RouterContext) => {
         disableManagementCaching(ctx);
+        if (!acceptAuthenticationInstance(app, ctx, "令牌刷新")) return;
         const { refreshToken } = ctx.request.body as { refreshToken?: string };
         if (!refreshToken) {
             ctx.status = 400;
@@ -137,4 +144,26 @@ export function registerAuthRoutes(app: App, router: Router): void {
 
 function disableManagementCaching(ctx: RouterContext): void {
     ctx.set("Cache-Control", "no-store");
+}
+
+function acceptAuthenticationInstance(app: App, ctx: RouterContext, operation: string): boolean {
+    setManagementEvidenceIdentity(app, ctx);
+    try {
+        assertManagementInstancePrecondition(app, ctx, operation);
+        return true;
+    } catch (error) {
+        ctx.status = error instanceof ManagementInstanceMismatchError ? 409 : 400;
+        ctx.body = {
+            success: false,
+            application: app.info.application_name,
+            instance_id: app.info.instance_id,
+            code:
+                error instanceof ManagementInstanceMismatchError
+                    ? "AUTH_INSTANCE_MISMATCH"
+                    : "AUTH_REQUEST_INVALID",
+            message: error instanceof ValidationError ? error.message : (error as Error).message,
+        };
+        app.logger.error(`管理端${operation}实例验证失败`, { error });
+        return false;
+    }
 }
