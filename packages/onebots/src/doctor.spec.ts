@@ -786,8 +786,11 @@ describe("doctor persisted plugin selection", () => {
             metadata: path.join(directory, "service.json"),
         });
         const metadataPath = path.join(directory, "service.json");
+        const definitionPath = path.join(directory, "service.plist");
         if (process.platform !== "win32") {
             fs.writeFileSync(metadataPath, JSON.stringify(spec), { mode: 0o644 });
+            fs.writeFileSync(definitionPath, "service definition", { mode: 0o666 });
+            fs.chmodSync(definitionPath, 0o666);
         }
         vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
         const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
@@ -839,7 +842,11 @@ describe("doctor persisted plugin selection", () => {
             expect(
                 invalid.checks.find(check => check.name === "service-metadata-mode"),
             ).toMatchObject({ level: "error" });
+            expect(
+                invalid.checks.find(check => check.name === "service-definition-mode"),
+            ).toMatchObject({ level: "error" });
             expect(fs.statSync(metadataPath).mode & 0o777).toBe(0o644);
+            expect(fs.statSync(definitionPath).mode & 0o777).toBe(0o666);
         }
         expect(install).not.toHaveBeenCalled();
 
@@ -851,7 +858,14 @@ describe("doctor persisted plugin selection", () => {
             expect(
                 systemReport.checks.find(check => check.name === "service-metadata-mode"),
             ).not.toHaveProperty("fixed");
+            expect(
+                systemReport.checks.find(check => check.name === "service-definition-mode"),
+            ).toMatchObject({ level: "error" });
+            expect(
+                systemReport.checks.find(check => check.name === "service-definition-mode"),
+            ).not.toHaveProperty("fixed");
             expect(fs.statSync(metadataPath).mode & 0o777).toBe(0o644);
+            expect(fs.statSync(definitionPath).mode & 0o777).toBe(0o666);
             expect(install).not.toHaveBeenCalled();
         }
 
@@ -870,7 +884,11 @@ describe("doctor persisted plugin selection", () => {
             expect(
                 repaired.checks.find(check => check.name === "service-metadata-mode"),
             ).toMatchObject({ level: "ok", fixed: true });
+            expect(
+                repaired.checks.find(check => check.name === "service-definition-mode"),
+            ).toMatchObject({ level: "ok", fixed: true });
             expect(fs.statSync(metadataPath).mode & 0o777).toBe(0o600);
+            expect(fs.statSync(definitionPath).mode & 0o777).toBe(0o644);
         }
         expect(install).toHaveBeenCalledWith({
             ...spec,

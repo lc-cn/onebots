@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import type { ServiceController, ServiceSpec } from "./service-manager.js";
 import type { DoctorCheck } from "./doctor-endpoint.js";
 import type { DoctorServiceEntryInspection } from "./doctor-service-entry.js";
@@ -33,6 +34,51 @@ export function inspectDoctorServiceDefinition(
         return {
             current: false,
             error: `服务平台定义无法读取或验证: ${controller.paths().definition}`,
+        };
+    }
+}
+
+/** unit/plist 可公开读取，但不得允许组或其他用户修改启动契约。 */
+export function inspectDoctorServiceDefinitionPermissions(
+    definitionPath: string,
+    fix = false,
+): DoctorCheck {
+    try {
+        if (!fs.statSync(definitionPath).isFile()) {
+            return {
+                name: "service-definition-mode",
+                level: "error",
+                message: `服务定义路径不是文件: ${definitionPath}`,
+            };
+        }
+        const mode = fs.statSync(definitionPath).mode & 0o777;
+        const formattedMode = mode.toString(8).padStart(3, "0");
+        if ((mode & 0o022) === 0) {
+            return {
+                name: "service-definition-mode",
+                level: "ok",
+                message: `服务定义权限 ${formattedMode} 未向组或其他用户开放写入`,
+            };
+        }
+        if (fix) {
+            fs.chmodSync(definitionPath, 0o644);
+            return {
+                name: "service-definition-mode",
+                level: "ok",
+                message: `已将服务定义权限从 ${formattedMode} 收紧为 0644`,
+                fixed: true,
+            };
+        }
+        return {
+            name: "service-definition-mode",
+            level: "error",
+            message: `服务定义权限 ${formattedMode} 允许组或其他用户修改（用户级 --fix 可收紧为 0644）`,
+        };
+    } catch {
+        return {
+            name: "service-definition-mode",
+            level: "error",
+            message: `服务定义权限无法验证: ${definitionPath}`,
         };
     }
 }

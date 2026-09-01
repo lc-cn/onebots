@@ -209,7 +209,7 @@ doctor 会分别验证当前 CLI 与守护服务定义中的 Node.js。对于服
 
 服务入口也不再以 `binPath` 存在作为充分证据。doctor 会解析符号链接后的真实文件，查找其所属 `package.json`，并确认包名是 `onebots`、版本与当前 CLI 一致且入口正是 manifest 声明的 `bin.onebots`。因此停止状态下仍能发现服务引用旧版安装、替代脚本或损坏清单；用户级 `--fix` 会改用当前 CLI 入口。
 
-systemd unit、launchd plist 等平台服务定义无法读取或比对时不会再让 doctor 中断；`service-definition` 会以不包含文件内容的路径诊断令门禁失败。用户级 `--fix` 写入定义后会再次读取并与新元数据比较，只有结果一致才标记为 `fixed`。若 systemctl、launchctl 或任务计划程序在修复期间失败，doctor 仍会返回完整报告，保留修复前的 Node 与入口证据，并以定义路径报告失败，不回显底层命令可能携带的环境或文件内容。
+systemd unit、launchd plist 等平台服务定义无法读取或比对时不会再让 doctor 中断；`service-definition` 会以不包含文件内容的路径诊断令门禁失败。POSIX 上的 `service-definition-mode` 允许 unit/plist 公开读取，但拒绝组或其他用户写入；用户级 `--fix` 可恢复 `0644`，系统级只报告风险。安装器会原子替换定义并主动恢复 `0644`，因此重新安装也能消除既有危险权限。用户级 `--fix` 写入定义后会再次读取并与新元数据比较，只有结果一致才标记为 `fixed`。若 systemctl、launchctl 或任务计划程序在修复期间失败，doctor 仍会返回完整报告，保留修复前的 Node 与入口证据，并以定义路径报告失败，不回显底层命令可能携带的环境或文件内容。
 
 `service-permissions` 会验证保存服务元数据与日志的状态路径确实是当前进程可遍历、读取和写入的目录。普通文件占位、目录缺失或访问权限不足都会以只包含目标路径的错误令部署门禁失败，不会把原始文件系统异常带入报告。
 

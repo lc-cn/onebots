@@ -95,6 +95,16 @@ function writePrivateJson(file: string, value: unknown): void {
     fs.renameSync(temporary, file);
 }
 
+function writeServiceDefinition(file: string, content: string): void {
+    const temporary = `${file}.${process.pid}.tmp`;
+    try {
+        fs.writeFileSync(temporary, content, { encoding: "utf8", mode: 0o644 });
+        fs.renameSync(temporary, file);
+    } finally {
+        if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    }
+}
+
 interface NodeWindowsService {
     once(event: string, listener: (...args: unknown[]) => void): void;
     install(): void;
@@ -175,20 +185,19 @@ export class ServiceController {
 
         if (this.host.platform === "linux") {
             fs.mkdirSync(path.dirname(paths.definition), { recursive: true });
-            fs.writeFileSync(paths.definition, renderSystemdUnit(normalized), "utf8");
+            writeServiceDefinition(paths.definition, renderSystemdUnit(normalized));
             const base = this.scope === "user" ? ["--user"] : [];
             this.host.exec("systemctl", [...base, "daemon-reload"], { inherit: true });
             this.host.exec("systemctl", [...base, "enable", SERVICE_NAME], { inherit: true });
         } else if (this.host.platform === "darwin") {
             fs.mkdirSync(path.dirname(paths.definition), { recursive: true });
-            fs.writeFileSync(
+            writeServiceDefinition(
                 paths.definition,
                 renderLaunchdPlist(
                     normalized,
                     path.join(paths.stateDir, "onebots.log"),
                     path.join(paths.stateDir, "onebots-error.log"),
                 ),
-                "utf8",
             );
         } else if (this.host.platform === "win32" && this.scope === "user") {
             const runnerPath = path.join(paths.stateDir, "onebots-runner.cmd");

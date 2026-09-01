@@ -37,6 +37,7 @@ import {
 import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
 import {
     inspectDoctorServiceDefinition,
+    inspectDoctorServiceDefinitionPermissions,
     repairDoctorUserService,
     type DoctorServiceDefinitionInspection,
 } from "./doctor-service-definition.js";
@@ -218,13 +219,26 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             message: `${serviceMetadata.error}；请重新执行 onebots install 生成服务定义`,
         });
     }
-    const serviceMetadataPath = controller.paths().metadata;
+    const servicePaths = controller.paths();
+    const serviceMetadataPath = servicePaths.metadata;
     if (useInstalledService && process.platform !== "win32" && fs.existsSync(serviceMetadataPath)) {
         checks.push(
             inspectSensitiveFilePermissions(
                 serviceMetadataPath,
                 "service-metadata-mode",
                 "服务元数据",
+                options.fix === true && options.scope === "user",
+            ),
+        );
+    }
+    if (
+        useInstalledService &&
+        process.platform !== "win32" &&
+        fs.existsSync(servicePaths.definition)
+    ) {
+        checks.push(
+            inspectDoctorServiceDefinitionPermissions(
+                servicePaths.definition,
                 options.fix === true && options.scope === "user",
             ),
         );
