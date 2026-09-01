@@ -28,6 +28,8 @@ import {
 } from "../management-credential.js";
 import type { UpdateRunResult } from "../updater.js";
 import { inspectDoctorServiceMetadata } from "../doctor-service-metadata.js";
+import { inspectServiceStatus } from "../service-status.js";
+export type { ServiceStatusKind, ServiceStatusReport } from "../service-status.js";
 
 /** 路由组件可渲染的稳定命令结果。 */
 export interface CommandResult {
@@ -259,63 +261,10 @@ async function verifyActivatedService(
 
 /** 同时检查进程管理器与网关健康语义，并返回适合自动化使用的退出码。 */
 export async function serviceStatus(
-    options: ScopeOptions,
+    options: ScopeOptions & { json?: boolean },
     fetcher: typeof fetch = fetch,
 ): Promise<CommandResult> {
-    const controller = new ServiceController(scopeFrom(options));
-    const status = controller.status();
-    const detail = status.detail ? [`进程管理器: ${status.detail}`] : [];
-    if (!status.installed) return { output: ["未安装", ...detail].join("\n"), exitCode: 2 };
-    if (!status.running) {
-        return { output: ["已安装，未运行", ...detail].join("\n"), exitCode: 1 };
-    }
-
-    const spec = controller.readSpec();
-    if (!spec) return { output: "服务元数据缺失", exitCode: 1 };
-    try {
-        const { parseRuntimeConfig } = await import("../runtime-config-validator.js");
-        const { compareDoctorEndpointIdentities, probeDoctorEndpoint, resolveGatewayBaseUrl } =
-            await import("../doctor.js");
-        const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
-        const base = resolveGatewayBaseUrl(config);
-        const endpointChecks = await Promise.all(
-            (["health", "ready"] as const).map(endpoint =>
-                probeDoctorEndpoint(
-                    base,
-                    endpoint,
-                    fetcher,
-                    endpoint === "health" ? packageMetadata.version : undefined,
-                ),
-            ),
-        );
-        const checks = [
-            ...endpointChecks,
-            compareDoctorEndpointIdentities(endpointChecks[0]!, endpointChecks[1]!),
-        ];
-        const hasError = checks.some(check => check.level === "error");
-        const hasWarning = checks.some(check => check.level === "warning");
-        const runtimeVersionUnverified = checks[0]?.level === "warning";
-        const summary = hasError
-            ? "运行中，不可用"
-            : runtimeVersionUnverified
-              ? "运行中，版本未验证"
-              : hasWarning
-                ? "运行中，待配置"
-                : "运行中，已就绪";
-        return {
-            output: [summary, ...detail, ...checks.map(check => check.message)].join("\n"),
-            exitCode: hasError || runtimeVersionUnverified ? 1 : undefined,
-        };
-    } catch (error) {
-        return {
-            output: [
-                "运行中，状态无法验证",
-                ...detail,
-                `配置读取失败: ${error instanceof Error ? error.message : String(error)}`,
-            ].join("\n"),
-            exitCode: 1,
-        };
-    }
+    return inspectServiceStatus(options, fetcher);
 }
 
 /** 读取或持续跟随当前 scope 的服务日志。 */
