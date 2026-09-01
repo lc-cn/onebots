@@ -4,6 +4,7 @@ import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import {
     compareDoctorEndpointIdentities,
     probeDoctorEndpoint,
+    readBoundedDoctorEndpointBody,
     resolveGatewayBaseUrl,
     verifyDoctorRuntimeContract,
 } from "./doctor-endpoint.js";
@@ -29,7 +30,7 @@ export async function readServiceInstanceId(
             signal: AbortSignal.timeout(2_000),
         });
         if (!response.ok) return null;
-        const payload: unknown = await response.json();
+        const payload: unknown = JSON.parse(await readBoundedDoctorEndpointBody(response));
         if (!payload || typeof payload !== "object" || !("instance_id" in payload)) return null;
         const instanceId = payload.instance_id;
         return typeof instanceId === "string" && instanceId.trim() ? instanceId.trim() : null;

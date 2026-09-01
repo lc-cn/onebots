@@ -331,6 +331,8 @@ readinessProbe:
 
 If the port does not accept a loopback connection and no managed service is running, doctor also binds and immediately releases the port using the same listen mode as gateway startup. A conflict on another interface or IPv6, or insufficient bind permission, therefore becomes a `port` error instead of a false **available** result.
 
+Every `/health` and `/ready` verifier reads at most 64 KiB of response body and checks both the declared `Content-Length` and the actual streamed byte count. An oversized response is cancelled immediately and becomes an explicit probe failure in doctor, status, and the start/restart/update online gates. The best-effort probe that records the old `instance_id` before a service switch uses the same boundary, so an unknown HTTP service on the configured port cannot consume CLI memory with a huge or endless response.
+
 ## Auto Integration
 
 All production-ready features are automatically integrated in `BaseApp`, ready to use without additional configuration.

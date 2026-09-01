@@ -17,6 +17,7 @@ import {
     resolveVerifiedUpdateTargets,
     runUpdatedServicePreflight,
 } from "./updater.js";
+import { DOCTOR_ENDPOINT_BODY_LIMIT_BYTES } from "./doctor-endpoint.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
 import { resolveServiceRuntimeContractId } from "./service-runtime-contract.js";
 
@@ -239,6 +240,21 @@ EOF
             "http://127.0.0.1:6727/health",
             expect.objectContaining({ cache: "no-store", signal: expect.any(AbortSignal) }),
         );
+    });
+
+    it("不从超限的旧健康响应接受实例身份", async () => {
+        const spec = temporaryServiceSpec();
+        const fetcher = vi.fn<typeof fetch>(
+            async () =>
+                new Response("", {
+                    status: 200,
+                    headers: {
+                        "content-length": String(DOCTOR_ENDPOINT_BODY_LIMIT_BYTES + 1),
+                    },
+                }),
+        );
+
+        await expect(readServiceInstanceId(spec, fetcher)).resolves.toBeNull();
     });
 
     it("使用当前配置中的 Web 后装插件覆盖过期服务快照", () => {

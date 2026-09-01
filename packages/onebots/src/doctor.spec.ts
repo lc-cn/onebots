@@ -14,7 +14,10 @@ import {
 } from "./doctor.js";
 import { ServiceController, type ServiceSpec } from "./service-manager.js";
 import packageMetadata from "../package.json" with { type: "json" };
-import { verifyDoctorRuntimeContract } from "./doctor-endpoint.js";
+import {
+    DOCTOR_ENDPOINT_BODY_LIMIT_BYTES,
+    verifyDoctorRuntimeContract,
+} from "./doctor-endpoint.js";
 import { inspectGatewayPortAvailability } from "./doctor-port.js";
 
 const temporaryDirectories: string[] = [];
@@ -585,6 +588,78 @@ describe("doctor health probes", () => {
             level: "error",
             message: "health: HTTP 200；响应 OK；响应不是有效 JSON",
         });
+    });
+
+    it("拒绝并取消超过上限的流式探针响应", async () => {
+        let cancelled = false;
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(new Uint8Array(DOCTOR_ENDPOINT_BODY_LIMIT_BYTES + 1));
+            },
+            cancel() {
+                cancelled = true;
+            },
+        });
+        const fetcher = vi.fn(async () => new Response(body, { status: 200 }));
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "health", fetcher),
+        ).resolves.toEqual({
+            name: "health",
+            level: "error",
+            message: "health: HTTP 200；响应正文超过 64 KiB 上限",
+        });
+        expect(cancelled).toBe(true);
+    });
+
+    it("接受恰好位于字节上限的有效探针响应", async () => {
+        const payload = JSON.stringify({
+            status: "ok",
+            application: "onebots",
+            version: "1.2.8",
+            instance_id: "bounded-instance",
+        });
+        const body = payload.padEnd(DOCTOR_ENDPOINT_BODY_LIMIT_BYTES, " ");
+        const fetcher = vi.fn(async () => new Response(body, { status: 200 }));
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "health", fetcher),
+        ).resolves.toMatchObject({
+            name: "health",
+            level: "ok",
+            identity: {
+                application: "onebots",
+                version: "1.2.8",
+                instanceId: "bounded-instance",
+            },
+        });
+    });
+
+    it("在读取正文前拒绝声明超限的探针响应", async () => {
+        let cancelled = false;
+        const body = new ReadableStream<Uint8Array>({
+            cancel() {
+                cancelled = true;
+            },
+        });
+        const fetcher = vi.fn(
+            async () =>
+                new Response(body, {
+                    status: 200,
+                    headers: {
+                        "content-length": String(DOCTOR_ENDPOINT_BODY_LIMIT_BYTES + 1),
+                    },
+                }),
+        );
+
+        await expect(
+            probeDoctorEndpoint("http://127.0.0.1:6727", "ready", fetcher),
+        ).resolves.toEqual({
+            name: "ready",
+            level: "error",
+            message: "ready: HTTP 200；响应正文超过 64 KiB 上限",
+        });
+        expect(cancelled).toBe(true);
     });
 });
 
