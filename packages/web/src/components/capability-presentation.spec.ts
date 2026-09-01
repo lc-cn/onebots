@@ -6,6 +6,7 @@ import {
     capabilitySceneLabel,
     capabilitySupportLabel,
     countSupportedCapabilities,
+    createEmptyAdapterCapabilityReport,
     extensionCapabilityNotice,
     getCapabilityEntries,
     hasAccountCapabilityOverride,
@@ -162,6 +163,39 @@ describe("capability presentation", () => {
             },
             accounts: [],
         });
+    });
+
+    it("撤销不再可信的目录快照但保留已加载适配器运行时清单", () => {
+        const runtimeAdapter = {
+            platform: "telegram",
+            displayName: "Telegram runtime",
+            description: "runtime",
+            icon: "telegram.svg",
+            capabilities: manifest,
+            accounts: [],
+        } satisfies AdapterInfo;
+        const staleReport = capabilityReport([
+            reportAdapter("telegram", manifest, "runtime"),
+            reportAdapter("discord", manifest),
+        ]);
+
+        const result = mergeCapabilityReportAdapters([runtimeAdapter], staleReport, false);
+
+        expect(result.map(adapter => adapter.platform)).toEqual(["telegram"]);
+        expect(result[0]).toMatchObject({
+            displayName: "Telegram runtime",
+            capabilitySource: "runtime",
+            capabilities: manifest,
+        });
+        expect(createEmptyAdapterCapabilityReport()).toEqual({
+            schemaVersion: 1,
+            generatedAt: "",
+            application: { name: "", version: "", instanceId: "" },
+            complete: false,
+            errors: [],
+            adapters: [],
+        });
+        expect(createEmptyAdapterCapabilityReport()).not.toBe(createEmptyAdapterCapabilityReport());
     });
 
     it("rejects malformed independent capability API responses", () => {

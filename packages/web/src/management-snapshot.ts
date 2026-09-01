@@ -19,7 +19,7 @@ export interface ManagementSnapshotState {
     error: string;
 }
 
-/** 只有账号运行态与能力目录来自同一进程时，页面才能采用并操作账号快照。 */
+/** 只有账号运行态与能力目录来自同一进程时，页面才能把两者合并为能力视图。 */
 export function resolveManagementSnapshot(input: ManagementSnapshotInput): ManagementSnapshotState {
     if (input.adapterStatus === "loading" || input.capabilityStatus === "loading") {
         return { status: "loading", error: "" };
@@ -41,4 +41,12 @@ export function resolveManagementSnapshot(input: ManagementSnapshotInput): Manag
         };
     }
     return { status: "ready", error: input.capabilityError };
+}
+
+/** 账号运行态有自己的身份边界，不因独立能力目录故障而撤销。 */
+export function selectTrustedAdapterInventory<T>(
+    status: ManagementSnapshotStatus,
+    adapters: readonly T[],
+): T[] {
+    return status === "ready" ? [...adapters] : [];
 }

@@ -18,6 +18,18 @@ const EMPTY_CAPABILITY_MANIFEST: AdapterCapabilityManifest = {
     transports: {},
 };
 
+/** 创建不包含历史平台证据的空报告，用于请求失败时主动撤销旧目录快照。 */
+export function createEmptyAdapterCapabilityReport(): AdapterCapabilityReport {
+    return {
+        schemaVersion: 1,
+        generatedAt: "",
+        application: { name: "", version: "", instanceId: "" },
+        complete: false,
+        errors: [],
+        adapters: [],
+    };
+}
+
 export const CAPABILITY_CATEGORIES = [
     { key: "actions", label: "动作" },
     { key: "events", label: "事件" },
@@ -252,9 +264,11 @@ export function extensionCapabilityNotice(
 export function mergeCapabilityReportAdapters(
     runtimeAdapters: readonly AdapterInfo[],
     report: AdapterCapabilityReport,
+    catalogTrusted = true,
 ): AdapterInfo[] {
     const runtimePlatforms = new Set(runtimeAdapters.map(adapter => adapter.platform));
-    const reportByPlatform = new Map(report.adapters.map(adapter => [adapter.name, adapter]));
+    const reportAdapters = catalogTrusted ? report.adapters : [];
+    const reportByPlatform = new Map(reportAdapters.map(adapter => [adapter.name, adapter]));
     const unavailableReason = report.errors.join("；");
     return [
         ...runtimeAdapters.map(adapter => {
@@ -274,7 +288,7 @@ export function mergeCapabilityReportAdapters(
                     adapter.capabilityPackageVersion ?? evidence?.packageVersion,
             };
         }),
-        ...report.adapters.flatMap(evidence => {
+        ...reportAdapters.flatMap(evidence => {
             if (runtimePlatforms.has(evidence.name)) return [];
             return [
                 {

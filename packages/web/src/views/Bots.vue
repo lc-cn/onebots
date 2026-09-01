@@ -15,11 +15,11 @@
                 </div>
             </div>
             <UiAlert
-                v-if="managementSnapshotStatus === 'unavailable'"
+                v-if="adapterInventoryStatus === 'unavailable'"
                 variant="danger"
                 title="账号运行态证据不可用"
                 class="mb-4">
-                {{ managementSnapshotError }}。页面不会展示或操作来源不一致的账号快照。
+                {{ adapterInventoryError }}。页面不会展示或操作无法验证的账号快照。
             </UiAlert>
 
             <UiEmpty
@@ -81,6 +81,7 @@ import BotCard from "../components/BotCard.vue";
 import AdapterCapabilitiesDrawer from "../components/AdapterCapabilitiesDrawer.vue";
 import type { AccountInfo, AdapterCapabilityReport, ExtensionInfo } from "../types";
 import {
+    createEmptyAdapterCapabilityReport,
     mergeCapabilityReportAdapters,
     parseAdapterCapabilityReport,
 } from "../components/capability-presentation.js";
@@ -92,7 +93,10 @@ import {
     sameManagementEvidenceIdentity,
     type ManagementEvidenceIdentity,
 } from "../management-evidence-identity.js";
-import { resolveManagementSnapshot } from "../management-snapshot.js";
+import {
+    resolveManagementSnapshot,
+    selectTrustedAdapterInventory,
+} from "../management-snapshot.js";
 
 const {
     adapters,
@@ -112,14 +116,7 @@ const capabilitiesOpen = ref(false);
 const extensions = ref<ExtensionInfo[]>([]);
 const extensionInventoryIdentity = ref<ManagementEvidenceIdentity | null>(null);
 const extensionInventoryStatus = ref<"loading" | "ready" | "unavailable">("loading");
-const capabilityReport = ref<AdapterCapabilityReport>({
-    schemaVersion: 1,
-    generatedAt: "",
-    application: { name: "", version: "", instanceId: "" },
-    complete: false,
-    errors: [],
-    adapters: [],
-});
+const capabilityReport = ref<AdapterCapabilityReport>(createEmptyAdapterCapabilityReport());
 const capabilityCatalogStatus = ref<"loading" | "ready" | "unavailable">("loading");
 const capabilityCatalogError = ref("");
 const adapterInventoryIdentityKey = computed(() => identityKey(adapterInventoryIdentity.value));
@@ -148,13 +145,17 @@ const managementSnapshot = computed(() =>
 const managementSnapshotStatus = computed(() => managementSnapshot.value.status);
 const managementSnapshotError = computed(() => managementSnapshot.value.error);
 const trustedAdapters = computed(() =>
-    managementSnapshotStatus.value === "ready" ? adapters.value : [],
+    selectTrustedAdapterInventory(adapterInventoryStatus.value, adapters.value),
 );
 const totalBotCount = computed(() =>
     trustedAdapters.value.reduce((count, adapter) => count + adapter.accounts.length, 0),
 );
 const capabilityAdapters = computed(() =>
-    mergeCapabilityReportAdapters(trustedAdapters.value, capabilityReport.value),
+    mergeCapabilityReportAdapters(
+        trustedAdapters.value,
+        capabilityReport.value,
+        managementSnapshotStatus.value === "ready",
+    ),
 );
 const protocolInventory = computed<ProtocolInventoryState>(() => {
     if (
@@ -215,6 +216,7 @@ async function loadCapabilityCatalog() {
             (capabilityReport.value.complete ? "" : "存在未完成版本绑定的能力证据");
         capabilityCatalogStatus.value = "ready";
     } catch (error) {
+        capabilityReport.value = createEmptyAdapterCapabilityReport();
         capabilityCatalogStatus.value = "unavailable";
         capabilityCatalogError.value = error instanceof Error ? error.message : "能力清单请求失败";
         reportClientError("获取独立适配器能力清单失败", error);

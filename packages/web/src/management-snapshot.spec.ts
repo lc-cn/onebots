@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveManagementSnapshot } from "./management-snapshot.js";
+import { resolveManagementSnapshot, selectTrustedAdapterInventory } from "./management-snapshot.js";
 
 const identity = {
     application: "onebots",
@@ -57,5 +57,22 @@ describe("management snapshot", () => {
                 capabilityError: "",
             }),
         ).toEqual({ status: "unavailable", error: "运行态响应畸形" });
+    });
+
+    it("能力目录故障不会撤销独立验证成功的账号清单", () => {
+        const adapters = [{ platform: "mock" }];
+
+        expect(selectTrustedAdapterInventory("ready", adapters)).toEqual(adapters);
+        expect(selectTrustedAdapterInventory("unavailable", adapters)).toEqual([]);
+        expect(
+            resolveManagementSnapshot({
+                adapterStatus: "ready",
+                adapterIdentity: identity,
+                adapterError: "",
+                capabilityStatus: "unavailable",
+                capabilityIdentity: null,
+                capabilityError: "能力目录响应畸形",
+            }),
+        ).toEqual({ status: "unavailable", error: "能力目录响应畸形" });
     });
 });
