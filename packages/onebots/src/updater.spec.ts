@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import packageMetadata from "../package.json" with { type: "json" };
 import type { ServiceSpec } from "./service-manager.js";
 import {
     loadTargetExtensionVersionCatalog,
     packageNamesFor,
     refreshServiceAfterUpdate,
     resolveInstalledPackageVersion,
+    resolvePackageUpdateProjectRoot,
     resolveUpdatePluginSelection,
     resolveVerifiedUpdateTargets,
     runUpdatedServicePreflight,
@@ -75,6 +77,58 @@ function refreshDependencies(
 }
 
 describe("post-update service safety", () => {
+    it("不会把仅依赖 core 的普通项目当成 OneBots 更新目标", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-core-consumer-"));
+        temporaryDirectories.push(root);
+        fs.writeFileSync(
+            path.join(root, "package.json"),
+            JSON.stringify({ dependencies: { "@onebots/core": "^1.0.0" } }),
+            "utf8",
+        );
+
+        expect(resolvePackageUpdateProjectRoot(root)).toBeNull();
+    });
+
+    it("跳过损坏的子目录清单并验证真正的 OneBots 项目身份", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-update-root-"));
+        temporaryDirectories.push(root);
+        fs.writeFileSync(
+            path.join(root, "package.json"),
+            JSON.stringify({ name: "onebots", version: packageMetadata.version }),
+            "utf8",
+        );
+        const child = path.join(root, "runtime");
+        fs.mkdirSync(child);
+        fs.writeFileSync(path.join(child, "package.json"), "{broken", "utf8");
+
+        expect(resolvePackageUpdateProjectRoot(child)).toBe(root);
+    });
+
+    it("没有可信上层项目时拒绝把损坏清单降级为全局更新", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-update-invalid-root-"));
+        temporaryDirectories.push(root);
+        fs.writeFileSync(path.join(root, "package.json"), "{broken", "utf8");
+
+        expect(() => resolvePackageUpdateProjectRoot(root)).toThrow(
+            `无法确定项目更新目录：package.json 无法读取或解析：${path.join(root, "package.json")}`,
+        );
+    });
+
+    it("在修改依赖前拒绝与当前 CLI 版本不一致的项目安装", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-update-mismatch-"));
+        temporaryDirectories.push(root);
+        fs.writeFileSync(
+            path.join(root, "package.json"),
+            JSON.stringify({ dependencies: { onebots: "^0.1.0" } }),
+            "utf8",
+        );
+        writePackageManifest(root, "onebots", "0.1.0");
+
+        expect(() => resolvePackageUpdateProjectRoot(root)).toThrow(
+            `项目更新目录无法验证：扩展运行目录中的 onebots@0.1.0 与当前进程 onebots@${packageMetadata.version} 不一致`,
+        );
+    });
+
     it("使用目标 OneBots 目录固定所有插件版本而不是各自追随 latest", () => {
         expect(
             resolveVerifiedUpdateTargets(

@@ -17,6 +17,7 @@ import {
     detectRuntimePackageManager,
 } from "./package-manager.js";
 import { readServiceInstanceId, verifyServiceOnline } from "./service-online-verification.js";
+import { inspectExtensionRuntimeRoot } from "./extension-runtime-root.js";
 import {
     assertUpdatedPackageVersions,
     rollbackUpdatedPackages,
@@ -135,7 +136,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
         throw new Error(`当前从 npx 临时缓存运行，无法安全自更新。请在项目中执行: ${command}`);
     }
     const names = changed.map(item => `${item.name}@${item.target}`);
-    const projectRoot = findProjectRoot(runtimeRoot);
+    const projectRoot = resolvePackageUpdateProjectRoot(runtimeRoot);
     const invocation = buildPackageUpdateInvocation(runtimeRoot, names, projectRoot);
     execFileSync(invocation.executable, invocation.args, {
         cwd: invocation.cwd,
@@ -388,23 +389,49 @@ function isEphemeralNpx(): boolean {
     return /[\\/]_npx[\\/]/.test(process.argv[1] || "");
 }
 
-function findProjectRoot(from: string): string | null {
+/**
+ * 只把能够证明当前 OneBots 安装身份的目录作为项目更新目标。
+ * 普通 @onebots/core 消费者不能因为共享核心类型而被写入网关与插件依赖。
+ */
+export function resolvePackageUpdateProjectRoot(from: string): string | null {
     let current = path.resolve(from);
-    while (current !== path.dirname(current)) {
+    let invalidManifest: string | null = null;
+    while (true) {
         const manifest = path.join(current, "package.json");
         if (fs.existsSync(manifest)) {
-            const parsed = JSON.parse(fs.readFileSync(manifest, "utf8")) as {
-                dependencies?: Record<string, string>;
-                devDependencies?: Record<string, string>;
-            };
-            if (
-                parsed.dependencies?.onebots ||
-                parsed.devDependencies?.onebots ||
-                parsed.dependencies?.["@onebots/core"]
-            )
-                return current;
+            try {
+                const parsed = JSON.parse(fs.readFileSync(manifest, "utf8")) as {
+                    name?: unknown;
+                    dependencies?: Record<string, string>;
+                    devDependencies?: Record<string, string>;
+                    optionalDependencies?: Record<string, string>;
+                };
+                if (
+                    parsed.name === "onebots" ||
+                    parsed.dependencies?.onebots ||
+                    parsed.devDependencies?.onebots ||
+                    parsed.optionalDependencies?.onebots
+                ) {
+                    const inspection = inspectExtensionRuntimeRoot(current);
+                    if (inspection.error) {
+                        throw new Error(`项目更新目录无法验证：${inspection.error}`);
+                    }
+                    return current;
+                }
+            } catch (error) {
+                if (error instanceof Error && error.message.startsWith("项目更新目录无法验证：")) {
+                    throw error;
+                }
+                invalidManifest ??= manifest;
+                // 子目录清单损坏时仍允许上层经验证的 OneBots 项目成为目标。
+            }
         }
-        current = path.dirname(current);
+        const parent = path.dirname(current);
+        if (parent === current) break;
+        current = parent;
+    }
+    if (invalidManifest) {
+        throw new Error(`无法确定项目更新目录：package.json 无法读取或解析：${invalidManifest}`);
     }
     return null;
 }
