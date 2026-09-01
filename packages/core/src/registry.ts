@@ -14,6 +14,7 @@ import {
     assertAdapterFactoryContract,
     assertProtocolFactoryContract,
 } from "./extension-factory-contract.js";
+import { invokeExtensionFactoryWithRegistryBoundary } from "./extension-factory-registry-boundary.js";
 
 interface ExtensionRegistrationScope {
     open: boolean;
@@ -242,9 +243,14 @@ export class ProtocolRegistry {
         if (!factory) {
             throw new Error(`Protocol ${name}/${version} not registered`);
         }
-        const protocol = Protocol.isClassFactory(factory)
-            ? new factory(adapter, account, config)
-            : factory(adapter, account, config);
+        const protocol = invokeExtensionFactoryWithRegistryBoundary(
+            `协议 ${name}/${version}`,
+            () =>
+                Protocol.isClassFactory(factory)
+                    ? new factory(adapter, account, config)
+                    : factory(adapter, account, config),
+            extensionRegistryBoundary,
+        );
         assertProtocolFactoryContract(protocol, name, version, adapter, account);
         return protocol;
     }
@@ -507,7 +513,11 @@ export class AdapterRegistry {
         if (!factory) {
             throw new Error(`Adapter ${name} not registered`);
         }
-        const adapter = Adapter.isClassAdapter(factory) ? new factory(app) : factory(app);
+        const adapter = invokeExtensionFactoryWithRegistryBoundary(
+            `适配器 ${name}`,
+            () => (Adapter.isClassAdapter(factory) ? new factory(app) : factory(app)),
+            extensionRegistryBoundary,
+        );
         assertAdapterFactoryContract(adapter, name, app);
         const runtimeCapabilities = normalizeAdapterCapabilities(adapter.describeCapabilities());
         const registeredCapabilities = this.metadata.get(name)?.capabilities;
@@ -576,6 +586,11 @@ export function restoreExtensionRegistryState(state: ExtensionRegistryState): vo
     AdapterRegistry.restoreState(state.adapters);
     ProtocolRegistry.restoreState(state.protocols);
 }
+
+const extensionRegistryBoundary = {
+    capture: captureExtensionRegistryState,
+    restore: restoreExtensionRegistryState,
+};
 
 /** Schema 是插件与宿主共享的长期契约；复制并冻结容器，避免注册后的外部改写。 */
 function createImmutableSchemaSnapshot(schema: Schema): Schema {
