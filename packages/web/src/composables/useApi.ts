@@ -24,6 +24,7 @@ import {
 } from "../management-evidence-identity.js";
 import { parseSystemInfoSnapshot } from "../system-info.js";
 import { readManagementJsonResponse } from "../management-response.js";
+import { parseLogStreamIdentity, parseLogStreamMessage } from "../log-stream-management.js";
 
 export interface UseApiResources {
     adapters?: boolean;
@@ -100,11 +101,27 @@ export function useApi(resources: UseApiResources = {}) {
 
     const startLogsSSE = () => {
         logsEventSource?.close();
+        let streamIdentityEstablished = false;
         logsEventSource = openAuthenticatedEventStream(buildApiUrl("/api/logs"), {
+            onOpen() {
+                streamIdentityEstablished = false;
+            },
             onMessage(data) {
-                const logData = JSON.parse(data);
-                logs.value.push(logData.message);
-                if (logs.value.length > 1000) logs.value = logs.value.slice(-1000);
+                try {
+                    const payload: unknown = JSON.parse(data);
+                    if (parseLogStreamIdentity(payload)) {
+                        streamIdentityEstablished = true;
+                        logs.value = [];
+                        return;
+                    }
+                    if (!streamIdentityEstablished) {
+                        throw new Error("日志事件流尚未声明实例身份");
+                    }
+                    logs.value.push(parseLogStreamMessage(payload));
+                    if (logs.value.length > 1000) logs.value = logs.value.slice(-1000);
+                } catch (error) {
+                    reportClientError("解析日志事件失败", error);
+                }
             },
             onError: error => reportClientError("Logs SSE 连接错误", error),
         });

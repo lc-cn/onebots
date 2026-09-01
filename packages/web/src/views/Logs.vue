@@ -90,6 +90,7 @@ import {
     openAuthenticatedEventStream,
     type AuthenticatedEventStream,
 } from '../authenticated-event-stream.js';
+import { parseLogStreamIdentity, parseLogStreamMessage } from '../log-stream-management.js';
 
 const { confirm } = useConfirm();
 
@@ -160,6 +161,7 @@ let lineBuffer = '';
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 /** 标记是否正在批量渲染（防止重入） */
 let isRendering = false;
+let streamIdentityEstablished = false;
 
 /* ── 日志级别解析 ─────────────────────────────────────── */
 
@@ -282,6 +284,13 @@ function processMessage(message: string) {
     }
 }
 
+function resetLogView() {
+    logLines.value = [];
+    lineBuffer = '';
+    displayedCount.value = 0;
+    terminal?.reset();
+}
+
 /* ── 连接与控制 ────────────────────────────────────────── */
 
 const handleResize = () => {
@@ -296,10 +305,7 @@ const clearLogs = async () => {
         danger: true,
     });
     if (!confirmed) return;
-    logLines.value = [];
-    lineBuffer = '';
-    displayedCount.value = 0;
-    terminal?.reset();
+    resetLogView();
 };
 
 const reconnect = () => {
@@ -312,20 +318,27 @@ const connectSSE = () => {
     }
 
     // 重连时清空（服务端会重新发送缓存日志）
-    logLines.value = [];
-    lineBuffer = '';
-    displayedCount.value = 0;
-    terminal?.reset();
+    resetLogView();
 
     eventSource = openAuthenticatedEventStream(buildApiUrl('/api/logs'), {
         onOpen: () => {
             isConnected.value = true;
+            streamIdentityEstablished = false;
             console.log('日志流已连接');
         },
         onMessage(eventData) {
             try {
-                const data = JSON.parse(eventData);
-                if (data.message) processMessage(data.message);
+                const payload: unknown = JSON.parse(eventData);
+                const identity = parseLogStreamIdentity(payload);
+                if (identity) {
+                    streamIdentityEstablished = true;
+                    resetLogView();
+                    return;
+                }
+                if (!streamIdentityEstablished) {
+                    throw new Error('日志事件流尚未声明实例身份');
+                }
+                processMessage(parseLogStreamMessage(payload));
             } catch (error) {
                 console.error('解析日志数据失败:', error);
             }

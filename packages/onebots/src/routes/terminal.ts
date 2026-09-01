@@ -19,6 +19,7 @@ import {
 import type { WebSocket } from "ws";
 import { parseTerminalClientMessage } from "../terminal-message.js";
 import { prepareManagementEventStream } from "../management-event-stream-response.js";
+import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
 
 /** SSE 心跳间隔（毫秒） */
 const SSE_HEARTBEAT_INTERVAL_MS = 30000;
@@ -124,7 +125,25 @@ export function registerTerminalRoutes(app: App, router: Router): void {
     /* ── 日志流 SSE ───────────────────────────────────────────── */
 
     router.get("/api/logs", (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
         prepareManagementEventStream(ctx);
+        try {
+            ctx.res.write(
+                `data: ${JSON.stringify({
+                    event: "identity",
+                    application: app.info.application_name,
+                    version: app.info.application_version,
+                    instance_id: app.info.instance_id,
+                    ...(app.runtimeContractId
+                        ? { runtime_contract_id: app.runtimeContractId }
+                        : {}),
+                })}\n\n`,
+            );
+        } catch (error) {
+            app.logger.error("发送日志流身份失败", { error });
+            ctx.res.end();
+            return;
+        }
 
         // 发送缓存日志到客户端
         try {

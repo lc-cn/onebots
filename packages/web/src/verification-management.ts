@@ -6,6 +6,7 @@ import {
     type ManagementEvidenceIdentity,
 } from "./management-evidence-identity.js";
 import { readManagementJsonResponse } from "./management-response.js";
+import { parseManagementStreamIdentity } from "./management-stream-identity.js";
 
 export interface VerificationSnapshot {
     identity: ManagementEvidenceIdentity;
@@ -46,21 +47,7 @@ export function isVerificationRequest(value: unknown): value is VerificationRequ
 export function parseVerificationStreamIdentity(
     payload: unknown,
 ): ManagementEvidenceIdentity | null {
-    if (!isRecord(payload) || payload.event !== "identity") return null;
-    const application = typeof payload.application === "string" ? payload.application.trim() : "";
-    const version = typeof payload.version === "string" ? payload.version.trim() : "";
-    const instanceId = typeof payload.instance_id === "string" ? payload.instance_id.trim() : "";
-    const runtimeContractId =
-        typeof payload.runtime_contract_id === "string" ? payload.runtime_contract_id.trim() : "";
-    if (application !== "onebots" || !version || !instanceId) {
-        throw new Error("验证事件流缺少完整 OneBots 实例身份");
-    }
-    return {
-        application,
-        version,
-        instanceId,
-        ...(runtimeContractId ? { runtimeContractId } : {}),
-    };
+    return parseManagementStreamIdentity(payload, "验证事件流");
 }
 
 export function verificationMutationHeaders(identity: ManagementEvidenceIdentity): Headers {
