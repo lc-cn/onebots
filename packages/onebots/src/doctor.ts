@@ -35,6 +35,10 @@ import {
     type DoctorServiceRuntimeInspection,
 } from "./doctor-service-runtime.js";
 import { inspectServiceEntry, type DoctorServiceEntryInspection } from "./doctor-service-entry.js";
+import {
+    inspectDoctorServiceDefinition,
+    type DoctorServiceDefinitionInspection,
+} from "./doctor-service-definition.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import {
     compareDoctorEndpointIdentities,
@@ -97,6 +101,11 @@ export interface DoctorOptions {
     serviceRuntimeInspector?: (nodePath: string) => DoctorServiceRuntimeInspection;
     /** 测试或嵌入场景可替换服务入口身份探测。 */
     serviceEntryInspector?: (binPath: string) => DoctorServiceEntryInspection;
+    /** 测试或嵌入场景可替换平台服务定义探测。 */
+    serviceDefinitionInspector?: (
+        controller: ServiceController,
+        spec: ServiceSpec,
+    ) => DoctorServiceDefinitionInspection;
 }
 
 export type DoctorPluginSource = "cli" | "config" | "service" | "none";
@@ -303,6 +312,9 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
         const serviceRuntime = inspectServiceRuntime(spec.nodePath);
         const inspectEntry = options.serviceEntryInspector ?? inspectServiceEntry;
         const serviceEntry = inspectEntry(spec.binPath);
+        const inspectDefinition =
+            options.serviceDefinitionInspector ?? inspectDoctorServiceDefinition;
+        const serviceDefinition = inspectDefinition(controller, spec);
         const stateDirectory = controller.paths().stateDir;
         try {
             fs.accessSync(stateDirectory, fs.constants.R_OK | fs.constants.W_OK);
@@ -331,16 +343,18 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             spec.configPath !== options.configPath ||
             spec.scope !== options.scope ||
             requestedPluginsDiffer ||
-            !controller.definitionIsCurrent(spec);
+            !serviceDefinition.current;
         if (stale && options.fix && options.scope === "user") {
-            await controller.install({
+            const repairedSpec = {
                 ...spec,
                 configPath: options.configPath,
                 nodePath: process.execPath,
                 binPath: path.resolve(process.argv[1]),
-            });
+            };
+            await controller.install(repairedSpec);
             const repairedRuntime = inspectServiceRuntime(process.execPath);
             const repairedEntry = inspectEntry(path.resolve(process.argv[1]));
+            const repairedDefinition = inspectDefinition(controller, repairedSpec);
             checks.push({
                 ...repairedRuntime.check,
                 ...(!serviceRuntime.supported || spec.nodePath !== process.execPath
@@ -355,9 +369,11 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             });
             checks.push({
                 name: "service-definition",
-                level: "ok",
-                message: "已重新生成用户级服务定义",
-                fixed: true,
+                level: repairedDefinition.current ? "ok" : "error",
+                message: repairedDefinition.current
+                    ? "已重新生成并验证用户级服务定义"
+                    : (repairedDefinition.error ?? "重新生成后的服务定义仍与元数据不一致"),
+                ...(repairedDefinition.current ? { fixed: true } : {}),
             });
         } else {
             checks.push(serviceRuntime.check);
@@ -365,9 +381,11 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             checks.push({
                 name: "service-definition",
                 level: stale ? "error" : "ok",
-                message: stale
-                    ? `服务定义中的运行路径已失效${options.scope === "system" ? "；请使用管理员权限重新执行 onebots install --system" : "，--fix 可修复"}`
-                    : "服务运行路径有效",
+                message:
+                    serviceDefinition.error ??
+                    (stale
+                        ? `服务定义中的运行路径已失效${options.scope === "system" ? "；请使用管理员权限重新执行 onebots install --system" : "，--fix 可修复"}`
+                        : "服务运行路径有效"),
             });
         }
     }

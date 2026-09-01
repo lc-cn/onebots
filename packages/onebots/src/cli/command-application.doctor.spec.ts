@@ -243,7 +243,9 @@ describe("doctor configuration scope", () => {
             definition: path.join(directory, "service.plist"),
             metadata: path.join(directory, "service.json"),
         });
-        vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
+        const definitionIsCurrent = vi
+            .spyOn(ServiceController.prototype, "definitionIsCurrent")
+            .mockReturnValue(true);
 
         const result = await diagnose({
             config: path.join(directory, ".", "config.yaml"),
@@ -279,5 +281,27 @@ describe("doctor configuration scope", () => {
         expect(report.checks.some(check => check.name === "adapter:service-missing")).toBe(true);
         expect(report.checks.some(check => check.name === "adapter:config-missing")).toBe(false);
         expect(report.checks.some(check => check.name === "gateway-address")).toBe(false);
+
+        definitionIsCurrent.mockImplementation(() => {
+            throw new Error("service definition contains ACCESS_TOKEN=secret-token");
+        });
+        const unreadableResult = await diagnose({
+            config: configPath,
+            register: [],
+            protocol: [],
+            system: false,
+            fix: false,
+            json: true,
+        });
+        const unreadableReport = JSON.parse(unreadableResult.output || "{}") as {
+            checks: Array<{ name: string; level: string; message: string }>;
+        };
+        expect(unreadableResult.exitCode).toBe(1);
+        expect(unreadableReport.checks.find(check => check.name === "service-definition")).toEqual({
+            name: "service-definition",
+            level: "error",
+            message: `服务平台定义无法读取或验证: ${path.join(directory, "service.plist")}`,
+        });
+        expect(unreadableResult.output).not.toContain("secret-token");
     });
 });
