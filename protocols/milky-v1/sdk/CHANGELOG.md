@@ -1,5 +1,25 @@
 # @imhelper/milky-v1
 
+## 1.0.9
+
+### Patch Changes
+
+- 9439cd0: 将协议 Adapter 的实体与消息查询统一为纯 DTO 边界，由 ImHelper 稳定缓存并投影成绑定当前 Client 的行为实例。补齐 OneBot 11/12 好友目录、OneBot 11 消息查询和 Satori 分页目录解析，协议数据结构错误不再伪装为空列表。
+- 85784a8: 收紧 npm 发布边界：TypeScript 包不再携带测试产物，Web 管理端只发布构建后的 `dist`。发布流水线会真实打包全部工作区包，拒绝测试、源码、`node_modules` 泄漏或缺失入口的 tarball。
+- f7b5c89: 统一客户端 SDK 文档与当前具体 Client、完整协议根、五种接收模式及已有 Host 接入契约；补齐 Milky SDK README 与 canonical 协议说明，并移除未生效的嵌套传输配置类型。
+- 8d6efe0: 为消息行为保留场景与频道上下文，并为父级依赖目录增加显式 scope。Satori 私聊先创建真实直接消息频道，回复、撤回、编辑与 reaction 原样使用事件 channel_id，同时补齐频道目录、重命名、好友删除、申请处理、Element 编解码与频道消息删除事件。
+- 16bbe82: 为通用目录查询增加协议无关的 fresh 选项，并让实体 refresh 与 Milky SDK 真正请求服务端刷新数据；同时正确解析 Milky 群与成员列表包装结构，将目录投影和群管理收敛为独立模块。
+- Updated dependencies [9439cd0]
+- Updated dependencies [85784a8]
+- Updated dependencies [f7b5c89]
+- Updated dependencies [71fdd97]
+- Updated dependencies [8d6efe0]
+- Updated dependencies [726cc54]
+- Updated dependencies [16bbe82]
+- Updated dependencies [01c56e2]
+- Updated dependencies [755a836]
+  - imhelper@1.0.9
+
 ## 1.0.8
 
 ### Patch Changes

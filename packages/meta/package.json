@@ -1,6 +1,6 @@
 {
     "name": "@onebots/meta",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "OneBots Meta Graph API 与 Webhook 共享基础层",
     "type": "module",
     "main": "lib/index.js",

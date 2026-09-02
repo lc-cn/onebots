@@ -1,5 +1,25 @@
 # @imhelper/onebot-v12
 
+## 1.0.9
+
+### Patch Changes
+
+- 9439cd0: 将协议 Adapter 的实体与消息查询统一为纯 DTO 边界，由 ImHelper 稳定缓存并投影成绑定当前 Client 的行为实例。补齐 OneBot 11/12 好友目录、OneBot 11 消息查询和 Satori 分页目录解析，协议数据结构错误不再伪装为空列表。
+- 85784a8: 收紧 npm 发布边界：TypeScript 包不再携带测试产物，Web 管理端只发布构建后的 `dist`。发布流水线会真实打包全部工作区包，拒绝测试、源码、`node_modules` 泄漏或缺失入口的 tarball。
+- 71fdd97: 完成全平台适配器能力清单，统一声明原生、模拟、权限、场景、事件、消息段与传输能力，并在运行时校验已声明动作确有具体实现，避免管理端和协议层暴露虚假能力。
+- 01c56e2: 修正 Telegram 群成员退出服务消息的事件投影，并补齐 OneBot v11、OneBot v12、Satori 与 Milky 对成员变化、消息撤回、好友变化、表态及资源生命周期等通用通知的标准投影。
+- 755a836: 让 typed event 在交付前把已确认的用户、群、频道与成员身份写入稳定 identity map。事件实体 getter 不再依赖预先执行目录查询，后续 refresh 仍在同一实例上补全资料，且申请人不会被提前伪装成好友或成员。频道消息与实体新增显式 Guild 上下文，Satori 目录使用准确的 guild scope。OneBot 12 同时补齐频道目录与成员 API、频道双重寻址、可拒绝的好友/群申请动作，保留 opaque flag 与申请子类型，并让扩展邀请动作继续使用协议标准字符串 ID。
+- Updated dependencies [9439cd0]
+- Updated dependencies [85784a8]
+- Updated dependencies [f7b5c89]
+- Updated dependencies [71fdd97]
+- Updated dependencies [8d6efe0]
+- Updated dependencies [726cc54]
+- Updated dependencies [16bbe82]
+- Updated dependencies [01c56e2]
+- Updated dependencies [755a836]
+  - imhelper@1.0.9
+
 ## 1.0.8
 
 ### Patch Changes

@@ -1,5 +1,23 @@
 # @imhelper/onebot-v11
 
+## 1.0.9
+
+### Patch Changes
+
+- 9439cd0: 将协议 Adapter 的实体与消息查询统一为纯 DTO 边界，由 ImHelper 稳定缓存并投影成绑定当前 Client 的行为实例。补齐 OneBot 11/12 好友目录、OneBot 11 消息查询和 Satori 分页目录解析，协议数据结构错误不再伪装为空列表。
+- 85784a8: 收紧 npm 发布边界：TypeScript 包不再携带测试产物，Web 管理端只发布构建后的 `dist`。发布流水线会真实打包全部工作区包，拒绝测试、源码、`node_modules` 泄漏或缺失入口的 tarball。
+- 71fdd97: 完成全平台适配器能力清单，统一声明原生、模拟、权限、场景、事件、消息段与传输能力，并在运行时校验已声明动作确有具体实现，避免管理端和协议层暴露虚假能力。
+- Updated dependencies [9439cd0]
+- Updated dependencies [85784a8]
+- Updated dependencies [f7b5c89]
+- Updated dependencies [71fdd97]
+- Updated dependencies [8d6efe0]
+- Updated dependencies [726cc54]
+- Updated dependencies [16bbe82]
+- Updated dependencies [01c56e2]
+- Updated dependencies [755a836]
+  - imhelper@1.0.9
+
 ## 1.0.8
 
 ### Patch Changes
