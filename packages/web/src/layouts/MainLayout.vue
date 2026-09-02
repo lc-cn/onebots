@@ -282,7 +282,7 @@ watch(
 const menuItems = [
     { to: "/bots", label: "机器人管理", icon: IconRobot },
     { to: "/extensions", label: "功能扩展", icon: IconPackage },
-    { to: "/frameworks", label: "框架接入", icon: IconPlugConnected },
+    { to: "/frameworks", label: "解决方案", icon: IconPlugConnected },
     { to: "/config", label: "配置管理", icon: IconSettings },
     { to: "/system", label: "系统信息", icon: IconChartBar },
     { to: "/terminal", label: "Web 控制台", icon: IconTerminal2 },

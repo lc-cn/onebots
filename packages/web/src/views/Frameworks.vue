@@ -2,14 +2,37 @@
     <div class="h-full overflow-y-auto">
         <div class="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
             <div>
-                <h1 class="text-2xl font-semibold text-fg">框架接入</h1>
+                <h1 class="text-2xl font-semibold text-fg">解决方案 · 机器人框架</h1>
                 <p class="mt-1 text-sm text-fg-secondary">
-                    九个接入方案可直接生成配置；另有十六个生态候选已完成资料调研。
+                    {{ profiles.length }} 个接入方案可直接生成配置；另有
+                    {{ ecosystem.length }} 个生态候选已完成资料调研。
                 </p>
             </div>
             <UiAlert v-if="errorMessage" variant="danger">{{ errorMessage }}</UiAlert>
             <div v-if="loading" class="flex justify-center py-20"><UiSpinner /></div>
             <template v-else>
+                <UiCard>
+                    <template #header>
+                        <div>
+                            <span class="font-semibold text-fg">加载框架方案扩展</span>
+                            <p class="mt-1 text-xs font-normal text-fg-secondary">
+                                从当前 OneBots 依赖根加载已安装的 Framework Integration Provider。
+                            </p>
+                        </div>
+                    </template>
+                    <div class="flex flex-col gap-3 sm:flex-row">
+                        <UiInput
+                            v-model="providerName"
+                            class="flex-1"
+                            placeholder="名称或包名，如 my-framework" />
+                        <UiButton :loading="loadingProvider" @click="loadProvider"
+                            >加载方案</UiButton
+                        >
+                    </div>
+                    <p class="mt-2 text-xs text-fg-tertiary">
+                        扩展包会在网关进程中执行代码，请只加载你已经审查并主动安装的包。
+                    </p>
+                </UiCard>
                 <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                     <UiCard v-for="profile in profiles" :key="profile.id">
                         <template #header>
@@ -196,14 +219,18 @@ const selectedFramework = ref<string | number | boolean | undefined>();
 const account = ref("");
 const onebotsOrigin = ref("");
 const frameworkOrigin = ref("");
+const providerName = ref("");
 const loading = ref(true);
+const loadingProvider = ref(false);
 const generating = ref(false);
 const errorMessage = ref("");
 const frameworkOptions = computed(() =>
     profiles.value.map(profile => ({ label: profile.displayName, value: profile.id })),
 );
 
-onMounted(async () => {
+onMounted(loadCatalog);
+
+async function loadCatalog() {
     try {
         const response = await authFetch(buildApiUrl("/api/frameworks"), { cache: "no-store" });
         const payload = await readManagementJsonResponse(response);
@@ -217,7 +244,33 @@ onMounted(async () => {
     } finally {
         loading.value = false;
     }
-});
+}
+
+async function loadProvider() {
+    loadingProvider.value = true;
+    errorMessage.value = "";
+    try {
+        const response = await authFetch(buildApiUrl("/api/frameworks/load"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider: providerName.value }),
+        });
+        const payload = await readManagementJsonResponse(response);
+        if (!response.ok) {
+            const message =
+                typeof payload === "object" && payload !== null && "message" in payload
+                    ? String(payload.message)
+                    : "方案扩展加载失败（HTTP " + response.status + "）";
+            throw new Error(message);
+        }
+        providerName.value = "";
+        await loadCatalog();
+    } catch (error) {
+        errorMessage.value = error instanceof Error ? error.message : "方案扩展加载失败";
+    } finally {
+        loadingProvider.value = false;
+    }
+}
 
 async function generatePlan() {
     generating.value = true;

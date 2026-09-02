@@ -20,7 +20,7 @@ describe("machine-readable command wiring", () => {
             },
         });
         const status = StatusCommand({ options: { system: false, json: true } });
-        const frameworks = FrameworksCommand({ options: { json: true } });
+        const frameworks = FrameworksCommand({ options: { register: [], json: true } });
 
         expect(capabilities.props.machineReadable).toBe(true);
         expect(doctor.props.machineReadable).toBe(true);

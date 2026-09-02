@@ -31,7 +31,7 @@ const routes: RouteRecordRaw[] = [
         path: 'frameworks',
         name: 'Frameworks',
         component: () => import('../views/Frameworks.vue'),
-        meta: { title: '框架接入', icon: 'PlugConnected' }
+        meta: { title: '解决方案', icon: 'PlugConnected' }
       },
       {
         path: 'config',

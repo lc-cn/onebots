@@ -1,0 +1,12 @@
+[package]
+name = "onebots-interop-kovi"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+futures-util = "=0.3.31"
+kovi = "=0.13.0"
+kovi-onebot = "=0.13.2"
+serde_json = "=1.0.145"
+tokio = { version = "=1.47.1", features = ["macros", "rt-multi-thread"] }

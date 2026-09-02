@@ -1,0 +1,1 @@
+AstrBot @ git+https://github.com/AstrBotDevs/AstrBot.git@6ee1ddd4fda2e9ff2e6a796329b3c0b3ec576995

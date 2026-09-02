@@ -80,6 +80,13 @@ const baseConfig = defineConfig({
                         ]
                     },
                     {
+                        text: "解决方案",
+                        items: [
+                            { text: "解决方案概览", link: "/solution/" },
+                            { text: "机器人框架", link: "/solution/frameworks" }
+                        ]
+                    },
+                    {
                         text: pkg.version,
                         items: [
                             {
@@ -98,7 +105,6 @@ const baseConfig = defineConfig({
                         { text: `快速开始`, link: "/guide/start" },
                         { text: `Docker 部署`, link: "/guide/docker" },
                         { text: `系统架构`, link: "/guide/architecture" },
-                        { text: `机器人框架接入`, link: "/guide/framework-integration" },
                         { text: `客户端SDK`, link: "/guide/client-sdk" },
                         { text: `开发适配器`, link: "/guide/adapter" },
                         { text: `适配器开发计划`, link: "/guide/adapter-todo" }
@@ -141,6 +147,10 @@ const baseConfig = defineConfig({
                         { text: "Satori", link: "/protocol/satori" },
                         { text: "Milky", link: "/protocol/milky" },
                         { text: "MCP", link: "/protocol/mcp" }
+                    ],
+                    "/solution/": [
+                        { text: "解决方案概览", link: "/solution/" },
+                        { text: "机器人框架", link: "/solution/frameworks" }
                     ]
                 },
                 footer: {
@@ -226,6 +236,13 @@ const baseConfig = defineConfig({
                         ]
                     },
                     {
+                        text: "Solutions",
+                        items: [
+                            { text: "Overview", link: "/en/solution/" },
+                            { text: "Bot Frameworks", link: "/en/solution/frameworks" }
+                        ]
+                    },
+                    {
                         text: getCurrentVersion()?.label || `v${pkg.version}`,
                         items: [
                             // 当前版本链接
@@ -257,7 +274,6 @@ const baseConfig = defineConfig({
                         { text: "Quick Start", link: "/en/guide/start" },
                         { text: "Docker Deployment", link: "/en/guide/docker" },
                         { text: "Architecture", link: "/en/guide/architecture" },
-                        { text: "Bot Framework Integration", link: "/en/guide/framework-integration" },
                         { text: "Client SDK", link: "/en/guide/client-sdk" },
                         { text: "Adapter Development", link: "/en/guide/adapter" },
                         { text: "Adapter Roadmap", link: "/en/guide/adapter-todo" }
@@ -300,6 +316,10 @@ const baseConfig = defineConfig({
                         { text: "Satori", link: "/en/protocol/satori" },
                         { text: "Milky", link: "/en/protocol/milky" },
                         { text: "MCP", link: "/en/protocol/mcp" }
+                    ],
+                    "/en/solution/": [
+                        { text: "Solutions Overview", link: "/en/solution/" },
+                        { text: "Bot Frameworks", link: "/en/solution/frameworks" }
                     ]
                 },
                 footer: {

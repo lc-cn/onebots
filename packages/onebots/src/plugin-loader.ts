@@ -152,7 +152,7 @@ export function inspectPlugin(
 
 /** 加载第一个可用插件，并且每个逻辑插件最多输出一条诊断。 */
 export async function tryLoadPlugin(
-    kind: "适配器" | "协议",
+    kind: string,
     name: string,
     candidates: string[],
     runtimeRequire: NodeJS.Require,
@@ -164,7 +164,7 @@ export async function tryLoadPlugin(
 }
 
 async function tryLoadPluginUnlocked(
-    kind: "适配器" | "协议",
+    kind: string,
     name: string,
     candidates: string[],
     runtimeRequire: NodeJS.Require,

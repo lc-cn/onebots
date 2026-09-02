@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { App } from "../app.js";
 import { registerFrameworkRoutes } from "./frameworks.js";
 
-type Handler = (ctx: RouterContext) => void;
+type Handler = (ctx: RouterContext) => void | Promise<void>;
 
 function setup() {
     const gets = new Map<string, Handler>();
@@ -30,11 +30,14 @@ describe("framework management routes", () => {
             schemaVersion: 1,
             frameworks: expect.arrayContaining([
                 expect.objectContaining({ id: "koishi" }),
+                expect.objectContaining({ id: "astrbot" }),
+                expect.objectContaining({ id: "langbot" }),
+                expect.objectContaining({ id: "alicebot" }),
+                expect.objectContaining({ id: "kotori" }),
                 expect.objectContaining({ id: "zhenxun" }),
             ]),
             ecosystem: expect.arrayContaining([
-                expect.objectContaining({ id: "astrbot", priority: "next" }),
-                expect.objectContaining({ id: "kovi", protocols: ["milky.v1", "onebot.v11"] }),
+                expect.objectContaining({ id: "olivos", protocols: ["onebot.v11", "onebot.v12"] }),
             ]),
         });
     });
@@ -59,5 +62,18 @@ describe("framework management routes", () => {
         posts.get("/api/frameworks/plan")!(invalid);
         expect(invalid.status).toBe(400);
         expect(invalid.body).toMatchObject({ code: "FRAMEWORK_PLAN_INVALID" });
+    });
+
+    it("reports a missing dynamic framework provider without changing the catalog", async () => {
+        const { posts } = setup();
+        const ctx = {
+            set: vi.fn(),
+            request: { body: { provider: "definitely-missing-framework-provider" } },
+        } as unknown as RouterContext;
+
+        await posts.get("/api/frameworks/load")!(ctx);
+
+        expect(ctx.status).toBe(400);
+        expect(ctx.body).toMatchObject({ code: "FRAMEWORK_PROVIDER_LOAD_FAILED" });
     });
 });

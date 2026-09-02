@@ -3,11 +3,16 @@ export { App, createOnebots, defineConfig } from "./app.js";
 export { getAppConfigSchema } from "./config-schema.js";
 export {
     createFrameworkConnectionPlan,
+    defineFrameworkIntegration,
+    FrameworkIntegrationRegistry,
     getFrameworkProfile,
     listFrameworkProfiles,
     type FrameworkConnectionCheck,
     type FrameworkConnectionPlan,
     type FrameworkConnectionRequest,
+    type FrameworkConfigRenderContext,
+    type FrameworkIntegrationContext,
+    type FrameworkIntegrationProvider,
     type DistributionCompatibilityAudit,
     type FrameworkId,
     type FrameworkKind,
@@ -22,6 +27,12 @@ export {
     type EcosystemPriority,
     type FrameworkEcosystemEntry,
 } from "./framework-ecosystem.js";
+export {
+    frameworkIntegrationCandidates,
+    loadFrameworkIntegration,
+    loadFrameworkIntegrations,
+    type LoadedFrameworkIntegration,
+} from "./framework-integration-loader.js";
 export {
     parseRuntimeConfig,
     validateRuntimeConfig,

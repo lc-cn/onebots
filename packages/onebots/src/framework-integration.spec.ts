@@ -2,11 +2,47 @@ import yaml from "js-yaml";
 import { describe, expect, it } from "vitest";
 import {
     createFrameworkConnectionPlan,
+    defineFrameworkIntegration,
+    FrameworkIntegrationRegistry,
     getFrameworkProfile,
     listFrameworkProfiles,
 } from "./framework-integration.js";
 
 describe("framework integration profiles", () => {
+    it("accepts dynamically registered framework providers without changing the planner", () => {
+        const snapshot = FrameworkIntegrationRegistry.capture();
+        try {
+            FrameworkIntegrationRegistry.register(
+                defineFrameworkIntegration({
+                    profile: {
+                        id: "fixture-framework",
+                        displayName: "Fixture",
+                        kind: "framework",
+                        packageName: "fixture-framework",
+                        protocol: "onebot.v11",
+                        transport: "websocket",
+                        verification: "documented",
+                        upstream: "https://example.com/fixture",
+                        defaultFrameworkOrigin: null,
+                        limitations: [],
+                    },
+                    resolveEndpoint: ({ onebotsEndpoint }) =>
+                        `${onebotsEndpoint.replace(/^http/u, "ws")}/fixture`,
+                    renderFrameworkConfig: ({ endpoint }) => `endpoint=${endpoint}`,
+                }),
+            );
+
+            const plan = createFrameworkConnectionPlan({
+                framework: "fixture-framework",
+                account: "mock.dynamic",
+            });
+            expect(plan.endpoint).toBe("ws://127.0.0.1:6727/mock/dynamic/onebot/v11/fixture");
+            expect(plan.frameworkConfig).toBe(`endpoint=${plan.endpoint}`);
+        } finally {
+            FrameworkIntegrationRegistry.restore(snapshot);
+        }
+    });
+
     it("publishes one immutable profile for every promised downstream", () => {
         const profiles = listFrameworkProfiles();
 
@@ -18,6 +54,11 @@ describe("framework integration profiles", () => {
             "alemonjs",
             "melobot",
             "zerobot",
+            "kovi",
+            "astrbot",
+            "langbot",
+            "alicebot",
+            "kotori",
             "yunzai",
             "zhenxun",
         ]);
@@ -66,6 +107,11 @@ describe("framework integration profiles", () => {
                             "alemonjs",
                             "melobot",
                             "zerobot",
+                            "kovi",
+                            "astrbot",
+                            "langbot",
+                            "alicebot",
+                            "kotori",
                         ].includes(profile.id),
                 )
                 .every(profile => profile.verification === "documented"),
@@ -167,6 +213,77 @@ describe("framework integration profiles", () => {
         });
         expect(melobot.framework.evidence?.command).toBe("pnpm interop:melobot");
         expect(zerobot.framework.evidence?.command).toBe("pnpm interop:zerobot");
+    });
+
+    it("renders Kovi's pinned split WebSocket plan", () => {
+        const kovi = createFrameworkConnectionPlan({ framework: "kovi", account: "qq.main" });
+
+        expect(kovi.endpoint).toBe("ws://127.0.0.1:6727/qq/main/onebot/v11");
+        expect(kovi.frameworkConfig).toContain('path = "/qq/main/onebot/v11"');
+        expect(kovi.frameworkConfig).toContain("all_in_one = false");
+        expect(kovi.framework.evidence?.command).toBe("pnpm interop:kovi");
+    });
+
+    it("renders AstrBot's pinned reverse WebSocket provider plan", () => {
+        const astrbot = createFrameworkConnectionPlan({
+            framework: "astrbot",
+            account: "qq.main",
+            frameworkOrigin: "http://astrbot.internal:6199/runtime",
+        });
+
+        expect(astrbot.endpoint).toBe("ws://astrbot.internal:6199/runtime/ws");
+        expect(yaml.load(astrbot.frameworkConfig)).toMatchObject({
+            type: "aiocqhttp",
+            ws_reverse_host: "astrbot.internal",
+            ws_reverse_port: 6199,
+            ws_reverse_token: "<shared-token>",
+        });
+        expect(astrbot.framework.evidence?.command).toBe("pnpm interop:astrbot");
+    });
+
+    it("renders LangBot's pinned reverse WebSocket provider plan", () => {
+        const langbot = createFrameworkConnectionPlan({
+            framework: "langbot",
+            account: "qq.main",
+            frameworkOrigin: "http://langbot.internal:2280/runtime",
+        });
+
+        expect(langbot.endpoint).toBe("ws://langbot.internal:2280/runtime/ws");
+        expect(yaml.load(langbot.frameworkConfig)).toMatchObject({
+            adapter: "aiocqhttp",
+            host: "langbot.internal",
+            port: 2280,
+            "access-token": "<shared-token>",
+        });
+        expect(langbot.framework.evidence?.command).toBe("pnpm interop:langbot");
+    });
+
+    it("renders AliceBot's authenticated compatibility provider plan", () => {
+        const alicebot = createFrameworkConnectionPlan({
+            framework: "alicebot",
+            account: "qq.main",
+            frameworkOrigin: "http://alicebot.internal:8080/runtime",
+        });
+
+        expect(alicebot.endpoint).toBe("ws://alicebot.internal:8080/runtime/cqhttp/ws");
+        expect(alicebot.frameworkConfig).toContain("class OneBotsCQHTTPAdapter");
+        expect(alicebot.frameworkConfig).toContain("request.headers.get('Authorization'");
+        expect(alicebot.frameworkConfig).toContain('access_token = "<shared-token>"');
+        expect(alicebot.framework.evidence?.command).toBe("pnpm interop:alicebot");
+    });
+
+    it("renders Kotori's authenticated connection wrapper plan", () => {
+        const kotori = createFrameworkConnectionPlan({
+            framework: "kotori",
+            account: "qq.main",
+            frameworkOrigin: "http://kotori.internal:7200/runtime",
+        });
+
+        expect(kotori.endpoint).toBe("ws://kotori.internal:7200/runtime/adapter/onebots");
+        expect(kotori.frameworkConfig).toContain("class OneBotsOnebotAdapter");
+        expect(kotori.frameworkConfig).toContain("socket.close(1008, 'Unauthorized')");
+        expect(kotori.frameworkConfig).toContain("port = 7200");
+        expect(kotori.framework.evidence?.command).toBe("pnpm interop:kotori");
     });
 
     it("generates Karin Milky HTTP and event transport configuration", () => {

@@ -1,0 +1,2 @@
+alicebot @ git+https://github.com/AliceBotProject/alicebot.git@1ff633db3937092816d7f3b6a96dd717819453d9
+alicebot-adapter-cqhttp @ git+https://github.com/AliceBotProject/alicebot.git@1ff633db3937092816d7f3b6a96dd717819453d9#subdirectory=packages/alicebot-adapter-cqhttp

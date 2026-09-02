@@ -3,8 +3,8 @@ import { CliError } from "./command-application.js";
 import { showFrameworkConnections } from "./framework-command.js";
 
 describe("frameworks command", () => {
-    it("lists every profile as stable JSON without requiring a bot account", () => {
-        const result = showFrameworkConnections({ json: true });
+    it("lists every profile as stable JSON without requiring a bot account", async () => {
+        const result = await showFrameworkConnections({ json: true });
         const report = JSON.parse(result.output ?? "{}") as {
             schemaVersion: number;
             profiles: Array<{ id: string; verification: string }>;
@@ -21,6 +21,11 @@ describe("frameworks command", () => {
             "alemonjs",
             "melobot",
             "zerobot",
+            "kovi",
+            "astrbot",
+            "langbot",
+            "alicebot",
+            "kotori",
             "yunzai",
             "zhenxun",
         ]);
@@ -31,10 +36,10 @@ describe("frameworks command", () => {
                 )
                 .every(profile => profile.verification === "handshake"),
         ).toBe(true);
-        expect(report.ecosystem).toHaveLength(16);
+        expect(report.ecosystem).toHaveLength(11);
         expect(report.ecosystem).toEqual(
             expect.arrayContaining([
-                expect.objectContaining({ id: "astrbot", priority: "next" }),
+                expect.objectContaining({ id: "avilla", priority: "later" }),
                 expect.objectContaining({ id: "genshinuid", priority: "later" }),
             ]),
         );
@@ -45,9 +50,9 @@ describe("frameworks command", () => {
         ).toBe(true);
     });
 
-    it("shows distribution source coverage without describing it as process verification", () => {
-        const list = showFrameworkConnections({ json: false });
-        const plan = showFrameworkConnections({
+    it("shows distribution source coverage without describing it as process verification", async () => {
+        const list = await showFrameworkConnections({ json: false });
+        const plan = await showFrameworkConnections({
             framework: "yunzai",
             account: "qq.main",
             json: false,
@@ -62,8 +67,8 @@ describe("frameworks command", () => {
         expect(plan.output).toContain("不代表完整进程互操作已验证");
     });
 
-    it("renders pinned handshake evidence without overstating the verification level", () => {
-        const result = showFrameworkConnections({
+    it("renders pinned handshake evidence without overstating the verification level", async () => {
+        const result = await showFrameworkConnections({
             framework: "nonebot",
             account: "mock.bot",
             framework_origin: "http://127.0.0.1:9000",
@@ -79,15 +84,15 @@ describe("frameworks command", () => {
         expect(result.output).toContain("<shared-token>");
     });
 
-    it("requires a valid framework and account before generating templates", () => {
-        expect(() =>
+    it("requires a valid framework and account before generating templates", async () => {
+        await expect(
             showFrameworkConnections({ framework: "unknown", account: "mock.bot", json: false }),
-        ).toThrow(CliError);
-        expect(() => showFrameworkConnections({ framework: "nonebot", json: false })).toThrow(
-            "需要 --account platform.account_id",
-        );
-        expect(() => showFrameworkConnections({ account: "mock.bot", json: false })).toThrow(
-            "只能与 --framework 一起使用",
-        );
+        ).rejects.toBeInstanceOf(CliError);
+        await expect(
+            showFrameworkConnections({ framework: "nonebot", json: false }),
+        ).rejects.toThrow("需要 --account platform.account_id");
+        await expect(
+            showFrameworkConnections({ account: "mock.bot", json: false }),
+        ).rejects.toThrow("只能与 --framework 一起使用");
     });
 });

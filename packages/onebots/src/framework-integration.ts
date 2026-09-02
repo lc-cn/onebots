@@ -1,15 +1,6 @@
 import yaml from "js-yaml";
 
-export type FrameworkId =
-    | "koishi"
-    | "nonebot"
-    | "karin"
-    | "zhin"
-    | "alemonjs"
-    | "melobot"
-    | "zerobot"
-    | "yunzai"
-    | "zhenxun";
+export type FrameworkId = string;
 
 export type FrameworkKind = "framework" | "distribution";
 export type FrameworkProtocol = "onebot.v11" | "onebot.v12" | "satori.v1" | "milky.v1";
@@ -79,9 +70,65 @@ export interface FrameworkConnectionPlan {
     limitations: string[];
 }
 
+export interface FrameworkIntegrationContext {
+    profile: FrameworkProfile;
+    onebotsEndpoint: string;
+    frameworkOrigin: URL | null;
+}
+
+export interface FrameworkConfigRenderContext extends FrameworkIntegrationContext {
+    endpoint: string;
+}
+
+export interface FrameworkIntegrationProvider {
+    profile: FrameworkProfile;
+    resolveEndpoint?: (context: FrameworkIntegrationContext) => string;
+    renderFrameworkConfig: (context: FrameworkConfigRenderContext) => string;
+}
+
+export function defineFrameworkIntegration(
+    provider: FrameworkIntegrationProvider,
+): FrameworkIntegrationProvider {
+    return provider;
+}
+
+/** 框架接入是独立于平台 Adapter 与出口 Protocol 的下游方案扩展。 */
+export class FrameworkIntegrationRegistry {
+    private static providers = new Map<string, FrameworkIntegrationProvider>();
+
+    static register(provider: FrameworkIntegrationProvider): void {
+        const id = provider.profile.id.trim();
+        if (!id || id !== provider.profile.id || !/^[a-z0-9][a-z0-9-]*$/u.test(id)) {
+            throw new TypeError(`框架集成 id 无效：${provider.profile.id}`);
+        }
+        const registered = this.providers.get(id);
+        if (registered === provider) return;
+        if (registered) throw new TypeError(`框架集成 ${id} 已由其他提供者注册`);
+        this.providers.set(id, deepFreeze(provider));
+    }
+
+    static get(id: string): FrameworkIntegrationProvider | undefined {
+        return this.providers.get(id);
+    }
+
+    static list(): readonly FrameworkIntegrationProvider[] {
+        return [...this.providers.values()];
+    }
+
+    /** @internal 供动态扩展加载事务失败时完整回滚。 */
+    static capture(): ReadonlyMap<string, FrameworkIntegrationProvider> {
+        return new Map(this.providers);
+    }
+
+    /** @internal 只接受由 capture 产生的进程内快照。 */
+    static restore(snapshot: ReadonlyMap<string, FrameworkIntegrationProvider>): void {
+        this.providers = new Map(snapshot);
+    }
+}
+
 const SHARED_TOKEN = "<shared-token>";
 
-const PROFILES: Readonly<Record<FrameworkId, FrameworkProfile>> = deepFreeze({
+const BUILTIN_PROFILES: Readonly<Record<string, FrameworkProfile>> = deepFreeze({
     koishi: {
         id: "koishi",
         displayName: "Koishi",
@@ -262,6 +309,147 @@ const PROFILES: Readonly<Record<FrameworkId, FrameworkProfile>> = deepFreeze({
         upstream: "https://github.com/wdvxdr1123/ZeroBot",
         defaultFrameworkOrigin: null,
         limitations: ["群消息、富媒体、重连、反向 WebSocket 与完整动作矩阵仍待验证。"],
+    },
+    kovi: {
+        id: "kovi",
+        displayName: "Kovi",
+        kind: "framework",
+        packageName: "kovi-onebot",
+        protocol: "onebot.v11",
+        transport: "websocket",
+        verification: "handshake",
+        evidence: {
+            frameworkVersion: "0.13.0",
+            adapterVersion: "0.13.2",
+            lastVerifiedAt: "2026-09-02",
+            command: "pnpm interop:kovi",
+            checks: [
+                "auth-rejection",
+                "handshake",
+                "private-message",
+                "get_login_info",
+                "send_private_msg",
+            ],
+        },
+        upstream: "https://github.com/ThriceCola/Kovi",
+        defaultFrameworkOrigin: null,
+        limitations: [
+            "Kovi 0.13.2 会生成带双斜杠的 /api 与 /event 地址，OneBots 已提供精确兼容路径。",
+            "Milky driver、群消息、富媒体、断线重连与完整动作矩阵仍待验证。",
+        ],
+    },
+    astrbot: {
+        id: "astrbot",
+        displayName: "AstrBot",
+        kind: "framework",
+        packageName: "AstrBot",
+        protocol: "onebot.v11",
+        transport: "reverse-websocket",
+        verification: "handshake",
+        evidence: {
+            frameworkVersion: "4.28.0b1",
+            adapterVersion: "1.4.4",
+            lastVerifiedAt: "2026-09-02",
+            command: "pnpm interop:astrbot",
+            checks: [
+                "auth-rejection",
+                "handshake",
+                "private-message",
+                "get_login_info",
+                "send_private_msg",
+            ],
+        },
+        upstream:
+            "https://github.com/AstrBotDevs/AstrBot/blob/master/docs/zh/platform/aiocqhttp.md",
+        defaultFrameworkOrigin: "http://127.0.0.1:6199",
+        limitations: [
+            "证据覆盖官方 AiocqhttpAdapter 边界，不代表 AstrBot 模型、插件与 WebUI 全栈已经验证。",
+            "群消息、富媒体、重连与完整动作矩阵仍待验证。",
+        ],
+    },
+    langbot: {
+        id: "langbot",
+        displayName: "LangBot",
+        kind: "framework",
+        packageName: "langbot",
+        protocol: "onebot.v11",
+        transport: "reverse-websocket",
+        verification: "handshake",
+        evidence: {
+            frameworkVersion: "4.10.9",
+            adapterVersion: "built-in",
+            lastVerifiedAt: "2026-09-02",
+            command: "pnpm interop:langbot",
+            checks: [
+                "auth-rejection",
+                "handshake",
+                "private-message",
+                "get_login_info",
+                "send_private_msg",
+            ],
+        },
+        upstream: "https://github.com/langbot-app/LangBot",
+        defaultFrameworkOrigin: "http://127.0.0.1:2280",
+        limitations: [
+            "证据覆盖官方 AiocqhttpAdapter 边界，不代表模型、流水线、插件与 WebUI 全栈已经验证。",
+            "群消息、富媒体、重连与完整动作矩阵仍待验证。",
+        ],
+    },
+    alicebot: {
+        id: "alicebot",
+        displayName: "AliceBot",
+        kind: "framework",
+        packageName: "alicebot-adapter-cqhttp",
+        protocol: "onebot.v11",
+        transport: "reverse-websocket",
+        verification: "handshake",
+        evidence: {
+            frameworkVersion: "0.11.0",
+            adapterVersion: "0.11.0",
+            lastVerifiedAt: "2026-09-02",
+            command: "pnpm interop:alicebot",
+            checks: [
+                "auth-rejection",
+                "handshake",
+                "private-message",
+                "get_login_info",
+                "send_private_msg",
+            ],
+        },
+        upstream: "https://github.com/AliceBotProject/alicebot",
+        defaultFrameworkOrigin: "http://127.0.0.1:8080",
+        limitations: [
+            "AliceBot 0.11.0 的反向 WebSocket 鉴权误读响应头，生成方案使用握手前鉴权子类修复该边界。",
+            "证据覆盖 CQHTTP adapter 的事件与动作边界；插件调度、群消息、富媒体和重连仍待验证。",
+        ],
+    },
+    kotori: {
+        id: "kotori",
+        displayName: "Kotori",
+        kind: "framework",
+        packageName: "@kotori-bot/kotori-plugin-adapter-onebot",
+        protocol: "onebot.v11",
+        transport: "reverse-websocket",
+        verification: "handshake",
+        evidence: {
+            frameworkVersion: "1.7.5",
+            adapterVersion: "2.1.2",
+            lastVerifiedAt: "2026-09-02",
+            command: "pnpm interop:kotori",
+            checks: [
+                "auth-rejection",
+                "handshake",
+                "private-message",
+                "get_login_info",
+                "send_private_msg",
+            ],
+        },
+        upstream: "https://github.com/kotorijs/kotori",
+        defaultFrameworkOrigin: "http://127.0.0.1:7200",
+        limitations: [
+            "官方 adapter 2.1.2 不提供 token 配置，生成方案通过 connection 扩展点在事件进入 adapter 前校验握手。",
+            "证据覆盖官方 OneBot adapter 的会话、身份动作与私聊发送；完整 Loader、群消息和重连仍待验证。",
+        ],
     },
     yunzai: {
         id: "yunzai",
@@ -469,18 +657,19 @@ const PROFILES: Readonly<Record<FrameworkId, FrameworkProfile>> = deepFreeze({
 });
 
 export function listFrameworkProfiles(): readonly FrameworkProfile[] {
-    return Object.values(PROFILES);
+    return FrameworkIntegrationRegistry.list().map(provider => provider.profile);
 }
 
 export function getFrameworkProfile(id: string): FrameworkProfile | undefined {
-    return PROFILES[id as FrameworkId];
+    return FrameworkIntegrationRegistry.get(id)?.profile;
 }
 
 export function createFrameworkConnectionPlan(
     request: FrameworkConnectionRequest,
 ): FrameworkConnectionPlan {
-    const profile = getFrameworkProfile(request.framework);
-    if (!profile) throw new TypeError(`未知机器人框架：${request.framework}`);
+    const provider = FrameworkIntegrationRegistry.get(request.framework);
+    if (!provider) throw new TypeError(`未知机器人框架：${request.framework}`);
+    const profile = provider.profile;
     const account = parseAccountKey(request.account);
     const onebotsOrigin = normalizeHttpOrigin(
         request.onebotsOrigin ?? "http://127.0.0.1:6727",
@@ -493,9 +682,12 @@ export function createFrameworkConnectionPlan(
             "/",
         );
     const onebotsEndpoint = new URL(protocolPath, onebotsOrigin).toString().replace(/\/$/u, "");
-    const endpoint = resolveEndpoint(profile, onebotsEndpoint, frameworkOrigin);
+    const integrationContext = { profile, onebotsEndpoint, frameworkOrigin };
+    const endpoint = provider.resolveEndpoint
+        ? provider.resolveEndpoint(integrationContext)
+        : resolveDefaultEndpoint(integrationContext);
     const onebotsConfig = renderOnebotsConfig(profile, account.key, endpoint);
-    const frameworkConfig = renderFrameworkConfig(profile, onebotsEndpoint, endpoint);
+    const frameworkConfig = provider.renderFrameworkConfig({ ...integrationContext, endpoint });
 
     return {
         schemaVersion: 1,
@@ -549,11 +741,11 @@ function resolveFrameworkOrigin(profile: FrameworkProfile, value?: string): URL 
     return normalizeHttpOrigin(origin, `${profile.displayName} framework origin`);
 }
 
-function resolveEndpoint(
-    profile: FrameworkProfile,
-    onebotsEndpoint: string,
-    frameworkOrigin: URL | null,
-): string {
+function resolveDefaultEndpoint({
+    profile,
+    onebotsEndpoint,
+    frameworkOrigin,
+}: FrameworkIntegrationContext): string {
     if (profile.transport !== "reverse-websocket") {
         if (profile.id === "koishi") return onebotsEndpoint.replace(/\/v1$/u, "");
         return profile.transport === "websocket" && profile.protocol.startsWith("onebot")
@@ -561,8 +753,12 @@ function resolveEndpoint(
             : onebotsEndpoint;
     }
     const path = profile.id === "yunzai" ? "/OneBotv11" : "/onebot/v11/ws";
+    return resolveReverseFrameworkEndpoint(frameworkOrigin!, path);
+}
+
+function resolveReverseFrameworkEndpoint(frameworkOrigin: URL, path: string): string {
     const basePath = frameworkOrigin!.pathname.replace(/\/+$/u, "");
-    return toWebSocketUrl(new URL(`${basePath}${path}`, frameworkOrigin!).toString());
+    return toWebSocketUrl(new URL(`${basePath}${path}`, frameworkOrigin).toString());
 }
 
 function renderOnebotsConfig(
@@ -582,11 +778,11 @@ function renderOnebotsConfig(
     return yaml.dump({ [accountKey]: { [profile.protocol]: protocolConfig } }, { noRefs: true });
 }
 
-function renderFrameworkConfig(
-    profile: FrameworkProfile,
-    onebotsEndpoint: string,
-    endpoint: string,
-): string {
+function renderBuiltinFrameworkConfig({
+    profile,
+    onebotsEndpoint,
+    endpoint,
+}: FrameworkConfigRenderContext): string {
     switch (profile.id) {
         case "nonebot":
         case "zhenxun":
@@ -596,17 +792,6 @@ function renderFrameworkConfig(
                 `ONEBOT_V11_ACCESS_TOKEN=${SHARED_TOKEN}`,
                 `# OneBots 主动连接 ${endpoint}`,
             ].join("\n");
-        case "zhin":
-            return yaml.dump({
-                plugins: {
-                    onebot11: {
-                        connection: "ws",
-                        name: "onebots",
-                        url: endpoint,
-                        access_token: SHARED_TOKEN,
-                    },
-                },
-            });
         case "alemonjs":
             return yaml.dump({
                 onebot: { url: endpoint, token: SHARED_TOKEN, reverse_enable: false },
@@ -634,6 +819,18 @@ function renderFrameworkConfig(
                 null,
                 2,
             );
+        case "kovi": {
+            const url = new URL(endpoint);
+            return [
+                "[onebot.server]",
+                `host = ${JSON.stringify(url.hostname)}`,
+                `port = ${url.port || (url.protocol === "wss:" ? "443" : "80")}`,
+                `access_token = ${JSON.stringify(SHARED_TOKEN)}`,
+                `secure = ${url.protocol === "wss:"}`,
+                `path = ${JSON.stringify(url.pathname)}`,
+                "all_in_one = false",
+            ].join("\n");
+        }
         case "karin":
             return JSON.stringify(
                 {
@@ -656,7 +853,140 @@ function renderFrameworkConfig(
                     "adapter-satori": { endpoint, token: SHARED_TOKEN },
                 },
             });
+        default:
+            throw new TypeError(`内置框架 ${profile.id} 缺少配置渲染器`);
     }
+}
+
+const zhinIntegration = defineFrameworkIntegration({
+    profile: BUILTIN_PROFILES.zhin,
+    renderFrameworkConfig: ({ endpoint }) =>
+        yaml.dump({
+            plugins: {
+                onebot11: {
+                    connection: "ws",
+                    name: "onebots",
+                    url: endpoint,
+                    access_token: SHARED_TOKEN,
+                },
+            },
+        }),
+});
+
+const astrbotIntegration = defineFrameworkIntegration({
+    profile: BUILTIN_PROFILES.astrbot,
+    resolveEndpoint: ({ frameworkOrigin }) =>
+        resolveReverseFrameworkEndpoint(frameworkOrigin!, "/ws"),
+    renderFrameworkConfig: ({ frameworkOrigin }) =>
+        yaml.dump({
+            id: "onebots",
+            type: "aiocqhttp",
+            enable: true,
+            ws_reverse_host: frameworkOrigin!.hostname,
+            ws_reverse_port: Number(frameworkOrigin!.port || 6199),
+            ws_reverse_token: SHARED_TOKEN,
+        }),
+});
+
+const langbotIntegration = defineFrameworkIntegration({
+    profile: BUILTIN_PROFILES.langbot,
+    resolveEndpoint: ({ frameworkOrigin }) =>
+        resolveReverseFrameworkEndpoint(frameworkOrigin!, "/ws"),
+    renderFrameworkConfig: ({ frameworkOrigin }) =>
+        yaml.dump({
+            adapter: "aiocqhttp",
+            enable: true,
+            host: frameworkOrigin!.hostname,
+            port: Number(frameworkOrigin!.port || 2280),
+            "access-token": SHARED_TOKEN,
+        }),
+});
+
+const alicebotIntegration = defineFrameworkIntegration({
+    profile: BUILTIN_PROFILES.alicebot,
+    resolveEndpoint: ({ frameworkOrigin }) =>
+        resolveReverseFrameworkEndpoint(frameworkOrigin!, "/cqhttp/ws"),
+    renderFrameworkConfig: ({ frameworkOrigin }) =>
+        [
+            "# onebots_alicebot.py",
+            "from aiohttp import web",
+            "from alicebot.adapter.cqhttp import CQHTTPAdapter",
+            "",
+            "class OneBotsCQHTTPAdapter(CQHTTPAdapter):",
+            "    async def handle_reverse_ws_response(self, request: web.Request):",
+            "        token = self.config.access_token",
+            "        supplied = request.query.get('access_token')",
+            "        authorization = request.headers.get('Authorization', '')",
+            "        if token and supplied != token and authorization != f'Bearer {token}':",
+            "            return web.Response(status=401, text='Unauthorized')",
+            "        self.websocket = web.WebSocketResponse()",
+            "        await self.websocket.prepare(request)",
+            "        await self.handle_websocket()",
+            "        return self.websocket",
+            "",
+            "# config.toml",
+            "[bot]",
+            'adapters = ["onebots_alicebot"]',
+            "[adapter.cqhttp]",
+            'adapter_type = "reverse-ws"',
+            `host = ${JSON.stringify(frameworkOrigin!.hostname)}`,
+            `port = ${frameworkOrigin!.port || "8080"}`,
+            'url = "/cqhttp/ws"',
+            `access_token = ${JSON.stringify(SHARED_TOKEN)}`,
+        ].join("\n"),
+});
+
+const kotoriIntegration = defineFrameworkIntegration({
+    profile: BUILTIN_PROFILES.kotori,
+    resolveEndpoint: ({ frameworkOrigin }) =>
+        resolveReverseFrameworkEndpoint(frameworkOrigin!, "/adapter/onebots"),
+    renderFrameworkConfig: ({ frameworkOrigin }) =>
+        [
+            "// onebots-adapter.ts",
+            'import { OnebotAdapter } from "@kotori-bot/kotori-plugin-adapter-onebot";',
+            "",
+            "export class OneBotsOnebotAdapter extends OnebotAdapter {",
+            "    constructor(ctx, config, identity) {",
+            "        super(ctx, config, identity);",
+            "        const connect = this.connection.bind(this);",
+            "        this.connection = (socket, request) => {",
+            "            const url = new URL(request.url ?? '/', 'ws://localhost');",
+            "            const authorization = request.headers.authorization ?? '';",
+            `            if (url.searchParams.get('access_token') !== ${JSON.stringify(SHARED_TOKEN)} && authorization !== ${JSON.stringify(`Bearer ${SHARED_TOKEN}`)}) {`,
+            "                socket.close(1008, 'Unauthorized');",
+            "                return;",
+            "            }",
+            "            connect(socket, request);",
+            "        };",
+            "    }",
+            "}",
+            "",
+            "# kotori.toml",
+            "[global]",
+            `port = ${frameworkOrigin!.port || "7200"}`,
+            "[adapter.onebots]",
+            'extends = "onebots-adapter"',
+            'mode = "ws-reverse"',
+        ].join("\n"),
+});
+
+for (const profile of Object.values(BUILTIN_PROFILES)) {
+    FrameworkIntegrationRegistry.register(
+        profile.id === "zhin"
+            ? zhinIntegration
+            : profile.id === "astrbot"
+              ? astrbotIntegration
+              : profile.id === "langbot"
+                ? langbotIntegration
+                : profile.id === "alicebot"
+                  ? alicebotIntegration
+                  : profile.id === "kotori"
+                    ? kotoriIntegration
+                    : defineFrameworkIntegration({
+                          profile,
+                          renderFrameworkConfig: renderBuiltinFrameworkConfig,
+                      }),
+    );
 }
 
 function createChecks(

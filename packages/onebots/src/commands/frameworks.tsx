@@ -6,9 +6,15 @@ import { showFrameworkConnections } from "../cli/framework-command.js";
 export const description = "列出机器人框架接入面或生成连接配置";
 export const options = z.object({
     framework: z
-        .enum(["koishi", "nonebot", "karin", "zhin", "alemonjs", "yunzai", "zhenxun"])
+        .string()
         .optional()
         .describe(option({ description: "目标机器人框架", valueDescription: "name" })),
+    register: z.array(z.string()).describe(
+        option({
+            description: "动态加载框架方案（可重复）",
+            valueDescription: "name-or-package",
+        }),
+    ),
     account: z
         .string()
         .optional()
@@ -39,6 +45,7 @@ export default function FrameworksCommand({
     return (
         <CommandRunner
             execute={() => showFrameworkConnections(input)}
+            pending="正在加载框架方案…"
             machineReadable={input.json}
         />
     );

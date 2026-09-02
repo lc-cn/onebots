@@ -1,0 +1,1 @@
+langbot @ git+https://github.com/langbot-app/LangBot.git@601c6975ea1937d7069ee8d720bb1ad70e960f19

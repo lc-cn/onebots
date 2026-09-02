@@ -9,6 +9,7 @@ import {
 } from "../framework-integration.js";
 import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
 import { listFrameworkEcosystem } from "../framework-ecosystem.js";
+import { loadFrameworkIntegration } from "../framework-integration-loader.js";
 
 export function registerFrameworkRoutes(app: App, router: Router): void {
     router.get("/api/frameworks", (ctx: RouterContext) => {
@@ -39,6 +40,26 @@ export function registerFrameworkRoutes(app: App, router: Router): void {
                 success: false,
                 code: "FRAMEWORK_PLAN_INVALID",
                 message: error instanceof Error ? error.message : "框架接入参数无效",
+            };
+        }
+    });
+
+    router.post("/api/frameworks/load", async (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
+        try {
+            const body = requireRecord(ctx.request.body);
+            const loaded = await loadFrameworkIntegration(requireString(body.provider, "provider"));
+            ctx.body = {
+                success: true,
+                loaded,
+                frameworks: listFrameworkProfiles(),
+            };
+        } catch (error) {
+            ctx.status = 400;
+            ctx.body = {
+                success: false,
+                code: "FRAMEWORK_PROVIDER_LOAD_FAILED",
+                message: error instanceof Error ? error.message : "框架方案加载失败",
             };
         }
     });

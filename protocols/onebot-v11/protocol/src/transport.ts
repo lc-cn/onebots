@@ -5,6 +5,7 @@ import WebSocket from "ws";
 import type { OneBotV11Config } from "./config.js";
 
 type DispatchListener = (data: string) => void | Promise<void>;
+type WebSocketRole = "api" | "event" | "universal";
 
 interface TransportLogger {
     debug(message: unknown, ...args: unknown[]): void;
@@ -94,7 +95,19 @@ export class OneBotV11Transport {
 
     private startWebSocket(): void {
         const { context } = this;
-        const server = context.router.ws(context.path);
+        this.registerWebSocketRoute(context.path, "universal");
+        this.registerWebSocketRoute(`${context.path}/event`, "event");
+        this.registerWebSocketRoute(`${context.path}/api`, "api");
+
+        // Kovi 0.13.x 会先给 base path 补尾斜杠，再拼接 `/event` 与 `/api`。
+        // 保留这两个精确别名，避免要求用户在框架外再部署一层路径改写代理。
+        this.registerWebSocketRoute(`${context.path}//event`, "event");
+        this.registerWebSocketRoute(`${context.path}//api`, "api");
+    }
+
+    private registerWebSocketRoute(path: string, role: WebSocketRole): void {
+        const { context } = this;
+        const server = context.router.ws(path);
         server.on("connection", (socket, request) => {
             const url = new URL(request.url ?? "/", "ws://localhost");
             const token =
@@ -105,55 +118,59 @@ export class OneBotV11Transport {
                 return;
             }
 
-            context.logger.info(`WebSocket client connected: ${context.path}`);
-            socket.send(
-                JSON.stringify(
-                    context.format("meta_event", {
-                        meta_event_type: "lifecycle",
-                        sub_type: "connect",
-                    }),
-                ),
-            );
+            context.logger.info(`WebSocket client connected: ${path} (${role})`);
             const onDispatch: DispatchListener = data => {
                 if (socket.readyState !== WebSocket.OPEN) return;
                 socket.send(data);
             };
-            context.onDispatch(onDispatch);
-
-            socket.on("message", async data => {
-                try {
-                    const request = JSON.parse(data.toString()) as Record<string, unknown>;
-                    const action = requireNonEmptyStringParam(request, "action");
-                    const params =
-                        request.params && typeof request.params === "object"
-                            ? (request.params as Record<string, unknown>)
-                            : undefined;
-                    const response = await context.apply(action, params);
-                    socket.send(
-                        JSON.stringify(
-                            request.echo === undefined
-                                ? response
-                                : { ...response, echo: request.echo },
-                        ),
-                    );
-                } catch (error) {
-                    context.logger.error("WebSocket message error:", error);
-                    socket.send(
-                        JSON.stringify({
-                            status: "failed",
-                            retcode: -1,
-                            msg: error instanceof Error ? error.message : String(error),
+            if (role !== "api") {
+                socket.send(
+                    JSON.stringify(
+                        context.format("meta_event", {
+                            meta_event_type: "lifecycle",
+                            sub_type: "connect",
                         }),
-                    );
-                }
-            });
+                    ),
+                );
+                context.onDispatch(onDispatch);
+            }
+
+            if (role !== "event") {
+                socket.on("message", async data => {
+                    try {
+                        const request = JSON.parse(data.toString()) as Record<string, unknown>;
+                        const action = requireNonEmptyStringParam(request, "action");
+                        const params =
+                            request.params && typeof request.params === "object"
+                                ? (request.params as Record<string, unknown>)
+                                : undefined;
+                        const response = await context.apply(action, params);
+                        socket.send(
+                            JSON.stringify(
+                                request.echo === undefined
+                                    ? response
+                                    : { ...response, echo: request.echo },
+                            ),
+                        );
+                    } catch (error) {
+                        context.logger.error("WebSocket message error:", error);
+                        socket.send(
+                            JSON.stringify({
+                                status: "failed",
+                                retcode: -1,
+                                msg: error instanceof Error ? error.message : String(error),
+                            }),
+                        );
+                    }
+                });
+            }
             socket.on("close", () => {
-                context.offDispatch(onDispatch);
-                context.logger.info(`WebSocket client disconnected: ${context.path}`);
+                if (role !== "api") context.offDispatch(onDispatch);
+                context.logger.info(`WebSocket client disconnected: ${path} (${role})`);
             });
             socket.on("error", error => context.logger.error("WebSocket error:", error));
         });
-        context.logger.info(`WebSocket server listening on ${context.path}`);
+        context.logger.info(`WebSocket ${role} server listening on ${path}`);
     }
 
     private startHeartbeat(): void {

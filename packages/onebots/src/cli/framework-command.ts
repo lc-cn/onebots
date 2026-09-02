@@ -6,17 +6,23 @@ import {
 } from "../framework-integration.js";
 import { listFrameworkEcosystem } from "../framework-ecosystem.js";
 import { CliError, type CommandResult } from "./command-application.js";
+import { loadFrameworkIntegrations } from "../framework-integration-loader.js";
 
 export interface FrameworkCommandOptions {
     framework?: string;
     account?: string;
     origin?: string;
     framework_origin?: string;
+    register?: string[];
     json: boolean;
 }
 
 /** 列出框架接入面，或为指定账号生成两端配置与验证步骤。 */
-export function showFrameworkConnections(options: FrameworkCommandOptions): CommandResult {
+export async function showFrameworkConnections(
+    options: FrameworkCommandOptions,
+): Promise<CommandResult> {
+    const failures = await loadFrameworkIntegrations(options.register ?? []);
+    if (failures.length) throw new CliError(failures.join("\n"), 2);
     if (!options.framework) {
         if (options.account || options.framework_origin) {
             throw new CliError("--account 和 --framework_origin 只能与 --framework 一起使用");

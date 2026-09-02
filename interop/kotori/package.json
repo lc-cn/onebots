@@ -1,0 +1,10 @@
+{
+    "name": "onebots-interop-kotori",
+    "private": true,
+    "version": "0.0.0",
+    "dependencies": {
+        "@kotori-bot/kotori-plugin-adapter-onebot": "2.1.2",
+        "kotori-bot": "1.7.5",
+        "ws": "8.18.3"
+    }
+}
