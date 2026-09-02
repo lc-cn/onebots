@@ -21,12 +21,14 @@ describe("frameworks command", () => {
             "yunzai",
             "zhenxun",
         ]);
-        expect(report.profiles.find(profile => profile.id === "nonebot")?.verification).toBe(
-            "handshake",
-        );
         expect(
             report.profiles
-                .filter(profile => profile.id !== "nonebot")
+                .filter(profile => ["nonebot", "zhin"].includes(profile.id))
+                .map(profile => profile.verification),
+        ).toEqual(["handshake", "handshake"]);
+        expect(
+            report.profiles
+                .filter(profile => !["nonebot", "zhin"].includes(profile.id))
                 .every(profile => profile.verification === "documented"),
         ).toBe(true);
     });

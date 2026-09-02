@@ -11,7 +11,7 @@ OneBots 把平台连接与机器人业务框架分开：OneBots 负责连接 IM 
 | Koishi | 通用框架 | Satori | OneBot 11 社区适配器 | 待互操作验证；当前 Koishi 使用 Satori v3，必须先核对 OneBots 的 `satori.v1` 出口 |
 | NoneBot2 | 通用框架 | OneBot 11 反向 WebSocket | OneBot 11 正向 WebSocket、OneBot 12 | `handshake`：NoneBot2 2.5.0 + adapter 2.4.6 已通过固定版本门禁；完整消息与动作矩阵待验证 |
 | Karin | 通用框架 | Milky WebSocket | Milky SSE、Webhook | 上游已有 Milky 适配器，待固定版本端到端验证 |
-| Zhin | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | 上游已有 OneBot 11 适配器，待固定版本端到端验证 |
+| Zhin | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | `handshake`：Zhin 6.0.15 + adapter 7.0.8 已通过固定版本门禁；完整消息与动作矩阵待验证 |
 | AlemonJS | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | 上游已有 `@alemonjs/onebot`，待固定版本端到端验证 |
 | 云崽 / TRSS-Yunzai | 机器人发行版 | OneBot 11 反向 WebSocket | 由具体分支决定 | 上游已有 OneBot 11 入口，需验证其私有动作和 CQ 码假设 |
 | 真寻 | NoneBot2 发行版 | OneBot 11 反向 WebSocket | 跟随 NoneBot2 | 上游基于 NoneBot2 OneBot 适配器，需额外验证真寻插件依赖的扩展动作 |
@@ -19,6 +19,8 @@ OneBots 把平台连接与机器人业务框架分开：OneBots 负责连接 IM 
 “框架”和“机器人发行版”需要分开处理。NoneBot、Koishi、Karin、Zhin 与 AlemonJS 提供通用插件运行时；云崽和真寻包含大量现成业务插件，除了协议握手，还可能依赖 QQ 生态形成的非标准动作、CQ 码或字段。
 
 NoneBot2 的证据由仓库中的真实进程互操作门禁产生，最近一次验证日期为 2026-09-02。门禁启动固定版本的 NoneBot2 和 OneBots，已经覆盖错误 token 拒绝、反向 WebSocket 握手、私聊事件、`get_login_info` 与 `send_private_msg`。这份证据只对应 `handshake` 等级；群消息、富媒体、重连和完整动作矩阵尚未通过，因此不标记为 `messages` 或 `verified`。
+
+Zhin 的固定版本门禁使用真实 `OneBot11WsEndpoint` 和 Zhin Endpoint 事件边界，覆盖错误 token 拒绝、正向 WebSocket 握手、私聊事件、`get_login_info` 与 `send_private_msg`。依赖保存在独立的 `interop/zhin/package-lock.json` 中，避免 npm 读取 pnpm workspace 的 `catalog:` 声明。当前证据同样只对应 `handshake`；群消息、富媒体、重连、侧事件和完整动作矩阵仍待验证。
 
 ## 接入接口
 
@@ -97,6 +99,13 @@ pnpm interop:nonebot
 
 CI 与发版流程都会运行同一命令。门禁使用固定依赖，不读取真实平台凭据，并通过 mock 适配器完成双向调用。
 
+Zhin 门禁使用独立 lockfile 安装并运行：
+
+```bash
+npm ci --prefix interop/zhin --ignore-scripts
+pnpm interop:zhin
+```
+
 1. 使用错误 token 时连接失败，正确 token 能识别目标账号。
 2. Mock 适配器触发私聊与群聊事件，下游收到正确身份、消息段和回复上下文。
 3. 下游发起发送、撤回、查询账号和查询群成员动作，OneBots 返回符合该框架预期的结果或稳定的不支持错误。
@@ -108,7 +117,7 @@ CI 与发版流程都会运行同一命令。门禁使用固定依赖，不读�
 ## 实施顺序
 
 1. **NoneBot2 + OneBot 11**：已建立固定版本夹具、配置模板、鉴权、私聊收发和基础 API 调用门禁；下一步补群消息、富媒体、重连和动作矩阵。
-2. **Zhin + OneBot 11、AlemonJS + OneBot 11**：复用同一正向 WebSocket 门禁，验证深模块能覆盖不同 Node.js 框架。
+2. **Zhin + OneBot 11、AlemonJS + OneBot 11**：Zhin 已完成固定版本正向 WebSocket 基础门禁；下一步复用夹具验证 AlemonJS，并继续补齐两者的消息与动作矩阵。
 3. **Karin + Milky**：验证第二种协议与 WebSocket/SSE/Webhook 多传输设计，证明 profile seam 不是 OneBot 专用。
 4. **云崽与真寻**：在基础框架通过后补充发行版的私有动作与消息兼容矩阵。
 5. **Koishi**：先完成当前 Satori v3 的差异审计和真实握手。若无法由现有出口兼容，再新增独立的 Satori v3 协议包，避免在 `satori.v1` 中混合两个版本。

@@ -66,6 +66,12 @@ jobs:
           ONEBOTS_INTEROP_PYTHON: python
         run: pnpm interop:nonebot
 
+      - name: Install Zhin interoperability dependencies
+        run: npm ci --prefix interop/zhin --ignore-scripts
+
+      - name: Verify Zhin interoperability
+        run: pnpm interop:zhin
+
       - name: Verify publish tarballs
         run: pnpm packages:pack:check
 

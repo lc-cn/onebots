@@ -28,9 +28,17 @@ describe("framework integration profiles", () => {
                 command: "pnpm interop:nonebot",
             },
         });
+        expect(getFrameworkProfile("zhin")).toMatchObject({
+            verification: "handshake",
+            evidence: {
+                frameworkVersion: "6.0.15",
+                adapterVersion: "7.0.8",
+                command: "pnpm interop:zhin",
+            },
+        });
         expect(
             profiles
-                .filter(profile => profile.id !== "nonebot")
+                .filter(profile => !["nonebot", "zhin"].includes(profile.id))
                 .every(profile => profile.verification === "documented"),
         ).toBe(true);
         expect(Object.isFrozen(getFrameworkProfile("nonebot"))).toBe(true);

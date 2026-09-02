@@ -11,7 +11,7 @@ The table records integration surfaces currently published by each upstream proj
 | Koishi | General framework | Satori | Community OneBot 11 adapter | Interop pending; current Koishi uses Satori v3, so the OneBots `satori.v1` endpoint must be audited first |
 | NoneBot2 | General framework | OneBot 11 reverse WebSocket | OneBot 11 forward WebSocket, OneBot 12 | `handshake`: pinned gate passes with NoneBot2 2.5.0 + adapter 2.4.6; full message and action matrices remain pending |
 | Karin | General framework | Milky WebSocket | Milky SSE or webhook | An upstream Milky adapter exists; pinned end-to-end verification pending |
-| Zhin | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | An upstream OneBot 11 adapter exists; pinned end-to-end verification pending |
+| Zhin | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `handshake`: pinned gate passes with Zhin 6.0.15 + adapter 7.0.8; full message and action matrices remain pending |
 | AlemonJS | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `@alemonjs/onebot` exists upstream; pinned end-to-end verification pending |
 | Yunzai / TRSS-Yunzai | Bot distribution | OneBot 11 reverse WebSocket | Depends on the selected distribution | An upstream OneBot 11 ingress exists; private actions and CQ-code assumptions still need verification |
 | Zhenxun | NoneBot2 distribution | OneBot 11 reverse WebSocket | Follows NoneBot2 | Uses the NoneBot2 OneBot adapter; Zhenxun plugin dependencies on extended actions need separate verification |
@@ -19,6 +19,8 @@ The table records integration surfaces currently published by each upstream proj
 General frameworks and bot distributions need different treatment. NoneBot, Koishi, Karin, Zhin, and AlemonJS provide reusable plugin runtimes. Yunzai and Zhenxun bundle application plugins that may depend on QQ-specific non-standard actions, CQ codes, or fields beyond a successful protocol handshake.
 
 The repository's external-process interop gate produced the NoneBot2 evidence, last verified on 2026-09-02. It starts pinned NoneBot2 and OneBots processes and covers invalid-token rejection, the reverse-WebSocket handshake, a private-message event, `get_login_info`, and `send_private_msg`. This evidence earns the `handshake` level only. Group messages, rich media, reconnect behavior, and the complete action matrix have not passed yet, so the profile is not marked `messages` or `verified`.
+
+The pinned Zhin gate uses the real `OneBot11WsEndpoint` and Zhin Endpoint event boundary. It covers invalid-token rejection, the forward-WebSocket handshake, a private-message event, `get_login_info`, and `send_private_msg`. Dependencies live in an isolated `interop/zhin/package-lock.json`, preventing npm from reading pnpm workspace `catalog:` declarations. This evidence also earns `handshake` only; group messages, rich media, reconnect behavior, side events, and the complete action matrix remain pending.
 
 ## Integration interface
 
@@ -97,6 +99,13 @@ pnpm interop:nonebot
 
 CI and the release workflow run the same command. The gate uses pinned dependencies, reads no real platform credentials, and uses the mock adapter for bidirectional calls.
 
+Install and run the Zhin gate from its isolated lockfile:
+
+```bash
+npm ci --prefix interop/zhin --ignore-scripts
+pnpm interop:zhin
+```
+
 1. An invalid token fails while the correct token identifies the selected account.
 2. Mock-adapter direct and group events reach the downstream with the expected identity, segments, and reply context.
 3. Downstream send, delete, login, and member-list calls receive the expected result or a stable unsupported error.
@@ -108,7 +117,7 @@ Yunzai and Zhenxun also require an extended-action baseline derived from real pl
 ## Delivery order
 
 1. **NoneBot2 + OneBot 11** now has a pinned fixture, configuration renderer, authentication check, private-message loop, and basic API gate. Group messages, rich media, reconnect behavior, and the action matrix come next.
-2. **Zhin + OneBot 11 and AlemonJS + OneBot 11** reuse the forward-WebSocket gate and prove that the deep module covers distinct Node.js frameworks.
+2. **Zhin + OneBot 11 and AlemonJS + OneBot 11**: Zhin now has a pinned forward-WebSocket baseline. Next, reuse the fixture for AlemonJS and expand both message and action matrices.
 3. **Karin + Milky** adds a second protocol and multiple transports, proving the profile seam is not OneBot-specific.
 4. **Yunzai and Zhenxun** add distribution-specific private-action and message compatibility after their base frameworks pass.
 5. **Koishi** starts with a Satori v3 difference audit and real handshake. If the existing endpoint cannot interoperate, add a separate Satori v3 protocol package instead of mixing two versions inside `satori.v1`.

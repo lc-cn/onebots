@@ -1,0 +1,10 @@
+{
+    "name": "onebots-interop-zhin",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "@zhin.js/adapter-onebot11": "7.0.8",
+        "zhin.js": "6.0.15",
+        "zod": "4.4.3"
+    }
+}
