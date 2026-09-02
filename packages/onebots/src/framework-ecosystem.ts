@@ -30,8 +30,9 @@ const ENTRIES: readonly FrameworkEcosystemEntry[] = deepFreeze([
         transports: ["reverse-websocket"],
         priority: "next",
         upstream: "https://github.com/AstrBotDevs/AstrBot",
-        evidence: "官方文档提供 OneBot v11 反向 WebSocket 服务端，默认路径 /ws。",
-        limitation: "需要固定 AstrBot 与 aiocqhttp 适配器版本后运行真实进程门禁。",
+        evidence:
+            "源码 6ee1ddd4fda2 与官方文档提供 OneBot v11 反向 WebSocket 服务端，默认路径 /ws。",
+        limitation: "完整 AstrBot 运行时依赖模型服务和持久化初始化，尚未形成可复现最小进程门禁。",
     },
     {
         id: "langbot",
@@ -42,8 +43,8 @@ const ENTRIES: readonly FrameworkEcosystemEntry[] = deepFreeze([
         transports: ["reverse-websocket"],
         priority: "next",
         upstream: "https://github.com/langbot-app/LangBot",
-        evidence: "官方 Wiki 提供 OneBot v11 适配器及协议端连接流程。",
-        limitation: "WebUI 配置模型仍需固定版本审计和脱敏模板。",
+        evidence: "源码 601c6975ea19 与官方 Wiki 提供 OneBot v11 适配器及协议端连接流程。",
+        limitation: "当前连接由 WebUI 持久化配置驱动，尚无稳定的无交互最小夹具接口。",
     },
     {
         id: "alicebot",
@@ -54,20 +55,9 @@ const ENTRIES: readonly FrameworkEcosystemEntry[] = deepFreeze([
         transports: ["websocket", "reverse-websocket"],
         priority: "next",
         upstream: "https://github.com/AliceBotProject/alicebot",
-        evidence: "官方维护 OneBot (CQHTTP) 适配器，并声明正向与反向 WebSocket。",
-        limitation: "需要确认当前发布版、动作响应形状与重连语义。",
-    },
-    {
-        id: "melobot",
-        displayName: "melobot",
-        kind: "framework",
-        language: "Python",
-        protocols: ["onebot.v11"],
-        transports: ["websocket", "reverse-websocket"],
-        priority: "next",
-        upstream: "https://github.com/Meloland/melobot",
-        evidence: "v3 内置 OneBot v11，并以多路 IO 作为协议连接边界。",
-        limitation: "OneBot v12 尚未支持；需要固定 v3 IO 配置格式。",
+        evidence: "源码 1ff633db3937 固定 alicebot 与 CQHTTP adapter 0.11.0。",
+        limitation:
+            "0.11.0 正向模式固定连接根路径；反向 token 校验读取响应头，安全互操作门禁未通过。",
     },
     {
         id: "kovi",
@@ -78,20 +68,9 @@ const ENTRIES: readonly FrameworkEcosystemEntry[] = deepFreeze([
         transports: ["websocket"],
         priority: "next",
         upstream: "https://github.com/ThriceCola/Kovi",
-        evidence: "官方仓库明确支持 Milky WebSocket 与 OneBot v11 正向 WebSocket。",
-        limitation: "应优先复用现有 Karin Milky 门禁，再补 Kovi 固定版本证据。",
-    },
-    {
-        id: "zerobot",
-        displayName: "ZeroBot",
-        kind: "framework",
-        language: "Go",
-        protocols: ["onebot.v11"],
-        transports: ["websocket"],
-        priority: "next",
-        upstream: "https://github.com/wdvxdr1123/ZeroBot",
-        evidence: "OneBot 官方生态收录的 Go OneBot v11 机器人框架。",
-        limitation: "连接配置、鉴权与插件动作面需要按当前版本审计。",
+        evidence: "源码 6b4532fbea9b 固定 Kovi 0.13.0、OneBot driver 0.13.2。",
+        limitation:
+            "OneBot driver 分离 /api 与 /event；all_in_one 又忽略配置 path，尚不能表达 OneBots 账号端点。",
     },
     {
         id: "kotori",
@@ -102,8 +81,9 @@ const ENTRIES: readonly FrameworkEcosystemEntry[] = deepFreeze([
         transports: ["websocket"],
         priority: "next",
         upstream: "https://github.com/kotorijs/kotori",
-        evidence: "官方仓库列出基于 OneBot 11 的 QQ 平台模块。",
-        limitation: "需要确认平台模块包名、连接方向和当前维护版本。",
+        evidence: "源码 793da0ea5ebe 固定 Kotori 1.7.5 与 OneBot adapter 2.1.2。",
+        limitation:
+            "正向模式将 address 与 port 简单拼接，无法保留 OneBots 路径；反向模式仍需鉴权审计。",
     },
     {
         id: "avilla",

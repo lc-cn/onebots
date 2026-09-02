@@ -22,6 +22,8 @@
     "interop:alemonjs": "node scripts/interop-alemonjs.mjs",
     "interop:karin": "node scripts/interop-karin.mjs",
     "interop:koishi": "node scripts/interop-koishi.mjs",
+    "interop:melobot": "node scripts/interop-melobot.mjs",
+    "interop:zerobot": "node scripts/interop-zerobot.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --check ./**/*.{ts,js}",

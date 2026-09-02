@@ -7,11 +7,11 @@ describe("framework ecosystem research catalog", () => {
         const ecosystem = listFrameworkEcosystem();
         const readyIds = new Set(listFrameworkProfiles().map(profile => profile.id));
 
-        expect(ecosystem).toHaveLength(18);
+        expect(ecosystem).toHaveLength(16);
         expect(new Set(ecosystem.map(entry => entry.id))).toHaveLength(ecosystem.length);
         expect(ecosystem.every(entry => !readyIds.has(entry.id as never))).toBe(true);
         expect(ecosystem.filter(entry => entry.priority === "next").map(entry => entry.id)).toEqual(
-            ["astrbot", "langbot", "alicebot", "melobot", "kovi", "zerobot", "kotori"],
+            ["astrbot", "langbot", "alicebot", "kovi", "kotori"],
         );
     });
 

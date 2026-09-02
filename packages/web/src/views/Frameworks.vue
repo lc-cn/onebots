@@ -4,7 +4,7 @@
             <div>
                 <h1 class="text-2xl font-semibold text-fg">框架接入</h1>
                 <p class="mt-1 text-sm text-fg-secondary">
-                    七个接入方案可直接生成配置；另有十八个生态候选已完成资料调研。
+                    九个接入方案可直接生成配置；另有十六个生态候选已完成资料调研。
                 </p>
             </div>
             <UiAlert v-if="errorMessage" variant="danger">{{ errorMessage }}</UiAlert>

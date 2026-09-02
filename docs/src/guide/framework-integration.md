@@ -13,20 +13,24 @@ OneBots 把平台连接与机器人业务框架分开：OneBots 负责连接 IM 
 | Karin | 通用框架 | Milky WebSocket | Milky SSE、Webhook | `handshake`：Karin 1.15.3 + adapter 1.3.3 已通过固定版本门禁；存在上游依赖声明与安全限制 |
 | Zhin | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | `handshake`：Zhin 6.0.15 + adapter 7.0.8 已通过固定版本门禁；完整消息与动作矩阵待验证 |
 | AlemonJS | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | `handshake`：AlemonJS 2.1.103 + adapter 2.1.21 已通过固定版本门禁；存在上游依赖安全限制 |
+| melobot | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | `handshake`：melobot 3.4.0 内置适配器已通过固定版本门禁；完整消息与动作矩阵待验证 |
+| ZeroBot | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | `handshake`：ZeroBot 1.8.2 内置驱动已通过固定版本门禁；完整消息与动作矩阵待验证 |
 | 云崽 / TRSS-Yunzai | 机器人发行版 | OneBot 11 反向 WebSocket | 由具体分支决定 | documented：固定源码版本的 59 个直接动作已覆盖 31 个，28 个私有动作仍不支持 |
 | 真寻 | NoneBot2 发行版 | OneBot 11 反向 WebSocket | 跟随 NoneBot2 | documented：固定源码版本中 17 个明确核心动作均有入口；完整进程与第三方插件待验证 |
 
 ## 扩展生态候选
 
-七个基线 profile 是已经具备配置生成器或固定源码审计的接入方案，不是 OneBots 能连接的全部机器人生态。基于 [OneBot 官方生态目录](https://onebot.dev/ecosystem) 与各项目官方仓库，管理 API、CLI 和 Web 管理端现在还公开 18 个已调研候选：
+九个基线 profile 是已经具备配置生成器或固定源码审计的接入方案，不是 OneBots 能连接的全部机器人生态。基于 [OneBot 官方生态目录](https://onebot.dev/ecosystem) 与各项目官方仓库，管理 API、CLI 和 Web 管理端现在还公开 16 个已调研候选：
 
 | 优先级 | 候选 | 选择依据 |
 | --- | --- | --- |
-| 下一批 | AstrBot、LangBot、AliceBot、melobot、Kovi、ZeroBot、Kotori | 上游已有明确的 OneBot、Milky 接入面，适合继续固定版本并建立真实进程门禁 |
+| 下一批 | AstrBot、LangBot、AliceBot、Kovi、Kotori | 上游已有明确的 OneBot、Milky 接入面，但固定源码审计发现完整运行时或路径、鉴权阻断 |
 | 后续 | Avilla、OlivOS、炸毛框架、Shiro、Simple Robot OneBot、Overflow、Walle、Adachi-BOT、GenshinUID | 协议面存在，但有 WIP、多宿主、组件 SDK 或私有动作审计成本 |
 | 存量迁移 | PepperBot、NoneBot 1 | 保留已有部署的迁移线索，开始新项目时不作为首选 |
 
 候选目录只表达“已有可追溯的上游依据”，不等同于兼容承诺。只有连接方向、配置字段、鉴权、事件和动作通过固定版本门禁后，候选才会升级为可生成 `ConnectionPlan` 的 profile。
+
+本轮真实进程门禁已把 melobot 3.4.0 与 ZeroBot 1.8.2 升级为 `handshake`。AliceBot 0.11.0 的正向适配器固定连接 `/`，反向 token 校验又读取响应头而非请求头；Kovi 0.13.2 在分离连接中追加 `/api` 与 `/event`，`all_in_one` 模式则忽略自定义 path；Kotori 2.1.2 的正向地址也无法保留账号协议路径。AstrBot 与 LangBot 当前需要完整 WebUI、持久化及业务运行时初始化，尚未得到可复现的最小夹具。这五项继续留在候选目录，不能通过关闭鉴权或伪造根路径升级。
 
 NapCat、Lagrange、OpenShamrock 等项目属于 OneBot **协议实现端**，作用与 OneBots 的平台接入和协议出口重叠；它们不是消费 OneBots 事件的下游业务框架，因此不计入这份框架候选目录。SDK、桥接组件和带插件的机器人发行版也分别标注类型，验收方式不会与通用框架混用。
 
@@ -168,7 +172,7 @@ pnpm interop:koishi
 3. **Karin + Milky**：已完成固定版本 WebSocket 基础门禁，证明 profile seam 不是 OneBot 专用；下一步补 SSE、Webhook、重连、群消息、富媒体与动作矩阵，并跟踪上游依赖声明和 `yaml` 修复。
 4. **云崽与真寻**：固定源码动作矩阵已经建立，并补齐可跨平台表达的好友删除、消息历史和合并转发入口；下一步运行完整发行版进程并逐项处理剩余私有动作。
 5. **Koishi**：已完成官方 Satori 适配器的固定版本握手、私聊和发送门禁；继续补群消息、富媒体、重连与完整资源动作矩阵。
-6. **扩展生态**：优先推进 AstrBot、LangBot、AliceBot、melobot、Kovi、ZeroBot 与 Kotori；逐个确认固定版本、连接方向和最小动作闭环后再加入配置生成器。
+6. **扩展生态**：melobot 与 ZeroBot 已完成最小动作闭环；AstrBot、LangBot、AliceBot、Kovi 与 Kotori 等待上游提供稳定夹具接口或 OneBots 增加经过设计的路径兼容层。
 
 ## 上游依据
 

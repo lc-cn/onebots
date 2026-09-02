@@ -13,20 +13,24 @@ The table records integration surfaces currently published by each upstream proj
 | Karin | General framework | Milky WebSocket | Milky SSE or webhook | `handshake`: pinned gate passes with Karin 1.15.3 + adapter 1.3.3; upstream dependency declaration and security limitations remain |
 | Zhin | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `handshake`: pinned gate passes with Zhin 6.0.15 + adapter 7.0.8; full message and action matrices remain pending |
 | AlemonJS | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `handshake`: pinned gate passes with AlemonJS 2.1.103 + adapter 2.1.21; an upstream dependency security limitation remains |
+| melobot | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `handshake`: pinned gate passes with melobot 3.4.0 built-in adapter; full message and action matrices remain pending |
+| ZeroBot | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `handshake`: pinned gate passes with ZeroBot 1.8.2 built-in driver; full message and action matrices remain pending |
 | Yunzai / TRSS-Yunzai | Bot distribution | OneBot 11 reverse WebSocket | Depends on the selected distribution | documented: 31 of 59 direct actions in a pinned source revision have protocol entries; 28 private actions remain unsupported |
 | Zhenxun | NoneBot2 distribution | OneBot 11 reverse WebSocket | Follows NoneBot2 | documented: all 17 explicit core actions in a pinned source revision have entries; the full process and third-party plugins remain pending |
 
 ## Expanded ecosystem candidates
 
-The seven baseline profiles are integration paths with a configuration renderer or a pinned source audit. They are not the whole ecosystem that OneBots can potentially serve. Based on the [official OneBot ecosystem](https://onebot.dev/ecosystem) and upstream project repositories, the management API, CLI, and Web console now expose 18 additional researched candidates:
+The nine baseline profiles are integration paths with a configuration renderer or a pinned source audit. They are not the whole ecosystem that OneBots can potentially serve. Based on the [official OneBot ecosystem](https://onebot.dev/ecosystem) and upstream project repositories, the management API, CLI, and Web console now expose 16 additional researched candidates:
 
 | Priority | Candidates | Rationale |
 | --- | --- | --- |
-| Next | AstrBot, LangBot, AliceBot, melobot, Kovi, ZeroBot, Kotori | Their upstream projects publish clear OneBot or Milky surfaces suitable for pinned process gates |
+| Next | AstrBot, LangBot, AliceBot, Kovi, Kotori | Their upstream projects publish OneBot or Milky surfaces, but pinned source audits found full-runtime or path/authentication blockers |
 | Later | Avilla, OlivOS, Zhamao, Shiro, Simple Robot OneBot, Overflow, Walle, Adachi-BOT, GenshinUID | A protocol surface exists, but WIP status, multiple hosts, SDK embedding, or private actions increase the audit cost |
 | Migration | PepperBot, NoneBot 1 | Kept as migration leads for existing deployments rather than preferred choices for new projects |
 
 A catalog entry means that traceable upstream evidence exists. It is not a compatibility promise. A candidate becomes a plan-ready profile only after its connection direction, configuration fields, authentication, events, and actions pass a pinned-version gate.
+
+This round promoted melobot 3.4.0 and ZeroBot 1.8.2 after real process gates. AliceBot 0.11.0 hardcodes `/` in forward mode and its reverse token check reads response headers rather than request headers. Kovi 0.13.2 appends `/api` and `/event` for split connections while `all_in_one` ignores the configured path. Kotori 2.1.2 also loses the account protocol path in forward mode. AstrBot and LangBot currently require their complete WebUI, persistence, and application runtime initialization instead of a reproducible minimal fixture. These five remain candidates; disabling authentication or pretending the account endpoint lives at `/` would not be valid evidence.
 
 NapCat, Lagrange, and OpenShamrock are OneBot **protocol implementations** whose role overlaps OneBots' platform and protocol edge. They are not downstream application frameworks consuming OneBots events, so they are outside this candidate list. SDKs, bridges, and plugin distributions are also classified separately because they require different acceptance gates.
 
@@ -168,7 +172,7 @@ Yunzai and Zhenxun also require an extended-action baseline derived from real pl
 3. **Karin + Milky** now has a pinned WebSocket baseline, proving the profile seam is not OneBot-specific. Add SSE, webhook, reconnect, group-message, rich-media, and action matrices next while tracking the upstream dependency declaration and `yaml` fix.
 4. **Yunzai and Zhenxun** now have pinned source-action matrices and shared friend-deletion, history, and forwarded-message entries. The next step is a full distribution process gate and explicit handling of the remaining private actions.
 5. **Koishi** now has a pinned official-Satori handshake, direct-message, and send gate. Add group messages, rich media, reconnect behavior, and the complete resource-action matrix next.
-6. **Expanded ecosystem** starts with AstrBot, LangBot, AliceBot, melobot, Kovi, ZeroBot, and Kotori. Each candidate must pin a version and pass a minimal connection and action loop before receiving a configuration renderer.
+6. **Expanded ecosystem** now has minimal loops for melobot and ZeroBot. AstrBot, LangBot, AliceBot, Kovi, and Kotori wait for stable fixture interfaces or a deliberately designed OneBots path compatibility layer.
 
 ## Upstream references
 

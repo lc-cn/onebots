@@ -19,6 +19,8 @@ describe("frameworks command", () => {
             "karin",
             "zhin",
             "alemonjs",
+            "melobot",
+            "zerobot",
             "yunzai",
             "zhenxun",
         ]);
@@ -29,7 +31,7 @@ describe("frameworks command", () => {
                 )
                 .every(profile => profile.verification === "handshake"),
         ).toBe(true);
-        expect(report.ecosystem).toHaveLength(18);
+        expect(report.ecosystem).toHaveLength(16);
         expect(report.ecosystem).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ id: "astrbot", priority: "next" }),

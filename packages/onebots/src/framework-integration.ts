@@ -6,6 +6,8 @@ export type FrameworkId =
     | "karin"
     | "zhin"
     | "alemonjs"
+    | "melobot"
+    | "zerobot"
     | "yunzai"
     | "zhenxun";
 
@@ -210,6 +212,56 @@ const PROFILES: Readonly<Record<FrameworkId, FrameworkProfile>> = deepFreeze({
             "固定版本依赖的 npm audit 报告 file-type 中等级拒绝服务风险；上游修复前不提升为 verified。",
             "群消息、富媒体、重连、侧事件与完整动作矩阵仍待固定版本验证。",
         ],
+    },
+    melobot: {
+        id: "melobot",
+        displayName: "melobot",
+        kind: "framework",
+        packageName: "melobot[onebot]",
+        protocol: "onebot.v11",
+        transport: "websocket",
+        verification: "handshake",
+        evidence: {
+            frameworkVersion: "3.4.0",
+            adapterVersion: "built-in",
+            lastVerifiedAt: "2026-09-02",
+            command: "pnpm interop:melobot",
+            checks: [
+                "auth-rejection",
+                "handshake",
+                "private-message",
+                "get_login_info",
+                "send_private_msg",
+            ],
+        },
+        upstream: "https://docs.melobot.org/ob_refer/impl.html",
+        defaultFrameworkOrigin: null,
+        limitations: ["群消息、富媒体、重连、反向 WebSocket 与完整动作矩阵仍待验证。"],
+    },
+    zerobot: {
+        id: "zerobot",
+        displayName: "ZeroBot",
+        kind: "framework",
+        packageName: "github.com/wdvxdr1123/ZeroBot",
+        protocol: "onebot.v11",
+        transport: "websocket",
+        verification: "handshake",
+        evidence: {
+            frameworkVersion: "1.8.2",
+            adapterVersion: "built-in",
+            lastVerifiedAt: "2026-09-02",
+            command: "pnpm interop:zerobot",
+            checks: [
+                "auth-rejection",
+                "handshake",
+                "private-message",
+                "get_login_info",
+                "send_private_msg",
+            ],
+        },
+        upstream: "https://github.com/wdvxdr1123/ZeroBot",
+        defaultFrameworkOrigin: null,
+        limitations: ["群消息、富媒体、重连、反向 WebSocket 与完整动作矩阵仍待验证。"],
     },
     yunzai: {
         id: "yunzai",
@@ -559,6 +611,29 @@ function renderFrameworkConfig(
             return yaml.dump({
                 onebot: { url: endpoint, token: SHARED_TOKEN, reverse_enable: false },
             });
+        case "melobot":
+            return [
+                "from melobot import Bot",
+                "from melobot.protocols.onebot.v11 import OneBotV11Protocol, WSClient",
+                "",
+                'bot = Bot("onebots")',
+                `bot.add_protocol(OneBotV11Protocol(WSClient("${endpoint}", access_token="${SHARED_TOKEN}")))`,
+                "bot.run()",
+            ].join("\n");
+        case "zerobot":
+            return JSON.stringify(
+                {
+                    zero: {
+                        nickname: ["onebots"],
+                        command_prefix: "/",
+                        super_users: [],
+                        ring_len: 4096,
+                    },
+                    ws: [{ Url: endpoint, AccessToken: SHARED_TOKEN }],
+                },
+                null,
+                2,
+            );
         case "karin":
             return JSON.stringify(
                 {

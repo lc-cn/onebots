@@ -16,6 +16,8 @@ describe("framework integration profiles", () => {
             "karin",
             "zhin",
             "alemonjs",
+            "melobot",
+            "zerobot",
             "yunzai",
             "zhenxun",
         ]);
@@ -56,7 +58,15 @@ describe("framework integration profiles", () => {
             profiles
                 .filter(
                     profile =>
-                        !["koishi", "nonebot", "karin", "zhin", "alemonjs"].includes(profile.id),
+                        ![
+                            "koishi",
+                            "nonebot",
+                            "karin",
+                            "zhin",
+                            "alemonjs",
+                            "melobot",
+                            "zerobot",
+                        ].includes(profile.id),
                 )
                 .every(profile => profile.verification === "documented"),
         ).toBe(true);
@@ -144,6 +154,19 @@ describe("framework integration profiles", () => {
                 reverse_enable: false,
             },
         });
+    });
+
+    it("renders the pinned melobot and ZeroBot forward WebSocket plans", () => {
+        const melobot = createFrameworkConnectionPlan({ framework: "melobot", account: "qq.main" });
+        const zerobot = createFrameworkConnectionPlan({ framework: "zerobot", account: "qq.main" });
+
+        expect(melobot.frameworkConfig).toContain("OneBotV11Protocol");
+        expect(melobot.frameworkConfig).toContain('access_token="<shared-token>"');
+        expect(JSON.parse(zerobot.frameworkConfig)).toMatchObject({
+            ws: [{ Url: zerobot.endpoint, AccessToken: "<shared-token>" }],
+        });
+        expect(melobot.framework.evidence?.command).toBe("pnpm interop:melobot");
+        expect(zerobot.framework.evidence?.command).toBe("pnpm interop:zerobot");
     });
 
     it("generates Karin Milky HTTP and event transport configuration", () => {
