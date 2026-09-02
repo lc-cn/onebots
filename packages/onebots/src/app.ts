@@ -20,6 +20,7 @@ import { registerTerminalRoutes } from "./routes/terminal.js";
 import { registerPublicStaticRoutes } from "./routes/public-static.js";
 import { registerMessageDebugRoutes } from "./routes/message-debug.js";
 import { registerExtensionRoutes } from "./routes/extensions.js";
+import { registerFrameworkRoutes } from "./routes/frameworks.js";
 import { LogCacheManager } from "./log-cache.js";
 import { VerificationManager } from "./verification-manager.js";
 import { HfBackupService } from "./hf-backup.js";
@@ -454,6 +455,7 @@ export class App extends BaseApp {
         registerPublicStaticRoutes(this, this.router);
         registerMessageDebugRoutes(this, this.router);
         registerExtensionRoutes(this, this.router);
+        registerFrameworkRoutes(this, this.router);
 
         if (!existsSync(this.logFile)) {
             const dir = path.dirname(this.logFile);

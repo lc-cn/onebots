@@ -23,14 +23,31 @@ describe("frameworks command", () => {
         ]);
         expect(
             report.profiles
-                .filter(profile => ["nonebot", "zhin", "alemonjs"].includes(profile.id))
-                .map(profile => profile.verification),
-        ).toEqual(["handshake", "handshake", "handshake"]);
+                .filter(profile =>
+                    ["koishi", "nonebot", "karin", "zhin", "alemonjs"].includes(profile.id),
+                )
+                .every(profile => profile.verification === "handshake"),
+        ).toBe(true);
         expect(
             report.profiles
-                .filter(profile => !["nonebot", "zhin", "alemonjs"].includes(profile.id))
+                .filter(profile => ["yunzai", "zhenxun"].includes(profile.id))
                 .every(profile => profile.verification === "documented"),
         ).toBe(true);
+    });
+
+    it("shows distribution source coverage without describing it as process verification", () => {
+        const list = showFrameworkConnections({ json: false });
+        const plan = showFrameworkConnections({
+            framework: "yunzai",
+            account: "qq.main",
+            json: false,
+        });
+
+        expect(list.output).toContain("yunzai");
+        expect(list.output).toContain("actions 31/59");
+        expect(plan.output).toContain("状态: documented");
+        expect(plan.output).toContain("源码动作: 31/59");
+        expect(plan.output).toContain("不代表完整进程互操作已验证");
     });
 
     it("renders pinned handshake evidence without overstating the verification level", () => {

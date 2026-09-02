@@ -13,8 +13,8 @@ OneBots 把平台连接与机器人业务框架分开：OneBots 负责连接 IM 
 | Karin | 通用框架 | Milky WebSocket | Milky SSE、Webhook | `handshake`：Karin 1.15.3 + adapter 1.3.3 已通过固定版本门禁；存在上游依赖声明与安全限制 |
 | Zhin | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | `handshake`：Zhin 6.0.15 + adapter 7.0.8 已通过固定版本门禁；完整消息与动作矩阵待验证 |
 | AlemonJS | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | `handshake`：AlemonJS 2.1.103 + adapter 2.1.21 已通过固定版本门禁；存在上游依赖安全限制 |
-| 云崽 / TRSS-Yunzai | 机器人发行版 | OneBot 11 反向 WebSocket | 由具体分支决定 | 上游已有 OneBot 11 入口，需验证其私有动作和 CQ 码假设 |
-| 真寻 | NoneBot2 发行版 | OneBot 11 反向 WebSocket | 跟随 NoneBot2 | 上游基于 NoneBot2 OneBot 适配器，需额外验证真寻插件依赖的扩展动作 |
+| 云崽 / TRSS-Yunzai | 机器人发行版 | OneBot 11 反向 WebSocket | 由具体分支决定 | documented：固定源码版本的 59 个直接动作已覆盖 31 个，28 个私有动作仍不支持 |
+| 真寻 | NoneBot2 发行版 | OneBot 11 反向 WebSocket | 跟随 NoneBot2 | documented：固定源码版本中 17 个明确核心动作均有入口；完整进程与第三方插件待验证 |
 
 “框架”和“机器人发行版”需要分开处理。NoneBot、Koishi、Karin、Zhin 与 AlemonJS 提供通用插件运行时；云崽和真寻包含大量现成业务插件，除了协议握手，还可能依赖 QQ 生态形成的非标准动作、CQ 码或字段。
 
@@ -27,6 +27,10 @@ AlemonJS 门禁使用官方 `OneBotClient`、v11 事件驱动和动作 API，覆
 Karin 门禁加载真实 `node-karin@1.15.3` 与 `@karinjs/plugin-adapter-milky@1.3.3`，覆盖错误 token 拒绝、Milky HTTP 初始化、WebSocket 握手、好友消息转换、`get_login_info`、`get_impl_info` 与 `send_private_message`。插件 1.3.3 的发布包会导入但未声明 `node-karin`，因此独立安装必须显式加入该依赖。固定依赖中的 `yaml@2.7.0` 受中等级栈溢出公告 `GHSA-48c2-rrv3-qjmp` 影响，当前 `npm audit` 没有可用自动修复；群消息、富媒体、重连、SSE、Webhook 与完整动作矩阵也尚未通过，所以验证等级保持 `handshake`。
 
 Koishi 门禁加载 `koishi@4.18.6` 与官方 `@koishijs/plugin-adapter-satori@1.5.1`。官方插件把配置中的 `endpoint` 当作 Satori 根地址并自行追加 `/v1/events` 与 `/v1/{method}`；模板因此输出 `.../satori`，而不是重复版本段的 `.../satori/v1`。门禁覆盖错误 token、IDENTIFY/READY、私聊事件和 `message.create`，并验证 OneBots 对官方客户端返回直接 Satori 结果，同时为既有调用者保留 `{ data }` 包装。固定依赖审计有 12 个中等级条目，均由 `file-type` 的 `GHSA-5v7r-6r5c-r473` 沿依赖链传播；当前审计建议是破坏性降级，未自动应用。
+
+云崽矩阵审计 [TRSS-Yunzai 源码版本 2d1652ac899e](https://github.com/TimeRainStarSky/Yunzai/commit/2d1652ac899e8f4338b5310171319e6894b2499c) 的 OneBotv11 适配器，共识别 59 个直接 sendApi 动作。OneBots 当前有 31 个协议入口，包括新增的好友删除、私聊/群聊历史和私聊/群聊合并转发；剩余 28 个主要是群文件、群公告、频道、QQ 资料与特定实现私有动作。这是固定源码静态审计，未运行完整云崽进程，因此等级保持 documented。
+
+真寻矩阵审计 [真寻源码版本 39ed1ade1469](https://github.com/zhenxun-org/zhenxun_bot/commit/39ed1ade1469318d53b5beb943f05b89664d294e) 中的明确 OneBot API 使用。识别出的 17 个核心动作均已有 OneBot v11 入口；其中好友删除与群合并转发在本轮补齐。动态 call_api、第三方插件和完整发行版进程不在这项静态结论内，不能据此标记为 actions 或 verified。
 
 ## 接入接口
 
@@ -77,6 +81,8 @@ onebots frameworks --framework nonebot --account wechat.work \
 ```
 
 `--json` 输出 `schemaVersion: 1` 的结构化 `ConnectionPlan`，可供部署工具消费。生成模板不会修改 `config.yaml`，用户核对方案并替换两端相同的 `<shared-token>` 后再写入配置。
+
+Web 管理端的“框架接入”页使用同一份 profile。即使尚未配置任何 bot，GET /api/frameworks 也会返回完整目录；页面可通过 POST /api/frameworks/plan 生成相同的脱敏方案。服务端会校验框架、账号和 URL，拒绝把凭据、查询参数或 fragment 写入方案。
 
 ## 验证等级
 
@@ -146,7 +152,7 @@ pnpm interop:koishi
 1. **NoneBot2 + OneBot 11**：已建立固定版本夹具、配置模板、鉴权、私聊收发和基础 API 调用门禁；下一步补群消息、富媒体、重连和动作矩阵。
 2. **Zhin + OneBot 11、AlemonJS + OneBot 11**：两者都已完成固定版本正向 WebSocket 基础门禁；继续补齐消息、重连和动作矩阵，并跟踪 AlemonJS 上游依赖修复。
 3. **Karin + Milky**：已完成固定版本 WebSocket 基础门禁，证明 profile seam 不是 OneBot 专用；下一步补 SSE、Webhook、重连、群消息、富媒体与动作矩阵，并跟踪上游依赖声明和 `yaml` 修复。
-4. **云崽与真寻**：在基础框架通过后补充发行版的私有动作与消息兼容矩阵。
+4. **云崽与真寻**：固定源码动作矩阵已经建立，并补齐可跨平台表达的好友删除、消息历史和合并转发入口；下一步运行完整发行版进程并逐项处理剩余私有动作。
 5. **Koishi**：已完成官方 Satori 适配器的固定版本握手、私聊和发送门禁；继续补群消息、富媒体、重连与完整资源动作矩阵。
 
 ## 上游依据

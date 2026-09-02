@@ -31,6 +31,16 @@ export function createInfoActions(
                 remark: friend.remark || "",
             }));
         },
+        delete_friend: async params => {
+            const { user_id, block } = params as { user_id: string | number; block?: boolean };
+            if (block !== undefined && typeof block !== "boolean") {
+                throw new TypeError("block 必须是布尔值");
+            }
+            await context.adapter.deleteFriend(context.accountId, {
+                user_id: context.resolveId(user_id),
+                block,
+            });
+        },
         get_group_info: async params => {
             const { group_id } = params as { group_id: string | number; no_cache?: boolean };
             const group = await context.adapter.getGroupInfo(context.accountId, {

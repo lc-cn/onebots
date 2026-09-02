@@ -78,10 +78,34 @@ function createProtocol() {
         handleGroupRequest: vi.fn(),
         muteGroupAnonymous: vi.fn(),
         setGroupAnonymous: vi.fn(),
-        describeCapabilities: vi.fn().mockReturnValue({
-            actions: { native_ping: true, get_record: true },
+        sendMessage: vi.fn().mockResolvedValue({
+            message_id: { string: "sent-1", number: 90001, source: "sent-1" },
         }),
-        callAction: vi.fn().mockResolvedValue({ pong: true }),
+        getMessageHistory: vi.fn().mockResolvedValue([
+            {
+                message_id: { string: "history-1", number: 80001, source: "history-1" },
+                time: 1700000000,
+                sender: {
+                    scene_type: "group",
+                    sender_id: { string: "user-1", number: 10001, source: "user-1" },
+                    scene_id: { string: "group-1", number: 20001, source: "group-1" },
+                    sender_name: "Alice",
+                    scene_name: "Test Group",
+                },
+                message: [{ type: "text", data: { text: "history" } }],
+            },
+        ]),
+        deleteFriend: vi.fn(),
+        describeCapabilities: vi.fn().mockReturnValue({
+            actions: { native_ping: true, get_record: true, make_forward_message: true },
+        }),
+        callAction: vi
+            .fn()
+            .mockImplementation((_uin, action) =>
+                action === "make_forward_message"
+                    ? Promise.resolve({ type: "json", data: { data: "forward" } })
+                    : Promise.resolve({ pong: true }),
+            ),
     };
 
     const protocol = new OneBotV11Protocol(
@@ -600,6 +624,52 @@ describe("OneBot V11 message format conversion", () => {
             approve: true,
             remark: undefined,
             block: undefined,
+        });
+    });
+
+    test("distribution compatibility actions reuse common friend, history and forward seams", async () => {
+        const { protocol, adapter } = createProtocol();
+
+        await expect(
+            protocol.apply("delete_friend", { user_id: 10001, block: true }),
+        ).resolves.toMatchObject({ status: "ok", retcode: 0 });
+        await expect(
+            protocol.apply("get_group_msg_history", {
+                group_id: 20001,
+                message_seq: 42,
+                count: 10,
+                reverseOrder: true,
+            }),
+        ).resolves.toMatchObject({
+            status: "ok",
+            data: { messages: [expect.objectContaining({ message_id: 80001 })] },
+        });
+        await expect(
+            protocol.apply("send_group_forward_msg", {
+                group_id: 20001,
+                messages: [{ type: "node", data: { user_id: 10001, content: "hello" } }],
+            }),
+        ).resolves.toMatchObject({ status: "ok", data: { message_id: 90001 } });
+
+        expect(adapter.deleteFriend).toHaveBeenCalledWith("bot", {
+            user_id: expect.objectContaining({ number: 10001 }),
+            block: true,
+        });
+        expect(adapter.getMessageHistory).toHaveBeenCalledWith("bot", {
+            scene_type: "group",
+            scene_id: expect.objectContaining({ number: 20001 }),
+            limit: 10,
+            offset: 42,
+            start_message_id: undefined,
+        });
+        expect(adapter.callAction).toHaveBeenCalledWith("bot", "make_forward_message", {
+            nodes: [{ type: "node", data: { user_id: 10001, content: "hello" } }],
+            dm: false,
+        });
+        expect(adapter.sendMessage).toHaveBeenCalledWith("bot", {
+            scene_type: "group",
+            scene_id: expect.objectContaining({ number: 20001 }),
+            message: [{ type: "json", data: { data: "forward" } }],
         });
     });
 

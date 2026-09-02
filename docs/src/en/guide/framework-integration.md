@@ -13,8 +13,8 @@ The table records integration surfaces currently published by each upstream proj
 | Karin | General framework | Milky WebSocket | Milky SSE or webhook | `handshake`: pinned gate passes with Karin 1.15.3 + adapter 1.3.3; upstream dependency declaration and security limitations remain |
 | Zhin | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `handshake`: pinned gate passes with Zhin 6.0.15 + adapter 7.0.8; full message and action matrices remain pending |
 | AlemonJS | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `handshake`: pinned gate passes with AlemonJS 2.1.103 + adapter 2.1.21; an upstream dependency security limitation remains |
-| Yunzai / TRSS-Yunzai | Bot distribution | OneBot 11 reverse WebSocket | Depends on the selected distribution | An upstream OneBot 11 ingress exists; private actions and CQ-code assumptions still need verification |
-| Zhenxun | NoneBot2 distribution | OneBot 11 reverse WebSocket | Follows NoneBot2 | Uses the NoneBot2 OneBot adapter; Zhenxun plugin dependencies on extended actions need separate verification |
+| Yunzai / TRSS-Yunzai | Bot distribution | OneBot 11 reverse WebSocket | Depends on the selected distribution | documented: 31 of 59 direct actions in a pinned source revision have protocol entries; 28 private actions remain unsupported |
+| Zhenxun | NoneBot2 distribution | OneBot 11 reverse WebSocket | Follows NoneBot2 | documented: all 17 explicit core actions in a pinned source revision have entries; the full process and third-party plugins remain pending |
 
 General frameworks and bot distributions need different treatment. NoneBot, Koishi, Karin, Zhin, and AlemonJS provide reusable plugin runtimes. Yunzai and Zhenxun bundle application plugins that may depend on QQ-specific non-standard actions, CQ codes, or fields beyond a successful protocol handshake.
 
@@ -27,6 +27,10 @@ The AlemonJS gate uses its official `OneBotClient`, v11 event driver, and action
 The Karin gate loads the real `node-karin@1.15.3` runtime and `@karinjs/plugin-adapter-milky@1.3.3`. It covers invalid-token rejection, Milky HTTP initialization, the WebSocket handshake, friend-message conversion, `get_login_info`, `get_impl_info`, and `send_private_message`. The adapter's 1.3.3 package imports but does not declare `node-karin`, so standalone installations must add that dependency explicitly. Its pinned `yaml@2.7.0` is affected by the moderate stack-overflow advisory `GHSA-48c2-rrv3-qjmp`, and `npm audit` currently offers no automatic fix. Group messages, rich media, reconnect behavior, SSE, webhook, and the full action matrix remain pending, so the evidence stays at `handshake`.
 
 The Koishi gate loads `koishi@4.18.6` and the official `@koishijs/plugin-adapter-satori@1.5.1`. The adapter treats its configured `endpoint` as the Satori root and appends `/v1/events` and `/v1/{method}` itself, so the generated endpoint is `.../satori` rather than the duplicated `.../satori/v1`. The gate covers invalid-token rejection, IDENTIFY/READY, a direct-message event, and `message.create`. OneBots returns direct Satori results to the official client while preserving the existing `{ data }` wrapper for legacy callers. The pinned audit contains 12 moderate entries propagated from `file-type` advisory `GHSA-5v7r-6r5c-r473`; its suggested fix is a breaking downgrade and was not applied automatically.
+
+The Yunzai matrix audits its OneBotv11 adapter at [TRSS-Yunzai revision 2d1652ac899e](https://github.com/TimeRainStarSky/Yunzai/commit/2d1652ac899e8f4338b5310171319e6894b2499c). It finds 59 direct sendApi actions. OneBots now has entries for 31, including newly exposed friend deletion, direct/group history, and direct/group forwarded messages. The remaining 28 mainly cover group files, notices, guilds, QQ profile operations, and implementation-specific actions. This is a pinned static source audit, not a full Yunzai process gate, so the level stays documented.
+
+The Zhenxun matrix audits explicit OneBot API use at [Zhenxun revision 39ed1ade1469](https://github.com/zhenxun-org/zhenxun_bot/commit/39ed1ade1469318d53b5beb943f05b89664d294e). All 17 identified core actions now have OneBot v11 entries, including friend deletion and group forwarded messages added in this round. Dynamic call_api, third-party plugins, and the complete distribution process are outside this static result; it does not earn actions or verified.
 
 ## Integration interface
 
@@ -77,6 +81,8 @@ onebots frameworks --framework nonebot --account wechat.work \
 ```
 
 `--json` emits a structured `ConnectionPlan` with `schemaVersion: 1` for deployment tooling. Generation never edits `config.yaml`; review the plan and replace `<shared-token>` with the same secret on both sides before applying it.
+
+The Web console's Framework Integration page consumes the same profiles. GET /api/frameworks returns the full catalog even when no bot exists, while POST /api/frameworks/plan renders the same redacted plan. The server validates the framework, account, and URLs and rejects credentials, query parameters, or fragments.
 
 ## Verification levels
 
@@ -146,7 +152,7 @@ Yunzai and Zhenxun also require an extended-action baseline derived from real pl
 1. **NoneBot2 + OneBot 11** now has a pinned fixture, configuration renderer, authentication check, private-message loop, and basic API gate. Group messages, rich media, reconnect behavior, and the action matrix come next.
 2. **Zhin + OneBot 11 and AlemonJS + OneBot 11** now both have pinned forward-WebSocket baselines. Expand their message, reconnect, and action matrices while tracking the AlemonJS upstream dependency fix.
 3. **Karin + Milky** now has a pinned WebSocket baseline, proving the profile seam is not OneBot-specific. Add SSE, webhook, reconnect, group-message, rich-media, and action matrices next while tracking the upstream dependency declaration and `yaml` fix.
-4. **Yunzai and Zhenxun** add distribution-specific private-action and message compatibility after their base frameworks pass.
+4. **Yunzai and Zhenxun** now have pinned source-action matrices and shared friend-deletion, history, and forwarded-message entries. The next step is a full distribution process gate and explicit handling of the remaining private actions.
 5. **Koishi** now has a pinned official-Satori handshake, direct-message, and send gate. Add group messages, rich media, reconnect behavior, and the complete resource-action matrix next.
 
 ## Upstream references

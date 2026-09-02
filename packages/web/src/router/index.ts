@@ -28,6 +28,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '功能扩展', icon: 'Package' }
       },
       {
+        path: 'frameworks',
+        name: 'Frameworks',
+        component: () => import('../views/Frameworks.vue'),
+        meta: { title: '框架接入', icon: 'PlugConnected' }
+      },
+      {
         path: 'config',
         name: 'Config',
         component: () => import('../views/Config.vue'),

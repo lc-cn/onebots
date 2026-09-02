@@ -64,6 +64,33 @@ describe("framework integration profiles", () => {
         expect(Object.isFrozen(getFrameworkProfile("nonebot")?.limitations)).toBe(true);
     });
 
+    it("publishes immutable and internally consistent distribution action audits", () => {
+        const yunzai = getFrameworkProfile("yunzai")?.distributionAudit;
+        const zhenxun = getFrameworkProfile("zhenxun")?.distributionAudit;
+
+        expect(yunzai).toMatchObject({
+            sourceRevision: "2d1652ac899e8f4338b5310171319e6894b2499c",
+            auditedAt: "2026-09-02",
+        });
+        expect(yunzai?.requiredActions).toHaveLength(59);
+        expect(yunzai?.supportedActions).toHaveLength(31);
+        expect(yunzai?.unsupportedActions).toHaveLength(28);
+        expect(
+            new Set(yunzai?.supportedActions).intersection(new Set(yunzai?.unsupportedActions)),
+        ).toHaveLength(0);
+        expect(
+            new Set([...(yunzai?.supportedActions ?? []), ...(yunzai?.unsupportedActions ?? [])]),
+        ).toEqual(new Set(yunzai?.requiredActions));
+        expect(yunzai?.unsupportedActions).toEqual(
+            expect.arrayContaining(["upload_group_file", "get_guild_list", "_send_group_notice"]),
+        );
+        expect(zhenxun?.requiredActions).toHaveLength(17);
+        expect(zhenxun?.supportedActions).toEqual(zhenxun?.requiredActions);
+        expect(zhenxun?.unsupportedActions).toEqual([]);
+        expect(Object.isFrozen(yunzai)).toBe(true);
+        expect(Object.isFrozen(yunzai?.supportedActions)).toBe(true);
+    });
+
     it("generates a NoneBot reverse WebSocket plan with separate gateway and framework origins", () => {
         const plan = createFrameworkConnectionPlan({
             framework: "nonebot",

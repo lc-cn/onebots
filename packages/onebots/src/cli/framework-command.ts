@@ -61,10 +61,13 @@ export function showFrameworkConnections(options: FrameworkCommandOptions): Comm
 function formatFrameworkProfileList(profiles: ReturnType<typeof listFrameworkProfiles>): string {
     return [
         "机器人框架接入基线（等级严格按 OneBots 固定版本证据标记）",
-        ...profiles.map(
-            profile =>
-                `${profile.id.padEnd(9)} ${profile.protocol.padEnd(12)} ${profile.transport.padEnd(17)} ${profile.verification}`,
-        ),
+        ...profiles.map(profile => {
+            const audit = profile.distributionAudit;
+            const coverage = audit
+                ? ` actions ${audit.supportedActions.length}/${audit.requiredActions.length}`
+                : "";
+            return `${profile.id.padEnd(9)} ${profile.protocol.padEnd(12)} ${profile.transport.padEnd(17)} ${profile.verification}${coverage}`;
+        }),
         "生成配置: onebots frameworks --framework <name> --account <platform.account_id>",
     ].join("\n");
 }
@@ -78,6 +81,12 @@ function formatFrameworkConnectionPlan(
         ...(plan.framework.evidence
             ? [
                   `证据: framework ${plan.framework.evidence.frameworkVersion} / adapter ${plan.framework.evidence.adapterVersion}，${plan.framework.evidence.lastVerifiedAt}，${plan.framework.evidence.command}`,
+              ]
+            : []),
+        ...(plan.framework.distributionAudit
+            ? [
+                  `源码动作: ${plan.framework.distributionAudit.supportedActions.length}/${plan.framework.distributionAudit.requiredActions.length}，revision ${plan.framework.distributionAudit.sourceRevision.slice(0, 12)}，${plan.framework.distributionAudit.auditedAt}`,
+                  `审计范围: ${plan.framework.distributionAudit.note}`,
               ]
             : []),
         `协议: ${plan.protocol}`,

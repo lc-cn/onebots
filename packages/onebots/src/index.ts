@@ -8,6 +8,7 @@ export {
     type FrameworkConnectionCheck,
     type FrameworkConnectionPlan,
     type FrameworkConnectionRequest,
+    type DistributionCompatibilityAudit,
     type FrameworkId,
     type FrameworkKind,
     type FrameworkProfile,
