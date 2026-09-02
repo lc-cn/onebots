@@ -64,7 +64,8 @@ const baseConfig = defineConfig({
                             { text: "Matrix", link: "/platform/matrix" },
                             { text: "Google Chat", link: "/platform/google-chat" },
                             { text: "Facebook Messenger", link: "/platform/facebook-messenger" },
-                            { text: "Instagram Messaging", link: "/platform/instagram" }
+                            { text: "Instagram Messaging", link: "/platform/instagram" },
+                            { text: "Mattermost", link: "/platform/mattermost" }
                         ]
                     },
                     {
@@ -129,7 +130,8 @@ const baseConfig = defineConfig({
                         { text: "Matrix", link: "/platform/matrix" },
                         { text: "Google Chat", link: "/platform/google-chat" },
                         { text: "Facebook Messenger", link: "/platform/facebook-messenger" },
-                        { text: "Instagram Messaging", link: "/platform/instagram" }
+                        { text: "Instagram Messaging", link: "/platform/instagram" },
+                        { text: "Mattermost", link: "/platform/mattermost" }
                     ],
                     "/protocol/": [
                         { text: "OneBot V11", link: "/protocol/onebot-v11" },
@@ -206,7 +208,8 @@ const baseConfig = defineConfig({
                             { text: "Matrix", link: "/en/platform/matrix" },
                             { text: "Google Chat", link: "/en/platform/google-chat" },
                             { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" },
-                            { text: "Instagram Messaging", link: "/en/platform/instagram" }
+                            { text: "Instagram Messaging", link: "/en/platform/instagram" },
+                            { text: "Mattermost", link: "/en/platform/mattermost" }
                         ]
                     },
                     {
@@ -284,7 +287,8 @@ const baseConfig = defineConfig({
                         { text: "Matrix", link: "/en/platform/matrix" },
                         { text: "Google Chat", link: "/en/platform/google-chat" },
                         { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" },
-                        { text: "Instagram Messaging", link: "/en/platform/instagram" }
+                        { text: "Instagram Messaging", link: "/en/platform/instagram" },
+                        { text: "Mattermost", link: "/en/platform/mattermost" }
                     ],
                     "/en/protocol/": [
                         { text: "OneBot V11", link: "/en/protocol/onebot-v11" },

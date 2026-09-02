@@ -180,6 +180,7 @@ For configuration details of other platforms, see:
 - [Google Chat Platform](/en/platform/google-chat)
 - [Facebook Messenger Platform](/en/platform/facebook-messenger)
 - [Instagram Messaging Platform](/en/platform/instagram)
+- [Mattermost Platform](/en/platform/mattermost)
 
 ## Related Links
 

@@ -496,6 +496,7 @@ wechat.prod:
 - [Google Chat 平台](/platform/google-chat)
 - [Facebook Messenger 平台](/platform/facebook-messenger)
 - [Instagram Messaging 平台](/platform/instagram)
+- [Mattermost 平台](/platform/mattermost)
 - [Kook 平台](/platform/kook)
 - [黑盒语音平台](/platform/heychat)
 - [钉钉平台](/platform/dingtalk)

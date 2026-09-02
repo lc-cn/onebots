@@ -185,6 +185,33 @@ export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
             },
         ],
     ),
+    adapter(
+        "mattermost",
+        "Mattermost",
+        "连接 Mattermost REST API v4、可靠 WebSocket、已有 socket 与 manual ingress。",
+        [
+            {
+                title: "准备 Mattermost 账号与 Token",
+                description:
+                    "创建 Bot Account 或专用用户并签发 Access Token，按目标 team、channel 和管理动作授予最小权限。",
+                url: "https://developers.mattermost.com/integrate/reference/bot-accounts/",
+            },
+            {
+                title: "选择事件入口",
+                description:
+                    "普通部署使用可靠 WebSocket；已有 Host、反向代理或连接管理器使用 manual + acceptSocket()/ingest()。",
+            },
+            {
+                title: "配置事件与资源过滤",
+                description: "Web 表单可逐项增减 event、team ID 与 channel ID，无需编辑 JSON。",
+            },
+            {
+                title: "核对权限与账号能力",
+                description:
+                    "管理、Bot 与 Scheduled Posts 动作依赖服务器版本、许可证和 token permission；保存后在能力面板确认。",
+            },
+        ],
+    ),
     adapter("slack", "Slack", "连接 Slack 工作区，支持 Socket Mode 和 Events API。", [
         {
             title: "创建 Slack App",

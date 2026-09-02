@@ -37,6 +37,9 @@
     "@onebots/adapter-matrix": {
       "version": "0.1.0"
     },
+    "@onebots/adapter-mattermost": {
+      "version": "0.1.0"
+    },
     "@onebots/adapter-qq": {
       "version": "3.0.10"
     },
@@ -5473,6 +5476,490 @@
             "support": "native",
             "mode": "native",
             "note": "通过 ingest()/ingestHttp()/acceptHttp() 接入已有连接或 Host"
+          }
+        }
+      }
+    },
+    "mattermost": {
+      "packageName": "@onebots/adapter-mattermost",
+      "packageVersion": "0.1.0",
+      "manifest": {
+        "version": 1,
+        "actions": {
+          "send_message": {
+            "support": "native",
+            "scenes": [
+              "direct",
+              "group",
+              "channel"
+            ]
+          },
+          "delete_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "get_message": {
+            "support": "native"
+          },
+          "get_message_history": {
+            "support": "native"
+          },
+          "update_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "mark_message_as_read": {
+            "support": "native"
+          },
+          "get_login_info": {
+            "support": "native"
+          },
+          "get_user_info": {
+            "support": "native"
+          },
+          "create_user_channel": {
+            "support": "native"
+          },
+          "get_group_info": {
+            "support": "native",
+            "availability": "context"
+          },
+          "get_group_member_list": {
+            "support": "native",
+            "availability": "context"
+          },
+          "get_group_member_info": {
+            "support": "native",
+            "availability": "context"
+          },
+          "send_group_message_reaction": {
+            "support": "native"
+          },
+          "get_group_essence_messages": {
+            "support": "native"
+          },
+          "set_group_essence_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "delete_group_essence_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "get_guild_info": {
+            "support": "native"
+          },
+          "get_guild_list": {
+            "support": "native"
+          },
+          "get_guild_member_info": {
+            "support": "native"
+          },
+          "get_guild_member_list": {
+            "support": "native"
+          },
+          "get_channel_info": {
+            "support": "native"
+          },
+          "get_channel_list": {
+            "support": "native"
+          },
+          "create_channel": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "update_channel": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "delete_channel": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "get_channel_member_info": {
+            "support": "native"
+          },
+          "get_channel_member_list": {
+            "support": "native"
+          },
+          "invite_channel_member": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "kick_channel_member": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "upload_file": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "Mattermost token 对目标 team/channel 的对应 permission"
+            ]
+          },
+          "get_file": {
+            "support": "native"
+          },
+          "can_send_image": {
+            "support": "native"
+          },
+          "can_send_record": {
+            "support": "native"
+          },
+          "get_version": {
+            "support": "native"
+          },
+          "get_status": {
+            "support": "native"
+          },
+          "get_supported_actions": {
+            "support": "native"
+          },
+          "call_mattermost_api": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "create_mattermost_post": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "create_mattermost_ephemeral_post": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "search_mattermost_posts": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "create_mattermost_scheduled_post": {
+            "support": "native",
+            "availability": "context",
+            "note": "依赖服务器 Scheduled Posts 功能和许可证配置"
+          },
+          "update_mattermost_scheduled_post": {
+            "support": "native",
+            "availability": "context",
+            "note": "依赖服务器 Scheduled Posts 功能和许可证配置"
+          },
+          "delete_mattermost_scheduled_post": {
+            "support": "native",
+            "availability": "context",
+            "note": "依赖服务器 Scheduled Posts 功能和许可证配置"
+          },
+          "list_mattermost_scheduled_posts": {
+            "support": "native",
+            "availability": "context",
+            "note": "依赖服务器 Scheduled Posts 功能和许可证配置"
+          },
+          "create_mattermost_direct_channel": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "create_mattermost_group_channel": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "create_mattermost_channel": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "patch_mattermost_channel": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "archive_mattermost_channel": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "restore_mattermost_channel": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "add_mattermost_channel_member": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "remove_mattermost_channel_member": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "create_mattermost_team": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "manage_system 或对应 team 管理权限"
+            ]
+          },
+          "patch_mattermost_team": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "manage_system 或对应 team 管理权限"
+            ]
+          },
+          "archive_mattermost_team": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "manage_system 或对应 team 管理权限"
+            ]
+          },
+          "restore_mattermost_team": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "manage_system 或对应 team 管理权限"
+            ]
+          },
+          "add_mattermost_team_member": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "remove_mattermost_team_member": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "set_mattermost_status": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "send_mattermost_typing": {
+            "support": "native",
+            "availability": "context",
+            "note": "需要已连接或通过 acceptSocket() 注入的 Mattermost WebSocket"
+          },
+          "get_mattermost_statuses": {
+            "support": "native",
+            "availability": "context",
+            "note": "需要已连接或通过 acceptSocket() 注入的 Mattermost WebSocket"
+          },
+          "get_mattermost_statuses_by_ids": {
+            "support": "native",
+            "availability": "context",
+            "note": "需要已连接或通过 acceptSocket() 注入的 Mattermost WebSocket"
+          },
+          "list_mattermost_emoji": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "get_mattermost_emoji_by_name": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "list_mattermost_bots": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "create_mattermost_bot": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "manage_system 或对应 team 管理权限"
+            ]
+          },
+          "patch_mattermost_bot": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "manage_system 或对应 team 管理权限"
+            ]
+          },
+          "enable_mattermost_bot": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "manage_system 或对应 team 管理权限"
+            ]
+          },
+          "disable_mattermost_bot": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "manage_system 或对应 team 管理权限"
+            ]
+          },
+          "execute_mattermost_command": {
+            "support": "native",
+            "availability": "permission"
+          },
+          "list_mattermost_channel_bookmarks": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "对应 public/private channel bookmark permission"
+            ],
+            "note": "Mattermost Server >= 9.5"
+          },
+          "create_mattermost_channel_bookmark": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "对应 public/private channel bookmark permission"
+            ],
+            "note": "Mattermost Server >= 9.5"
+          },
+          "update_mattermost_channel_bookmark": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "对应 public/private channel bookmark permission"
+            ],
+            "note": "Mattermost Server >= 9.5"
+          },
+          "delete_mattermost_channel_bookmark": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "对应 public/private channel bookmark permission"
+            ],
+            "note": "Mattermost Server >= 9.5"
+          }
+        },
+        "events": {
+          "message": {
+            "support": "native",
+            "scenes": [
+              "direct",
+              "group",
+              "channel"
+            ]
+          },
+          "message_updated": {
+            "support": "native"
+          },
+          "message_deleted": {
+            "support": "native"
+          },
+          "reaction_added": {
+            "support": "native"
+          },
+          "reaction_removed": {
+            "support": "native"
+          },
+          "typing_started": {
+            "support": "native"
+          },
+          "user_updated": {
+            "support": "native"
+          },
+          "member_joined": {
+            "support": "native"
+          },
+          "member_left": {
+            "support": "native"
+          },
+          "channel_subscriber_added": {
+            "support": "native"
+          },
+          "channel_subscriber_removed": {
+            "support": "native"
+          },
+          "channel_created": {
+            "support": "native"
+          },
+          "channel_updated": {
+            "support": "native"
+          },
+          "channel_deleted": {
+            "support": "native"
+          },
+          "guild_updated": {
+            "support": "native"
+          },
+          "guild_deleted": {
+            "support": "native"
+          },
+          "custom": {
+            "support": "native",
+            "note": "偏好、线程、插件、配置、属性字段及未来事件保留完整 raw_event"
+          }
+        },
+        "segments": {
+          "text": {
+            "support": "native",
+            "direction": "both"
+          },
+          "at": {
+            "support": "native",
+            "direction": "send",
+            "note": "发送需提供 Mattermost username"
+          },
+          "emoji": {
+            "support": "native",
+            "direction": "send"
+          },
+          "image": {
+            "support": "native",
+            "direction": "both"
+          },
+          "video": {
+            "support": "native",
+            "direction": "both"
+          },
+          "audio": {
+            "support": "native",
+            "direction": "both"
+          },
+          "file": {
+            "support": "native",
+            "direction": "both"
+          },
+          "location": {
+            "support": "emulated",
+            "direction": "send",
+            "note": "编译为地图 Markdown 链接"
+          },
+          "reply": {
+            "support": "native",
+            "direction": "send"
+          },
+          "thread": {
+            "support": "native",
+            "direction": "both"
+          }
+        },
+        "transports": {
+          "websocket": {
+            "support": "native",
+            "mode": "websocket",
+            "note": "官方 /api/v4/websocket，支持可靠续接和无限重连"
+          },
+          "existing_socket": {
+            "support": "native",
+            "mode": "native",
+            "note": "acceptSocket() 接收已有 Host 管理的已连接 socket"
+          },
+          "manual": {
+            "support": "native",
+            "mode": "native",
+            "note": "ingest(rawEvent) 接入已有 consumer、代理或消息队列"
           }
         }
       }

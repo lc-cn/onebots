@@ -29,6 +29,7 @@ const platformLabels = {
     kook: "KOOK",
     line: "LINE",
     matrix: "Matrix",
+    mattermost: "Mattermost",
     qq: "QQ",
     slack: "Slack",
     teams: "Teams",
