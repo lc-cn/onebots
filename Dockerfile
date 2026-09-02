@@ -14,7 +14,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 # 复制各工作空间（.dockerignore 已排除 node_modules/lib 等）
 COPY packages ./packages
 COPY adapters ./adapters
-COPY applications ./applications
 COPY protocols ./protocols
 COPY docs ./docs
 COPY development ./development
@@ -49,7 +48,6 @@ COPY --chown=node:node --from=builder /app/package.json /app/pnpm-lock.yaml /app
 COPY --chown=node:node --from=builder /app/node_modules ./node_modules
 COPY --chown=node:node --from=builder /app/packages ./packages
 COPY --chown=node:node --from=builder /app/adapters ./adapters
-COPY --chown=node:node --from=builder /app/applications ./applications
 COPY --chown=node:node --from=builder /app/protocols ./protocols
 COPY --chown=node:node --from=builder /app/development ./development
 COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs

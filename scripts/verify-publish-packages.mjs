@@ -18,7 +18,6 @@ function packageDirectories() {
     return [
         ...directChildren("packages"),
         ...directChildren("adapters"),
-        ...directChildren("applications"),
         ...directChildren("protocols").flatMap(directories =>
             fs
                 .readdirSync(directories, { withFileTypes: true })
