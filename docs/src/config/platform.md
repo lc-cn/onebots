@@ -495,6 +495,7 @@ wechat.prod:
 - [Matrix 平台](/platform/matrix)
 - [Google Chat 平台](/platform/google-chat)
 - [Facebook Messenger 平台](/platform/facebook-messenger)
+- [Instagram Messaging 平台](/platform/instagram)
 - [Kook 平台](/platform/kook)
 - [黑盒语音平台](/platform/heychat)
 - [钉钉平台](/platform/dingtalk)

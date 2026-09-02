@@ -63,7 +63,8 @@ const baseConfig = defineConfig({
                             { text: "Zulip", link: "/platform/zulip" },
                             { text: "Matrix", link: "/platform/matrix" },
                             { text: "Google Chat", link: "/platform/google-chat" },
-                            { text: "Facebook Messenger", link: "/platform/facebook-messenger" }
+                            { text: "Facebook Messenger", link: "/platform/facebook-messenger" },
+                            { text: "Instagram Messaging", link: "/platform/instagram" }
                         ]
                     },
                     {
@@ -126,7 +127,8 @@ const baseConfig = defineConfig({
                         { text: "Zulip", link: "/platform/zulip" },
                         { text: "Matrix", link: "/platform/matrix" },
                         { text: "Google Chat", link: "/platform/google-chat" },
-                        { text: "Facebook Messenger", link: "/platform/facebook-messenger" }
+                        { text: "Facebook Messenger", link: "/platform/facebook-messenger" },
+                        { text: "Instagram Messaging", link: "/platform/instagram" }
                     ],
                     "/protocol/": [
                         { text: "OneBot V11", link: "/protocol/onebot-v11" },
@@ -202,7 +204,8 @@ const baseConfig = defineConfig({
                             { text: "Zulip", link: "/en/platform/zulip" },
                             { text: "Matrix", link: "/en/platform/matrix" },
                             { text: "Google Chat", link: "/en/platform/google-chat" },
-                            { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" }
+                            { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" },
+                            { text: "Instagram Messaging", link: "/en/platform/instagram" }
                         ]
                     },
                     {
@@ -278,7 +281,8 @@ const baseConfig = defineConfig({
                         { text: "Zulip", link: "/en/platform/zulip" },
                         { text: "Matrix", link: "/en/platform/matrix" },
                         { text: "Google Chat", link: "/en/platform/google-chat" },
-                        { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" }
+                        { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" },
+                        { text: "Instagram Messaging", link: "/en/platform/instagram" }
                     ],
                     "/en/protocol/": [
                         { text: "OneBot V11", link: "/en/protocol/onebot-v11" },

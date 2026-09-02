@@ -106,192 +106,192 @@ flowchart LR
 <details open>
 <summary><b>OneBot v11（40 个标准 API）</b></summary>
 
-| API | <span title="钉钉">钉<br>钉</span> | <span title="Discord">D<br>i<br>s<br>c<br>o<br>r<br>d</span> | <span title="邮件">邮<br>件</span> | <span title="Messenger">M<br>e<br>s<br>s<br>e<br>n<br>g<br>e<br>r</span> | <span title="飞书">飞<br>书</span> | <span title="Google Chat">G<br>o<br>o<br>g<br>l<br>e<br>C<br>h<br>a<br>t</span> | <span title="黑盒">黑<br>盒</span> | <span title="ICQQ">I<br>C<br>Q<br>Q</span> | <span title="KOOK">K<br>O<br>O<br>K</span> | <span title="LINE">L<br>I<br>N<br>E</span> | <span title="Matrix">M<br>a<br>t<br>r<br>i<br>x</span> | <span title="QQ">Q<br>Q</span> | <span title="Slack">S<br>l<br>a<br>c<br>k</span> | <span title="Teams">T<br>e<br>a<br>m<br>s</span> | <span title="TG">T<br>G</span> | <span title="微信">微<br>信</span> | <span title="ClawBot">C<br>l<br>a<br>w<br>B<br>o<br>t</span> | <span title="企微">企<br>微</span> | <span title="企微客服">企<br>微<br>客<br>服</span> | <span title="WA">W<br>A</span> | <span title="Zulip">Z<br>u<br>l<br>i<br>p</span> |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `send_private_msg` | — | — | ✅ | ✅ | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | — | ✅ |
-| `send_group_msg` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
-| `send_msg` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `delete_msg` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ |
-| `get_msg` | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | ✅ |
-| `get_forward_msg` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `send_like` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_kick` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
-| `invite_friend_to_group` | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
-| `set_group_ban` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
-| `set_group_anonymous_ban` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_whole_ban` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_admin` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
-| `set_group_anonymous` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_card` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_name` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
-| `set_group_leave` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | — | ✅ | — | — | — | — | — | ✅ |
-| `set_group_special_title` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
-| `set_friend_add_request` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `accept_friend_request` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_add_request` | — | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
-| `get_login_info` | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ |
-| `get_stranger_info` | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | ✅ | ✅ | ◐ | ✅ |
-| `get_friend_list` | ◐ | — | — | — | ✅ | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — | — | — | — |
-| `get_group_info` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ◐ |
-| `get_group_list` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ◐ | ✅ | — | — | ✅ | — | — | — | — | — | ✅ | ◐ |
-| `get_group_member_info` | ◐ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
-| `get_group_member_list` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ | — | ✅ | ✅ |
-| `get_group_honor_info` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_cookies` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_csrf_token` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_credentials` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_record` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_image` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `can_send_image` | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `can_send_record` | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `get_status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `get_version_info` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `set_restart` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `clean_cache` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| API | <span title="钉钉">钉<br>钉</span> | <span title="Discord">D<br>i<br>s<br>c<br>o<br>r<br>d</span> | <span title="邮件">邮<br>件</span> | <span title="Messenger">M<br>e<br>s<br>s<br>e<br>n<br>g<br>e<br>r</span> | <span title="飞书">飞<br>书</span> | <span title="Google Chat">G<br>o<br>o<br>g<br>l<br>e<br>C<br>h<br>a<br>t</span> | <span title="黑盒">黑<br>盒</span> | <span title="ICQQ">I<br>C<br>Q<br>Q</span> | <span title="Instagram">I<br>n<br>s<br>t<br>a<br>g<br>r<br>a<br>m</span> | <span title="KOOK">K<br>O<br>O<br>K</span> | <span title="LINE">L<br>I<br>N<br>E</span> | <span title="Matrix">M<br>a<br>t<br>r<br>i<br>x</span> | <span title="QQ">Q<br>Q</span> | <span title="Slack">S<br>l<br>a<br>c<br>k</span> | <span title="Teams">T<br>e<br>a<br>m<br>s</span> | <span title="TG">T<br>G</span> | <span title="微信">微<br>信</span> | <span title="ClawBot">C<br>l<br>a<br>w<br>B<br>o<br>t</span> | <span title="企微">企<br>微</span> | <span title="企微客服">企<br>微<br>客<br>服</span> | <span title="WA">W<br>A</span> | <span title="Zulip">Z<br>u<br>l<br>i<br>p</span> |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `send_private_msg` | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | — | ✅ |
+| `send_group_msg` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
+| `send_msg` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `delete_msg` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ |
+| `get_msg` | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | ✅ |
+| `get_forward_msg` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `send_like` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_kick` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
+| `invite_friend_to_group` | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
+| `set_group_ban` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
+| `set_group_anonymous_ban` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_whole_ban` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_admin` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
+| `set_group_anonymous` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_card` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_name` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
+| `set_group_leave` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — | ✅ | — | — | — | — | — | ✅ |
+| `set_group_special_title` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
+| `set_friend_add_request` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `accept_friend_request` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_add_request` | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
+| `get_login_info` | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ |
+| `get_stranger_info` | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | ✅ | ✅ | ◐ | ✅ |
+| `get_friend_list` | ◐ | — | — | — | ✅ | — | — | ✅ | — | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — | — | — | — |
+| `get_group_info` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ◐ |
+| `get_group_list` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ◐ | ✅ | — | — | ✅ | — | — | — | — | — | ✅ | ◐ |
+| `get_group_member_info` | ◐ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
+| `get_group_member_list` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ | — | ✅ | ✅ |
+| `get_group_honor_info` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_cookies` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_csrf_token` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_credentials` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_record` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_image` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `can_send_image` | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `can_send_record` | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_version_info` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `set_restart` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `clean_cache` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
 </details>
 
 <details>
 <summary><b>OneBot v12（27 个标准 API）</b></summary>
 
-| API | <span title="钉钉">钉<br>钉</span> | <span title="Discord">D<br>i<br>s<br>c<br>o<br>r<br>d</span> | <span title="邮件">邮<br>件</span> | <span title="Messenger">M<br>e<br>s<br>s<br>e<br>n<br>g<br>e<br>r</span> | <span title="飞书">飞<br>书</span> | <span title="Google Chat">G<br>o<br>o<br>g<br>l<br>e<br>C<br>h<br>a<br>t</span> | <span title="黑盒">黑<br>盒</span> | <span title="ICQQ">I<br>C<br>Q<br>Q</span> | <span title="KOOK">K<br>O<br>O<br>K</span> | <span title="LINE">L<br>I<br>N<br>E</span> | <span title="Matrix">M<br>a<br>t<br>r<br>i<br>x</span> | <span title="QQ">Q<br>Q</span> | <span title="Slack">S<br>l<br>a<br>c<br>k</span> | <span title="Teams">T<br>e<br>a<br>m<br>s</span> | <span title="TG">T<br>G</span> | <span title="微信">微<br>信</span> | <span title="ClawBot">C<br>l<br>a<br>w<br>B<br>o<br>t</span> | <span title="企微">企<br>微</span> | <span title="企微客服">企<br>微<br>客<br>服</span> | <span title="WA">W<br>A</span> | <span title="Zulip">Z<br>u<br>l<br>i<br>p</span> |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `send_message` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `delete_message` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ |
-| `get_self_info` | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ |
-| `get_supported_actions` | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ |
-| `get_status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `get_version` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `get_user_info` | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | ✅ | ✅ | ◐ | ✅ |
-| `get_friend_list` | ◐ | — | — | — | ✅ | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — | — | — | — |
-| `get_group_info` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ◐ |
-| `get_group_list` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ◐ | ✅ | — | — | ✅ | — | — | — | — | — | ✅ | ◐ |
-| `get_group_member_info` | ◐ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
-| `get_group_member_list` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ | — | ✅ | ✅ |
-| `set_group_name` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
-| `leave_group` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | — | ✅ | — | — | — | — | — | ✅ |
-| `invite_friend_to_group` | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
-| `accept_friend_request` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `handle_friend_request` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `handle_group_request` | — | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
-| `get_guild_info` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `get_guild_list` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `get_guild_member_info` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `get_guild_member_list` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `get_channel_info` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| `get_channel_list` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| `set_channel_name` | — | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| `get_channel_member_info` | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — |
-| `get_channel_member_list` | — | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | — | — | — | — |
+| API | <span title="钉钉">钉<br>钉</span> | <span title="Discord">D<br>i<br>s<br>c<br>o<br>r<br>d</span> | <span title="邮件">邮<br>件</span> | <span title="Messenger">M<br>e<br>s<br>s<br>e<br>n<br>g<br>e<br>r</span> | <span title="飞书">飞<br>书</span> | <span title="Google Chat">G<br>o<br>o<br>g<br>l<br>e<br>C<br>h<br>a<br>t</span> | <span title="黑盒">黑<br>盒</span> | <span title="ICQQ">I<br>C<br>Q<br>Q</span> | <span title="Instagram">I<br>n<br>s<br>t<br>a<br>g<br>r<br>a<br>m</span> | <span title="KOOK">K<br>O<br>O<br>K</span> | <span title="LINE">L<br>I<br>N<br>E</span> | <span title="Matrix">M<br>a<br>t<br>r<br>i<br>x</span> | <span title="QQ">Q<br>Q</span> | <span title="Slack">S<br>l<br>a<br>c<br>k</span> | <span title="Teams">T<br>e<br>a<br>m<br>s</span> | <span title="TG">T<br>G</span> | <span title="微信">微<br>信</span> | <span title="ClawBot">C<br>l<br>a<br>w<br>B<br>o<br>t</span> | <span title="企微">企<br>微</span> | <span title="企微客服">企<br>微<br>客<br>服</span> | <span title="WA">W<br>A</span> | <span title="Zulip">Z<br>u<br>l<br>i<br>p</span> |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `send_message` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `delete_message` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ |
+| `get_self_info` | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ |
+| `get_supported_actions` | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ | ◆ |
+| `get_status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_version` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_user_info` | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | ✅ | ✅ | ◐ | ✅ |
+| `get_friend_list` | ◐ | — | — | — | ✅ | — | — | ✅ | — | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — | — | — | — |
+| `get_group_info` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ◐ |
+| `get_group_list` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ◐ | ✅ | — | — | ✅ | — | — | — | — | — | ✅ | ◐ |
+| `get_group_member_info` | ◐ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
+| `get_group_member_list` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ | — | ✅ | ✅ |
+| `set_group_name` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
+| `leave_group` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — | ✅ | — | — | — | — | — | ✅ |
+| `invite_friend_to_group` | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
+| `accept_friend_request` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `handle_friend_request` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `handle_group_request` | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
+| `get_guild_info` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `get_guild_list` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `get_guild_member_info` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `get_guild_member_list` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `get_channel_info` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
+| `get_channel_list` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
+| `set_channel_name` | — | ✅ | — | — | — | — | ✅ | — | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
+| `get_channel_member_info` | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — |
+| `get_channel_member_list` | — | — | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | — | — | — | — |
 
 </details>
 
 <details>
 <summary><b>Satori v1（26 个标准 API）</b></summary>
 
-| API | <span title="钉钉">钉<br>钉</span> | <span title="Discord">D<br>i<br>s<br>c<br>o<br>r<br>d</span> | <span title="邮件">邮<br>件</span> | <span title="Messenger">M<br>e<br>s<br>s<br>e<br>n<br>g<br>e<br>r</span> | <span title="飞书">飞<br>书</span> | <span title="Google Chat">G<br>o<br>o<br>g<br>l<br>e<br>C<br>h<br>a<br>t</span> | <span title="黑盒">黑<br>盒</span> | <span title="ICQQ">I<br>C<br>Q<br>Q</span> | <span title="KOOK">K<br>O<br>O<br>K</span> | <span title="LINE">L<br>I<br>N<br>E</span> | <span title="Matrix">M<br>a<br>t<br>r<br>i<br>x</span> | <span title="QQ">Q<br>Q</span> | <span title="Slack">S<br>l<br>a<br>c<br>k</span> | <span title="Teams">T<br>e<br>a<br>m<br>s</span> | <span title="TG">T<br>G</span> | <span title="微信">微<br>信</span> | <span title="ClawBot">C<br>l<br>a<br>w<br>B<br>o<br>t</span> | <span title="企微">企<br>微</span> | <span title="企微客服">企<br>微<br>客<br>服</span> | <span title="WA">W<br>A</span> | <span title="Zulip">Z<br>u<br>l<br>i<br>p</span> |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `message.create` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `message.get` | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | ✅ |
-| `message.delete` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ |
-| `message.update` | — | — | — | — | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | — | ✅ | ✅ | ✅ | — | — | — | — | — | ✅ |
-| `message.list` | — | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
-| `reaction.create` | — | — | — | — | — | ✅ | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — |
-| `reaction.delete` | — | — | — | — | — | ✅ | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — |
-| `channel.get` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| `channel.list` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| `channel.create` | — | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| `channel.update` | — | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| `channel.delete` | — | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
-| `guild.get` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `guild.list` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `guild.member.get` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `guild.member.list` | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `guild.member.kick` | — | ✅ | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `guild.member.mute` | — | — | — | — | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `user.get` | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | ✅ | ✅ | ◐ | ✅ |
-| `user.channel.create` | — | — | — | — | — | ✅ | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — |
-| `friend.list` | ◐ | — | — | — | ✅ | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — | — | — | — |
-| `friend.delete` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `friend.approve` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `guild.approve` | — | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
-| `guild.member.approve` | — | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
-| `login.get` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| API | <span title="钉钉">钉<br>钉</span> | <span title="Discord">D<br>i<br>s<br>c<br>o<br>r<br>d</span> | <span title="邮件">邮<br>件</span> | <span title="Messenger">M<br>e<br>s<br>s<br>e<br>n<br>g<br>e<br>r</span> | <span title="飞书">飞<br>书</span> | <span title="Google Chat">G<br>o<br>o<br>g<br>l<br>e<br>C<br>h<br>a<br>t</span> | <span title="黑盒">黑<br>盒</span> | <span title="ICQQ">I<br>C<br>Q<br>Q</span> | <span title="Instagram">I<br>n<br>s<br>t<br>a<br>g<br>r<br>a<br>m</span> | <span title="KOOK">K<br>O<br>O<br>K</span> | <span title="LINE">L<br>I<br>N<br>E</span> | <span title="Matrix">M<br>a<br>t<br>r<br>i<br>x</span> | <span title="QQ">Q<br>Q</span> | <span title="Slack">S<br>l<br>a<br>c<br>k</span> | <span title="Teams">T<br>e<br>a<br>m<br>s</span> | <span title="TG">T<br>G</span> | <span title="微信">微<br>信</span> | <span title="ClawBot">C<br>l<br>a<br>w<br>B<br>o<br>t</span> | <span title="企微">企<br>微</span> | <span title="企微客服">企<br>微<br>客<br>服</span> | <span title="WA">W<br>A</span> | <span title="Zulip">Z<br>u<br>l<br>i<br>p</span> |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `message.create` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `message.get` | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | ✅ |
+| `message.delete` | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ |
+| `message.update` | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | ✅ | — | ✅ | ✅ | ✅ | — | — | — | — | — | ✅ |
+| `message.list` | — | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
+| `reaction.create` | — | — | — | — | — | ✅ | — | ✅ | — | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — |
+| `reaction.delete` | — | — | — | — | — | ✅ | — | ✅ | — | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — |
+| `channel.get` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
+| `channel.list` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
+| `channel.create` | — | ✅ | — | — | — | — | ✅ | — | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
+| `channel.update` | — | ✅ | — | — | — | — | ✅ | — | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
+| `channel.delete` | — | ✅ | — | — | — | — | ✅ | — | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — |
+| `guild.get` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `guild.list` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `guild.member.get` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `guild.member.list` | — | ✅ | — | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `guild.member.kick` | — | ✅ | — | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `guild.member.mute` | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `user.get` | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | ✅ | ✅ | ◐ | ✅ |
+| `user.channel.create` | — | — | — | — | — | ✅ | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — |
+| `friend.list` | ◐ | — | — | — | ✅ | — | — | ✅ | — | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — | — | — | — |
+| `friend.delete` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `friend.approve` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `guild.approve` | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
+| `guild.member.approve` | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
+| `login.get` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 </details>
 
 <details>
 <summary><b>Milky v1（67 个标准 API）</b></summary>
 
-| API | <span title="钉钉">钉<br>钉</span> | <span title="Discord">D<br>i<br>s<br>c<br>o<br>r<br>d</span> | <span title="邮件">邮<br>件</span> | <span title="Messenger">M<br>e<br>s<br>s<br>e<br>n<br>g<br>e<br>r</span> | <span title="飞书">飞<br>书</span> | <span title="Google Chat">G<br>o<br>o<br>g<br>l<br>e<br>C<br>h<br>a<br>t</span> | <span title="黑盒">黑<br>盒</span> | <span title="ICQQ">I<br>C<br>Q<br>Q</span> | <span title="KOOK">K<br>O<br>O<br>K</span> | <span title="LINE">L<br>I<br>N<br>E</span> | <span title="Matrix">M<br>a<br>t<br>r<br>i<br>x</span> | <span title="QQ">Q<br>Q</span> | <span title="Slack">S<br>l<br>a<br>c<br>k</span> | <span title="Teams">T<br>e<br>a<br>m<br>s</span> | <span title="TG">T<br>G</span> | <span title="微信">微<br>信</span> | <span title="ClawBot">C<br>l<br>a<br>w<br>B<br>o<br>t</span> | <span title="企微">企<br>微</span> | <span title="企微客服">企<br>微<br>客<br>服</span> | <span title="WA">W<br>A</span> | <span title="Zulip">Z<br>u<br>l<br>i<br>p</span> |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `send_private_message` | — | — | ✅ | ✅ | — | ✅ | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | — | ✅ |
-| `send_group_message` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
-| `recall_private_message` | — | — | ✅ | — | ✅ | ✅ | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ |
-| `recall_group_message` | ✅ | — | ✅ | — | ✅ | ✅ | — | ✅ | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — | — | — | ✅ |
-| `get_message` | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | ✅ |
-| `get_history_messages` | — | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
-| `get_resource_temp_url` | ✅ | — | — | — | — | — | — | ◐ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_forwarded_messages` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `mark_message_as_read` | — | — | ✅ | ✅ | — | ✅ | — | ✅ | — | ✅ | ✅ | — | — | — | — | — | — | — | — | ✅ | ✅ |
-| `delete_friend` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_avatar` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_nickname` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_bio` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_custom_face_url_list` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_peer_pins` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_peer_pin` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `kick_group_member` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
-| `invite_friend_to_group` | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
-| `set_group_member_mute` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
-| `set_group_member_admin` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
-| `set_group_member_card` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_member_special_title` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
-| `set_group_name` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
-| `quit_group` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | — | ✅ | — | — | — | — | — | ✅ |
-| `send_group_nudge` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_avatar` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_whole_mute` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `send_group_announcement` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `set_group_essence_message` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `send_group_message_reaction` | — | — | — | — | — | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — | — |
-| `get_group_announcements` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `delete_group_announcement` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_group_essence_messages` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `accept_group_request` | — | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
-| `reject_group_request` | — | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
-| `accept_group_invitation` | — | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
-| `reject_group_invitation` | — | — | — | — | — | — | — | ✅ | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
-| `accept_friend_request` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `reject_friend_request` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `upload_private_file` | — | — | — | ✅ | — | ✅ | ✅ | — | — | — | ✅ | — | — | — | — | — | — | ✅ | ✅ | — | ✅ |
-| `upload_group_file` | — | — | — | — | — | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | ✅ | — | — | ✅ |
-| `get_private_file_download_url` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_group_file_download_url` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_group_files` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `move_group_file` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `rename_group_file` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `delete_group_file` | — | — | — | — | — | — | — | ✅ | — | — | — | — | ✅ | — | — | — | — | — | — | — | — |
-| `persist_group_file` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `create_group_folder` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `rename_group_folder` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `delete_group_folder` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_login_info` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `get_impl_info` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `get_status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `get_user_profile` | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | ✅ | ✅ | ◐ | ✅ |
-| `get_friend_info` | ◐ | — | — | — | ◐ | — | — | ✅ | ✅ | ✅ | — | — | ◐ | — | — | ✅ | — | — | — | — | — |
-| `get_friend_list` | ◐ | — | — | — | ✅ | — | — | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — | — | — | — |
-| `get_group_info` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ◐ |
-| `get_group_list` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ◐ | ✅ | — | — | ✅ | — | — | — | — | — | ✅ | ◐ |
-| `get_group_member_info` | ◐ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
-| `get_group_member_list` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ | — | ✅ | ✅ |
-| `get_cookies` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_csrf_token` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `send_friend_nudge` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `send_profile_like` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_friend_requests` | — | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
-| `get_group_notifications` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| API | <span title="钉钉">钉<br>钉</span> | <span title="Discord">D<br>i<br>s<br>c<br>o<br>r<br>d</span> | <span title="邮件">邮<br>件</span> | <span title="Messenger">M<br>e<br>s<br>s<br>e<br>n<br>g<br>e<br>r</span> | <span title="飞书">飞<br>书</span> | <span title="Google Chat">G<br>o<br>o<br>g<br>l<br>e<br>C<br>h<br>a<br>t</span> | <span title="黑盒">黑<br>盒</span> | <span title="ICQQ">I<br>C<br>Q<br>Q</span> | <span title="Instagram">I<br>n<br>s<br>t<br>a<br>g<br>r<br>a<br>m</span> | <span title="KOOK">K<br>O<br>O<br>K</span> | <span title="LINE">L<br>I<br>N<br>E</span> | <span title="Matrix">M<br>a<br>t<br>r<br>i<br>x</span> | <span title="QQ">Q<br>Q</span> | <span title="Slack">S<br>l<br>a<br>c<br>k</span> | <span title="Teams">T<br>e<br>a<br>m<br>s</span> | <span title="TG">T<br>G</span> | <span title="微信">微<br>信</span> | <span title="ClawBot">C<br>l<br>a<br>w<br>B<br>o<br>t</span> | <span title="企微">企<br>微</span> | <span title="企微客服">企<br>微<br>客<br>服</span> | <span title="WA">W<br>A</span> | <span title="Zulip">Z<br>u<br>l<br>i<br>p</span> |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `send_private_message` | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | — | ✅ |
+| `send_group_message` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
+| `recall_private_message` | — | — | ✅ | — | ✅ | ✅ | — | — | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | — | — | ✅ |
+| `recall_group_message` | ✅ | — | ✅ | — | ✅ | ✅ | — | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | — | — | — | — | ✅ |
+| `get_message` | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | — | — | — | — | — | — | — | ✅ |
+| `get_history_messages` | — | ✅ | ✅ | ✅ | — | ✅ | — | ✅ | ✅ | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
+| `get_resource_temp_url` | ✅ | — | — | — | — | — | — | ◐ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_forwarded_messages` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `mark_message_as_read` | — | — | ✅ | ✅ | — | ✅ | — | ✅ | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | ✅ | ✅ |
+| `delete_friend` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_avatar` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_nickname` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_bio` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_custom_face_url_list` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_peer_pins` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_peer_pin` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `kick_group_member` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
+| `invite_friend_to_group` | ✅ | — | — | — | — | ✅ | — | ✅ | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | ✅ |
+| `set_group_member_mute` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
+| `set_group_member_admin` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
+| `set_group_member_card` | — | — | — | — | — | — | ✅ | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_member_special_title` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — |
+| `set_group_name` | ✅ | — | — | — | ✅ | ✅ | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | ✅ |
+| `quit_group` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | — | ✅ | — | — | — | — | — | ✅ |
+| `send_group_nudge` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_avatar` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_whole_mute` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `send_group_announcement` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `set_group_essence_message` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `send_group_message_reaction` | — | — | — | — | — | ✅ | — | ✅ | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — |
+| `get_group_announcements` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `delete_group_announcement` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_group_essence_messages` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `accept_group_request` | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
+| `reject_group_request` | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
+| `accept_group_invitation` | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
+| `reject_group_invitation` | — | — | — | — | — | — | — | ✅ | — | — | — | ✅ | — | — | — | ✅ | — | — | — | — | ✅ | — |
+| `accept_friend_request` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `reject_friend_request` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `upload_private_file` | — | — | — | ✅ | — | ✅ | ✅ | — | ✅ | — | — | ✅ | — | — | — | — | — | — | ✅ | ✅ | — | ✅ |
+| `upload_group_file` | — | — | — | — | — | ✅ | ✅ | ✅ | — | — | — | ✅ | ✅ | — | — | — | — | — | ✅ | — | — | ✅ |
+| `get_private_file_download_url` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_group_file_download_url` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_group_files` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `move_group_file` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `rename_group_file` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `delete_group_file` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — |
+| `persist_group_file` | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `create_group_folder` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `rename_group_folder` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `delete_group_folder` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_login_info` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_impl_info` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_status` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `get_user_profile` | ✅ | ✅ | ◐ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | — | — | ✅ | — | ✅ | ✅ | ◐ | ✅ |
+| `get_friend_info` | ◐ | — | — | — | ◐ | — | — | ✅ | — | ✅ | ✅ | — | — | ◐ | — | — | ✅ | — | — | — | — | — |
+| `get_friend_list` | ◐ | — | — | — | ✅ | — | — | ✅ | — | ✅ | ✅ | — | — | ✅ | — | — | ✅ | — | — | — | — | — |
+| `get_group_info` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | ✅ | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ◐ |
+| `get_group_list` | — | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ◐ | ✅ | — | — | ✅ | — | — | — | — | — | ✅ | ◐ |
+| `get_group_member_info` | ◐ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | — | ✅ | ✅ |
+| `get_group_member_list` | ✅ | — | — | — | ✅ | ✅ | ✅ | ✅ | — | — | ✅ | ✅ | — | — | ✅ | — | — | — | ✅ | — | ✅ | ✅ |
+| `get_cookies` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_csrf_token` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `send_friend_nudge` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `send_profile_like` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_friend_requests` | — | — | — | — | — | — | — | ✅ | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — |
+| `get_group_notifications` | — | — | — | — | — | — | — | ✅ | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
 </details>
 
@@ -430,17 +430,17 @@ pnpm add imhelper @imhelper/onebot-v11
 
 **平台（节选）**
 
-| 平台                           | 包                                                         |
-| ------------------------------ | ---------------------------------------------------------- |
-| QQ 官方机器人                  | `@onebots/adapter-qq`                                      |
-| ICQQ                           | `@onebots/adapter-icqq`（私有源配置见文档）                |
-| Kook                           | `@onebots/adapter-kook`                                    |
-| 黑盒语音                       | `@onebots/adapter-heychat`                                 |
-| 微信公众号                     | `@onebots/adapter-wechat`                                  |
-| Discord / Telegram / Slack / … | `@onebots/adapter-discord` 等                              |
-| 飞书 / 钉钉 / 企业微信         | `@onebots/adapter-feishu` 等                               |
-| Matrix / Google Chat           | `@onebots/adapter-matrix` / `@onebots/adapter-google-chat` |
-| Facebook Messenger             | `@onebots/adapter-facebook-messenger`                      |
+| 平台                           | 包                                                                   |
+| ------------------------------ | -------------------------------------------------------------------- |
+| QQ 官方机器人                  | `@onebots/adapter-qq`                                                |
+| ICQQ                           | `@onebots/adapter-icqq`（私有源配置见文档）                          |
+| Kook                           | `@onebots/adapter-kook`                                              |
+| 黑盒语音                       | `@onebots/adapter-heychat`                                           |
+| 微信公众号                     | `@onebots/adapter-wechat`                                            |
+| Discord / Telegram / Slack / … | `@onebots/adapter-discord` 等                                        |
+| 飞书 / 钉钉 / 企业微信         | `@onebots/adapter-feishu` 等                                         |
+| Matrix / Google Chat           | `@onebots/adapter-matrix` / `@onebots/adapter-google-chat`           |
+| Facebook Messenger / Instagram | `@onebots/adapter-facebook-messenger` / `@onebots/adapter-instagram` |
 
 完整列表见 **仓库目录 [`adapters/`](./adapters/)** 与 **[文档](https://onebots.pages.dev)**。
 

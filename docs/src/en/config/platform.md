@@ -179,6 +179,7 @@ For configuration details of other platforms, see:
 - [Matrix Platform](/en/platform/matrix)
 - [Google Chat Platform](/en/platform/google-chat)
 - [Facebook Messenger Platform](/en/platform/facebook-messenger)
+- [Instagram Messaging Platform](/en/platform/instagram)
 
 ## Related Links
 

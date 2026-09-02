@@ -27,6 +27,7 @@ onebots currently supports the following platform adapters:
 | **Matrix** | ✅ Implemented | `@onebots/adapter-matrix` | Client-Server API, AppService, and manual ingress |
 | **Google Chat** | ✅ Implemented | `@onebots/adapter-google-chat` | Interaction HTTPS, Workspace Events, and manual ingress |
 | **Facebook Messenger** | ✅ Implemented | `@onebots/adapter-facebook-messenger` | Messenger Platform, Graph API, webhook, and manual ingress |
+| **Instagram Messaging** | ✅ Implemented | `@onebots/adapter-instagram` | Instagram Login, Messaging, Graph API, webhook, and manual ingress |
 
 ## Capability manifests
 
@@ -107,6 +108,7 @@ Plugin import and contract verification run as one serialized registry transacti
 - [Matrix Adapter Documentation](/en/platform/matrix)
 - [Google Chat Adapter Documentation](/en/platform/google-chat)
 - [Facebook Messenger Adapter Documentation](/en/platform/facebook-messenger)
+- [Instagram Messaging Adapter Documentation](/en/platform/instagram)
 
 ## Installation
 

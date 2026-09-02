@@ -75,6 +75,34 @@ const genericSetup: ExtensionSetupStep[] = [
 
 export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
     adapter(
+        "instagram",
+        "Instagram Messaging",
+        "连接 Instagram Login、Messaging、Graph API、Webhook 与已有事件入口。",
+        [
+            {
+                title: "创建 Meta App 与 Instagram 身份",
+                description:
+                    "启用 Business Login for Instagram，准备 Professional Account ID、Instagram User Access Token、App Secret 与 Verify Token。",
+                url: "https://www.postman.com/meta/instagram/overview",
+            },
+            {
+                title: "选择 Webhook 或已有入口",
+                description:
+                    "Webhook 使用公开 HTTPS callback 并保留精确 raw body；已有 Host、队列或 consumer 选择 manual。",
+            },
+            {
+                title: "配置订阅和权限",
+                description:
+                    "Web 表单可动态增减 webhook fields、事件与当前 permissions，并实时收敛账号能力。",
+            },
+            {
+                title: "核对平台限制",
+                description:
+                    "Instagram Messaging 仅支持 direct；Human Agent 与评论私信分别遵守审核、用途和消息窗口限制。",
+            },
+        ],
+    ),
+    adapter(
         "facebook-messenger",
         "Facebook Messenger",
         "连接 Messenger Platform、Graph API、Webhook 与已有事件入口。",

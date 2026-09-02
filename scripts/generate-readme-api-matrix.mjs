@@ -22,6 +22,7 @@ const platformLabels = {
     email: "邮件",
     feishu: "飞书",
     "facebook-messenger": "Messenger",
+    instagram: "Instagram",
     "google-chat": "Google Chat",
     heychat: "黑盒",
     icqq: "ICQQ",

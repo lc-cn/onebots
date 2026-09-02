@@ -25,6 +25,9 @@
     "@onebots/adapter-icqq": {
       "version": "3.0.8"
     },
+    "@onebots/adapter-instagram": {
+      "version": "0.1.0"
+    },
     "@onebots/adapter-kook": {
       "version": "3.0.8"
     },
@@ -3386,6 +3389,346 @@
           "native": {
             "support": "native",
             "mode": "native"
+          }
+        }
+      }
+    },
+    "instagram": {
+      "packageName": "@onebots/adapter-instagram",
+      "packageVersion": "0.1.0",
+      "manifest": {
+        "version": 1,
+        "actions": {
+          "send_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束",
+            "scenes": [
+              "direct"
+            ]
+          },
+          "get_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "Requests 文件夹中 30 天未活跃会话不会返回；单次最多读取最近 20 条消息详情",
+            "scenes": [
+              "direct"
+            ]
+          },
+          "get_message_history": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "Requests 文件夹中 30 天未活跃会话不会返回；单次最多读取最近 20 条消息详情",
+            "scenes": [
+              "direct"
+            ]
+          },
+          "get_login_info": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_basic"
+            ]
+          },
+          "get_user_info": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_basic",
+              "instagram_business_manage_messages"
+            ]
+          },
+          "upload_file": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束",
+            "scenes": [
+              "direct"
+            ]
+          },
+          "can_send_image": {
+            "support": "native"
+          },
+          "can_send_record": {
+            "support": "native"
+          },
+          "get_version": {
+            "support": "native"
+          },
+          "get_status": {
+            "support": "native"
+          },
+          "get_supported_actions": {
+            "support": "native"
+          },
+          "call_instagram_api": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Graph edge 要求的 permission"
+            ]
+          },
+          "send_instagram_native": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "send_instagram_human_agent": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages",
+              "Human Agent"
+            ],
+            "note": "仅限 7 天内由真实人工客服发送，不得用于自动化或无关内容"
+          },
+          "send_instagram_private_reply": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages",
+              "instagram_business_manage_comments"
+            ],
+            "note": "每条评论只能私信回复一次，须在评论后 7 天内发送"
+          },
+          "react_instagram_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "send_instagram_media_share": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "send_instagram_like_heart": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "list_instagram_conversations": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "Requests 文件夹中 30 天未活跃会话不会返回；单次最多读取最近 20 条消息详情"
+          },
+          "find_instagram_conversation": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "Requests 文件夹中 30 天未活跃会话不会返回；单次最多读取最近 20 条消息详情"
+          },
+          "get_instagram_conversation": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "Requests 文件夹中 30 天未活跃会话不会返回；单次最多读取最近 20 条消息详情"
+          },
+          "get_instagram_messenger_profile": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "set_instagram_messenger_profile": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "delete_instagram_messenger_profile": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "upload_instagram_attachment": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "subscribe_instagram_webhooks": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "get_instagram_subscribed_apps": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "delete_instagram_webhook_subscription": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "list_instagram_welcome_message_flows": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "create_instagram_welcome_message_flow": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "update_instagram_welcome_message_flow": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          },
+          "delete_instagram_welcome_message_flow": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "instagram_business_manage_messages"
+            ],
+            "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束"
+          }
+        },
+        "events": {
+          "message": {
+            "support": "native",
+            "scenes": [
+              "direct"
+            ]
+          },
+          "message_deleted": {
+            "support": "native"
+          },
+          "message_updated": {
+            "support": "native"
+          },
+          "message_status": {
+            "support": "native"
+          },
+          "reaction_added": {
+            "support": "native"
+          },
+          "reaction_removed": {
+            "support": "native"
+          },
+          "interaction": {
+            "support": "native"
+          },
+          "custom": {
+            "support": "native",
+            "note": "unsupported message、referral、opt-in、handover、standby、comment 与其他 field/value 原样保留"
+          }
+        },
+        "segments": {
+          "text": {
+            "support": "native",
+            "direction": "both"
+          },
+          "reply": {
+            "support": "native",
+            "direction": "both"
+          },
+          "image": {
+            "support": "native",
+            "direction": "both"
+          },
+          "video": {
+            "support": "native",
+            "direction": "both"
+          },
+          "audio": {
+            "support": "native",
+            "direction": "both"
+          },
+          "instagram_quick_replies": {
+            "support": "native",
+            "direction": "send"
+          },
+          "instagram_quick_reply": {
+            "support": "native",
+            "direction": "receive"
+          },
+          "instagram_referral": {
+            "support": "native",
+            "direction": "receive"
+          },
+          "instagram_reply_context": {
+            "support": "native",
+            "direction": "receive"
+          },
+          "instagram": {
+            "support": "native",
+            "direction": "send"
+          },
+          "instagram_attachment": {
+            "support": "native",
+            "direction": "receive"
+          }
+        },
+        "transports": {
+          "webhook": {
+            "support": "native",
+            "mode": "webhook",
+            "note": "GET challenge、精确 raw-body SHA256、batch 展开与可靠去重"
+          },
+          "manual": {
+            "support": "native",
+            "mode": "native",
+            "note": "ingest(rawEvent) 与已有 Host 共用 Client 和事件投影"
           }
         }
       }
