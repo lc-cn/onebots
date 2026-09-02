@@ -1,42 +1,57 @@
 # Walle
 
-Walle is now an activatable OneBots Application with the `experimental` stage. It publishes connection metadata, limitations, and the `get_walle_application_info` compatibility action for matching `onebot.v12` protocol instances.
+## API compatibility
 
-## Start
+- Protocol: `onebot.v12`
+- Transport: `websocket` (the framework connects to OneBots)
+- The Application does not invent framework-specific actions. Standard actions stay in the protocol; platform-specific actions are forwarded only when the selected Adapter exposes them.
+- `-t walle` loads compatibility behavior only. It does not enable a transport or edit account configuration.
+
+## Generate both configurations
 
 ```bash
-onebots -r <adapter> -p onebot-v12 -t walle -c config.yaml
+onebots frameworks --framework walle --account <platform.account_id>
 ```
 
-Or persist the selection:
+For separate hosts, add `--origin http://<onebots-host>:6727`. The output contains the exact OneBots YAML, Walle configuration, endpoint, and checks.
+
+## Configure OneBots
 
 ```yaml
 plugins:
   adapters: [<adapter>]
   protocols: [onebot-v12]
   applications: [walle]
+
+<platform>.<account_id>:
+  account_id: <account_id>
+  # Add the Adapter credentials documented for the platform.
+  onebot.v12:
+    use_http: false
+    use_ws: true
+    access_token: <shared-token>
 ```
 
-## Runtime capability
+```bash
+onebots -r <adapter> -p onebot-v12 -t walle -c config.yaml
+```
 
-| Item | Current value |
-| --- | --- |
-| Application | `walle` |
-| Stage | `experimental` |
-| Protocol | `onebot.v12` |
-| Transport | `websocket` |
-| Extension action | `get_walle_application_info` |
-| Verification | `documented` |
-| Upstream | [Walle](https://github.com/onebot-walle/walle) |
+Copy the generated “Walle configuration” into the framework project. Keep the protocol, endpoint, and token identical on both sides. In containers, use a reachable service name instead of `127.0.0.1` for another container.
 
-Use `GET /api/applications` to inspect effective per-account protocol capabilities. Generate a redacted connection template with:
+## Verify and repair
 
 ```bash
+onebots doctor -c config.yaml
 onebots frameworks --framework walle --account <platform.account_id>
 ```
 
-## Boundaries
+| Symptom | Fix |
+| --- | --- |
+| plugin load failure | Install the named package and check the `-r/-p/-t` names |
+| refused connection / 404 | Fix host, port, account path; for forward WS explicitly set `use_ws: true` |
+| reverse WS absent | Start the framework listener first and correct `ws_reverse_url` |
+| 401 | Make both tokens identical and remove stale environment overrides |
+| `Unknown action` | Check required/missing actions and Adapter capabilities; disable the dependent plugin or implement a real Application conversion |
+| connected without events | Repair account login, platform subscriptions/permissions, and event filters |
 
-Only the OneBot 12 WebSocket application side is declared; HTTP/WebHook and the complete action matrix are unverified.
-
-This stage can be activated with `-t`, but it will not become `available` until pinned-version interoperability passes.
+See the [framework troubleshooting guide](/en/solution/troubleshooting) for command-level diagnosis.

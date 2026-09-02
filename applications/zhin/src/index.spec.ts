@@ -1,41 +1,25 @@
-import { EventEmitter } from "node:events";
-import { describe, expect, it, vi } from "vitest";
-import type { Protocol, WsServer } from "onebots";
+import { describe, expect, it } from "vitest";
+import type { Protocol } from "onebots";
 import { zhinApplication } from "./index.js";
 
 describe("Zhin Application", () => {
-    it("为 OneBot 11 增加专用路由、能力动作和生命周期", async () => {
-        const server = Object.assign(new EventEmitter(), { close: vi.fn() }) as unknown as WsServer;
-        const protocol = {
+    it("只声明标准 API 依赖，不增加动作、路由或生命周期钩子", () => {
+        const extension = zhinApplication.createProtocolExtension({
             name: "onebot",
             version: "v11",
             path: "/mock/main/onebot/v11",
-            router: { ws: vi.fn(() => server) },
-            logger: { info: vi.fn(), error: vi.fn() },
-        } as unknown as Protocol;
-        const extension = zhinApplication.createProtocolExtension(protocol);
-        expect(extension?.capability).toMatchObject({
-            routes: ["/mock/main/onebot/v11/applications/zhin"],
-            actions: expect.arrayContaining(["get_zhin_application_info"]),
-        });
+        } as Protocol)!;
 
-        const next = vi.fn(async () => undefined);
-        await extension?.start?.({ protocol, next });
-        expect(next).toHaveBeenCalledOnce();
-        expect(protocol.router.ws).toHaveBeenCalledWith("/mock/main/onebot/v11/applications/zhin");
-
-        const result = await extension?.apply?.({
-            protocol,
-            action: "get_zhin_application_info",
-            next: vi.fn(),
+        expect(extension.capability).toMatchObject({
+            actions: [],
+            requiredActions: ["get_login_info", "send_private_msg"],
+            unsupportedActions: [],
+            routes: [],
+            connections: [{ endpoint: "/mock/main/onebot/v11" }],
         });
-        expect(result).toMatchObject({
-            status: "ok",
-            data: { application: "zhin", protocol: "onebot.v11" },
-        });
-
-        await extension?.stop?.({ protocol, next });
-        expect(server.close).toHaveBeenCalledOnce();
+        expect(extension.start).toBeUndefined();
+        expect(extension.stop).toBeUndefined();
+        expect(extension.apply).toBeUndefined();
     });
 
     it("对其他协议返回未支持", () => {

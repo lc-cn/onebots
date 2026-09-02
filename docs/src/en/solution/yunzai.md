@@ -1,35 +1,59 @@
 # 云崽 / TRSS-Yunzai
 
-云崽 / TRSS-Yunzai is available through the OneBots Application runtime. Activate it with `-t yunzai`; the Application is applied to every protocol instance and publishes its connections, actions, routes, and limitations.
+## API compatibility
 
-## Start
+- Protocol: `onebot.v11`
+- Transport: `reverse-websocket` (OneBots connects to the framework WebSocket server)
+- The Application does not invent framework-specific actions. Standard actions stay in the protocol; platform-specific actions are forwarded only when the selected Adapter exposes them.
+- `-t yunzai` loads compatibility behavior only. It does not enable a transport or edit account configuration.
+
+## Generate both configurations
 
 ```bash
-onebots -r <adapter> -p onebot-v11 -t yunzai -c config.yaml
+onebots frameworks --framework yunzai --account <platform.account_id>
 ```
 
-Persist the same selection with:
+For separate hosts, add `--origin http://<onebots-host>:6727` and `--framework_origin http://<framework-host>:<port>`. The output contains the exact OneBots YAML, 云崽 / TRSS-Yunzai configuration, endpoint, and checks.
+
+## Configure OneBots
 
 ```yaml
 plugins:
   adapters: [<adapter>]
   protocols: [onebot-v11]
   applications: [yunzai]
+
+<platform>.<account_id>:
+  account_id: <account_id>
+  # Add the Adapter credentials documented for the platform.
+  onebot.v11:
+    use_http: false
+    use_ws: false
+    use_ws_reverse: true
+    ws_reverse_url: <framework-websocket-url>
+    access_token: <shared-token>
 ```
 
-## Connection capability
+```bash
+onebots -r <adapter> -p onebot-v11 -t yunzai -c config.yaml
+```
 
-| Item | Current value |
+Copy the generated “云崽 / TRSS-Yunzai configuration” into the framework project. Keep the protocol, endpoint, and token identical on both sides. In containers, use a reachable service name instead of `127.0.0.1` for another container.
+
+## Verify and repair
+
+```bash
+onebots doctor -c config.yaml
+onebots frameworks --framework yunzai --account <platform.account_id>
+```
+
+| Symptom | Fix |
 | --- | --- |
-| Application | `yunzai` |
-| Protocol | `onebot.v11` |
-| Transport | `reverse-websocket` |
-| Pinned gate | `source audit 2d1652ac` |
+| plugin load failure | Install the named package and check the `-r/-p/-t` names |
+| refused connection / 404 | Fix host, port, account path; for forward WS explicitly set `use_ws: true` |
+| reverse WS absent | Start the framework listener first and correct `ws_reverse_url` |
+| 401 | Make both tokens identical and remove stale environment overrides |
+| `Unknown action` | Check required/missing actions and Adapter capabilities; disable the dependent plugin or implement a real Application conversion |
+| connected without events | Repair account login, platform subscriptions/permissions, and event filters |
 
-Query `GET /api/applications` for runtime state. Registered protocols other than `onebot.v11` are reported as `unsupported` rather than being presented as compatible.
-
-## Limitations
-
-The Yunzai audit still has 28 unsupported private actions around files, notices, guilds, and QQ profiles.
-
-See the [framework overview](/en/solution/frameworks) for generated configuration and audit evidence.
+See the [framework troubleshooting guide](/en/solution/troubleshooting) for command-level diagnosis.

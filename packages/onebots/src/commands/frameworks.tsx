@@ -9,12 +9,15 @@ export const options = z.object({
         .string()
         .optional()
         .describe(option({ description: "目标机器人框架", valueDescription: "name" })),
-    register: z.array(z.string()).describe(
-        option({
-            description: "动态加载框架方案（可重复）",
-            valueDescription: "name-or-package",
-        }),
-    ),
+    register: z
+        .array(z.string())
+        .default([])
+        .describe(
+            option({
+                description: "动态加载框架方案（可重复）",
+                valueDescription: "name-or-package",
+            }),
+        ),
     account: z
         .string()
         .optional()

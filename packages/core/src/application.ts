@@ -18,6 +18,10 @@ export interface ApplicationProtocolCapability {
     status: ApplicationSupportStatus;
     connections: readonly ApplicationConnection[];
     actions: readonly string[];
+    /** 框架正常工作时会调用、但并非由 Application 新增的协议或平台动作。 */
+    requiredActions?: readonly string[];
+    /** 已确认无法由当前协议或平台适配器提供的框架动作。 */
+    unsupportedActions?: readonly string[];
     routes: readonly string[];
     limitations: readonly string[];
 }
@@ -214,6 +218,8 @@ export class ApplicationRegistry {
                         status: "unsupported",
                         connections: [],
                         actions: [],
+                        requiredActions: [],
+                        unsupportedActions: [],
                         routes: [],
                         limitations: [
                             ...(definition.unsupportedProtocol?.(protocol) ?? [
@@ -402,6 +408,8 @@ function freezeCapability(
             capability.connections.map(connection => Object.freeze({ ...connection })),
         ),
         actions: Object.freeze([...capability.actions]),
+        requiredActions: Object.freeze([...(capability.requiredActions ?? [])]),
+        unsupportedActions: Object.freeze([...(capability.unsupportedActions ?? [])]),
         routes: Object.freeze([...capability.routes]),
         limitations: Object.freeze([...capability.limitations]),
     });

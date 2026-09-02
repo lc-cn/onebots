@@ -1,42 +1,57 @@
 # Shiro
 
-Shiro is now an activatable OneBots Application with the `experimental` stage. It publishes connection metadata, limitations, and the `get_shiro_application_info` compatibility action for matching `onebot.v11` protocol instances.
+## API compatibility
 
-## Start
+- Protocol: `onebot.v11`
+- Transport: `websocket` (the framework connects to OneBots)
+- The Application does not invent framework-specific actions. Standard actions stay in the protocol; platform-specific actions are forwarded only when the selected Adapter exposes them.
+- `-t shiro` loads compatibility behavior only. It does not enable a transport or edit account configuration.
+
+## Generate both configurations
 
 ```bash
-onebots -r <adapter> -p onebot-v11 -t shiro -c config.yaml
+onebots frameworks --framework shiro --account <platform.account_id>
 ```
 
-Or persist the selection:
+For separate hosts, add `--origin http://<onebots-host>:6727`. The output contains the exact OneBots YAML, Shiro configuration, endpoint, and checks.
+
+## Configure OneBots
 
 ```yaml
 plugins:
   adapters: [<adapter>]
   protocols: [onebot-v11]
   applications: [shiro]
+
+<platform>.<account_id>:
+  account_id: <account_id>
+  # Add the Adapter credentials documented for the platform.
+  onebot.v11:
+    use_http: false
+    use_ws: true
+    access_token: <shared-token>
 ```
 
-## Runtime capability
+```bash
+onebots -r <adapter> -p onebot-v11 -t shiro -c config.yaml
+```
 
-| Item | Current value |
-| --- | --- |
-| Application | `shiro` |
-| Stage | `experimental` |
-| Protocol | `onebot.v11` |
-| Transport | `websocket` |
-| Extension action | `get_shiro_application_info` |
-| Verification | `documented` |
-| Upstream | [Shiro](https://github.com/MisakaTAT/Shiro) |
+Copy the generated “Shiro configuration” into the framework project. Keep the protocol, endpoint, and token identical on both sides. In containers, use a reachable service name instead of `127.0.0.1` for another container.
 
-Use `GET /api/applications` to inspect effective per-account protocol capabilities. Generate a redacted connection template with:
+## Verify and repair
 
 ```bash
+onebots doctor -c config.yaml
 onebots frameworks --framework shiro --account <platform.account_id>
 ```
 
-## Boundaries
+| Symptom | Fix |
+| --- | --- |
+| plugin load failure | Install the named package and check the `-r/-p/-t` names |
+| refused connection / 404 | Fix host, port, account path; for forward WS explicitly set `use_ws: true` |
+| reverse WS absent | Start the framework listener first and correct `ws_reverse_url` |
+| 401 | Make both tokens identical and remove stale environment overrides |
+| `Unknown action` | Check required/missing actions and Adapter capabilities; disable the dependent plugin or implement a real Application conversion |
+| connected without events | Repair account login, platform subscriptions/permissions, and event filters |
 
-No Spring Boot starter version is pinned yet; the current gate covers protocol identity, connection metadata, and compatibility actions.
-
-This stage can be activated with `-t`, but it will not become `available` until pinned-version interoperability passes.
+See the [framework troubleshooting guide](/en/solution/troubleshooting) for command-level diagnosis.

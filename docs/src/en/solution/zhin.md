@@ -1,46 +1,57 @@
 # Zhin
 
-Zhin is available through the OneBots Application runtime. Activate it with `-t zhin`; the Application is applied to every protocol instance and publishes its connections, actions, routes, and limitations.
+## API compatibility
 
-## Start
+- Protocol: `onebot.v11`
+- Transport: `websocket` (the framework connects to OneBots)
+- The Application does not invent framework-specific actions. Standard actions stay in the protocol; platform-specific actions are forwarded only when the selected Adapter exposes them.
+- `-t zhin` loads compatibility behavior only. It does not enable a transport or edit account configuration.
+
+## Generate both configurations
 
 ```bash
-onebots -r <adapter> -p onebot-v11 -t zhin -c config.yaml
+onebots frameworks --framework zhin --account <platform.account_id>
 ```
 
-Persist the same selection with:
+For separate hosts, add `--origin http://<onebots-host>:6727`. The output contains the exact OneBots YAML, Zhin configuration, endpoint, and checks.
+
+## Configure OneBots
 
 ```yaml
 plugins:
   adapters: [<adapter>]
   protocols: [onebot-v11]
   applications: [zhin]
+
+<platform>.<account_id>:
+  account_id: <account_id>
+  # Add the Adapter credentials documented for the platform.
+  onebot.v11:
+    use_http: false
+    use_ws: true
+    access_token: <shared-token>
 ```
 
-## Connection capability
+```bash
+onebots -r <adapter> -p onebot-v11 -t zhin -c config.yaml
+```
 
-| Item | Current value |
+Copy the generated “Zhin configuration” into the framework project. Keep the protocol, endpoint, and token identical on both sides. In containers, use a reachable service name instead of `127.0.0.1` for another container.
+
+## Verify and repair
+
+```bash
+onebots doctor -c config.yaml
+onebots frameworks --framework zhin --account <platform.account_id>
+```
+
+| Symptom | Fix |
 | --- | --- |
-| Application | `zhin` |
-| Protocol | `onebot.v11` |
-| Transport | `websocket` |
-| Pinned gate | `6.0.15 / adapter 7.0.8` |
+| plugin load failure | Install the named package and check the `-r/-p/-t` names |
+| refused connection / 404 | Fix host, port, account path; for forward WS explicitly set `use_ws: true` |
+| reverse WS absent | Start the framework listener first and correct `ws_reverse_url` |
+| 401 | Make both tokens identical and remove stale environment overrides |
+| `Unknown action` | Check required/missing actions and Adapter capabilities; disable the dependent plugin or implement a real Application conversion |
+| connected without events | Repair account login, platform subscriptions/permissions, and event filters |
 
-Query `GET /api/applications` for runtime state. Registered protocols other than `onebot.v11` are reported as `unsupported` rather than being presented as compatible.
-
-## Zhin-specific extension
-
-`@onebots/application-zhin` is an independent npm package. For every OneBot 11 protocol instance it adds:
-
-- a dedicated `/<platform>/<account>/onebot/v11/applications/zhin` forward WebSocket;
-- the `get_zhin_application_info` extension action;
-- token validation, lifecycle events, action calls, and event delivery;
-- connection and action capabilities exposed by the management API.
-
-The dedicated route starts with `-t zhin` even when the base protocol's `use_ws` option is `false`.
-
-## Limitations
-
-The current gate covers handshake, private messages, and basic identity/send actions. Group, rich-media, and reconnect matrices remain incomplete.
-
-See the [framework overview](/en/solution/frameworks) for generated configuration and audit evidence.
+See the [framework troubleshooting guide](/en/solution/troubleshooting) for command-level diagnosis.

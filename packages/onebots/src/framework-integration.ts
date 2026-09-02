@@ -774,13 +774,14 @@ function renderOnebotsConfig(
     accountKey: string,
     endpoint: string,
 ): string {
-    const protocolConfig: Record<string, unknown> = { access_token: SHARED_TOKEN };
+    const credentialKey = profile.protocol === "satori.v1" ? "token" : "access_token";
+    const protocolConfig: Record<string, unknown> = { [credentialKey]: SHARED_TOKEN };
     if (profile.transport === "reverse-websocket") {
         protocolConfig.use_http = false;
         protocolConfig.use_ws = false;
         protocolConfig.ws_reverse = [endpoint];
     } else {
-        protocolConfig.use_http = true;
+        protocolConfig.use_http = ["satori.v1", "milky.v1"].includes(profile.protocol);
         protocolConfig.use_ws = true;
     }
     return yaml.dump({ [accountKey]: { [profile.protocol]: protocolConfig } }, { noRefs: true });
@@ -1120,7 +1121,6 @@ for (const profile of ECOSYSTEM_PROFILES) {
 }
 
 export function createProfileApplication(profile: FrameworkProfile) {
-    const infoAction = `get_${profile.id.replace(/-/gu, "_")}_application_info`;
     return defineApplication({
         name: profile.id,
         displayName: profile.displayName,
@@ -1152,23 +1152,11 @@ export function createProfileApplication(profile: FrameworkProfile) {
                             description: `${profile.displayName} 使用 ${profile.protocol} 的 ${profile.transport} 连接。`,
                         },
                     ],
-                    actions: [...new Set([...actions, infoAction])],
-                    routes: direction === "onebots-listens" ? [protocol.path] : [],
+                    actions: [],
+                    requiredActions: [...new Set(actions)],
+                    unsupportedActions: [...(profile.distributionAudit?.unsupportedActions ?? [])],
+                    routes: [],
                     limitations: [...profile.limitations],
-                },
-                async apply({ action, next }) {
-                    if (action !== infoAction) return next();
-                    return {
-                        status: "ok",
-                        retcode: 0,
-                        data: {
-                            application: profile.id,
-                            stage: profile.applicationStage ?? "available",
-                            protocol: profile.protocol,
-                            transport: profile.transport,
-                            verification: profile.verification,
-                        },
-                    };
                 },
             };
         },

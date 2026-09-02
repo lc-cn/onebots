@@ -52,7 +52,7 @@ try {
         [path.join(ROOT, "interop/zhin/app.mjs")],
         {
             ONEBOTS_INTEROP_ZHIN_RUNTIME: RUNTIME,
-            ONEBOTS_INTEROP_ENDPOINT: `ws://127.0.0.1:${gatewayPort}/mock/interop/onebot/v11/applications/zhin`,
+            ONEBOTS_INTEROP_ENDPOINT: `ws://127.0.0.1:${gatewayPort}/mock/interop/onebot/v11`,
             ONEBOTS_INTEROP_TOKEN: TOKEN,
             ONEBOTS_INTEROP_EVIDENCE: evidencePath,
         },
@@ -101,13 +101,13 @@ function prepareWorkspacePlugins() {
 }
 
 function renderConfig(port) {
-    return `port: ${port}\nlog_level: error\naccess_token: management-token\nmock.interop:\n  account_id: interop\n  latency: 0\n  auto_events: true\n  event_interval: 100\n  auto_event_types: [private_message]\n  onebot.v11:\n    use_http: false\n    use_ws: false\n    access_token: ${TOKEN}\n`;
+    return `port: ${port}\nlog_level: error\naccess_token: management-token\nmock.interop:\n  account_id: interop\n  latency: 0\n  auto_events: true\n  event_interval: 100\n  auto_event_types: [private_message]\n  onebot.v11:\n    use_http: false\n    use_ws: true\n    access_token: ${TOKEN}\n`;
 }
 
 function assertWrongTokenRejected(port) {
     return new Promise((resolve, reject) => {
         const socket = new WebSocket(
-            `ws://127.0.0.1:${port}/mock/interop/onebot/v11/applications/zhin?access_token=wrong-token`,
+            `ws://127.0.0.1:${port}/mock/interop/onebot/v11?access_token=wrong-token`,
         );
         const timer = setTimeout(() => {
             socket.terminate();

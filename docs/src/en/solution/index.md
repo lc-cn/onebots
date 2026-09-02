@@ -1,9 +1,14 @@
 # Solutions
 
-Solutions describe how OneBots works with downstream systems. Platform documentation answers where messages come from, protocol documentation explains how they are exposed, and solutions identify who consumes those protocols and how to build a verified workflow.
+Each framework page provides an API compatibility boundary, generated configurations for both sides, and command-level troubleshooting.
 
-## Bot framework Applications
+```bash
+onebots frameworks
+onebots frameworks --framework <framework> --account <platform.account_id>
+onebots -r <adapter> -p <protocol> -t <framework> -c config.yaml
+onebots doctor -c config.yaml
+```
 
-The [framework runtime](/en/solution/frameworks) covers 25 activatable targets. Activate a framework with `onebots -t <framework>`; its Application is applied to every protocol instance and contributes compatible actions, dedicated routes, connection methods, and capability descriptions per protocol.
+`-t` only loads compatibility behavior. Protocol configuration remains the sole authority that enables transports.
 
-Every framework now has its own page. `available` pages provide pinned configuration or interoperability evidence, `experimental` pages provide executable connection templates with explicit unverified boundaries, and `legacy` pages serve existing migrations. All three stages can be activated with `-t` and remain visible in the management API.
+Use the [framework matrix](/en/solution/frameworks) and [troubleshooting guide](/en/solution/troubleshooting).

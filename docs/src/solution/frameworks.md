@@ -1,23 +1,26 @@
-# 机器人框架解决方案
+# 框架接入表
 
-机器人框架现在是 OneBots 的第三类运行时扩展 **Application**，与 Adapter、Protocol 同级。启动顺序是：
+先按框架支持的协议选择方案，再运行生成命令；不要手写猜测连接地址。
 
-```text
--r Adapter → -p Protocol → -t Application → 创建账号和协议实例 → Application 注入协议扩展
-```
+| 框架 | 协议 | 连接方向 |
+| --- | --- | --- |
+| Koishi / Avilla | Satori v1 | 框架连接 OneBots |
+| Karin | Milky v1 | 框架连接 OneBots |
+| Walle | OneBot v12 | 框架连接 OneBots |
+| NoneBot2、真寻、AstrBot、LangBot、AliceBot、Kotori、云崽、GenshinUID、NoneBot 1 | OneBot v11 | OneBots 连接框架 |
+| Zhin、AlemonJS、melobot、ZeroBot、Kovi、OlivOS、炸毛、Shiro、Simbot、Overflow、Adachi-BOT、PepperBot | OneBot v11 | 框架连接 OneBots |
 
 ```bash
-onebots -r mock -p onebot-v11 -t zhin
+onebots frameworks --framework <framework> --account <platform.account_id>
 ```
 
-Application 可以组合协议的启动/停止、动作调用和事件投递，并为每个协议实例公开兼容动作、专用路由、连接方式和限制。`GET /api/applications` 返回已注册项、当前激活项以及逐账号协议能力。外部包使用 `@onebots/application-<name>`、`onebots-application-<name>` 或原始包名。
+输出中的 **OneBots 配置**负责账号协议与传输开关，**框架配置**负责框架端连接。Application 不会替用户开启传输。
 
-## 支持状态
+## API 扩展规则
 
-- **available**：14 个具有固定配置或互操作证据的框架/发行版可通过 `-t` 激活，其中 Zhin 使用独立 npm Application 并具备专用 WebSocket。
-- **experimental**：9 个具有明确协议接入面的框架、SDK 或发行版可激活，并提供连接模板与运行时兼容动作；固定版本互操作完成前不会标为稳定。
-- **legacy**：PepperBot 与 NoneBot 1 可用于存量迁移，管理 API 会保留存量状态，新部署不推荐。
+- `actions`：Application 确实新增或转换的动作；为空就表示没有注入动作。
+- `requiredActions`：框架会调用的协议或平台动作。
+- `unsupportedActions`：固定版本审计确认缺失的动作。
+- 标准协议动作由 Protocol 实现；平台私有动作由 Adapter 能力决定。不能安全转换的动作必须保留为缺口。
 
-`experimental` 与 `legacy` 都是可运行状态。激活后，每个匹配协议都会增加唯一的 `get_<framework>_application_info` 动作；不匹配的协议会返回 `unsupported` 能力描述。
-
-每个框架的启动命令、协议、连接方式和限制请从“解决方案”菜单进入对应页面。
+云崽一类发行版可能依赖 QQ 文件、群公告、频道或资料私有动作。选择不具备相应能力的 Adapter 时，基础收发消息可能工作，但依赖这些动作的插件仍会失败。

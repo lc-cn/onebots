@@ -7,7 +7,8 @@ const pkg = require("../../package.json");
 
 const solutionItems = [
     { text: "解决方案概览", link: "/solution/" },
-    { text: "框架运行时", link: "/solution/frameworks" },
+    { text: "框架接入表", link: "/solution/frameworks" },
+    { text: "连接排查", link: "/solution/troubleshooting" },
     { text: "Zhin", link: "/solution/zhin" },
     { text: "Koishi", link: "/solution/koishi" },
     { text: "NoneBot2", link: "/solution/nonebot" },
@@ -37,8 +38,9 @@ const solutionItems = [
 
 const enSolutionItems = [
     { text: "Overview", link: "/en/solution/" },
-    { text: "Framework Runtime", link: "/en/solution/frameworks" },
-    ...solutionItems.slice(2).map(item => ({
+    { text: "Framework Matrix", link: "/en/solution/frameworks" },
+    { text: "Troubleshooting", link: "/en/solution/troubleshooting" },
+    ...solutionItems.slice(3).map(item => ({
         text: item.text.replace("（实验）", " (Experimental)").replace("（存量）", " (Legacy)"),
         link: `/en${item.link}`
     }))

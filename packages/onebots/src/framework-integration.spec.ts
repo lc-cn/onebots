@@ -364,8 +364,8 @@ describe("framework integration profiles", () => {
         expect(plan.limitations).not.toHaveLength(0);
     });
 
-    it("injects a unique compatibility action into an experimental profile", async () => {
-        const profile = getFrameworkProfile("overflow")!;
+    it("describes required APIs without adding routes or fake actions", () => {
+        const profile = getFrameworkProfile("nonebot")!;
         const definition = createProfileApplication(profile);
         const protocol = {
             name: "onebot",
@@ -373,24 +373,10 @@ describe("framework integration profiles", () => {
             path: "/qq/main/onebot/v11",
         } as Protocol;
         const extension = definition.createProtocolExtension(protocol)!;
-        const next = vi.fn();
-
-        expect(extension.capability.actions).toContain("get_overflow_application_info");
-        await expect(
-            extension.apply!({
-                protocol,
-                action: "get_overflow_application_info",
-                next,
-            }),
-        ).resolves.toMatchObject({
-            status: "ok",
-            data: {
-                application: "overflow",
-                stage: "experimental",
-                protocol: "onebot.v11",
-            },
-        });
-        expect(next).not.toHaveBeenCalled();
+        expect(extension.capability.actions).toEqual([]);
+        expect(extension.capability.routes).toEqual([]);
+        expect(extension.capability.requiredActions).toContain("get_login_info");
+        expect(extension.apply).toBeUndefined();
     });
 
     it.each([

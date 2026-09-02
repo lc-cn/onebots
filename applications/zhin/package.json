@@ -1,7 +1,7 @@
 {
     "name": "@onebots/application-zhin",
     "version": "1.0.0",
-    "description": "OneBots 的 Zhin 机器人框架运行时扩展",
+    "description": "OneBots 的 Zhin OneBot 11 API 兼容能力声明",
     "type": "module",
     "main": "lib/index.js",
     "types": "lib/index.d.ts",

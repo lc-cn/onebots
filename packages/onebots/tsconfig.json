@@ -1,24 +1,24 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "strict": false,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "outDir": "lib",
-    "rootDir": "src",
-    "composite": true,
-    "jsx": "react-jsx",
-    "types": ["node"],
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"],
-  "exclude": ["node_modules", "lib"]
+    "compilerOptions": {
+        "target": "ESNext",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "resolveJsonModule": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "strict": false,
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true,
+        "outDir": "lib",
+        "rootDir": "src",
+        "composite": true,
+        "jsx": "react-jsx",
+        "types": ["node"],
+        "paths": {
+            "@/*": ["./src/*"]
+        }
+    },
+    "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"],
+    "exclude": ["node_modules", "lib", "src/**/*.spec.ts", "src/**/*.test.ts"]
 }
