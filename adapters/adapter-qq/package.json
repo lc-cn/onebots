@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-qq",
-    "version": "3.0.10",
+    "version": "3.0.11",
     "description": "OneBots QQ 官方机器人适配器（基于腾讯官方 Node.js SDK）",
     "type": "module",
     "main": "lib/index.js",

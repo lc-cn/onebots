@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-mattermost",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "OneBots Mattermost REST v4 与可靠 WebSocket 适配器",
     "type": "module",
     "main": "lib/index.js",
@@ -9,7 +9,13 @@
         "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
         "clean": "rm -rf lib *.tsbuildinfo"
     },
-    "keywords": ["onebots", "mattermost", "adapter", "rest", "websocket"],
+    "keywords": [
+        "onebots",
+        "mattermost",
+        "adapter",
+        "rest",
+        "websocket"
+    ],
     "author": "凉菜",
     "license": "MIT",
     "publishConfig": {
