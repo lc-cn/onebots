@@ -40,8 +40,18 @@ describe("schema form contract", () => {
                         section: "advanced",
                         widget: "record-list",
                         fields: [
+                            {
+                                key: "kind",
+                                label: "类型",
+                                choices: [{ label: "用户", value: "user" }],
+                            },
                             { key: "user_id", label: "用户 ID" },
-                            { key: "enabled", label: "启用", type: "boolean" },
+                            {
+                                key: "enabled",
+                                label: "启用",
+                                type: "boolean",
+                                visibleWhen: { path: "kind", oneOf: ["user"] },
+                            },
                         ],
                     },
                 },
@@ -133,5 +143,37 @@ describe("schema form contract", () => {
                 },
             }),
         ).toThrow("仅可在 choice-list");
+        expect(() =>
+            assertSchemaFormContract({
+                subscriptions: {
+                    type: "array",
+                    label: "订阅",
+                    ui: {
+                        section: "filter",
+                        widget: "record-list",
+                        fields: [{ key: "type", label: "类型", choices: [] }],
+                    },
+                },
+            }),
+        ).toThrow("choices 不能为空");
+        expect(() =>
+            assertSchemaFormContract({
+                subscriptions: {
+                    type: "array",
+                    label: "订阅",
+                    ui: {
+                        section: "filter",
+                        widget: "record-list",
+                        fields: [
+                            {
+                                key: "condition",
+                                label: "条件",
+                                visibleWhen: { path: "missing", oneOf: ["message"] },
+                            },
+                        ],
+                    },
+                },
+            }),
+        ).toThrow("不存在的行内显示依赖");
     });
 });

@@ -468,6 +468,28 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  adapters/adapter-twitch:
+    dependencies:
+      onebots:
+        specifier: workspace:*
+        version: link:../../packages/onebots
+      ws:
+        specifier: ^8.21.3
+        version: 8.21.3
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.12.0
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      tsc-alias:
+        specifier: latest
+        version: 1.9.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   adapters/adapter-wechat:
     dependencies:
       onebots:

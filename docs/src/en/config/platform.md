@@ -181,6 +181,7 @@ For configuration details of other platforms, see:
 - [Facebook Messenger Platform](/en/platform/facebook-messenger)
 - [Instagram Messaging Platform](/en/platform/instagram)
 - [Mattermost Platform](/en/platform/mattermost)
+- [Twitch Platform](/en/platform/twitch)
 
 ## Related Links
 

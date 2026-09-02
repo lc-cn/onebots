@@ -212,6 +212,35 @@ export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
             },
         ],
     ),
+    adapter(
+        "twitch",
+        "Twitch",
+        "连接 Twitch Helix API、EventSub WebSocket/Webhook、已有 socket 与 manual ingress。",
+        [
+            {
+                title: "创建 Twitch 应用并准备 OAuth Token",
+                description:
+                    "在 Twitch Developer Console 注册应用，记录 Client ID，并按接收方式和目标动作签发最小权限的用户或应用令牌。",
+                url: "https://dev.twitch.tv/docs/authentication/register-app/",
+            },
+            {
+                title: "选择 EventSub 接收方式",
+                description:
+                    "普通机器人可用官方 EventSub WebSocket；公网服务可用 Webhook；已有 Host、反向连接或队列使用 manual + acceptSocket()/acceptHttp()/ingest()。",
+            },
+            {
+                title: "配置订阅条件与事件过滤",
+                description:
+                    "Web 表单按 EventSub 类型动态展示对应 condition，订阅可逐项增减，无需手写 JSON。",
+            },
+            {
+                title: "核对 OAuth Scope 与动态能力",
+                description:
+                    "保存后 OneBots 会验证令牌身份，并按实际 scopes 和订阅收敛可用动作与事件。",
+                url: "https://dev.twitch.tv/docs/authentication/scopes/",
+            },
+        ],
+    ),
     adapter("slack", "Slack", "连接 Slack 工作区，支持 Socket Mode 和 Events API。", [
         {
             title: "创建 Slack App",

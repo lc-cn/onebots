@@ -29,6 +29,7 @@ onebots currently supports the following platform adapters:
 | **Facebook Messenger** | ✅ Implemented | `@onebots/adapter-facebook-messenger` | Messenger Platform, Graph API, webhook, and manual ingress |
 | **Instagram Messaging** | ✅ Implemented | `@onebots/adapter-instagram` | Instagram Login, Messaging, Graph API, webhook, and manual ingress |
 | **Mattermost** | ✅ Implemented | `@onebots/adapter-mattermost` | REST API v4, reliable WebSocket, existing sockets, and manual ingress |
+| **Twitch** | ✅ Implemented | `@onebots/adapter-twitch` | Helix, EventSub WebSocket/Webhook, existing Host/socket, and manual ingress |
 
 ## Capability manifests
 
@@ -111,6 +112,7 @@ Plugin import and contract verification run as one serialized registry transacti
 - [Facebook Messenger Adapter Documentation](/en/platform/facebook-messenger)
 - [Instagram Messaging Adapter Documentation](/en/platform/instagram)
 - [Mattermost Adapter Documentation](/en/platform/mattermost)
+- [Twitch Adapter Documentation](/en/platform/twitch)
 
 ## Installation
 

@@ -48,9 +48,15 @@ export interface ValidationRule<T = unknown> {
             key: string;
             label: string;
             type?: "string" | "number" | "boolean";
+            choices?: Array<Choice<string | number | boolean>>;
             placeholder?: string;
             description?: string;
             sensitive?: boolean;
+            /** 相对于同一列表项的字段显示条件。 */
+            visibleWhen?: {
+                path: string;
+                oneOf: Array<string | number | boolean>;
+            };
         }>;
         eventFields?: Array<{
             path: string;
@@ -140,9 +146,24 @@ export function assertSchemaFormContract(schema: Schema): void {
                 throw new ValidationError(`配置字段 ${path} 必须声明 sensitive`);
             }
         }
-        for (const field of rule.ui.fields ?? []) {
+        const rowFields = rule.ui.fields ?? [];
+        const rowFieldKeys = new Set(rowFields.map(field => field.key));
+        for (const field of rowFields) {
             if (!field.key.trim() || !field.label.trim()) {
                 throw new ValidationError(`配置字段 ${path} 的子字段必须声明 key 与 label`);
+            }
+            if (field.choices?.length === 0) {
+                throw new ValidationError(`配置字段 ${path}.${field.key} 的 choices 不能为空`);
+            }
+            if (field.visibleWhen && !rowFieldKeys.has(field.visibleWhen.path)) {
+                throw new ValidationError(
+                    `配置字段 ${path}.${field.key} 引用了不存在的行内显示依赖 ${field.visibleWhen.path}`,
+                );
+            }
+            if (field.visibleWhen?.oneOf.length === 0) {
+                throw new ValidationError(
+                    `配置字段 ${path}.${field.key} 的行内显示条件 oneOf 不能为空`,
+                );
             }
             if (/(?:password|token|secret|private_key|encrypt_key|aes_key)$/i.test(field.key)) {
                 if (field.sensitive !== true) {

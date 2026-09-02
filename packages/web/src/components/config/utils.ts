@@ -155,12 +155,27 @@ export const parseStructuredFieldValue = (
     }
     if (usesRecordListEditor(rule)) {
         if (!Array.isArray(raw)) return { ok: false, message: `字段 ${label} 必须是对象列表` };
-        const fieldTypes = new Map((rule.ui?.fields || []).map(field => [field.key, field.type]));
+        const recordFields = rule.ui?.fields || [];
+        const fieldChoices = new Map(
+            recordFields
+                .filter(field => field.choices?.length)
+                .map(field => [field.key, new Set(field.choices?.map(choice => choice.value))]),
+        );
         const entries: Record<string, unknown>[] = [];
         for (const item of raw) {
             if (!isRecord(item)) return { ok: false, message: `字段 ${label} 中存在无效项目` };
             const entry = { ...item };
-            for (const [key, type] of fieldTypes) {
+            for (const field of recordFields) {
+                const { key, type } = field;
+                if (
+                    field.visibleWhen &&
+                    !field.visibleWhen.oneOf.includes(
+                        entry[field.visibleWhen.path] as string | number | boolean,
+                    )
+                ) {
+                    delete entry[key];
+                    continue;
+                }
                 const value = entry[key];
                 if (value === undefined || value === "") {
                     delete entry[key];
@@ -169,6 +184,10 @@ export const parseStructuredFieldValue = (
                 const expected = type || "string";
                 if (typeof value !== expected) {
                     return { ok: false, message: `字段 ${label}.${key} 必须是${expected}` };
+                }
+                const allowed = fieldChoices.get(key);
+                if (allowed && !allowed.has(value as string | number | boolean)) {
+                    return { ok: false, message: `字段 ${label}.${key} 包含未声明的选项` };
                 }
             }
             if (Object.keys(entry).length) entries.push(entry);

@@ -52,6 +52,9 @@
     "@onebots/adapter-telegram": {
       "version": "3.0.8"
     },
+    "@onebots/adapter-twitch": {
+      "version": "0.1.0"
+    },
     "@onebots/adapter-wechat": {
       "version": "3.0.8"
     },
@@ -8054,6 +8057,584 @@
             "support": "native",
             "mode": "native",
             "note": "通过 ingest() 或 acceptHttp(Request) 接入既有 Host"
+          }
+        }
+      }
+    },
+    "twitch": {
+      "packageName": "@onebots/adapter-twitch",
+      "packageVersion": "0.1.0",
+      "manifest": {
+        "version": 1,
+        "actions": {
+          "send_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "user:write:chat + user:bot（频道）或 user:manage:whispers（私信）"
+            ]
+          },
+          "delete_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:chat_messages"
+            ]
+          },
+          "get_login_info": {
+            "support": "native"
+          },
+          "get_user_info": {
+            "support": "native"
+          },
+          "create_user_channel": {
+            "support": "emulated",
+            "availability": "permission",
+            "permissions": [
+              "user:manage:whispers"
+            ],
+            "note": "Twitch 私信没有持久 conversation resource，以收件人 ID 表示 direct channel"
+          },
+          "get_group_list": {
+            "support": "native",
+            "note": "返回账号配置的 broadcaster channel"
+          },
+          "get_group_info": {
+            "support": "native"
+          },
+          "get_group_member_list": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:read:chatters"
+            ]
+          },
+          "get_group_member_info": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:read:chatters"
+            ]
+          },
+          "mute_group_member": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:banned_users"
+            ]
+          },
+          "set_group_admin": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:moderators"
+            ]
+          },
+          "send_group_announcement": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:announcements"
+            ]
+          },
+          "get_channel_info": {
+            "support": "native"
+          },
+          "get_channel_list": {
+            "support": "native",
+            "note": "Twitch 账号只绑定一个 broadcaster channel"
+          },
+          "can_send_image": {
+            "support": "native",
+            "note": "返回 false；Chat 无原生媒体上传"
+          },
+          "can_send_record": {
+            "support": "native",
+            "note": "返回 false；Chat 无原生音频上传"
+          },
+          "get_version": {
+            "support": "native"
+          },
+          "get_status": {
+            "support": "native"
+          },
+          "get_supported_actions": {
+            "support": "native"
+          },
+          "call_twitch_api": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_users": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_channels": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "modify_twitch_channel": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_streams": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "create_twitch_clip": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_clips": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "send_twitch_chat_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "user:write:chat"
+            ]
+          },
+          "send_twitch_announcement": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:announcements"
+            ]
+          },
+          "send_twitch_whisper": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "user:manage:whispers"
+            ]
+          },
+          "get_twitch_chatters": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:read:chatters"
+            ]
+          },
+          "get_twitch_chat_settings": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "update_twitch_chat_settings": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:chat_settings"
+            ]
+          },
+          "delete_twitch_chat_messages": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:chat_messages"
+            ]
+          },
+          "ban_twitch_user": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:banned_users"
+            ]
+          },
+          "unban_twitch_user": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:banned_users"
+            ]
+          },
+          "warn_twitch_user": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:warnings"
+            ]
+          },
+          "get_twitch_moderators": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "add_twitch_moderator": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:moderators"
+            ]
+          },
+          "remove_twitch_moderator": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:moderators"
+            ]
+          },
+          "get_twitch_vips": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "add_twitch_vip": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:vips"
+            ]
+          },
+          "remove_twitch_vip": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:vips"
+            ]
+          },
+          "get_twitch_blocked_terms": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "add_twitch_blocked_term": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:blocked_terms"
+            ]
+          },
+          "remove_twitch_blocked_term": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "moderator:manage:blocked_terms"
+            ]
+          },
+          "check_twitch_automod_status": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "manage_twitch_held_automod_message": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_custom_rewards": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "create_twitch_custom_reward": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:redemptions"
+            ]
+          },
+          "update_twitch_custom_reward": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:redemptions"
+            ]
+          },
+          "delete_twitch_custom_reward": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:redemptions"
+            ]
+          },
+          "get_twitch_reward_redemptions": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "update_twitch_reward_redemptions": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_polls": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "create_twitch_poll": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:polls"
+            ]
+          },
+          "end_twitch_poll": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:polls"
+            ]
+          },
+          "get_twitch_predictions": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "create_twitch_prediction": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:predictions"
+            ]
+          },
+          "resolve_twitch_prediction": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:predictions"
+            ]
+          },
+          "start_twitch_raid": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:raids"
+            ]
+          },
+          "cancel_twitch_raid": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:raids"
+            ]
+          },
+          "get_twitch_schedule": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "update_twitch_schedule": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:schedule"
+            ]
+          },
+          "get_twitch_videos": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "delete_twitch_videos": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "channel:manage:videos"
+            ]
+          },
+          "get_twitch_games": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_channel_emotes": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_global_emotes": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_user_emotes": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "get_twitch_cheermotes": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "create_twitch_eventsub_subscription": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "list_twitch_eventsub_subscriptions": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          },
+          "delete_twitch_eventsub_subscription": {
+            "support": "native",
+            "availability": "permission",
+            "permissions": [
+              "目标 Twitch Helix 方法要求的 OAuth scope"
+            ]
+          }
+        },
+        "events": {
+          "message": {
+            "support": "native",
+            "scenes": [
+              "channel",
+              "direct"
+            ]
+          },
+          "message_deleted": {
+            "support": "native"
+          },
+          "channel_updated": {
+            "support": "native"
+          },
+          "channel_subscriber_added": {
+            "support": "native"
+          },
+          "channel_subscription_added": {
+            "support": "native"
+          },
+          "channel_subscription_removed": {
+            "support": "native"
+          },
+          "channel_subscription_updated": {
+            "support": "native"
+          },
+          "group_ban": {
+            "support": "native"
+          },
+          "heartbeat": {
+            "support": "native"
+          },
+          "custom": {
+            "support": "native",
+            "note": "未专门投影的 EventSub 类型保留完整 raw_event 与 twitch extensions"
+          }
+        },
+        "segments": {
+          "text": {
+            "support": "native",
+            "direction": "both"
+          },
+          "at": {
+            "support": "native",
+            "direction": "both"
+          },
+          "emoji": {
+            "support": "native",
+            "direction": "both"
+          },
+          "image": {
+            "support": "emulated",
+            "direction": "send",
+            "note": "编译为公开 URL 文本"
+          },
+          "video": {
+            "support": "emulated",
+            "direction": "send",
+            "note": "编译为公开 URL 文本"
+          },
+          "audio": {
+            "support": "emulated",
+            "direction": "send",
+            "note": "编译为公开 URL 文本"
+          },
+          "file": {
+            "support": "emulated",
+            "direction": "send",
+            "note": "编译为公开 URL 文本"
+          },
+          "reply": {
+            "support": "native",
+            "direction": "send"
+          }
+        },
+        "transports": {
+          "eventsub_websocket": {
+            "support": "native",
+            "mode": "websocket",
+            "note": "用户令牌、官方 reconnect_url 无损迁移、断线重订阅与无限退避"
+          },
+          "eventsub_webhook": {
+            "support": "native",
+            "mode": "webhook",
+            "note": "应用令牌自动订阅；acceptHttp() 校验 HMAC、时窗、challenge 与重复投递"
+          },
+          "existing_socket": {
+            "support": "native",
+            "mode": "native",
+            "note": "acceptSocket() 接收已有 Host 完成升级的 EventSub socket"
+          },
+          "manual": {
+            "support": "native",
+            "mode": "native",
+            "note": "ingest(rawEvent) 复用严格解析、过滤、去重与 canonical 投影"
           }
         }
       }

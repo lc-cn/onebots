@@ -65,7 +65,8 @@ const baseConfig = defineConfig({
                             { text: "Google Chat", link: "/platform/google-chat" },
                             { text: "Facebook Messenger", link: "/platform/facebook-messenger" },
                             { text: "Instagram Messaging", link: "/platform/instagram" },
-                            { text: "Mattermost", link: "/platform/mattermost" }
+                            { text: "Mattermost", link: "/platform/mattermost" },
+                            { text: "Twitch", link: "/platform/twitch" }
                         ]
                     },
                     {
@@ -131,7 +132,8 @@ const baseConfig = defineConfig({
                         { text: "Google Chat", link: "/platform/google-chat" },
                         { text: "Facebook Messenger", link: "/platform/facebook-messenger" },
                         { text: "Instagram Messaging", link: "/platform/instagram" },
-                        { text: "Mattermost", link: "/platform/mattermost" }
+                        { text: "Mattermost", link: "/platform/mattermost" },
+                        { text: "Twitch", link: "/platform/twitch" }
                     ],
                     "/protocol/": [
                         { text: "OneBot V11", link: "/protocol/onebot-v11" },
@@ -209,7 +211,8 @@ const baseConfig = defineConfig({
                             { text: "Google Chat", link: "/en/platform/google-chat" },
                             { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" },
                             { text: "Instagram Messaging", link: "/en/platform/instagram" },
-                            { text: "Mattermost", link: "/en/platform/mattermost" }
+                            { text: "Mattermost", link: "/en/platform/mattermost" },
+                            { text: "Twitch", link: "/en/platform/twitch" }
                         ]
                     },
                     {
@@ -288,7 +291,8 @@ const baseConfig = defineConfig({
                         { text: "Google Chat", link: "/en/platform/google-chat" },
                         { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" },
                         { text: "Instagram Messaging", link: "/en/platform/instagram" },
-                        { text: "Mattermost", link: "/en/platform/mattermost" }
+                        { text: "Mattermost", link: "/en/platform/mattermost" },
+                        { text: "Twitch", link: "/en/platform/twitch" }
                     ],
                     "/en/protocol/": [
                         { text: "OneBot V11", link: "/en/protocol/onebot-v11" },

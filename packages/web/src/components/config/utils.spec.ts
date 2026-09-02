@@ -57,7 +57,19 @@ const recordListRule: ValidationRule = {
     ui: {
         widget: "record-list",
         fields: [
-            { key: "id", label: "ID" },
+            {
+                key: "kind",
+                label: "类型",
+                choices: [
+                    { label: "群组", value: "group" },
+                    { label: "用户", value: "user" },
+                ],
+            },
+            {
+                key: "id",
+                label: "ID",
+                visibleWhen: { path: "kind", oneOf: ["group"] },
+            },
             { key: "limit", label: "上限", type: "number" },
         ],
     },
@@ -149,16 +161,31 @@ describe("config form generation", () => {
     });
 
     test("keeps generic record lists structured and preserves extension fields", () => {
-        const value = reactive([{ id: "group-1", limit: 10, members: [1, 2] }]);
+        const value = reactive([{ kind: "group", id: "group-1", limit: 10, members: [1, 2] }]);
 
         expect(resolveStructuredFieldDisplay(value, recordListRule)).toEqual(value);
         expect(parseStructuredFieldValue(value, recordListRule, "群组")).toEqual({
             ok: true,
-            value: [{ id: "group-1", limit: 10, members: [1, 2] }],
+            value: [{ kind: "group", id: "group-1", limit: 10, members: [1, 2] }],
         });
         expect(
-            parseStructuredFieldValue([{ id: "group-1", limit: "10" }], recordListRule, "群组"),
+            parseStructuredFieldValue(
+                [{ kind: "group", id: "group-1", limit: "10" }],
+                recordListRule,
+                "群组",
+            ),
         ).toEqual({ ok: false, message: "字段 群组.limit 必须是number" });
+        expect(
+            parseStructuredFieldValue(
+                [{ kind: "user", id: "stale", limit: 10 }],
+                recordListRule,
+                "群组",
+            ),
+        ).toEqual({ ok: true, value: [{ kind: "user", limit: 10 }] });
+        expect(parseStructuredFieldValue([{ kind: "unknown" }], recordListRule, "群组")).toEqual({
+            ok: false,
+            message: "字段 群组.kind 包含未声明的选项",
+        });
     });
 
     test("removes blank rows and rejects the wrong URL scheme", () => {

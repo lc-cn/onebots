@@ -4,6 +4,7 @@ import { IconPlus, IconTableRow, IconTrash } from "@tabler/icons-vue";
 import UiButton from "../../ui/UiButton.vue";
 import UiInput from "../../ui/UiInput.vue";
 import UiNumberInput from "../../ui/UiNumberInput.vue";
+import UiSelect from "../../ui/UiSelect.vue";
 import UiSwitch from "../../ui/UiSwitch.vue";
 import type { ValidationRule } from "./types.js";
 
@@ -41,6 +42,22 @@ const stringValue = (entry: Record<string, unknown>, key: string) =>
     typeof entry[key] === "string" ? entry[key] : "";
 const numberValue = (entry: Record<string, unknown>, key: string) =>
     typeof entry[key] === "number" ? entry[key] : undefined;
+const choiceValue = (entry: Record<string, unknown>, key: string) => {
+    const value = entry[key];
+    return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+        ? value
+        : undefined;
+};
+const visibleFields = (entry: Record<string, unknown>) =>
+    fields.value.filter(field => {
+        const condition = field.visibleWhen;
+        return (
+            !condition ||
+            condition.oneOf.includes(entry[condition.path] as string | number | boolean)
+        );
+    });
+const choiceOptions = (field: (typeof fields.value)[number]) =>
+    (field.choices || []).map(choice => ({ label: choice.label, value: choice.value }));
 </script>
 
 <template>
@@ -84,7 +101,7 @@ const numberValue = (entry: Record<string, unknown>, key: string) =>
                 </button>
             </div>
             <div class="grid gap-3 sm:grid-cols-2">
-                <label v-for="field in fields" :key="field.key" class="space-y-1.5">
+                <label v-for="field in visibleFields(entry)" :key="field.key" class="space-y-1.5">
                     <span class="text-xs font-medium text-fg-secondary">{{ field.label }}</span>
                     <UiNumberInput
                         v-if="field.type === 'number'"
@@ -94,6 +111,13 @@ const numberValue = (entry: Record<string, unknown>, key: string) =>
                     <UiSwitch
                         v-else-if="field.type === 'boolean'"
                         :model-value="entry[field.key] === true"
+                        :disabled="disabled"
+                        @update:model-value="updateField(index, field.key, $event)" />
+                    <UiSelect
+                        v-else-if="field.choices?.length"
+                        :model-value="choiceValue(entry, field.key)"
+                        :options="choiceOptions(field)"
+                        :placeholder="field.placeholder || '请选择'"
                         :disabled="disabled"
                         @update:model-value="updateField(index, field.key, $event)" />
                     <UiInput
