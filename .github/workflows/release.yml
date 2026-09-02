@@ -78,6 +78,12 @@ jobs:
       - name: Verify AlemonJS interoperability
         run: pnpm interop:alemonjs
 
+      - name: Install Karin interoperability dependencies
+        run: npm ci --prefix interop/karin --ignore-scripts
+
+      - name: Verify Karin interoperability
+        run: pnpm interop:karin
+
       - name: Verify publish tarballs
         run: pnpm packages:pack:check
 

@@ -1,0 +1,9 @@
+{
+    "name": "onebots-interop-karin",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "@karinjs/plugin-adapter-milky": "1.3.3",
+        "node-karin": "1.15.3"
+    }
+}

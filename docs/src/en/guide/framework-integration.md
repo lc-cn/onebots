@@ -10,7 +10,7 @@ The table records integration surfaces currently published by each upstream proj
 | --- | --- | --- | --- | --- |
 | Koishi | General framework | Satori | Community OneBot 11 adapter | Interop pending; current Koishi uses Satori v3, so the OneBots `satori.v1` endpoint must be audited first |
 | NoneBot2 | General framework | OneBot 11 reverse WebSocket | OneBot 11 forward WebSocket, OneBot 12 | `handshake`: pinned gate passes with NoneBot2 2.5.0 + adapter 2.4.6; full message and action matrices remain pending |
-| Karin | General framework | Milky WebSocket | Milky SSE or webhook | An upstream Milky adapter exists; pinned end-to-end verification pending |
+| Karin | General framework | Milky WebSocket | Milky SSE or webhook | `handshake`: pinned gate passes with Karin 1.15.3 + adapter 1.3.3; upstream dependency declaration and security limitations remain |
 | Zhin | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `handshake`: pinned gate passes with Zhin 6.0.15 + adapter 7.0.8; full message and action matrices remain pending |
 | AlemonJS | General framework | OneBot 11 forward WebSocket | OneBot 11 reverse WebSocket | `handshake`: pinned gate passes with AlemonJS 2.1.103 + adapter 2.1.21; an upstream dependency security limitation remains |
 | Yunzai / TRSS-Yunzai | Bot distribution | OneBot 11 reverse WebSocket | Depends on the selected distribution | An upstream OneBot 11 ingress exists; private actions and CQ-code assumptions still need verification |
@@ -23,6 +23,8 @@ The repository's external-process interop gate produced the NoneBot2 evidence, l
 The pinned Zhin gate uses the real `OneBot11WsEndpoint` and Zhin Endpoint event boundary. It covers invalid-token rejection, the forward-WebSocket handshake, a private-message event, `get_login_info`, and `send_private_msg`. Dependencies live in an isolated `interop/zhin/package-lock.json`, preventing npm from reading pnpm workspace `catalog:` declarations. This evidence also earns `handshake` only; group messages, rich media, reconnect behavior, side events, and the complete action matrix remain pending.
 
 The AlemonJS gate uses its official `OneBotClient`, v11 event driver, and action API for the same forward-WebSocket baseline. The pinned dependency audit on 2026-09-02 reports two moderate denial-of-service advisories in `file-type` (`GHSA-5v7r-6r5c-r473` and `GHSA-j47w-4g3g-c36v`), with the current AlemonJS version pinning an affected release. A passing handshake therefore cannot advance to `verified`, and the audit tool's breaking downgrade must not replace the current runtime.
+
+The Karin gate loads the real `node-karin@1.15.3` runtime and `@karinjs/plugin-adapter-milky@1.3.3`. It covers invalid-token rejection, Milky HTTP initialization, the WebSocket handshake, friend-message conversion, `get_login_info`, `get_impl_info`, and `send_private_message`. The adapter's 1.3.3 package imports but does not declare `node-karin`, so standalone installations must add that dependency explicitly. Its pinned `yaml@2.7.0` is affected by the moderate stack-overflow advisory `GHSA-48c2-rrv3-qjmp`, and `npm audit` currently offers no automatic fix. Group messages, rich media, reconnect behavior, SSE, webhook, and the full action matrix remain pending, so the evidence stays at `handshake`.
 
 ## Integration interface
 
@@ -115,6 +117,13 @@ npm ci --prefix interop/alemonjs --ignore-scripts
 pnpm interop:alemonjs
 ```
 
+The Karin fixture explicitly pins both packages because the published adapter omits its runtime dependency:
+
+```bash
+npm ci --prefix interop/karin --ignore-scripts
+pnpm interop:karin
+```
+
 1. An invalid token fails while the correct token identifies the selected account.
 2. Mock-adapter direct and group events reach the downstream with the expected identity, segments, and reply context.
 3. Downstream send, delete, login, and member-list calls receive the expected result or a stable unsupported error.
@@ -127,7 +136,7 @@ Yunzai and Zhenxun also require an extended-action baseline derived from real pl
 
 1. **NoneBot2 + OneBot 11** now has a pinned fixture, configuration renderer, authentication check, private-message loop, and basic API gate. Group messages, rich media, reconnect behavior, and the action matrix come next.
 2. **Zhin + OneBot 11 and AlemonJS + OneBot 11** now both have pinned forward-WebSocket baselines. Expand their message, reconnect, and action matrices while tracking the AlemonJS upstream dependency fix.
-3. **Karin + Milky** adds a second protocol and multiple transports, proving the profile seam is not OneBot-specific.
+3. **Karin + Milky** now has a pinned WebSocket baseline, proving the profile seam is not OneBot-specific. Add SSE, webhook, reconnect, group-message, rich-media, and action matrices next while tracking the upstream dependency declaration and `yaml` fix.
 4. **Yunzai and Zhenxun** add distribution-specific private-action and message compatibility after their base frameworks pass.
 5. **Koishi** starts with a Satori v3 difference audit and real handshake. If the existing endpoint cannot interoperate, add a separate Satori v3 protocol package instead of mixing two versions inside `satori.v1`.
 

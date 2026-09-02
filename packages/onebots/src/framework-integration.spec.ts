@@ -46,7 +46,7 @@ describe("framework integration profiles", () => {
         });
         expect(
             profiles
-                .filter(profile => !["nonebot", "zhin", "alemonjs"].includes(profile.id))
+                .filter(profile => !["nonebot", "karin", "zhin", "alemonjs"].includes(profile.id))
                 .every(profile => profile.verification === "documented"),
         ).toBe(true);
         expect(Object.isFrozen(getFrameworkProfile("nonebot"))).toBe(true);
@@ -127,6 +127,12 @@ describe("framework integration profiles", () => {
         ]);
         expect(yaml.load(plan.onebotsConfig)).toMatchObject({
             "qq.bot": { "milky.v1": { use_http: true, use_ws: true } },
+        });
+        expect(plan.framework.verification).toBe("handshake");
+        expect(plan.framework.evidence).toMatchObject({
+            frameworkVersion: "1.15.3",
+            adapterVersion: "1.3.3",
+            command: "pnpm interop:karin",
         });
     });
 

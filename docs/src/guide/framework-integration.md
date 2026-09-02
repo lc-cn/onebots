@@ -10,7 +10,7 @@ OneBots 把平台连接与机器人业务框架分开：OneBots 负责连接 IM 
 | --- | --- | --- | --- | --- |
 | Koishi | 通用框架 | Satori | OneBot 11 社区适配器 | 待互操作验证；当前 Koishi 使用 Satori v3，必须先核对 OneBots 的 `satori.v1` 出口 |
 | NoneBot2 | 通用框架 | OneBot 11 反向 WebSocket | OneBot 11 正向 WebSocket、OneBot 12 | `handshake`：NoneBot2 2.5.0 + adapter 2.4.6 已通过固定版本门禁；完整消息与动作矩阵待验证 |
-| Karin | 通用框架 | Milky WebSocket | Milky SSE、Webhook | 上游已有 Milky 适配器，待固定版本端到端验证 |
+| Karin | 通用框架 | Milky WebSocket | Milky SSE、Webhook | `handshake`：Karin 1.15.3 + adapter 1.3.3 已通过固定版本门禁；存在上游依赖声明与安全限制 |
 | Zhin | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | `handshake`：Zhin 6.0.15 + adapter 7.0.8 已通过固定版本门禁；完整消息与动作矩阵待验证 |
 | AlemonJS | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | `handshake`：AlemonJS 2.1.103 + adapter 2.1.21 已通过固定版本门禁；存在上游依赖安全限制 |
 | 云崽 / TRSS-Yunzai | 机器人发行版 | OneBot 11 反向 WebSocket | 由具体分支决定 | 上游已有 OneBot 11 入口，需验证其私有动作和 CQ 码假设 |
@@ -23,6 +23,8 @@ NoneBot2 的证据由仓库中的真实进程互操作门禁产生，最近一�
 Zhin 的固定版本门禁使用真实 `OneBot11WsEndpoint` 和 Zhin Endpoint 事件边界，覆盖错误 token 拒绝、正向 WebSocket 握手、私聊事件、`get_login_info` 与 `send_private_msg`。依赖保存在独立的 `interop/zhin/package-lock.json` 中，避免 npm 读取 pnpm workspace 的 `catalog:` 声明。当前证据同样只对应 `handshake`；群消息、富媒体、重连、侧事件和完整动作矩阵仍待验证。
 
 AlemonJS 门禁使用官方 `OneBotClient`、v11 事件驱动和动作 API，覆盖相同的正向 WebSocket 基础闭环。2026-09-02 的固定依赖审计报告 `file-type` 存在两个中等级拒绝服务公告（`GHSA-5v7r-6r5c-r473`、`GHSA-j47w-4g3g-c36v`），而 AlemonJS 当前固定受影响版本；因此即使握手通过，也不能提升为 `verified`，更不能用审计工具建议的破坏性降级版本替换当前运行时。
+
+Karin 门禁加载真实 `node-karin@1.15.3` 与 `@karinjs/plugin-adapter-milky@1.3.3`，覆盖错误 token 拒绝、Milky HTTP 初始化、WebSocket 握手、好友消息转换、`get_login_info`、`get_impl_info` 与 `send_private_message`。插件 1.3.3 的发布包会导入但未声明 `node-karin`，因此独立安装必须显式加入该依赖。固定依赖中的 `yaml@2.7.0` 受中等级栈溢出公告 `GHSA-48c2-rrv3-qjmp` 影响，当前 `npm audit` 没有可用自动修复；群消息、富媒体、重连、SSE、Webhook 与完整动作矩阵也尚未通过，所以验证等级保持 `handshake`。
 
 ## 接入接口
 
@@ -115,6 +117,13 @@ npm ci --prefix interop/alemonjs --ignore-scripts
 pnpm interop:alemonjs
 ```
 
+Karin 的发布包没有声明运行时框架依赖，夹具显式固定两者版本：
+
+```bash
+npm ci --prefix interop/karin --ignore-scripts
+pnpm interop:karin
+```
+
 1. 使用错误 token 时连接失败，正确 token 能识别目标账号。
 2. Mock 适配器触发私聊与群聊事件，下游收到正确身份、消息段和回复上下文。
 3. 下游发起发送、撤回、查询账号和查询群成员动作，OneBots 返回符合该框架预期的结果或稳定的不支持错误。
@@ -127,7 +136,7 @@ pnpm interop:alemonjs
 
 1. **NoneBot2 + OneBot 11**：已建立固定版本夹具、配置模板、鉴权、私聊收发和基础 API 调用门禁；下一步补群消息、富媒体、重连和动作矩阵。
 2. **Zhin + OneBot 11、AlemonJS + OneBot 11**：两者都已完成固定版本正向 WebSocket 基础门禁；继续补齐消息、重连和动作矩阵，并跟踪 AlemonJS 上游依赖修复。
-3. **Karin + Milky**：验证第二种协议与 WebSocket/SSE/Webhook 多传输设计，证明 profile seam 不是 OneBot 专用。
+3. **Karin + Milky**：已完成固定版本 WebSocket 基础门禁，证明 profile seam 不是 OneBot 专用；下一步补 SSE、Webhook、重连、群消息、富媒体与动作矩阵，并跟踪上游依赖声明和 `yaml` 修复。
 4. **云崽与真寻**：在基础框架通过后补充发行版的私有动作与消息兼容矩阵。
 5. **Koishi**：先完成当前 Satori v3 的差异审计和真实握手。若无法由现有出口兼容，再新增独立的 Satori v3 协议包，避免在 `satori.v1` 中混合两个版本。
 

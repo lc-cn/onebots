@@ -17,13 +17,14 @@ export function projectMilkyUserProfile(info: Adapter.UserInfo): Milky.UserProfi
     };
 }
 
-/** 投影 Milky 必需的实现与 QQ 协议信息，不猜测缺失的平台值。 */
+/** 投影 Milky 必需的实现与 QQ 协议信息，并为不暴露客户端指纹的适配器提供网关兜底值。 */
 export function projectMilkyImplInfo(info: Adapter.VersionInfo): Milky.ImplInfo {
     return {
         impl_name: info.app_name ?? info.impl ?? "onebots",
         impl_version: info.app_version ?? info.impl_version ?? info.version ?? "unknown",
-        qq_protocol_version: requireString(info.qq_protocol_version, "qq_protocol_version"),
-        qq_protocol_type: requireProtocolType(info.qq_protocol_type),
+        qq_protocol_version:
+            info.qq_protocol_version ?? info.onebot_version ?? info.version ?? "unknown",
+        qq_protocol_type: protocolTypeOrGatewayDefault(info.qq_protocol_type),
         milky_version: "1.0",
     };
 }
@@ -36,12 +37,7 @@ function nonNegativeInteger(value: unknown, field: string): number {
     return value;
 }
 
-function requireString(value: unknown, field: string): string {
-    if (typeof value !== "string") throw new TypeError(`Adapter 缺少 ${field}`);
-    return value;
-}
-
-function requireProtocolType(value: unknown): Milky.ImplInfo["qq_protocol_type"] {
+function protocolTypeOrGatewayDefault(value: unknown): Milky.ImplInfo["qq_protocol_type"] {
     if (
         value === "windows" ||
         value === "linux" ||
@@ -55,5 +51,5 @@ function requireProtocolType(value: unknown): Milky.ImplInfo["qq_protocol_type"]
     ) {
         return value;
     }
-    throw new TypeError("Adapter 缺少有效的 qq_protocol_type");
+    return "linux";
 }

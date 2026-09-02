@@ -29,7 +29,7 @@ describe("Milky 系统实体投影", () => {
         });
     });
 
-    it("输出完整 QQ 协议实现信息并拒绝猜测平台", () => {
+    it("输出完整 QQ 协议实现信息", () => {
         expect(
             projectMilkyImplInfo({
                 app_name: "onebots ICQQ Adapter",
@@ -44,8 +44,21 @@ describe("Milky 系统实体投影", () => {
             qq_protocol_type: "android_pad",
             milky_version: "1.0",
         });
-        expect(() => projectMilkyImplInfo({ app_name: "incomplete" })).toThrow(
-            "qq_protocol_version",
-        );
+    });
+
+    it("为未暴露 QQ 客户端指纹的通用适配器提供稳定兜底值", () => {
+        expect(
+            projectMilkyImplInfo({
+                app_name: "onebots Mock Adapter",
+                app_version: "1.0.0",
+                impl: "mock",
+            }),
+        ).toEqual({
+            impl_name: "onebots Mock Adapter",
+            impl_version: "1.0.0",
+            qq_protocol_version: "unknown",
+            qq_protocol_type: "linux",
+            milky_version: "1.0",
+        });
     });
 });
