@@ -1,0 +1,9 @@
+{
+    "name": "onebots-interop-koishi",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "@koishijs/plugin-adapter-satori": "1.5.1",
+        "koishi": "4.18.6"
+    }
+}

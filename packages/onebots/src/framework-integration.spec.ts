@@ -28,6 +28,14 @@ describe("framework integration profiles", () => {
                 command: "pnpm interop:nonebot",
             },
         });
+        expect(getFrameworkProfile("koishi")).toMatchObject({
+            verification: "handshake",
+            evidence: {
+                frameworkVersion: "4.18.6",
+                adapterVersion: "1.5.1",
+                command: "pnpm interop:koishi",
+            },
+        });
         expect(getFrameworkProfile("zhin")).toMatchObject({
             verification: "handshake",
             evidence: {
@@ -46,7 +54,10 @@ describe("framework integration profiles", () => {
         });
         expect(
             profiles
-                .filter(profile => !["nonebot", "karin", "zhin", "alemonjs"].includes(profile.id))
+                .filter(
+                    profile =>
+                        !["koishi", "nonebot", "karin", "zhin", "alemonjs"].includes(profile.id),
+                )
                 .every(profile => profile.verification === "documented"),
         ).toBe(true);
         expect(Object.isFrozen(getFrameworkProfile("nonebot"))).toBe(true);
@@ -136,12 +147,19 @@ describe("framework integration profiles", () => {
         });
     });
 
-    it("keeps Koishi explicitly documented rather than claiming verified Satori compatibility", () => {
+    it("generates the Satori root endpoint expected by the official Koishi adapter", () => {
         const plan = createFrameworkConnectionPlan({ framework: "koishi", account: "slack.team" });
 
-        expect(plan.framework.verification).toBe("documented");
-        expect(plan.limitations.join(" ")).toContain("Satori v3");
-        expect(plan.endpoint).toBe("http://127.0.0.1:6727/slack/team/satori/v1");
+        expect(plan.framework.verification).toBe("handshake");
+        expect(plan.endpoint).toBe("http://127.0.0.1:6727/slack/team/satori");
+        expect(yaml.load(plan.frameworkConfig)).toEqual({
+            plugins: {
+                "adapter-satori": {
+                    endpoint: plan.endpoint,
+                    token: "<shared-token>",
+                },
+            },
+        });
     });
 
     it.each([

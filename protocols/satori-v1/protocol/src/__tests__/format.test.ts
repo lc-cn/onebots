@@ -161,6 +161,30 @@ describe("Satori V1 protocol", () => {
         expect(router.ws).toHaveBeenCalledWith("/qq/bot/satori/v1/events");
     });
 
+    test("returns direct Satori results to the official adapter while preserving legacy wrappers", async () => {
+        const { protocol, router } = createProtocol();
+        protocol["startHttp"]();
+        const handler = router.post.mock.calls[0][1];
+        const createContext = (headers: Record<string, string>) => ({
+            headers,
+            params: { method: "login.get" },
+            query: {},
+            request: { body: {} },
+            body: undefined as unknown,
+            status: 200,
+        });
+
+        const official = createContext({ "satori-platform": "mock" });
+        await handler(official);
+        expect(official.body).toMatchObject({ user: { id: "runtime-bot" }, platform: "qq" });
+
+        const legacy = createContext({});
+        await handler(legacy);
+        expect(legacy.body).toMatchObject({
+            data: { user: { id: "runtime-bot" }, platform: "qq" },
+        });
+    });
+
     test("waits for IDENTIFY before READY and responds to PING", async () => {
         const { protocol, wsServer } = createProtocol();
         protocol.start();

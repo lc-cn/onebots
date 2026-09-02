@@ -288,7 +288,10 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
 
             try {
                 const result = await this.apply(method, params);
-                ctx.body = result;
+                const isOfficialAdapter = Boolean(
+                    ctx.headers["satori-platform"] || ctx.headers["x-platform"],
+                );
+                ctx.body = isOfficialAdapter && "data" in result ? result.data : result;
             } catch (error) {
                 this.logger.error(`HTTP API ${method} failed:`, error);
                 ctx.status = 500;

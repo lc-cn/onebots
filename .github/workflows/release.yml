@@ -84,6 +84,12 @@ jobs:
       - name: Verify Karin interoperability
         run: pnpm interop:karin
 
+      - name: Install Koishi interoperability dependencies
+        run: npm ci --prefix interop/koishi --ignore-scripts
+
+      - name: Verify Koishi interoperability
+        run: pnpm interop:koishi
+
       - name: Verify publish tarballs
         run: pnpm packages:pack:check
 

@@ -77,12 +77,19 @@ const PROFILES: Readonly<Record<FrameworkId, FrameworkProfile>> = deepFreeze({
         packageName: "@koishijs/plugin-adapter-satori",
         protocol: "satori.v1",
         transport: "websocket",
-        verification: "documented",
+        verification: "handshake",
+        evidence: {
+            frameworkVersion: "4.18.6",
+            adapterVersion: "1.5.1",
+            lastVerifiedAt: "2026-09-02",
+            command: "pnpm interop:koishi",
+            checks: ["auth-rejection", "handshake", "private-message", "message.create"],
+        },
         upstream: "https://koishi.chat/en-US/plugins/adapter/satori",
         defaultFrameworkOrigin: null,
         limitations: [
-            "当前 Koishi 使用 Satori v3；OneBots satori.v1 尚未完成固定版本互操作验证。",
-            "此模板仅用于差异审计，不应作为生产兼容声明。",
+            "群消息、富媒体、重连与完整 Satori 资源动作矩阵仍待固定版本验证。",
+            "Koishi 4.18.6 的固定依赖审计包含由 file-type GHSA-5v7r-6r5c-r473 传播的 12 个中等级条目。",
         ],
     },
     nonebot: {
@@ -313,6 +320,7 @@ function resolveEndpoint(
     frameworkOrigin: URL | null,
 ): string {
     if (profile.transport !== "reverse-websocket") {
+        if (profile.id === "koishi") return onebotsEndpoint.replace(/\/v1$/u, "");
         return profile.transport === "websocket" && profile.protocol.startsWith("onebot")
             ? toWebSocketUrl(onebotsEndpoint)
             : onebotsEndpoint;
@@ -387,7 +395,7 @@ function renderFrameworkConfig(
         case "koishi":
             return yaml.dump({
                 plugins: {
-                    "adapter-satori": { endpoint: onebotsEndpoint, token: SHARED_TOKEN },
+                    "adapter-satori": { endpoint, token: SHARED_TOKEN },
                 },
             });
     }
