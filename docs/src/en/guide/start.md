@@ -194,9 +194,14 @@ After disable and restart are complete, the card offers **Uninstall disk depende
 
 After installation, the server also declares whether the current process has a verified restart supervisor. A system service created by `onebots install` can safely switch instances. Docker or another orchestrator exposes the same ability only when its restart policy is paired with `ONEBOTS_RESTARTABLE=1`. A directly launched foreground process stays online and the page reports “installation complete, restart manually” instead of exiting and waiting for a replacement that cannot appear. The System page uses the same evidence and disables its restart button when no supervisor is available.
 
+## Connect a Bot Framework
+
+Frameworks differ in protocol versions, connection direction, and extended actions. Read the [bot framework integration baseline](/en/guide/framework-integration) first; it distinguishes an upstream integration surface from interoperability actually verified by OneBots. In particular, current Koishi uses Satori v3, so the presence of a OneBots `satori.v1` endpoint alone does not establish compatibility.
+
 ## Next Steps
 
 - 📖 Read the [Architecture Guide](/en/guide/architecture) to understand the system structure
 - 🔧 Check the [Configuration Guide](/en/config/global) for detailed configuration options
 - 💻 Learn about the [Client SDK](/en/guide/client-sdk) for developing cross-protocol applications
+- 🤖 Choose a verified path in the [Bot Framework Integration Guide](/en/guide/framework-integration)
 - 🔌 Explore [Platform Documentation](/en/platform/wechat) for platform-specific features

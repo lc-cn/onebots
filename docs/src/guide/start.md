@@ -248,6 +248,8 @@ Web 扩展中心也执行同一门禁。目录不闭合时，页面会显示完�
 
 服务启动后，即可在机器人框架中配置连接。
 
+不同框架对协议版本、连接方向和扩展动作的要求并不相同。请先查看[机器人框架接入基线](/guide/framework-integration)；其中会把上游已有接入面与 OneBots 已完成的互操作验证分开标记。特别是 Koishi 当前使用 Satori v3，不能仅凭 OneBots 存在 `satori.v1` 出口就假定兼容。
+
 ### HTTP 接口
 
 **OneBot V11 HTTP API 格式：**
