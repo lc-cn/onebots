@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AdapterCapabilityManifest } from "@onebots/core";
 import {
-    assertExtensionInstallAcknowledgement,
-    buildExtensionInstallRequestHeaders,
     parseExtensionInventory,
     parseExtensionManagementSnapshot,
     parsePackageMutationStatus,
@@ -87,14 +85,21 @@ function managementResponse(
     extraHeaders: Record<string, string> = {},
 ): Response {
     return new Response(null, {
-        headers: {
-            "X-OneBots-Application": "onebots",
-            "X-OneBots-Version": "1.2.8",
-            "X-OneBots-Instance-Id": instanceId,
-            "X-OneBots-Runtime-Contract-Id": "sha256:contract-a",
-            ...extraHeaders,
-        },
+        headers: managementHeaders(instanceId, extraHeaders),
     });
+}
+
+function managementHeaders(
+    instanceId = "instance-a",
+    extraHeaders: Record<string, string> = {},
+): Record<string, string> {
+    return {
+        "X-OneBots-Application": "onebots",
+        "X-OneBots-Version": "1.2.8",
+        "X-OneBots-Instance-Id": instanceId,
+        "X-OneBots-Runtime-Contract-Id": "sha256:contract-a",
+        ...extraHeaders,
+    };
 }
 
 describe("extension inventory response", () => {
@@ -201,66 +206,6 @@ describe("extension inventory response", () => {
                 mutationResponse,
                 [adapter()],
                 idle,
-            ),
-        ).toThrow("缺少有效配置修订号");
-    });
-
-    it("只接受同一实例签发且包含新配置修订的安装回执", () => {
-        const identity = {
-            application: "onebots",
-            version: "1.2.8",
-            instanceId: "instance-a",
-            runtimeContractId: "sha256:contract-a",
-        };
-        const revision = `sha256:${"b".repeat(64)}`;
-        expect(
-            assertExtensionInstallAcknowledgement(
-                managementResponse(),
-                {
-                    success: true,
-                    application: "onebots",
-                    instance_id: "instance-a",
-                    config_revision: revision,
-                },
-                identity,
-            ),
-        ).toBe(revision);
-        expect(() =>
-            assertExtensionInstallAcknowledgement(
-                managementResponse("instance-b"),
-                {
-                    success: true,
-                    application: "onebots",
-                    instance_id: "instance-b",
-                    config_revision: revision,
-                },
-                identity,
-            ),
-        ).toThrow("安装回执实例不匹配");
-        expect(() =>
-            assertExtensionInstallAcknowledgement(
-                managementResponse(),
-                { success: true, application: "onebots", instance_id: "instance-a" },
-                identity,
-            ),
-        ).toThrow("缺少有效配置修订号");
-    });
-
-    it("把安装请求绑定到目录实例和配置修订", () => {
-        const revision = `sha256:${"c".repeat(64)}`;
-        expect(
-            buildExtensionInstallRequestHeaders(
-                { application: "onebots", version: "1.2.8", instanceId: "instance-a" },
-                revision,
-            ),
-        ).toEqual({
-            "X-OneBots-Expected-Instance-Id": "instance-a",
-            "X-OneBots-Expected-Config-Revision": revision,
-        });
-        expect(() =>
-            buildExtensionInstallRequestHeaders(
-                { application: "onebots", version: "1.2.8", instanceId: "instance-a" },
-                "stale",
             ),
         ).toThrow("缺少有效配置修订号");
     });

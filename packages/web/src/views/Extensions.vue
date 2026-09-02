@@ -313,11 +313,11 @@ import { UiAlert, UiBadge, UiButton, UiCard, UiEmpty, UiInput, UiSpinner } from 
 import { useConfirm } from "../ui/confirm.js";
 import { matchesExtensionSearch } from "../components/capability-search.js";
 import { parseExtensionFilter, type ExtensionFilter } from "./extension-filter.js";
+import { parseExtensionManagementSnapshot } from "./extension-inventory.js";
 import {
-    assertExtensionInstallAcknowledgement,
     buildExtensionInstallRequestHeaders,
-    parseExtensionManagementSnapshot,
-} from "./extension-inventory.js";
+    parseExtensionMutationResponse,
+} from "./extension-mutation.js";
 import type { ManagementEvidenceIdentity } from "../management-evidence-identity.js";
 import { getExtensionConfigurationAction } from "./extension-configuration.js";
 import {
@@ -677,20 +677,15 @@ async function install(extension: ExtensionInfo): Promise<void> {
                     ),
                 },
             );
-            const result = (await readManagementJsonResponse(response)) as {
-                success: boolean;
-                restartRequired?: boolean;
-                restartSupported?: boolean;
-                message?: string;
-            };
-            if (!response.ok || !result.success) {
-                throw new Error(result.message || "扩展安装失败");
-            }
-            extensionConfigRevision.value = assertExtensionInstallAcknowledgement(
+            const result = await parseExtensionMutationResponse(
                 response,
-                result,
                 expectedIdentity,
+                "install",
+                extension.id,
+                "扩展安装失败",
             );
+            if (!result.success) throw new Error(result.message);
+            extensionConfigRevision.value = result.configRevision;
             const completion = getExtensionInstallCompletion(result);
             shouldRestart = completion.restart;
             if (!completion.restart) {
@@ -778,16 +773,16 @@ async function disable(extension: ExtensionInfo): Promise<void> {
                     ),
                 },
             );
-            result = (await readManagementJsonResponse(response)) as typeof result;
-            if (!response.ok || !result.success) {
-                throw new Error(result.message || "扩展停用失败");
-            }
-            extensionConfigRevision.value = assertExtensionInstallAcknowledgement(
+            const parsed = await parseExtensionMutationResponse(
                 response,
-                result,
                 expectedIdentity,
-                "停用",
+                "disable",
+                extension.id,
+                "扩展停用失败",
             );
+            if (!parsed.success) throw new Error(parsed.message);
+            extensionConfigRevision.value = parsed.configRevision;
+            result = parsed;
         } catch (error) {
             const requestMessage = error instanceof Error ? error.message : String(error);
             const loaded = await loadExtensions();
@@ -874,19 +869,15 @@ async function uninstall(extension: ExtensionInfo): Promise<void> {
                     ),
                 },
             );
-            const result = (await readManagementJsonResponse(response)) as {
-                success: boolean;
-                message?: string;
-            };
-            if (!response.ok || !result.success) {
-                throw new Error(result.message || "扩展依赖卸载失败");
-            }
-            extensionConfigRevision.value = assertExtensionInstallAcknowledgement(
+            const result = await parseExtensionMutationResponse(
                 response,
-                result,
                 expectedIdentity,
-                "依赖卸载",
+                "uninstall",
+                extension.id,
+                "扩展依赖卸载失败",
             );
+            if (!result.success) throw new Error(result.message);
+            extensionConfigRevision.value = result.configRevision;
             await loadExtensions();
             restartMessage.value = result.message ?? "扩展依赖已安全卸载";
         } catch (error) {

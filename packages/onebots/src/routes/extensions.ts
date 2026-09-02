@@ -46,12 +46,15 @@ export function registerExtensionRoutes(app: App, router: Router): void {
             assertManagementInstancePrecondition(app, ctx, "扩展安装");
             assertManagementConfigRevisionPrecondition(ctx, "扩展安装", app.configPath);
             const result = await app.extensionManager.install(String(ctx.params.id));
-            const configRevision = createManagementConfigRevision(
-                readFileSync(app.configPath, "utf8"),
-            );
+            const target = String(ctx.params.id);
+            const configSource = readFileSync(app.configPath, "utf8");
+            const configRevision = createManagementConfigRevision(configSource);
+            setManagementConfigRevision(ctx, configSource);
             ctx.body = {
                 success: true,
                 ...result,
+                operation: "install",
+                target: { id: target },
                 application: app.info.application_name,
                 instance_id: app.info.instance_id,
                 config_revision: configRevision,
@@ -80,6 +83,7 @@ export function registerExtensionRoutes(app: App, router: Router): void {
                 success: false,
                 application: app.info.application_name,
                 instance_id: app.info.instance_id,
+                code: extensionMutationFailureCode(error),
                 message,
             };
             app.logger.error("管理端安装扩展失败", { error: message });
@@ -92,12 +96,15 @@ export function registerExtensionRoutes(app: App, router: Router): void {
             assertManagementInstancePrecondition(app, ctx, "扩展停用");
             assertManagementConfigRevisionPrecondition(ctx, "扩展停用", app.configPath);
             const result = await app.extensionManager.disable(String(ctx.params.id));
-            const configRevision = createManagementConfigRevision(
-                readFileSync(app.configPath, "utf8"),
-            );
+            const target = String(ctx.params.id);
+            const configSource = readFileSync(app.configPath, "utf8");
+            const configRevision = createManagementConfigRevision(configSource);
+            setManagementConfigRevision(ctx, configSource);
             ctx.body = {
                 success: true,
                 ...result,
+                operation: "disable",
+                target: { id: target },
                 application: app.info.application_name,
                 instance_id: app.info.instance_id,
                 config_revision: configRevision,
@@ -125,6 +132,7 @@ export function registerExtensionRoutes(app: App, router: Router): void {
                 success: false,
                 application: app.info.application_name,
                 instance_id: app.info.instance_id,
+                code: extensionMutationFailureCode(error),
                 message,
             };
             app.logger.error("管理端停用扩展失败", { error: message });
@@ -140,12 +148,15 @@ export function registerExtensionRoutes(app: App, router: Router): void {
                 String(ctx.params.id),
                 app.pluginInfos,
             );
-            const configRevision = createManagementConfigRevision(
-                readFileSync(app.configPath, "utf8"),
-            );
+            const target = String(ctx.params.id);
+            const configSource = readFileSync(app.configPath, "utf8");
+            const configRevision = createManagementConfigRevision(configSource);
+            setManagementConfigRevision(ctx, configSource);
             ctx.body = {
                 success: true,
                 ...result,
+                operation: "uninstall",
+                target: { id: target },
                 application: app.info.application_name,
                 instance_id: app.info.instance_id,
                 config_revision: configRevision,
@@ -171,11 +182,25 @@ export function registerExtensionRoutes(app: App, router: Router): void {
                 success: false,
                 application: app.info.application_name,
                 instance_id: app.info.instance_id,
+                code: extensionMutationFailureCode(error),
                 message,
             };
             app.logger.error("管理端卸载扩展依赖失败", { error: message });
         }
     });
+}
+
+function extensionMutationFailureCode(error: unknown): string {
+    if (error instanceof ManagementInstanceMismatchError) return "EXTENSION_INSTANCE_MISMATCH";
+    if (error instanceof ManagementConfigRevisionMismatchError)
+        return "EXTENSION_CONFIG_REVISION_MISMATCH";
+    if (error instanceof ExtensionInstallConflictError) return "EXTENSION_BUSY";
+    if (error instanceof ExtensionStateConflictError) return "EXTENSION_STATE_CONFLICT";
+    if (error instanceof ExtensionNotFoundError) return "EXTENSION_NOT_FOUND";
+    if (error instanceof ExtensionRuntimeConfigError) return "EXTENSION_RUNTIME_CONFIG_INVALID";
+    if (error instanceof ExtensionCatalogIntegrityError) return "EXTENSION_CATALOG_UNAVAILABLE";
+    if (error instanceof ValidationError) return "EXTENSION_INVALID";
+    return "EXTENSION_FAILED";
 }
 
 function tryReadConfigSource(app: App): string | null {

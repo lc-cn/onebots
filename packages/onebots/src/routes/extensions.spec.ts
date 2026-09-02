@@ -104,6 +104,8 @@ describe("extension routes", () => {
         expect(install).toHaveBeenCalledWith("adapter:slack");
         expect(ctx.body).toMatchObject({
             success: true,
+            operation: "install",
+            target: { id: "adapter:slack" },
             restartRequired: true,
             restartSupported: true,
             application: "onebots",
@@ -111,6 +113,10 @@ describe("extension routes", () => {
             config_revision: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
         });
         expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
+        expect(ctx.set).toHaveBeenCalledWith(
+            "X-OneBots-Config-Revision",
+            expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
+        );
     });
 
     it("拒绝由旧实例或过期配置快照发起的安装", async () => {
@@ -124,6 +130,7 @@ describe("extension routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "EXTENSION_INSTANCE_MISMATCH",
             message: expect.stringContaining("当前已由实例 instance-a 接管"),
         });
 
@@ -135,6 +142,7 @@ describe("extension routes", () => {
         expect(staleRevision.status).toBe(409);
         expect(staleRevision.body).toMatchObject({
             success: false,
+            code: "EXTENSION_CONFIG_REVISION_MISMATCH",
             message: "扩展安装使用的配置已经过期，请重新读取后再操作",
         });
         expect(install).not.toHaveBeenCalled();
@@ -148,6 +156,8 @@ describe("extension routes", () => {
 
         expect(ctx.body).toMatchObject({
             success: true,
+            operation: "install",
+            target: { id: "adapter:slack" },
             restartRequired: true,
             restartSupported: false,
             message: expect.stringContaining("请手动重启 OneBots"),
@@ -163,6 +173,8 @@ describe("extension routes", () => {
         expect(disable).toHaveBeenCalledWith("adapter:slack");
         expect(ctx.body).toMatchObject({
             success: true,
+            operation: "disable",
+            target: { id: "adapter:slack" },
             restartRequired: true,
             restartSupported: true,
             application: "onebots",
@@ -181,6 +193,8 @@ describe("extension routes", () => {
         expect(uninstall).toHaveBeenCalledWith("adapter:slack", app.pluginInfos);
         expect(ctx.body).toMatchObject({
             success: true,
+            operation: "uninstall",
+            target: { id: "adapter:slack" },
             restartRequired: false,
             application: "onebots",
             instance_id: "instance-a",
@@ -201,6 +215,7 @@ describe("extension routes", () => {
         expect(ctx.status).toBe(409);
         expect(ctx.body).toMatchObject({
             success: false,
+            code: "EXTENSION_CONFIG_REVISION_MISMATCH",
             message: "扩展停用使用的配置已经过期，请重新读取后再操作",
         });
         expect(disable).not.toHaveBeenCalled();
@@ -220,6 +235,7 @@ describe("extension routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "EXTENSION_BUSY",
             message: "正在安装",
         });
     });
@@ -238,6 +254,7 @@ describe("extension routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "EXTENSION_CATALOG_UNAVAILABLE",
             message: "扩展目录完整性校验失败",
         });
     });
@@ -256,6 +273,7 @@ describe("extension routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "EXTENSION_RUNTIME_CONFIG_INVALID",
             message: "扩展启动配置无法读取：plugins 必须是对象",
         });
     });
@@ -275,6 +293,7 @@ describe("extension routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "EXTENSION_FAILED",
             message,
         });
         expect(app.logger.error).toHaveBeenCalledWith("管理端安装扩展失败", {
