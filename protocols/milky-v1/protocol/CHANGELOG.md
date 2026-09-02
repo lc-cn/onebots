@@ -1,5 +1,11 @@
 # @onebots/protocol-milky-v1
 
+## 3.0.12
+
+### Patch Changes
+
+- onebots@1.2.12
+
 ## 3.0.11
 
 ### Patch Changes

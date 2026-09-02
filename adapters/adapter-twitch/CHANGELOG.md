@@ -1,5 +1,11 @@
 # @onebots/adapter-twitch
 
+## 0.1.3
+
+### Patch Changes
+
+- onebots@1.2.12
+
 ## 0.1.2
 
 ### Patch Changes

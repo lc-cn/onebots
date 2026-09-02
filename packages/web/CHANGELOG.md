@@ -1,5 +1,12 @@
 # @onebots/web
 
+## 1.0.17
+
+### Patch Changes
+
+- Updated dependencies [b806e6f]
+  - @onebots/core@1.2.9
+
 ## 1.0.16
 
 ### Patch Changes
