@@ -1,4 +1,9 @@
-import { AccountMutationConflictError, RouterContext, ValidationError } from "@onebots/core";
+import {
+    AccountConfigDriftError,
+    AccountMutationConflictError,
+    RouterContext,
+    ValidationError,
+} from "@onebots/core";
 import type { Adapter, Router } from "@onebots/core";
 import type { App } from "../app.js";
 import {
@@ -235,7 +240,9 @@ async function handleAccountRemoval(
         const request = readRequest();
         const content = await app.removeAccount(request.platform, request.uin, request.force);
         if (typeof content !== "string") {
-            throw new ValidationError(`无法删除账号 ${request.platform}.${request.uin}：账号不存在`);
+            throw new ValidationError(
+                `无法删除账号 ${request.platform}.${request.uin}：账号不存在`,
+            );
         }
         ctx.body = accountMutationSuccess(
             app,
@@ -281,8 +288,19 @@ function accountMutationFailure(app: App, error: unknown) {
         success: false,
         application: app.info.application_name,
         instance_id: app.info.instance_id,
+        code: accountMutationCode(error),
         message: error instanceof Error ? error.message : "账号配置操作失败",
     };
+}
+
+function accountMutationCode(error: unknown): string {
+    if (error instanceof ManagementInstanceMismatchError) return "ACCOUNT_INSTANCE_MISMATCH";
+    if (error instanceof ManagementConfigRevisionMismatchError)
+        return "ACCOUNT_CONFIG_REVISION_MISMATCH";
+    if (error instanceof AccountConfigDriftError) return "ACCOUNT_CONFIG_DRIFT";
+    if (error instanceof AccountMutationConflictError) return "ACCOUNT_CONFIG_BUSY";
+    if (error instanceof ValidationError) return "ACCOUNT_CONFIG_INVALID";
+    return "ACCOUNT_CONFIG_FAILED";
 }
 
 function parseBooleanQuery(value: unknown): boolean {

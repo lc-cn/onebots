@@ -52,6 +52,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     saved: [];
+    stale: [];
     reloadSchema: [];
 }>();
 
@@ -284,11 +285,7 @@ const handleSubmit = async () => {
     try {
         const response = await authFetch(
             buildApiUrl(url),
-            buildAccountConfigurationMutationRequest(
-                payload,
-                expectedIdentity,
-                expectedRevision,
-            ),
+            buildAccountConfigurationMutationRequest(payload, expectedIdentity, expectedRevision),
         );
         const result = await parseAccountConfigurationMutationResponse(
             response,
@@ -303,6 +300,10 @@ const handleSubmit = async () => {
             toast.success(result.message);
             dialogVisible.value = false;
             emit("saved");
+        } else if (result.refreshRequired) {
+            dialogVisible.value = false;
+            emit("stale");
+            toast.error(`${result.message}；配置快照正在刷新，请重新打开账号`);
         } else {
             toast.error(result.message);
         }

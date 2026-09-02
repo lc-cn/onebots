@@ -167,7 +167,7 @@ const loadConfigurationSnapshot = async () => {
             normalizeSchema(rawSchema as Schema | SchemaBundle),
         );
         const configObject = parseConfigObject(snapshot.content);
-        if (generation !== configurationLoadGeneration) return;
+        if (generation !== configurationLoadGeneration) return false;
 
         configurationIdentity.value = snapshot.identity;
         configRevision.value = snapshot.configRevision;
@@ -180,8 +180,9 @@ const loadConfigurationSnapshot = async () => {
         configurationError.value = "";
         schemaStatus.value = "ready";
         await applyProtocolConfigurationRequest();
+        return true;
     } catch (error) {
-        if (generation !== configurationLoadGeneration) return;
+        if (generation !== configurationLoadGeneration) return false;
         configurationIdentity.value = null;
         configRevision.value = "";
         configurationStatus.value = "unavailable";
@@ -189,6 +190,7 @@ const loadConfigurationSnapshot = async () => {
         schemaStatus.value = "error";
         console.error("加载配置快照失败:", error);
         toast.error("加载配置快照失败");
+        return false;
     }
 };
 
@@ -326,6 +328,13 @@ const handleRemoveAccount = async (row: AccountRow) => {
         if (result.success) {
             toast.success(result.message);
             await loadConfigurationSnapshot();
+        } else if (result.refreshRequired) {
+            const refreshed = await loadConfigurationSnapshot();
+            toast.error(
+                refreshed
+                    ? `${result.message}；配置快照已刷新，请重新确认删除`
+                    : `${result.message}；自动刷新失败，请手动重新读取配置`,
+            );
         } else {
             toast.error(result.message);
         }
@@ -451,5 +460,6 @@ watch(activeTab, name => {
         :identity="configurationIdentity"
         :config-revision="configRevision"
         @saved="loadConfigurationSnapshot"
+        @stale="loadConfigurationSnapshot"
         @reload-schema="loadConfigurationSnapshot" />
 </template>

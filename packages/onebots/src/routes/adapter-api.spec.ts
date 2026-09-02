@@ -1,4 +1,5 @@
 import {
+    AccountConfigDriftError,
     AccountMutationConflictError,
     UnsupportedCapabilityError,
     ValidationError,
@@ -88,7 +89,25 @@ describe("adapter account routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "ACCOUNT_CONFIG_BUSY",
             message: "OneBots 配置正在变更，请稍后重试账号操作",
+        });
+    });
+
+    it("账号磁盘漂移发布稳定错误码供 Web 丢弃旧表单", async () => {
+        const updateAccount = vi.fn(async () => {
+            throw new AccountConfigDriftError();
+        });
+        const { posts } = setup({ updateAccount } as Partial<App>);
+        const ctx = accountMutationContext({ platform: "mock", account_id: "10001" });
+
+        await posts.get("/api/edit")!(ctx);
+
+        expect(ctx.status).toBe(409);
+        expect(ctx.body).toMatchObject({
+            success: false,
+            code: "ACCOUNT_CONFIG_DRIFT",
+            message: expect.stringContaining("已保留最新文件"),
         });
     });
 
@@ -106,6 +125,7 @@ describe("adapter account routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "ACCOUNT_CONFIG_INVALID",
             message: "运行时配置无效：mock.demo.token: is required",
         });
     });
@@ -128,6 +148,7 @@ describe("adapter account routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "ACCOUNT_INSTANCE_MISMATCH",
             message: `${operation}请求期望实例 instance-before-restart，当前已由实例 instance-a 接管`,
         });
         expect(app[method]).not.toHaveBeenCalled();
@@ -149,6 +170,7 @@ describe("adapter account routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "ACCOUNT_CONFIG_INVALID",
             message: "账号新增请求的配置修订号无效",
         });
         expect(app.addAccount).not.toHaveBeenCalled();
@@ -157,24 +179,27 @@ describe("adapter account routes", () => {
     it.each([
         ["/api/add", "add", "addAccount", "添加成功"],
         ["/api/edit", "edit", "updateAccount", "修改成功"],
-    ] as const)("%s 返回处理实例、目标和精确提交修订", async (route, operation, method, message) => {
-        const { app, posts } = setup();
-        const ctx = accountMutationContext(
-            { platform: "mock", account_id: "demo" },
-            "instance-a",
-        );
+    ] as const)(
+        "%s 返回处理实例、目标和精确提交修订",
+        async (route, operation, method, message) => {
+            const { app, posts } = setup();
+            const ctx = accountMutationContext(
+                { platform: "mock", account_id: "demo" },
+                "instance-a",
+            );
 
-        await posts.get(route)!(ctx);
+            await posts.get(route)!(ctx);
 
-        expect(app[method]).toHaveBeenCalledOnce();
-        expect(ctx.body).toEqual(accountMutationSuccess(operation, "mock", "demo", message));
-        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Application", "onebots");
-        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
-        expect(ctx.set).toHaveBeenCalledWith(
-            "X-OneBots-Config-Revision",
-            createManagementConfigRevision(persistedConfig),
-        );
-    });
+            expect(app[method]).toHaveBeenCalledOnce();
+            expect(ctx.body).toEqual(accountMutationSuccess(operation, "mock", "demo", message));
+            expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Application", "onebots");
+            expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Instance-Id", "instance-a");
+            expect(ctx.set).toHaveBeenCalledWith(
+                "X-OneBots-Config-Revision",
+                createManagementConfigRevision(persistedConfig),
+            );
+        },
+    );
 
     it("适配器未实际提交账号时不返回伪成功", async () => {
         const addAccount = vi.fn(async () => undefined);
@@ -188,6 +213,7 @@ describe("adapter account routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "ACCOUNT_CONFIG_INVALID",
             message: "无法添加账号 missing.demo：适配器不可用",
         });
     });
@@ -206,6 +232,7 @@ describe("adapter account routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "ACCOUNT_CONFIG_INVALID",
             message: "查询参数 uin 必须是非空字符串",
         });
         expect(app.removeAccount).not.toHaveBeenCalled();
@@ -226,6 +253,7 @@ describe("adapter account routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "ACCOUNT_INSTANCE_MISMATCH",
             message: "账号删除请求期望实例 instance-before-restart，当前已由实例 instance-a 接管",
         });
         expect(app.removeAccount).not.toHaveBeenCalled();
@@ -246,6 +274,7 @@ describe("adapter account routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "ACCOUNT_INSTANCE_MISMATCH",
             message: "账号删除请求期望实例 instance-before-restart，当前已由实例 instance-a 接管",
         });
         expect(app.removeAccount).not.toHaveBeenCalled();
@@ -266,9 +295,7 @@ describe("adapter account routes", () => {
         await gets.get("/api/remove")!(ctx);
 
         expect(app.removeAccount).toHaveBeenCalledWith("mock", "10001", expected);
-        expect(ctx.body).toEqual(
-            accountMutationSuccess("remove", "mock", "10001", "移除成功"),
-        );
+        expect(ctx.body).toEqual(accountMutationSuccess("remove", "mock", "10001", "移除成功"));
     });
 
     it("使用 POST 请求体删除账号并严格校验 force", async () => {
@@ -281,9 +308,7 @@ describe("adapter account routes", () => {
         await posts.get("/api/remove")!(valid);
 
         expect(app.removeAccount).toHaveBeenCalledWith("mock", "10001", true);
-        expect(valid.body).toEqual(
-            accountMutationSuccess("remove", "mock", "10001", "移除成功"),
-        );
+        expect(valid.body).toEqual(accountMutationSuccess("remove", "mock", "10001", "移除成功"));
         expect(valid.set).toHaveBeenCalledWith(
             "X-OneBots-Config-Revision",
             createManagementConfigRevision(persistedConfig),
@@ -300,6 +325,7 @@ describe("adapter account routes", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-a",
+            code: "ACCOUNT_CONFIG_INVALID",
             message: "请求字段 force 必须是布尔值",
         });
         expect(app.removeAccount).toHaveBeenCalledTimes(1);
