@@ -4,6 +4,7 @@ import {
     listFrameworkProfiles,
     type FrameworkId,
 } from "../framework-integration.js";
+import { listFrameworkEcosystem } from "../framework-ecosystem.js";
 import { CliError, type CommandResult } from "./command-application.js";
 
 export interface FrameworkCommandOptions {
@@ -21,10 +22,11 @@ export function showFrameworkConnections(options: FrameworkCommandOptions): Comm
             throw new CliError("--account 和 --framework_origin 只能与 --framework 一起使用");
         }
         const profiles = listFrameworkProfiles();
+        const ecosystem = listFrameworkEcosystem();
         return {
             output: options.json
-                ? JSON.stringify({ schemaVersion: 1, profiles }, null, 2)
-                : formatFrameworkProfileList(profiles),
+                ? JSON.stringify({ schemaVersion: 1, profiles, ecosystem }, null, 2)
+                : formatFrameworkProfileList(profiles, ecosystem),
             raw: options.json,
         };
     }
@@ -58,7 +60,10 @@ export function showFrameworkConnections(options: FrameworkCommandOptions): Comm
     };
 }
 
-function formatFrameworkProfileList(profiles: ReturnType<typeof listFrameworkProfiles>): string {
+function formatFrameworkProfileList(
+    profiles: ReturnType<typeof listFrameworkProfiles>,
+    ecosystem: ReturnType<typeof listFrameworkEcosystem>,
+): string {
     return [
         "机器人框架接入基线（等级严格按 OneBots 固定版本证据标记）",
         ...profiles.map(profile => {
@@ -68,6 +73,12 @@ function formatFrameworkProfileList(profiles: ReturnType<typeof listFrameworkPro
                 : "";
             return `${profile.id.padEnd(9)} ${profile.protocol.padEnd(12)} ${profile.transport.padEnd(17)} ${profile.verification}${coverage}`;
         }),
+        "",
+        "已调研候选（尚未提供配置生成器）",
+        ...ecosystem.map(
+            entry =>
+                `${entry.id.padEnd(14)} ${entry.protocols.join(",").padEnd(23)} ${entry.language.padEnd(10)} ${entry.priority}`,
+        ),
         "生成配置: onebots frameworks --framework <name> --account <platform.account_id>",
     ].join("\n");
 }

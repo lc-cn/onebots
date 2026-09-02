@@ -8,6 +8,7 @@ describe("frameworks command", () => {
         const report = JSON.parse(result.output ?? "{}") as {
             schemaVersion: number;
             profiles: Array<{ id: string; verification: string }>;
+            ecosystem: Array<{ id: string; priority: string }>;
         };
 
         expect(result.raw).toBe(true);
@@ -28,6 +29,13 @@ describe("frameworks command", () => {
                 )
                 .every(profile => profile.verification === "handshake"),
         ).toBe(true);
+        expect(report.ecosystem).toHaveLength(18);
+        expect(report.ecosystem).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ id: "astrbot", priority: "next" }),
+                expect.objectContaining({ id: "genshinuid", priority: "later" }),
+            ]),
+        );
         expect(
             report.profiles
                 .filter(profile => ["yunzai", "zhenxun"].includes(profile.id))
@@ -45,6 +53,8 @@ describe("frameworks command", () => {
 
         expect(list.output).toContain("yunzai");
         expect(list.output).toContain("actions 31/59");
+        expect(list.output).toContain("已调研候选");
+        expect(list.output).toContain("astrbot");
         expect(plan.output).toContain("状态: documented");
         expect(plan.output).toContain("源码动作: 31/59");
         expect(plan.output).toContain("不代表完整进程互操作已验证");

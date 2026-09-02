@@ -32,6 +32,10 @@ describe("framework management routes", () => {
                 expect.objectContaining({ id: "koishi" }),
                 expect.objectContaining({ id: "zhenxun" }),
             ]),
+            ecosystem: expect.arrayContaining([
+                expect.objectContaining({ id: "astrbot", priority: "next" }),
+                expect.objectContaining({ id: "kovi", protocols: ["milky.v1", "onebot.v11"] }),
+            ]),
         });
     });
 

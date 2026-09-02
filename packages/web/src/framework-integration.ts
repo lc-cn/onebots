@@ -19,6 +19,24 @@ export interface FrameworkProfileView {
     distributionAudit?: FrameworkAudit;
 }
 
+export interface FrameworkEcosystemView {
+    id: string;
+    displayName: string;
+    kind: "framework" | "distribution" | "sdk" | "bridge";
+    language: string;
+    protocols: string[];
+    transports: string[];
+    priority: "next" | "later" | "legacy";
+    upstream: string;
+    evidence: string;
+    limitation: string;
+}
+
+export interface FrameworkCatalogView {
+    frameworks: FrameworkProfileView[];
+    ecosystem: FrameworkEcosystemView[];
+}
+
 export interface FrameworkPlanView {
     framework: FrameworkProfileView;
     endpoint: string;
@@ -28,12 +46,19 @@ export interface FrameworkPlanView {
     limitations: string[];
 }
 
-export function parseFrameworkCatalog(value: unknown): FrameworkProfileView[] {
+export function parseFrameworkCatalog(value: unknown): FrameworkCatalogView {
     const root = record(value, "框架目录");
-    if (root.schemaVersion !== 1 || !Array.isArray(root.frameworks)) {
+    if (
+        root.schemaVersion !== 1 ||
+        !Array.isArray(root.frameworks) ||
+        !Array.isArray(root.ecosystem)
+    ) {
         throw new TypeError("框架目录版本无效");
     }
-    return root.frameworks.map(parseProfile);
+    return {
+        frameworks: root.frameworks.map(parseProfile),
+        ecosystem: root.ecosystem.map(parseEcosystemEntry),
+    };
 }
 
 export function parseFrameworkPlan(value: unknown): FrameworkPlanView {
@@ -73,6 +98,30 @@ function parseProfile(value: unknown): FrameworkProfileView {
         ...(profile.distributionAudit === undefined
             ? {}
             : { distributionAudit: parseAudit(profile.distributionAudit) }),
+    };
+}
+
+function parseEcosystemEntry(value: unknown): FrameworkEcosystemView {
+    const entry = record(value, "ecosystem");
+    const kind = string(entry.kind, "ecosystem.kind");
+    const priority = string(entry.priority, "ecosystem.priority");
+    if (!["framework", "distribution", "sdk", "bridge"].includes(kind)) {
+        throw new TypeError("ecosystem.kind 无效");
+    }
+    if (!["next", "later", "legacy"].includes(priority)) {
+        throw new TypeError("ecosystem.priority 无效");
+    }
+    return {
+        id: string(entry.id, "ecosystem.id"),
+        displayName: string(entry.displayName, "ecosystem.displayName"),
+        kind: kind as FrameworkEcosystemView["kind"],
+        language: string(entry.language, "ecosystem.language"),
+        protocols: strings(entry.protocols, "ecosystem.protocols"),
+        transports: strings(entry.transports, "ecosystem.transports"),
+        priority: priority as FrameworkEcosystemView["priority"],
+        upstream: string(entry.upstream, "ecosystem.upstream"),
+        evidence: string(entry.evidence, "ecosystem.evidence"),
+        limitation: string(entry.limitation, "ecosystem.limitation"),
     };
 }
 

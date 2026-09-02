@@ -16,6 +16,20 @@ The table records integration surfaces currently published by each upstream proj
 | Yunzai / TRSS-Yunzai | Bot distribution | OneBot 11 reverse WebSocket | Depends on the selected distribution | documented: 31 of 59 direct actions in a pinned source revision have protocol entries; 28 private actions remain unsupported |
 | Zhenxun | NoneBot2 distribution | OneBot 11 reverse WebSocket | Follows NoneBot2 | documented: all 17 explicit core actions in a pinned source revision have entries; the full process and third-party plugins remain pending |
 
+## Expanded ecosystem candidates
+
+The seven baseline profiles are integration paths with a configuration renderer or a pinned source audit. They are not the whole ecosystem that OneBots can potentially serve. Based on the [official OneBot ecosystem](https://onebot.dev/ecosystem) and upstream project repositories, the management API, CLI, and Web console now expose 18 additional researched candidates:
+
+| Priority | Candidates | Rationale |
+| --- | --- | --- |
+| Next | AstrBot, LangBot, AliceBot, melobot, Kovi, ZeroBot, Kotori | Their upstream projects publish clear OneBot or Milky surfaces suitable for pinned process gates |
+| Later | Avilla, OlivOS, Zhamao, Shiro, Simple Robot OneBot, Overflow, Walle, Adachi-BOT, GenshinUID | A protocol surface exists, but WIP status, multiple hosts, SDK embedding, or private actions increase the audit cost |
+| Migration | PepperBot, NoneBot 1 | Kept as migration leads for existing deployments rather than preferred choices for new projects |
+
+A catalog entry means that traceable upstream evidence exists. It is not a compatibility promise. A candidate becomes a plan-ready profile only after its connection direction, configuration fields, authentication, events, and actions pass a pinned-version gate.
+
+NapCat, Lagrange, and OpenShamrock are OneBot **protocol implementations** whose role overlaps OneBots' platform and protocol edge. They are not downstream application frameworks consuming OneBots events, so they are outside this candidate list. SDKs, bridges, and plugin distributions are also classified separately because they require different acceptance gates.
+
 General frameworks and bot distributions need different treatment. NoneBot, Koishi, Karin, Zhin, and AlemonJS provide reusable plugin runtimes. Yunzai and Zhenxun bundle application plugins that may depend on QQ-specific non-standard actions, CQ codes, or fields beyond a successful protocol handshake.
 
 The repository's external-process interop gate produced the NoneBot2 evidence, last verified on 2026-09-02. It starts pinned NoneBot2 and OneBots processes and covers invalid-token rejection, the reverse-WebSocket handshake, a private-message event, `get_login_info`, and `send_private_msg`. This evidence earns the `handshake` level only. Group messages, rich media, reconnect behavior, and the complete action matrix have not passed yet, so the profile is not marked `messages` or `verified`.
@@ -154,6 +168,7 @@ Yunzai and Zhenxun also require an extended-action baseline derived from real pl
 3. **Karin + Milky** now has a pinned WebSocket baseline, proving the profile seam is not OneBot-specific. Add SSE, webhook, reconnect, group-message, rich-media, and action matrices next while tracking the upstream dependency declaration and `yaml` fix.
 4. **Yunzai and Zhenxun** now have pinned source-action matrices and shared friend-deletion, history, and forwarded-message entries. The next step is a full distribution process gate and explicit handling of the remaining private actions.
 5. **Koishi** now has a pinned official-Satori handshake, direct-message, and send gate. Add group messages, rich media, reconnect behavior, and the complete resource-action matrix next.
+6. **Expanded ecosystem** starts with AstrBot, LangBot, AliceBot, melobot, Kovi, ZeroBot, and Kotori. Each candidate must pin a version and pass a minimal connection and action loop before receiving a configuration renderer.
 
 ## Upstream references
 
@@ -164,3 +179,10 @@ Yunzai and Zhenxun also require an extended-action baseline derived from real pl
 - [AlemonJS OneBot adapter](https://www.npmjs.com/package/@alemonjs/onebot)
 - [Yunzai platform integration](https://yunzai-bot.com/get-started/platform.html)
 - [Zhenxun project](https://github.com/zhenxun-org/zhenxun_bot)
+- [Official OneBot ecosystem](https://onebot.dev/ecosystem)
+- [AstrBot](https://github.com/AstrBotDevs/AstrBot)
+- [LangBot](https://github.com/langbot-app/LangBot)
+- [AliceBot](https://github.com/AliceBotProject/alicebot)
+- [melobot](https://github.com/Meloland/melobot)
+- [Kovi](https://github.com/ThriceCola/Kovi)
+- [Kotori](https://github.com/kotorijs/kotori)

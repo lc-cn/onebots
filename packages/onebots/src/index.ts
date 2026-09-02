@@ -17,6 +17,12 @@ export {
     type FrameworkVerificationLevel,
 } from "./framework-integration.js";
 export {
+    listFrameworkEcosystem,
+    type EcosystemEntryKind,
+    type EcosystemPriority,
+    type FrameworkEcosystemEntry,
+} from "./framework-ecosystem.js";
+export {
     parseRuntimeConfig,
     validateRuntimeConfig,
     type RuntimeConfigIssue,

@@ -4,7 +4,7 @@
             <div>
                 <h1 class="text-2xl font-semibold text-fg">框架接入</h1>
                 <p class="mt-1 text-sm text-fg-secondary">
-                    查看七个机器人框架与发行版的验证状态，并生成不含真实密钥的双端配置。
+                    七个接入方案可直接生成配置；另有十八个生态候选已完成资料调研。
                 </p>
             </div>
             <UiAlert v-if="errorMessage" variant="danger">{{ errorMessage }}</UiAlert>
@@ -65,6 +65,39 @@
                         </div>
                     </UiCard>
                 </div>
+                <UiCard>
+                    <template #header>
+                        <div>
+                            <span class="font-semibold text-fg">已调研生态候选</span>
+                            <p class="mt-1 text-xs font-normal text-fg-secondary">
+                                候选条目仅表示已有上游依据，不代表已经完成兼容验证或配置生成器。
+                            </p>
+                        </div>
+                    </template>
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <a
+                            v-for="entry in ecosystem"
+                            :key="entry.id"
+                            :href="entry.upstream"
+                            target="_blank"
+                            rel="noreferrer"
+                            class="rounded-control border border-border p-3 transition-colors hover:border-accent">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <strong class="text-sm text-fg">{{ entry.displayName }}</strong>
+                                <UiBadge
+                                    :variant="entry.priority === 'next' ? 'accent' : 'neutral'">
+                                    {{ priorityLabel(entry.priority) }}
+                                </UiBadge>
+                                <span class="text-xs text-fg-tertiary">{{ entry.language }}</span>
+                            </div>
+                            <p class="mt-2 font-mono text-xs text-accent">
+                                {{ entry.protocols.join(" · ") }}
+                            </p>
+                            <p class="mt-2 text-xs text-fg-secondary">{{ entry.evidence }}</p>
+                            <p class="mt-1 text-xs text-fg-tertiary">{{ entry.limitation }}</p>
+                        </a>
+                    </div>
+                </UiCard>
                 <UiCard>
                     <template #header
                         ><span class="font-semibold text-fg">生成接入配置</span></template
@@ -143,6 +176,7 @@ import { authFetch } from "../composables/useAuth.js";
 import {
     parseFrameworkCatalog,
     parseFrameworkPlan,
+    type FrameworkEcosystemView,
     type FrameworkPlanView,
     type FrameworkProfileView,
 } from "../framework-integration.js";
@@ -156,6 +190,7 @@ import UiSelect from "../ui/UiSelect.vue";
 import UiSpinner from "../ui/UiSpinner.vue";
 
 const profiles = ref<FrameworkProfileView[]>([]);
+const ecosystem = ref<FrameworkEcosystemView[]>([]);
 const plan = ref<FrameworkPlanView | null>(null);
 const selectedFramework = ref<string | number | boolean | undefined>();
 const account = ref("");
@@ -173,7 +208,9 @@ onMounted(async () => {
         const response = await authFetch(buildApiUrl("/api/frameworks"), { cache: "no-store" });
         const payload = await readManagementJsonResponse(response);
         if (!response.ok) throw new Error("框架目录请求失败（HTTP " + response.status + "）");
-        profiles.value = parseFrameworkCatalog(payload);
+        const catalog = parseFrameworkCatalog(payload);
+        profiles.value = catalog.frameworks;
+        ecosystem.value = catalog.ecosystem;
         selectedFramework.value = profiles.value[0]?.id;
     } catch (error) {
         errorMessage.value = error instanceof Error ? error.message : "框架目录不可用";
@@ -219,5 +256,9 @@ function verificationLabel(level: string) {
 
 function verificationVariant(level: string): "success" | "warning" {
     return level === "documented" ? "warning" : "success";
+}
+
+function priorityLabel(priority: FrameworkEcosystemView["priority"]): string {
+    return priority === "next" ? "下一批" : priority === "later" ? "后续" : "历史项目";
 }
 </script>

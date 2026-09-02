@@ -8,11 +8,16 @@ import {
     type FrameworkId,
 } from "../framework-integration.js";
 import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
+import { listFrameworkEcosystem } from "../framework-ecosystem.js";
 
 export function registerFrameworkRoutes(app: App, router: Router): void {
     router.get("/api/frameworks", (ctx: RouterContext) => {
         setManagementEvidenceIdentity(app, ctx);
-        ctx.body = { schemaVersion: 1, frameworks: listFrameworkProfiles() };
+        ctx.body = {
+            schemaVersion: 1,
+            frameworks: listFrameworkProfiles(),
+            ecosystem: listFrameworkEcosystem(),
+        };
     });
 
     router.post("/api/frameworks/plan", (ctx: RouterContext) => {
