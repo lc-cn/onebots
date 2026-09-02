@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-line",
-    "version": "3.0.10",
+    "version": "3.0.11",
     "description": "基于官方 SDK 的 OneBots LINE Messaging API 适配器",
     "type": "module",
     "main": "lib/index.js",
