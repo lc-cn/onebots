@@ -1,5 +1,15 @@
 # @onebots/docs
 
+## 0.5.6
+
+### Patch Changes
+
+- a02ada0: 新增与 Adapter、Protocol 同级的内置 Application 运行时扩展，通过 `-t/--target` 选择目标框架，并按框架拆分中英文解决方案文档。
+- e3eb81b: 将 11 个机器人框架目标从 planned 提升为可激活的 experimental 或 legacy Application，补充连接模板、唯一兼容动作、运行时状态、CLI/管理 API 契约测试及中英文解决方案文档。
+- 7f70d7a: 收敛机器人框架 Application 的职责：移除专用传输和状态动作，区分真实扩展动作、框架依赖动作与已知缺口，并让所有传输继续由账号协议配置显式控制。
+
+  将 25 个框架解决方案重写为可执行的 OneBots 配置、框架端连接、验证和故障修复手册；同时修复框架配置生成命令的本地构建入口、默认参数以及 Satori 鉴权字段。
+
 ## 0.5.5
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-kook",
-  "version": "3.0.10",
+  "version": "3.0.11",
   "description": "onebots KOOK(开黑了)适配器",
   "type": "module",
   "main": "lib/index.js",

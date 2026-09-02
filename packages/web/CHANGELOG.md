@@ -1,5 +1,17 @@
 # @onebots/web
 
+## 1.0.16
+
+### Patch Changes
+
+- ba672b9: 新增可动态注册和加载的 Framework Integration Provider，补齐 Kovi、AstrBot、LangBot、AliceBot 与 Kotori 的固定版本连接方案和互操作门禁，并将机器人框架整理为一级解决方案入口。
+- d449626: 修复配置默认值未进入运行实例、可选空字段误报、休眠协议阻止启动和 Web 表单保留数字字符串的问题，统一 OneBot 心跳与请求超时的毫秒语义，并避免 Satori 默认值覆盖来源适配器的平台身份。
+- Updated dependencies [a02ada0]
+- Updated dependencies [e3eb81b]
+- Updated dependencies [d449626]
+- Updated dependencies [7f70d7a]
+  - @onebots/core@1.2.8
+
 ## 1.0.15
 
 ### Patch Changes

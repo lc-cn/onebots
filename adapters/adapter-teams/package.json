@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-teams",
-    "version": "3.0.10",
+    "version": "3.0.11",
     "description": "基于 Microsoft 365 Agents SDK 的 OneBots Teams 适配器",
     "type": "module",
     "main": "lib/index.js",

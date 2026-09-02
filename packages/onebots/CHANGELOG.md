@@ -1,5 +1,26 @@
 # onebots
 
+## 1.2.11
+
+### Patch Changes
+
+- 80600ef: 新增完整 IRCv3 适配器：支持 Modern IRC TCP/TLS、CAP 302、SASL、已有 socket 与 manual ingress、canonical 事件/API、平台动作、动态能力、结构化 Web Schema 和双语文档。
+- a02ada0: 新增与 Adapter、Protocol 同级的内置 Application 运行时扩展，通过 `-t/--target` 选择目标框架，并按框架拆分中英文解决方案文档。
+- ba672b9: 新增可动态注册和加载的 Framework Integration Provider，补齐 Kovi、AstrBot、LangBot、AliceBot 与 Kotori 的固定版本连接方案和互操作门禁，并将机器人框架整理为一级解决方案入口。
+- e3eb81b: 将 11 个机器人框架目标从 planned 提升为可激活的 experimental 或 legacy Application，补充连接模板、唯一兼容动作、运行时状态、CLI/管理 API 契约测试及中英文解决方案文档。
+- d449626: 修复配置默认值未进入运行实例、可选空字段误报、休眠协议阻止启动和 Web 表单保留数字字符串的问题，统一 OneBot 心跳与请求超时的毫秒语义，并避免 Satori 默认值覆盖来源适配器的平台身份。
+- 7f70d7a: 收敛机器人框架 Application 的职责：移除专用传输和状态动作，区分真实扩展动作、框架依赖动作与已知缺口，并让所有传输继续由账号协议配置显式控制。
+
+  将 25 个框架解决方案重写为可执行的 OneBots 配置、框架端连接、验证和故障修复手册；同时修复框架配置生成命令的本地构建入口、默认参数以及 Satori 鉴权字段。
+
+- Updated dependencies [a02ada0]
+- Updated dependencies [ba672b9]
+- Updated dependencies [e3eb81b]
+- Updated dependencies [d449626]
+- Updated dependencies [7f70d7a]
+  - @onebots/core@1.2.8
+  - @onebots/web@1.0.16
+
 ## 1.2.10
 
 ### Patch Changes
