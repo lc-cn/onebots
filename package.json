@@ -19,6 +19,7 @@
     "test:coverage": "vitest run --coverage",
     "interop:nonebot": "node scripts/interop-nonebot.mjs",
     "interop:zhin": "node scripts/interop-zhin.mjs",
+    "interop:alemonjs": "node scripts/interop-alemonjs.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --check ./**/*.{ts,js}",

@@ -69,6 +69,12 @@ jobs:
       - name: Verify Zhin interoperability
         run: pnpm interop:zhin
 
+      - name: Install AlemonJS interoperability dependencies
+        run: npm ci --prefix interop/alemonjs --ignore-scripts
+
+      - name: Verify AlemonJS interoperability
+        run: pnpm interop:alemonjs
+
       - name: Lint
         run: pnpm lint
 

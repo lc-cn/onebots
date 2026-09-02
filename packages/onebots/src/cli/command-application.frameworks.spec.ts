@@ -23,12 +23,12 @@ describe("frameworks command", () => {
         ]);
         expect(
             report.profiles
-                .filter(profile => ["nonebot", "zhin"].includes(profile.id))
+                .filter(profile => ["nonebot", "zhin", "alemonjs"].includes(profile.id))
                 .map(profile => profile.verification),
-        ).toEqual(["handshake", "handshake"]);
+        ).toEqual(["handshake", "handshake", "handshake"]);
         expect(
             report.profiles
-                .filter(profile => !["nonebot", "zhin"].includes(profile.id))
+                .filter(profile => !["nonebot", "zhin", "alemonjs"].includes(profile.id))
                 .every(profile => profile.verification === "documented"),
         ).toBe(true);
     });

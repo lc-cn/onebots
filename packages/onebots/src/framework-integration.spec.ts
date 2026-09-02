@@ -36,9 +36,17 @@ describe("framework integration profiles", () => {
                 command: "pnpm interop:zhin",
             },
         });
+        expect(getFrameworkProfile("alemonjs")).toMatchObject({
+            verification: "handshake",
+            evidence: {
+                frameworkVersion: "2.1.103",
+                adapterVersion: "2.1.21",
+                command: "pnpm interop:alemonjs",
+            },
+        });
         expect(
             profiles
-                .filter(profile => !["nonebot", "zhin"].includes(profile.id))
+                .filter(profile => !["nonebot", "zhin", "alemonjs"].includes(profile.id))
                 .every(profile => profile.verification === "documented"),
         ).toBe(true);
         expect(Object.isFrozen(getFrameworkProfile("nonebot"))).toBe(true);

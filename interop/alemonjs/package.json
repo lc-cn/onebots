@@ -1,0 +1,9 @@
+{
+    "name": "onebots-interop-alemonjs",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "@alemonjs/onebot": "2.1.21",
+        "alemonjs": "2.1.103"
+    }
+}
