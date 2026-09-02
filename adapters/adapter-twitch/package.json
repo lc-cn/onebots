@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-twitch",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "description": "OneBots Twitch Helix API 与 EventSub 适配器",
     "type": "module",
     "main": "lib/index.js",

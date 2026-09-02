@@ -1,5 +1,11 @@
 # @onebots/adapter-matrix
 
+## 0.1.4
+
+### Patch Changes
+
+- onebots@1.2.12
+
 ## 0.1.3
 
 ### Patch Changes

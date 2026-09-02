@@ -1,5 +1,12 @@
 # @onebots/adapter-instagram
 
+## 0.1.4
+
+### Patch Changes
+
+- @onebots/meta@0.1.4
+- onebots@1.2.12
+
 ## 0.1.3
 
 ### Patch Changes

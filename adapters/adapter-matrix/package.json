@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-matrix",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "description": "OneBots Matrix Client-Server 与 Application Service 适配器",
     "type": "module",
     "main": "lib/index.js",

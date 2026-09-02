@@ -1,5 +1,11 @@
 # @onebots/adapter-icqq
 
+## 3.0.13
+
+### Patch Changes
+
+- onebots@1.2.12
+
 ## 3.0.12
 
 ### Patch Changes

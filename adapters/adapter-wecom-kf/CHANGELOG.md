@@ -1,5 +1,11 @@
 # @onebots/adapter-wecom-kf
 
+## 2.0.12
+
+### Patch Changes
+
+- onebots@1.2.12
+
 ## 2.0.11
 
 ### Patch Changes

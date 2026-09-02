@@ -1,5 +1,11 @@
 # @onebots/adapter-mock
 
+## 1.0.21
+
+### Patch Changes
+
+- onebots@1.2.12
+
 ## 1.0.20
 
 ### Patch Changes
