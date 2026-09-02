@@ -536,7 +536,7 @@ EOF
             adapters: ["slack", "telegram"],
             protocols: ["milky-v1"],
         });
-        expect(packageNamesFor(selection.adapters, selection.protocols)).toEqual([
+        expect(packageNamesFor(selection.adapters, selection.protocols, ["zhin"])).toEqual([
             "onebots",
             "@onebots/adapter-slack",
             "@onebots/adapter-telegram",

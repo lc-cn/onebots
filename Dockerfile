@@ -26,7 +26,7 @@ RUN node --input-type=module -e "import fs from 'node:fs'; const p='development/
 # 安装依赖并构建（无 adapter-icqq，无需 GitHub Packages token；锁文件与镜像上下文可能不一致，故不用 --frozen-lockfile）
 RUN pnpm install --no-frozen-lockfile
 # 仅构建网关所需包（跳过 docs：VitePress 需 git，Alpine 镜像未安装且运行时不需要文档）
-RUN pnpm build:packages && pnpm --filter='./protocols/*/*' --filter='./adapters/*' --filter='./applications/*' build
+RUN pnpm build:packages && pnpm --filter='./protocols/*/*' --filter='./adapters/*' build
 
 # 生产依赖（去掉 devDependencies 以减小镜像）
 RUN pnpm prune --prod

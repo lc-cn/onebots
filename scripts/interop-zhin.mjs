@@ -93,11 +93,6 @@ function prepareWorkspacePlugins() {
         path.join(scope, "protocol-onebot-v11"),
         "dir",
     );
-    fs.symlinkSync(
-        path.join(ROOT, "applications/zhin"),
-        path.join(scope, "application-zhin"),
-        "dir",
-    );
 }
 
 function renderConfig(port) {

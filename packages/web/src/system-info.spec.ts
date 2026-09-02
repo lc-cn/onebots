@@ -46,8 +46,8 @@ describe("system info snapshot", () => {
                     plugins: [
                         {
                             type: "application",
-                            name: "zhin",
-                            packageName: "@onebots/application-zhin",
+                            name: "custom",
+                            packageName: "onebots-application-custom",
                             version: "1.0.0",
                             entryPath: "/runtime/zhin.js",
                         },

@@ -86,18 +86,17 @@ export type UpdateRunResult =
     | { status: "current"; changes: [] }
     | { status: "updates_available" | "updated" | "cancelled"; changes: PackageUpdateChange[] };
 
-/** 将 adapter/protocol 短名转换为可更新的 npm 包名列表。 */
+/** 将外部 adapter/protocol 短名转换为可更新的 npm 包；内置 Application 随 onebots 更新。 */
 export function packageNamesFor(
     adapters: string[],
     protocols: string[],
-    applications: string[] = [],
+    _applications: string[] = [],
 ): string[] {
     return [
         ...new Set([
             "onebots",
             ...adapters.map(name => `@onebots/adapter-${name}`),
             ...protocols.map(name => `@onebots/protocol-${name}`),
-            ...applications.map(name => `@onebots/application-${name}`),
         ]),
     ];
 }

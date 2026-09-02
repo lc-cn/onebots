@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadPlugins } from "./runtime.js";
 
 const promotedApplications = [
+    "zhin",
     "avilla",
     "olivos",
     "zhamao",
@@ -16,7 +17,7 @@ const promotedApplications = [
     "nonebot1",
 ] as const;
 
-describe("promoted framework Applications", () => {
+describe("built-in framework Applications", () => {
     afterEach(() => {
         for (const name of promotedApplications) ApplicationRegistry.deactivate(name);
     });

@@ -1109,10 +1109,8 @@ for (const profile of ECOSYSTEM_PROFILES) {
     );
 }
 
-// Zhin 拥有独立 npm Application；其余已验证方案先以同一运行时接口暴露连接能力，
-// 后续可以无缝替换为同名外部包，而无需改变 `-t` 或管理 API。
+// 已验证方案统一以内置 Application 暴露兼容边界；`-t` 只负责选择并激活。
 for (const profile of Object.values(BUILTIN_PROFILES)) {
-    if (profile.id === "zhin") continue;
     ApplicationRegistry.register(createProfileApplication(profile));
 }
 

@@ -1,5 +1,4 @@
 ---
-"@onebots/application-zhin": patch
 "@onebots/core": patch
 "@onebots/docs": patch
 "onebots": patch

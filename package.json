@@ -7,7 +7,7 @@
   "scripts": {
     "build": "pnpm build:packages && pnpm build:rest",
     "build:packages": "pnpm --filter='./packages/*' --workspace-concurrency=1 build",
-    "build:rest": "pnpm --filter='./protocols/*/*' --filter='./adapters/*' --filter='./applications/*' --filter=@onebots/docs --filter=onebots-dev build",
+    "build:rest": "pnpm --filter='./protocols/*/*' --filter='./adapters/*' --filter=@onebots/docs --filter=onebots-dev build",
     "clean": "pnpm -r clean",
     "dev": "pnpm --filter=onebots-dev dev",
     "test:ws": "pnpm --filter=onebots-dev test:ws",
@@ -73,7 +73,6 @@
   "workspaces": [
     "packages/*",
     "adapters/*",
-    "applications/*",
     "protocols/*/*",
     "docs",
     "development"
