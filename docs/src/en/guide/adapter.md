@@ -30,6 +30,7 @@ onebots currently supports the following platform adapters:
 | **Instagram Messaging** | ✅ Implemented | `@onebots/adapter-instagram` | Instagram Login, Messaging, Graph API, webhook, and manual ingress |
 | **Mattermost** | ✅ Implemented | `@onebots/adapter-mattermost` | REST API v4, reliable WebSocket, existing sockets, and manual ingress |
 | **Twitch** | ✅ Implemented | `@onebots/adapter-twitch` | Helix, EventSub WebSocket/Webhook, existing Host/socket, and manual ingress |
+| **IRCv3** | ✅ Implemented | `@onebots/adapter-ircv3` | Modern IRC, CAP/SASL, TCP/TLS, existing sockets, and manual ingress |
 
 ## Capability manifests
 
@@ -113,6 +114,7 @@ Plugin import and contract verification run as one serialized registry transacti
 - [Instagram Messaging Adapter Documentation](/en/platform/instagram)
 - [Mattermost Adapter Documentation](/en/platform/mattermost)
 - [Twitch Adapter Documentation](/en/platform/twitch)
+- [IRCv3 Adapter Documentation](/en/platform/ircv3)
 
 ## Installation
 

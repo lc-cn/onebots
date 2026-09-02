@@ -35,6 +35,7 @@ onebots 目前支持以下平台适配器：
 | **Instagram Messaging** | ✅ 已实现 | `@onebots/adapter-instagram` | 支持 Instagram Login、Messaging、Graph API、Webhook 与手动接入 |
 | **Mattermost** | ✅ 已实现 | `@onebots/adapter-mattermost` | 支持 REST API v4、可靠 WebSocket、已有 socket 与手动接入 |
 | **Twitch** | ✅ 已实现 | `@onebots/adapter-twitch` | 支持 Helix、EventSub WebSocket/Webhook、已有 Host/socket 与手动接入 |
+| **IRCv3** | ✅ 已实现 | `@onebots/adapter-ircv3` | 支持 Modern IRC、CAP/SASL、TCP/TLS、已有 socket 与手动接入 |
 
 ## 能力清单
 
@@ -124,6 +125,7 @@ Schema 中的封闭枚举继续使用 `choices`。若数组字段只想提供常
 - [Instagram Messaging 适配器文档](/platform/instagram)
 - [Mattermost 适配器文档](/platform/mattermost)
 - [Twitch 适配器文档](/platform/twitch)
+- [IRCv3 适配器文档](/platform/ircv3)
 
 ## 1. 安装依赖 
 

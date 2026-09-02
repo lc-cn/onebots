@@ -498,6 +498,7 @@ wechat.prod:
 - [Instagram Messaging 平台](/platform/instagram)
 - [Mattermost 平台](/platform/mattermost)
 - [Twitch 平台](/platform/twitch)
+- [IRCv3 平台](/platform/ircv3)
 - [Kook 平台](/platform/kook)
 - [黑盒语音平台](/platform/heychat)
 - [钉钉平台](/platform/dingtalk)

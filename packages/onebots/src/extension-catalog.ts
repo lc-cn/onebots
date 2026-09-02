@@ -241,6 +241,28 @@ export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
             },
         ],
     ),
+    adapter("ircv3", "IRCv3", "连接 Modern IRC/IRCv3、TCP/TLS、已有 socket 与 manual ingress。", [
+        {
+            title: "确认 IRC 网络与账号方式",
+            description: "向目标网络确认 server、TLS 端口、账号注册、SASL 机制和 channel 权限。",
+            url: "https://ircv3.net/irc/",
+        },
+        {
+            title: "选择连接所有权",
+            description:
+                "普通部署使用主动 TCP/TLS；已有连接管理器、反向连接或队列使用 manual + acceptSocket()/ingest()。",
+        },
+        {
+            title: "配置认证、频道与事件",
+            description:
+                "Web 表单按 TLS/SASL 模式展示字段，channel、capability 和 event command 可逐项增减。",
+        },
+        {
+            title: "核对协商后的动态能力",
+            description:
+                "连接后在能力面板确认 draft/chathistory、CHATHISTORY、MONITOR、setname、typing 等服务器实际能力。",
+        },
+    ]),
     adapter("slack", "Slack", "连接 Slack 工作区，支持 Socket Mode 和 Events API。", [
         {
             title: "创建 Slack App",

@@ -182,6 +182,7 @@ For configuration details of other platforms, see:
 - [Instagram Messaging Platform](/en/platform/instagram)
 - [Mattermost Platform](/en/platform/mattermost)
 - [Twitch Platform](/en/platform/twitch)
+- [IRCv3 Platform](/en/platform/ircv3)
 
 ## Related Links
 
