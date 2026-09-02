@@ -1,5 +1,22 @@
 # @onebots/protocol-onebot-v11
 
+## 3.0.10
+
+### Patch Changes
+
+- 8a0f0a8: 修复 OneBot 11 反向 WebSocket 的 Bearer 鉴权兼容性，并加入固定版本 NoneBot2 真实进程互操作门禁、验证证据与中英文接入说明。
+- 285a0bd: 补齐机器人发行版常用的好友删除、消息历史与合并转发动作，发布云崽和真寻的固定源码兼容矩阵，并在管理 API 与 Web 页面提供七套框架的脱敏接入方案。
+- Updated dependencies [d358230]
+- Updated dependencies [8a0f0a8]
+- Updated dependencies [42dc575]
+- Updated dependencies [2df841a]
+- Updated dependencies [285a0bd]
+- Updated dependencies [85b15f7]
+- Updated dependencies [1f396bd]
+- Updated dependencies [d635329]
+- Updated dependencies [ce480b1]
+  - onebots@1.2.10
+
 ## 3.0.9
 
 ### Patch Changes

@@ -1,5 +1,16 @@
 # @onebots/web
 
+## 1.0.15
+
+### Patch Changes
+
+- 42dc575: 新增 18 个已调研机器人生态候选的分级目录，并在 CLI、管理 API、Web 管理端与中英文文档中区分可生成方案的框架和待验证候选。
+- 285a0bd: 补齐机器人发行版常用的好友删除、消息历史与合并转发动作，发布云崽和真寻的固定源码兼容矩阵，并在管理 API 与 Web 页面提供七套框架的脱敏接入方案。
+- d635329: 加入 melobot 3.4.0 与 ZeroBot 1.8.2 的固定版本真实进程门禁和配置生成方案，并记录其余下一批框架的固定源码阻断证据。
+- ce480b1: 新增完整 Twitch Helix 与稳定 EventSub 适配器，支持主动 WebSocket、签名 Webhook、已有 HTTP Host、已有 socket 和 manual ingress，共享严格验证、可靠去重、动态能力及结构化配置表单；同时让通用 record-list 支持行内下拉与条件字段，并发布 Twitch 能力目录。
+- Updated dependencies [ce480b1]
+  - @onebots/core@1.2.7
+
 ## 1.0.14
 
 ### Patch Changes

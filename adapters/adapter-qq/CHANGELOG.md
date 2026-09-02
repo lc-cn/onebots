@@ -1,5 +1,20 @@
 # @onebots/adapter-qq
 
+## 3.0.12
+
+### Patch Changes
+
+- Updated dependencies [d358230]
+- Updated dependencies [8a0f0a8]
+- Updated dependencies [42dc575]
+- Updated dependencies [2df841a]
+- Updated dependencies [285a0bd]
+- Updated dependencies [85b15f7]
+- Updated dependencies [1f396bd]
+- Updated dependencies [d635329]
+- Updated dependencies [ce480b1]
+  - onebots@1.2.10
+
 ## 3.0.11
 
 ### Patch Changes

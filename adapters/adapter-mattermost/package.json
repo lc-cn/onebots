@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-mattermost",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "OneBots Mattermost REST v4 与可靠 WebSocket 适配器",
     "type": "module",
     "main": "lib/index.js",

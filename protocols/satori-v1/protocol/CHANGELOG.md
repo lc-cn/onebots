@@ -1,5 +1,21 @@
 # @onebots/protocol-satori-v1
 
+## 3.0.10
+
+### Patch Changes
+
+- d358230: 加入固定版本 Koishi Satori 互操作门禁，修正官方适配器根端点模板，并在保留既有响应包装的同时支持官方客户端的直接 API 结果。
+- Updated dependencies [d358230]
+- Updated dependencies [8a0f0a8]
+- Updated dependencies [42dc575]
+- Updated dependencies [2df841a]
+- Updated dependencies [285a0bd]
+- Updated dependencies [85b15f7]
+- Updated dependencies [1f396bd]
+- Updated dependencies [d635329]
+- Updated dependencies [ce480b1]
+  - onebots@1.2.10
+
 ## 3.0.9
 
 ### Patch Changes
