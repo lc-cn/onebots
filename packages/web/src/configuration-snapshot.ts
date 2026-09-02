@@ -4,6 +4,7 @@ import {
     sameManagementEvidenceIdentity,
     type ManagementEvidenceIdentity,
 } from "./management-evidence-identity.js";
+import { readManagementJsonResponse } from "./management-response.js";
 
 export interface ConfigurationSnapshot<TSchema> {
     identity: ManagementEvidenceIdentity;
@@ -33,25 +34,70 @@ export function parseConfigurationSnapshot<TSchema>(
     return { identity: configIdentity, configRevision, content, schema };
 }
 
-export interface ConfigurationMutationResult {
-    success: boolean;
-    application?: unknown;
-    instance_id?: unknown;
-    config_revision?: unknown;
-    message?: unknown;
-    restartRequired?: unknown;
-}
+export type ConfigurationMutationFailureCode =
+    | "CONFIG_INSTANCE_MISMATCH"
+    | "CONFIG_REVISION_MISMATCH"
+    | "CONFIG_DRIFT"
+    | "CONFIG_BUSY"
+    | "CONFIG_INVALID"
+    | "CONFIG_APPLY_FAILED";
 
-/** 保存成功必须由处理请求的同一实例明确确认。 */
-export function assertConfigurationMutationAcknowledgement(
-    response: Pick<Response, "headers">,
-    payload: ConfigurationMutationResult,
+export type ConfigurationMutationResult =
+    | {
+          success: true;
+          configRevision: string;
+          applied: boolean;
+          restartRequired: boolean;
+          changedHostFields: string[];
+          message: string;
+      }
+    | {
+          success: false;
+          code: ConfigurationMutationFailureCode;
+          refreshRequired: boolean;
+          message: string;
+      };
+
+/** 在读取正文前先闭合响应实例，再验证保存操作、应用状态与配置提交。 */
+export async function parseConfigurationMutationResponse(
+    response: Response,
     expectedIdentity: ManagementEvidenceIdentity,
-): string {
-    assertConfigurationMutationIdentity(response, payload, expectedIdentity);
-    if (payload.success !== true) throw new Error("配置保存回执未声明成功");
-    const headerRevision =
-        response.headers.get(MANAGEMENT_CONFIG_REVISION_HEADER)?.trim() ?? "";
+): Promise<ConfigurationMutationResult> {
+    const responseIdentity = parseManagementEvidenceIdentity(response);
+    if (!sameManagementEvidenceIdentity(responseIdentity, expectedIdentity)) {
+        return {
+            success: false,
+            code: "CONFIG_INSTANCE_MISMATCH",
+            refreshRequired: true,
+            message: `配置快照已失效：期望实例 ${expectedIdentity.instanceId}，实际 ${responseIdentity.instanceId}`,
+        };
+    }
+    const payload: unknown = await readManagementJsonResponse(response);
+    if (!isRecord(payload) || payload.application !== "onebots") {
+        throw new Error("配置保存回执未声明 OneBots 应用身份");
+    }
+    if (payload.instance_id !== expectedIdentity.instanceId) {
+        throw new Error(
+            `配置保存回执实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${typeof payload.instance_id === "string" ? payload.instance_id : "缺失"}`,
+        );
+    }
+    if (!response.ok) {
+        if (payload.success !== false) throw new Error("配置保存失败回执未声明失败");
+        const code = parseConfigurationMutationFailureCode(payload.code);
+        return {
+            success: false,
+            code,
+            refreshRequired:
+                code === "CONFIG_INSTANCE_MISMATCH" ||
+                code === "CONFIG_REVISION_MISMATCH" ||
+                code === "CONFIG_DRIFT",
+            message: safeConfigurationMessage(payload.message, "保存失败"),
+        };
+    }
+    if (payload.success !== true || payload.operation !== "save") {
+        throw new Error("配置保存成功回执与请求操作不一致");
+    }
+    const headerRevision = response.headers.get(MANAGEMENT_CONFIG_REVISION_HEADER)?.trim() ?? "";
     if (
         typeof payload.config_revision !== "string" ||
         !/^sha256:[a-f0-9]{64}$/u.test(payload.config_revision) ||
@@ -59,36 +105,68 @@ export function assertConfigurationMutationAcknowledgement(
     ) {
         throw new Error("配置保存回执缺少一致的配置修订号");
     }
-    return payload.config_revision;
+    const changedHostFields = parseChangedHostFields(payload.changedHostFields);
+    if (payload.restartRequired === true) {
+        if (payload.applied !== false || changedHostFields.length === 0) {
+            throw new Error("配置保存回执的重启状态无效");
+        }
+    } else if (
+        payload.restartRequired !== false ||
+        payload.applied !== true ||
+        changedHostFields.length !== 0
+    ) {
+        throw new Error("配置保存回执的应用状态无效");
+    }
+    return {
+        success: true,
+        configRevision: payload.config_revision,
+        applied: payload.applied,
+        restartRequired: payload.restartRequired,
+        changedHostFields,
+        message: safeConfigurationMessage(payload.message, "配置已保存"),
+    };
 }
 
-/** 失败诊断也必须来自处理该快照的同一实例，避免展示代理拼接的正文。 */
-export function configurationMutationFailureMessage(
-    response: Pick<Response, "headers">,
-    payload: ConfigurationMutationResult,
-    expectedIdentity: ManagementEvidenceIdentity,
-): string {
-    assertConfigurationMutationIdentity(response, payload, expectedIdentity);
-    if (payload.success !== false) throw new Error("配置保存失败回执未声明失败");
-    return typeof payload.message === "string" && payload.message.trim()
-        ? payload.message.trim().replace(/\s+/gu, " ").slice(0, 500)
-        : "保存失败";
+function parseConfigurationMutationFailureCode(value: unknown): ConfigurationMutationFailureCode {
+    switch (value) {
+        case "CONFIG_INSTANCE_MISMATCH":
+        case "CONFIG_REVISION_MISMATCH":
+        case "CONFIG_DRIFT":
+        case "CONFIG_BUSY":
+        case "CONFIG_INVALID":
+        case "CONFIG_APPLY_FAILED":
+            return value;
+        default:
+            throw new Error("配置保存失败回执缺少有效错误码");
+    }
 }
 
-function assertConfigurationMutationIdentity(
-    response: Pick<Response, "headers">,
-    payload: ConfigurationMutationResult,
-    expectedIdentity: ManagementEvidenceIdentity,
-): void {
-    const responseIdentity = parseManagementEvidenceIdentity(response);
-    if (!sameManagementEvidenceIdentity(responseIdentity, expectedIdentity)) {
-        throw new Error(
-            `配置保存响应实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${responseIdentity.instanceId}`,
-        );
+function parseChangedHostFields(value: unknown): string[] {
+    if (
+        !Array.isArray(value) ||
+        value.some(
+            field =>
+                typeof field !== "string" ||
+                !field.trim() ||
+                field.length > 100 ||
+                /[\u0000-\u001f\u007f]/u.test(field),
+        )
+    ) {
+        throw new Error("配置保存回执的宿主字段无效");
     }
-    if (payload.application !== "onebots" || payload.instance_id !== expectedIdentity.instanceId) {
-        throw new Error(
-            `配置保存回执实例不匹配：期望 ${expectedIdentity.instanceId}，实际 ${typeof payload.instance_id === "string" ? payload.instance_id : "缺失"}`,
-        );
+    const fields = value.map(field => field.trim());
+    if (new Set(fields).size !== fields.length) {
+        throw new Error("配置保存回执的宿主字段重复");
     }
+    return fields;
+}
+
+function safeConfigurationMessage(value: unknown, fallback: string): string {
+    return typeof value === "string" && value.trim()
+        ? value.trim().replace(/\s+/gu, " ").slice(0, 500)
+        : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }

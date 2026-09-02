@@ -26,10 +26,8 @@ import { parseProtocolConfigurationRequest } from "./protocol-configuration-requ
 import { buildAccountRemovalRequest } from "../account-removal-request.js";
 import { parseAccountConfigurationMutationResponse } from "../account-configuration-mutation.js";
 import {
-    assertConfigurationMutationAcknowledgement,
-    configurationMutationFailureMessage,
+    parseConfigurationMutationResponse,
     parseConfigurationSnapshot,
-    type ConfigurationMutationResult,
 } from "../configuration-snapshot.js";
 import {
     MANAGEMENT_CONFIG_REVISION_HEADER,
@@ -271,18 +269,14 @@ const handleSave = async () => {
             cache: "no-store",
             redirect: "error",
         });
-        const result = (await readManagementJsonResponse(response)) as ConfigurationMutationResult;
-        if (response.ok) {
-            configRevision.value = assertConfigurationMutationAcknowledgement(
-                response,
-                result,
-                expectedIdentity,
-            );
-            const message = typeof result.message === "string" ? result.message : undefined;
-            if (result.restartRequired) toast.warning(message ?? "配置已保存，需要重启");
-            else toast.success(message ?? "配置已保存并生效");
+        const result = await parseConfigurationMutationResponse(response, expectedIdentity);
+        if (result.success) {
+            configRevision.value = result.configRevision;
+            if (result.restartRequired) toast.warning(result.message);
+            else toast.success(result.message);
         } else {
-            toast.error(configurationMutationFailureMessage(response, result, expectedIdentity));
+            toast.error(result.message);
+            if (result.refreshRequired) await loadConfigurationSnapshot();
         }
     } catch (error) {
         console.error("保存配置失败:", error);

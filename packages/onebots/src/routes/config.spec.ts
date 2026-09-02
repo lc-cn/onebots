@@ -154,6 +154,7 @@ describe("configuration route", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-current",
+            code: "CONFIG_INSTANCE_MISMATCH",
             message:
                 "配置保存请求期望实例 instance-before-restart，当前已由实例 instance-current 接管",
         });
@@ -185,6 +186,7 @@ describe("configuration route", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-current",
+            code: "CONFIG_REVISION_MISMATCH",
             message: "配置保存使用的配置已经过期，请重新读取后再操作",
         });
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe("access_token: external-token\n");
@@ -417,6 +419,7 @@ describe("configuration route", () => {
 
         expect(ctx.body).toEqual({
             success: true,
+            operation: "save",
             application: "onebots",
             instance_id: "instance-current",
             config_revision: createManagementConfigRevision("access_token: next-token\n"),
@@ -462,7 +465,7 @@ describe("configuration route", () => {
         await handler(ctx);
 
         expect(ctx.status).toBe(409);
-        expect(ctx.body).toMatchObject({ success: false });
+        expect(ctx.body).toMatchObject({ success: false, code: "CONFIG_BUSY" });
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe("access_token: old-token\n");
         expect(reload).not.toHaveBeenCalled();
     });
@@ -483,6 +486,7 @@ describe("configuration route", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-current",
+            code: "CONFIG_DRIFT",
             message: "配置应用失败，且磁盘配置已被另一操作更新；已保留最新文件",
         });
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe(concurrent);
@@ -503,6 +507,7 @@ describe("configuration route", () => {
             success: false,
             application: "onebots",
             instance_id: "instance-current",
+            code: "CONFIG_DRIFT",
             message: "配置运行态处理完成，但磁盘配置已被另一操作更新；已保留最新文件，请重新加载",
         });
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe(concurrent);
@@ -517,9 +522,27 @@ describe("configuration route", () => {
         await handler(ctx);
 
         expect(ctx.status).toBe(400);
-        expect(ctx.body).toMatchObject({ success: false });
+        expect(ctx.body).toMatchObject({ success: false, code: "CONFIG_INVALID" });
         expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe("access_token: old-token\n");
         expect(reload).not.toHaveBeenCalled();
+    });
+
+    it("运行态应用失败返回稳定错误码并恢复旧文件", async () => {
+        const reload = vi.fn(async () => {
+            throw new Error("adapter startup failed");
+        }) as App["reload"];
+        const { handler } = setup(reload);
+        const ctx = configMutationContext("access_token: next-token\n");
+
+        await handler(ctx);
+
+        expect(ctx.status).toBe(500);
+        expect(ctx.body).toMatchObject({
+            success: false,
+            code: "CONFIG_APPLY_FAILED",
+            message: "adapter startup failed",
+        });
+        expect(fs.readFileSync(BaseApp.configPath, "utf8")).toBe("access_token: old-token\n");
     });
 
     it("可选远端备份异常不会把已生效配置误报为失败", async () => {

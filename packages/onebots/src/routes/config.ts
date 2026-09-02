@@ -4,7 +4,12 @@ import { readFileSync } from "fs";
 import type { App } from "../app.js";
 import { getAppConfigSchema } from "../config-schema.js";
 import { saveManagedRuntimeConfig } from "../managed-runtime-config.js";
-import { isRuntimeConfigApplicationConflict } from "../runtime-config-application.js";
+import {
+    isRuntimeConfigApplicationConflict,
+    RuntimeConfigApplicationConflictError,
+    RuntimeConfigPostApplyConflictError,
+    RuntimeConfigRollbackConflictError,
+} from "../runtime-config-application.js";
 import { scheduleProcessRestart } from "../process-restart.js";
 import { setManagementEvidenceIdentity } from "../management-evidence-identity.js";
 import {
@@ -49,6 +54,7 @@ export function registerConfigRoutes(app: App, router: Router): void {
             const configRevision = setManagementConfigRevision(ctx, configContent);
             ctx.body = {
                 ...result,
+                operation: "save",
                 application: app.info.application_name,
                 instance_id: app.info.instance_id,
                 config_revision: configRevision,
@@ -67,6 +73,7 @@ export function registerConfigRoutes(app: App, router: Router): void {
                 success: false,
                 application: app.info.application_name,
                 instance_id: app.info.instance_id,
+                code: configurationMutationFailureCode(error),
                 message: (error as Error).message,
             };
             app.logger.error("管理端配置保存失败", { error });
@@ -231,6 +238,20 @@ export function registerConfigRoutes(app: App, router: Router): void {
             app.logger.error("管理端重启预检失败，当前服务继续运行", { error });
         }
     });
+}
+
+function configurationMutationFailureCode(error: unknown): string {
+    if (error instanceof ManagementInstanceMismatchError) return "CONFIG_INSTANCE_MISMATCH";
+    if (error instanceof ManagementConfigRevisionMismatchError) return "CONFIG_REVISION_MISMATCH";
+    if (
+        error instanceof RuntimeConfigRollbackConflictError ||
+        error instanceof RuntimeConfigPostApplyConflictError
+    ) {
+        return "CONFIG_DRIFT";
+    }
+    if (error instanceof RuntimeConfigApplicationConflictError) return "CONFIG_BUSY";
+    if (error instanceof ValidationError) return "CONFIG_INVALID";
+    return "CONFIG_APPLY_FAILED";
 }
 
 function systemOperationFailure(app: App, error: unknown, fallback: string) {
