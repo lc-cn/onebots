@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-matrix",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "OneBots Matrix Client-Server 与 Application Service 适配器",
     "type": "module",
     "main": "lib/index.js",
@@ -9,7 +9,13 @@
         "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
         "clean": "rm -rf lib *.tsbuildinfo"
     },
-    "keywords": ["onebots", "matrix", "adapter", "appservice", "sync"],
+    "keywords": [
+        "onebots",
+        "matrix",
+        "adapter",
+        "appservice",
+        "sync"
+    ],
     "author": "凉菜",
     "license": "MIT",
     "publishConfig": {

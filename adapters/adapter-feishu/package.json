@@ -1,6 +1,6 @@
 {
   "name": "@onebots/adapter-feishu",
-  "version": "3.0.8",
+  "version": "3.0.9",
   "description": "onebots 飞书适配器",
   "type": "module",
   "main": "lib/index.js",
