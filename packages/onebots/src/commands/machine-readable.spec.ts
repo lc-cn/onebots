@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import CapabilitiesCommand from "./capabilities.js";
 import DoctorCommand from "./doctor.js";
+import FrameworksCommand from "./frameworks.js";
 import StatusCommand from "./status.js";
 
 describe("machine-readable command wiring", () => {
@@ -19,9 +20,11 @@ describe("machine-readable command wiring", () => {
             },
         });
         const status = StatusCommand({ options: { system: false, json: true } });
+        const frameworks = FrameworksCommand({ options: { json: true } });
 
         expect(capabilities.props.machineReadable).toBe(true);
         expect(doctor.props.machineReadable).toBe(true);
         expect(status.props.machineReadable).toBe(true);
+        expect(frameworks.props.machineReadable).toBe(true);
     });
 });

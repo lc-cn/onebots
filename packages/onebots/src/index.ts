@@ -2,6 +2,20 @@
 export { App, createOnebots, defineConfig } from "./app.js";
 export { getAppConfigSchema } from "./config-schema.js";
 export {
+    createFrameworkConnectionPlan,
+    getFrameworkProfile,
+    listFrameworkProfiles,
+    type FrameworkConnectionCheck,
+    type FrameworkConnectionPlan,
+    type FrameworkConnectionRequest,
+    type FrameworkId,
+    type FrameworkKind,
+    type FrameworkProfile,
+    type FrameworkProtocol,
+    type FrameworkTransport,
+    type FrameworkVerificationLevel,
+} from "./framework-integration.js";
+export {
     parseRuntimeConfig,
     validateRuntimeConfig,
     type RuntimeConfigIssue,

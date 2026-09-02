@@ -26,7 +26,8 @@ OneBots 把平台连接与机器人业务框架分开：OneBots 负责连接 IM 
 interface FrameworkConnectionRequest {
   framework: 'koishi' | 'nonebot' | 'karin' | 'zhin' | 'alemonjs' | 'yunzai' | 'zhenxun'
   account: `${string}.${string}`
-  origin: string
+  onebotsOrigin?: string
+  frameworkOrigin?: string
 }
 
 interface ConnectionPlan {
@@ -41,6 +42,31 @@ interface ConnectionPlan {
 ```
 
 框架差异留在 profile 数据和少量渲染器中。协议 URL、token 处理、账号路由、配置脱敏和探测逻辑只实现一次。CLI、Web 向导、文档示例与互操作测试都消费同一份 profile，避免四套说明逐渐漂移。
+
+`onebotsOrigin` 是框架访问 OneBots 的 HTTP origin，可以包含网关的 Router 前缀；`frameworkOrigin` 只用于反向 WebSocket，是 OneBots 访问 NoneBot、云崽或真寻监听端的地址。模块拒绝带用户名、密码、查询参数或 fragment 的 origin，生成结果只包含 `<shared-token>` 占位符，不会把真实长期凭据写进终端历史或归档。
+
+## 生成连接配置
+
+不创建账号也可以查看全部接入 profile：
+
+```bash
+onebots frameworks
+onebots frameworks --json
+```
+
+指定已经存在或准备创建的 OneBots 账号后，命令会生成账号协议片段、框架配置、端点和验证步骤：
+
+```bash
+# 正向 WebSocket：Zhin 主动连接 OneBots
+onebots frameworks --framework zhin --account telegram.main \
+  --origin https://bots.example.com/gateway
+
+# 反向 WebSocket：OneBots 主动连接 NoneBot
+onebots frameworks --framework nonebot --account wechat.work \
+  --framework_origin http://nonebot:8080
+```
+
+`--json` 输出 `schemaVersion: 1` 的结构化 `ConnectionPlan`，可供部署工具消费。生成模板不会修改 `config.yaml`，用户核对方案并替换两端相同的 `<shared-token>` 后再写入配置。
 
 ## 验证等级
 
@@ -85,4 +111,3 @@ interface ConnectionPlan {
 - [AlemonJS OneBot 适配器](https://www.npmjs.com/package/@alemonjs/onebot)
 - [云崽平台接入](https://yunzai-bot.com/get-started/platform.html)
 - [真寻项目说明](https://github.com/zhenxun-org/zhenxun_bot)
-

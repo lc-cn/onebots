@@ -26,7 +26,8 @@ The implementation will use one deep module to produce a `ConnectionPlan`. A cal
 interface FrameworkConnectionRequest {
   framework: 'koishi' | 'nonebot' | 'karin' | 'zhin' | 'alemonjs' | 'yunzai' | 'zhenxun'
   account: `${string}.${string}`
-  origin: string
+  onebotsOrigin?: string
+  frameworkOrigin?: string
 }
 
 interface ConnectionPlan {
@@ -41,6 +42,31 @@ interface ConnectionPlan {
 ```
 
 Framework-specific facts remain in profile data and a small set of renderers. Protocol URLs, token handling, account routing, redaction, and probes are implemented once. The CLI, Web wizard, documentation, and interop fixtures all consume the same profiles so four separate descriptions cannot drift independently.
+
+`onebotsOrigin` is the HTTP origin from which the framework reaches OneBots and may include the Router prefix. `frameworkOrigin` is used only for reverse WebSocket plans and names the listener that OneBots reaches inside NoneBot, Yunzai, or Zhenxun. The module rejects origins containing a username, password, query, or fragment. Generated output contains only a `<shared-token>` placeholder, so a long-lived credential does not enter terminal history or archived evidence.
+
+## Generate connection configuration
+
+List every profile without creating an account:
+
+```bash
+onebots frameworks
+onebots frameworks --json
+```
+
+Supply an existing or planned OneBots account to render the account protocol fragment, downstream configuration, endpoint, and checks:
+
+```bash
+# Forward WebSocket: Zhin connects to OneBots
+onebots frameworks --framework zhin --account telegram.main \
+  --origin https://bots.example.com/gateway
+
+# Reverse WebSocket: OneBots connects to NoneBot
+onebots frameworks --framework nonebot --account wechat.work \
+  --framework_origin http://nonebot:8080
+```
+
+`--json` emits a structured `ConnectionPlan` with `schemaVersion: 1` for deployment tooling. Generation never edits `config.yaml`; review the plan and replace `<shared-token>` with the same secret on both sides before applying it.
 
 ## Verification levels
 
@@ -85,4 +111,3 @@ Yunzai and Zhenxun also require an extended-action baseline derived from real pl
 - [AlemonJS OneBot adapter](https://www.npmjs.com/package/@alemonjs/onebot)
 - [Yunzai platform integration](https://yunzai-bot.com/get-started/platform.html)
 - [Zhenxun project](https://github.com/zhenxun-org/zhenxun_bot)
-
