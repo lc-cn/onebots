@@ -40,7 +40,12 @@ const satoriSchema: Schema = {
         sensitive: true,
         ui: { section: "credentials" },
     },
-    platform: { type: "string", label: "平台标识", ui: { section: "credentials" } },
+    platform: {
+        type: "string",
+        label: "平台标识覆盖",
+        description: "留空时继承来源适配器的平台标识；仅在下游需要自定义命名空间时填写。",
+        ui: { section: "advanced" },
+    },
     filters: Protocol.FilterSchema,
 };
 

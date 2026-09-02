@@ -75,5 +75,4 @@ App.registerGeneral("satori.v1", {
     use_http: false,
     use_ws: true,
     webhooks: [],
-    platform: "satori",
 });
