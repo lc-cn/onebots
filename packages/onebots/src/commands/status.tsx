@@ -10,5 +10,11 @@ export const options = scopeOptions.extend({
 });
 
 export default function StatusCommand({ options: input }: { options: z.infer<typeof options> }) {
-    return <CommandRunner execute={() => serviceStatus(input)} pending="正在检查服务状态…" />;
+    return (
+        <CommandRunner
+            execute={() => serviceStatus(input)}
+            pending="正在检查服务状态…"
+            machineReadable={input.json}
+        />
+    );
 }

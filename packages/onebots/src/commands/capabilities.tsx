@@ -18,6 +18,7 @@ export default function CapabilitiesCommand({
         <CommandRunner
             execute={() => showCapabilities({ ...input, protocol: [] })}
             pending="正在加载适配器能力清单…"
+            machineReadable={input.json}
         />
     );
 }

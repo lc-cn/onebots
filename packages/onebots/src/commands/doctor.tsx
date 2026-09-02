@@ -12,5 +12,11 @@ export const options = scopedRuntimeOptions.extend({
 });
 
 export default function DoctorCommand({ options: input }: { options: z.infer<typeof options> }) {
-    return <CommandRunner execute={() => diagnose(input)} pending="正在诊断 OneBots…" />;
+    return (
+        <CommandRunner
+            execute={() => diagnose(input)}
+            pending="正在诊断 OneBots…"
+            machineReadable={input.json}
+        />
+    );
 }
