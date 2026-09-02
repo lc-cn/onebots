@@ -4,6 +4,7 @@ import { ValidationError } from "./errors.js";
 interface RegistryBoundary<State> {
     capture(): State;
     restore(state: State): void;
+    equals?(left: State, right: State): boolean;
 }
 
 /**
@@ -26,7 +27,11 @@ export function invokeExtensionFactoryWithRegistryBoundary<Result, State>(
         factoryError = error;
     }
 
-    if (!isDeepStrictEqual(boundary.capture(), snapshot)) {
+    const current = boundary.capture();
+    const unchanged = boundary.equals
+        ? boundary.equals(current, snapshot)
+        : isDeepStrictEqual(current, snapshot);
+    if (!unchanged) {
         const violation = new ValidationError(
             `${label} 工厂不得修改扩展注册表；实例工厂只能创建候选实例`,
             {

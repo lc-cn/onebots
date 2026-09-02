@@ -27,6 +27,8 @@ export interface ExtensionRegistrationScopeOptions {
 
 const extensionRegistrationScope = new AsyncLocalStorage<ExtensionRegistrationScope>();
 const MAX_REGISTRATION_TIMEOUT_MS = 2_147_483_647;
+const extensionRegistryRestoreToken = Symbol("onebots.extension-registry-restore");
+const trustedExtensionRegistrySnapshots = new WeakSet<ExtensionRegistryState>();
 
 /**
  * 将一次插件导入标记为唯一可写的注册时段。
@@ -358,17 +360,23 @@ export class ProtocolRegistry {
 
     /** @internal 供插件加载事务捕获当前注册状态。 */
     static captureState(): ExtensionRegistryState["protocols"] {
-        return {
-            factories: new Map(
-                [...this.protocols].map(([name, versions]) => [name, new Map(versions)]),
+        return Object.freeze({
+            factories: createReadonlyRegistryMap(
+                [...this.protocols].map(([name, versions]) => [
+                    name,
+                    createReadonlyRegistryMap(versions),
+                ]),
             ),
-            metadata: new Map(this.metadata),
-            schemas: new Map(this.schemas),
-        };
+            metadata: createReadonlyRegistryMap(this.metadata),
+            schemas: createReadonlyRegistryMap(this.schemas),
+        });
     }
 
     /** @internal 恢复插件加载前的精确注册状态。 */
-    static restoreState(state: ExtensionRegistryState["protocols"]): void {
+    static restoreState(state: ExtensionRegistryState["protocols"], token?: symbol): void {
+        if (token !== extensionRegistryRestoreToken) {
+            throw new ValidationError("协议注册表快照只能由宿主恢复");
+        }
         assertExtensionRegistryMutationOpen();
         this.protocols = new Map(
             [...state.factories].map(([name, versions]) => [name, new Map(versions)]),
@@ -560,15 +568,18 @@ export class AdapterRegistry {
 
     /** @internal 供插件加载事务捕获当前注册状态。 */
     static captureState(): ExtensionRegistryState["adapters"] {
-        return {
-            factories: new Map(this.adapters),
-            metadata: new Map(this.metadata),
-            schemas: new Map(this.schemas),
-        };
+        return Object.freeze({
+            factories: createReadonlyRegistryMap(this.adapters),
+            metadata: createReadonlyRegistryMap(this.metadata),
+            schemas: createReadonlyRegistryMap(this.schemas),
+        });
     }
 
     /** @internal 恢复插件加载前的精确注册状态。 */
-    static restoreState(state: ExtensionRegistryState["adapters"]): void {
+    static restoreState(state: ExtensionRegistryState["adapters"], token?: symbol): void {
+        if (token !== extensionRegistryRestoreToken) {
+            throw new ValidationError("适配器注册表快照只能由宿主恢复");
+        }
         assertExtensionRegistryMutationOpen();
         this.adapters = new Map(state.factories);
         this.metadata = new Map(
@@ -580,22 +591,60 @@ export class AdapterRegistry {
 
 /** 捕获 Adapter 与 Protocol 注册表，用于隔离一次插件初始化。 */
 export function captureExtensionRegistryState(): ExtensionRegistryState {
-    return {
+    const state = Object.freeze({
         adapters: AdapterRegistry.captureState(),
         protocols: ProtocolRegistry.captureState(),
-    };
+    });
+    trustedExtensionRegistrySnapshots.add(state);
+    return state;
 }
 
 /** 回滚一次失败插件初始化造成的全部注册表修改。 */
 export function restoreExtensionRegistryState(state: ExtensionRegistryState): void {
-    AdapterRegistry.restoreState(state.adapters);
-    ProtocolRegistry.restoreState(state.protocols);
+    if (!trustedExtensionRegistrySnapshots.delete(state)) {
+        throw new ValidationError("拒绝恢复来源不明或已经使用的扩展注册表快照");
+    }
+    AdapterRegistry.restoreState(state.adapters, extensionRegistryRestoreToken);
+    ProtocolRegistry.restoreState(state.protocols, extensionRegistryRestoreToken);
 }
 
 const extensionRegistryBoundary = {
     capture: captureExtensionRegistryState,
     restore: restoreExtensionRegistryState,
+    equals: extensionRegistryStatesEqual,
 };
+
+function extensionRegistryStatesEqual(
+    left: ExtensionRegistryState,
+    right: ExtensionRegistryState,
+): boolean {
+    return (
+        mapValuesEqual(left.adapters.factories, right.adapters.factories) &&
+        mapValuesEqual(left.adapters.metadata, right.adapters.metadata) &&
+        mapValuesEqual(left.adapters.schemas, right.adapters.schemas) &&
+        mapValuesEqual(
+            left.protocols.factories,
+            right.protocols.factories,
+            (leftVersions, rightVersions) => mapValuesEqual(leftVersions, rightVersions),
+        ) &&
+        mapValuesEqual(left.protocols.metadata, right.protocols.metadata) &&
+        mapValuesEqual(left.protocols.schemas, right.protocols.schemas)
+    );
+}
+
+function mapValuesEqual<K, V>(
+    left: ReadonlyMap<K, V>,
+    right: ReadonlyMap<K, V>,
+    equals: (left: V, right: V) => boolean = Object.is,
+): boolean {
+    if (left.size !== right.size) return false;
+    for (const [key, value] of left) {
+        const other = right.get(key);
+        if (other === undefined && !right.has(key)) return false;
+        if (!equals(value, other!)) return false;
+    }
+    return true;
+}
 
 /** Schema 是插件与宿主共享的长期契约；复制并冻结容器，避免注册后的外部改写。 */
 function createImmutableSchemaSnapshot(schema: Schema): Schema {
@@ -665,6 +714,24 @@ function createReadonlyMap(target: Map<unknown, unknown>): Map<unknown, unknown>
     });
 }
 
+function createReadonlyRegistryMap<K, V>(entries: Iterable<readonly [K, V]>): ReadonlyMap<K, V> {
+    const target = new Map(entries);
+    const snapshot = new Proxy(target, {
+        get(map, property) {
+            if (property === "set" || property === "delete" || property === "clear") {
+                return rejectRegistrySnapshotMutation;
+            }
+            const value: unknown = Reflect.get(map, property, map);
+            return typeof value === "function" ? value.bind(map) : value;
+        },
+        set: rejectSchemaPropertyMutation,
+        defineProperty: rejectSchemaPropertyMutation,
+        deleteProperty: rejectSchemaPropertyMutation,
+    });
+    Object.freeze(target);
+    return snapshot;
+}
+
 function createReadonlySet(target: Set<unknown>): Set<unknown> {
     return new Proxy(target, {
         get(set, property) {
@@ -697,6 +764,10 @@ function createReadonlyDate(target: Date): Date {
 
 function rejectSchemaMutation(): never {
     throw new TypeError("注册后的配置 Schema 不可修改");
+}
+
+function rejectRegistrySnapshotMutation(): never {
+    throw new TypeError("扩展注册表快照不可修改");
 }
 
 function rejectSchemaPropertyMutation(): false {

@@ -464,4 +464,55 @@ describe("extension registries", () => {
         expect(ProtocolRegistry.getSchema("test.v2")).toBeUndefined();
         expect(ProtocolRegistry.getMetadata("test")?.versions).toEqual(["v1"]);
     });
+
+    it("注册表事务快照在顶层和嵌套 Map 上都不可修改", () => {
+        AdapterRegistry.register("existing", adapterFactory);
+        AdapterRegistry.registerSchema("existing", schema);
+        ProtocolRegistry.register("test", "v1", protocolFactory);
+        ProtocolRegistry.registerSchema("test.v1", schema);
+        const state = captureExtensionRegistryState();
+
+        expect(Object.isFrozen(state)).toBe(true);
+        expect(Object.isFrozen(state.adapters)).toBe(true);
+        expect(Object.isFrozen(state.protocols)).toBe(true);
+        expect(() =>
+            (state.adapters.factories as Map<string, Adapter.Factory>).set(
+                "injected",
+                anotherAdapterFactory,
+            ),
+        ).toThrow("扩展注册表快照不可修改");
+        expect(() =>
+            (state.protocols.factories.get("test") as Map<string, Protocol.Factory>).set(
+                "v2",
+                anotherProtocolFactory,
+            ),
+        ).toThrow("扩展注册表快照不可修改");
+        expect(AdapterRegistry.has("injected")).toBe(false);
+        expect(ProtocolRegistry.has("test", "v2")).toBe(false);
+    });
+
+    it("拒绝伪造、直接采用或重复使用注册表恢复快照", () => {
+        AdapterRegistry.register("existing", adapterFactory);
+        AdapterRegistry.registerSchema("existing", schema);
+        const state = captureExtensionRegistryState();
+        const forged = { adapters: state.adapters, protocols: state.protocols };
+
+        expect(() => restoreExtensionRegistryState(forged)).toThrow(
+            "拒绝恢复来源不明或已经使用的扩展注册表快照",
+        );
+        expect(() => AdapterRegistry.restoreState(state.adapters)).toThrow(
+            "适配器注册表快照只能由宿主恢复",
+        );
+        expect(() => ProtocolRegistry.restoreState(state.protocols)).toThrow(
+            "协议注册表快照只能由宿主恢复",
+        );
+
+        AdapterRegistry.unregister("existing");
+        restoreExtensionRegistryState(state);
+        expect(AdapterRegistry.has("existing")).toBe(true);
+        expect(() => restoreExtensionRegistryState(state)).toThrow(
+            "拒绝恢复来源不明或已经使用的扩展注册表快照",
+        );
+        expect(AdapterRegistry.has("existing")).toBe(true);
+    });
 });
