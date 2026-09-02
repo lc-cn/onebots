@@ -20,7 +20,19 @@ describe("framework integration profiles", () => {
             "zhenxun",
         ]);
         expect(new Set(profiles.map(profile => profile.id))).toHaveLength(profiles.length);
-        expect(profiles.every(profile => profile.verification === "documented")).toBe(true);
+        expect(getFrameworkProfile("nonebot")).toMatchObject({
+            verification: "handshake",
+            evidence: {
+                frameworkVersion: "2.5.0",
+                adapterVersion: "2.4.6",
+                command: "pnpm interop:nonebot",
+            },
+        });
+        expect(
+            profiles
+                .filter(profile => profile.id !== "nonebot")
+                .every(profile => profile.verification === "documented"),
+        ).toBe(true);
         expect(Object.isFrozen(getFrameworkProfile("nonebot"))).toBe(true);
         expect(Object.isFrozen(getFrameworkProfile("nonebot")?.limitations)).toBe(true);
     });
@@ -50,7 +62,7 @@ describe("framework integration profiles", () => {
                 },
             },
         });
-        expect(plan.frameworkConfig).toContain("ONEBOT_ACCESS_TOKEN=<shared-token>");
+        expect(plan.frameworkConfig).toContain("ONEBOT_V11_ACCESS_TOKEN=<shared-token>");
         expect(plan.frameworkConfig).not.toContain("gateway.example.com");
     });
 

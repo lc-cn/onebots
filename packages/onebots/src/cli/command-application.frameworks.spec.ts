@@ -21,10 +21,17 @@ describe("frameworks command", () => {
             "yunzai",
             "zhenxun",
         ]);
-        expect(report.profiles.every(profile => profile.verification === "documented")).toBe(true);
+        expect(report.profiles.find(profile => profile.id === "nonebot")?.verification).toBe(
+            "handshake",
+        );
+        expect(
+            report.profiles
+                .filter(profile => profile.id !== "nonebot")
+                .every(profile => profile.verification === "documented"),
+        ).toBe(true);
     });
 
-    it("renders a human connection plan without presenting documented as verified", () => {
+    it("renders pinned handshake evidence without overstating the verification level", () => {
         const result = showFrameworkConnections({
             framework: "nonebot",
             account: "mock.bot",
@@ -33,7 +40,10 @@ describe("frameworks command", () => {
         });
 
         expect(result.output).toContain("NoneBot2 接入方案");
-        expect(result.output).toContain("状态: documented（上游接入面不等于 OneBots 已验证）");
+        expect(result.output).toContain("状态: handshake（固定版本已验证到此等级）");
+        expect(result.output).toContain(
+            "证据: framework 2.5.0 / adapter 2.4.6，2026-09-02，pnpm interop:nonebot",
+        );
         expect(result.output).toContain("ws://127.0.0.1:9000/onebot/v11/ws");
         expect(result.output).toContain("<shared-token>");
     });

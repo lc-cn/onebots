@@ -60,7 +60,7 @@ export function showFrameworkConnections(options: FrameworkCommandOptions): Comm
 
 function formatFrameworkProfileList(profiles: ReturnType<typeof listFrameworkProfiles>): string {
     return [
-        "机器人框架接入基线（上游接入面不等于 OneBots 已验证）",
+        "机器人框架接入基线（等级严格按 OneBots 固定版本证据标记）",
         ...profiles.map(
             profile =>
                 `${profile.id.padEnd(9)} ${profile.protocol.padEnd(12)} ${profile.transport.padEnd(17)} ${profile.verification}`,
@@ -74,7 +74,12 @@ function formatFrameworkConnectionPlan(
 ): string {
     return [
         `${plan.framework.displayName} 接入方案`,
-        `状态: ${plan.framework.verification}（上游接入面不等于 OneBots 已验证）`,
+        formatVerificationStatus(plan.framework),
+        ...(plan.framework.evidence
+            ? [
+                  `证据: framework ${plan.framework.evidence.frameworkVersion} / adapter ${plan.framework.evidence.adapterVersion}，${plan.framework.evidence.lastVerifiedAt}，${plan.framework.evidence.command}`,
+              ]
+            : []),
         `协议: ${plan.protocol}`,
         `传输: ${plan.transport}`,
         `端点: ${plan.endpoint}`,
@@ -95,4 +100,12 @@ function formatFrameworkConnectionPlan(
             ? ["", "已知限制:", ...plan.limitations.map(item => `- ${item}`)]
             : []),
     ].join("\n");
+}
+
+function formatVerificationStatus(
+    framework: ReturnType<typeof createFrameworkConnectionPlan>["framework"],
+): string {
+    return framework.verification === "documented"
+        ? "状态: documented（仅确认上游接入面，尚无 OneBots 固定版本互操作证据）"
+        : `状态: ${framework.verification}（固定版本已验证到此等级）`;
 }

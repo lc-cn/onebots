@@ -208,16 +208,18 @@ export class OneBotV11Transport {
     private startWebSocketReverse(url: string): void {
         const { context } = this;
         const endpoint = new URL(url);
+        const headers: Record<string, string> = {
+            "User-Agent": "OneBot/11",
+            "X-Self-ID": context.accountId,
+            "X-Client-Role": "Universal",
+        };
         if (context.config.access_token) {
             endpoint.searchParams.set("access_token", context.config.access_token);
+            headers.Authorization = `Bearer ${context.config.access_token}`;
         }
         const session = new ReverseWebSocketSession({
             url: endpoint.toString(),
-            headers: {
-                "User-Agent": "OneBot/11",
-                "X-Self-ID": context.accountId,
-                "X-Client-Role": "Universal",
-            },
+            headers,
             logger: context.logger,
             onOpen: () => {
                 session.send(

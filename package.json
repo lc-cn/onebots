@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
+    "interop:nonebot": "node scripts/interop-nonebot.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --check ./**/*.{ts,js}",

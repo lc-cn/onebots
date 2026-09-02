@@ -27,9 +27,18 @@ export interface FrameworkProfile {
     protocol: FrameworkProtocol;
     transport: FrameworkTransport;
     verification: FrameworkVerificationLevel;
+    evidence?: FrameworkVerificationEvidence;
     upstream: string;
     defaultFrameworkOrigin: string | null;
     limitations: readonly string[];
+}
+
+export interface FrameworkVerificationEvidence {
+    frameworkVersion: string;
+    adapterVersion: string;
+    lastVerifiedAt: string;
+    command: string;
+    checks: readonly string[];
 }
 
 export interface FrameworkConnectionRequest {
@@ -83,10 +92,23 @@ const PROFILES: Readonly<Record<FrameworkId, FrameworkProfile>> = deepFreeze({
         packageName: "nonebot-adapter-onebot",
         protocol: "onebot.v11",
         transport: "reverse-websocket",
-        verification: "documented",
+        verification: "handshake",
+        evidence: {
+            frameworkVersion: "2.5.0",
+            adapterVersion: "2.4.6",
+            lastVerifiedAt: "2026-09-02",
+            command: "pnpm interop:nonebot",
+            checks: [
+                "auth-rejection",
+                "handshake",
+                "private-message",
+                "get_login_info",
+                "send_private_msg",
+            ],
+        },
         upstream: "https://onebot.adapters.nonebot.dev/docs/guide/setup/",
         defaultFrameworkOrigin: "http://127.0.0.1:8080",
-        limitations: ["尚未在 OneBots CI 中固定 NoneBot2 与适配器版本。"],
+        limitations: ["群消息、富媒体、重连与完整动作矩阵仍待固定版本验证。"],
     },
     karin: {
         id: "karin",
@@ -280,7 +302,7 @@ function renderFrameworkConfig(
             return [
                 "# .env",
                 "DRIVER=~fastapi+~websockets",
-                `ONEBOT_ACCESS_TOKEN=${SHARED_TOKEN}`,
+                `ONEBOT_V11_ACCESS_TOKEN=${SHARED_TOKEN}`,
                 `# OneBots 主动连接 ${endpoint}`,
             ].join("\n");
         case "zhin":

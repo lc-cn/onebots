@@ -9,7 +9,7 @@ OneBots 把平台连接与机器人业务框架分开：OneBots 负责连接 IM 
 | 下游 | 类型 | 首选接入面 | 备选 | 当前结论 |
 | --- | --- | --- | --- | --- |
 | Koishi | 通用框架 | Satori | OneBot 11 社区适配器 | 待互操作验证；当前 Koishi 使用 Satori v3，必须先核对 OneBots 的 `satori.v1` 出口 |
-| NoneBot2 | 通用框架 | OneBot 11 反向 WebSocket | OneBot 11 正向 WebSocket、OneBot 12 | 上游原生支持，待固定版本端到端验证 |
+| NoneBot2 | 通用框架 | OneBot 11 反向 WebSocket | OneBot 11 正向 WebSocket、OneBot 12 | `handshake`：NoneBot2 2.5.0 + adapter 2.4.6 已通过固定版本门禁；完整消息与动作矩阵待验证 |
 | Karin | 通用框架 | Milky WebSocket | Milky SSE、Webhook | 上游已有 Milky 适配器，待固定版本端到端验证 |
 | Zhin | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | 上游已有 OneBot 11 适配器，待固定版本端到端验证 |
 | AlemonJS | 通用框架 | OneBot 11 正向 WebSocket | OneBot 11 反向 WebSocket | 上游已有 `@alemonjs/onebot`，待固定版本端到端验证 |
@@ -17,6 +17,8 @@ OneBots 把平台连接与机器人业务框架分开：OneBots 负责连接 IM 
 | 真寻 | NoneBot2 发行版 | OneBot 11 反向 WebSocket | 跟随 NoneBot2 | 上游基于 NoneBot2 OneBot 适配器，需额外验证真寻插件依赖的扩展动作 |
 
 “框架”和“机器人发行版”需要分开处理。NoneBot、Koishi、Karin、Zhin 与 AlemonJS 提供通用插件运行时；云崽和真寻包含大量现成业务插件，除了协议握手，还可能依赖 QQ 生态形成的非标准动作、CQ 码或字段。
+
+NoneBot2 的证据由仓库中的真实进程互操作门禁产生，最近一次验证日期为 2026-09-02。门禁启动固定版本的 NoneBot2 和 OneBots，已经覆盖错误 token 拒绝、反向 WebSocket 握手、私聊事件、`get_login_info` 与 `send_private_msg`。这份证据只对应 `handshake` 等级；群消息、富媒体、重连和完整动作矩阵尚未通过，因此不标记为 `messages` 或 `verified`。
 
 ## 接入接口
 
@@ -41,7 +43,7 @@ interface ConnectionPlan {
 }
 ```
 
-框架差异留在 profile 数据和少量渲染器中。协议 URL、token 处理、账号路由、配置脱敏和探测逻辑只实现一次。CLI、Web 向导、文档示例与互操作测试都消费同一份 profile，避免四套说明逐渐漂移。
+框架差异留在 profile 数据和少量渲染器中。协议 URL、token 处理、账号路由、配置脱敏和探测逻辑只实现一次。CLI、Web 向导、文档示例与互操作测试都消费同一份 profile，避免四套说明逐渐漂移。`FrameworkProfile.evidence` 记录已验证的框架版本、适配器版本、日期、命令和检查项；没有固定版本证据的 profile 不提供该字段。
 
 `onebotsOrigin` 是框架访问 OneBots 的 HTTP origin，可以包含网关的 Router 前缀；`frameworkOrigin` 只用于反向 WebSocket，是 OneBots 访问 NoneBot、云崽或真寻监听端的地址。模块拒绝带用户名、密码、查询参数或 fragment 的 origin，生成结果只包含 `<shared-token>` 占位符，不会把真实长期凭据写进终端历史或归档。
 
@@ -86,6 +88,15 @@ onebots frameworks --framework nonebot --account wechat.work \
 
 每个框架的测试夹具应作为外部进程或容器运行，禁止只对 profile 做快照测试。最小门禁包括：
 
+NoneBot2 门禁可在仓库根目录执行：
+
+```bash
+python -m pip install -r interop/nonebot/requirements.txt
+pnpm interop:nonebot
+```
+
+CI 与发版流程都会运行同一命令。门禁使用固定依赖，不读取真实平台凭据，并通过 mock 适配器完成双向调用。
+
 1. 使用错误 token 时连接失败，正确 token 能识别目标账号。
 2. Mock 适配器触发私聊与群聊事件，下游收到正确身份、消息段和回复上下文。
 3. 下游发起发送、撤回、查询账号和查询群成员动作，OneBots 返回符合该框架预期的结果或稳定的不支持错误。
@@ -96,7 +107,7 @@ onebots frameworks --framework nonebot --account wechat.work \
 
 ## 实施顺序
 
-1. **NoneBot2 + OneBot 11**：协议成熟、官方适配器文档清楚，用它建立 profile、配置生成和互操作测试骨架。
+1. **NoneBot2 + OneBot 11**：已建立固定版本夹具、配置模板、鉴权、私聊收发和基础 API 调用门禁；下一步补群消息、富媒体、重连和动作矩阵。
 2. **Zhin + OneBot 11、AlemonJS + OneBot 11**：复用同一正向 WebSocket 门禁，验证深模块能覆盖不同 Node.js 框架。
 3. **Karin + Milky**：验证第二种协议与 WebSocket/SSE/Webhook 多传输设计，证明 profile seam 不是 OneBot 专用。
 4. **云崽与真寻**：在基础框架通过后补充发行版的私有动作与消息兼容矩阵。
