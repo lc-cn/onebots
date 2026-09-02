@@ -103,7 +103,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         const me = await bot.getMe();
 
         return {
-            user_id: this.createId(me.id.toString()),
+            user_id: this.createId(me.id),
             user_name: me.username || "",
             user_displayname: me.first_name || "",
             avatar: undefined,
@@ -122,7 +122,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
         const chat = await bot.getChat(chatId);
 
         return {
-            group_id: this.createId(chat.id.toString()),
+            group_id: this.createId(chat.id),
             group_name: chat.title || chat.username || "",
         };
     }
@@ -149,7 +149,7 @@ export class TelegramAdapter extends Adapter<TelegramBot, "telegram"> {
 
         return {
             group_id: params.group_id,
-            user_id: this.createId(member.user.id.toString()),
+            user_id: this.createId(member.user.id),
             user_name: member.user.username || "",
             card: member.user.first_name || "",
             role:

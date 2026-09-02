@@ -119,4 +119,18 @@ describe("projectHeychatEvent", () => {
             extensions: { heychat: { event_type: "50" } },
         });
     });
+
+    it("数字 sequence 保留原始类型，并作为缺省消息 ID", () => {
+        const raw = envelope("50", {
+            room_base_info: { room_id: "r1", room_name: "房间" },
+            channel_base_info: { channel_id: "c1", channel_name: "频道", channel_type: 1 },
+            sender_info: { user_id: 42, nickname: "用户" },
+            command_info: { id: "cmd", name: "/ping", options: [] },
+        });
+
+        expect(projectHeychatEvent(raw, { accountId: "bot", createId })).toMatchObject({
+            id: { number: 7, string: "7", source: 7 },
+            message_id: { number: 7, string: "7", source: 7 },
+        });
+    });
 });
