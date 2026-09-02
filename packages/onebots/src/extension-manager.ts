@@ -199,6 +199,11 @@ export class ExtensionStateConflictError extends Error {}
 export class ExtensionCatalogIntegrityError extends Error {}
 export class ExtensionRuntimeConfigError extends Error {}
 
+interface ExtensionMutationCommit<RestartRequired extends boolean> {
+    restartRequired: RestartRequired;
+    configSource: string;
+}
+
 /** 白名单扩展的安装、启用和运行态查询。 */
 export class ExtensionManager {
     private readonly runtimeRoot: string;
@@ -214,21 +219,21 @@ export class ExtensionManager {
         operationId: string;
         phase: ExtensionInstallationPhase;
         startedAt: string;
-        promise: Promise<{ restartRequired: true }>;
+        promise: Promise<ExtensionMutationCommit<true>>;
     } | null = null;
     private readonly lastInstallations = new Map<string, ExtensionInstallationResult>();
     private disabling: {
         id: string;
         operationId: string;
         startedAt: string;
-        promise: Promise<{ restartRequired: true }>;
+        promise: Promise<ExtensionMutationCommit<true>>;
     } | null = null;
     private readonly lastDisables = new Map<string, ExtensionDisableResult>();
     private uninstalling: {
         id: string;
         operationId: string;
         startedAt: string;
-        promise: Promise<{ restartRequired: false }>;
+        promise: Promise<ExtensionMutationCommit<false>>;
     } | null = null;
     private readonly lastUninstalls = new Map<string, ExtensionUninstallResult>();
 
@@ -379,7 +384,7 @@ export class ExtensionManager {
         return inspectPackageMutationLock(this.runtimeRoot);
     }
 
-    async install(id: string): Promise<{ restartRequired: true }> {
+    async install(id: string): Promise<ExtensionMutationCommit<true>> {
         const entry = getTrustedExtensionCatalogEntry(id);
         if (!entry) throw new ExtensionNotFoundError("扩展不存在或不允许从管理端安装");
         if (this.installation) {
@@ -407,7 +412,7 @@ export class ExtensionManager {
         });
         const operationId = randomUUID();
         const startedAt = new Date().toISOString();
-        const promise = startGate.then(async (): Promise<{ restartRequired: true }> => {
+        const promise = startGate.then(async (): Promise<ExtensionMutationCommit<true>> => {
             let packageLock;
             try {
                 packageLock = acquirePackageMutationLock(this.runtimeRoot, {
@@ -494,7 +499,7 @@ export class ExtensionManager {
                     });
                     if (fs.readFileSync(this.configPath, "utf8") !== candidate.source) continue;
                     writeConfigFileAtomic(this.configPath, candidate.content, { backup: true });
-                    return { restartRequired: true };
+                    return { restartRequired: true, configSource: candidate.content };
                 }
                 throw new ExtensionInstallConflictError(
                     "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
@@ -558,7 +563,7 @@ export class ExtensionManager {
      * 从下一次启动选择中移除扩展。依赖保留在磁盘，避免配置操作隐式改写包管理器状态。
      * 当前进程仍会继续使用已加载扩展，调用方必须在写入成功后完成一次可验证重启。
      */
-    async disable(id: string): Promise<{ restartRequired: true }> {
+    async disable(id: string): Promise<ExtensionMutationCommit<true>> {
         const entry = getTrustedExtensionCatalogEntry(id);
         if (!entry) throw new ExtensionNotFoundError("扩展不存在或不允许从管理端停用");
         if (this.installation) {
@@ -584,7 +589,7 @@ export class ExtensionManager {
         });
         const operationId = randomUUID();
         const startedAt = new Date().toISOString();
-        const promise = startGate.then(async (): Promise<{ restartRequired: true }> => {
+        const promise = startGate.then(async (): Promise<ExtensionMutationCommit<true>> => {
             let packageLock;
             try {
                 packageLock = acquirePackageMutationLock(this.runtimeRoot, {
@@ -614,7 +619,7 @@ export class ExtensionManager {
                     });
                     if (fs.readFileSync(this.configPath, "utf8") !== candidate.source) continue;
                     writeConfigFileAtomic(this.configPath, candidate.content, { backup: true });
-                    return { restartRequired: true };
+                    return { restartRequired: true, configSource: candidate.content };
                 }
                 throw new ExtensionInstallConflictError(
                     "配置在扩展预检期间持续变化，请等待其他管理操作完成后重试",
@@ -654,7 +659,7 @@ export class ExtensionManager {
     async uninstall(
         id: string,
         loadedPlugins: readonly LoadedPluginInfo[],
-    ): Promise<{ restartRequired: false }> {
+    ): Promise<ExtensionMutationCommit<false>> {
         const entry = getTrustedExtensionCatalogEntry(id);
         if (!entry) throw new ExtensionNotFoundError("扩展不存在或不允许从管理端卸载");
         if (this.installation) {
@@ -680,7 +685,7 @@ export class ExtensionManager {
         });
         const operationId = randomUUID();
         const startedAt = new Date().toISOString();
-        const promise = startGate.then(async (): Promise<{ restartRequired: false }> => {
+        const promise = startGate.then(async (): Promise<ExtensionMutationCommit<false>> => {
             let packageLock;
             try {
                 packageLock = acquirePackageMutationLock(this.runtimeRoot, {
@@ -701,7 +706,7 @@ export class ExtensionManager {
             let packageManager: VerifiedPackageManager | null = null;
             let uninstallAttempted = false;
             try {
-                const selection = this.readSelectionForMutation();
+                const { selection } = this.readConfigSnapshotForMutation();
                 const selected = (
                     entry.type === "adapter" ? selection.adapters : selection.protocols
                 ).includes(entry.name);
@@ -748,7 +753,18 @@ export class ExtensionManager {
                         `扩展依赖卸载校验失败：${removedPackage.error ?? `${entry.packageName} 仍为 ${removedPackage.version}`}`,
                     );
                 }
-                return { restartRequired: false };
+                const committed = this.readConfigSnapshotForMutation();
+                const reenabled = (
+                    entry.type === "adapter"
+                        ? committed.selection.adapters
+                        : committed.selection.protocols
+                ).includes(entry.name);
+                if (reenabled) {
+                    throw new ExtensionStateConflictError(
+                        `扩展 ${entry.name} 在依赖卸载期间被重新启用，依赖卸载已取消；请重新停用后再试`,
+                    );
+                }
+                return { restartRequired: false, configSource: committed.source };
             } catch (error) {
                 const packageChanged =
                     uninstallAttempted &&
@@ -893,9 +909,13 @@ export class ExtensionManager {
         return this.readSelectionFromSource(fs.readFileSync(this.configPath, "utf8"));
     }
 
-    private readSelectionForMutation(): RuntimePluginSelection {
+    private readConfigSnapshotForMutation(): {
+        source: string;
+        selection: RuntimePluginSelection;
+    } {
         try {
-            return this.readSelection();
+            const source = fs.readFileSync(this.configPath, "utf8");
+            return { source, selection: this.readSelectionFromSource(source) };
         } catch (error) {
             throw new ExtensionRuntimeConfigError(formatExtensionRuntimeConfigError(error), {
                 cause: error,

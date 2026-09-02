@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { RouterContext } from "@onebots/core";
 import type { App } from "../app.js";
@@ -9,7 +10,10 @@ import {
 } from "../extension-manager.js";
 import { registerExtensionRoutes } from "./extensions.js";
 import { MANAGEMENT_EXPECTED_INSTANCE_HEADER } from "../management-instance-precondition.js";
-import { MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER } from "../management-config-revision.js";
+import {
+    createManagementConfigRevision,
+    MANAGEMENT_EXPECTED_CONFIG_REVISION_HEADER,
+} from "../management-config-revision.js";
 
 type RouteHandler = (ctx: RouterContext) => void | Promise<void>;
 const configPath = fileURLToPath(new URL("../config.sample.yaml", import.meta.url));
@@ -25,10 +29,19 @@ function postContext(
 }
 
 function setup(
-    install = vi.fn(async () => ({ restartRequired: true as const })),
+    install = vi.fn(async () => ({
+        restartRequired: true as const,
+        configSource: readFileSync(configPath, "utf8"),
+    })),
     restartSupported = true,
-    disable = vi.fn(async () => ({ restartRequired: true as const })),
-    uninstall = vi.fn(async () => ({ restartRequired: false as const })),
+    disable = vi.fn(async () => ({
+        restartRequired: true as const,
+        configSource: readFileSync(configPath, "utf8"),
+    })),
+    uninstall = vi.fn(async () => ({
+        restartRequired: false as const,
+        configSource: readFileSync(configPath, "utf8"),
+    })),
 ) {
     const gets = new Map<string, RouteHandler>();
     const posts = new Map<string, RouteHandler>();
@@ -117,6 +130,22 @@ describe("extension routes", () => {
             "X-OneBots-Config-Revision",
             expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
         );
+    });
+
+    it("使用扩展事务返回的精确配置生成成功修订", async () => {
+        const committedSource = "plugins:\n  adapters: [slack]\n  protocols: []\n";
+        const install = vi.fn(async () => ({
+            restartRequired: true as const,
+            configSource: committedSource,
+        }));
+        const { posts } = setup(install);
+        const ctx = postContext();
+
+        await posts.get("/api/extensions/:id/install")!(ctx);
+
+        const revision = createManagementConfigRevision(committedSource);
+        expect(ctx.body).toMatchObject({ config_revision: revision });
+        expect(ctx.set).toHaveBeenCalledWith("X-OneBots-Config-Revision", revision);
     });
 
     it("拒绝由旧实例或过期配置快照发起的安装", async () => {

@@ -45,9 +45,10 @@ export function registerExtensionRoutes(app: App, router: Router): void {
         try {
             assertManagementInstancePrecondition(app, ctx, "扩展安装");
             assertManagementConfigRevisionPrecondition(ctx, "扩展安装", app.configPath);
-            const result = await app.extensionManager.install(String(ctx.params.id));
+            const { configSource, ...result } = await app.extensionManager.install(
+                String(ctx.params.id),
+            );
             const target = String(ctx.params.id);
-            const configSource = readFileSync(app.configPath, "utf8");
             const configRevision = createManagementConfigRevision(configSource);
             setManagementConfigRevision(ctx, configSource);
             ctx.body = {
@@ -95,9 +96,10 @@ export function registerExtensionRoutes(app: App, router: Router): void {
         try {
             assertManagementInstancePrecondition(app, ctx, "扩展停用");
             assertManagementConfigRevisionPrecondition(ctx, "扩展停用", app.configPath);
-            const result = await app.extensionManager.disable(String(ctx.params.id));
+            const { configSource, ...result } = await app.extensionManager.disable(
+                String(ctx.params.id),
+            );
             const target = String(ctx.params.id);
-            const configSource = readFileSync(app.configPath, "utf8");
             const configRevision = createManagementConfigRevision(configSource);
             setManagementConfigRevision(ctx, configSource);
             ctx.body = {
@@ -144,12 +146,11 @@ export function registerExtensionRoutes(app: App, router: Router): void {
         try {
             assertManagementInstancePrecondition(app, ctx, "扩展依赖卸载");
             assertManagementConfigRevisionPrecondition(ctx, "扩展依赖卸载", app.configPath);
-            const result = await app.extensionManager.uninstall(
+            const { configSource, ...result } = await app.extensionManager.uninstall(
                 String(ctx.params.id),
                 app.pluginInfos,
             );
             const target = String(ctx.params.id);
-            const configSource = readFileSync(app.configPath, "utf8");
             const configRevision = createManagementConfigRevision(configSource);
             setManagementConfigRevision(ctx, configSource);
             ctx.body = {

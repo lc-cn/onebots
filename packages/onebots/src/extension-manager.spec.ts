@@ -156,7 +156,7 @@ describe("ExtensionManager", () => {
             installedManager.list([]).find(item => item.id === "adapter:slack")
                 ?.packageManagerError,
         ).toBeNull();
-        await expect(installedManager.install("adapter:slack")).resolves.toEqual({
+        await expect(installedManager.install("adapter:slack")).resolves.toMatchObject({
             restartRequired: true,
         });
         expect(install).not.toHaveBeenCalled();
@@ -545,9 +545,11 @@ describe("ExtensionManager", () => {
             preflight: successfulPreflight,
         });
 
-        await expect(manager.install("adapter:slack")).resolves.toEqual({
+        const result = await manager.install("adapter:slack");
+        expect(result).toMatchObject({
             restartRequired: true,
         });
+        expect(result.configSource).toBe(fs.readFileSync(configPath, "utf8"));
         expect(install).toHaveBeenCalledWith(
             "@onebots/adapter-slack",
             catalogVersion("@onebots/adapter-slack"),
@@ -709,7 +711,7 @@ describe("ExtensionManager", () => {
                 });
                 expect(globals.__onebotsExtensionManagerExternalEntry).toBeUndefined();
 
-                await expect(manager.install("adapter:slack")).resolves.toEqual({
+                await expect(manager.install("adapter:slack")).resolves.toMatchObject({
                     restartRequired: true,
                 });
 
@@ -869,8 +871,8 @@ describe("ExtensionManager", () => {
         releasePreflight?.();
 
         await expect(Promise.all([first, retry])).resolves.toEqual([
-            { restartRequired: true },
-            { restartRequired: true },
+            expect.objectContaining({ restartRequired: true }),
+            expect.objectContaining({ restartRequired: true }),
         ]);
         expect(install).toHaveBeenCalledOnce();
         expect(preflight).toHaveBeenCalledOnce();
@@ -926,8 +928,8 @@ describe("ExtensionManager", () => {
         expect(secondInstall).not.toHaveBeenCalled();
 
         releaseInstall?.();
-        await expect(first).resolves.toEqual({ restartRequired: true });
-        await expect(secondManager.install("protocol:mcp-v1")).resolves.toEqual({
+        await expect(first).resolves.toMatchObject({ restartRequired: true });
+        await expect(secondManager.install("protocol:mcp-v1")).resolves.toMatchObject({
             restartRequired: true,
         });
     });
@@ -971,7 +973,7 @@ describe("ExtensionManager", () => {
             message: "registry timeout",
         });
 
-        await expect(manager.install("adapter:slack")).resolves.toEqual({
+        await expect(manager.install("adapter:slack")).resolves.toMatchObject({
             restartRequired: true,
         });
         expect(install).toHaveBeenCalledTimes(2);
@@ -1411,9 +1413,11 @@ describe("ExtensionManager", () => {
             preflight,
         });
 
-        await expect(manager.disable("adapter:slack")).resolves.toEqual({
+        const result = await manager.disable("adapter:slack");
+        expect(result).toMatchObject({
             restartRequired: true,
         });
+        expect(result.configSource).toBe(fs.readFileSync(configPath, "utf8"));
 
         expect(preflight).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1591,8 +1595,8 @@ describe("ExtensionManager", () => {
 
         finishPreflight?.();
         await expect(Promise.all([first, retry])).resolves.toEqual([
-            { restartRequired: true },
-            { restartRequired: true },
+            expect.objectContaining({ restartRequired: true }),
+            expect.objectContaining({ restartRequired: true }),
         ]);
         expect(preflight).toHaveBeenCalledOnce();
 
@@ -1628,8 +1632,9 @@ describe("ExtensionManager", () => {
             }),
         });
 
-        await expect(manager.uninstall("adapter:slack", [])).resolves.toEqual({
+        await expect(manager.uninstall("adapter:slack", [])).resolves.toMatchObject({
             restartRequired: false,
+            configSource: fs.readFileSync(configPath, "utf8"),
         });
 
         expect(uninstall).toHaveBeenCalledWith(packageName, root, {
@@ -1643,6 +1648,51 @@ describe("ExtensionManager", () => {
             uninstallOperation: null,
             lastUninstall: { status: "succeeded", message: null },
         });
+    });
+
+    it("依赖卸载期间扩展被重新启用时恢复原依赖", async () => {
+        const { root, configPath } = fixture();
+        const packageName = "@onebots/adapter-slack";
+        const version = catalogVersion(packageName);
+        installFixturePackage(packageName, version, root);
+        const restore = vi.fn(
+            async (name: string, previousVersion: string, runtimeRoot: string) => {
+                installFixturePackage(name, previousVersion, runtimeRoot);
+            },
+        );
+        const manager = new ExtensionManager({
+            runtimeRoot: root,
+            configPath,
+            installer: {
+                install: vi.fn(),
+                uninstall: async (name, runtimeRoot) => {
+                    removeFixturePackage(name, runtimeRoot);
+                    fs.writeFileSync(
+                        configPath,
+                        "plugins:\n  adapters: [slack]\n  protocols: [onebot-v11]\ngeneral: {}\n",
+                    );
+                },
+                restore,
+            },
+            preflight: successfulPreflight,
+            packageManagerInspector: async () => ({
+                manager: "npm",
+                executable: "npm",
+                resolvedPath: "/verified/npm",
+                version: "11.0.0",
+                error: null,
+            }),
+        });
+
+        await expect(manager.uninstall("adapter:slack", [])).rejects.toThrow(
+            "在依赖卸载期间被重新启用",
+        );
+        expect(restore).toHaveBeenCalledWith(packageName, version, root, {
+            packageManager: { manager: "npm", resolvedPath: "/verified/npm" },
+        });
+        expect(manager.list([]).find(item => item.id === "adapter:slack")?.installedVersion).toBe(
+            version,
+        );
     });
 
     it("拒绝卸载仍启用或仍由当前进程加载的扩展", async () => {
