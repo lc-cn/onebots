@@ -34,6 +34,13 @@ export interface SetupOptions {
 interface SetupDependencies {
     loadPlugins(adapters: string[], protocols: string[]): Promise<string[]>;
     afterConfigWrite?(configPath: string): void;
+    interactive?: boolean;
+    createPrompt?(): SetupPrompt;
+}
+
+interface SetupPrompt {
+    question(query: string): Promise<string>;
+    close(): void;
 }
 
 type SetupConfigSnapshot =
@@ -54,6 +61,7 @@ interface PromptRule {
     label?: string;
     description?: string;
     default?: unknown;
+    sensitive?: boolean;
 }
 
 /** 使用配置 schema 引导创建或安全更新 OneBots 配置。 */
@@ -100,10 +108,14 @@ export async function runSetup(
     let protocols = options.protocols?.length
         ? options.protocols
         : (configuredPlugins?.protocols ?? []);
-    if (process.stdin.isTTY && process.stdout.isTTY) {
+    const interactive =
+        dependencies?.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    if (interactive) {
         const { getAppConfigSchema } = await import("./config-schema.js");
         const baseSchema = getAppConfigSchema().base;
-        const prompt = readline.createInterface({ input: process.stdin, output: process.stdout });
+        const prompt =
+            dependencies?.createPrompt?.() ??
+            readline.createInterface({ input: process.stdin, output: process.stdout });
         try {
             if (exists && !options.force) {
                 const answer = (await prompt.question("配置已存在，是否引导修改？ [y/N] "))
@@ -117,7 +129,7 @@ export async function runSetup(
                     !rule.type ||
                     rule.type === "object" ||
                     rule.type === "array" ||
-                    key === "password"
+                    rule.sensitive === true
                 )
                     continue;
                 const current = config[key] ?? rule.default ?? "";

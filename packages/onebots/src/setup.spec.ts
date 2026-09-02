@@ -29,6 +29,48 @@ function temporaryConfigPath(): string {
 }
 
 describe("setup workflow", () => {
+    it("交互式 setup 不显示或询问 Schema 标记的管理凭据", async () => {
+        const configPath = temporaryConfigPath();
+        fs.writeFileSync(
+            configPath,
+            [
+                "port: 7000",
+                "username: admin",
+                "password: password-never-echo",
+                "access_token: token-never-echo",
+                "",
+            ].join("\n"),
+            { mode: 0o600 },
+        );
+        const questions: string[] = [];
+        const close = vi.fn();
+
+        await runSetupWithEnvironment(configPath, { force: true }, "", {
+            interactive: true,
+            createPrompt: () => ({
+                question: async query => {
+                    questions.push(query);
+                    return "";
+                },
+                close,
+            }),
+            loadPlugins: async () => [],
+        });
+
+        const renderedQuestions = questions.join("\n");
+        expect(renderedQuestions).not.toContain("password-never-echo");
+        expect(renderedQuestions).not.toContain("token-never-echo");
+        expect(renderedQuestions).not.toContain("管理端密码");
+        expect(renderedQuestions).not.toContain("管理端鉴权码");
+        expect(renderedQuestions).toContain("管理端用户名");
+        expect(parseConfig(configPath)).toMatchObject({
+            username: "admin",
+            password: "password-never-echo",
+            access_token: "token-never-echo",
+        });
+        expect(close).toHaveBeenCalledOnce();
+    });
+
     it("writes a secure first-run configuration without unloaded protocol references", async () => {
         const configPath = temporaryConfigPath();
         const output = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
