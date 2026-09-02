@@ -14,7 +14,10 @@ Application 可以组合协议的启动/停止、动作调用和事件投递，�
 
 ## 支持状态
 
-- **available**：14 个框架/发行版可通过 `-t` 激活，其中 Zhin 使用独立 npm Application 并具备专用 WebSocket。
-- **planned**：11 个调研对象已进入同一注册表，但在提供实现和固定版本门禁前会拒绝激活。
+- **available**：14 个具有固定配置或互操作证据的框架/发行版可通过 `-t` 激活，其中 Zhin 使用独立 npm Application 并具备专用 WebSocket。
+- **experimental**：9 个具有明确协议接入面的框架、SDK 或发行版可激活，并提供连接模板与运行时兼容动作；固定版本互操作完成前不会标为稳定。
+- **legacy**：PepperBot 与 NoneBot 1 可用于存量迁移，管理 API 会保留存量状态，新部署不推荐。
+
+`experimental` 与 `legacy` 都是可运行状态。激活后，每个匹配协议都会增加唯一的 `get_<framework>_application_info` 动作；不匹配的协议会返回 `unsupported` 能力描述。
 
 每个框架的启动命令、协议、连接方式和限制请从“解决方案”菜单进入对应页面。

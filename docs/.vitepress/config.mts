@@ -22,15 +22,15 @@ const solutionItems = [
     { text: "Kotori", link: "/solution/kotori" },
     { text: "云崽 / TRSS-Yunzai", link: "/solution/yunzai" },
     { text: "真寻", link: "/solution/zhenxun" },
-    { text: "Avilla（调研）", link: "/solution/avilla" },
-    { text: "OlivOS（调研）", link: "/solution/olivos" },
-    { text: "炸毛框架（调研）", link: "/solution/zhamao" },
-    { text: "Shiro（调研）", link: "/solution/shiro" },
-    { text: "Simple Robot（调研）", link: "/solution/simbot-onebot" },
-    { text: "Overflow（调研）", link: "/solution/overflow" },
-    { text: "Walle（调研）", link: "/solution/walle" },
-    { text: "Adachi-BOT（调研）", link: "/solution/adachi-bot" },
-    { text: "GenshinUID（调研）", link: "/solution/genshinuid" },
+    { text: "Avilla（实验）", link: "/solution/avilla" },
+    { text: "OlivOS（实验）", link: "/solution/olivos" },
+    { text: "炸毛框架（实验）", link: "/solution/zhamao" },
+    { text: "Shiro（实验）", link: "/solution/shiro" },
+    { text: "Simple Robot（实验）", link: "/solution/simbot-onebot" },
+    { text: "Overflow（实验）", link: "/solution/overflow" },
+    { text: "Walle（实验）", link: "/solution/walle" },
+    { text: "Adachi-BOT（实验）", link: "/solution/adachi-bot" },
+    { text: "GenshinUID（实验）", link: "/solution/genshinuid" },
     { text: "PepperBot（存量）", link: "/solution/pepperbot" },
     { text: "NoneBot 1（存量）", link: "/solution/nonebot1" }
 ];
@@ -39,7 +39,7 @@ const enSolutionItems = [
     { text: "Overview", link: "/en/solution/" },
     { text: "Framework Runtime", link: "/en/solution/frameworks" },
     ...solutionItems.slice(2).map(item => ({
-        text: item.text.replace("（调研）", " (Research)").replace("（存量）", " (Legacy)"),
+        text: item.text.replace("（实验）", " (Experimental)").replace("（存量）", " (Legacy)"),
         link: `/en${item.link}`
     }))
 ];

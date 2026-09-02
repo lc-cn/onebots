@@ -80,10 +80,10 @@ function formatFrameworkProfileList(
             return `${profile.id.padEnd(9)} ${profile.protocol.padEnd(12)} ${profile.transport.padEnd(17)} ${profile.verification}${coverage}`;
         }),
         "",
-        "已调研候选（尚未提供配置生成器）",
+        "扩展运行时状态（experimental/legacy 均可通过 -t 激活）",
         ...ecosystem.map(
             entry =>
-                `${entry.id.padEnd(14)} ${entry.protocols.join(",").padEnd(23)} ${entry.language.padEnd(10)} ${entry.priority}`,
+                `${entry.id.padEnd(14)} ${entry.runtime.protocol.padEnd(12)} ${entry.runtime.transport.padEnd(17)} ${entry.runtime.stage}`,
         ),
         "生成配置: onebots frameworks --framework <name> --account <platform.account_id>",
     ].join("\n");

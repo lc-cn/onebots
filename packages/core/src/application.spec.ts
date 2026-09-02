@@ -151,6 +151,22 @@ describe("ApplicationRegistry", () => {
         expect(ApplicationRegistry.getNames()).toContain("avilla");
         expect(() => ApplicationRegistry.activate("avilla")).toThrow("应用 avilla 仍处于调研阶段");
     });
+
+    it.each(["experimental", "legacy"] as const)("允许激活 %s 阶段并保留运行时状态", stage => {
+        ApplicationRegistry.register({
+            name: stage,
+            displayName: stage,
+            description: stage,
+            stage,
+            createProtocolExtension: () => undefined,
+        });
+
+        ApplicationRegistry.activate(stage);
+
+        expect(ApplicationRegistry.listActive()).toEqual([
+            expect.objectContaining({ name: stage, stage }),
+        ]);
+    });
 });
 
 function createProtocol(): TestProtocol {

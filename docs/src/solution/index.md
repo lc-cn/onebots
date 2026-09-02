@@ -4,6 +4,6 @@
 
 ## 机器人框架 Application
 
-[框架运行时](/solution/frameworks)覆盖 25 个已经支持或完成调研的目标。可运行框架通过 `onebots -t <framework>` 激活 Application；它会作用于所有协议实例，并按协议补充兼容动作、专用路由、连接方式和能力描述。
+[框架运行时](/solution/frameworks)覆盖 25 个可激活目标。框架通过 `onebots -t <framework>` 激活 Application；它会作用于所有协议实例，并按协议补充兼容动作、专用路由、连接方式和能力描述。
 
-每个框架现在都有独立页面。`available` 页面给出可执行命令和固定版本证据；`planned` 页面明确列出尚缺实现，不能通过 `-t` 假装成已经支持。
+每个框架现在都有独立页面。`available` 页面给出固定配置或互操作证据，`experimental` 页面给出可执行连接模板和明确的未验证边界，`legacy` 页面服务存量迁移。三种状态都可通过 `-t` 激活，且会原样出现在管理 API 中。

@@ -1,9 +1,15 @@
 import yaml from "js-yaml";
-import { ApplicationRegistry, defineApplication, type Protocol } from "@onebots/core";
+import {
+    ApplicationRegistry,
+    defineApplication,
+    type ApplicationStage,
+    type Protocol,
+} from "@onebots/core";
+import { listFrameworkEcosystem } from "./framework-ecosystem.js";
 
 export type FrameworkId = string;
 
-export type FrameworkKind = "framework" | "distribution";
+export type FrameworkKind = "framework" | "distribution" | "sdk" | "bridge";
 export type FrameworkProtocol = "onebot.v11" | "onebot.v12" | "satori.v1" | "milky.v1";
 export type FrameworkTransport = "websocket" | "reverse-websocket" | "sse" | "webhook";
 export type FrameworkVerificationLevel =
@@ -26,6 +32,7 @@ export interface FrameworkProfile {
     upstream: string;
     defaultFrameworkOrigin: string | null;
     limitations: readonly string[];
+    applicationStage?: Exclude<ApplicationStage, "planned">;
 }
 
 export interface DistributionCompatibilityAudit {
@@ -859,6 +866,77 @@ function renderBuiltinFrameworkConfig({
     }
 }
 
+function renderEcosystemFrameworkConfig(
+    { profile, endpoint, frameworkOrigin }: FrameworkConfigRenderContext,
+    entry: ReturnType<typeof listFrameworkEcosystem>[number],
+): string {
+    switch (profile.id) {
+        case "overflow":
+            return JSON.stringify(
+                {
+                    connections: [
+                        {
+                            enable: true,
+                            type: "websocket",
+                            host: endpoint,
+                            token: SHARED_TOKEN,
+                        },
+                    ],
+                },
+                null,
+                2,
+            );
+        case "nonebot1":
+            return [
+                "# NoneBot 1 / aiocqhttp 存量配置",
+                `HOST=${frameworkOrigin!.hostname}`,
+                `PORT=${frameworkOrigin!.port || "8080"}`,
+                `ACCESS_TOKEN=${SHARED_TOKEN}`,
+                `# OneBots 反向连接 ${endpoint}`,
+            ].join("\n");
+        case "genshinuid":
+            return yaml.dump({
+                host: "nonebot2-or-other-supported-host",
+                plugin: "GenshinUID",
+                core: "gsuid-core",
+                onebot_reverse_websocket: endpoint,
+                access_token: SHARED_TOKEN,
+            });
+        case "walle":
+            return [
+                '// Cargo.toml: walle-core = { features = ["app-obc", "websocket"] }',
+                "// AppConfig 中启用 OneBot 12 正向 WebSocket：",
+                `// url = ${JSON.stringify(endpoint)}`,
+                `// access_token = ${JSON.stringify(SHARED_TOKEN)}`,
+            ].join("\n");
+        case "simbot-onebot":
+            return [
+                "# simbot-component-onebot-v11 bot configuration",
+                `url=${endpoint}`,
+                `accessToken=${SHARED_TOKEN}`,
+                "component=onebot-v11",
+            ].join("\n");
+        case "shiro":
+            return yaml.dump({
+                shiro: {
+                    websocket: { url: endpoint, accessToken: SHARED_TOKEN },
+                },
+            });
+        default:
+            return yaml.dump({
+                application: profile.id,
+                stage: entry.runtime.stage,
+                protocol: profile.protocol,
+                connection: {
+                    transport: profile.transport,
+                    endpoint,
+                    access_token: SHARED_TOKEN,
+                },
+                note: entry.limitation,
+            });
+    }
+}
+
 const zhinIntegration = defineFrameworkIntegration({
     profile: BUILTIN_PROFILES.zhin,
     renderFrameworkConfig: ({ endpoint }) =>
@@ -990,6 +1068,46 @@ for (const profile of Object.values(BUILTIN_PROFILES)) {
     );
 }
 
+const ECOSYSTEM_PROFILES = listFrameworkEcosystem().map(entry =>
+    deepFreeze<FrameworkProfile>({
+        id: entry.id,
+        displayName: entry.displayName,
+        kind: entry.kind,
+        packageName: null,
+        protocol: entry.runtime.protocol,
+        transport: entry.runtime.transport,
+        verification: "documented",
+        upstream: entry.upstream,
+        defaultFrameworkOrigin: entry.runtime.defaultFrameworkOrigin,
+        limitations: [entry.limitation],
+        applicationStage: entry.runtime.stage,
+    }),
+);
+
+for (const profile of ECOSYSTEM_PROFILES) {
+    const entry = listFrameworkEcosystem().find(candidate => candidate.id === profile.id)!;
+    FrameworkIntegrationRegistry.register(
+        defineFrameworkIntegration({
+            profile,
+            ...(entry.runtime.transport === "reverse-websocket"
+                ? {
+                      resolveEndpoint: ({ frameworkOrigin }) =>
+                          resolveReverseFrameworkEndpoint(
+                              frameworkOrigin!,
+                              entry.runtime.reversePath ?? "/onebot/v11/ws",
+                          ),
+                  }
+                : profile.id === "avilla"
+                  ? {
+                        resolveEndpoint: ({ onebotsEndpoint }) =>
+                            onebotsEndpoint.replace(/\/v1$/u, ""),
+                    }
+                  : {}),
+            renderFrameworkConfig: context => renderEcosystemFrameworkConfig(context, entry),
+        }),
+    );
+}
+
 // Zhin 拥有独立 npm Application；其余已验证方案先以同一运行时接口暴露连接能力，
 // 后续可以无缝替换为同名外部包，而无需改变 `-t` 或管理 API。
 for (const profile of Object.values(BUILTIN_PROFILES)) {
@@ -997,12 +1115,18 @@ for (const profile of Object.values(BUILTIN_PROFILES)) {
     ApplicationRegistry.register(createProfileApplication(profile));
 }
 
-function createProfileApplication(profile: FrameworkProfile) {
+for (const profile of ECOSYSTEM_PROFILES) {
+    ApplicationRegistry.register(createProfileApplication(profile));
+}
+
+export function createProfileApplication(profile: FrameworkProfile) {
+    const infoAction = `get_${profile.id.replace(/-/gu, "_")}_application_info`;
     return defineApplication({
         name: profile.id,
         displayName: profile.displayName,
         description: `${profile.displayName} 的 ${profile.protocol} 运行时连接扩展。`,
         homepage: profile.upstream,
+        stage: profile.applicationStage,
         createProtocolExtension(protocol: Protocol) {
             if (`${protocol.name}.${protocol.version}` !== profile.protocol) return undefined;
             const direction =
@@ -1028,9 +1152,23 @@ function createProfileApplication(profile: FrameworkProfile) {
                             description: `${profile.displayName} 使用 ${profile.protocol} 的 ${profile.transport} 连接。`,
                         },
                     ],
-                    actions: [...actions],
+                    actions: [...new Set([...actions, infoAction])],
                     routes: direction === "onebots-listens" ? [protocol.path] : [],
                     limitations: [...profile.limitations],
+                },
+                async apply({ action, next }) {
+                    if (action !== infoAction) return next();
+                    return {
+                        status: "ok",
+                        retcode: 0,
+                        data: {
+                            application: profile.id,
+                            stage: profile.applicationStage ?? "available",
+                            protocol: profile.protocol,
+                            transport: profile.transport,
+                            verification: profile.verification,
+                        },
+                    };
                 },
             };
         },

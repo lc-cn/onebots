@@ -1,15 +1,42 @@
 # Shiro
 
-Shiro is registered in the unified Application catalog with the `planned` stage. It cannot be activated with `-t shiro` yet; OneBots rejects startup instead of reporting research notes as working support.
+Shiro is now an activatable OneBots Application with the `experimental` stage. It publishes connection metadata, limitations, and the `get_shiro_application_info` compatibility action for matching `onebot.v11` protocol instances.
+
+## Start
+
+```bash
+onebots -r <adapter> -p onebot-v11 -t shiro -c config.yaml
+```
+
+Or persist the selection:
+
+```yaml
+plugins:
+  adapters: [<adapter>]
+  protocols: [onebot-v11]
+  applications: [shiro]
+```
+
+## Runtime capability
 
 | Item | Current value |
 | --- | --- |
-| Application ID | `shiro` |
-| Candidate protocols | `onebot.v11` |
-| Stage | `planned` |
+| Application | `shiro` |
+| Stage | `experimental` |
+| Protocol | `onebot.v11` |
+| Transport | `websocket` |
+| Extension action | `get_shiro_application_info` |
+| Verification | `documented` |
+| Upstream | [Shiro](https://github.com/MisakaTAT/Shiro) |
 
-## Missing implementation
+Use `GET /api/applications` to inspect effective per-account protocol capabilities. Generate a redacted connection template with:
 
-A Spring Boot starter version and session configuration must be pinned.
+```bash
+onebots frameworks --framework shiro --account <platform.account_id>
+```
 
-Promotion to `available` requires a same-name Application package or built-in implementation, protocol capability descriptors, and a pinned-version interoperability gate.
+## Boundaries
+
+No Spring Boot starter version is pinned yet; the current gate covers protocol identity, connection metadata, and compatibility actions.
+
+This stage can be activated with `-t`, but it will not become `available` until pinned-version interoperability passes.

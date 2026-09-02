@@ -1,15 +1,42 @@
 # Walle
 
-Walle is registered in the unified Application catalog with the `planned` stage. It cannot be activated with `-t walle` yet; OneBots rejects startup instead of reporting research notes as working support.
+Walle is now an activatable OneBots Application with the `experimental` stage. It publishes connection metadata, limitations, and the `get_walle_application_info` compatibility action for matching `onebot.v12` protocol instances.
+
+## Start
+
+```bash
+onebots -r <adapter> -p onebot-v12 -t walle -c config.yaml
+```
+
+Or persist the selection:
+
+```yaml
+plugins:
+  adapters: [<adapter>]
+  protocols: [onebot-v12]
+  applications: [walle]
+```
+
+## Runtime capability
 
 | Item | Current value |
 | --- | --- |
-| Application ID | `walle` |
-| Candidate protocols | `onebot.v12` |
-| Stage | `planned` |
+| Application | `walle` |
+| Stage | `experimental` |
+| Protocol | `onebot.v12` |
+| Transport | `websocket` |
+| Extension action | `get_walle_application_info` |
+| Verification | `documented` |
+| Upstream | [Walle](https://github.com/onebot-walle/walle) |
 
-## Missing implementation
+Use `GET /api/applications` to inspect effective per-account protocol capabilities. Generate a redacted connection template with:
 
-OneBots OneBot 12 action and event coverage must be expanded first.
+```bash
+onebots frameworks --framework walle --account <platform.account_id>
+```
 
-Promotion to `available` requires a same-name Application package or built-in implementation, protocol capability descriptors, and a pinned-version interoperability gate.
+## Boundaries
+
+Only the OneBot 12 WebSocket application side is declared; HTTP/WebHook and the complete action matrix are unverified.
+
+This stage can be activated with `-t`, but it will not become `available` until pinned-version interoperability passes.

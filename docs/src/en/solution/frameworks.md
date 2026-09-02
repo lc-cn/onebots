@@ -14,7 +14,10 @@ Applications compose protocol start/stop, actions, and event dispatch while publ
 
 ## Support stages
 
-- **available**: 14 frameworks/distributions can be activated with `-t`; Zhin has an independent npm Application and dedicated WebSocket.
-- **planned**: 11 researched targets share the registry but activation is rejected until an implementation and pinned interoperability gate exist.
+- **available**: 14 frameworks or distributions with pinned configuration or interoperability evidence can be activated with `-t`; Zhin has an independent npm Application and dedicated WebSocket.
+- **experimental**: 9 frameworks, SDKs, bridges, or distributions with a documented protocol surface are activatable and expose connection templates plus runtime compatibility actions. They remain experimental until pinned interoperability passes.
+- **legacy**: PepperBot and NoneBot 1 are activatable for existing migrations. The management API preserves their legacy status and they are not recommended for new deployments.
+
+Both `experimental` and `legacy` are runnable stages. Each matching protocol gains a unique `get_<framework>_application_info` action; unmatched protocols report an explicit `unsupported` capability.
 
 Use the Solutions menu for one page per framework with commands, protocols, transports, and limitations.

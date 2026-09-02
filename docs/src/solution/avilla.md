@@ -1,15 +1,42 @@
 # Avilla
 
-Avilla 已纳入统一 Application 注册表，但状态为 `planned`，当前不能通过 `-t avilla` 激活。OneBots 会明确拒绝启动，避免把调研资料误报为可运行支持。
+Avilla 已进入可激活的 OneBots Application 运行时，状态为 `experimental`。它会为匹配的 `satori.v1` 协议实例公开连接能力、限制和 `get_avilla_application_info` 兼容动作。
+
+## 启动
+
+```bash
+onebots -r <adapter> -p satori-v1 -t avilla -c config.yaml
+```
+
+也可以持久化：
+
+```yaml
+plugins:
+  adapters: [<adapter>]
+  protocols: [satori-v1]
+  applications: [avilla]
+```
+
+## 运行时能力
 
 | 项目 | 当前值 |
 | --- | --- |
-| Application ID | `avilla` |
-| 候选协议 | `onebot.v11 / satori.v1 / onebot.v12` |
-| 状态 | `planned` |
+| Application | `avilla` |
+| 阶段 | `experimental` |
+| 协议 | `satori.v1` |
+| 连接方式 | `websocket` |
+| 扩展动作 | `get_avilla_application_info` |
+| 验证级别 | `documented` |
+| 上游 | [Avilla](https://github.com/GraiaProject/Avilla) |
 
-## 尚缺的实现
+运行后可通过 `GET /api/applications` 查看逐账号、逐协议的实际能力。生成脱敏连接模板：
 
-上游相关组件仍标记为 WIP 或 Planned。
+```bash
+onebots frameworks --framework avilla --account <platform.account_id>
+```
 
-完成标准是提供同名 Application 包或内置实现、协议扩展能力描述、固定版本互操作门禁，然后才能把状态提升为 `available`。
+## 使用边界
+
+上游仍将 Satori 组件标记为 WIP，模板只用于实验验证。
+
+该状态允许通过 `-t` 激活，但在完成固定版本互操作前不会提升为 `available`。

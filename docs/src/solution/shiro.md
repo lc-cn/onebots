@@ -1,15 +1,42 @@
 # Shiro
 
-Shiro 已纳入统一 Application 注册表，但状态为 `planned`，当前不能通过 `-t shiro` 激活。OneBots 会明确拒绝启动，避免把调研资料误报为可运行支持。
+Shiro 已进入可激活的 OneBots Application 运行时，状态为 `experimental`。它会为匹配的 `onebot.v11` 协议实例公开连接能力、限制和 `get_shiro_application_info` 兼容动作。
+
+## 启动
+
+```bash
+onebots -r <adapter> -p onebot-v11 -t shiro -c config.yaml
+```
+
+也可以持久化：
+
+```yaml
+plugins:
+  adapters: [<adapter>]
+  protocols: [onebot-v11]
+  applications: [shiro]
+```
+
+## 运行时能力
 
 | 项目 | 当前值 |
 | --- | --- |
-| Application ID | `shiro` |
-| 候选协议 | `onebot.v11` |
-| 状态 | `planned` |
+| Application | `shiro` |
+| 阶段 | `experimental` |
+| 协议 | `onebot.v11` |
+| 连接方式 | `websocket` |
+| 扩展动作 | `get_shiro_application_info` |
+| 验证级别 | `documented` |
+| 上游 | [Shiro](https://github.com/MisakaTAT/Shiro) |
 
-## 尚缺的实现
+运行后可通过 `GET /api/applications` 查看逐账号、逐协议的实际能力。生成脱敏连接模板：
 
-需固定 Spring Boot starter 版本与会话配置。
+```bash
+onebots frameworks --framework shiro --account <platform.account_id>
+```
 
-完成标准是提供同名 Application 包或内置实现、协议扩展能力描述、固定版本互操作门禁，然后才能把状态提升为 `available`。
+## 使用边界
+
+尚未固定 Spring Boot starter 版本，当前门禁只覆盖协议身份、连接描述和兼容动作。
+
+该状态允许通过 `-t` 激活，但在完成固定版本互操作前不会提升为 `available`。

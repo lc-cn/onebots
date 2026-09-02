@@ -13,22 +13,10 @@ describe("frameworks command", () => {
 
         expect(result.raw).toBe(true);
         expect(report.schemaVersion).toBe(1);
-        expect(report.profiles.map(profile => profile.id)).toEqual([
-            "koishi",
-            "nonebot",
-            "karin",
-            "zhin",
-            "alemonjs",
-            "melobot",
-            "zerobot",
-            "kovi",
-            "astrbot",
-            "langbot",
-            "alicebot",
-            "kotori",
-            "yunzai",
-            "zhenxun",
-        ]);
+        expect(report.profiles).toHaveLength(25);
+        expect(report.profiles.map(profile => profile.id)).toEqual(
+            expect.arrayContaining(["koishi", "zhin", "avilla", "overflow", "nonebot1"]),
+        );
         expect(
             report.profiles
                 .filter(profile =>
@@ -60,7 +48,8 @@ describe("frameworks command", () => {
 
         expect(list.output).toContain("yunzai");
         expect(list.output).toContain("actions 31/59");
-        expect(list.output).toContain("已调研候选");
+        expect(list.output).toContain("扩展运行时状态");
+        expect(list.output).toContain("experimental");
         expect(list.output).toContain("astrbot");
         expect(plan.output).toContain("状态: documented");
         expect(plan.output).toContain("源码动作: 31/59");

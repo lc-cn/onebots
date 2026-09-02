@@ -4,6 +4,6 @@ Solutions describe how OneBots works with downstream systems. Platform documenta
 
 ## Bot framework Applications
 
-The [framework runtime](/en/solution/frameworks) covers 25 supported or researched targets. Activate a runnable framework with `onebots -t <framework>`; its Application is applied to every protocol instance and contributes compatible actions, dedicated routes, connection methods, and capability descriptions per protocol.
+The [framework runtime](/en/solution/frameworks) covers 25 activatable targets. Activate a framework with `onebots -t <framework>`; its Application is applied to every protocol instance and contributes compatible actions, dedicated routes, connection methods, and capability descriptions per protocol.
 
-Every framework now has its own page. `available` pages provide executable commands and pinned evidence. `planned` pages state what is missing and cannot be activated as if support already worked.
+Every framework now has its own page. `available` pages provide pinned configuration or interoperability evidence, `experimental` pages provide executable connection templates with explicit unverified boundaries, and `legacy` pages serve existing migrations. All three stages can be activated with `-t` and remain visible in the management API.

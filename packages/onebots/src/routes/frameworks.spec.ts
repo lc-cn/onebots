@@ -21,7 +21,7 @@ function setup() {
 }
 
 describe("framework management routes", () => {
-    it("公开可运行与调研阶段的 Application 注册状态", () => {
+    it("公开 available、experimental 与 legacy Application 注册状态", () => {
         const { gets } = setup();
         const ctx = { set: vi.fn() } as unknown as RouterContext;
 
@@ -31,7 +31,8 @@ describe("framework management routes", () => {
             schemaVersion: 1,
             registered: expect.arrayContaining([
                 expect.objectContaining({ name: "koishi", stage: "available", active: false }),
-                expect.objectContaining({ name: "avilla", stage: "planned", active: false }),
+                expect.objectContaining({ name: "avilla", stage: "experimental", active: false }),
+                expect.objectContaining({ name: "nonebot1", stage: "legacy", active: false }),
             ]),
             active: [],
             protocols: [],

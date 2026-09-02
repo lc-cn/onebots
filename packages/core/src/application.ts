@@ -2,6 +2,7 @@ import type { Protocol } from "./protocol.js";
 import { ValidationError } from "./errors.js";
 
 export type ApplicationSupportStatus = "supported" | "unsupported";
+export type ApplicationStage = "available" | "experimental" | "legacy" | "planned";
 
 export interface ApplicationConnection {
     id: string;
@@ -58,7 +59,7 @@ export interface ApplicationDefinition {
     name: string;
     displayName: string;
     description: string;
-    stage?: "available" | "planned";
+    stage?: ApplicationStage;
     homepage?: string;
     createProtocolExtension(protocol: Protocol): ApplicationProtocolExtension | undefined;
     unsupportedProtocol?(protocol: Protocol): readonly string[];
@@ -68,7 +69,7 @@ export interface ActiveApplicationInfo {
     name: string;
     displayName: string;
     description: string;
-    stage: "available";
+    stage: Exclude<ApplicationStage, "planned">;
     homepage?: string;
 }
 
@@ -169,7 +170,10 @@ export class ApplicationRegistry {
                           name,
                           displayName: definition.displayName,
                           description: definition.description,
-                          stage: "available" as const,
+                          stage: (definition.stage ?? "available") as Exclude<
+                              ApplicationStage,
+                              "planned"
+                          >,
                           homepage: definition.homepage,
                       },
                   ]

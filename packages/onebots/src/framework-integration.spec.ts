@@ -1,6 +1,8 @@
 import yaml from "js-yaml";
-import { describe, expect, it } from "vitest";
+import type { Protocol } from "@onebots/core";
+import { describe, expect, it, vi } from "vitest";
 import {
+    createProfileApplication,
     createFrameworkConnectionPlan,
     defineFrameworkIntegration,
     FrameworkIntegrationRegistry,
@@ -61,6 +63,17 @@ describe("framework integration profiles", () => {
             "kotori",
             "yunzai",
             "zhenxun",
+            "avilla",
+            "olivos",
+            "zhamao",
+            "shiro",
+            "simbot-onebot",
+            "overflow",
+            "walle",
+            "adachi-bot",
+            "genshinuid",
+            "pepperbot",
+            "nonebot1",
         ]);
         expect(new Set(profiles.map(profile => profile.id))).toHaveLength(profiles.length);
         expect(getFrameworkProfile("nonebot")).toMatchObject({
@@ -327,6 +340,57 @@ describe("framework integration profiles", () => {
                 },
             },
         });
+    });
+
+    it.each([
+        ["avilla", "experimental", "satori.v1"],
+        ["olivos", "experimental", "onebot.v11"],
+        ["zhamao", "experimental", "onebot.v11"],
+        ["shiro", "experimental", "onebot.v11"],
+        ["simbot-onebot", "experimental", "onebot.v11"],
+        ["overflow", "experimental", "onebot.v11"],
+        ["walle", "experimental", "onebot.v12"],
+        ["adachi-bot", "experimental", "onebot.v11"],
+        ["genshinuid", "experimental", "onebot.v11"],
+        ["pepperbot", "legacy", "onebot.v11"],
+        ["nonebot1", "legacy", "onebot.v11"],
+    ] as const)("creates an activatable %s connection plan", (framework, stage, protocol) => {
+        const plan = createFrameworkConnectionPlan({ framework, account: "qq.main" });
+
+        expect(plan.framework.applicationStage).toBe(stage);
+        expect(plan.protocol).toBe(protocol);
+        expect(plan.endpoint).toMatch(/^(?:https?|wss?):\/\//u);
+        expect(plan.frameworkConfig).toContain("<shared-token>");
+        expect(plan.limitations).not.toHaveLength(0);
+    });
+
+    it("injects a unique compatibility action into an experimental profile", async () => {
+        const profile = getFrameworkProfile("overflow")!;
+        const definition = createProfileApplication(profile);
+        const protocol = {
+            name: "onebot",
+            version: "v11",
+            path: "/qq/main/onebot/v11",
+        } as Protocol;
+        const extension = definition.createProtocolExtension(protocol)!;
+        const next = vi.fn();
+
+        expect(extension.capability.actions).toContain("get_overflow_application_info");
+        await expect(
+            extension.apply!({
+                protocol,
+                action: "get_overflow_application_info",
+                next,
+            }),
+        ).resolves.toMatchObject({
+            status: "ok",
+            data: {
+                application: "overflow",
+                stage: "experimental",
+                protocol: "onebot.v11",
+            },
+        });
+        expect(next).not.toHaveBeenCalled();
     });
 
     it.each([

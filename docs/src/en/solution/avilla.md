@@ -1,15 +1,42 @@
 # Avilla
 
-Avilla is registered in the unified Application catalog with the `planned` stage. It cannot be activated with `-t avilla` yet; OneBots rejects startup instead of reporting research notes as working support.
+Avilla is now an activatable OneBots Application with the `experimental` stage. It publishes connection metadata, limitations, and the `get_avilla_application_info` compatibility action for matching `satori.v1` protocol instances.
+
+## Start
+
+```bash
+onebots -r <adapter> -p satori-v1 -t avilla -c config.yaml
+```
+
+Or persist the selection:
+
+```yaml
+plugins:
+  adapters: [<adapter>]
+  protocols: [satori-v1]
+  applications: [avilla]
+```
+
+## Runtime capability
 
 | Item | Current value |
 | --- | --- |
-| Application ID | `avilla` |
-| Candidate protocols | `onebot.v11 / satori.v1 / onebot.v12` |
-| Stage | `planned` |
+| Application | `avilla` |
+| Stage | `experimental` |
+| Protocol | `satori.v1` |
+| Transport | `websocket` |
+| Extension action | `get_avilla_application_info` |
+| Verification | `documented` |
+| Upstream | [Avilla](https://github.com/GraiaProject/Avilla) |
 
-## Missing implementation
+Use `GET /api/applications` to inspect effective per-account protocol capabilities. Generate a redacted connection template with:
 
-Upstream still marks the relevant connectors as WIP or Planned.
+```bash
+onebots frameworks --framework avilla --account <platform.account_id>
+```
 
-Promotion to `available` requires a same-name Application package or built-in implementation, protocol capability descriptors, and a pinned-version interoperability gate.
+## Boundaries
+
+Upstream still marks its Satori component as WIP; this template is for experiments only.
+
+This stage can be activated with `-t`, but it will not become `available` until pinned-version interoperability passes.

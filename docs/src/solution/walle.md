@@ -1,15 +1,42 @@
 # Walle
 
-Walle 已纳入统一 Application 注册表，但状态为 `planned`，当前不能通过 `-t walle` 激活。OneBots 会明确拒绝启动，避免把调研资料误报为可运行支持。
+Walle 已进入可激活的 OneBots Application 运行时，状态为 `experimental`。它会为匹配的 `onebot.v12` 协议实例公开连接能力、限制和 `get_walle_application_info` 兼容动作。
+
+## 启动
+
+```bash
+onebots -r <adapter> -p onebot-v12 -t walle -c config.yaml
+```
+
+也可以持久化：
+
+```yaml
+plugins:
+  adapters: [<adapter>]
+  protocols: [onebot-v12]
+  applications: [walle]
+```
+
+## 运行时能力
 
 | 项目 | 当前值 |
 | --- | --- |
-| Application ID | `walle` |
-| 候选协议 | `onebot.v12` |
-| 状态 | `planned` |
+| Application | `walle` |
+| 阶段 | `experimental` |
+| 协议 | `onebot.v12` |
+| 连接方式 | `websocket` |
+| 扩展动作 | `get_walle_application_info` |
+| 验证级别 | `documented` |
+| 上游 | [Walle](https://github.com/onebot-walle/walle) |
 
-## 尚缺的实现
+运行后可通过 `GET /api/applications` 查看逐账号、逐协议的实际能力。生成脱敏连接模板：
 
-需先扩大 OneBots 的 OneBot 12 动作与事件门禁。
+```bash
+onebots frameworks --framework walle --account <platform.account_id>
+```
 
-完成标准是提供同名 Application 包或内置实现、协议扩展能力描述、固定版本互操作门禁，然后才能把状态提升为 `available`。
+## 使用边界
+
+当前只声明 OneBot 12 WebSocket 应用端能力，HTTP/WebHook 与完整动作矩阵未验证。
+
+该状态允许通过 `-t` 激活，但在完成固定版本互操作前不会提升为 `available`。

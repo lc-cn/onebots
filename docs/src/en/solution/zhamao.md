@@ -1,15 +1,42 @@
 # 炸毛框架
 
-炸毛框架 is registered in the unified Application catalog with the `planned` stage. It cannot be activated with `-t zhamao` yet; OneBots rejects startup instead of reporting research notes as working support.
+炸毛框架 is now an activatable OneBots Application with the `experimental` stage. It publishes connection metadata, limitations, and the `get_zhamao_application_info` compatibility action for matching `onebot.v11` protocol instances.
+
+## Start
+
+```bash
+onebots -r <adapter> -p onebot-v11 -t zhamao -c config.yaml
+```
+
+Or persist the selection:
+
+```yaml
+plugins:
+  adapters: [<adapter>]
+  protocols: [onebot-v11]
+  applications: [zhamao]
+```
+
+## Runtime capability
 
 | Item | Current value |
 | --- | --- |
-| Application ID | `zhamao` |
-| Candidate protocols | `onebot.v11 / onebot.v12` |
-| Stage | `planned` |
+| Application | `zhamao` |
+| Stage | `experimental` |
+| Protocol | `onebot.v11` |
+| Transport | `websocket` |
+| Extension action | `get_zhamao_application_info` |
+| Verification | `documented` |
+| Upstream | [炸毛框架](https://github.com/zhamao-robot/zhamao-framework) |
 
-## Missing implementation
+Use `GET /api/applications` to inspect effective per-account protocol capabilities. Generate a redacted connection template with:
 
-The current PHP runtime, driver version, and connection configuration still need verification.
+```bash
+onebots frameworks --framework zhamao --account <platform.account_id>
+```
 
-Promotion to `available` requires a same-name Application package or built-in implementation, protocol capability descriptors, and a pinned-version interoperability gate.
+## Boundaries
+
+PHP runtime and OneBot driver versions vary; verify the generated fields against the selected upstream release.
+
+This stage can be activated with `-t`, but it will not become `available` until pinned-version interoperability passes.

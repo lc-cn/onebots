@@ -1,15 +1,42 @@
 # NoneBot 1
 
-NoneBot 1 已纳入统一 Application 注册表，但状态为 `planned`，当前不能通过 `-t nonebot1` 激活。OneBots 会明确拒绝启动，避免把调研资料误报为可运行支持。
+NoneBot 1 已进入可激活的 OneBots Application 运行时，状态为 `legacy`。它会为匹配的 `onebot.v11` 协议实例公开连接能力、限制和 `get_nonebot1_application_info` 兼容动作。
+
+## 启动
+
+```bash
+onebots -r <adapter> -p onebot-v11 -t nonebot1 -c config.yaml
+```
+
+也可以持久化：
+
+```yaml
+plugins:
+  adapters: [<adapter>]
+  protocols: [onebot-v11]
+  applications: [nonebot1]
+```
+
+## 运行时能力
 
 | 项目 | 当前值 |
 | --- | --- |
-| Application ID | `nonebot1` |
-| 候选协议 | `onebot.v11` |
-| 状态 | `planned` |
+| Application | `nonebot1` |
+| 阶段 | `legacy` |
+| 协议 | `onebot.v11` |
+| 连接方式 | `reverse-websocket` |
+| 扩展动作 | `get_nonebot1_application_info` |
+| 验证级别 | `documented` |
+| 上游 | [NoneBot 1](https://github.com/nonebot/nonebot) |
 
-## 尚缺的实现
+运行后可通过 `GET /api/applications` 查看逐账号、逐协议的实际能力。生成脱敏连接模板：
 
-仅作为存量迁移目标；新部署推荐 NoneBot2。
+```bash
+onebots frameworks --framework nonebot1 --account <platform.account_id>
+```
 
-完成标准是提供同名 Application 包或内置实现、协议扩展能力描述、固定版本互操作门禁，然后才能把状态提升为 `available`。
+## 使用边界
+
+仅面向存量 NoneBot 1 / aiocqhttp 项目，Python 与依赖兼容性由部署者负责；新项目使用 NoneBot2。
+
+该状态允许通过 `-t` 激活，但不会被表述为新部署推荐项。
