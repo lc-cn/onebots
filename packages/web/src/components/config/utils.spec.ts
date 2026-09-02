@@ -9,6 +9,7 @@ import {
     parseStructuredFieldValue,
     resolveStructuredFieldDisplay,
     resolveSchemaFieldInitialValue,
+    shouldOmitSchemaFieldValue,
 } from "./utils.js";
 import type { SchemaBundle, ValidationRule } from "./types.js";
 
@@ -258,6 +259,36 @@ describe("config form generation", () => {
         expect(
             resolveSchemaFieldInitialValue({ email: { auth: { method: "password" } } }, method),
         ).toBe("password");
+    });
+
+    test("normalizes legacy scalar values before binding schema fields", () => {
+        const fields = buildSchemaFields({
+            heartbeat_interval: { type: "number", default: 15000 },
+            request_timeout: { type: "number" },
+            sign_api_addr: { type: "string" },
+        });
+        const byPath = (path: string) => {
+            const field = fields.find(item => item.path.join(".") === path);
+            if (!field) throw new Error(`missing ${path}`);
+            return field;
+        };
+
+        expect(
+            resolveSchemaFieldInitialValue(
+                { heartbeat_interval: "5000" },
+                byPath("heartbeat_interval"),
+            ),
+        ).toBe(5000);
+        expect(
+            resolveSchemaFieldInitialValue({ request_timeout: "" }, byPath("request_timeout")),
+        ).toBeUndefined();
+        expect(
+            resolveSchemaFieldInitialValue({ sign_api_addr: "" }, byPath("sign_api_addr")),
+        ).toBeUndefined();
+        expect(resolveSchemaFieldInitialValue({}, byPath("heartbeat_interval"))).toBe(15000);
+        expect(shouldOmitSchemaFieldValue("", { type: "string" })).toBe(true);
+        expect(shouldOmitSchemaFieldValue("", { type: "string", required: true })).toBe(false);
+        expect(shouldOmitSchemaFieldValue(0, { type: "number" })).toBe(false);
     });
 
     test("removes hidden values and empty parent objects", () => {

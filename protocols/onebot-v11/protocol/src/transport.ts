@@ -159,7 +159,7 @@ export class OneBotV11Transport {
     private startHeartbeat(): void {
         const { context } = this;
         if (!context.config.heartbeat_interval || this.heartbeatTimer) return;
-        const intervalMs = Math.max(Number(context.config.heartbeat_interval) || 1, 1) * 1000;
+        const intervalMs = Math.max(Number(context.config.heartbeat_interval) || 1, 1);
         this.heartbeatTimer = setInterval(() => {
             const heartbeat = context.format("meta_event", {
                 meta_event_type: "heartbeat",

@@ -294,7 +294,11 @@ export class ConfigValidator {
                 if (validationRule.max !== undefined && strValue.length > validationRule.max) {
                     errors.push(`${currentPath} length must be <= ${validationRule.max}`);
                 }
-                if (validationRule.pattern && !validationRule.pattern.test(strValue)) {
+                if (
+                    validationRule.pattern &&
+                    (strValue !== "" || validationRule.required) &&
+                    !validationRule.pattern.test(strValue)
+                ) {
                     errors.push(`${currentPath} does not match pattern ${validationRule.pattern}`);
                 }
             }

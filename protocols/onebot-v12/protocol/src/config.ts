@@ -1,7 +1,7 @@
-import { App } from 'onebots'
+import { App } from "onebots";
 
 // OneBot V12 Protocol Configuration
-declare module 'onebots' {
+declare module "onebots" {
     namespace Protocol {
         interface Configs {
             "onebot.v12": OneBotV12Config.Config;
@@ -22,7 +22,9 @@ export namespace OneBotV12Config {
     }
 }
 
-App.registerGeneral('onebot.v12', {
+App.registerGeneral("onebot.v12", {
     use_http: true,
     use_ws: false,
+    request_timeout: 15000,
+    heartbeat_interval: 15000,
 });

@@ -9,7 +9,13 @@ import { OneBotV12ActionService } from "./actions.js";
 import { projectOneBotV12Notice } from "./notice-projector.js";
 import { OneBotV12Transport } from "./transport.js";
 
-const onebotV12Schema: Schema = {
+function normalizeMilliseconds(value: unknown): number {
+    const parsed = typeof value === "number" ? value : Number(String(value).trim());
+    if (!Number.isFinite(parsed)) throw new TypeError("必须是有效数字");
+    return parsed;
+}
+
+export const onebotV12Schema: Schema = {
     use_http: { type: "boolean", default: true, label: "启用 HTTP", ui: { section: "transport" } },
     use_ws: {
         type: "boolean",
@@ -45,7 +51,9 @@ const onebotV12Schema: Schema = {
     },
     request_timeout: {
         type: "number",
-        label: "请求超时(秒)",
+        default: 15000,
+        transform: normalizeMilliseconds,
+        label: "请求超时(毫秒)",
         ui: { section: "advanced" },
     },
     access_token: {
@@ -56,7 +64,9 @@ const onebotV12Schema: Schema = {
     },
     heartbeat_interval: {
         type: "number",
-        label: "心跳间隔(秒)",
+        default: 15000,
+        transform: normalizeMilliseconds,
+        label: "心跳间隔(毫秒)",
         ui: { section: "advanced" },
     },
     enable_cors: {
@@ -330,8 +340,7 @@ export class OneBotV12Protocol extends Protocol<"v12", OneBotV12Config.Config> {
             return;
         }
 
-        // 配置为秒，转换为毫秒；至少 1 秒
-        const intervalMs = Math.max(Number(this.config.heartbeat_interval) || 1, 1) * 1000;
+        const intervalMs = Math.max(Number(this.config.heartbeat_interval) || 1, 1);
         this.heartbeatTimer = setInterval(() => {
             this.dispatchMetaEvent("heartbeat", {
                 interval: intervalMs,

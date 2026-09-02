@@ -9,6 +9,8 @@ import {
     readLine,
     TokenManager,
     writeConfigFileAtomic,
+    deepClone,
+    deepMerge,
     type Account,
 } from "@onebots/core";
 import { getAppConfigSchema } from "./config-schema.js";
@@ -105,6 +107,30 @@ const client = (() => {
     }
     return "";
 })();
+
+export function mergeAppConfigDefaults(
+    config: App.Config,
+    defaults: App.Config = App.defaultConfig,
+): App.Config {
+    const defaultGeneral = defaults.general ?? {};
+    const configuredGeneral = config.general ?? {};
+    const general = Object.fromEntries(
+        [...new Set([...Object.keys(defaultGeneral), ...Object.keys(configuredGeneral)])].map(
+            key => [
+                key,
+                deepMerge(
+                    deepClone(defaultGeneral[key] ?? {}),
+                    deepClone(configuredGeneral[key] ?? {}),
+                ),
+            ],
+        ),
+    );
+    return {
+        ...defaults,
+        ...config,
+        general,
+    };
+}
 
 export class App extends BaseApp {
     public ws: WsServer;
@@ -240,7 +266,10 @@ export class App extends BaseApp {
     }
 
     constructor(config: App.Config, runtimeContract?: ServiceRuntimeContract) {
-        super(config, { name: packageMetadata.name, version: packageMetadata.version });
+        super(mergeAppConfigDefaults(config), {
+            name: packageMetadata.name,
+            version: packageMetadata.version,
+        });
         this.runtimeContractId = runtimeContract
             ? createServiceRuntimeContractId(runtimeContract)
             : undefined;

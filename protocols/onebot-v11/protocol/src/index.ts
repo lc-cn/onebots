@@ -9,7 +9,13 @@ import { OneBotV11Config } from "./config.js";
 import { projectOneBotV11Notice } from "./notice-projector.js";
 import { OneBotV11Transport } from "./transport.js";
 
-const onebotV11Schema: Schema = {
+function normalizeMilliseconds(value: unknown): number {
+    const parsed = typeof value === "number" ? value : Number(String(value).trim());
+    if (!Number.isFinite(parsed)) throw new TypeError("必须是有效数字");
+    return parsed;
+}
+
+export const onebotV11Schema: Schema = {
     use_http: { type: "boolean", default: true, label: "启用 HTTP", ui: { section: "transport" } },
     use_ws: {
         type: "boolean",
@@ -82,7 +88,9 @@ const onebotV11Schema: Schema = {
     },
     heartbeat_interval: {
         type: "number",
-        label: "心跳间隔(秒)",
+        default: 15000,
+        transform: normalizeMilliseconds,
+        label: "心跳间隔(毫秒)",
         ui: { section: "advanced" },
     },
     filters: Protocol.FilterSchema,

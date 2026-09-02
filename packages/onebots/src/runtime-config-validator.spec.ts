@@ -168,10 +168,10 @@ describe("runtime config validation", () => {
         ).not.toThrow();
     });
 
-    it("rejects configured accounts whose adapter or protocol was not loaded", () => {
+    it("keeps dormant protocol configuration while still requiring a loaded outlet", () => {
         expect(() =>
             validateRuntimeConfig({ general: { "ghost.v1": { use_http: true } } }),
-        ).toThrow(/general\.ghost\.v1.*协议 ghost\.v1 未加载/);
+        ).not.toThrow();
 
         expect(() =>
             validateRuntimeConfig({
@@ -185,7 +185,19 @@ describe("runtime config validation", () => {
             validateRuntimeConfig({
                 "mock.demo": { token: "secret", "ghost.v1": {} },
             }),
-        ).toThrow(/协议 ghost\.v1 未加载.*至少需要配置一个已加载的协议出口/);
+        ).toThrow(/至少需要配置一个已加载的协议出口/);
+
+        ProtocolRegistry.register("test", "v1", (() => undefined) as unknown as Protocol.Factory);
+        ProtocolRegistry.registerSchema("test.v1", protocolSchema);
+        expect(() =>
+            validateRuntimeConfig({
+                "mock.demo": {
+                    token: "secret",
+                    "test.v1": { use_http: true },
+                    "ghost.v1": {},
+                },
+            }),
+        ).not.toThrow();
     });
 });
 

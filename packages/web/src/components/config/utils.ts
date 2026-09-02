@@ -283,15 +283,26 @@ export const resolveSchemaFieldInitialValue = (
     field: SchemaFieldDef,
 ): unknown => {
     const currentValue = getValueByPath(configObject, field.path);
-    if (currentValue !== undefined) return currentValue;
+    if (currentValue !== undefined && currentValue !== null && currentValue !== "") {
+        if (field.rule.type === "number" && typeof currentValue === "string") {
+            const normalized = currentValue.trim();
+            const parsed = Number(normalized);
+            if (normalized && Number.isFinite(parsed)) return parsed;
+        }
+        return currentValue;
+    }
     for (const source of field.valueInference ?? []) {
         const sourceValue = getValueByPath(configObject, source.path);
         if (sourceValue !== undefined && sourceValue !== null && sourceValue !== "") {
             return source.value;
         }
     }
-    return field.rule.default ?? (field.rule.type === "boolean" ? false : "");
+    return field.rule.default ?? (field.rule.type === "boolean" ? false : undefined);
 };
+
+/** 可选标量留空时从 YAML 中删除，交由运行时 Schema 应用默认值。 */
+export const shouldOmitSchemaFieldValue = (value: unknown, rule: ValidationRule): boolean =>
+    value === undefined || value === null || (value === "" && !rule.required);
 
 /** Schema 声明是显示与持久化的唯一来源，两个配置入口共用同一判断。 */
 export const isSchemaFieldVisible = (

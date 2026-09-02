@@ -45,6 +45,7 @@ import {
     resolveSchemaFieldInitialValue,
     parseStructuredFieldValue,
     isSchemaFieldVisible,
+    shouldOmitSchemaFieldValue,
     normalizeSchema,
     buildConfigGroups,
     extractAccountRows,
@@ -252,6 +253,10 @@ const handleSave = async () => {
                             return;
                         }
                         value = parsed.value;
+                    }
+                    if (shouldOmitSchemaFieldValue(value, field.rule)) {
+                        deleteValueByPath(configObject, field.path);
+                        continue;
                     }
                     setValueByPath(configObject, field.path, value);
                 }

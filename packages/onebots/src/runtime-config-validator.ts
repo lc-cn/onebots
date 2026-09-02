@@ -60,9 +60,6 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
     for (const [key, value] of Object.entries(general ?? {})) {
         const schema = schemas.protocols[key];
         if (!schema) {
-            if (looksLikeProtocolKey(key)) {
-                issues.push({ path: `general.${key}`, message: `协议 ${key} 未加载` });
-            }
             continue;
         }
         const protocolConfig = asConfigObject(value);
@@ -120,9 +117,6 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
             const [protocol, version, ...extra] = key.split(".");
             if (!version || extra.length > 0) continue;
             if (!ProtocolRegistry.has(protocol, version)) {
-                if (looksLikeProtocolConfig(protocolValue)) {
-                    issues.push({ path: `${rootKey}.${key}`, message: `协议 ${key} 未加载` });
-                }
                 continue;
             }
             loadedProtocolCount++;
@@ -212,12 +206,4 @@ function asConfigObject(value: unknown): Record<string, unknown> | undefined {
     return typeof value === "object" && value !== null && !Array.isArray(value)
         ? (value as Record<string, unknown>)
         : undefined;
-}
-
-function looksLikeProtocolConfig(value: unknown): boolean {
-    return asConfigObject(value) !== undefined;
-}
-
-function looksLikeProtocolKey(value: string): boolean {
-    return /^[a-z][a-z0-9-]*\.v[1-9][0-9]*$/u.test(value);
 }

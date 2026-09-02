@@ -156,6 +156,17 @@ describe("Config Validator", () => {
             }).not.toThrow();
         });
 
+        it("should treat an empty optional string as not configured", () => {
+            const schema = {
+                endpoint: { type: "string" as const, pattern: /^https?:\/\/[^\s]+$/ },
+            };
+
+            expect(() => ConfigValidator.validate({ endpoint: "" }, schema)).not.toThrow();
+            expect(() => ConfigValidator.validate({ endpoint: "not-a-url" }, schema)).toThrow(
+                ValidationError,
+            );
+        });
+
         it("should use custom validator", () => {
             const schema = {
                 password: {

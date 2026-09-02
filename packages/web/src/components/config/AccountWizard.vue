@@ -26,6 +26,7 @@ import {
     resolveSchemaFieldInitialValue,
     parseStructuredFieldValue,
     isSchemaFieldVisible,
+    shouldOmitSchemaFieldValue,
     protocolTitle,
 } from "./utils";
 import { buildProtocolFieldLayout } from "./protocol-layout";
@@ -253,6 +254,10 @@ const handleSubmit = async () => {
                 }
                 value = parsed.value;
             }
+            if (shouldOmitSchemaFieldValue(value, field.rule)) {
+                deleteValueByPath(configObject, field.path);
+                continue;
+            }
             setValueByPath(configObject, field.path, value);
         }
     }
@@ -270,6 +275,10 @@ const handleSubmit = async () => {
                 return;
             }
             value = parsed.value;
+        }
+        if (shouldOmitSchemaFieldValue(value, field.rule)) {
+            deleteValueByPath(configObject, field.path);
+            continue;
         }
         setValueByPath(configObject, field.path, value);
     }

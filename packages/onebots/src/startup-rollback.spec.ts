@@ -49,9 +49,7 @@ describe("App startup rollback", () => {
         BaseApp.configDir = directory;
         const exitListenerCount = process.listenerCount("exit");
         const app = new App({
-            general: {
-                "ghost.v1": { use_http: true },
-            },
+            "missing.demo": {},
         });
 
         expect(process.listenerCount("exit")).toBe(exitListenerCount + 1);
@@ -60,7 +58,7 @@ describe("App startup rollback", () => {
         expect(process.stdout.write).not.toBe(originalStdoutWrite);
         expect(process.stderr.write).not.toBe(originalStderrWrite);
 
-        await expect(app.start()).rejects.toThrow("协议 ghost.v1 未加载");
+        await expect(app.start()).rejects.toThrow("适配器 missing 未加载");
 
         expect(app.isDisposed).toBe(true);
         expect(app.lifecycle.getResourceCount()).toBe(0);
