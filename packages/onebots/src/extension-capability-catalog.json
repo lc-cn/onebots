@@ -23,7 +23,7 @@
       "version": "4.0.10"
     },
     "@onebots/adapter-icqq": {
-      "version": "3.0.11"
+      "version": "3.0.12"
     },
     "@onebots/adapter-instagram": {
       "version": "0.1.3"
@@ -2679,7 +2679,7 @@
     },
     "icqq": {
       "packageName": "@onebots/adapter-icqq",
-      "packageVersion": "3.0.11",
+      "packageVersion": "3.0.12",
       "manifest": {
         "version": 1,
         "actions": {
