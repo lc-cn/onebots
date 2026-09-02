@@ -36,17 +36,12 @@ describe("ICQQ 账号资料动作", () => {
                 class_name: "朋友",
             }),
         };
+        const createId = vi.fn(id);
         const actions = Object.create(ICQQSocialActions.prototype) as ICQQSocialActions;
         Object.defineProperties(actions, {
             getAccount: { value: () => ({ client: bot }) },
             numericId: { value: (value: string) => Number(value) },
-            createId: {
-                value: (value: string | number) => ({
-                    string: String(value),
-                    number: Number(value),
-                    source: value,
-                }),
-            },
+            createId: { value: createId },
         });
 
         await expect(actions.getFriendList("bot", { no_cache: true })).resolves.toEqual([
@@ -65,6 +60,39 @@ describe("ICQQ 账号资料动作", () => {
         ).resolves.toEqual(expect.objectContaining({ category_id: 2, category_name: "朋友" }));
         expect(bot.getFriendList).toHaveBeenCalledWith(true);
         expect(bot.getFriendInfo).toHaveBeenCalledWith(10001, true);
+        expect(createId).toHaveBeenNthCalledWith(1, 10001);
+        expect(createId).toHaveBeenNthCalledWith(2, 10001);
+    });
+
+    it("账号和陌生人资料保留数字 QQ 号", async () => {
+        const bot = {
+            getLoginInfo: vi.fn().mockReturnValue({
+                user_id: 10000,
+                nickname: "Bot",
+                avatar: "https://example.com/bot.png",
+            }),
+            getStrangerInfo: vi.fn().mockResolvedValue({
+                user_id: 10001,
+                nickname: "Alice",
+                avatar: "https://example.com/alice.png",
+            }),
+        };
+        const createId = vi.fn(id);
+        const actions = Object.create(ICQQSocialActions.prototype) as ICQQSocialActions;
+        Object.defineProperties(actions, {
+            getAccount: { value: () => ({ client: bot }) },
+            numericId: { value: (value: string) => Number(value) },
+            createId: { value: createId },
+        });
+
+        await expect(actions.getLoginInfo("bot")).resolves.toEqual(
+            expect.objectContaining({ user_id: id(10000) }),
+        );
+        await expect(actions.getUserInfo("bot", { user_id: id(10001) })).resolves.toEqual(
+            expect.objectContaining({ user_id: id(10001) }),
+        );
+        expect(createId).toHaveBeenNthCalledWith(1, 10000);
+        expect(createId).toHaveBeenNthCalledWith(2, 10001);
     });
 
     it("以真实 QQ UID 列出并处理好友请求", async () => {

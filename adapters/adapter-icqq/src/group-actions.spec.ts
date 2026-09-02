@@ -136,6 +136,13 @@ describe("ICQQ 群动作", () => {
                     created_time: 100,
                 },
             ]),
+            getGroupInfo: vi.fn().mockResolvedValue({
+                group_id: 20001,
+                group_name: "OneBots",
+                member_count: 20,
+                max_member_count: 500,
+                created_time: 100,
+            }),
             getGroupMemberList: vi.fn().mockResolvedValue([
                 {
                     group_id: 20001,
@@ -155,16 +162,20 @@ describe("ICQQ 群动作", () => {
                 },
             ]),
         };
+        const createId = vi.fn(id);
         const actions = Object.create(ICQQGroupActions.prototype) as ICQQGroupActions;
         Object.defineProperties(actions, {
             getAccount: { value: () => ({ client: bot }) },
-            createId: { value: id },
+            createId: { value: createId },
             numericId: { value: (value: string) => Number(value) },
         });
 
         await expect(actions.getGroupList("bot", { no_cache: true })).resolves.toEqual([
             expect.objectContaining({ created_time: 100 }),
         ]);
+        await expect(
+            actions.getGroupInfo("bot", { group_id: id(20001), no_cache: true }),
+        ).resolves.toEqual(expect.objectContaining({ created_time: 100 }));
         await expect(
             actions.getGroupMemberList("bot", {
                 group_id: id(20001),
@@ -184,7 +195,11 @@ describe("ICQQ 群动作", () => {
             }),
         ]);
         expect(bot.getGroupList).toHaveBeenCalledWith(true);
+        expect(bot.getGroupInfo).toHaveBeenCalledWith(20001, true);
         expect(bot.getGroupMemberList).toHaveBeenCalledWith(20001, true);
+        expect(createId).toHaveBeenNthCalledWith(1, 20001);
+        expect(createId).toHaveBeenNthCalledWith(2, 20001);
+        expect(createId).toHaveBeenNthCalledWith(3, 10001);
     });
 
     it("按表态类型添加和删除群消息回应", async () => {

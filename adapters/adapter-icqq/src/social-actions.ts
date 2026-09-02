@@ -198,7 +198,7 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
             });
 
         return {
-            user_id: this.createId(info.user_id.toString()),
+            user_id: this.createId(info.user_id),
             user_name: info.nickname,
             user_displayname: info.nickname,
             avatar: info.avatar,
@@ -214,7 +214,7 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         const info = await bot.getStrangerInfo(userId);
 
         return {
-            user_id: this.createId(info.user_id.toString()),
+            user_id: this.createId(info.user_id),
             user_name: info.nickname,
             user_displayname: info.nickname,
             avatar: info.avatar,
@@ -267,7 +267,7 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         const friends = await bot.getFriendList(params?.no_cache);
 
         return friends.map(friend => ({
-            user_id: this.createId(friend.user_id.toString()),
+            user_id: this.createId(friend.user_id),
             user_name: friend.nickname,
             remark: friend.remark,
             sex: friend.sex,
@@ -289,7 +289,7 @@ export abstract class ICQQSocialActions extends Adapter<ICQQBot, "icqq"> {
         if (!info) throw icqqResourceNotFound("好友", userId);
 
         return {
-            user_id: this.createId(info.user_id.toString()),
+            user_id: this.createId(info.user_id),
             user_name: info.nickname,
             remark: info.remark,
             sex: info.sex,

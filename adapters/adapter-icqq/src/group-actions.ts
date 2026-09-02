@@ -21,7 +21,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         const groups = await bot.getGroupList(params?.no_cache);
 
         return groups.map(group => ({
-            group_id: this.createId(group.group_id.toString()),
+            group_id: this.createId(group.group_id),
             group_name: group.group_name,
             member_count: group.member_count,
             max_member_count: group.max_member_count,
@@ -43,7 +43,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
         if (!info) throw icqqResourceNotFound("群", groupId);
 
         return {
-            group_id: this.createId(info.group_id.toString()),
+            group_id: this.createId(info.group_id),
             group_name: info.group_name,
             member_count: info.member_count,
             max_member_count: info.max_member_count,
@@ -87,7 +87,7 @@ export abstract class ICQQGroupActions extends ICQQSocialActions {
 
         return members.map(member => ({
             group_id: params.group_id,
-            user_id: this.createId(member.user_id.toString()),
+            user_id: this.createId(member.user_id),
             user_name: member.nickname,
             card: member.card || "",
             sex: member.sex ?? "unknown",
