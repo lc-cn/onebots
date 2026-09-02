@@ -375,6 +375,7 @@ describe("BaseApp reload boundary", () => {
         } as unknown as Account;
         adapter.createAccount = vi.fn(() => account);
         const onConfigPersisted = vi.fn();
+        const assertAccountConfigSourceCurrent = vi.fn();
         const app = {
             config: { ...config },
             configPath: BaseApp.configPath,
@@ -383,6 +384,7 @@ describe("BaseApp reload boundary", () => {
             adapters: new Map(),
             findOrCreateAdapter: vi.fn(() => adapter),
             validateAccountConfigCandidate: vi.fn(),
+            assertAccountConfigSourceCurrent,
             onConfigPersisted,
         } as unknown as BaseApp;
 
@@ -394,6 +396,10 @@ describe("BaseApp reload boundary", () => {
             expect(onConfigPersisted).toHaveBeenCalledWith(
                 BaseApp.configPath,
                 expect.stringContaining("mock.primary:"),
+            );
+            expect(assertAccountConfigSourceCurrent).toHaveBeenCalledWith(
+                BaseApp.configPath,
+                undefined,
             );
         } finally {
             BaseApp.configDir = originalConfigDir;

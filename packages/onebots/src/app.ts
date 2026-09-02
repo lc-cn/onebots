@@ -1,4 +1,5 @@
 import {
+    AccountConfigDriftError,
     BaseApp,
     ConfigRestartRequiredError,
     yaml,
@@ -411,6 +412,12 @@ export class App extends BaseApp {
 
     protected override onConfigPersisted(configPath: string, content: string): void {
         this.markRuntimeConfigApplied(configPath, content);
+    }
+
+    protected override assertAccountConfigSourceCurrent(configPath: string): void {
+        if (configPath === this.configPath && this.runtimeConfigState.status !== "in_sync") {
+            throw new AccountConfigDriftError();
+        }
     }
 
     protected override validateAccountConfigCandidate(

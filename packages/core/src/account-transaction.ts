@@ -29,6 +29,8 @@ export interface AccountTransactionOptions {
     configPath: string;
     runtimeStarted: boolean;
     forceStop?: boolean;
+    /** 宿主可在触碰账号运行态前证明磁盘来源仍是当前进程已应用的版本。 */
+    assertSourceCurrent?(configPath: string, source: string | undefined): void;
     onPersisted(configPath: string, content: string): void;
     dependencies?: Partial<AccountTransactionDependencies>;
 }
@@ -41,9 +43,17 @@ const defaultDependencies: AccountTransactionDependencies = {
 };
 
 export class AccountMutationConflictError extends ConfigError {
-    constructor() {
-        super("OneBots 配置正在变更，请稍后重试账号操作");
+    constructor(message = "OneBots 配置正在变更，请稍后重试账号操作", options?: { cause?: Error }) {
+        super(message, options);
         this.name = "AccountMutationConflictError";
+    }
+}
+
+/** 磁盘配置在账号运行态切换期间被外部操作更新。 */
+export class AccountConfigDriftError extends AccountMutationConflictError {
+    constructor(cause?: Error) {
+        super("账号配置在操作期间已被其他进程更新；已保留最新文件，请重试", { cause });
+        this.name = "AccountConfigDriftError";
     }
 }
 
@@ -68,37 +78,85 @@ export async function mutateAccountAtomically(options: AccountTransactionOptions
             write: options.dependencies?.write ?? defaultDependencies.write,
         };
         const previousEntry = host.config[options.configKey];
-        const previousFile = fs.existsSync(options.configPath)
-            ? fs.readFileSync(options.configPath, "utf8")
-            : undefined;
+        const previousFile = readConfigFile(options.configPath);
         let previousRuntimeConfig: Account.Config | undefined;
 
+        options.assertSourceCurrent?.(options.configPath, previousFile);
         previousRuntimeConfig = await switchAccountRuntime(options, options.nextConfig);
         if (options.nextConfig) host.config[options.configKey] = options.nextConfig;
         else delete host.config[options.configKey];
-        const content = dependencies.serialize(host.config);
 
+        let content: string | undefined;
         try {
+            content = dependencies.serialize(host.config);
+            assertConfigFileCurrent(options.configPath, previousFile);
             dependencies.write(options.configPath, content, true);
+            assertConfigFileCurrent(options.configPath, content);
             options.onPersisted(options.configPath, content);
             return content;
         } catch (error) {
             restoreConfigEntry(host.config, options.configKey, previousEntry);
-            const failures = new FailureCollector();
-            failures.add(error);
-            await failures.capture(() => switchAccountRuntime(options, previousRuntimeConfig));
-            await failures.capture(() => {
-                if (previousFile === undefined) fs.rmSync(options.configPath, { force: true });
-                else dependencies.write(options.configPath, previousFile, false);
-            });
-            if (previousFile !== undefined) {
-                await failures.capture(() => options.onPersisted(options.configPath, previousFile));
+            const failures: unknown[] = [error];
+            try {
+                await switchAccountRuntime(options, previousRuntimeConfig);
+            } catch (rollbackError) {
+                failures.push(rollbackError);
             }
-            throwCollectedFailures(failures, "账号配置持久化失败且回滚未完整完成");
+            if (!(error instanceof AccountConfigDriftError)) {
+                try {
+                    restoreConfigFileAfterFailure(
+                        options.configPath,
+                        previousFile,
+                        content,
+                        dependencies,
+                    );
+                    if (previousFile !== undefined) {
+                        options.onPersisted(options.configPath, previousFile);
+                    }
+                } catch (rollbackError) {
+                    if (rollbackError instanceof AccountConfigDriftError && failures.length === 1) {
+                        throw new AccountConfigDriftError(asError(error));
+                    }
+                    failures.push(rollbackError);
+                }
+            }
+            if (failures.length === 1) throw error;
+            throw new AggregateError(failures, "账号配置持久化失败且回滚未完整完成");
         }
     } finally {
         runtimeLease.release();
     }
+}
+
+function assertConfigFileCurrent(file: string, expected: string | undefined): void {
+    if (readConfigFile(file) !== expected) throw new AccountConfigDriftError();
+}
+
+function readConfigFile(file: string): string | undefined {
+    try {
+        return fs.readFileSync(file, "utf8");
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+        throw error;
+    }
+}
+
+function restoreConfigFileAfterFailure(
+    file: string,
+    previous: string | undefined,
+    candidate: string | undefined,
+    dependencies: AccountTransactionDependencies,
+): void {
+    const current = readConfigFile(file);
+    if (current === previous) return;
+    if (current !== candidate) throw new AccountConfigDriftError();
+    if (previous === undefined) fs.rmSync(file, { force: true });
+    else dependencies.write(file, previous, false);
+    assertConfigFileCurrent(file, previous);
+}
+
+function asError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
 }
 
 async function switchAccountRuntime(

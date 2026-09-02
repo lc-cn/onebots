@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+    AccountConfigDriftError,
     AdapterRegistry,
     ProtocolRegistry,
     type Adapter,
@@ -47,6 +48,22 @@ afterEach(() => {
 });
 
 describe("App account mutation validation", () => {
+    it("磁盘配置不再是当前进程已应用版本时拒绝启动账号事务", () => {
+        const method = Object.getOwnPropertyDescriptor(
+            App.prototype,
+            "assertAccountConfigSourceCurrent",
+        )?.value as (configPath: string) => void;
+        const app = {
+            configPath: "/srv/onebots/config.yaml",
+            runtimeConfigState: { status: "drifted" },
+        };
+
+        expect(() => Reflect.apply(method, app, ["/srv/onebots/config.yaml"])).toThrowError(
+            AccountConfigDriftError,
+        );
+        expect(() => Reflect.apply(method, app, ["/tmp/other.yaml"])).not.toThrow();
+    });
+
     it("通过主程序 Schema 钩子在创建适配器前拒绝无效候选账号", async () => {
         const findOrCreateAdapter = vi.fn();
         const app = Object.assign(Object.create(App.prototype) as App, {

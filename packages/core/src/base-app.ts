@@ -326,6 +326,8 @@ export class BaseApp extends Koa {
                 configKey,
                 configPath: this.configPath,
                 runtimeStarted: this.isStarted,
+                assertSourceCurrent: (configPath, source) =>
+                    this.assertAccountConfigSourceCurrent(configPath, source),
                 onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
             });
         } catch (error) {
@@ -358,6 +360,8 @@ export class BaseApp extends Koa {
             configKey: key,
             configPath: this.configPath,
             runtimeStarted: this.isStarted,
+            assertSourceCurrent: (configPath, source) =>
+                this.assertAccountConfigSourceCurrent(configPath, source),
             onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
         });
     }
@@ -378,12 +382,20 @@ export class BaseApp extends Koa {
             configPath: this.configPath,
             runtimeStarted: this.isStarted,
             forceStop: force,
+            assertSourceCurrent: (configPath, source) =>
+                this.assertAccountConfigSourceCurrent(configPath, source),
             onPersisted: (configPath, content) => this.onConfigPersisted(configPath, content),
         });
     }
 
     /** 配置由核心账号操作成功落盘后的扩展钩子。 */
     protected onConfigPersisted(_configPath: string, _content: string): void {}
+
+    /** 主程序可拒绝从尚未应用或已经漂移的磁盘配置开始账号事务。 */
+    protected assertAccountConfigSourceCurrent(
+        _configPath: string,
+        _source: string | undefined,
+    ): void {}
 
     /** 主程序可覆写此钩子，以当前已加载插件的 Schema 校验单账号候选配置。 */
     protected validateAccountConfigCandidate(_configKey: string, _config: Account.Config): void {}

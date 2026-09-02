@@ -6,6 +6,7 @@ import type { Account } from "./account.js";
 import type { Adapter } from "./adapter.js";
 import { BaseApp } from "./base-app.js";
 import {
+    AccountConfigDriftError,
     AccountMutationConflictError,
     mutateAccountAtomically,
     type AccountTransactionHost,
@@ -99,10 +100,7 @@ describe("account transaction", () => {
         await expect(mutateAccountAtomically(transactionOptions)).resolves.toBe(persisted);
 
         expect(fs.readFileSync(fixture.configPath, "utf8")).toBe(persisted);
-        expect(transactionOptions.onPersisted).toHaveBeenCalledWith(
-            fixture.configPath,
-            persisted,
-        );
+        expect(transactionOptions.onPersisted).toHaveBeenCalledWith(fixture.configPath, persisted);
     });
 
     it("新增账号启动失败时清理候选运行态并保留原配置文件", async () => {
@@ -183,6 +181,124 @@ describe("account transaction", () => {
         );
     });
 
+    it("序列化失败时也回退已经启动的候选账号和内存配置", async () => {
+        const previousConfig = { platform: "mock", account_id: "10001", token: "old" };
+        const next = { ...previousConfig, token: "next" };
+        const fixture = createFixture(previousConfig);
+        const candidate = createAccount(fixture.adapter, next);
+        const restored = createAccount(fixture.adapter, previousConfig);
+        fixture.adapter.accounts.set("10001", createAccount(fixture.adapter, previousConfig));
+        vi.mocked(fixture.adapter.createAccount)
+            .mockReturnValueOnce(candidate)
+            .mockReturnValueOnce(restored);
+        const transactionOptions = options(fixture, next);
+        transactionOptions.dependencies = {
+            serialize: vi.fn(() => {
+                throw new Error("配置无法序列化");
+            }),
+            write: vi.fn(),
+        };
+
+        await expect(mutateAccountAtomically(transactionOptions)).rejects.toThrow("配置无法序列化");
+
+        expect(candidate.stop).toHaveBeenCalledOnce();
+        expect(restored.start).toHaveBeenCalledOnce();
+        expect(fixture.adapter.accounts.get("10001")).toBe(restored);
+        expect(fixture.host.config["mock.10001"]).toEqual(previousConfig);
+        expect(fs.readFileSync(fixture.configPath, "utf8")).toBe(fixture.initialFile);
+        expect(transactionOptions.dependencies.write).not.toHaveBeenCalled();
+    });
+
+    it("候选账号启动期间配置被外部更新时保留新文件并恢复旧账号", async () => {
+        const previousConfig = { platform: "mock", account_id: "10001", token: "old" };
+        const next = { ...previousConfig, token: "next" };
+        const fixture = createFixture(previousConfig);
+        const concurrent = "access_token: external-token\nlog_level: debug\n";
+        const candidate = createAccount(fixture.adapter, next, {
+            start: vi.fn(async () => {
+                fs.writeFileSync(fixture.configPath, concurrent);
+            }),
+        });
+        const restored = createAccount(fixture.adapter, previousConfig);
+        fixture.adapter.accounts.set("10001", createAccount(fixture.adapter, previousConfig));
+        vi.mocked(fixture.adapter.createAccount)
+            .mockReturnValueOnce(candidate)
+            .mockReturnValueOnce(restored);
+        const transactionOptions = options(fixture, next);
+
+        await expect(mutateAccountAtomically(transactionOptions)).rejects.toBeInstanceOf(
+            AccountConfigDriftError,
+        );
+
+        expect(candidate.stop).toHaveBeenCalledOnce();
+        expect(restored.start).toHaveBeenCalledOnce();
+        expect(fixture.adapter.accounts.get("10001")).toBe(restored);
+        expect(fixture.host.config["mock.10001"]).toEqual(previousConfig);
+        expect(fs.readFileSync(fixture.configPath, "utf8")).toBe(concurrent);
+        expect(transactionOptions.onPersisted).not.toHaveBeenCalled();
+    });
+
+    it("写入器失败且磁盘已出现外部版本时返回可重试冲突而不覆盖它", async () => {
+        const previousConfig = { platform: "mock", account_id: "10001", token: "old" };
+        const next = { ...previousConfig, token: "next" };
+        const fixture = createFixture(previousConfig);
+        const concurrent = "access_token: external-token\nport: 7788\n";
+        const candidate = createAccount(fixture.adapter, next);
+        const restored = createAccount(fixture.adapter, previousConfig);
+        fixture.adapter.accounts.set("10001", createAccount(fixture.adapter, previousConfig));
+        vi.mocked(fixture.adapter.createAccount)
+            .mockReturnValueOnce(candidate)
+            .mockReturnValueOnce(restored);
+        const transactionOptions = options(fixture, next);
+        transactionOptions.dependencies = {
+            write: vi.fn(() => {
+                fs.writeFileSync(fixture.configPath, concurrent);
+                throw new Error("目录同步失败");
+            }),
+        };
+
+        const failure = await mutateAccountAtomically(transactionOptions).catch(error => error);
+
+        expect(failure).toBeInstanceOf(AccountConfigDriftError);
+        expect((failure as AccountConfigDriftError).cause).toEqual(
+            expect.objectContaining({ message: "目录同步失败" }),
+        );
+        expect(candidate.stop).toHaveBeenCalledOnce();
+        expect(restored.start).toHaveBeenCalledOnce();
+        expect(fs.readFileSync(fixture.configPath, "utf8")).toBe(concurrent);
+        expect(transactionOptions.onPersisted).not.toHaveBeenCalled();
+    });
+
+    it("写入返回后发现外部版本时拒绝成功回执并恢复旧账号", async () => {
+        const previousConfig = { platform: "mock", account_id: "10001", token: "old" };
+        const next = { ...previousConfig, token: "next" };
+        const fixture = createFixture(previousConfig);
+        const concurrent = "access_token: external-token\nport: 8899\n";
+        const candidate = createAccount(fixture.adapter, next);
+        const restored = createAccount(fixture.adapter, previousConfig);
+        fixture.adapter.accounts.set("10001", createAccount(fixture.adapter, previousConfig));
+        vi.mocked(fixture.adapter.createAccount)
+            .mockReturnValueOnce(candidate)
+            .mockReturnValueOnce(restored);
+        const transactionOptions = options(fixture, next);
+        transactionOptions.dependencies = {
+            write: vi.fn((file, content) => {
+                fs.writeFileSync(file, content);
+                fs.writeFileSync(file, concurrent);
+            }),
+        };
+
+        await expect(mutateAccountAtomically(transactionOptions)).rejects.toBeInstanceOf(
+            AccountConfigDriftError,
+        );
+
+        expect(candidate.stop).toHaveBeenCalledOnce();
+        expect(restored.start).toHaveBeenCalledOnce();
+        expect(fixture.adapter.accounts.get("10001")).toBe(restored);
+        expect(fs.readFileSync(fixture.configPath, "utf8")).toBe(concurrent);
+        expect(transactionOptions.onPersisted).not.toHaveBeenCalled();
+    });
+
     it("账号事务进行中拒绝第二个配置变更", async () => {
         const fixture = createFixture();
         const next = { platform: "mock", account_id: "10001", token: "next" };
@@ -220,6 +336,33 @@ describe("account transaction", () => {
             runtimeOperation: "idle",
         });
         expect(fixture.adapter.createAccount).not.toHaveBeenCalled();
+    });
+
+    it("宿主判定磁盘来源已经漂移时在触碰账号运行态前拒绝事务", async () => {
+        const previousConfig = { platform: "mock", account_id: "10001", token: "old" };
+        const next = { ...previousConfig, token: "next" };
+        const fixture = createFixture(previousConfig);
+        const previous = createAccount(fixture.adapter, previousConfig);
+        fixture.adapter.accounts.set("10001", previous);
+        const transactionOptions = options(fixture, next);
+        transactionOptions.assertSourceCurrent = vi.fn(() => {
+            throw new AccountConfigDriftError();
+        });
+
+        await expect(mutateAccountAtomically(transactionOptions)).rejects.toBeInstanceOf(
+            AccountConfigDriftError,
+        );
+
+        expect(transactionOptions.assertSourceCurrent).toHaveBeenCalledWith(
+            fixture.configPath,
+            fixture.initialFile,
+        );
+        expect(previous.stop).not.toHaveBeenCalled();
+        expect(fixture.adapter.createAccount).not.toHaveBeenCalled();
+        expect(fixture.host).toMatchObject({
+            isReloading: false,
+            runtimeOperation: "idle",
+        });
     });
 
     it("运行态回滚失败时聚合原始错误和清理证据", async () => {
@@ -293,6 +436,7 @@ describe("account transaction", () => {
         const app = {
             isReloading: false,
             isStarted: true,
+            configPath: fixture.configPath,
             config: fixture.host.config,
             adapters,
             findOrCreateAdapter: vi.fn(() => {
@@ -300,6 +444,7 @@ describe("account transaction", () => {
                 return fixture.adapter;
             }),
             validateAccountConfigCandidate: vi.fn(),
+            assertAccountConfigSourceCurrent: vi.fn(),
             onConfigPersisted: vi.fn(),
         };
 
