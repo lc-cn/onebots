@@ -1,6 +1,7 @@
 packages:
   - 'packages/*'
   - 'adapters/*'
+  - 'applications/*'
   - 'protocols/*/*'
   - 'docs'
   - 'development'

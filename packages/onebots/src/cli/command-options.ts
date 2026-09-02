@@ -4,9 +4,36 @@ import { z } from "zod";
 
 /** 所有需要配置、adapter 和 protocol 的路由共享 schema。 */
 export const runtimeOptions = z.object({
-    config: z.string().optional().describe(option({ alias: "c", description: "配置文件路径", valueDescription: "path" })),
-    register: z.array(z.string()).default([]).describe(option({ alias: "r", description: "注册适配器（可多次）", valueDescription: "adapter" })),
-    protocol: z.array(z.string()).default([]).describe(option({ alias: "p", description: "注册协议（可多次）", valueDescription: "protocol" })),
+    config: z
+        .string()
+        .optional()
+        .describe(option({ alias: "c", description: "配置文件路径", valueDescription: "path" })),
+    register: z
+        .array(z.string())
+        .default([])
+        .describe(
+            option({
+                alias: "r",
+                description: "注册适配器（可多次）",
+                valueDescription: "adapter",
+            }),
+        ),
+    protocol: z
+        .array(z.string())
+        .default([])
+        .describe(
+            option({ alias: "p", description: "注册协议（可多次）", valueDescription: "protocol" }),
+        ),
+    target: z
+        .array(z.string())
+        .optional()
+        .describe(
+            option({
+                alias: "t",
+                description: "注册目标框架（可多次）",
+                valueDescription: "framework",
+            }),
+        ),
 });
 
 /** 用户级/系统级服务 scope 的共享 schema。 */

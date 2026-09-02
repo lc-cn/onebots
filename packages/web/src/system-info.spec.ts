@@ -38,6 +38,25 @@ describe("system info snapshot", () => {
         });
     });
 
+    it("接受 Application 运行时插件", () => {
+        expect(() =>
+            parseSystemInfoSnapshot(
+                new Response(null, { headers }),
+                systemInfo({
+                    plugins: [
+                        {
+                            type: "application",
+                            name: "zhin",
+                            packageName: "@onebots/application-zhin",
+                            version: "1.0.0",
+                            entryPath: "/runtime/zhin.js",
+                        },
+                    ],
+                }),
+            ),
+        ).not.toThrow();
+    });
+
     it("拒绝正文身份漂移、畸形配置状态和重复插件", () => {
         expect(() =>
             parseSystemInfoSnapshot(

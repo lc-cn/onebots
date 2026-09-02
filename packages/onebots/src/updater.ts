@@ -46,6 +46,7 @@ export { resolveVerifiedUpdateTargets } from "./update-extension-catalog.js";
 export interface UpdateOptions {
     adapters: string[];
     protocols: string[];
+    applications?: string[];
     scope: ServiceScope;
     check?: boolean;
     yes?: boolean;
@@ -73,6 +74,7 @@ export type PackageVersionQueryRunner = (request: PackageVersionQueryRequest) =>
 interface UpdatePluginSelection {
     adapters: string[];
     protocols: string[];
+    applications?: string[];
 }
 
 interface PackagesOnlyPreflightDependencies {
@@ -85,27 +87,35 @@ export type UpdateRunResult =
     | { status: "updates_available" | "updated" | "cancelled"; changes: PackageUpdateChange[] };
 
 /** 将 adapter/protocol 短名转换为可更新的 npm 包名列表。 */
-export function packageNamesFor(adapters: string[], protocols: string[]): string[] {
+export function packageNamesFor(
+    adapters: string[],
+    protocols: string[],
+    applications: string[] = [],
+): string[] {
     return [
         ...new Set([
             "onebots",
             ...adapters.map(name => `@onebots/adapter-${name}`),
             ...protocols.map(name => `@onebots/protocol-${name}`),
+            ...applications.map(name => `@onebots/application-${name}`),
         ]),
     ];
 }
 
 /** 显式更新参数优先，其次使用当前配置，最后兼容旧服务保存的启动快照。 */
 export function resolveUpdatePluginSelection(
-    options: Pick<UpdateOptions, "adapters" | "protocols">,
+    options: Pick<UpdateOptions, "adapters" | "protocols" | "applications">,
     spec: ServiceSpec | null,
     configPath?: string,
-): { adapters: string[]; protocols: string[] } {
+): UpdatePluginSelection {
     const selectionPath = configPath ?? spec?.configPath;
     const configured =
         selectionPath && fs.existsSync(selectionPath)
             ? getRuntimePluginSelection(parseRuntimeConfig(fs.readFileSync(selectionPath, "utf8")))
             : undefined;
+    const applications = options.applications?.length
+        ? options.applications
+        : (configured?.applications ?? spec?.applications);
     return {
         adapters: options.adapters.length
             ? options.adapters
@@ -113,6 +123,7 @@ export function resolveUpdatePluginSelection(
         protocols: options.protocols.length
             ? options.protocols
             : (configured?.protocols ?? spec?.protocols ?? []),
+        ...(applications === undefined ? {} : { applications }),
     };
 }
 
@@ -155,12 +166,16 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
     const controller = new ServiceController(options.scope);
     const installedSpec = options.packagesOnly ? null : controller.readSpec();
     const { spec, runtimeRoot } = resolveUpdateRuntimeTarget(options.packagesOnly, installedSpec);
-    const { adapters, protocols } = resolveUpdatePluginSelection(
+    const {
+        adapters,
+        protocols,
+        applications = [],
+    } = resolveUpdatePluginSelection(
         options,
         options.packagesOnly ? null : installedSpec,
         options.packagesOnly ? options.configPath : undefined,
     );
-    const packages = packageNamesFor(adapters, protocols);
+    const packages = packageNamesFor(adapters, protocols, applications);
     const manager = await requireUpdatePackageManager(runtimeRoot);
     const targetOnebotsVersion = queryLatestPackageVersion(manager, "onebots", runtimeRoot);
     const targetCatalog = loadTargetExtensionVersionCatalog(
@@ -178,7 +193,10 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             options.packagesOnly ? null : installedSpec,
             options.packagesOnly ? options.configPath : undefined,
         );
-        assertUpdatePluginSelectionUnchanged({ adapters, protocols }, lockedSelection);
+        assertUpdatePluginSelectionUnchanged(
+            { adapters, protocols, applications },
+            lockedSelection,
+        );
         updates = refreshUpdatePackageSnapshots(targets, runtimeRoot);
         for (const item of updates) {
             writeCliOutput(`${item.name}: ${item.current ?? "未安装"} -> ${item.target}`);
@@ -191,6 +209,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
                     configPath: path.resolve(options.configPath!),
                     adapters,
                     protocols,
+                    applications,
                     nodePath: process.execPath,
                     binPath: path.resolve(process.argv[1]),
                     workingDirectory: runtimeRoot,
@@ -242,7 +261,10 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
             options.packagesOnly ? null : installedSpec,
             options.packagesOnly ? options.configPath : undefined,
         );
-        assertUpdatePluginSelectionUnchanged({ adapters, protocols }, lockedSelection);
+        assertUpdatePluginSelectionUnchanged(
+            { adapters, protocols, applications },
+            lockedSelection,
+        );
         const lockedUpdates = refreshUpdatePackageSnapshots(updates, runtimeRoot);
         const lockedChanged = lockedUpdates.filter(item => item.current !== item.target);
         if (!lockedChanged.length) {
@@ -252,6 +274,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult
                     configPath: path.resolve(options.configPath!),
                     adapters,
                     protocols,
+                    applications,
                     nodePath: process.execPath,
                     binPath: path.resolve(process.argv[1]),
                     workingDirectory: runtimeRoot,
@@ -400,7 +423,8 @@ export function assertUpdatePluginSelectionUnchanged(
 ): void {
     if (
         sameStringList(planned.adapters, current.adapters) &&
-        sameStringList(planned.protocols, current.protocols)
+        sameStringList(planned.protocols, current.protocols) &&
+        sameStringList(planned.applications ?? [], current.applications ?? [])
     ) {
         return;
     }

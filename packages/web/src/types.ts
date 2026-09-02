@@ -70,7 +70,7 @@ export interface RuntimeConfigState {
 }
 
 export interface LoadedPluginInfo {
-    type: "adapter" | "protocol";
+    type: "adapter" | "protocol" | "application";
     name: string;
     packageName: string;
     version: string | null;

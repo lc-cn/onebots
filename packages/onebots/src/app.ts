@@ -8,6 +8,7 @@ import {
     Protocol,
     readLine,
     TokenManager,
+    ApplicationRegistry,
     writeConfigFileAtomic,
     deepClone,
     deepMerge,
@@ -697,6 +698,13 @@ export namespace App {
         maybeNames = pluginCandidates("protocol", name),
     ): Promise<boolean> {
         return loadPlugin("protocol", name, maybeNames, require);
+    }
+    export async function loadApplicationFactory(
+        name: string,
+        maybeNames = pluginCandidates("application", name),
+    ): Promise<boolean> {
+        if (ApplicationRegistry.has(name)) return true;
+        return loadPlugin("application", name, maybeNames, require);
     }
 }
 

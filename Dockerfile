@@ -14,6 +14,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 # 复制各工作空间（.dockerignore 已排除 node_modules/lib 等）
 COPY packages ./packages
 COPY adapters ./adapters
+COPY applications ./applications
 COPY protocols ./protocols
 COPY docs ./docs
 COPY development ./development
@@ -25,7 +26,7 @@ RUN node --input-type=module -e "import fs from 'node:fs'; const p='development/
 # 安装依赖并构建（无 adapter-icqq，无需 GitHub Packages token；锁文件与镜像上下文可能不一致，故不用 --frozen-lockfile）
 RUN pnpm install --no-frozen-lockfile
 # 仅构建网关所需包（跳过 docs：VitePress 需 git，Alpine 镜像未安装且运行时不需要文档）
-RUN pnpm build:packages && pnpm --filter='./protocols/*/*' --filter='./adapters/*' build
+RUN pnpm build:packages && pnpm --filter='./protocols/*/*' --filter='./adapters/*' --filter='./applications/*' build
 
 # 生产依赖（去掉 devDependencies 以减小镜像）
 RUN pnpm prune --prod
@@ -48,6 +49,7 @@ COPY --chown=node:node --from=builder /app/package.json /app/pnpm-lock.yaml /app
 COPY --chown=node:node --from=builder /app/node_modules ./node_modules
 COPY --chown=node:node --from=builder /app/packages ./packages
 COPY --chown=node:node --from=builder /app/adapters ./adapters
+COPY --chown=node:node --from=builder /app/applications ./applications
 COPY --chown=node:node --from=builder /app/protocols ./protocols
 COPY --chown=node:node --from=builder /app/development ./development
 COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs

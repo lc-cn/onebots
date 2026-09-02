@@ -9,6 +9,7 @@ export interface ServiceRuntimeContract {
     configPath: string;
     adapters: string[];
     protocols: string[];
+    applications?: string[];
     nodePath: string;
     binPath: string;
     workingDirectory: string;
@@ -20,6 +21,7 @@ export function createServiceRuntimeContractId(contract: ServiceRuntimeContract)
         configPath: path.resolve(contract.configPath),
         adapters: [...contract.adapters],
         protocols: [...contract.protocols],
+        applications: [...(contract.applications ?? [])],
         nodePath: path.resolve(contract.nodePath),
         binPath: path.resolve(contract.binPath),
         workingDirectory: path.resolve(contract.workingDirectory),
@@ -31,13 +33,15 @@ export function createServiceRuntimeContractId(contract: ServiceRuntimeContract)
 export function resolveServiceRuntimeContractId(spec: ServiceSpec): string {
     let adapters = spec.adapters;
     let protocols = spec.protocols;
+    let applications = spec.applications ?? [];
     if (fs.existsSync(spec.configPath)) {
         const config = parseRuntimeConfig(fs.readFileSync(spec.configPath, "utf8"));
         const selection = getRuntimePluginSelection(config);
         if (selection) {
             adapters = selection.adapters;
             protocols = selection.protocols;
+            applications = selection.applications ?? applications;
         }
     }
-    return createServiceRuntimeContractId({ ...spec, adapters, protocols });
+    return createServiceRuntimeContractId({ ...spec, adapters, protocols, applications });
 }

@@ -1,6 +1,6 @@
-import { RouterContext, ValidationError } from "@onebots/core";
+import { ApplicationRegistry, RouterContext, ValidationError } from "@onebots/core";
 import type { Router } from "@onebots/core";
-import type { App } from "../app.js";
+import { App } from "../app.js";
 import {
     createFrameworkConnectionPlan,
     getFrameworkProfile,
@@ -12,6 +12,47 @@ import { listFrameworkEcosystem } from "../framework-ecosystem.js";
 import { loadFrameworkIntegration } from "../framework-integration-loader.js";
 
 export function registerFrameworkRoutes(app: App, router: Router): void {
+    router.get("/api/applications", (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
+        ctx.body = {
+            schemaVersion: 1,
+            registered: ApplicationRegistry.getNames().map(name => ({
+                name,
+                active: ApplicationRegistry.getActiveNames().includes(name),
+                ...applicationMetadata(name),
+            })),
+            active: ApplicationRegistry.listActive(),
+            protocols: listRuntimeApplicationCapabilities(app),
+        };
+    });
+
+    router.post("/api/applications/load", async (ctx: RouterContext) => {
+        setManagementEvidenceIdentity(app, ctx);
+        try {
+            const body = requireRecord(ctx.request.body);
+            const name = requireString(body.application, "application");
+            if (!(await App.loadApplicationFactory(name))) {
+                throw new ValidationError(`无法加载应用 ${name}`);
+            }
+            ctx.body = {
+                success: true,
+                application: name,
+                registered: true,
+                active: ApplicationRegistry.listActive(),
+                protocols: listRuntimeApplicationCapabilities(app),
+                restartRequired: true,
+                activationCommand: `onebots -t ${name}`,
+            };
+        } catch (error) {
+            ctx.status = 400;
+            ctx.body = {
+                success: false,
+                code: "APPLICATION_LOAD_FAILED",
+                message: error instanceof Error ? error.message : "应用加载失败",
+            };
+        }
+    });
+
     router.get("/api/frameworks", (ctx: RouterContext) => {
         setManagementEvidenceIdentity(app, ctx);
         ctx.body = {
@@ -63,6 +104,33 @@ export function registerFrameworkRoutes(app: App, router: Router): void {
             };
         }
     });
+}
+
+function applicationMetadata(name: string) {
+    const definition = ApplicationRegistry.get(name);
+    return definition
+        ? {
+              displayName: definition.displayName,
+              description: definition.description,
+              stage: definition.stage ?? "available",
+              homepage: definition.homepage,
+          }
+        : {};
+}
+
+function listRuntimeApplicationCapabilities(app: App) {
+    return [...app.adapters.values()].flatMap(adapter =>
+        [...adapter.accounts.values()].flatMap(account =>
+            account.protocols.map(protocol => ({
+                platform: String(adapter.platform),
+                accountId: account.account_id,
+                protocol: `${protocol.name}.${protocol.version}`,
+                path: protocol.path,
+                lifecycleStatus: protocol.lifecycleStatus,
+                applications: ApplicationRegistry.describeProtocol(protocol),
+            })),
+        ),
+    );
 }
 
 function requireRecord(value: unknown): Record<string, unknown> {

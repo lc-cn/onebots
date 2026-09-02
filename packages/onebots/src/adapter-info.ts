@@ -10,7 +10,7 @@ import { isDeepStrictEqual } from "node:util";
 type AdapterInfoSource = Pick<Adapter, "describeCapabilities" | "info" | "logger" | "platform">;
 
 export interface LoadedAdapterPlugin {
-    type: "adapter" | "protocol";
+    type: "adapter" | "protocol" | "application";
     name: string;
     version: string | null;
 }

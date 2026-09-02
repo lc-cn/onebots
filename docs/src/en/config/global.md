@@ -15,6 +15,7 @@ access_token: "replace-with-a-long-random-token" # Management token (sensitive)
 plugins:
   adapters: [qq]
   protocols: [onebot-v11]
+  applications: [zhin]
 
 # General configuration (protocol default configuration)
 general:

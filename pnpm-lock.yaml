@@ -596,6 +596,18 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  applications/zhin:
+    devDependencies:
+      onebots:
+        specifier: workspace:*
+        version: link:../../packages/onebots
+      tsc-alias:
+        specifier: latest
+        version: 1.9.2
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   development:
     dependencies:
       '@imhelper/onebot-v11':

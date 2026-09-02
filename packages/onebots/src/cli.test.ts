@@ -50,10 +50,33 @@ describe("OneBots CLI v2", () => {
     });
 
     it("keeps the bare foreground invocation as the default route", () => {
-        const argv = ["node", "onebots", "-r", "qq", "-p", "onebot-v11", "-c", "config.yaml"];
+        const argv = [
+            "node",
+            "onebots",
+            "-r",
+            "qq",
+            "-p",
+            "onebot-v11",
+            "-t",
+            "zhin",
+            "-c",
+            "config.yaml",
+        ];
         expect(prepareCliInvocation(argv)).toEqual({
             kind: "cli",
-            argv: ["node", "onebots", "run", "-r", "qq", "-p", "onebot-v11", "-c", "config.yaml"],
+            argv: [
+                "node",
+                "onebots",
+                "run",
+                "-r",
+                "qq",
+                "-p",
+                "onebot-v11",
+                "-t",
+                "zhin",
+                "-c",
+                "config.yaml",
+            ],
         });
     });
 
@@ -154,10 +177,12 @@ describe("OneBots CLI v2", () => {
                 config: "config.yaml",
                 register: ["kook", "qq", "kook"],
                 protocol: ["onebot-v11", "onebot-v11"],
+                target: ["zhin", "zhin"],
             }),
         ).toMatchObject({
             adapters: ["kook", "qq"],
             protocols: ["onebot-v11"],
+            applications: ["zhin"],
         });
     });
 
@@ -165,11 +190,18 @@ describe("OneBots CLI v2", () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-cli-plugins-"));
         temporaryDirectories.push(directory);
         const config = path.join(directory, "config.yaml");
-        fs.writeFileSync(config, "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\n");
+        fs.writeFileSync(
+            config,
+            "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\n  applications: [zhin]\n",
+        );
 
         expect(
             resolveConfiguredRuntimeOptions({ config, register: [], protocol: [] }),
-        ).toMatchObject({ adapters: ["mock"], protocols: ["onebot-v11"] });
+        ).toMatchObject({
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            applications: ["zhin"],
+        });
         expect(
             resolveConfiguredRuntimeOptions({ config, register: ["qq"], protocol: [] }),
         ).toMatchObject({ adapters: ["qq"], protocols: ["onebot-v11"] });

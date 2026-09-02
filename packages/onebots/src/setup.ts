@@ -29,10 +29,15 @@ export interface SetupOptions {
     reset?: boolean;
     adapters?: string[];
     protocols?: string[];
+    applications?: string[];
 }
 
 interface SetupDependencies {
-    loadPlugins(adapters: string[], protocols: string[]): Promise<string[]>;
+    loadPlugins(
+        adapters: string[],
+        protocols: string[],
+        applications?: string[],
+    ): Promise<string[]>;
     afterConfigWrite?(configPath: string): void;
     interactive?: boolean;
     createPrompt?(): SetupPrompt;
@@ -108,6 +113,9 @@ export async function runSetup(
     let protocols = options.protocols?.length
         ? options.protocols
         : (configuredPlugins?.protocols ?? []);
+    let applications = options.applications?.length
+        ? options.applications
+        : (configuredPlugins?.applications ?? []);
     const interactive =
         dependencies?.interactive ?? Boolean(process.stdin.isTTY && process.stdout.isTTY);
     if (interactive) {
@@ -156,6 +164,14 @@ export async function runSetup(
                     .split(",")
                     .map(value => value.trim())
                     .filter(Boolean);
+            const applicationAnswer = (
+                await prompt.question(`目标框架（逗号分隔） [${applications.join(",")}]: `)
+            ).trim();
+            if (applicationAnswer)
+                applications = applicationAnswer
+                    .split(",")
+                    .map(value => value.trim())
+                    .filter(Boolean);
         } finally {
             prompt.close();
         }
@@ -163,18 +179,23 @@ export async function runSetup(
 
     adapters = normalizePluginNames(adapters);
     protocols = normalizePluginNames(protocols);
-    if (preserveExisting && !hasSamePluginSelection(configuredPlugins, { adapters, protocols })) {
+    applications = normalizePluginNames(applications);
+    if (
+        preserveExisting &&
+        !hasSamePluginSelection(configuredPlugins, { adapters, protocols, applications })
+    ) {
+        const selectionFlags = options.applications?.length ? "-r/-p/-t" : "-r/-p";
         throw new Error(
-            "非交互环境不会修改现有插件选择。请添加 --force 以备份配置并写入本次 -r/-p 选择。",
+            `非交互环境不会修改现有插件选择。请添加 --force 以备份配置并写入本次 ${selectionFlags} 选择。`,
         );
     }
     const loadPlugins =
         dependencies?.loadPlugins ??
-        (async (adapterNames: string[], protocolNames: string[]) => {
+        (async (adapterNames: string[], protocolNames: string[], applicationNames: string[]) => {
             const runtime = await import("./runtime.js");
-            return runtime.loadPlugins(adapterNames, protocolNames);
+            return runtime.loadPlugins(adapterNames, protocolNames, applicationNames);
         });
-    const failures = await loadPlugins(adapters, protocols);
+    const failures = await loadPlugins(adapters, protocols, applications);
     if (failures.length > 0) {
         throw new Error(`无法加载插件: ${failures.join(", ")}`);
     }
@@ -194,8 +215,19 @@ export async function runSetup(
         for (const line of managementUrls) writeCliOutput(line);
         return;
     }
-    if (adapters.length > 0 || protocols.length > 0 || configuredPlugins) {
-        setRuntimePluginSelection(config, { adapters, protocols });
+    if (
+        adapters.length > 0 ||
+        protocols.length > 0 ||
+        applications.length > 0 ||
+        configuredPlugins
+    ) {
+        setRuntimePluginSelection(config, {
+            adapters,
+            protocols,
+            ...(applications.length > 0 || configuredPlugins?.applications !== undefined
+                ? { applications }
+                : {}),
+        });
     }
     if (!exists) {
         config.general = createProtocolDefaults(ProtocolRegistry.getAllSchemas());
@@ -358,12 +390,13 @@ function isFileSystemError(error: unknown, code: string): boolean {
 }
 
 function hasSamePluginSelection(
-    current: { adapters: string[]; protocols: string[] } | undefined,
-    requested: { adapters: string[]; protocols: string[] },
+    current: { adapters: string[]; protocols: string[]; applications?: string[] } | undefined,
+    requested: { adapters: string[]; protocols: string[]; applications?: string[] },
 ): boolean {
     return (
         sameStringSet(current?.adapters ?? [], requested.adapters) &&
-        sameStringSet(current?.protocols ?? [], requested.protocols)
+        sameStringSet(current?.protocols ?? [], requested.protocols) &&
+        sameStringSet(current?.applications ?? [], requested.applications ?? [])
     );
 }
 

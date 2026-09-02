@@ -2,6 +2,12 @@ port: 6727 # 监听端口
 log_level: info # 日志等级
 timeout: 30 # 登录超时时间（秒）
 
+# setup 可持久化启动扩展选择；CLI 的 -r/-p/-t 会按类别覆盖对应列表。
+# plugins:
+#     adapters: [mock]
+#     protocols: [onebot-v11]
+#     applications: [zhin]
+
 # ONEBOTS_ACCESS_TOKEN 环境变量优先于本文件，适合托管平台 Secret。
 # 没有环境变量，且 access_token 或完整的 username / password 均未配置时，
 # 首次启动会生成 256 位 access_token 并写入本文件，但不会输出到服务日志。

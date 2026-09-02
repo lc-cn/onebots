@@ -44,7 +44,9 @@ export {
 export {
     // Registry
     AdapterRegistry,
+    ApplicationRegistry,
     ProtocolRegistry,
+    defineApplication,
     // Base classes
     Adapter,
     Account,
@@ -70,6 +72,15 @@ export {
     type Next,
     type Dict,
     type WsServer,
+    type ActiveApplicationInfo,
+    type ApplicationApplyContext,
+    type ApplicationConnection,
+    type ApplicationDefinition,
+    type ApplicationDispatchContext,
+    type ApplicationProtocolCapability,
+    type ApplicationProtocolExtension,
+    type ApplicationStartContext,
+    type ApplicationStopContext,
     type AdapterCapabilityManifest,
     type CapabilityDescriptor,
     type ReverseWebSocketOptions,

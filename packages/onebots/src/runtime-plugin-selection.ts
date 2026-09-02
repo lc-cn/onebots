@@ -3,6 +3,7 @@ import { ValidationError } from "@onebots/core";
 export interface RuntimePluginSelection {
     adapters: string[];
     protocols: string[];
+    applications?: string[];
 }
 
 /** 读取配置中的插件默认选择；缺少 plugins 时保留旧版 CLI 行为。 */
@@ -13,11 +14,18 @@ export function getRuntimePluginSelection(
     if (value === undefined) return undefined;
     if (!isRecord(value)) throw new ValidationError("plugins 必须是对象");
 
-    const unexpected = Object.keys(value).find(key => key !== "adapters" && key !== "protocols");
+    const unexpected = Object.keys(value).find(
+        key => key !== "adapters" && key !== "protocols" && key !== "applications",
+    );
     if (unexpected) throw new ValidationError(`plugins 包含未知字段 ${unexpected}`);
     return {
         adapters: normalizePluginList(value.adapters, "plugins.adapters"),
         protocols: normalizePluginList(value.protocols, "plugins.protocols"),
+        ...(value.applications === undefined
+            ? {}
+            : {
+                  applications: normalizePluginList(value.applications, "plugins.applications"),
+              }),
     };
 }
 
@@ -28,6 +36,11 @@ export function setRuntimePluginSelection(
     config.plugins = {
         adapters: normalizePluginList(selection.adapters, "plugins.adapters"),
         protocols: normalizePluginList(selection.protocols, "plugins.protocols"),
+        ...(selection.applications === undefined
+            ? {}
+            : {
+                  applications: normalizePluginList(selection.applications, "plugins.applications"),
+              }),
     };
 }
 

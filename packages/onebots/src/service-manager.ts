@@ -522,6 +522,9 @@ function isServiceSpec(value: unknown): value is ServiceSpec {
         item.adapters.every(entry => typeof entry === "string") &&
         Array.isArray(item.protocols) &&
         item.protocols.every(entry => typeof entry === "string") &&
+        (item.applications === undefined ||
+            (Array.isArray(item.applications) &&
+                item.applications.every(entry => typeof entry === "string"))) &&
         typeof item.nodePath === "string" &&
         typeof item.binPath === "string" &&
         typeof item.workingDirectory === "string"

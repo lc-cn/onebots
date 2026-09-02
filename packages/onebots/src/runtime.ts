@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { App, createOnebots } from "./app.js";
+import { ApplicationRegistry } from "@onebots/core";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { createRuntimeShutdownCoordinator } from "./runtime-shutdown.js";
 
@@ -8,6 +9,7 @@ export interface RuntimeOptions {
     configPath: string;
     adapters: string[];
     protocols: string[];
+    applications?: string[];
 }
 
 /** 将未知 rejection/异常格式化为可读字符串 */
@@ -30,7 +32,11 @@ function formatProcessError(reason: unknown): string {
 }
 
 /** 加载命令指定的 adapter 与 protocol，并返回失败项。 */
-export async function loadPlugins(adapters: string[], protocols: string[]): Promise<string[]> {
+export async function loadPlugins(
+    adapters: string[],
+    protocols: string[],
+    applications: string[] = [],
+): Promise<string[]> {
     const failures: string[] = [];
     for (const adapter of adapters) {
         if (!(await App.loadAdapterFactory(adapter))) failures.push(`adapter:${adapter}`);
@@ -38,13 +44,21 @@ export async function loadPlugins(adapters: string[], protocols: string[]): Prom
     for (const protocol of protocols) {
         if (!(await App.loadProtocolFactory(protocol))) failures.push(`protocol:${protocol}`);
     }
+    for (const application of applications) {
+        if (!(await App.loadApplicationFactory(application))) {
+            failures.push(`application:${application}`);
+            continue;
+        }
+        ApplicationRegistry.activate(application);
+    }
     return failures;
 }
 
 /** 以前台模式运行桥接服务，并统一处理优雅关闭。 */
 export async function runBridge(options: RuntimeOptions): Promise<void> {
     const configPath = path.resolve(options.configPath);
-    const failures = await loadPlugins(options.adapters, options.protocols);
+    const applications = options.applications ?? [];
+    const failures = await loadPlugins(options.adapters, options.protocols, applications);
     if (failures.length) {
         throw new Error(`无法加载插件: ${failures.join(", ")}`);
     }
@@ -58,6 +72,7 @@ export async function runBridge(options: RuntimeOptions): Promise<void> {
         configPath,
         adapters: options.adapters,
         protocols: options.protocols,
+        applications,
         nodePath: process.execPath,
         binPath: path.resolve(process.argv[1]),
         workingDirectory: process.cwd(),

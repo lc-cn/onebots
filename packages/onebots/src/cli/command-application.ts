@@ -82,6 +82,7 @@ export function normalizeRuntimeOptions(options: RuntimeOptions) {
         configPath: path.resolve(options.config ?? "config.yaml"),
         adapters: [...new Set(options.register)],
         protocols: [...new Set(options.protocol)],
+        applications: [...new Set(options.target ?? [])],
     };
 }
 
@@ -97,6 +98,9 @@ export function resolveConfiguredRuntimeOptions(options: RuntimeOptions) {
         ...runtime,
         adapters: runtime.adapters.length ? runtime.adapters : configured.adapters,
         protocols: runtime.protocols.length ? runtime.protocols : configured.protocols,
+        applications: runtime.applications.length
+            ? runtime.applications
+            : (configured.applications ?? []),
     };
 }
 
@@ -231,6 +235,7 @@ export async function installService(
         configPath: runtime.configPath,
         adapters: runtime.adapters,
         protocols: runtime.protocols,
+        applications: runtime.applications,
         nodePath: process.execPath,
         binPath: path.resolve(process.argv[1]),
         workingDirectory: resolveServiceWorkingDirectory(),
@@ -460,6 +465,7 @@ export async function setupConfiguration(
         reset: options.reset,
         adapters: runtime.adapters,
         protocols: runtime.protocols,
+        applications: runtime.applications,
     });
     return {};
 }
@@ -530,6 +536,7 @@ export async function updatePackages(
     const result = await runUpdate({
         adapters: runtime.adapters,
         protocols: runtime.protocols,
+        applications: runtime.applications,
         scope,
         check: options.check,
         yes: options.yes,
@@ -730,7 +737,7 @@ export async function runMcpStdio(
 ): Promise<CommandResult> {
     const runtime = resolveConfiguredRuntimeOptions(options);
     const { loadPlugins } = await import("../runtime.js");
-    const failures = await loadPlugins(runtime.adapters, runtime.protocols);
+    const failures = await loadPlugins(runtime.adapters, runtime.protocols, runtime.applications);
     if (failures.length) throw new CliError(`无法加载插件: ${failures.join(", ")}`, 2);
 
     const { createOnebots } = await import("../app.js");
@@ -738,6 +745,7 @@ export async function runMcpStdio(
         configPath: runtime.configPath,
         adapters: runtime.adapters,
         protocols: runtime.protocols,
+        applications: runtime.applications,
         nodePath: process.execPath,
         binPath: path.resolve(process.argv[1]),
         workingDirectory: process.cwd(),

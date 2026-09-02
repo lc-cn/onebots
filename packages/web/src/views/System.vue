@@ -246,8 +246,21 @@
                         :key="`${plugin.type}:${plugin.name}`"
                         class="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-3">
                         <div class="flex min-w-0 flex-1 items-center gap-2">
-                            <UiBadge :variant="plugin.type === 'adapter' ? 'success' : 'neutral'">
-                                {{ plugin.type === "adapter" ? "适配器" : "协议" }}
+                            <UiBadge
+                                :variant="
+                                    plugin.type === 'adapter'
+                                        ? 'success'
+                                        : plugin.type === 'application'
+                                          ? 'info'
+                                          : 'neutral'
+                                ">
+                                {{
+                                    plugin.type === "adapter"
+                                        ? "适配器"
+                                        : plugin.type === "application"
+                                          ? "应用"
+                                          : "协议"
+                                }}
                             </UiBadge>
                             <span class="font-medium text-fg">{{ plugin.name }}</span>
                             <span class="truncate font-mono text-xs text-fg-secondary">

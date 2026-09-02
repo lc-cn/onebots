@@ -63,6 +63,16 @@ describe("service definition", () => {
         ]);
     });
 
+    it("把目标框架写入守护服务启动契约", () => {
+        expect(buildServiceArgs({ ...spec, applications: ["zhin", "koishi"] })).toEqual([
+            ...buildServiceArgs(spec),
+            "-t",
+            "zhin",
+            "-t",
+            "koishi",
+        ]);
+    });
+
     it("quotes systemd paths without losing arguments", () => {
         const unit = renderSystemdUnit(spec);
         expect(unit).toContain(

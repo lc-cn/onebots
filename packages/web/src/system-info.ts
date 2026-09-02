@@ -29,7 +29,9 @@ export function parseSystemInfoSnapshot(
     for (const plugin of value.plugins) {
         if (
             !isRecord(plugin) ||
-            (plugin.type !== "adapter" && plugin.type !== "protocol") ||
+            (plugin.type !== "adapter" &&
+                plugin.type !== "protocol" &&
+                plugin.type !== "application") ||
             !nonEmptyString(plugin.name) ||
             !nonEmptyString(plugin.packageName) ||
             !(plugin.version === null || nonEmptyString(plugin.version)) ||

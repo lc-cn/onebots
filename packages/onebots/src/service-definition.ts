@@ -11,6 +11,7 @@ export interface ServiceSpec {
     configPath: string;
     adapters: string[];
     protocols: string[];
+    applications?: string[];
     nodePath: string;
     binPath: string;
     workingDirectory: string;
@@ -42,6 +43,7 @@ export function buildServiceArgs(
         spec.configPath,
         ...spec.adapters.flatMap(adapter => ["-r", adapter]),
         ...spec.protocols.flatMap(protocol => ["-p", protocol]),
+        ...(spec.applications ?? []).flatMap(application => ["-t", application]),
     ];
 }
 

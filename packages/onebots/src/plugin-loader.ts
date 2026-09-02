@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
     AdapterRegistry,
+    ApplicationRegistry,
     ProtocolRegistry,
     captureExtensionRegistryState,
     restoreExtensionRegistryState,
@@ -29,7 +30,7 @@ export type PluginLoadResult =
     | { loaded: true; inspection: Extract<PluginInspection, { status: "ready" }> }
     | { loaded: false; inspection: PluginInspection; message: string };
 
-export type PluginType = "adapter" | "protocol";
+export type PluginType = "adapter" | "protocol" | "application";
 
 export interface LoadedPluginInfo {
     type: PluginType;
@@ -73,7 +74,8 @@ export function clearLoadedPlugins(): void {
 
 /** 所有 CLI 路径共享同一组插件包名候选，避免运行、doctor 与服务预检规则漂移。 */
 export function pluginCandidates(type: PluginType, name: string): string[] {
-    const prefix = type === "adapter" ? "adapter" : "protocol";
+    const prefix =
+        type === "adapter" ? "adapter" : type === "protocol" ? "protocol" : "application";
     return [`@onebots/${prefix}-${name}`, `onebots-${prefix}-${name}`, name];
 }
 
@@ -231,7 +233,7 @@ export async function tryLoadRegisteredPlugin(
 ): Promise<PluginLoadResult> {
     return serializePluginRegistration(async () => {
         const registryState = captureExtensionRegistryState();
-        const kind = type === "adapter" ? "适配器" : "协议";
+        const kind = type === "adapter" ? "适配器" : type === "protocol" ? "协议" : "应用";
         const result = await tryLoadPluginUnlocked(
             kind,
             name,
@@ -370,7 +372,9 @@ function getRegistrationContractError(
         return `承诺的扩展身份 ${loadedKey} 在本次插件加载前已经存在，无法证明注册归属`;
     }
 
-    if (type === "adapter") {
+    if (type === "application") {
+        if (!ApplicationRegistry.has(name)) return `没有注册应用 ${name}`;
+    } else if (type === "adapter") {
         if (!AdapterRegistry.has(name)) return `没有注册适配器 ${name}`;
         if (!AdapterRegistry.getSchema(name)) return `没有注册适配器配置 Schema ${name}`;
     } else {
@@ -398,6 +402,7 @@ function hasPromisedRegistration(
     name: string,
     state: ExtensionRegistryState,
 ): boolean {
+    if (type === "application") return state.applications.definitions.has(name);
     if (type === "adapter") {
         return (
             state.adapters.factories.has(name) ||
@@ -420,6 +425,7 @@ interface RegistryChange {
 }
 
 function promisedRegistryChangeKeys(type: PluginType, name: string): Set<string> {
+    if (type === "application") return new Set([`application.definition:${name}`]);
     if (type === "adapter") {
         return new Set([
             `adapter.factory:${name}`,
@@ -441,6 +447,20 @@ function getRegistryChanges(
     after: ExtensionRegistryState,
 ): RegistryChange[] {
     const changes: RegistryChange[] = [];
+    appendMapChanges(
+        changes,
+        "application.definition",
+        "应用定义",
+        before.applications.definitions,
+        after.applications.definitions,
+    );
+    appendMapChanges(
+        changes,
+        "application.active",
+        "应用激活状态",
+        new Map(before.applications.active.map(name => [name, true])),
+        new Map(after.applications.active.map(name => [name, true])),
+    );
     appendMapChanges(
         changes,
         "adapter.factory",

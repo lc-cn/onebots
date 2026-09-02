@@ -1,4 +1,5 @@
 import yaml from "js-yaml";
+import { ApplicationRegistry, defineApplication, type Protocol } from "@onebots/core";
 
 export type FrameworkId = string;
 
@@ -987,6 +988,58 @@ for (const profile of Object.values(BUILTIN_PROFILES)) {
                           renderFrameworkConfig: renderBuiltinFrameworkConfig,
                       }),
     );
+}
+
+// Zhin 拥有独立 npm Application；其余已验证方案先以同一运行时接口暴露连接能力，
+// 后续可以无缝替换为同名外部包，而无需改变 `-t` 或管理 API。
+for (const profile of Object.values(BUILTIN_PROFILES)) {
+    if (profile.id === "zhin") continue;
+    ApplicationRegistry.register(createProfileApplication(profile));
+}
+
+function createProfileApplication(profile: FrameworkProfile) {
+    return defineApplication({
+        name: profile.id,
+        displayName: profile.displayName,
+        description: `${profile.displayName} 的 ${profile.protocol} 运行时连接扩展。`,
+        homepage: profile.upstream,
+        createProtocolExtension(protocol: Protocol) {
+            if (`${protocol.name}.${protocol.version}` !== profile.protocol) return undefined;
+            const direction =
+                profile.transport === "reverse-websocket"
+                    ? ("onebots-connects" as const)
+                    : ("onebots-listens" as const);
+            const endpoint =
+                direction === "onebots-listens"
+                    ? protocol.path
+                    : (profile.defaultFrameworkOrigin ?? "由目标框架配置监听地址");
+            const actions =
+                profile.distributionAudit?.requiredActions ??
+                profile.evidence?.checks.filter(check => /^[a-z][a-z0-9_]+$/u.test(check)) ??
+                [];
+            return {
+                capability: {
+                    connections: [
+                        {
+                            id: `${profile.protocol}-${profile.transport}`,
+                            transport: profile.transport,
+                            direction,
+                            endpoint,
+                            description: `${profile.displayName} 使用 ${profile.protocol} 的 ${profile.transport} 连接。`,
+                        },
+                    ],
+                    actions: [...actions],
+                    routes: direction === "onebots-listens" ? [protocol.path] : [],
+                    limitations: [...profile.limitations],
+                },
+            };
+        },
+        unsupportedProtocol(protocol: Protocol) {
+            return [
+                `${profile.displayName} 当前固定方案使用 ${profile.protocol}，未验证 ${protocol.name}.${protocol.version}。`,
+            ];
+        },
+    });
 }
 
 function createChecks(

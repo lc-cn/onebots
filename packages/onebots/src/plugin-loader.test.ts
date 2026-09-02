@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { AdapterRegistry, ProtocolRegistry } from "@onebots/core";
+import { AdapterRegistry, ApplicationRegistry, ProtocolRegistry } from "@onebots/core";
 import {
     clearLoadedPlugins,
     getLoadedPlugins,
@@ -19,6 +19,7 @@ afterEach(() => {
     vi.restoreAllMocks();
     AdapterRegistry.clear();
     ProtocolRegistry.clear();
+    ApplicationRegistry.clear();
     clearLoadedPlugins();
     for (const directory of temporaryDirectories.splice(0)) {
         fs.rmSync(directory, { recursive: true, force: true });
@@ -26,6 +27,37 @@ afterEach(() => {
 });
 
 describe("plugin loader", () => {
+    it("按 application 包契约加载并记录目标框架", async () => {
+        const directory = createImportOnlyPlugin(
+            "zhin-application",
+            "globalThis.__onebotsRegisterZhinApplication();\n",
+        );
+        const globals = globalThis as typeof globalThis & {
+            __onebotsRegisterZhinApplication?: () => void;
+        };
+        globals.__onebotsRegisterZhinApplication = () => {
+            ApplicationRegistry.register({
+                name: "zhin",
+                displayName: "Zhin",
+                description: "test",
+                createProtocolExtension: () => undefined,
+            });
+        };
+        try {
+            const result = await tryLoadRegisteredPlugin(
+                "application",
+                "zhin",
+                ["zhin-application"],
+                createRequire(path.join(directory, "package.json")),
+            );
+            expect(result).toMatchObject({ loaded: true });
+            expect(ApplicationRegistry.has("zhin")).toBe(true);
+            expect(getLoadedPlugins()).toMatchObject([{ type: "application", name: "zhin" }]);
+        } finally {
+            delete globals.__onebotsRegisterZhinApplication;
+        }
+    });
+
     it("reports one actionable error when a workspace package exists without its build output", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-plugin-loader-"));
         temporaryDirectories.push(directory);

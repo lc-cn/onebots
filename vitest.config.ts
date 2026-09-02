@@ -18,6 +18,8 @@ export default defineConfig({
       'packages/**/__tests__/**/*.{test,spec}.{js,ts}',
       'adapters/**/src/**/*.{test,spec}.{js,ts}',
       'adapters/**/__tests__/**/*.{test,spec}.{js,ts}',
+      'applications/**/src/**/*.{test,spec}.{js,ts}',
+      'applications/**/__tests__/**/*.{test,spec}.{js,ts}',
       'protocols/**/src/**/*.{test,spec}.{js,ts}',
       'protocols/**/__tests__/**/*.{test,spec}.{js,ts}',
       '__tests__/**/*.{test,spec}.{js,ts}',
@@ -41,6 +43,7 @@ export default defineConfig({
       include: [
         'packages/*/src/**/*.ts',
         'adapters/*/src/**/*.ts',
+        'applications/*/src/**/*.ts',
         'protocols/*/protocol/src/**/*.ts',
         'protocols/*/sdk/src/**/*.ts'
       ],
@@ -52,6 +55,9 @@ export default defineConfig({
         'adapters/*/src/**/*.d.ts',
         'adapters/*/src/**/*.spec.ts',
         'adapters/*/src/**/*.test.ts',
+        'applications/*/src/**/*.d.ts',
+        'applications/*/src/**/*.spec.ts',
+        'applications/*/src/**/*.test.ts',
         'protocols/*/protocol/src/**/*.d.ts',
         'protocols/*/protocol/src/**/*.spec.ts',
         'protocols/*/protocol/src/**/*.test.ts',

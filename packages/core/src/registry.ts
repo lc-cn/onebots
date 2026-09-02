@@ -16,6 +16,11 @@ import {
 } from "./extension-factory-contract.js";
 import { invokeExtensionFactoryWithRegistryBoundary } from "./extension-factory-registry-boundary.js";
 import { createAdapterWithRouteScope } from "./scoped-adapter.js";
+import {
+    ApplicationRegistry,
+    configureApplicationRegistryMutationGuard,
+    type ApplicationRegistryState,
+} from "./application.js";
 
 interface ExtensionRegistrationScope {
     open: boolean;
@@ -76,7 +81,10 @@ function assertExtensionRegistryMutationOpen(): void {
     }
 }
 
+configureApplicationRegistryMutationGuard(assertExtensionRegistryMutationOpen);
+
 export interface ExtensionRegistryState {
+    readonly applications: ApplicationRegistryState;
     readonly adapters: {
         readonly factories: ReadonlyMap<string, Adapter.Factory>;
         readonly metadata: ReadonlyMap<string, Adapter.Metadata>;
@@ -255,7 +263,7 @@ export class ProtocolRegistry {
             extensionRegistryBoundary,
         );
         assertProtocolFactoryContract(protocol, name, version, adapter, account);
-        return protocol;
+        return ApplicationRegistry.extend(protocol);
     }
 
     /** 验证第三方账号没有绕过注册表注入、遗漏或替换协议实例。 */
@@ -592,6 +600,7 @@ export class AdapterRegistry {
 /** 捕获 Adapter 与 Protocol 注册表，用于隔离一次插件初始化。 */
 export function captureExtensionRegistryState(): ExtensionRegistryState {
     const state = Object.freeze({
+        applications: ApplicationRegistry.captureState(),
         adapters: AdapterRegistry.captureState(),
         protocols: ProtocolRegistry.captureState(),
     });
@@ -606,6 +615,7 @@ export function restoreExtensionRegistryState(state: ExtensionRegistryState): vo
     }
     AdapterRegistry.restoreState(state.adapters, extensionRegistryRestoreToken);
     ProtocolRegistry.restoreState(state.protocols, extensionRegistryRestoreToken);
+    ApplicationRegistry.restoreState(state.applications);
 }
 
 const extensionRegistryBoundary = {
@@ -619,6 +629,8 @@ function extensionRegistryStatesEqual(
     right: ExtensionRegistryState,
 ): boolean {
     return (
+        mapValuesEqual(left.applications.definitions, right.applications.definitions) &&
+        isDeepStrictEqual(left.applications.active, right.applications.active) &&
         mapValuesEqual(left.adapters.factories, right.adapters.factories) &&
         mapValuesEqual(left.adapters.metadata, right.adapters.metadata) &&
         mapValuesEqual(left.adapters.schemas, right.adapters.schemas) &&

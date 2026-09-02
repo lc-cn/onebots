@@ -25,6 +25,8 @@ describe("internal service runtime", () => {
                 "mock",
                 "-p",
                 "onebot-v11",
+                "-t",
+                "zhin",
             ]),
         ).toEqual({
             command: "preflight",
@@ -32,6 +34,7 @@ describe("internal service runtime", () => {
                 configPath: path.resolve("config.yaml"),
                 adapters: ["mock"],
                 protocols: ["onebot-v11"],
+                applications: ["zhin"],
             },
         });
     });
@@ -40,7 +43,10 @@ describe("internal service runtime", () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-service-runtime-"));
         directories.push(directory);
         const configPath = path.join(directory, "config.yaml");
-        fs.writeFileSync(configPath, "plugins:\n  adapters: [slack]\n  protocols: [onebot-v12]\n");
+        fs.writeFileSync(
+            configPath,
+            "plugins:\n  adapters: [slack]\n  protocols: [onebot-v12]\n  applications: [koishi]\n",
+        );
 
         expect(
             resolveServiceRuntimeOptions({
@@ -52,6 +58,7 @@ describe("internal service runtime", () => {
             configPath,
             adapters: ["slack"],
             protocols: ["onebot-v12"],
+            applications: ["koishi"],
         });
     });
 

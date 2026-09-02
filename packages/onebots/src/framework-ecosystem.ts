@@ -3,6 +3,7 @@ import type {
     FrameworkProtocol,
     FrameworkTransport,
 } from "./framework-integration.js";
+import { ApplicationRegistry, defineApplication } from "@onebots/core";
 
 export type EcosystemEntryKind = FrameworkKind | "sdk" | "bridge";
 export type EcosystemPriority = "next" | "later" | "legacy";
@@ -157,6 +158,20 @@ const ENTRIES: readonly FrameworkEcosystemEntry[] = deepFreeze([
 
 export function listFrameworkEcosystem(): readonly FrameworkEcosystemEntry[] {
     return ENTRIES;
+}
+
+for (const entry of ENTRIES) {
+    ApplicationRegistry.register(
+        defineApplication({
+            name: entry.id,
+            displayName: entry.displayName,
+            description: entry.evidence,
+            homepage: entry.upstream,
+            stage: "planned",
+            createProtocolExtension: () => undefined,
+            unsupportedProtocol: () => [entry.limitation],
+        }),
+    );
 }
 
 function deepFreeze<T>(value: T): T {

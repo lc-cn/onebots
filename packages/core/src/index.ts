@@ -26,6 +26,7 @@ export * from "./recent-event-deduplicator.js";
 export * from "./reliable-event-ingress.js";
 export * from "./ordered-event-delivery-queue.js";
 export * from "./protocol.js";
+export * from "./application.js";
 export * from "./event-filter.js";
 export * from "./gateway-path.js";
 export * from "./public-static-root.js";

@@ -14,10 +14,11 @@ import { pluginCandidates, tryLoadRegisteredPlugin, type PluginType } from "./pl
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { inspectPersistedCredentialPermissions } from "./persisted-credential-permissions.js";
 import { formatConfiguredCommand } from "./setup-config.js";
+import { ApplicationRegistry } from "@onebots/core";
 
 export type ServicePreflightSpec = Pick<
     ServiceSpec,
-    "configPath" | "adapters" | "protocols" | "workingDirectory"
+    "configPath" | "adapters" | "protocols" | "applications" | "workingDirectory"
 >;
 
 const execFileAsync = promisify(execFile);
@@ -65,6 +66,7 @@ export async function preflightServiceRuntimeIsolated(
         spec.configPath,
         ...spec.adapters.flatMap(adapter => ["-r", adapter]),
         ...spec.protocols.flatMap(protocol => ["-p", protocol]),
+        ...(spec.applications ?? []).flatMap(application => ["-t", application]),
     ];
     try {
         await (options.execute ?? executeIsolatedPreflight)(nodePath, args, {
@@ -122,12 +124,23 @@ export async function preflightServiceRuntime(spec: ServicePreflightSpec): Promi
     }
 
     const runtimeRequire = createRequire(path.join(spec.workingDirectory, "package.json"));
+    await import("./framework-integration.js");
+    await import("./framework-ecosystem.js");
     const failures: string[] = [];
     for (const [type, names] of [
         ["adapter", spec.adapters],
         ["protocol", spec.protocols],
+        ["application", spec.applications ?? []],
     ] as const satisfies ReadonlyArray<readonly [PluginType, readonly string[]]>) {
         for (const name of names) {
+            if (type === "application" && ApplicationRegistry.has(name)) {
+                try {
+                    ApplicationRegistry.activate(name);
+                } catch (error) {
+                    failures.push(error instanceof Error ? error.message : String(error));
+                }
+                continue;
+            }
             const result = await tryLoadRegisteredPlugin(
                 type,
                 name,
@@ -135,6 +148,7 @@ export async function preflightServiceRuntime(spec: ServicePreflightSpec): Promi
                 runtimeRequire,
             );
             if (result.loaded === false) failures.push(result.message);
+            else if (type === "application") ApplicationRegistry.activate(name);
         }
     }
     if (failures.length > 0) {

@@ -60,12 +60,18 @@ export function resolveServiceRuntimeOptions(options: {
     configPath: string;
     adapters: string[];
     protocols: string[];
+    applications?: string[];
 }) {
     if (!fs.existsSync(options.configPath)) return options;
     const source = fs.readFileSync(options.configPath, "utf8");
     const selection = getRuntimePluginSelection(parseRuntimeConfig(source));
     return selection
-        ? { ...options, adapters: selection.adapters, protocols: selection.protocols }
+        ? {
+              ...options,
+              adapters: selection.adapters,
+              protocols: selection.protocols,
+              applications: selection.applications ?? options.applications ?? [],
+          }
         : options;
 }
 
@@ -95,6 +101,7 @@ export function parseServiceRuntimeInvocation(argv: string[]) {
         configPath: path.resolve("config.yaml"),
         adapters: [] as string[],
         protocols: [] as string[],
+        applications: [] as string[],
     };
     const args = argv.slice(2);
     const command = args[0] === "preflight" ? "preflight" : "run";
@@ -107,12 +114,16 @@ export function parseServiceRuntimeInvocation(argv: string[]) {
             options.adapters.push(requireValue(args, ++index, token));
         else if (token === "-p" || token === "--protocol")
             options.protocols.push(requireValue(args, ++index, token));
+        else if (token === "-t" || token === "--target")
+            options.applications.push(requireValue(args, ++index, token));
         else if (token.startsWith("--config="))
             options.configPath = path.resolve(token.slice("--config=".length));
         else if (token.startsWith("--register="))
             options.adapters.push(token.slice("--register=".length));
         else if (token.startsWith("--protocol="))
             options.protocols.push(token.slice("--protocol=".length));
+        else if (token.startsWith("--target="))
+            options.applications.push(token.slice("--target=".length));
         else throw new CliError(`无效的服务运行参数: ${token}`, 2);
     }
     return { command, options } as const;

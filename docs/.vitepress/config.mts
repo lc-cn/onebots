@@ -5,6 +5,45 @@ import { withVersioning } from "./plugins/versioning.js";
 
 const pkg = require("../../package.json");
 
+const solutionItems = [
+    { text: "解决方案概览", link: "/solution/" },
+    { text: "框架运行时", link: "/solution/frameworks" },
+    { text: "Zhin", link: "/solution/zhin" },
+    { text: "Koishi", link: "/solution/koishi" },
+    { text: "NoneBot2", link: "/solution/nonebot" },
+    { text: "Karin", link: "/solution/karin" },
+    { text: "AlemonJS", link: "/solution/alemonjs" },
+    { text: "melobot", link: "/solution/melobot" },
+    { text: "ZeroBot", link: "/solution/zerobot" },
+    { text: "Kovi", link: "/solution/kovi" },
+    { text: "AstrBot", link: "/solution/astrbot" },
+    { text: "LangBot", link: "/solution/langbot" },
+    { text: "AliceBot", link: "/solution/alicebot" },
+    { text: "Kotori", link: "/solution/kotori" },
+    { text: "云崽 / TRSS-Yunzai", link: "/solution/yunzai" },
+    { text: "真寻", link: "/solution/zhenxun" },
+    { text: "Avilla（调研）", link: "/solution/avilla" },
+    { text: "OlivOS（调研）", link: "/solution/olivos" },
+    { text: "炸毛框架（调研）", link: "/solution/zhamao" },
+    { text: "Shiro（调研）", link: "/solution/shiro" },
+    { text: "Simple Robot（调研）", link: "/solution/simbot-onebot" },
+    { text: "Overflow（调研）", link: "/solution/overflow" },
+    { text: "Walle（调研）", link: "/solution/walle" },
+    { text: "Adachi-BOT（调研）", link: "/solution/adachi-bot" },
+    { text: "GenshinUID（调研）", link: "/solution/genshinuid" },
+    { text: "PepperBot（存量）", link: "/solution/pepperbot" },
+    { text: "NoneBot 1（存量）", link: "/solution/nonebot1" }
+];
+
+const enSolutionItems = [
+    { text: "Overview", link: "/en/solution/" },
+    { text: "Framework Runtime", link: "/en/solution/frameworks" },
+    ...solutionItems.slice(2).map(item => ({
+        text: item.text.replace("（调研）", " (Research)").replace("（存量）", " (Legacy)"),
+        link: `/en${item.link}`
+    }))
+];
+
 // 版本配置
 const versioningOptions = {
     versions: versions,
@@ -66,7 +105,8 @@ const baseConfig = defineConfig({
                             { text: "Facebook Messenger", link: "/platform/facebook-messenger" },
                             { text: "Instagram Messaging", link: "/platform/instagram" },
                             { text: "Mattermost", link: "/platform/mattermost" },
-                            { text: "Twitch", link: "/platform/twitch" }
+                            { text: "Twitch", link: "/platform/twitch" },
+                            { text: "IRCv3", link: "/platform/ircv3" }
                         ]
                     },
                     {
@@ -81,10 +121,7 @@ const baseConfig = defineConfig({
                     },
                     {
                         text: "解决方案",
-                        items: [
-                            { text: "解决方案概览", link: "/solution/" },
-                            { text: "机器人框架", link: "/solution/frameworks" }
-                        ]
+                        items: solutionItems
                     },
                     {
                         text: pkg.version,
@@ -139,7 +176,8 @@ const baseConfig = defineConfig({
                         { text: "Facebook Messenger", link: "/platform/facebook-messenger" },
                         { text: "Instagram Messaging", link: "/platform/instagram" },
                         { text: "Mattermost", link: "/platform/mattermost" },
-                        { text: "Twitch", link: "/platform/twitch" }
+                        { text: "Twitch", link: "/platform/twitch" },
+                        { text: "IRCv3", link: "/platform/ircv3" }
                     ],
                     "/protocol/": [
                         { text: "OneBot V11", link: "/protocol/onebot-v11" },
@@ -149,8 +187,7 @@ const baseConfig = defineConfig({
                         { text: "MCP", link: "/protocol/mcp" }
                     ],
                     "/solution/": [
-                        { text: "解决方案概览", link: "/solution/" },
-                        { text: "机器人框架", link: "/solution/frameworks" }
+                        ...solutionItems
                     ]
                 },
                 footer: {
@@ -222,7 +259,8 @@ const baseConfig = defineConfig({
                             { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" },
                             { text: "Instagram Messaging", link: "/en/platform/instagram" },
                             { text: "Mattermost", link: "/en/platform/mattermost" },
-                            { text: "Twitch", link: "/en/platform/twitch" }
+                            { text: "Twitch", link: "/en/platform/twitch" },
+                            { text: "IRCv3", link: "/en/platform/ircv3" }
                         ]
                     },
                     {
@@ -237,10 +275,7 @@ const baseConfig = defineConfig({
                     },
                     {
                         text: "Solutions",
-                        items: [
-                            { text: "Overview", link: "/en/solution/" },
-                            { text: "Bot Frameworks", link: "/en/solution/frameworks" }
-                        ]
+                        items: enSolutionItems
                     },
                     {
                         text: getCurrentVersion()?.label || `v${pkg.version}`,
@@ -308,7 +343,8 @@ const baseConfig = defineConfig({
                         { text: "Facebook Messenger", link: "/en/platform/facebook-messenger" },
                         { text: "Instagram Messaging", link: "/en/platform/instagram" },
                         { text: "Mattermost", link: "/en/platform/mattermost" },
-                        { text: "Twitch", link: "/en/platform/twitch" }
+                        { text: "Twitch", link: "/en/platform/twitch" },
+                        { text: "IRCv3", link: "/en/platform/ircv3" }
                     ],
                     "/en/protocol/": [
                         { text: "OneBot V11", link: "/en/protocol/onebot-v11" },
@@ -318,8 +354,7 @@ const baseConfig = defineConfig({
                         { text: "MCP", link: "/en/protocol/mcp" }
                     ],
                     "/en/solution/": [
-                        { text: "Solutions Overview", link: "/en/solution/" },
-                        { text: "Bot Frameworks", link: "/en/solution/frameworks" }
+                        ...enSolutionItems
                     ]
                 },
                 footer: {

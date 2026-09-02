@@ -23,6 +23,7 @@ access_token: "replace-with-a-long-random-token" # 管理端鉴权码（敏感�
 plugins:
   adapters: [qq]
   protocols: [onebot-v11]
+  applications: [zhin]
 
 # 通用配置（协议默认配置）
 general:
