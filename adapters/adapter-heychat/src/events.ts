@@ -46,7 +46,7 @@ function projectCommand(
     const sender = data.sender_info;
     if (!room?.room_id || !channel?.channel_id || !sender) return null;
 
-    const messageId = data.msg_id || String(envelope.sequence);
+    const messageId = data.msg_id || envelope.sequence;
     const rawMessage = buildCommandText(data.command_info);
     return {
         ...base(envelope, options, data.bot_id),
@@ -206,7 +206,7 @@ function base(
     eventBotId?: number,
 ): Pick<CommonEvent.Base, "id" | "timestamp" | "platform" | "bot_id"> {
     return {
-        id: options.createId(String(envelope.sequence)),
+        id: options.createId(envelope.sequence),
         timestamp: normalizeTimestamp(envelope.timestamp),
         platform: "heychat",
         bot_id: options.createId(eventBotId ?? options.botId ?? options.accountId),

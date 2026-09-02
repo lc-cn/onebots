@@ -61,7 +61,7 @@ export class WeComAdapter extends Adapter<WeComClient, "wecom"> {
         const client = this.requireClient(uin);
         const agent = client.getCachedAgent() || (await client.getAgent());
         return {
-            user_id: this.createId(String(agent.agentid)),
+            user_id: this.createId(agent.agentid),
             user_name: agent.name || `企业微信应用 ${agent.agentid}`,
             user_displayname: agent.description || agent.name,
             avatar: agent.square_logo_url,

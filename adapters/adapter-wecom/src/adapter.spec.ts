@@ -63,4 +63,19 @@ describe("WeComAdapter 生命周期", () => {
         await adapter.stop(config.account_id);
         expect(account.status).toBe(AccountStatus.OffLine);
     });
+
+    it("登录信息保留企业微信数字 AgentID", async () => {
+        vi.spyOn(WeComClient.prototype, "getCachedAgent").mockReturnValue({
+            errcode: 0,
+            errmsg: "ok",
+            agentid: 1000001,
+            name: "Internal Bot",
+        });
+        const account = adapter.createAccount(config);
+        adapter.accounts.set(config.account_id, account);
+
+        await expect(adapter.getLoginInfo(config.account_id)).resolves.toMatchObject({
+            user_id: { number: 1000001, string: "1000001", source: 1000001 },
+        });
+    });
 });

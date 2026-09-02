@@ -6,6 +6,11 @@ export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal" |
 export type Dispose = () => unknown;
 export type MayBeArray<T> = T | T[];
 export namespace CommonTypes {
+    /**
+     * 平台 ID 的统一表示。
+     * - 原始 number：number/source 保留原值，string 为其字符串形式。
+     * - 原始 string：string/source 保留原值，number 为稳定的唯一映射值。
+     */
     export type Id = {
         string: string;
         source: string | number;
