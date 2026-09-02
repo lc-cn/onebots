@@ -1,5 +1,19 @@
 # @onebots/docs
 
+## 0.5.5
+
+### Patch Changes
+
+- d358230: 加入固定版本 Koishi Satori 互操作门禁，修正官方适配器根端点模板，并在保留既有响应包装的同时支持官方客户端的直接 API 结果。
+- 8a0f0a8: 修复 OneBot 11 反向 WebSocket 的 Bearer 鉴权兼容性，并加入固定版本 NoneBot2 真实进程互操作门禁、验证证据与中英文接入说明。
+- 42dc575: 新增 18 个已调研机器人生态候选的分级目录，并在 CLI、管理 API、Web 管理端与中英文文档中区分可生成方案的框架和待验证候选。
+- 2df841a: 加入固定版本 Karin Milky WebSocket 互操作门禁、验证证据、安全限制和中英文接入说明，并让 `get_impl_info` 对未暴露 QQ 客户端指纹的适配器返回稳定兜底信息。
+- 285a0bd: 补齐机器人发行版常用的好友删除、消息历史与合并转发动作，发布云崽和真寻的固定源码兼容矩阵，并在管理 API 与 Web 页面提供七套框架的脱敏接入方案。
+- 85b15f7: 加入固定版本 Zhin OneBot 11 正向 WebSocket 互操作门禁、可移植依赖锁、验证证据和中英文接入说明。
+- 1f396bd: 加入固定版本 AlemonJS OneBot 11 正向 WebSocket 互操作门禁、验证证据、安全限制和中英文接入说明。
+- d635329: 加入 melobot 3.4.0 与 ZeroBot 1.8.2 的固定版本真实进程门禁和配置生成方案，并记录其余下一批框架的固定源码阻断证据。
+- ce480b1: 新增完整 Twitch Helix 与稳定 EventSub 适配器，支持主动 WebSocket、签名 Webhook、已有 HTTP Host、已有 socket 和 manual ingress，共享严格验证、可靠去重、动态能力及结构化配置表单；同时让通用 record-list 支持行内下拉与条件字段，并发布 Twitch 能力目录。
+
 ## 0.5.4
 
 ### Patch Changes

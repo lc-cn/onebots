@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-google-chat",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "OneBots Google Chat API 与 Google Workspace Events 适配器",
     "type": "module",
     "main": "lib/index.js",

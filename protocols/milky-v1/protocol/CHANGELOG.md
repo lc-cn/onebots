@@ -1,5 +1,21 @@
 # @onebots/protocol-milky-v1
 
+## 3.0.10
+
+### Patch Changes
+
+- 2df841a: 加入固定版本 Karin Milky WebSocket 互操作门禁、验证证据、安全限制和中英文接入说明，并让 `get_impl_info` 对未暴露 QQ 客户端指纹的适配器返回稳定兜底信息。
+- Updated dependencies [d358230]
+- Updated dependencies [8a0f0a8]
+- Updated dependencies [42dc575]
+- Updated dependencies [2df841a]
+- Updated dependencies [285a0bd]
+- Updated dependencies [85b15f7]
+- Updated dependencies [1f396bd]
+- Updated dependencies [d635329]
+- Updated dependencies [ce480b1]
+  - onebots@1.2.10
+
 ## 3.0.9
 
 ### Patch Changes
