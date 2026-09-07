@@ -10,7 +10,7 @@ _One multi-platform bot gateway: one `CommonEvent` model, many adapters, many wi
 
 [![OneBot V11](https://img.shields.io/badge/OneBot-v11-black)](https://onebot.dev/) [![OneBot V12](https://img.shields.io/badge/OneBot-v12-black)](https://12.onebot.dev/) [![Satori](https://img.shields.io/badge/Satori-v1-6366f1)](https://satori.js.org/) [![Milky](https://img.shields.io/badge/Milky-v1-f472b6)](https://github.com/aspect-y/milky)
 
-**[📚 在线文档](https://onebots.pages.dev)** · **[English README](./README.en.md)** · **[Issues](https://github.com/lc-cn/onebots/issues)** · **QQ 群 [860669870](https://jq.qq.com/?_wv=1027&k=B22VGXov)**
+**[📚 在线文档](https://onebots.pages.dev)** · **[English README](./README.en.md)** · **[Issues](https://github.com/lc-cn/onebots/issues)** · **QQ 群 [756653776](https://qm.qq.com/q/SytiyzBPyI)**
 
 </div>
 
