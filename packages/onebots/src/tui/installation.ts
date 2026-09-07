@@ -150,6 +150,8 @@ const executeInstall: InstallExecutor = async (invocation, root) => {
     await execute(invocation.executable, invocation.args, {
         cwd: root,
         env: invocation.environment,
+        // Windows 的 npm/pnpm 入口是 .cmd；参数仅来自已确认的可信包目录。
+        shell: process.platform === "win32",
         timeout: PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
         maxBuffer: 4 * 1024 * 1024,
     });
