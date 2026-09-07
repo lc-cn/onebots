@@ -9,6 +9,11 @@ describe("微信 ClawBot 配置 Schema", () => {
             expect.objectContaining({ value: "polling" }),
             expect.objectContaining({ value: "manual" }),
         ]);
+        expect(wechatClawbotSchema.outbound_text_format?.default).toBe("plain");
+        expect(wechatClawbotSchema.outbound_text_format?.choices).toEqual([
+            expect.objectContaining({ value: "plain" }),
+            expect.objectContaining({ value: "markdown" }),
+        ]);
         expect(wechatClawbotSchema.polling_timeout_ms?.min).toBe(1_000);
         expect(wechatClawbotSchema.polling_retry_initial_delay_ms?.min).toBe(100);
         expect(wechatClawbotSchema.polling_retry_max_delay_ms?.min).toBe(1_000);
