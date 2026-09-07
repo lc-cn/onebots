@@ -1,26 +1,25 @@
 import { option } from "pastel";
 import { z } from "zod";
 import { CommandRunner } from "../cli/command-runner.js";
-import { CliError, serviceConfigPath, scopeFrom } from "../cli/command-application.js";
+import { CliError, serviceConfigPath } from "../cli/command-application.js";
 import { scopedRuntimeOptions } from "../cli/command-options.js";
-import { getWebUrl, OneBotsDashboard, openWeb } from "../ui.js";
-import * as fs from "node:fs";
-import { useState } from "react";
+import { getWebUrl, openWeb } from "../ui.js";
 import { OneBotsTui } from "../tui/app.js";
 
-export const description = "打开 OneBots 终端运维面板";
+export const description = "打开 OneBots 工作台";
 export const options = scopedRuntimeOptions.extend({
+    setup: z.boolean().describe(option({ description: "进入扩展安装页" })),
+    configure: z.boolean().describe(option({ description: "进入账号配置页" })),
     web: z.boolean().describe(option({ description: "直接打开 Web 管理端" })),
 });
 
 function UiCommand({ options: input }: { options: z.infer<typeof options> }) {
     const configPath = serviceConfigPath(input);
-    const [manage, setManage] = useState(!fs.existsSync(configPath));
-    const url = getWebUrl(configPath);
     if (input.web) {
         return (
             <CommandRunner
                 execute={async () => {
+                    const url = getWebUrl(configPath);
                     try {
                         await openWeb(url);
                         return { output: `已打开 ${url}` };
@@ -41,13 +40,21 @@ function UiCommand({ options: input }: { options: z.infer<typeof options> }) {
             />
         );
     }
-    if (manage) return <OneBotsTui configPath={configPath} system={input.system} />;
+    const selection =
+        input.register.length || input.protocol.length || input.target?.length
+            ? {
+                  adapters: input.register,
+                  protocols: input.protocol,
+                  applications: input.target ?? [],
+              }
+            : undefined;
     return (
-        <OneBotsDashboard
+        <OneBotsTui
             configPath={configPath}
-            scope={scopeFrom(input)}
-            url={url}
-            onManage={() => setManage(true)}
+            system={input.system}
+            setup={input.setup}
+            configure={input.configure}
+            selection={selection}
         />
     );
 }

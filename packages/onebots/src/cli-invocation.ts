@@ -23,7 +23,7 @@ export type CliInvocation =
  * Pastel 将选项归属于具体文件路由。这个适配器保留 OneBots v1/v2 允许
  * `-r/-p/-c` 出现在命令名前后的兼容约定，并隔离系统服务的无 TTY 入口。
  */
-export function prepareCliInvocation(argv: string[]): CliInvocation {
+export function prepareCliInvocation(argv: string[], interactive = false): CliInvocation {
     const invalidOption = findInvalidRuntimeOption(argv.slice(2));
     if (invalidOption) return { kind: "invalid", message: invalidOption };
 
@@ -43,7 +43,10 @@ export function prepareCliInvocation(argv: string[]): CliInvocation {
             trailing.every(token => ["-h", "--help", "-v", "--version"].includes(token));
         return rootOnly
             ? { kind: "cli", argv }
-            : { kind: "cli", argv: [argv[0], argv[1], "run", ...argv.slice(2)] };
+            : {
+                  kind: "cli",
+                  argv: [argv[0], argv[1], interactive ? "ui" : "run", ...argv.slice(2)],
+              };
     }
     if (REMOVED_NAMESPACES.has(firstPositional.token))
         return { kind: "unknown", command: firstPositional.token };

@@ -106,7 +106,7 @@ try {
         $RollbackOneBots = $false
         $env:ONEBOTS_EXTENSION_ROOT = $RuntimeDir
         Write-Step "OneBots 主程序已就绪，进入适配器、协议和框架选择向导。"
-        Invoke-Checked -FilePath $OneBots -Arguments @("tui", "--setup", "-c", $ConfigFile)
+        Invoke-Checked -FilePath $OneBots -Arguments @("ui", "--setup", "-c", $ConfigFile)
         return
     }
 

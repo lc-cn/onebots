@@ -175,7 +175,7 @@ if [ -t 0 ] && [ -t 1 ] && [ "${ONEBOTS_NONINTERACTIVE:-0}" != 1 ]; then
     say "OneBots 主程序已就绪，进入适配器、协议和框架选择向导。"
     (
         cd "$RUNTIME_DIR"
-        ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" tui --setup -c "$CONFIG_FILE"
+        ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" ui --setup -c "$CONFIG_FILE"
     )
     exit 0
 fi

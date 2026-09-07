@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createInstallationPlan, runInstallation } from "./installation.js";
+import { createInstallationPlan } from "./installation.js";
+import { runInstallation } from "./onboarding.js";
 import { TuiCancelled, type PromptRequest, type TuiPrompt } from "./prompt.js";
 
 function scripted(answers: Array<string[] | Error>, inspect?: (request: PromptRequest) => void) {
@@ -25,7 +26,7 @@ describe("TUI 依赖安装流程", () => {
             expect(install).toHaveBeenCalledOnce();
         });
         const { prompt, requests } = scripted(
-            [["icqq"], ["private-test-token"], ["onebot-v11"], ["nonebot"], ["yes"]],
+            [["icqq"], ["private-test-token"], ["onebot-v11"], ["nonebot"], ["install"]],
             () => expect(install).not.toHaveBeenCalled(),
         );
         const selection = await runInstallation(
@@ -43,6 +44,7 @@ describe("TUI 依赖安装流程", () => {
             expect.arrayContaining([expect.stringMatching(/^@onebots\/adapter-icqq@\d/)]),
             "/runtime",
             "private-test-token",
+            expect.any(Function),
         );
         expect(requests[1].secret).toBe(true);
         expect(JSON.stringify(requests)).not.toContain("private-test-token");
@@ -66,11 +68,11 @@ describe("TUI 依赖安装流程", () => {
             ["secret"],
             ["onebot-v11"],
             [],
-            ["no"],
+            ["0"],
             ["telegram"],
             ["onebot-v11"],
             [],
-            ["yes"],
+            ["install"],
         ]);
         await runInstallation(prompt, "/runtime", { adapters: [], protocols: [] }, dependencies);
         expect(dependencies.install).toHaveBeenCalledOnce();
@@ -79,7 +81,13 @@ describe("TUI 依赖安装流程", () => {
 
     it("框架与协议不匹配时回到选择页，不擅自加装协议", async () => {
         const dependencies = { install: vi.fn(), verify: vi.fn() };
-        const { prompt } = scripted([["telegram"], ["mcp-v1"], ["nonebot"], new TuiCancelled()]);
+        const { prompt } = scripted([
+            ["telegram"],
+            ["mcp-v1"],
+            ["nonebot"],
+            new TuiCancelled(),
+            new TuiCancelled(),
+        ]);
         await expect(
             runInstallation(prompt, "/runtime", { adapters: [], protocols: [] }, dependencies),
         ).rejects.toBeInstanceOf(TuiCancelled);
@@ -87,23 +95,48 @@ describe("TUI 依赖安装流程", () => {
         expect(dependencies.install).not.toHaveBeenCalled();
     });
 
-    it("安装失败不进入加载验证，加载失败不报告完成", async () => {
-        const { prompt } = scripted([["telegram"], ["onebot-v11"], [], ["yes"]]);
+    it("安装失败可重试；验证失败只重试验证，不重装", async () => {
+        const { prompt } = scripted([
+            ["telegram"],
+            ["onebot-v11"],
+            [],
+            ["install"],
+            ["retry"],
+            ["retry"],
+        ]);
         const dependencies = {
-            install: vi.fn().mockRejectedValue(new Error("network failure")),
-            verify: vi.fn(),
+            install: vi
+                .fn()
+                .mockRejectedValueOnce(new Error("network failure"))
+                .mockResolvedValue(undefined),
+            verify: vi
+                .fn()
+                .mockRejectedValueOnce(new Error("broken plugin"))
+                .mockResolvedValue(undefined),
         };
+        await runInstallation(prompt, "/runtime", { adapters: [], protocols: [] }, dependencies);
+        expect(dependencies.install).toHaveBeenCalledTimes(2);
+        expect(dependencies.verify).toHaveBeenCalledTimes(2);
+    });
+
+    it("协议页返回平台时保留选择", async () => {
+        const { prompt, requests } = scripted([
+            ["telegram"],
+            new TuiCancelled(),
+            ["telegram"],
+            ["onebot-v11"],
+            [],
+            ["cancel"],
+        ]);
         await expect(
-            runInstallation(prompt, "/runtime", { adapters: [], protocols: [] }, dependencies),
-        ).rejects.toThrow("network failure");
-        expect(dependencies.verify).not.toHaveBeenCalled();
-        const next = scripted([["telegram"], ["onebot-v11"], [], ["yes"]]);
-        dependencies.install.mockResolvedValue(undefined);
-        dependencies.verify.mockRejectedValue(new Error("broken plugin"));
-        await expect(
-            runInstallation(next.prompt, "/runtime", { adapters: [], protocols: [] }, dependencies),
-        ).rejects.toThrow("broken plugin");
-        expect(next.prompt.report).not.toHaveBeenCalledWith(expect.stringContaining("验证通过"));
+            runInstallation(
+                prompt,
+                "/runtime",
+                { adapters: [], protocols: [] },
+                { install: vi.fn(), verify: vi.fn() },
+            ),
+        ).rejects.toBeInstanceOf(TuiCancelled);
+        expect(requests[2].selected).toEqual(["telegram"]);
     });
 
     it("框架是内置方案，安装计划只包含用户所选适配器与协议的精确版本", () => {

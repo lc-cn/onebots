@@ -12,7 +12,7 @@ export const options = runtimeOptions.extend({
     reset: z.boolean().describe(option({ description: "从安全默认值重建配置（需配合 --force）" })),
 });
 
-export default function SetupCommand({ options: input }: { options: z.infer<typeof options> }) {
+function SetupCommand({ options: input }: { options: z.infer<typeof options> }) {
     if (process.stdin.isTTY && process.stdout.isTTY && !input.force && !input.reset) {
         const runtime = normalizeRuntimeOptions(input);
         const selection =
@@ -23,3 +23,6 @@ export default function SetupCommand({ options: input }: { options: z.infer<type
     }
     return <CommandRunner execute={() => setupConfiguration(input)} />;
 }
+
+SetupCommand.useShell = false;
+export default SetupCommand;

@@ -18,6 +18,24 @@ afterEach(() => {
 });
 
 describe("OneBots CLI v2", () => {
+    it("交互式默认工作台，显式 run 与无 TTY 启动保持前台语义", () => {
+        expect(prepareCliInvocation(["node", "onebots"], true)).toEqual({
+            kind: "cli",
+            argv: ["node", "onebots", "ui"],
+        });
+        expect(prepareCliInvocation(["node", "onebots", "run"], true)).toEqual({
+            kind: "cli",
+            argv: ["node", "onebots", "run"],
+        });
+        expect(prepareCliInvocation(["node", "onebots"], false)).toEqual({
+            kind: "cli",
+            argv: ["node", "onebots", "run"],
+        });
+        expect(prepareCliInvocation(["node", "onebots", "--help"], true)).toEqual({
+            kind: "cli",
+            argv: ["node", "onebots", "--help"],
+        });
+    });
     it("accepts runtime options before a flat Pastel route", () => {
         expect(
             prepareCliInvocation([

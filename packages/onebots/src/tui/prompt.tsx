@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TERMINAL_PAGES } from "./workspace.js";
 import { Box, Text, useInput } from "ink";
 
 export interface PromptChoice {
@@ -14,11 +15,14 @@ export interface PromptRequest {
     selected?: string[];
     initial?: string;
     secret?: boolean;
+    /** 工作区导航只在页面根部可用，避免编辑时跳页丢失字段。 */
+    navigation?: boolean;
 }
 
 export interface TuiPrompt {
     ask(request: PromptRequest): Promise<string[]>;
     report(message: string): void;
+    progress?(message: string): void;
     handoff?(binPath: string, args: string[], root: string): Promise<void>;
 }
 
@@ -41,19 +45,53 @@ export function PromptView({
     const [cursor, setCursor] = useState(0);
     const [selected, setSelected] = useState(request.selected ?? []);
     const [value, setValue] = useState(request.initial ?? "");
+    const [scroll, setScroll] = useState(0);
+    const [search, setSearch] = useState("");
+    const [searching, setSearching] = useState(false);
     const choices = request.choices;
+    const filtered = choices?.filter(choice =>
+        choice.label.toLowerCase().includes(search.toLowerCase()),
+    );
     useInput((input, key) => {
+        if (key.escape && (searching || search)) {
+            setSearching(false);
+            setSearch("");
+            setCursor(0);
+            return;
+        }
+        if (request.navigation && !searching && /^[1-7]$/.test(input))
+            return complete(["$page:" + TERMINAL_PAGES[Number(input) - 1].id]);
         if (key.escape || (key.ctrl && input === "c")) return cancel();
+        if (request.navigation && key.tab) return complete(["$next"]);
+        if (key.pageDown) return setScroll(index => index + 8);
+        if (key.pageUp) return setScroll(index => Math.max(0, index - 8));
+        if (!choices && key.ctrl && input === "u") return setValue("");
         if (choices) {
+            if (input === "/" && !searching) {
+                setSearching(true);
+                return;
+            }
+            if (searching) {
+                if (key.return) {
+                    setSearching(false);
+                    return;
+                }
+                setCursor(0);
+                if (key.backspace || key.delete) setSearch(value => value.slice(0, -1));
+                else if (!key.ctrl && !key.meta) setSearch(value => value + input);
+                return;
+            }
             if (key.upArrow) setCursor(index => Math.max(0, index - 1));
-            if (key.downArrow) setCursor(index => Math.min(choices.length - 1, index + 1));
-            if (input === " " && request.multiple && choices[cursor]) {
-                const item = choices[cursor].value;
+            if (key.downArrow)
+                setCursor(index => Math.max(0, Math.min(filtered.length - 1, index + 1)));
+            if (input === " " && request.multiple && filtered[cursor]) {
+                const item = filtered[cursor].value;
                 setSelected(values =>
                     values.includes(item) ? values.filter(v => v !== item) : [...values, item],
                 );
             }
-            if (key.return) complete(request.multiple ? selected : [choices[cursor]?.value ?? ""]);
+            if (key.return && (request.multiple || filtered[cursor]))
+                complete(request.multiple ? selected : [filtered[cursor].value]);
         } else {
             if (key.return) return complete([value]);
             if (key.backspace || key.delete) setValue(text => [...text].slice(0, -1).join(""));
@@ -74,9 +112,27 @@ export function PromptView({
             <Text bold color="cyan">
                 {request.title}
             </Text>
-            {request.detail && <Text>{request.detail}</Text>}
+            {request.detail && (
+                <Text>
+                    {request.detail
+                        .split("\n")
+                        .slice(
+                            Math.min(scroll, Math.max(0, request.detail.split("\n").length - 8)),
+                            Math.min(scroll, Math.max(0, request.detail.split("\n").length - 8)) +
+                                8,
+                        )
+                        .join("\n")}
+                </Text>
+            )}
+            {request.detail?.split("\n").length > 8 && <Text dimColor>PgUp/PgDn 滚动说明</Text>}
+            {(searching || search) && (
+                <Text color="yellow">
+                    搜索：{search}
+                    {searching ? "▏（Enter 完成）" : "（/ 修改）"}
+                </Text>
+            )}
             {choices ? (
-                choices.slice(offset, offset + 10).map((choice, index) => (
+                filtered.slice(offset, offset + 8).map((choice, index) => (
                     <Text key={choice.value} color={offset + index === cursor ? "cyan" : undefined}>
                         {offset + index === cursor ? "❯" : " "}{" "}
                         {request.multiple
@@ -92,7 +148,11 @@ export function PromptView({
             )}
             <Text dimColor>
                 {choices ? `↑↓ 选择${request.multiple ? " · 空格勾选" : ""} · ` : ""}Enter 确认 ·
-                Esc 返回/取消{choices ? ` (${cursor + 1}/${choices.length})` : ""}
+                Esc 返回
+                {choices
+                    ? ` · / 搜索 (${Math.min(cursor + 1, filtered.length)}/${filtered.length})`
+                    : ""}
+                {request.navigation ? " · 1–7 跳页 · Tab 下一页" : ""}
             </Text>
         </Box>
     );

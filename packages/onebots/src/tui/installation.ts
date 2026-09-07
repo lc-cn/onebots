@@ -18,7 +18,6 @@ import {
 import { acquirePackageMutationLock } from "../package-mutation-lock.js";
 import { inspectPlugin, pluginCandidates, tryLoadRegisteredPlugin } from "../plugin-loader.js";
 import type { RuntimePluginSelection } from "../runtime-plugin-selection.js";
-import { confirm, type TuiPrompt } from "./prompt.js";
 
 export interface InstallationPlan {
     selection: RuntimePluginSelection;
@@ -60,87 +59,13 @@ export function createInstallationPlan(selection: RuntimePluginSelection): Insta
 }
 
 export interface InstallationDependencies {
-    install(packages: string[], root: string, token: string): Promise<void>;
+    install(
+        packages: string[],
+        root: string,
+        token: string,
+        progress?: (message: string) => void,
+    ): Promise<void>;
     verify(selection: RuntimePluginSelection, root: string): Promise<void>;
-}
-
-/** 确认之前只收集信息；验证失败时不落盘任何插件选择或账号配置。 */
-export async function runInstallation(
-    prompt: TuiPrompt,
-    root: string,
-    initial: RuntimePluginSelection,
-    dependencies: InstallationDependencies = { install: installPackages, verify: loadSelection },
-): Promise<RuntimePluginSelection | null> {
-    let selection = structuredClone(initial);
-    let token = "";
-    try {
-        while (true) {
-            selection.adapters = await prompt.ask({
-                title: "1/4 选择平台适配器",
-                multiple: true,
-                selected: selection.adapters,
-                choices: EXTENSION_CATALOG.filter(item => item.type === "adapter").map(item => ({
-                    value: item.name,
-                    label: `${item.displayName} · ${item.name}`,
-                })),
-            });
-            if (selection.adapters.includes("icqq")) {
-                [token] = await prompt.ask({
-                    title: "ICQQ 安装凭据：GitHub Packages Token",
-                    secret: true,
-                    detail: "需要有 @icqqjs 包读取权限及 read:packages 的 Token。仅用于本次安装，不写入配置或摘要。留空使用已有 npm 认证。",
-                });
-            } else token = "";
-            selection.protocols = await prompt.ask({
-                title: "2/4 选择输出协议",
-                multiple: true,
-                selected: selection.protocols,
-                choices: EXTENSION_CATALOG.filter(item => item.type === "protocol").map(item => ({
-                    value: item.name,
-                    label: `${item.displayName} · ${item.description}`,
-                })),
-            });
-            selection.applications = await prompt.ask({
-                title: "3/4 选择接入框架（可不选）",
-                multiple: true,
-                selected: selection.applications,
-                detail: "选择的是 OneBots 内置兼容方案；框架程序在下游单独部署。",
-                choices: listFrameworkProfiles().map(item => ({
-                    value: item.id,
-                    label: `${item.displayName} · ${item.protocol} · ${item.applicationStage ?? item.verification}`,
-                })),
-            });
-            let plan: InstallationPlan;
-            try {
-                plan = createInstallationPlan(selection);
-            } catch (error) {
-                prompt.report((error as Error).message);
-                continue;
-            }
-            const confirmed = await confirm(
-                prompt,
-                "4/4 确认安装计划",
-                [
-                    `运行目录：${root}`,
-                    `主程序：onebots@${metadata.version}（本地缺失或版本不同时安装）`,
-                    `依赖：\n${plan.packages.join("\n") || "无"}`,
-                    `框架方案：${selection.applications.join(", ") || "无"}`,
-                    `ICQQ 凭据：${token ? "已输入（隐藏）" : "使用已有认证或不需要"}`,
-                    "安装完成后检查插件加载，再进入账号与协议配置。返回可修改全部选择。",
-                ].join("\n"),
-            );
-            if (!confirmed) continue;
-            prompt.report("正在安装依赖，请等待…");
-            await dependencies.install(plan.packages, root, token);
-            token = "";
-            prompt.report("正在验证适配器、协议及框架方案是否能加载…");
-            await dependencies.verify(selection, root);
-            prompt.report("依赖安装与加载验证通过，可以配置账号及协议。");
-            return selection;
-        }
-    } finally {
-        token = "";
-    }
 }
 
 const execute = promisify(execFile);
@@ -162,6 +87,7 @@ export async function installPackages(
     root: string,
     token: string,
     executePackage: InstallExecutor = executeInstall,
+    progress?: (message: string) => void,
 ): Promise<void> {
     fs.mkdirSync(root, { recursive: true });
     const lock = acquirePackageMutationLock(root, {
@@ -210,6 +136,7 @@ export async function installPackages(
         const local = inspectPlugin(["onebots"], require);
         const bootstrap = local.status !== "ready" || local.version !== metadata.version;
         for (const spec of [...(bootstrap ? [`onebots@${metadata.version}`] : []), ...packages]) {
+            progress?.(`正在安装 ${spec}`);
             const invocation = buildExtensionInstallInvocation(
                 root,
                 spec,
@@ -244,15 +171,9 @@ export async function loadSelection(
     selection: RuntimePluginSelection,
     root: string,
 ): Promise<void> {
+    const localBin = localRuntimeBin(root);
+    if (localBin) throw new TuiLocalRuntime(localBin, selection);
     const require = createRequire(path.join(root, "package.json"));
-    const local = inspectPlugin(["onebots"], require);
-    if (
-        local.status === "ready" &&
-        fs.realpathSync(local.entryPath) !==
-            fs.realpathSync(path.resolve(import.meta.dirname, "../../lib/index.js"))
-    ) {
-        throw new TuiLocalRuntime(path.join(path.dirname(local.entryPath), "bin.js"), selection);
-    }
     for (const [type, names] of [
         ["adapter", selection.adapters],
         ["protocol", selection.protocols],
@@ -271,5 +192,17 @@ export async function loadSelection(
     for (const name of selection.applications ?? []) {
         if (!ApplicationRegistry.has(name)) throw new Error(`框架方案 ${name} 未注册`);
         ApplicationRegistry.activate(name);
+    }
+}
+
+export function localRuntimeBin(root: string): string | undefined {
+    const require = createRequire(path.join(root, "package.json"));
+    const local = inspectPlugin(["onebots"], require);
+    if (
+        local.status === "ready" &&
+        fs.realpathSync(local.entryPath) !==
+            fs.realpathSync(path.resolve(import.meta.dirname, "../../lib/index.js"))
+    ) {
+        return path.join(path.dirname(local.entryPath), "bin.js");
     }
 }
