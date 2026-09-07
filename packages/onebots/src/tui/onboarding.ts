@@ -101,6 +101,7 @@ export async function runInstallation(
                             `运行目录：${root}`,
                             `主程序：onebots@${metadata.version}`,
                             `安装依赖：\n${plan.packages.join("\n") || "无"}`,
+                            `同时安装的必需 peer：\n${plan.peers.join("\n") || "无额外 SDK"}`,
                             `框架：${selection.applications?.join("、") || "无"}`,
                             `安装凭据：${token ? "已填写 · 隐藏" : "已有认证或不需要"}`,
                         ].join("\n"),

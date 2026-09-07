@@ -10,6 +10,7 @@ export interface ExtensionCapabilityCatalogEntry {
 export interface ExtensionPackageCatalogEntry {
     packageName: string;
     packageVersion: string;
+    peerDependencies?: Readonly<Record<string, string>>;
 }
 
 const entries = new Map<string, ExtensionCapabilityCatalogEntry>();
@@ -19,7 +20,16 @@ if (snapshot.schemaVersion !== 2) {
 }
 for (const [packageName, value] of Object.entries(snapshot.packages)) {
     if (!value.version) throw new Error(`扩展版本目录 ${packageName} 缺少版本`);
-    packageEntries.set(packageName, Object.freeze({ packageName, packageVersion: value.version }));
+    packageEntries.set(
+        packageName,
+        Object.freeze({
+            packageName,
+            packageVersion: value.version,
+            ...("peerDependencies" in value
+                ? { peerDependencies: Object.freeze(value.peerDependencies) }
+                : {}),
+        }),
+    );
 }
 for (const [platform, value] of Object.entries(snapshot.adapters)) {
     if (!value.packageName || !value.packageVersion) {

@@ -445,7 +445,7 @@ EOF
             packages: { "@onebots/adapter-mock": { version: "2.5.0" } },
         });
         expect(fs.readFileSync(marker, "utf8").trim()).toBe(
-            "install --ignore-scripts --no-save --omit=dev onebots@1.3.0",
+            "install --include=peer --legacy-peer-deps=false --strict-peer-deps --ignore-scripts --no-save --omit=dev onebots@1.3.0",
         );
     });
 

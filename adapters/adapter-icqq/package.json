@@ -37,11 +37,6 @@
     "onebots": "workspace:*",
     "@icqqjs/icqq": "^1.10.18"
   },
-  "peerDependenciesMeta": {
-    "@icqqjs/icqq": {
-      "optional": true
-    }
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lc-cn/onebots.git"

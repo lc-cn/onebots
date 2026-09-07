@@ -33,7 +33,12 @@ describe("update package transaction", () => {
         );
 
         expect(execute.mock.calls.map(([invocation]) => invocation.args)).toEqual([
-            ["up", "onebots@1.2.8"],
+            [
+                "up",
+                "--config.auto-install-peers=true",
+                "--config.strict-peer-dependencies=true",
+                "onebots@1.2.8",
+            ],
             ["remove", "@onebots/adapter-mock"],
         ]);
         expect(execute.mock.calls.map(([invocation]) => invocation.executable)).toEqual([

@@ -139,6 +139,29 @@ describe("TUI 依赖安装流程", () => {
         expect(requests[2].selected).toEqual(["telegram"]);
     });
 
+    it("确认页列出所选适配器的必需 peer，不为未选择的平台安装 SDK", async () => {
+        expect(createInstallationPlan({ adapters: ["icqq"], protocols: [] }).peers).toEqual([
+            "@icqqjs/icqq@^1.10.18",
+        ]);
+        expect(createInstallationPlan({ adapters: ["telegram"], protocols: [] }).peers).toEqual([]);
+        const { prompt, requests } = scripted([
+            ["icqq"],
+            ["token"],
+            ["onebot-v11"],
+            [],
+            ["cancel"],
+        ]);
+        await expect(
+            runInstallation(
+                prompt,
+                "/runtime",
+                { adapters: [], protocols: [] },
+                { install: vi.fn(), verify: vi.fn() },
+            ),
+        ).rejects.toBeInstanceOf(TuiCancelled);
+        expect(requests.at(-1)?.detail).toContain("@icqqjs/icqq@^1.10.18");
+    });
+
     it("框架是内置方案，安装计划只包含用户所选适配器与协议的精确版本", () => {
         const plan = createInstallationPlan({
             adapters: ["telegram"],

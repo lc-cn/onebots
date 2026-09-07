@@ -16,6 +16,11 @@ import {
     sanitizeNpmEnvironment,
 } from "./package-manager.js";
 
+const npmPeerFlags = ["--include=peer", "--legacy-peer-deps=false", "--strict-peer-deps"];
+const pnpmPeerFlags = [
+    "--config.auto-install-peers=true",
+    "--config.strict-peer-dependencies=true",
+];
 const directories: string[] = [];
 
 afterEach(() => {
@@ -223,7 +228,13 @@ describe("runtime package manager", () => {
 
         expect(invocation).toMatchObject({
             executable: "pnpm",
-            args: ["add", "--save-prod", "--workspace-root", "@onebots/protocol-mcp-v1@0.1.5"],
+            args: [
+                "add",
+                ...pnpmPeerFlags,
+                "--save-prod",
+                "--workspace-root",
+                "@onebots/protocol-mcp-v1@0.1.5",
+            ],
         });
     });
 
@@ -244,7 +255,7 @@ describe("runtime package manager", () => {
             ),
         ).toMatchObject({
             executable: packageManager.resolvedPath,
-            args: ["add", "--save-prod", "@onebots/adapter-slack@3.0.8"],
+            args: ["add", ...pnpmPeerFlags, "--save-prod", "@onebots/adapter-slack@3.0.8"],
         });
         expect(
             buildExtensionRestoreInvocation(
@@ -257,7 +268,7 @@ describe("runtime package manager", () => {
             ),
         ).toMatchObject({
             executable: packageManager.resolvedPath,
-            args: ["add", "--save-prod", "@onebots/adapter-slack@3.0.7"],
+            args: ["add", ...pnpmPeerFlags, "--save-prod", "@onebots/adapter-slack@3.0.7"],
         });
     });
 
@@ -273,7 +284,7 @@ describe("runtime package manager", () => {
             }),
         ).toMatchObject({
             executable: "pnpm",
-            args: ["add", "--save-prod", "@onebots/protocol-mcp-v1@0.1.5"],
+            args: ["add", ...pnpmPeerFlags, "--save-prod", "@onebots/protocol-mcp-v1@0.1.5"],
         });
     });
 
@@ -306,6 +317,7 @@ describe("runtime package manager", () => {
         expect(invocation.executable).toBe("npm");
         expect(invocation.args).toEqual([
             "install",
+            ...npmPeerFlags,
             "--save",
             "--omit=dev",
             "@onebots/adapter-slack@3.0.8",
@@ -322,7 +334,14 @@ describe("runtime package manager", () => {
                 {},
                 { force: true },
             ).args,
-        ).toEqual(["install", "--save", "--omit=dev", "--force", "@onebots/adapter-slack@3.0.8"]);
+        ).toEqual([
+            "install",
+            ...npmPeerFlags,
+            "--save",
+            "--omit=dev",
+            "--force",
+            "@onebots/adapter-slack@3.0.8",
+        ]);
 
         const pnpmRoot = fixture({ packageManager: "pnpm@9.15.9" });
         expect(
@@ -333,7 +352,13 @@ describe("runtime package manager", () => {
                 {},
                 { force: true },
             ).args,
-        ).toEqual(["add", "--save-prod", "--force", "@onebots/adapter-slack@3.0.8"]);
+        ).toEqual([
+            "add",
+            ...pnpmPeerFlags,
+            "--save-prod",
+            "--force",
+            "@onebots/adapter-slack@3.0.8",
+        ]);
     });
 
     it("按原状态生成扩展恢复命令", () => {
@@ -348,7 +373,13 @@ describe("runtime package manager", () => {
             ),
         ).toEqual({
             executable: "npm",
-            args: ["install", "--save", "--omit=dev", "@onebots/adapter-slack@3.0.7"],
+            args: [
+                "install",
+                ...npmPeerFlags,
+                "--save",
+                "--omit=dev",
+                "@onebots/adapter-slack@3.0.7",
+            ],
             environment: {},
         });
 
@@ -392,7 +423,13 @@ describe("runtime package manager", () => {
             ),
         ).toMatchObject({
             executable: "npm",
-            args: ["install", "--save", "--omit=dev", "@onebots/adapter-slack@3.0.8"],
+            args: [
+                "install",
+                ...npmPeerFlags,
+                "--save",
+                "--omit=dev",
+                "@onebots/adapter-slack@3.0.8",
+            ],
         });
     });
 
@@ -480,7 +517,7 @@ describe("runtime package manager", () => {
 
         expect(invocation).toEqual({
             executable: "pnpm",
-            args: ["add", "--save-prod", "@onebots/adapter-slack@3.0.8"],
+            args: ["add", ...pnpmPeerFlags, "--save-prod", "@onebots/adapter-slack@3.0.8"],
             environment: {},
         });
     });
@@ -510,7 +547,7 @@ describe("runtime package manager", () => {
                 ),
             ).toEqual({
                 executable: "pnpm",
-                args: ["add", "--save-prod", "@onebots/protocol-mcp-v1@0.1.5"],
+                args: ["add", ...pnpmPeerFlags, "--save-prod", "@onebots/protocol-mcp-v1@0.1.5"],
                 environment: { npm_config_user_agent: "npm/11.0.0 node/v24.0.0" },
             });
         },
@@ -554,6 +591,7 @@ describe("runtime package manager", () => {
             executable: "npm",
             args: [
                 "install",
+                ...npmPeerFlags,
                 "--save",
                 "--omit=dev",
                 "onebots@latest",
@@ -598,7 +636,7 @@ describe("runtime package manager", () => {
 
         expect(buildPackageUpdateInvocation(root, ["onebots@latest"], null, "win32", {})).toEqual({
             executable: "npm.cmd",
-            args: ["install", "--global", "onebots@latest"],
+            args: ["install", ...npmPeerFlags, "--global", "onebots@latest"],
             cwd: root,
             environment: {},
         });
@@ -616,13 +654,13 @@ describe("runtime package manager", () => {
 
         expect(buildPackageUpdateInvocation(root, ["onebots@latest"], root, "linux", {})).toEqual({
             executable: "pnpm",
-            args: ["up", "onebots@latest"],
+            args: ["up", ...pnpmPeerFlags, "onebots@latest"],
             cwd: root,
             environment: {},
         });
         expect(buildPackageUpdateInvocation(root, ["onebots@latest"], null, "linux", {})).toEqual({
             executable: "pnpm",
-            args: ["add", "--global", "onebots@latest"],
+            args: ["add", ...pnpmPeerFlags, "--global", "onebots@latest"],
             cwd: root,
             environment: {},
         });

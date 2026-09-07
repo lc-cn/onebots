@@ -83,6 +83,16 @@ describe("TUI 包安装执行边界", () => {
         expect(fs.existsSync(path.join(root, "config.yaml"))).toBe(false);
     });
 
+    it("peer 版本冲突提示修复依赖，不误报网络或允许继续启动", async () => {
+        const root = fixture();
+        await expect(
+            installPackages(["@onebots/adapter-test@1.0.0"], root, "", async () => {
+                throw new Error("ERR_PNPM_PEER_DEP_ISSUES invalid sdk");
+            }),
+        ).rejects.toThrow("peerDependencies");
+        expect(fs.existsSync(path.join(root, "config.yaml"))).toBe(false);
+    });
+
     it("pnpm workspace 使用 pnpm 而非 npm，且校验安装的实际版本", async () => {
         const root = fixture();
         fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages: []\n");

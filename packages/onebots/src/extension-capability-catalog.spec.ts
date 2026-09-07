@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
@@ -28,6 +29,15 @@ describe("extension capability catalog", () => {
                 { cwd: process.cwd() },
             ),
         ).resolves.toMatchObject({ stderr: "" });
+    });
+
+    it("ICQQ 的运行 SDK 必须随适配器安装，不能标记为可选 peer", () => {
+        const manifest = JSON.parse(fs.readFileSync("adapters/adapter-icqq/package.json", "utf8"));
+        expect(manifest.peerDependencies["@icqqjs/icqq"]).toBe("^1.10.18");
+        expect(manifest.peerDependenciesMeta?.["@icqqjs/icqq"]?.optional).not.toBe(true);
+        expect(getExtensionPackageCatalogEntry("@onebots/adapter-icqq")?.peerDependencies).toEqual({
+            "@icqqjs/icqq": "^1.10.18",
+        });
     });
 
     it("returns frozen package and capability identities", () => {

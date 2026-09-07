@@ -13,6 +13,12 @@ const outputPath = path.join(
     "extension-capability-catalog.json",
 );
 
+function packageEntry(manifest) {
+    const peerDependencies = Object.fromEntries(Object.entries(manifest.peerDependencies ?? {})
+        .filter(([name]) => name !== "onebots" && !manifest.peerDependenciesMeta?.[name]?.optional));
+    return { version: manifest.version, ...(Object.keys(peerDependencies).length ? { peerDependencies } : {}) };
+}
+
 async function buildCatalog() {
     const adapterDirectories = fs
         .readdirSync(adaptersRoot, { withFileTypes: true })
@@ -29,7 +35,7 @@ async function buildCatalog() {
         const packageJson = JSON.parse(
             fs.readFileSync(path.join(packageDirectory, "package.json"), "utf8"),
         );
-        packages[packageJson.name] = { version: packageJson.version };
+        packages[packageJson.name] = packageEntry(packageJson);
         const capabilityPath = path.join(packageDirectory, "lib", "capabilities.js");
         if (!fs.existsSync(capabilityPath)) {
             throw new Error(
@@ -66,7 +72,7 @@ async function buildCatalog() {
         const manifestPath = path.join(protocolsRoot, directory, "protocol", "package.json");
         if (!fs.existsSync(manifestPath)) continue;
         const packageJson = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-        packages[packageJson.name] = { version: packageJson.version };
+        packages[packageJson.name] = packageEntry(packageJson);
     }
 
     return `${JSON.stringify({ schemaVersion: 2, packages, adapters }, null, 2)}\n`;

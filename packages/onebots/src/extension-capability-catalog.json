@@ -23,7 +23,10 @@
       "version": "4.0.11"
     },
     "@onebots/adapter-icqq": {
-      "version": "3.0.13"
+      "version": "3.0.13",
+      "peerDependencies": {
+        "@icqqjs/icqq": "^1.10.18"
+      }
     },
     "@onebots/adapter-instagram": {
       "version": "0.1.4"

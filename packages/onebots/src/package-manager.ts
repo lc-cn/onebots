@@ -489,9 +489,18 @@ export function buildPackageManagerInvocation(
 ): PackageInstallInvocation {
     return {
         executable: resolvedPath ?? (platform === "win32" ? `${manager}.cmd` : manager),
-        args,
+        args: ["install", "add", "up", "update"].includes(args[0])
+            ? [args[0], ...peerInstallationArguments(manager), ...args.slice(1)]
+            : args,
         environment: manager === "npm" ? sanitizeNpmEnvironment(environment) : environment,
     };
+}
+
+/** 显式覆盖用户环境中跳过 peer 的配置，缺失或冲突不得被当作安装成功。 */
+function peerInstallationArguments(manager: SupportedPackageManager): string[] {
+    return manager === "npm"
+        ? ["--include=peer", "--legacy-peer-deps=false", "--strict-peer-deps"]
+        : ["--config.auto-install-peers=true", "--config.strict-peer-dependencies=true"];
 }
 
 /** 生成可直接执行的扩展安装命令；pnpm workspace 根目录必须显式使用 workspace-root。 */

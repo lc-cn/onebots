@@ -22,6 +22,7 @@ import type { RuntimePluginSelection } from "../runtime-plugin-selection.js";
 export interface InstallationPlan {
     selection: RuntimePluginSelection;
     packages: string[];
+    peers: string[];
 }
 
 /** 全局/npx 引导安装完本地宿主后，后续表单必须在同一份 core 注册表中执行。 */
@@ -55,7 +56,13 @@ export function createInstallationPlan(selection: RuntimePluginSelection): Insta
         if (!selection.protocols.includes(protocol))
             throw new Error(`${profile.displayName} 方案需要 ${protocol}，请返回协议选择页勾选`);
     }
-    return { selection, packages: [...new Set(packages)] };
+    const peers = packages.flatMap(spec =>
+        Object.entries(
+            getExtensionPackageCatalogEntry(spec.slice(0, spec.lastIndexOf("@")))
+                ?.peerDependencies ?? {},
+        ).map(([name, range]) => `${name}@${range}`),
+    );
+    return { selection, packages: [...new Set(packages)], peers: [...new Set(peers)] };
 }
 
 export interface InstallationDependencies {
@@ -151,7 +158,9 @@ export async function installPackages(
                 const output = error instanceof Error ? error.message : "";
                 const hint = /E401|E403|401|403|unauthorized|forbidden/i.test(output)
                     ? "检查包读取权限和 read:packages Token 后重试"
-                    : "检查网络、包管理器及 registry 配置后重试";
+                    : /ERESOLVE|ERR_PNPM_PEER_DEP_ISSUES|ERR_PNPM_NO_MATCHING_VERSION/i.test(output)
+                      ? "检查适配器及 peerDependencies 的版本要求，修复冲突后重试"
+                      : "检查网络、包管理器及 registry 配置后重试";
                 throw new Error(`${spec} 安装失败：${hint}。已完成的依赖保留，账号配置尚未更新。`);
             }
             const separator = spec.lastIndexOf("@");
