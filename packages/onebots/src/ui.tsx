@@ -92,7 +92,12 @@ export async function runUi(options: UiOptions): Promise<void> {
 }
 
 /** Pastel `ui` 路由直接复用的仪表盘，避免嵌套 Ink renderer。 */
-export function OneBotsDashboard({ configPath, scope, url }: UiOptions & { url: string }) {
+export function OneBotsDashboard({
+    configPath,
+    scope,
+    url,
+    onManage,
+}: UiOptions & { url: string; onManage?: () => void }) {
     const controller = useMemo(() => new ServiceController(scope), [scope]);
     const gatewayUrl = useMemo(() => getGatewayUrl(configPath), [configPath]);
     const { exit } = useApp();
@@ -142,6 +147,7 @@ export function OneBotsDashboard({ configPath, scope, url }: UiOptions & { url: 
 
     useInput((input, key) => {
         if (input === "q" || key.escape) return exit();
+        if (input === "c" && onManage) return onManage();
         if (input === "s") void act("启动", "start");
         if (input === "x") void act("停止", "stop");
         if (input === "r") void act("重启", "restart");
@@ -185,6 +191,7 @@ export function OneBotsDashboard({ configPath, scope, url }: UiOptions & { url: 
             )}
             {message && <Text color="yellow">{message}</Text>}
             <Text dimColor>[s] 启动 [x] 停止 [r] 重启 [l] 刷新 [d] 诊断 [o] Web [q] 退出</Text>
+            {onManage && <Text dimColor>[c] 安装与配置向导</Text>}
         </Box>
     );
 }

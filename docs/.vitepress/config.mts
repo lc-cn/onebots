@@ -142,6 +142,7 @@ const baseConfig = defineConfig({
                     "/guide/": [
                         { text: `准备工作`, link: "/guide/prepare" },
                         { text: `快速开始`, link: "/guide/start" },
+                        { text: `终端安装与管理`, link: "/guide/tui" },
                         { text: `Docker 部署`, link: "/guide/docker" },
                         { text: `系统架构`, link: "/guide/architecture" },
                         { text: `客户端SDK`, link: "/guide/client-sdk" },

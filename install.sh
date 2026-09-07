@@ -160,12 +160,24 @@ say "正在安装 OneBots 与匹配的 Web 管理端…"
 
 ONEBOTS_BIN="$RUNTIME_DIR/node_modules/.bin/onebots"
 [ -x "$ONEBOTS_BIN" ] || fail "OneBots 命令安装不完整"
+
 CATALOG_FILE="$RUNTIME_DIR/node_modules/onebots/lib/extension-capability-catalog.json"
 WEB_ENTRY="$RUNTIME_DIR/node_modules/@onebots/web/dist/index.html"
 NESTED_WEB_ENTRY="$RUNTIME_DIR/node_modules/onebots/node_modules/@onebots/web/dist/index.html"
 [ -f "$CATALOG_FILE" ] || fail "OneBots 扩展版本目录缺失，无法选择匹配的默认协议"
 if [ ! -f "$WEB_ENTRY" ] && [ ! -f "$NESTED_WEB_ENTRY" ]; then
     fail "与 OneBots 匹配的 Web 管理端产物缺失"
+fi
+
+# 交互安装先收集所有扩展选择，再由 TUI 安装与验证；自动化流程保持可脚本化。
+if [ -t 0 ] && [ -t 1 ] && [ "${ONEBOTS_NONINTERACTIVE:-0}" != 1 ]; then
+    rollback_onebots=false
+    say "OneBots 主程序已就绪，进入适配器、协议和框架选择向导。"
+    (
+        cd "$RUNTIME_DIR"
+        ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" tui --setup -c "$CONFIG_FILE"
+    )
+    exit 0
 fi
 
 if [ "$config_exists" = false ]; then

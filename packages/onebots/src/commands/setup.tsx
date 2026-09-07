@@ -3,6 +3,8 @@ import { z } from "zod";
 import { CommandRunner } from "../cli/command-runner.js";
 import { setupConfiguration } from "../cli/command-application.js";
 import { runtimeOptions } from "../cli/command-options.js";
+import { normalizeRuntimeOptions } from "../cli/command-application.js";
+import { OneBotsTui } from "../tui/app.js";
 
 export const description = "引导创建或更新 OneBots 配置";
 export const options = runtimeOptions.extend({
@@ -11,5 +13,13 @@ export const options = runtimeOptions.extend({
 });
 
 export default function SetupCommand({ options: input }: { options: z.infer<typeof options> }) {
+    if (process.stdin.isTTY && process.stdout.isTTY && !input.force && !input.reset) {
+        const runtime = normalizeRuntimeOptions(input);
+        const selection =
+            runtime.adapters.length || runtime.protocols.length || runtime.applications.length
+                ? runtime
+                : undefined;
+        return <OneBotsTui configPath={runtime.configPath} setup selection={selection} />;
+    }
     return <CommandRunner execute={() => setupConfiguration(input)} />;
 }

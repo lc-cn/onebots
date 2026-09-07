@@ -102,6 +102,14 @@ try {
     if (-not (Test-Path $WebEntry) -and -not (Test-Path $NestedWebEntry)) {
         throw "与 OneBots 匹配的 Web 管理端产物缺失"
     }
+    if (-not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected -and $env:ONEBOTS_NONINTERACTIVE -ne "1") {
+        $RollbackOneBots = $false
+        $env:ONEBOTS_EXTENSION_ROOT = $RuntimeDir
+        Write-Step "OneBots 主程序已就绪，进入适配器、协议和框架选择向导。"
+        Invoke-Checked -FilePath $OneBots -Arguments @("tui", "--setup", "-c", $ConfigFile)
+        return
+    }
+
     if (-not $ConfigExists) {
         $Catalog = Get-Content $CatalogFile -Raw | ConvertFrom-Json
         $ProtocolVersion = $Catalog.packages.'@onebots/protocol-onebot-v11'.version
