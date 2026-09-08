@@ -25,12 +25,7 @@ import type {
 import type { ClearSessionOptions, IlinkBotOptions } from "./ilink-options.js";
 import { mapInboundWirePacket } from "./protocol/inbound-mapper.js";
 import { allocateLoginTicket, awaitLoginTicketResolution } from "./login/qr-handshake.js";
-import {
-    postFileBundle,
-    postLiteralReply,
-    postPhotoBundle,
-    postVideoBundle,
-} from "./outbound/assembler.js";
+import { createOutboundSender } from "./outbound/assembler.js";
 import { IlinkJsonTransport } from "./transport/ilink-json-transport.js";
 import { JsonFileCredentialStore, MemoryCredentialStore } from "./state/persist.js";
 import {
@@ -70,6 +65,7 @@ export class IlinkBot extends EventEmitter<IlinkBotEvents> {
     private readonly receivedEvents = new RecentEventDeduplicator<string>();
     private readonly contextTokenStore?: ClawbotContextTokenStore;
     private readonly contextTokenAccountKey?: string;
+    private readonly outbound: ReturnType<typeof createOutboundSender>;
     private didMigrateContextTokensFromFile = false;
     private contextTokensCarryover: Record<string, string> | null = null;
 
@@ -103,6 +99,7 @@ export class IlinkBot extends EventEmitter<IlinkBotEvents> {
 
         this.contextTokenStore = options.contextTokenStore;
         this.contextTokenAccountKey = options.contextTokenAccountKey;
+        this.outbound = createOutboundSender(this.transport, options.outboundTextFormat ?? "plain");
 
         this.pollKnobs =
             typeof options.polling === "object"
@@ -311,7 +308,7 @@ export class IlinkBot extends EventEmitter<IlinkBotEvents> {
     ): Promise<{ messageId: string }> {
         await this.ensureSessionLoaded();
         const ctx = await this.obtainReplyContext(chatId, options.contextToken);
-        return postLiteralReply(this.transport, chatId, ctx, text);
+        return this.outbound.postText(chatId, ctx, text);
     }
 
     async sendPhotoToUser(
@@ -329,7 +326,7 @@ export class IlinkBot extends EventEmitter<IlinkBotEvents> {
             filename: options.filename,
             contentType: options.contentType,
         });
-        const mid = await postPhotoBundle(this.transport, chatId, ctx, staged, options.caption);
+        const mid = await this.outbound.postPhoto(chatId, ctx, staged, options.caption);
         return { messageId: mid };
     }
 
@@ -348,7 +345,7 @@ export class IlinkBot extends EventEmitter<IlinkBotEvents> {
             filename: options.filename,
             contentType: options.contentType,
         });
-        const mid = await postVideoBundle(this.transport, chatId, ctx, staged, options.caption);
+        const mid = await this.outbound.postVideo(chatId, ctx, staged, options.caption);
         return { messageId: mid };
     }
 
@@ -371,7 +368,7 @@ export class IlinkBot extends EventEmitter<IlinkBotEvents> {
             filename: blob.fileName,
             contentType: blob.contentType,
         });
-        const mid = await postFileBundle(this.transport, chatId, ctx, staged, options.caption);
+        const mid = await this.outbound.postFile(chatId, ctx, staged, options.caption);
         return { messageId: mid };
     }
 

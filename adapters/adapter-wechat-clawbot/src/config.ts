@@ -12,6 +12,15 @@ export function assertWechatClawbotConfig(config: WechatClawbotConfig): void {
             "微信 ClawBot receive_mode 必须是 polling 或 manual",
         );
     }
+    if (
+        config.outbound_text_format !== undefined &&
+        !["plain", "markdown"].includes(config.outbound_text_format)
+    ) {
+        throw new GatewayFault(
+            "INVALID_CONFIG",
+            "微信 ClawBot outbound_text_format 必须是 plain 或 markdown",
+        );
+    }
     assertIntegerRange("qr_login_timeout_ms", config.qr_login_timeout_ms, 60_000);
     assertIntegerRange("polling_timeout_ms", config.polling_timeout_ms, 1_000);
     assertIntegerRange(

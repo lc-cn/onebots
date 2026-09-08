@@ -65,6 +65,7 @@ export class WechatIlinkBot extends IlinkBot {
             polling: false,
             contextTokenStore: store,
             contextTokenAccountKey: store ? config.account_id : undefined,
+            outboundTextFormat: config.outbound_text_format,
         });
         this.cfg = config;
         this.on("credential_stale", (_err: StaleCredentialFault) => {

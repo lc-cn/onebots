@@ -1,6 +1,8 @@
 import type { ClawbotContextTokenStore } from "../context-token-store.js";
 import type { CredentialBlob, PollingOptions, SessionStore } from "./protocol/chat-event.js";
 
+export type OutboundTextFormat = "plain" | "markdown";
+
 export interface IlinkBotOptions {
     session?: Partial<CredentialBlob> | null;
     sessionStore?: SessionStore | string;
@@ -10,6 +12,8 @@ export interface IlinkBotOptions {
     cdnBaseUrl?: string;
     routeTag?: string;
     polling?: boolean | PollingOptions;
+    /** 出站文本格式；plain 去除 Markdown 标记但保留换行，markdown 原样透传。 */
+    outboundTextFormat?: OutboundTextFormat;
     /** context_token 由宿主统一存储时注入；SDK 不再把它写入会话 JSON。 */
     contextTokenStore?: ClawbotContextTokenStore;
     /** 宿主中的稳定账号键，与 contextTokenStore 成对使用。 */

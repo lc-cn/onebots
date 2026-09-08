@@ -253,6 +253,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         const wc: WechatIlinkRuntimeConfig = {
             account_id: config.account_id,
             receive_mode: config.receive_mode,
+            outbound_text_format: config.outbound_text_format,
             base_url: ILINK_HTTP_ORIGIN_DEFAULT,
             cdn_base_url: ILINK_CDN_ROOT_DEFAULT,
             bot_type: ILINK_QR_BOT_CLASS_DEFAULT,

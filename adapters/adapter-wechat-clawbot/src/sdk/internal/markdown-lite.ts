@@ -1,4 +1,6 @@
-/** 将常见 Markdown 压成纯文本 */
+import type { OutboundTextFormat } from "../ilink-options.js";
+
+/** 将常见 Markdown 转成纯文本，同时保留适合聊天阅读的段落换行。 */
 export function coercePlainMarkdown(source: string): string {
     const lines = source.split(/\r?\n/);
     const acc: string[] = [];
@@ -14,9 +16,14 @@ export function coercePlainMarkdown(source: string): string {
         line = line.replace(/!\[[^\]]*]\([^)]*\)/g, "");
         line = line.replace(/\[([^\]]+)]\([^)]*\)/g, "$1");
         line = line.replace(/[*_~]+/g, "");
-        if (line.trim()) acc.push(line.trimEnd());
+        acc.push(line.trimEnd());
     }
-    let flat = acc.join("\n").replace(/\|/g, " ");
-    flat = flat.replace(/\s+/g, " ");
-    return flat.trim();
+    let plain = acc.join("\n").replace(/\|/g, " ");
+    plain = plain.replace(/[^\S\r\n]+/g, " ").replace(/\n{3,}/g, "\n\n");
+    return plain.trim();
+}
+
+/** 按账号配置选择 Markdown 原样透传或兼容纯文本。 */
+export function formatOutboundText(source: string, format: OutboundTextFormat = "plain"): string {
+    return format === "markdown" ? source : coercePlainMarkdown(source);
 }

@@ -1,3 +1,5 @@
+import type { OutboundTextFormat } from "./sdk/ilink-options.js";
+
 /**
  * 微信 ClawBot（iLink Bot HTTP）适配器配置
  *
@@ -15,6 +17,8 @@ export interface WechatClawbotConfig {
     account_id: string;
     /** 事件接收方式；manual 由已有 Host 调用 `WechatIlinkBot.ingest()` */
     receive_mode?: "polling" | "manual";
+    /** 出站文本格式；plain 去 Markdown 标记但保留换行，markdown 原样透传。 */
+    outbound_text_format?: OutboundTextFormat;
     /** 扫码登录总超时（毫秒），默认 480000 */
     qr_login_timeout_ms?: number;
     /** getupdates 长轮询超时（毫秒） */

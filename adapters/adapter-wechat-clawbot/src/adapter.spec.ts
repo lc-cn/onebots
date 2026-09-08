@@ -53,6 +53,15 @@ describe("WechatClawbotAdapter 身份契约", () => {
         expect(account.info.startupTimeoutSeconds).toBe(480);
     });
 
+    it("将出站文本格式传入 iLink 运行时", () => {
+        const account = adapter.createAccount({
+            ...config,
+            outbound_text_format: "markdown",
+        });
+
+        expect(account.client.getConfig().outbound_text_format).toBe("markdown");
+    });
+
     it("恢复会话后登录信息与事件都使用真实 ilink_bot_id", async () => {
         const account = adapter.createAccount(config);
         adapter.accounts.set(config.account_id, account);

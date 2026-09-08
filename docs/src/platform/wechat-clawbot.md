@@ -22,6 +22,7 @@
 - 可取消的无限长轮询、指数退避与 iLink `notifystart` / `notifystop` 生命周期
 - `receive_mode: manual` 复用登录态与出站 API，但不创建 `getupdates`；已有 Host 通过 `await WechatIlinkBot.ingest()` 投递原始事件，协议投影成功后才提交事件身份
 - 文本、图片、视频、文件双向收发，语音与未知 item 无损接收
+- 出站文本可选择 `plain` 或 `markdown`；纯文本模式仍保留换行，Markdown 模式原样交给客户端渲染
 - 复合消息、引用消息与工具调用进度按原顺序投影，并始终保留 `raw_event`
 - `context_token` 写入主库 SQLite；回复依赖对端先发或显式传入有效 token
 - Web 管理端验证流动态展示二维码或数字配对码输入框
@@ -43,6 +44,7 @@ pnpm add @onebots/adapter-wechat-clawbot
 ```yaml
 wechat-clawbot.my_bot:
   receive_mode: polling # 或 manual
+  outbound_text_format: markdown # plain（默认）或 markdown
 ```
 
 ```bash

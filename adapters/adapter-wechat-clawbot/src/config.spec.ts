@@ -9,6 +9,21 @@ describe("微信 ClawBot 配置", () => {
         ).not.toThrow();
         expect(resolveWechatClawbotReceiveMode({})).toBe("polling");
         expect(resolveWechatClawbotReceiveMode({ receive_mode: "manual" })).toBe("manual");
+        expect(() =>
+            assertWechatClawbotConfig({
+                account_id: "bot",
+                outbound_text_format: "markdown",
+            }),
+        ).not.toThrow();
+    });
+
+    it("拒绝未知出站文本格式", () => {
+        expect(() =>
+            assertWechatClawbotConfig({
+                account_id: "bot",
+                outbound_text_format: "html" as never,
+            }),
+        ).toThrowError(expect.objectContaining({ code: "INVALID_CONFIG" }));
     });
 
     it("拒绝未知接收模式", () => {
