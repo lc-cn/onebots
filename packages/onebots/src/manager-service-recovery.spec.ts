@@ -95,13 +95,13 @@ function fixture(action: ManagerServiceAction = "stop") {
         bytes: fs.readFileSync(path.join(workspace, file)),
     }));
     const journal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
-    const capture = action === "uninstall" ? captureManagerServiceRemoval(spec, host) : undefined;
+    const capture = ["uninstall", "upgrade"].includes(action) ? captureManagerServiceRemoval(spec, host) : undefined;
     const record = journal.prepare({
         id: "operation",
         action,
         spec,
         desiredEnabled: action !== "uninstall",
-        ...(capture
+        ...(capture && action === "uninstall"
             ? {
                   removal: {
                       platform: "linux" as const,
@@ -110,6 +110,12 @@ function fixture(action: ManagerServiceAction = "stop") {
                   },
               }
             : {}),
+        ...(capture && action === "upgrade" ? { upgrade: {
+            previousSpec: { ...spec, binPath: "/app/old-bin.js" },
+            previousCandidateDigest: "a".repeat(64), candidateDigest: "b".repeat(64),
+            snapshot: { platform: "linux" as const, files: capture.snapshot,
+                initial: { enabled: true, processId: null, identity: null } },
+        } } : {}),
     });
     capture?.dispose();
     if (action === "uninstall") {
@@ -157,6 +163,15 @@ function fixture(action: ManagerServiceAction = "stop") {
     };
 }
 describe("manager service explicit target-state reconciliation", () => {
+    it("升级操作不能通过普通停止对账误标完成，保留文件及恢复门禁", async () => {
+        const f = fixture("upgrade");
+        await expect(reconcileManagerServiceOperation("operation", "user", f.host, {
+            platform: f.platform,
+        })).rejects.toThrow("未重放系统动作");
+        expect(f.effects).toEqual([]);
+        expect(f.journal.read("operation").recoveryRequired).toBe(true);
+        for (const saved of f.saved) expect(fs.readFileSync(saved.file)).toEqual(saved.bytes);
+    });
     it("rechecks the target instead of trusting a completed operation on repeat", async () => {
         const f = fixture();
         await reconcileManagerServiceOperation("operation", "user", f.host, {

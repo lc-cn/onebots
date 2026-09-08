@@ -5,12 +5,22 @@ import {
 import { createHash } from "node:crypto";
 import { parseManagerServiceSpec, type ManagerServiceSpec } from "./manager-service-spec.js";
 import {
+    parseManagerServiceUpgrade,
+    type ManagerServiceUpgrade,
+} from "./manager-service-upgrade-record.js";
+import {
     ServiceOperationStorage,
     canonicalServiceJson,
     closedServiceObject,
 } from "./service-operation-storage.js";
 
-export type ManagerServiceAction = "start" | "stop" | "restart" | "install" | "uninstall";
+export type ManagerServiceAction =
+    | "start"
+    | "stop"
+    | "restart"
+    | "install"
+    | "uninstall"
+    | "upgrade";
 export type ManagerServicePhase =
     | "prepared"
     | "stopping"
@@ -35,6 +45,7 @@ export interface ManagerServiceRecord {
     managerSpec: ManagerServiceSpec;
     managerSpecDigest: string;
     removal?: ManagerServiceRemoval;
+    upgrade?: ManagerServiceUpgrade;
 }
 export interface ManagerServicePreparation {
     id: string;
@@ -42,8 +53,9 @@ export interface ManagerServicePreparation {
     desiredEnabled: boolean;
     spec: ManagerServiceSpec;
     removal?: ManagerServiceRemoval;
+    upgrade?: ManagerServiceUpgrade;
 }
-const actions = ["start", "stop", "restart", "install", "uninstall"];
+const actions = ["start", "stop", "restart", "install", "uninstall", "upgrade"];
 const phases = [
     "prepared",
     "stopping",
@@ -59,6 +71,16 @@ const phases = [
     "completed",
 ];
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
+const upgradePhases: ManagerServicePhase[] = [
+    "prepared",
+    "stopping",
+    "writing",
+    "restoring-enablement",
+    "starting",
+    "verifying",
+    "releasing",
+    "completed",
+];
 const failure = () => new Error("管理服务操作记录未确认或已损坏，禁止继续操作");
 
 /**
@@ -121,6 +143,7 @@ export class FileManagerServiceJournal {
                 "desiredEnabled",
                 "spec",
                 ...(Object.hasOwn(input, "removal") ? ["removal"] : []),
+                ...(Object.hasOwn(input, "upgrade") ? ["upgrade"] : []),
             ]);
             const spec = parseManagerServiceSpec(value.spec);
             const record = parseManagerServiceRecord({
@@ -131,6 +154,7 @@ export class FileManagerServiceJournal {
                 managerSpec: spec,
                 managerSpecDigest: digest(spec),
                 ...(Object.hasOwn(value, "removal") ? { removal: value.removal } : {}),
+                ...(Object.hasOwn(value, "upgrade") ? { upgrade: value.upgrade } : {}),
                 phase: "prepared",
                 status: "running",
                 recoveryRequired: false,
@@ -162,7 +186,9 @@ export class FileManagerServiceJournal {
                 record.desiredEnabled !== previous.desiredEnabled ||
                 record.managerSpecDigest !== previous.managerSpecDigest ||
                 canonicalServiceJson(record.removal ?? null) !==
-                    canonicalServiceJson(previous.removal ?? null)
+                    canonicalServiceJson(previous.removal ?? null) ||
+                canonicalServiceJson(record.upgrade ?? null) !==
+                    canonicalServiceJson(previous.upgrade ?? null)
             )
                 throw failure();
             if (
@@ -176,6 +202,14 @@ export class FileManagerServiceJournal {
             )
                 throw failure();
             if (previous.status === "interrupted" && record.status === "running") throw failure();
+            if (record.action === "upgrade" && record.phase !== previous.phase) {
+                const sequence = upgradePhases.filter(
+                    phase =>
+                        phase !== "starting" || record.upgrade?.snapshot.initial.processId !== null,
+                );
+                if (sequence.indexOf(record.phase) !== sequence.indexOf(previous.phase) + 1)
+                    throw failure();
+            }
             this.storage.write(`${record.id}.json`, record);
         } catch {
             throw failure();
@@ -195,6 +229,9 @@ export function parseManagerServiceRecord(input: unknown): ManagerServiceRecord 
         "managerSpecDigest",
         ...(input && typeof input === "object" && Object.hasOwn(input, "removal")
             ? ["removal"]
+            : []),
+        ...(input && typeof input === "object" && Object.hasOwn(input, "upgrade")
+            ? ["upgrade"]
             : []),
     ]);
     const spec = parseManagerServiceSpec(value.managerSpec);
@@ -223,6 +260,17 @@ export function parseManagerServiceRecord(input: unknown): ManagerServiceRecord 
     if (hasRemoval) {
         value.removal = parseManagerServiceRemovalSnapshot(value.removal);
         if (value.desiredEnabled !== false) throw failure();
+    }
+    const hasUpgrade = Object.hasOwn(value, "upgrade");
+    if ((value.action === "upgrade") !== hasUpgrade) throw failure();
+    if (hasUpgrade) {
+        const upgrade = parseManagerServiceUpgrade(value.upgrade, spec, value.desiredEnabled);
+        value.upgrade = upgrade;
+        if (
+            !upgradePhases.includes(value.phase as ManagerServicePhase) ||
+            (value.phase === "starting" && upgrade.snapshot.initial.processId === null)
+        )
+            throw failure();
     }
     if (
         ["removing-definition", "unregistering", "removing-metadata"].includes(
