@@ -211,15 +211,30 @@ async function quiet(control: string, neverStarted = false): Promise<boolean> {
 export async function verifyServiceMigrationProcesses(workspace: string): Promise<boolean> {
     let release: (() => void) | undefined;
     try {
-        const control = root(workspace);
+        root(workspace); // 保留加锁前只读边界检查，不替未知目录初始化管理状态。
         release = acquireControlWorkspace(workspace);
+        return await verifyServiceMigrationProcessesWhileLocked(workspace);
+    } catch {
+        return false;
+    } finally {
+        release?.();
+    }
+}
+
+/**
+ * 调用方必须已持workspace锁，并在后续文件删除/恢复完成前继续持有。
+ * 不自行加锁或释放；全部私有凭据、PID/进程组及worker证据与普通入口一致。
+ */
+export async function verifyServiceMigrationProcessesWhileLocked(
+    workspace: string,
+): Promise<boolean> {
+    try {
+        const control = root(workspace);
         const receipt = readReceipt(control);
         if (receipt.pid !== null && !gone(receipt.pid)) return false;
         return await quiet(control, receipt.phase === "never-started");
     } catch {
         return false;
-    } finally {
-        release?.();
     }
 }
 

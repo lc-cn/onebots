@@ -1,3 +1,7 @@
+import {
+    parseManagerServiceRemovalSnapshot,
+    type ManagerServiceRemoval,
+} from "./manager-service-removal-snapshot.js";
 import { createHash } from "node:crypto";
 import { parseManagerServiceSpec, type ManagerServiceSpec } from "./manager-service-spec.js";
 import {
@@ -13,6 +17,9 @@ export type ManagerServicePhase =
     | "restoring-enablement"
     | "starting"
     | "writing"
+    | "removing-definition"
+    | "unregistering"
+    | "removing-metadata"
     | "removing"
     | "verifying"
     | "releasing"
@@ -27,12 +34,14 @@ export interface ManagerServiceRecord {
     desiredEnabled: boolean;
     managerSpec: ManagerServiceSpec;
     managerSpecDigest: string;
+    removal?: ManagerServiceRemoval;
 }
 export interface ManagerServicePreparation {
     id: string;
     action: ManagerServiceAction;
     desiredEnabled: boolean;
     spec: ManagerServiceSpec;
+    removal?: ManagerServiceRemoval;
 }
 const actions = ["start", "stop", "restart", "install", "uninstall"];
 const phases = [
@@ -42,6 +51,9 @@ const phases = [
     "starting",
     "writing",
     "removing",
+    "removing-definition",
+    "unregistering",
+    "removing-metadata",
     "verifying",
     "releasing",
     "completed",
@@ -82,7 +94,13 @@ export class FileManagerServiceJournal {
     }
     prepare(input: ManagerServicePreparation): ManagerServiceRecord {
         try {
-            const value = closedServiceObject(input, ["id", "action", "desiredEnabled", "spec"]);
+            const value = closedServiceObject(input, [
+                "id",
+                "action",
+                "desiredEnabled",
+                "spec",
+                ...(Object.hasOwn(input, "removal") ? ["removal"] : []),
+            ]);
             const spec = parseManagerServiceSpec(value.spec);
             const record = parseManagerServiceRecord({
                 schemaVersion: 1,
@@ -91,6 +109,7 @@ export class FileManagerServiceJournal {
                 desiredEnabled: value.desiredEnabled,
                 managerSpec: spec,
                 managerSpecDigest: digest(spec),
+                ...(Object.hasOwn(value, "removal") ? { removal: value.removal } : {}),
                 phase: "prepared",
                 status: "running",
                 recoveryRequired: false,
@@ -120,7 +139,9 @@ export class FileManagerServiceJournal {
             if (
                 record.action !== previous.action ||
                 record.desiredEnabled !== previous.desiredEnabled ||
-                record.managerSpecDigest !== previous.managerSpecDigest
+                record.managerSpecDigest !== previous.managerSpecDigest ||
+                canonicalServiceJson(record.removal ?? null) !==
+                    canonicalServiceJson(previous.removal ?? null)
             )
                 throw failure();
             if (
@@ -151,6 +172,9 @@ export function parseManagerServiceRecord(input: unknown): ManagerServiceRecord 
         "desiredEnabled",
         "managerSpec",
         "managerSpecDigest",
+        ...(input && typeof input === "object" && Object.hasOwn(input, "removal")
+            ? ["removal"]
+            : []),
     ]);
     const spec = parseManagerServiceSpec(value.managerSpec);
     if (
@@ -172,6 +196,19 @@ export function parseManagerServiceRecord(input: unknown): ManagerServiceRecord 
     if (value.status === "succeeded" && (value.phase !== "completed" || value.recoveryRequired))
         throw failure();
     if (value.status === "failed" && !value.recoveryRequired && value.phase !== "completed")
+        throw failure();
+    const hasRemoval = Object.hasOwn(value, "removal");
+    if ((value.action === "uninstall") !== hasRemoval) throw failure();
+    if (hasRemoval) {
+        value.removal = parseManagerServiceRemovalSnapshot(value.removal);
+        if (value.desiredEnabled !== false) throw failure();
+    }
+    if (
+        ["removing-definition", "unregistering", "removing-metadata"].includes(
+            String(value.phase),
+        ) &&
+        value.action !== "uninstall"
+    )
         throw failure();
     return { ...value, managerSpec: spec } as unknown as ManagerServiceRecord;
 }

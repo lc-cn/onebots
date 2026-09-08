@@ -254,13 +254,23 @@ export class LaunchdServicePlatform implements ServicePlatform {
         try {
             const deadline = this.now() + this.timeout;
             const before = await this.inspectWithin(deadline);
-            if (!["running", "stopped"].includes(before.state)) unavailable();
-            if (before.running ? !before.identity : !before.quiescent) unavailable();
+            if (!["running", "stopped", "failed"].includes(before.state)) unavailable();
+            // 冷启动看到已退出但仍 loaded 的 job，并不代表后代全部退出。
+            // 可以注销已稳定确认的固定 job，但只有 bootout 后的完整持久证据才能确认停机。
+            const coldLoaded =
+                before.loaded &&
+                !before.running &&
+                before.processId === null &&
+                !this.unprovenGroup &&
+                Boolean(this.confirmUnloadedProcesses);
+            if (before.running ? !before.identity : !before.quiescent && !coldLoaded) unavailable();
             this.command(["disable", this.target], deadline);
             const disabled = await this.inspectWithin(deadline);
             if (
                 disabled.enabled ||
                 disabled.identity !== before.identity ||
+                disabled.processId !== before.processId ||
+                disabled.state !== before.state ||
                 disabled.loaded !== before.loaded
             )
                 unavailable();

@@ -10,6 +10,7 @@ import {
     closeServiceProcessOwnership,
     prepareServiceProcessOwnershipSeed,
     verifyServiceMigrationProcesses,
+    verifyServiceMigrationProcessesWhileLocked,
 } from "./service-migration-processes.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
 import {
@@ -221,5 +222,49 @@ describe("管理服务迁移进程证明", () => {
                 method: "GET",
             }),
         ).toBeNull();
+    });
+});
+
+describe("caller-owned workspace lock process verification", () => {
+    it("verifies inside the caller's real lock without releasing it while the wrapper remains exclusive", async () => {
+        const f = fixture();
+        const unlock = acquireControlWorkspace(f.workspace);
+        try {
+            expect(await verifyServiceMigrationProcessesWhileLocked(f.workspace)).toBe(true);
+            expect(await verifyServiceMigrationProcesses(f.workspace)).toBe(false);
+            expect(() => acquireControlWorkspace(f.workspace)).toThrow();
+            expect(await verifyServiceMigrationProcessesWhileLocked(f.workspace)).toBe(true);
+            expect(() => acquireControlWorkspace(f.workspace)).toThrow();
+        } finally {
+            unlock();
+        }
+        expect(await verifyServiceMigrationProcesses(f.workspace)).toBe(true);
+    });
+    it("does not relax damaged owner or gateway uncertainty when caller already holds the lock", async () => {
+        const f = fixture();
+        const unlock = acquireControlWorkspace(f.workspace);
+        try {
+            f.save({ ...f.state, recoveryRequired: true });
+            expect(await verifyServiceMigrationProcessesWhileLocked(f.workspace)).toBe(false);
+            f.save();
+            fs.writeFileSync(path.join(f.control, "process-ownership.json"), "synthetic-secret");
+            expect(await verifyServiceMigrationProcessesWhileLocked(f.workspace)).toBe(false);
+            expect(() => acquireControlWorkspace(f.workspace)).toThrow();
+        } finally {
+            unlock();
+        }
+    });
+    it("still rejects an active manager and never alters its ownership record", async () => {
+        const f = fixture();
+        const unlock = acquireControlWorkspace(f.workspace);
+        try {
+            expect(await claimServiceProcessOwnership(f.workspace, randomUUID(), false)).toBe(true);
+            const file = path.join(f.control, "process-ownership.json"),
+                before = fs.readFileSync(file);
+            expect(await verifyServiceMigrationProcessesWhileLocked(f.workspace)).toBe(false);
+            expect(fs.readFileSync(file)).toEqual(before);
+        } finally {
+            unlock();
+        }
     });
 });

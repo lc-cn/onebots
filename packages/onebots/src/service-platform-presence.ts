@@ -34,7 +34,7 @@ export function isLaunchdServiceMissing(
     );
 }
 
-/** 首次安装写文件前、服务级锁内调用；不存在只能由固定 OS 身份的明确结果证明。 */
+/** 首次安装前或卸载验收时在服务锁内调用；不存在只能由固定 OS 身份的明确结果证明。 */
 export function assertServiceAbsent(scope: ServiceScope, host: ServiceHost): void {
     try {
         if (!["user", "system"].includes(scope) || (scope === "user" && !validUid(host.uid)))

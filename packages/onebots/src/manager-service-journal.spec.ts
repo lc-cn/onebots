@@ -9,6 +9,26 @@ afterEach(() => {
     vi.restoreAllMocks();
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
+function removal(enabled = true) {
+    const file = {
+        sha256: "a".repeat(64),
+        dev: "1",
+        ino: "2",
+        uid: 501,
+        mode: 0o644,
+        size: 32,
+        ctimeNs: "10",
+        mtimeNs: "10",
+    };
+    return {
+        platform: "linux" as const,
+        files: {
+            definition: { ...file, path: "/tmp/onebots-gateway.service" },
+            metadata: { ...file, path: "/tmp/service.json", mode: 0o600, ino: "3" },
+        },
+        initial: { enabled, processId: null, identity: null },
+    };
+}
 function fixture() {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "manager-operation-")));
     roots.push(root);
@@ -33,14 +53,15 @@ describe("ordinary manager service operation journal", () => {
             const record = test.journal.prepare({
                 id: "op-1",
                 action,
-                desiredEnabled: true,
+                ...(action === "uninstall" ? { removal: removal() } : {}),
+                desiredEnabled: action !== "uninstall",
                 spec: test.spec,
             });
             test.spec.host = "0.0.0.0";
             expect(record).toMatchObject({
                 status: "running",
                 phase: "prepared",
-                desiredEnabled: true,
+                desiredEnabled: action !== "uninstall",
                 managerSpec: { host: "127.0.0.1" },
             });
             expect(record.managerSpecDigest).toMatch(/^[0-9a-f]{64}$/);
@@ -52,6 +73,7 @@ describe("ordinary manager service operation journal", () => {
                 "managerSpecDigest",
                 "phase",
                 "recoveryRequired",
+                ...(action === "uninstall" ? ["removal"] : []),
                 "schemaVersion",
                 "status",
             ]);
@@ -72,6 +94,7 @@ describe("ordinary manager service operation journal", () => {
         const record = test.journal.prepare({
             id: "op-1",
             action: "uninstall",
+            removal: removal(false),
             desiredEnabled: false,
             spec: test.spec,
         });
@@ -198,4 +221,65 @@ describe("ordinary manager service operation journal", () => {
         });
         expect(new FileManagerServiceJournal(test.root).health().recoveryRequired).toBe(true);
     });
+});
+
+it("uninstall requires closed immutable snapshot and permits each durable removal phase", () => {
+    const test = fixture();
+    const input = {
+        id: "remove",
+        action: "uninstall" as const,
+        desiredEnabled: false,
+        spec: test.spec,
+    };
+    expect(() => test.journal.prepare(input)).toThrow();
+    for (const snapshot of [
+        { ...removal(), token: "secret" },
+        {
+            ...removal(),
+            files: {
+                ...removal().files,
+                metadata: { ...removal().files.metadata, path: "relative" },
+            },
+        },
+        {
+            ...removal(),
+            files: { ...removal().files, definition: { ...removal().files.definition, ino: "01" } },
+        },
+    ])
+        expect(() => test.journal.prepare({ ...input, removal: snapshot })).toThrow();
+    expect(() =>
+        test.journal.prepare({ ...input, desiredEnabled: true, removal: removal() }),
+    ).toThrow();
+    const snapshot = removal();
+    const record = test.journal.prepare({ ...input, removal: snapshot });
+    expect(record.removal?.initial.enabled).toBe(true);
+    expect(() => test.journal.save({ ...record, removal: removal(false) })).toThrow();
+    snapshot.files.definition.sha256 = "b".repeat(64);
+    expect(record.removal?.files.definition.sha256).toBe("a".repeat(64));
+    expect(() => test.journal.save({ ...record, removal: snapshot })).toThrow();
+    for (const phase of ["removing-definition", "unregistering", "removing-metadata"] as const) {
+        test.journal.save({ ...record, phase });
+        expect(test.journal.read(record.id).phase).toBe(phase);
+    }
+    const cold = new FileManagerServiceJournal(test.root);
+    expect(cold.health().recoveryRequired).toBe(true);
+    expect(cold.read(record.id).removal).toEqual(removal());
+});
+it("non-uninstall refuses snapshots; legacy uninstall without snapshot stays untouched and blocked", () => {
+    const test = fixture();
+    const input = { id: "old", action: "stop" as const, desiredEnabled: true, spec: test.spec };
+    expect(() => test.journal.prepare({ ...input, removal: removal() })).toThrow();
+    const record = test.journal.prepare(input);
+    const legacy = JSON.stringify({
+        ...record,
+        action: "uninstall",
+        phase: "completed",
+        status: "succeeded",
+    });
+    const file = path.join(test.root, "old.json");
+    fs.writeFileSync(file, legacy);
+    const cold = new FileManagerServiceJournal(test.root);
+    expect(cold.health().recoveryRequired).toBe(true);
+    expect(() => cold.read("old")).toThrow();
+    expect(fs.readFileSync(file, "utf8")).toBe(legacy);
 });

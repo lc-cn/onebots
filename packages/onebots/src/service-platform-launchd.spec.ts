@@ -83,6 +83,60 @@ function fixture(options: LaunchdServicePlatformOptions = {}) {
 }
 
 describe("launchd service platform", () => {
+    it.each(["not running", "crashed"])(
+        "unloads a stable cold %s job before consulting durable process proof",
+        async rawState => {
+            const proof = vi.fn(async () => {
+                expect(f.state.loaded).toBe(false);
+                expect(f.calls.some(call => call[1] === "bootout")).toBe(true);
+                return true;
+            });
+            const f = fixture({ confirmUnloadedProcesses: proof });
+            Object.assign(f.state, { running: false, rawState });
+            expect(await f.platform.inspect()).toMatchObject({
+                state: rawState === "crashed" ? "failed" : "stopped",
+                quiescent: false,
+            });
+            expect(proof).not.toHaveBeenCalled();
+            await f.platform.quiesce();
+            expect(await f.platform.inspect()).toMatchObject({
+                state: "stopped",
+                loaded: false,
+                enabled: false,
+                quiescent: true,
+            });
+            expect(
+                f.calls
+                    .filter(call => ["disable", "bootout"].includes(call[1]))
+                    .map(call => call[1]),
+            ).toEqual(["disable", "bootout"]);
+            expect(f.probes).toEqual([]); // No PID is guessed for the cold instance.
+        },
+    );
+    it("does not declare a cold failed job stopped when its durable proof stays false", async () => {
+        const proof = vi.fn(async () => false);
+        const f = fixture({ confirmUnloadedProcesses: proof });
+        Object.assign(f.state, { running: false, rawState: "crashed" });
+        await expect(f.platform.quiesce()).rejects.toThrow("无法安全确认");
+        expect(f.calls.some(call => call[1] === "bootout")).toBe(true);
+        expect(proof).toHaveBeenCalled();
+        expect((await f.platform.inspect()).quiescent).toBe(false);
+    });
+    it.each(["pid", "path"])("rejects cold job %s changes before bootout", async change => {
+        const f = fixture({ confirmUnloadedProcesses: async () => true });
+        Object.assign(f.state, { running: false, rawState: "crashed" });
+        const original = f.host.exec;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args[0] === "disable") {
+                if (change === "path") f.state.path = "/other.plist";
+                else Object.assign(f.state, { running: true, rawState: "running" });
+            }
+            return output;
+        };
+        await expect(f.platform.quiesce()).rejects.toThrow("无法安全确认");
+        expect(f.calls.some(call => call[1] === "bootout")).toBe(false);
+    });
     it("uses durable manager ownership proof only for an explicitly unloaded cold instance", async () => {
         const proof = vi.fn(async () => true);
         const f = fixture({ confirmUnloadedProcesses: proof });
