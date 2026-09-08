@@ -25,7 +25,7 @@ function object(value: unknown): Record<string, unknown> {
         throw failure();
     return value as Record<string, unknown>;
 }
-function privateSocket(workspace: string): string {
+export function inspectPrivateControlSocket(workspace: string): string {
     if (
         process.platform === "win32" ||
         !path.isAbsolute(workspace) ||
@@ -125,12 +125,12 @@ function parseStatus(input: unknown): MigrationManagerState {
 }
 export async function inspectMigrationManager(workspace: string): Promise<MigrationManagerState> {
     try {
-        const identity = privateSocket(workspace);
+        const identity = inspectPrivateControlSocket(workspace);
         const response = await createLocalControlTransport(workspace).request<unknown>(
             "GET",
             "/api/control/status",
         );
-        if (privateSocket(workspace) !== identity) throw failure();
+        if (inspectPrivateControlSocket(workspace) !== identity) throw failure();
         return parseStatus(response);
     } catch {
         throw failure();
@@ -143,7 +143,7 @@ export async function releaseMigrationManager(
     try {
         if (typeof operationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(operationId))
             throw failure();
-        const identity = privateSocket(workspace);
+        const identity = inspectPrivateControlSocket(workspace);
         const response = object(
             await createLocalControlTransport(workspace).request<unknown>(
                 "POST",
@@ -152,7 +152,7 @@ export async function releaseMigrationManager(
             ),
         );
         if (
-            privateSocket(workspace) !== identity ||
+            inspectPrivateControlSocket(workspace) !== identity ||
             Object.keys(response).length !== 1 ||
             response.released !== true
         )

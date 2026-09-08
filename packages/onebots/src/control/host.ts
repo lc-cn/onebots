@@ -1,3 +1,4 @@
+import { respondControlSnapshot, gatewayDiagnosticStatus } from "./diagnostics.js";
 import {
     claimServiceProcessOwnership,
     closeServiceProcessOwnership,
@@ -256,18 +257,14 @@ export async function startControlHost(options: ControlHostOptions) {
                     json(response, migration.status, migration.body);
                     return;
                 }
-                if (pathname === "/api/control/status" && request.method === "GET") {
-                    json(response, 200, {
+                if (
+                    ["/api/control/status", "/api/control/diagnostics"].includes(pathname) &&
+                    request.method === "GET"
+                ) {
+                    const status = {
                         schemaVersion: 1,
                         manager: { id, version: packageMetadata.version, pid: process.pid },
-                        gateway: storageError
-                            ? {
-                                  ...controller.status(),
-                                  actual: "failed",
-                                  recoveryRequired: true,
-                                  error: "控制状态不可读取，请检查本地工作区",
-                              }
-                            : controller.status(),
+                        gateway: gatewayDiagnosticStatus(controller.status(), storageError),
                         authAvailable,
                         processOwnership: { available: ownershipAvailable },
                         serviceMigration: serviceMigrationStatus(workspace),
@@ -278,7 +275,8 @@ export async function startControlHost(options: ControlHostOptions) {
                                 configurationStorageUnavailable ||
                                 Boolean(configurationApplication?.health().recoveryRequired),
                         },
-                    });
+                    };
+                    respondControlSnapshot(response, pathname, workspace, status, server.address());
                     return;
                 }
                 if (isInstallationPath(pathname)) {

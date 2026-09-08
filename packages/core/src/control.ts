@@ -14,6 +14,17 @@ export interface ControlStatus {
     };
 }
 
+export interface ControlDiagnostics {
+    schemaVersion: 1;
+    manager: { id: string; pid: number; version: string };
+    management: { host: string; port: number } | null;
+    gateway: Pick<ControlStatus["gateway"], "actual" | "desired" | "recoveryRequired">;
+    configuration: { state: "ready" | "damaged" | "unavailable"; recoveryRequired: boolean };
+    generation: { activeId: string | null; recoveryRequired: boolean };
+    processOwnership: { available: boolean };
+    serviceMigration: { pending: boolean; recoveryRequired: boolean };
+}
+
 export interface ControlOperation {
     id: string;
     action: "start" | "stop" | "restart" | "shutdown" | "reconcile" | "suspend";
@@ -261,6 +272,10 @@ export class ControlClient {
             "GET",
             `/api/control/configuration/operations/${encodeURIComponent(id)}`,
         );
+    }
+
+    diagnostics(): Promise<ControlDiagnostics> {
+        return this.transport.request("GET", "/api/control/diagnostics");
     }
 
     status(): Promise<ControlStatus> {
