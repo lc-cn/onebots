@@ -6,6 +6,11 @@ import { AuthorKind, ItemKind, OutboxPhase } from "../protocol/wire-models.js";
 import type { OutboundWireEnvelope, WireCompositeItem } from "../protocol/wire-models.js";
 import type { StagedCipherPayload } from "../cdn/payload-pipeline.js";
 
+/** iLink 线协议要求 Base64 的内容是 32 位 hex 文本，而不是 16 字节原始密钥。 */
+function encodeCdnAesKey(aesKeyHex: string): string {
+    return Buffer.from(aesKeyHex, "utf8").toString("base64");
+}
+
 async function emitIsolatedFacet(
     transport: IlinkJsonTransport,
     peerKey: string,
@@ -95,9 +100,10 @@ export async function postPhotoBundle(
         image_item: {
             media: {
                 encrypt_query_param: staged.remoteHandle,
-                aes_key: Buffer.from(staged.aesKeyHex, "hex").toString("base64"),
+                aes_key: encodeCdnAesKey(staged.aesKeyHex),
                 encrypt_type: 1,
             },
+            hd_size: staged.cipherBudget,
             mid_size: staged.cipherBudget,
         },
     });
@@ -124,10 +130,10 @@ export async function postVideoBundle(
         video_item: {
             media: {
                 encrypt_query_param: staged.remoteHandle,
-                aes_key: Buffer.from(staged.aesKeyHex, "hex").toString("base64"),
+                aes_key: encodeCdnAesKey(staged.aesKeyHex),
                 encrypt_type: 1,
             },
-            video_size: staged.cipherBudget,
+            video_size: staged.plainBytes,
         },
     });
     return emitFacetChain(transport, peerKey, contextToken, chain);
@@ -153,11 +159,12 @@ export async function postFileBundle(
         file_item: {
             media: {
                 encrypt_query_param: staged.remoteHandle,
-                aes_key: Buffer.from(staged.aesKeyHex, "hex").toString("base64"),
+                aes_key: encodeCdnAesKey(staged.aesKeyHex),
                 encrypt_type: 1,
             },
             file_name: staged.originalName,
             len: String(staged.plainBytes),
+            md5: staged.plainMd5Hex,
         },
     });
     return emitFacetChain(transport, peerKey, contextToken, chain);
