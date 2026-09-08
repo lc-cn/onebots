@@ -75,6 +75,17 @@ const genericSetup: ExtensionSetupStep[] = [
 
 export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
     adapter(
+        "mock",
+        "模拟平台（本地测试）",
+        "无需外部平台凭据，用于验证协议连接和本地开发。不会自动启用。",
+        [
+            {
+                title: "创建模拟账号",
+                description: "安装后添加 mock 账号，再按需要启用协议；不会连接真实聊天平台。",
+            },
+        ],
+    ),
+    adapter(
         "instagram",
         "Instagram Messaging",
         "连接 Instagram Login、Messaging、Graph API、Webhook 与已有事件入口。",

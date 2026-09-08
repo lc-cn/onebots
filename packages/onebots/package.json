@@ -43,23 +43,26 @@
     "@types/koa-static": "^4.0.4",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.10",
+    "@types/semver": "^7.7.1",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "tsx": "latest",
     "typescript": "catalog:"
   },
   "dependencies": {
-    "@karinjs/node-pty": "^1.1.3",
     "@onebots/core": "workspace:*",
     "@onebots/web": "workspace:*",
     "ink": "^6.3.1",
     "js-yaml": "^4.3.1",
     "koa-static": "^5.0.0",
     "pastel": "^4.0.1",
+    "pnpm": "9.15.9",
     "react": "^19.1.1",
+    "semver": "^7.8.5",
     "zod": "^4.1.12"
   },
   "optionalDependencies": {
+    "@karinjs/node-pty": "^1.1.3",
     "node-windows": "^1.0.0-beta.8"
   },
   "repository": {

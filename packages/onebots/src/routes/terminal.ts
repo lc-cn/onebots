@@ -1,6 +1,5 @@
 import { RouterContext } from "@onebots/core";
 import type { Router } from "@onebots/core";
-import * as pty from "@karinjs/node-pty";
 import { existsSync, readFileSync } from "fs";
 import type { App } from "../app.js";
 import {
@@ -41,7 +40,7 @@ export function registerTerminalRoutes(app: App, router: Router): void {
         maxPayloadBytes: TERMINAL_WEBSOCKET_MAX_PAYLOAD_BYTES,
         maxConnections: TERMINAL_WEBSOCKET_MAX_CONNECTIONS,
     });
-    terminalWs.on("connection", (client, request) => {
+    terminalWs.on("connection", async (client, request) => {
         client.on("error", error => {
             app.logger.warn("终端 WebSocket 连接错误", { error });
         });
@@ -51,34 +50,58 @@ export function registerTerminalRoutes(app: App, router: Router): void {
             return;
         }
         const managementToken = extractManagementToken(request);
+        // 创建 PTY 终端实例（如果不存在）
+        if (!app.ptyTerminal) {
+            // 原生终端是管理端的按需能力，不能阻止只运行网关的宿主包导入。
+            let pty: typeof import("@karinjs/node-pty");
+            try {
+                pty = await import("@karinjs/node-pty");
+            } catch (error) {
+                app.logger.error("终端原生组件不可用", { error });
+                client.close(1011, "Terminal unavailable");
+                return;
+            }
+            if (client.readyState !== WebSocket.OPEN) return;
+            if (!validateManagementToken(app, managementToken).valid) {
+                client.close(1008, "Unauthorized");
+                return;
+            }
+            // import 期间其他连接可能已经创建了共享终端。
+            if (!app.ptyTerminal) {
+                const shell = process.platform === "win32" ? "powershell.exe" : "bash";
+                try {
+                    app.ptyTerminal = pty.spawn(shell, [], {
+                        name: "xterm-color",
+                        cols: 80,
+                        rows: 30,
+                        cwd: process.env.HOME,
+                        env: process.env,
+                    });
+                } catch (error) {
+                    app.logger.error("终端进程启动失败", { error });
+                    client.close(1011, "Terminal unavailable");
+                    return;
+                }
+
+                // 监听 PTY 输出
+                app.ptyTerminal.onData((data: string) => {
+                    // 广播到所有连接的客户端
+                    app.terminalClients.forEach(c => {
+                        if (!sendTerminalMessage(app, c, { type: "output", data }, "终端输出"))
+                            app.terminalClients.delete(c);
+                    });
+                });
+
+                // 监听 PTY 退出
+                app.ptyTerminal.onExit(() => {
+                    handleTerminalProcessExit(app);
+                });
+            }
+        }
+
         const stopAuthorizationMonitor = startManagementAuthorizationMonitor(app, managementToken, {
             onUnauthorized: () => client.close(1008, "Unauthorized"),
         });
-        // 创建 PTY 终端实例（如果不存在）
-        if (!app.ptyTerminal) {
-            const shell = process.platform === "win32" ? "powershell.exe" : "bash";
-            app.ptyTerminal = pty.spawn(shell, [], {
-                name: "xterm-color",
-                cols: 80,
-                rows: 30,
-                cwd: process.env.HOME,
-                env: process.env,
-            });
-
-            // 监听 PTY 输出
-            app.ptyTerminal.onData((data: string) => {
-                // 广播到所有连接的客户端
-                app.terminalClients.forEach(c => {
-                    if (!sendTerminalMessage(app, c, { type: "output", data }, "终端输出"))
-                        app.terminalClients.delete(c);
-                });
-            });
-
-            // 监听 PTY 退出
-            app.ptyTerminal.onExit(() => {
-                handleTerminalProcessExit(app);
-            });
-        }
 
         // 添加到客户端列表
         app.terminalClients.add(client);

@@ -23,17 +23,22 @@ COPY development ./development
 RUN node --input-type=module -e "import fs from 'node:fs'; const p='development/package.json'; const pkg=JSON.parse(fs.readFileSync(p,'utf8')); if (pkg.dependencies?.['@onebots/adapter-icqq']) { delete pkg.dependencies['@onebots/adapter-icqq']; fs.writeFileSync(p, JSON.stringify(pkg, null, 2) + '\n'); }"
 
 # 安装依赖并构建（无 adapter-icqq，无需 GitHub Packages token；锁文件与镜像上下文可能不一致，故不用 --frozen-lockfile）
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --no-frozen-lockfile --ignore-scripts
 # 仅构建网关所需包（跳过 docs：VitePress 需 git，Alpine 镜像未安装且运行时不需要文档）
 RUN pnpm build:packages && pnpm --filter='./protocols/*/*' --filter='./adapters/*' build
 
+# 对两个已构建宿主做 pnpm pack，让 workspace/catalog 依赖转换成发布版声明。
+COPY scripts/pack-control-runtime.mjs ./scripts/pack-control-runtime.mjs
+RUN node scripts/pack-control-runtime.mjs /app/runtime-artifacts
+
 # 生产依赖（去掉 devDependencies 以减小镜像）
-RUN pnpm prune --prod
+RUN pnpm prune --prod --ignore-scripts
 
 # ---------- 运行阶段 ----------
 FROM node:24-alpine
 
 ENV ONEBOTS_CONTAINER=1
+ENV ONEBOTS_RUNTIME_ARTIFACTS=/app/runtime-artifacts/manifest.json
 ENV COREPACK_HOME=/usr/local/share/corepack
 
 RUN apk add --no-cache su-exec \
@@ -51,6 +56,7 @@ COPY --chown=node:node --from=builder /app/packages ./packages
 COPY --chown=node:node --from=builder /app/adapters ./adapters
 COPY --chown=node:node --from=builder /app/protocols ./protocols
 COPY --chown=node:node --from=builder /app/development ./development
+COPY --chown=node:node --from=builder /app/runtime-artifacts ./runtime-artifacts
 COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs
 COPY --chown=node:node scripts/docker-extension-runtime.mjs scripts/docker-extension-release.mjs scripts/docker-extension-installer.mjs ./scripts/
 

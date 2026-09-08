@@ -24,7 +24,6 @@ async function buildCatalog() {
         .readdirSync(adaptersRoot, { withFileTypes: true })
         .filter(entry => entry.isDirectory() && entry.name.startsWith("adapter-"))
         .map(entry => entry.name)
-        .filter(name => name !== "adapter-mock")
         .sort();
     const adapters = {};
     const packages = {};

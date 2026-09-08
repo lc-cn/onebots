@@ -1,4 +1,5 @@
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { createLocalControlClient } from "../client/local-control.js";
 import { startControlHost } from "./host.js";
 import { writeCliOutput } from "../cli-output.js";
@@ -54,10 +55,64 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
         return true;
     }
     if (action === "status") writeCliOutput(JSON.stringify(await client.status()));
-    else if (action === "start" || action === "stop" || action === "restart") {
+    else if (action === "plan") {
+        const names = (name: string) =>
+            option(name, "")
+                .split(",")
+                .map(value => value.trim())
+                .filter(Boolean);
+        const catalog = await client.installationCatalog();
+        writeCliOutput(
+            JSON.stringify(
+                await client.planInstallation(
+                    {
+                        adapters: names("--adapters"),
+                        protocols: names("--protocols"),
+                        applications: names("--frameworks"),
+                    },
+                    catalog.activeGenerationId,
+                ),
+            ),
+        );
+    } else if (action === "install") {
+        const token = options.includes("--auth-stdin") ? await readDownloadToken() : undefined;
+        writeCliOutput(
+            JSON.stringify(
+                await client.install({
+                    id: option("--request", randomUUID()),
+                    planId: option("--plan", ""),
+                    ...(token ? { token } : {}),
+                }),
+            ),
+        );
+    } else if (action === "installation") {
+        writeCliOutput(JSON.stringify(await client.installation(option("--request", ""))));
+    } else if (action === "cancel-installation") {
+        writeCliOutput(JSON.stringify(await client.cancelInstallation(option("--request", ""))));
+    } else if (action === "activate") {
+        const operation = await client.activateGeneration(option("--generation", ""));
+        writeCliOutput(JSON.stringify(operation));
+        if (operation.status === "failed") process.exitCode = 1;
+    } else if (action === "start" || action === "stop" || action === "restart") {
         const operation = await client.gateway(action);
         writeCliOutput(JSON.stringify(operation));
         if (operation.status === "failed") process.exitCode = 1;
-    } else throw new Error("控制命令应为 status、start、stop 或 restart");
+    } else
+        throw new Error(
+            "控制命令应为 status、start、stop、restart、plan、install、installation、cancel-installation 或 activate",
+        );
     return true;
+}
+
+async function readDownloadToken(): Promise<string> {
+    if (process.stdin.isTTY)
+        throw new Error("--auth-stdin 仅接受安全管道输入，不能在终端明文输入授权");
+    let input = "";
+    for await (const chunk of process.stdin) {
+        input += chunk.toString();
+        if (Buffer.byteLength(input) > 512) throw new Error("下载授权格式无效");
+    }
+    const token = input.trim();
+    if (!/^[A-Za-z0-9_]+$/.test(token)) throw new Error("下载授权格式无效");
+    return token;
 }

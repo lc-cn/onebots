@@ -6,6 +6,7 @@ import {
     type ControlStatus,
 } from "@onebots/core/control";
 import UiButton from "./ui/UiButton.vue";
+import ControlInstallationPanel from "./components/ControlInstallationPanel.vue";
 
 const token = ref(localStorage.getItem("onebots.control.token") ?? "");
 const code = ref("");
@@ -136,6 +137,7 @@ onUnmounted(() => {
                 <p class="text-sm text-fg-secondary">
                     停止网关不会关闭此控制台。空白工作区不会自动接入平台或开启协议。
                 </p>
+                <ControlInstallationPanel :client="client" @applied="refresh" />
                 <section v-if="state.gateway.operations.length" class="border-t border-border pt-6">
                     <h2 class="text-lg font-medium mb-3">最近操作</h2>
                     <ul class="divide-y divide-border">
@@ -150,6 +152,7 @@ onUnmounted(() => {
                                     restart: "重启",
                                     shutdown: "管理服务退出",
                                     reconcile: "恢复核验",
+                                    suspend: "切换版本暂停",
                                 }[operation.action]
                             }}</span>
                             <span>{{

@@ -29,15 +29,19 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm exec vitest run packages/onebots/src __tests__/unit/docker*
+      - run: pnpm exec vitest run packages/onebots/src __tests__/unit/docker* __tests__/unit/pack-control-runtime.spec.ts
       - run: pnpm packages:pack:check
       - run: docker build -t onebots-control-ci .
       - name: Verify blank Docker control service
         run: |
-          docker run -d --name onebots-control-ci onebots-control-ci
+          docker run -d --name onebots-control-ci --mount type=volume,source=onebots-control-ci-data,target=/data onebots-control-ci
           docker exec -i --user 1000:1000 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs
           docker restart onebots-control-ci
           docker exec -i --user 1000:1000 -e CONTROL_VERIFY_RESTART=1 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs
+      - name: Verify dependency generation and protocol API
+        run: docker exec -i --user 1000:1000 onebots-control-ci node --input-type=module < scripts/verify-control-installation.mjs
       - name: Clean verification container
         if: always()
-        run: docker rm -f onebots-control-ci || true
+        run: |
+          docker rm -f onebots-control-ci || true
+          docker volume rm onebots-control-ci-data || true

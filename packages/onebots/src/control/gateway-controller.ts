@@ -18,7 +18,7 @@ export type GatewayDesiredState = "running" | "stopped";
 export type GatewayActualState = "starting" | "running" | "stopping" | "stopped" | "failed";
 export interface GatewayOperation {
     id: string;
-    action: "start" | "stop" | "restart" | "shutdown" | "reconcile";
+    action: "start" | "stop" | "restart" | "shutdown" | "reconcile" | "suspend";
     status: "running" | "succeeded" | "failed";
     startedAt: string;
     finishedAt?: string;
@@ -113,6 +113,11 @@ export class GatewayController {
         });
     }
 
+    /** Internal generation switch: release the current instance without changing user intent. */
+    suspend(): Promise<GatewayOperation> {
+        return this.run("suspend", undefined, () => this.stopInstance());
+    }
+
     shutdown(): Promise<GatewayOperation> {
         return this.run("shutdown", undefined, async () => {
             this.closed = true;
@@ -204,7 +209,7 @@ export class GatewayController {
             }
             if (
                 operation.status === "succeeded" &&
-                ["stop", "shutdown", "reconcile"].includes(action)
+                ["stop", "shutdown", "reconcile", "suspend"].includes(action)
             ) {
                 this.storageUncertain = false;
             }

@@ -6,6 +6,38 @@ import { describe, expect, test } from "vitest";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("Docker 构建上下文", () => {
+    test("标准镜像安装不执行原生终端下载脚本，PTY仅为可选能力并保留平台可选构建依赖", async () => {
+        const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
+        const metadata = JSON.parse(
+            await readFile(resolve(repositoryRoot, "packages/onebots/package.json"), "utf8"),
+        );
+        expect(metadata.dependencies).not.toHaveProperty("@karinjs/node-pty");
+        expect(metadata.optionalDependencies["@karinjs/node-pty"]).toMatch(/^\^?\d+\./);
+        const installation = dockerfile
+            .split(/\r?\n/)
+            .find(line => line.startsWith("RUN pnpm install"));
+        expect(installation).toContain("--ignore-scripts");
+        expect(dockerfile).toContain("RUN pnpm prune --prod --ignore-scripts");
+        // esbuild/Rollup/Tailwind platform binaries are distributed as optional packages.
+        expect(installation).not.toMatch(/--no-optional|--omit[= ]optional/);
+    });
+    test("在构建后裁剪前冻结两个宿主工件，运行镜像只通过相对manifest定位", async () => {
+        const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
+        const pack = dockerfile.indexOf(
+            "RUN node scripts/pack-control-runtime.mjs /app/runtime-artifacts",
+        );
+        expect(pack).toBeGreaterThan(dockerfile.indexOf("RUN pnpm build:packages"));
+        expect(pack).toBeLessThan(dockerfile.indexOf("RUN pnpm prune --prod"));
+        expect(dockerfile).toContain(
+            "COPY scripts/pack-control-runtime.mjs ./scripts/pack-control-runtime.mjs",
+        );
+        expect(dockerfile).toContain(
+            "COPY --chown=node:node --from=builder /app/runtime-artifacts ./runtime-artifacts",
+        );
+        expect(dockerfile).toContain(
+            "ENV ONEBOTS_RUNTIME_ARTIFACTS=/app/runtime-artifacts/manifest.json",
+        );
+    });
     test("排除嵌套增量缓存和认证文件，防止缺失构建产物或泄露凭据", async () => {
         const patterns = (await readFile(resolve(repositoryRoot, ".dockerignore"), "utf8")).split(
             /\r?\n/,

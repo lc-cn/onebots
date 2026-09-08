@@ -28,7 +28,7 @@ export function createLocalControlClient(workspace: string): ControlClient {
                         response.on("end", () => {
                             try {
                                 const data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-                                if (response.statusCode !== 200)
+                                if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300)
                                     throw new Error(data.message ?? "本地控制请求失败");
                                 resolve(data as T);
                             } catch (error) {

@@ -25,6 +25,13 @@ async function fixture(driver?: GatewayDriver) {
 }
 
 describe("GatewayController", () => {
+    it("suspends for an internal switch without changing desired state or closing the controller", async () => {
+        const { controller } = await fixture();
+        await controller.start();
+        expect(await controller.suspend()).toMatchObject({ status: "succeeded" });
+        expect(controller.status()).toMatchObject({ actual: "stopped", desired: "running" });
+        expect(await controller.start()).toMatchObject({ status: "succeeded" });
+    });
     it("restores committed memory when intent cannot be persisted and dispatches no effect", async () => {
         const { controller, driver, statePath } = await fixture();
         const before = controller.status();

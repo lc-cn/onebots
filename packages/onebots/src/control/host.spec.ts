@@ -24,8 +24,12 @@ function workspace(): string {
     return directory;
 }
 
-async function start(root: string) {
-    const host = await startControlHost({ workspace: root, port: 0, gatewayEntrypoint });
+async function start(root: string, entrypoint = gatewayEntrypoint) {
+    const host = await startControlHost({
+        workspace: root,
+        port: 0,
+        gatewayEntrypoint: entrypoint,
+    });
     cleanups.push(() => host.close());
     const address = host.server.address();
     if (!address || typeof address === "string") throw new Error("控制宿主未监听 TCP");
@@ -69,6 +73,85 @@ async function upgrade(port: number, target: string): Promise<string> {
 }
 
 describe("control host integration", () => {
+    it("网关ready后的状态写入失败仍保留Web并允许修复存储后安全关闭", async () => {
+        const root = workspace();
+        const entrypoint = path.join(root, "fault-gateway.mjs");
+        fs.writeFileSync(
+            entrypoint,
+            `
+import fs from 'node:fs';
+import path from 'node:path';
+process.on('disconnect', () => process.exit(0));
+process.on('message', message => {
+    if (message.type === 'gateway.stop') process.exit(0);
+    const statePath = path.join(message.workspacePath, '.control/gateway.json');
+    fs.renameSync(statePath, statePath + '.saved');
+    fs.mkdirSync(statePath);
+    process.send({...message, type:'gateway.ready', address:{host:'127.0.0.1',port:12345}});
+});
+`,
+        );
+        const running = await start(root, entrypoint);
+        try {
+            expect((await fetch(`${running.url}/`)).status).toBe(200);
+            expect((await fetch(`${running.url}/ready`)).status).toBe(200);
+            expect((await running.local.status()).gateway).toMatchObject({
+                actual: "failed",
+                recoveryRequired: true,
+            });
+        } finally {
+            const statePath = path.join(root, ".control/gateway.json");
+            fs.rmSync(statePath, { recursive: true });
+            fs.renameSync(statePath + ".saved", statePath);
+        }
+        await running.host.close();
+    });
+
+    it("版本指针初始化失败不会关闭Web或启动未验证网关", async () => {
+        const root = workspace();
+        fs.mkdirSync(path.join(root, ".control"));
+        fs.writeFileSync(path.join(root, ".control/active-generation.json"), "{invalid-pointer");
+        const running = await start(root);
+        expect((await fetch(`${running.url}/`)).status).toBe(200);
+        expect((await running.local.status()).gateway).toMatchObject({
+            actual: "failed",
+            recoveryRequired: true,
+        });
+        expect(running.host.controller.status().instance).toBeUndefined();
+    });
+
+    it("冷启动中断的版本切换阻止自动启动，但管理端可诊断", async () => {
+        const root = workspace();
+        fs.mkdirSync(path.join(root, ".control"));
+        fs.writeFileSync(
+            path.join(root, ".control/active-generation.json"),
+            JSON.stringify({
+                schemaVersion: 1,
+                active: null,
+                recoveryRequired: false,
+                operations: [
+                    {
+                        id: "interrupted",
+                        status: "running",
+                        phase: "stopping",
+                        previous: null,
+                        target: { id: "target", planDigest: "a".repeat(64) },
+                        desiredBefore: "running",
+                        startedAt: new Date().toISOString(),
+                    },
+                ],
+            }),
+        );
+        const running = await start(root);
+        expect((await fetch(`${running.url}/`)).status).toBe(200);
+        expect(running.host.controller.status()).toMatchObject({
+            actual: "stopped",
+            desired: "running",
+        });
+        expect(running.host.controller.status().instance).toBeUndefined();
+        await expect(running.local.gateway("start")).rejects.toThrow();
+    });
+
     it("本地配对引导后 Web 控制真实网关，停止仍保留管理页且重启宿主维持停止意图", async () => {
         const root = workspace();
         const running = await start(root);
