@@ -13,6 +13,8 @@ import type {
 export interface ManagerServiceRemoval {
     readonly snapshot: Readonly<ManagerServiceRemovalSnapshot>;
     verifyRemaining(): boolean;
+    /** 单文件锚点检查；升级写入定义后仍须验证尚未替换的元数据。 */
+    verifyFile(file: "definition" | "metadata"): boolean;
     removeDefinition(): void;
     removeMetadata(): void;
     dispose(): void;
@@ -190,6 +192,7 @@ export function captureManagerServiceRemoval(
             metadata: snapshot(captured[1]),
         }),
         verifyRemaining,
+        verifyFile: file => !disposed && !uncertain && equal(captured[file === "definition" ? 0 : 1]),
         removeDefinition: () => remove(0),
         removeMetadata: () => remove(1),
         dispose() {
