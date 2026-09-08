@@ -4,6 +4,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 const FAILURE = "控制认证失败";
 const BOOTSTRAP_TTL = 5 * 60 * 1000;
+const SESSION_TTL = 30 * 24 * 60 * 60 * 1000;
 const ATTEMPT_WINDOW = 60 * 1000;
 const ATTEMPT_LIMIT = 5;
 const HASH = /^[a-f0-9]{64}$/;
@@ -24,6 +25,7 @@ interface AuthState {
     recovery: { hash: string; expiresAt: number } | null;
     issuance: { startedAt: number; count: number };
     sessionHash: string | null;
+    sessionLifetime: { issuedAt: number; expiresAt: number } | null;
     attempts: { startedAt: number; count: number };
 }
 
@@ -132,19 +134,28 @@ export class ControlAuth {
         state.bootstrap = null;
         state.recovery = null;
         state.sessionHash = digest(token);
+        state.sessionLifetime = { issuedAt: now, expiresAt: now + SESSION_TTL };
         this.write(state);
         return token;
     }
 
     verify(token: string): boolean {
         const state = this.read();
-        return state.sessionHash !== null && matches(token, state.sessionHash);
+        const now = this.now();
+        return (
+            state.sessionHash !== null &&
+            state.sessionLifetime !== null &&
+            now >= state.sessionLifetime.issuedAt &&
+            now < state.sessionLifetime.expiresAt &&
+            matches(token, state.sessionHash)
+        );
     }
 
     revoke(token: string): void {
         const state = this.read();
         if (state.sessionHash === null || !matches(token, state.sessionHash)) return;
         state.sessionHash = null;
+        state.sessionLifetime = null;
         this.write(state);
     }
 
@@ -156,8 +167,9 @@ export class ControlAuth {
                 throw new Error(FAILURE);
             }
             const state: unknown = JSON.parse(fs.readFileSync(this.statePath, "utf8"));
-            // 已发布 version 1 没有恢复字段；只补结构，不重置现有限流或会话。
+            // 补齐旧结构，保留配对及限流；无签发时间的旧会话必须本机恢复。
             if (record(state)) {
+                if (!Object.hasOwn(state, "sessionLifetime")) state.sessionLifetime = null;
                 if (!Object.hasOwn(state, "deploymentBootstrap")) state.deploymentBootstrap = null;
                 if (!Object.hasOwn(state, "deploymentBootstrapHistory"))
                     state.deploymentBootstrapHistory = record(state.deploymentBootstrap)
@@ -185,6 +197,7 @@ export class ControlAuth {
                     recovery: null,
                     issuance: { startedAt: this.now(), count: 0 },
                     sessionHash: null,
+                    sessionLifetime: null,
                     attempts: { startedAt: this.now(), count: 0 },
                 };
             }
@@ -258,6 +271,20 @@ function validState(value: unknown): value is AuthState {
         (typeof value.sessionHash !== "string" || !HASH.test(value.sessionHash))
     )
         return false;
+    if (value.sessionLifetime !== null) {
+        const lifetime = value.sessionLifetime;
+        if (
+            value.sessionHash === null ||
+            !record(lifetime) ||
+            typeof lifetime.issuedAt !== "number" ||
+            !Number.isSafeInteger(lifetime.issuedAt) ||
+            lifetime.issuedAt < 0 ||
+            typeof lifetime.expiresAt !== "number" ||
+            !Number.isSafeInteger(lifetime.expiresAt) ||
+            lifetime.expiresAt - lifetime.issuedAt !== SESSION_TTL
+        )
+            return false;
+    }
     for (const challenge of [
         value.bootstrap,
         value.recovery,
