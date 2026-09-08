@@ -1,6 +1,7 @@
 /** OneBots CLI 进程入口的参数规范化 seam。 */
 
 const REMOVED_NAMESPACES = new Set(["gateway", "service", "daemon"]);
+const MANAGEMENT_VALUE_OPTIONS = new Set(["--data-dir", "--host", "--port"]);
 
 const RUNTIME_OPTIONS = new Set([
     "-c",
@@ -85,7 +86,7 @@ function findInvalidRuntimeOption(tokens: string[]): string | undefined {
 function findFirstPositional(argv: string[]): { index: number; token: string } | undefined {
     for (let index = 2; index < argv.length; index++) {
         const token = argv[index];
-        if (RUNTIME_OPTIONS.has(token)) {
+        if (RUNTIME_OPTIONS.has(token) || MANAGEMENT_VALUE_OPTIONS.has(token)) {
             index++;
             continue;
         }
@@ -100,7 +101,7 @@ function splitRuntimeOptions(tokens: string[]): { runtime: string[]; remaining: 
     const remaining: string[] = [];
     for (let index = 0; index < tokens.length; index++) {
         const token = tokens[index];
-        if (RUNTIME_OPTIONS.has(token)) {
+        if (RUNTIME_OPTIONS.has(token) || MANAGEMENT_VALUE_OPTIONS.has(token)) {
             runtime.push(token);
             if (tokens[index + 1] !== undefined) runtime.push(tokens[++index]);
         } else if (isAttachedRuntimeOption(token)) {

@@ -203,14 +203,6 @@ export async function showCapabilities(
     };
 }
 
-/** 使用与裸 `onebots` 相同的 runtime module 前台运行桥接服务。 */
-export async function runForeground(options: RuntimeOptions): Promise<CommandResult> {
-    const runtime = resolveConfiguredRuntimeOptions(options);
-    const { runBridge } = await import("../runtime.js");
-    await runBridge(runtime);
-    return {};
-}
-
 /** 校验运行环境并安装或更新固定的 OneBots 服务定义。 */
 export interface ServiceInstallDependencies {
     preflight(spec: ServicePreflightSpec): Promise<void>;
