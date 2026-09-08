@@ -5,6 +5,7 @@ import { runManagerDoctor, type ManagerDoctorCheck } from "./manager-doctor.js";
 import type { ManagerServiceStatus } from "./manager-service-status.js";
 import type { ServiceHost } from "./service-host.js";
 import { getServiceFiles } from "./service-files.js";
+import type { ControlDiagnostics } from "@onebots/core/control";
 const roots: string[] = [];
 afterEach(() => {
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
@@ -26,7 +27,7 @@ function fixture() {
             throw new Error("unexpected process effect");
         }),
     };
-    const diagnostics = {
+    const diagnostics: ControlDiagnostics = {
         schemaVersion: 1 as const,
         manager: { id: "manager-1", pid: 321, version: "1.0.0" },
         management: { host: "127.0.0.1", port: 6727 },
@@ -40,6 +41,17 @@ function fixture() {
             recoveryRequired: false,
         },
         generation: { activeId: null, recoveryRequired: false },
+        storage: {
+            dataDirectory: "creatable",
+            database: "creatable",
+            publicStatic: "disabled",
+            databaseIntegrity: "not-checked",
+        } as const,
+        extensions: {
+            receipt: "bundled",
+            selection: "ready",
+            registration: "not-checked",
+        } as const,
         processOwnership: { available: true },
         serviceMigration: { pending: false, recoveryRequired: false },
     };
@@ -94,6 +106,47 @@ function fixture() {
     return { root, workspace, host, diagnostics, deps, service };
 }
 describe("manager doctor read-only diagnostics", () => {
+    it("an empty uninitialized database is not an unverified existing database", async () => {
+        const f = fixture();
+        const report = await runManagerDoctor(
+            { dataDir: f.workspace, strict: true },
+            f.host,
+            f.deps,
+        );
+        expect(report.exitCode).toBe(0);
+        expect(report.checks).toContainEqual(
+            expect.objectContaining({ id: "database-integrity", status: "pass" }),
+        );
+    });
+    it("existing database access is not reported as database integrity verification", async () => {
+        const f = fixture();
+        f.diagnostics.storage.database = "ready";
+        const report = await runManagerDoctor(
+            { dataDir: f.workspace, strict: true },
+            f.host,
+            f.deps,
+        );
+        expect(report.exitCode).toBe(1);
+        expect(report.checks).toContainEqual(
+            expect.objectContaining({ id: "database-access", status: "pass" }),
+        );
+        expect(report.checks).toContainEqual(
+            expect.objectContaining({ id: "database-integrity", status: "warn" }),
+        );
+    });
+    it("a configured extension outside the verified selection fails diagnosis", async () => {
+        const f = fixture();
+        f.diagnostics.extensions = {
+            receipt: "verified",
+            selection: "mismatch",
+            registration: "not-checked",
+        };
+        const report = await runManagerDoctor({ dataDir: f.workspace }, f.host, f.deps);
+        expect(report.exitCode).toBe(1);
+        expect(report.checks).toContainEqual(
+            expect.objectContaining({ id: "extension-selection", status: "fail" }),
+        );
+    });
     it("does not turn an intentionally stopped manager into an IPC failure or start it", async () => {
         const f = fixture();
         f.service();

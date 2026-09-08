@@ -53,6 +53,7 @@ it("diagnostics is authenticated, closed and readonly for empty and damaged conf
     });
     expect(Object.keys(value).sort()).toEqual([
         "configuration",
+        "extensions",
         "gateway",
         "generation",
         "management",
@@ -60,6 +61,7 @@ it("diagnostics is authenticated, closed and readonly for empty and damaged conf
         "processOwnership",
         "schemaVersion",
         "serviceMigration",
+        "storage",
     ]);
     expect(Object.keys(value.gateway).sort()).toEqual(["actual", "desired", "recoveryRequired"]);
     expect(snapshot(root)).toEqual(before);

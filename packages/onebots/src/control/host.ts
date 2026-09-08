@@ -1,4 +1,4 @@
-import { respondControlSnapshot, gatewayDiagnosticStatus } from "./diagnostics.js";
+import { createControlSnapshotResponder, gatewayDiagnosticStatus } from "./diagnostics.js";
 import {
     claimServiceProcessOwnership,
     closeServiceProcessOwnership,
@@ -89,6 +89,7 @@ export async function startControlHost(options: ControlHostOptions) {
         authAvailable = false;
         process.stderr.write("[onebots] 控制认证存储不可用，远程管理已禁用\n");
     }
+    const respondSnapshot = createControlSnapshotResponder(workspace, generations);
     const driver = new NodeGatewayDriver({
         controlInstanceId: id,
         prepare: async () => {
@@ -276,7 +277,7 @@ export async function startControlHost(options: ControlHostOptions) {
                                 Boolean(configurationApplication?.health().recoveryRequired),
                         },
                     };
-                    respondControlSnapshot(response, pathname, workspace, status, server.address());
+                    respondSnapshot(response, pathname, status, server.address());
                     return;
                 }
                 if (isInstallationPath(pathname)) {

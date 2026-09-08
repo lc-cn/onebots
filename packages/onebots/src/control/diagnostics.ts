@@ -5,6 +5,9 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { ControlDiagnostics } from "@onebots/core/control";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
+import type { GenerationStore } from "../installation/generation-store.js";
+import { inspectDiagnosticStorage } from "./diagnostic-storage.js";
+import { inspectDiagnosticExtensions } from "./diagnostic-extensions.js";
 
 interface DiagnosticStatus {
     manager: ControlDiagnostics["manager"];
@@ -19,10 +22,14 @@ export function inspectControlDiagnostics(
     workspace: string,
     status: DiagnosticStatus,
     address: AddressInfo | string | null,
+    generations?: Pick<GenerationStore, "readVerified">,
 ): ControlDiagnostics {
     let state: ControlDiagnostics["configuration"]["state"] = "unavailable";
+    let document: Record<string, unknown> | null = null;
     try {
-        state = new ConfigurationFile(path.join(workspace, "config.yaml")).inspect().state;
+        const inspected = new ConfigurationFile(path.join(workspace, "config.yaml")).inspect();
+        state = inspected.state;
+        if (inspected.state === "ready") document = inspected.document;
     } catch {
         /* 读失败与坏YAML区分，绝不回传文件路径或异常原文。 */
     }
@@ -53,6 +60,13 @@ export function inspectControlDiagnostics(
             activeId: status.generation.active?.id ?? null,
             recoveryRequired: status.generation.recoveryRequired,
         },
+        storage: inspectDiagnosticStorage(workspace, document),
+        extensions: inspectDiagnosticExtensions(
+            workspace,
+            document,
+            status.generation.active?.id ?? null,
+            generations ? id => generations.readVerified(id) : undefined,
+        ),
         processOwnership: { available: status.processOwnership.available },
         serviceMigration: {
             pending: status.serviceMigration.pending,
@@ -71,18 +85,22 @@ export function gatewayDiagnosticStatus(state: GatewayControllerState, unavailab
           }
         : state;
 }
-export function respondControlSnapshot(
-    response: ServerResponse,
-    pathname: string,
+export function createControlSnapshotResponder(
     workspace: string,
-    status: DiagnosticStatus,
-    address: AddressInfo | string | null,
+    generations?: Pick<GenerationStore, "readVerified">,
 ) {
-    jsonResponse(
-        response,
-        200,
-        pathname.endsWith("/diagnostics")
-            ? inspectControlDiagnostics(workspace, status, address)
-            : status,
-    );
+    return (
+        response: ServerResponse,
+        pathname: string,
+        status: DiagnosticStatus,
+        address: AddressInfo | string | null,
+    ) => {
+        jsonResponse(
+            response,
+            200,
+            pathname.endsWith("/diagnostics")
+                ? inspectControlDiagnostics(workspace, status, address, generations)
+                : status,
+        );
+    };
 }

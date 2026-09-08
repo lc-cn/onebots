@@ -157,6 +157,63 @@ export async function runManagerDoctor(
                 ? "使用内置运行版本，空实例无需安装扩展。"
                 : "已选择不可变运行版本。",
         );
+        for (const key of ["dataDirectory", "database"] as const) {
+            const value = before.storage[key];
+            add(
+                key === "database" ? "database-access" : "data-directory",
+                value === "ready" || value === "creatable" ? "pass" : "fail",
+                value === "creatable"
+                    ? "尚未初始化，已确认可创建；诊断未创建任何文件。"
+                    : value === "ready"
+                      ? "文件类型、归属与访问权限检查通过。"
+                      : "存储路径无效或无法确认，未修改权限。",
+            );
+        }
+        add(
+            "public-static",
+            before.storage.publicStatic === "invalid"
+                ? "fail"
+                : before.storage.publicStatic === "unavailable"
+                  ? "warn"
+                  : "pass",
+            before.storage.publicStatic === "disabled"
+                ? "未启用用户静态目录。"
+                : "用户静态目录的边界与可读性检查。",
+        );
+        add(
+            "extension-receipt",
+            before.extensions.receipt === "invalid"
+                ? "fail"
+                : before.extensions.receipt === "unavailable"
+                  ? "warn"
+                  : "pass",
+            before.extensions.receipt === "verified"
+                ? "运行计划、锁文件、Schema 与宿主清单匹配既有收据；未重新运行插件。"
+                : before.extensions.receipt === "bundled"
+                  ? "当前使用内置宿主。"
+                  : "扩展运行收据无效或无法确认。",
+        );
+        add(
+            "extension-selection",
+            before.extensions.selection === "ready"
+                ? "pass"
+                : before.extensions.selection === "mismatch"
+                  ? "fail"
+                  : "warn",
+            "启动扩展选择与已验证清单的一致性检查，不替代账号配置校验。",
+        );
+        add(
+            "extension-registration",
+            before.extensions.registration === "verified" ||
+                (before.extensions.receipt === "bundled" && before.extensions.selection === "ready")
+                ? "pass"
+                : "warn",
+            before.extensions.registration === "verified"
+                ? "匹配既有注册验证证据，诊断未导入插件。"
+                : before.extensions.receipt === "bundled" && before.extensions.selection === "ready"
+                  ? "空启动选择无需扩展注册验证。"
+                  : "缺少匹配的注册验证证据，未运行插件来补做校验。",
+        );
         add(
             "process-ownership",
             before.processOwnership.available ? "pass" : "fail",
@@ -174,9 +231,11 @@ export async function runManagerDoctor(
         if (!isDeepStrictEqual(before, after))
             add("manager-identity", "fail", "检查期间管理实例或监听地址改变，请重新诊断。");
         add(
-            "storage-integrity",
-            "warn",
-            "未执行数据库完整性、静态资源目录及扩展注册一致性检查；不以管理端可达替代这些验收。",
+            "database-integrity",
+            before.storage.database === "creatable" ? "pass" : "warn",
+            before.storage.database === "creatable"
+                ? "数据库尚未创建，无现存数据库需要完整性检查。"
+                : "本次只检查数据库文件与目录访问边界，未打开 SQLite 执行完整性检查。",
         );
     } catch {
         add("manager", "fail", "管理诊断不可达或响应无效；未回退旧登录和插件加载路径。");

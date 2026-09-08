@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { fork, type ChildProcess } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    statSync,
+    symlinkSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { once } from "node:events";
@@ -59,12 +67,32 @@ function spawnGateway(withMock = false) {
 }
 
 describe("独立网关 IPC", () => {
+    it("启动不修改已有账号数据目录权限", async () => {
+        if (process.platform === "win32") return;
+        const { child, message } = spawnGateway();
+        const data = path.join(message.workspacePath, "data");
+        mkdirSync(data, { mode: 0o750 });
+        const originalMode = statSync(data).mode & 0o777;
+        const readyPromise = once(child, "message");
+        child.send(message);
+        expect((await readyPromise)[0].type).toBe("gateway.ready");
+        expect(statSync(data).mode & 0o777).toBe(originalMode);
+        const exited = once(child, "exit");
+        child.disconnect();
+        expect((await exited)[0]).toBe(0);
+    });
     it("真实 Mock 与 OneBot 插件保持单例注册和协议 API", async () => {
         const { child, message } = spawnGateway(true);
         const readyPromise = once(child, "message");
         child.send(message);
         const [ready] = await readyPromise;
         expect(ready.type).toBe("gateway.ready");
+        if (process.platform !== "win32") {
+            expect(statSync(path.join(message.workspacePath, "data")).mode & 0o777).toBe(0o700);
+            expect(statSync(path.join(message.workspacePath, "data/onebots.db")).mode & 0o777).toBe(
+                0o600,
+            );
+        }
         const response = await fetch(
             `http://127.0.0.1:${ready.address.port}/mock/bot/onebot/v11/get_login_info`,
             { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },

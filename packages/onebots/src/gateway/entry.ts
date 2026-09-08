@@ -54,7 +54,7 @@ async function start(message: GatewayStartMessage): Promise<void> {
         // 原账号数据库和会话仍保存在原工作区 data，不随配置版本移动。
         BaseApp.configDir = path.resolve(message.workspacePath);
         BaseApp.configFileName = path.relative(BaseApp.configDir, configPath);
-        mkdirSync(BaseApp.dataDir, { recursive: true });
+        mkdirSync(BaseApp.dataDir, { recursive: true, mode: 0o700 });
         const config = parseRuntimeConfig(readFileSync(configPath, "utf8"));
         delete config.username;
         delete config.password;

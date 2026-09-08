@@ -50,6 +50,21 @@ const diagnostics = z
             })
             .strict(),
         processOwnership: z.object({ available: z.boolean() }).strict(),
+        storage: z
+            .object({
+                dataDirectory: z.enum(["ready", "creatable", "invalid", "unavailable"]),
+                database: z.enum(["ready", "creatable", "invalid", "unavailable"]),
+                publicStatic: z.enum(["ready", "disabled", "invalid", "unavailable"]),
+                databaseIntegrity: z.literal("not-checked"),
+            })
+            .strict(),
+        extensions: z
+            .object({
+                receipt: z.enum(["bundled", "verified", "invalid", "unavailable"]),
+                selection: z.enum(["ready", "mismatch", "unavailable"]),
+                registration: z.enum(["verified", "not-checked"]),
+            })
+            .strict(),
         serviceMigration: z
             .object({ pending: z.boolean(), recoveryRequired: z.boolean() })
             .strict(),

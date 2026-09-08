@@ -25,6 +25,13 @@ function state(port: number): ControlDiagnostics {
         gateway: { actual: "stopped", desired: "stopped", recoveryRequired: false },
         configuration: { state: "ready", recoveryRequired: false },
         generation: { activeId: null, recoveryRequired: false },
+        storage: {
+            dataDirectory: "creatable",
+            database: "creatable",
+            publicStatic: "disabled",
+            databaseIntegrity: "not-checked",
+        },
+        extensions: { receipt: "bundled", selection: "ready", registration: "not-checked" },
         processOwnership: { available: true },
         serviceMigration: { pending: false, recoveryRequired: false },
     };
