@@ -2,12 +2,14 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import {
     ControlClient,
+    ControlRequestError,
     createHttpControlTransport,
     type ControlStatus,
 } from "@onebots/core/control";
 import UiButton from "./ui/UiButton.vue";
 import ControlInstallationPanel from "./components/ControlInstallationPanel.vue";
 import ControlConfigurationPanel from "./components/ControlConfigurationPanel.vue";
+import ControlSessionsPanel from "./components/ControlSessionsPanel.vue";
 
 const token = ref(localStorage.getItem("onebots.control.token") ?? "");
 const code = ref("");
@@ -33,6 +35,11 @@ async function refresh() {
         error.value = "";
     } catch (cause) {
         if (token.value !== expectedToken) return;
+        if (cause instanceof ControlRequestError && cause.status === 401) {
+            reconnect();
+            error.value = "管理会话已失效，请申请新设备码重新授权。";
+            return;
+        }
         error.value = cause instanceof Error ? cause.message : "无法连接管理服务";
     }
 }
@@ -52,7 +59,7 @@ async function pair() {
     }
 }
 function reconnect() {
-    // 仅移除此浏览器的凭证；服务端旧会话在本地恢复码兑换成功前保持有效。
+    // 仅移除此浏览器的凭证，不撤销服务端会话。
     token.value = "";
     localStorage.removeItem("onebots.control.token");
     state.value = undefined;
@@ -67,7 +74,7 @@ async function logout() {
         reconnect();
     } catch {
         error.value =
-            "无法确认服务端会话已撤销。请重试；若凭据已失效，可清除本地凭据后使用恢复码重新配对。";
+            "无法确认服务端会话已撤销。请重试；若凭据已失效，可清除本地凭据后申请设备码重新授权。";
     } finally {
         busy.value = false;
     }
@@ -108,7 +115,7 @@ onUnmounted(() => {
                     <UiButton :disabled="busy" @click="reconnect">清除本地凭据</UiButton>
                 </div>
                 <p v-if="token" class="text-sm text-fg-secondary mt-3">
-                    退出登录会撤销服务端会话。仅清除本地凭据不会撤销会话；再次连接需申请恢复码。
+                    退出登录会撤销当前设备的服务端会话。仅清除本地凭据不会撤销会话；再次连接需申请设备码。
                 </p>
             </header>
             <p v-if="error" role="alert" class="rounded-panel border border-danger p-4 text-danger">
@@ -117,16 +124,21 @@ onUnmounted(() => {
             <form v-if="!token" @submit.prevent="pair" class="max-w-md space-y-4">
                 <h2 class="text-lg font-medium">连接管理服务</h2>
                 <p class="text-sm text-fg-secondary">
-                    在本机运行
+                    首次安装尚未授权任何设备时，在本机运行
                     <code>onebots auth bootstrap --data-dir &lt;工作区&gt;</code
                     >，将单次配对码填在这里。Docker 中可通过 docker exec 运行该命令。
                 </p>
                 <p class="text-sm text-fg-secondary">
+                    新设备或重新登录：在管理服务所在机器运行
+                    <code>onebots auth device --data-dir &lt;工作区&gt;</code>，输入一次性设备码。
+                    设备码在 5 分钟后失效，不会挤掉已有设备。
+                </p>
+                <p class="text-sm text-fg-secondary">
                     已配对但凭证丢失？在管理服务所在机器运行
                     <code>onebots auth recover --data-dir &lt;工作区&gt;</code>，在此输入恢复码。
-                    码在 5 分钟后失效；兑换成功才使旧凭证失效。不要删除认证文件。
+                    码在 5 分钟后失效；兑换成功会撤销所有旧设备，仅在需要恢复访问时使用。不要删除认证文件。
                 </p>
-                <label class="block text-sm" for="pair-code">单次配对码</label>
+                <label class="block text-sm" for="pair-code">一次性授权码</label>
                 <input
                     id="pair-code"
                     v-model="code"
@@ -177,6 +189,7 @@ onUnmounted(() => {
                 </p>
                 <ControlInstallationPanel :client="client" @applied="refresh" />
                 <ControlConfigurationPanel :client="client" @applied="refresh" />
+                <ControlSessionsPanel :key="token" :client="client" @revoked-self="reconnect" />
                 <section v-if="state.gateway.operations.length" class="border-t border-border pt-6">
                     <h2 class="text-lg font-medium mb-3">最近操作</h2>
                     <ul class="divide-y divide-border">

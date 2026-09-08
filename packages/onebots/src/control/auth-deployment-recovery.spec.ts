@@ -151,7 +151,7 @@ it("损坏恢复历史和超大状态固定拒绝而非重置配对", () => {
         );
         expect(() => f.restart()).toThrow("控制认证失败");
     }
-    fs.writeFileSync(f.statePath, JSON.stringify(state) + " ".repeat(4096));
+    fs.writeFileSync(f.statePath, JSON.stringify(state) + " ".repeat(16384));
     expect(() => f.restart()).toThrow("控制认证失败");
 });
 

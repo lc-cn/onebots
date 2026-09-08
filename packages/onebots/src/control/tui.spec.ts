@@ -41,6 +41,13 @@ function client(handler: (method: string, route: string, body: unknown) => unkno
     return { client: new ControlClient({ request }), request };
 }
 describe("统一控制 TUI", () => {
+    it("新设备授权走同一客户端，不恢复或启动网关", async () => {
+        const ui = prompt([["device"], ["quit"]]);
+        const transport = client(() => ({ code: "new-device-code" }));
+        await runControlTui(transport.client, { prompt: ui.ui });
+        expect(transport.request).toHaveBeenCalledExactlyOnceWith("POST", "/api/control/auth/device", {});
+        expect(ui.reports.join(" ")).toContain("不撤销已有设备");
+    });
     it("取消计划不安装，默认集合来自catalog，框架不补选协议", async () => {
         const ui = prompt([["icqq"], [], ["zhin"], ["no"]]);
         const transport = client((_method, route) => (route.endsWith("catalog") ? catalog : plan));

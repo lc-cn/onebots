@@ -58,6 +58,10 @@ describe("control auth", () => {
         const { auth, reopen, statePath } = fixture();
         const token = auth.pair(auth.issueBootstrap());
         const legacy = JSON.parse(fs.readFileSync(statePath, "utf8"));
+        legacy.version = 1;
+        legacy.sessionHash = legacy.sessions[0].hash;
+        delete legacy.sessions;
+        delete legacy.device;
         delete legacy.sessionLifetime;
         fs.writeFileSync(statePath, JSON.stringify(legacy));
         const before = fs.readFileSync(statePath, "utf8");
@@ -81,7 +85,8 @@ describe("control auth", () => {
             const { auth, reopen, statePath } = fixture();
             const token = auth.pair(auth.issueBootstrap());
             const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
-            state.sessionLifetime = lifetime;
+            state.sessions[0] = { id: state.sessions[0].id, hash: state.sessions[0].hash,
+                ...(typeof lifetime === "object" ? lifetime : {}) };
             fs.writeFileSync(statePath, JSON.stringify(state));
             expect(() => reopen().verify(token)).toThrow("控制认证失败");
         },

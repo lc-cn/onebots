@@ -1,3 +1,4 @@
+import { handleControlSessions } from "./auth-sessions-api.js";
 import { createHash } from "node:crypto";
 import { readBody } from "./http-utils.js";
 import type { ControlMcpService } from "./mcp-api.js";
@@ -13,10 +14,12 @@ export async function handleControlAuth(input: {
     body(): Promise<Record<string, unknown>>;
     revoked?(owner: string): void;
 }): Promise<{ status: number; body: unknown } | undefined> {
+    const sessions = await handleControlSessions(input);
+    if (sessions) return sessions;
     const action = input.pathname.slice("/api/control/auth/".length);
     if (
         !input.pathname.startsWith("/api/control/auth/") ||
-        !["bootstrap", "recovery", "pair", "logout"].includes(action) ||
+        !["bootstrap", "recovery", "device", "pair", "logout"].includes(action) ||
         input.request.method !== "POST"
     )
         return;
@@ -29,7 +32,9 @@ export async function handleControlAuth(input: {
         if (action === "pair") {
             if (typeof body.code !== "string" || Object.keys(body).length !== 1)
                 throw new Error("认证失败");
-            return { status: 200, body: { token: input.auth.pair(body.code) } };
+            const result = input.auth.pairWithRevocations(body.code);
+            for (const owner of result.revoked) input.revoked?.(owner);
+            return { status: 200, body: { token: result.token } };
         }
         if (Object.keys(body).length) throw new Error("认证失败");
         return {
@@ -38,7 +43,7 @@ export async function handleControlAuth(input: {
                 code:
                     action === "recovery"
                         ? input.auth.issueRecovery()
-                        : input.auth.issueBootstrap(),
+                        : action === "device" ? input.auth.issueDevice() : input.auth.issueBootstrap(),
             },
         };
     } catch {

@@ -18,11 +18,19 @@ docker exec onebots onebots auth bootstrap --data-dir /data
 
 Enter the code on the console pairing page within five minutes. It is single-use; do not share it in chats or logs. No adapter, account, or protocol is required to open the management console.
 
+## Add devices and manage sessions
+
+Run `onebots auth device --data-dir /path/to/data` on the manager host (or through `docker exec`) and enter the single-use code in the new browser within five minutes. The TUI also provides an authorize-new-browser action. Adding a device keeps existing sessions valid.
+
+The console lists session IDs, authorization and expiry times, and the current device. Revoke individual sessions after confirmation. Up to 16 active sessions are supported. Sessions expire 30 days after authorization; requests and restarts do not extend this deadline. Session IDs are not credentials.
+
+Legacy sessions without an issuance time require authorization again; sessions with an existing deadline retain it. After the authentication store is upgraded, do not downgrade to a manager that cannot read the multi-device format or restore old authentication files to revive revoked credentials.
+
 ## Sign out and reconnect
 
 **Sign out** asks the server to persistently revoke the session, then clears browser credentials after confirmation. **Clear local credentials** only removes the browser copy; it does not revoke the server session. A failed sign-out request is not reported as confirmed revocation.
 
-An already paired workspace does not reopen initial setup. To reconnect or recover a lost session, run:
+An already paired workspace does not reopen initial setup. Use `auth device` to reconnect without revoking others. To regain control and revoke all previous devices, run:
 
 ```bash
 onebots auth recover --data-dir /path/to/data
@@ -30,7 +38,7 @@ onebots auth recover --data-dir /path/to/data
 docker exec onebots onebots auth recover --data-dir /data
 ```
 
-Enter the recovery code on the same pairing page. Issuing it preserves the existing session; only successful redemption replaces it. The current manager has one valid browser session, so re-pairing invalidates earlier credentials.
+Enter the recovery code on the same pairing page. Issuing it preserves existing sessions; successful redemption revokes all prior devices and outstanding additional-device codes, keeping only the new session.
 
 ## Deployments without a terminal
 

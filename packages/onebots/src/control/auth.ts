@@ -14,8 +14,22 @@ export interface ControlAuthOptions {
     now?: () => number;
 }
 
+export interface ControlSession {
+    id: string;
+    issuedAt: number;
+    expiresAt: number;
+    current: boolean;
+}
+
+interface StoredSession {
+    id: string;
+    hash: string;
+    issuedAt: number;
+    expiresAt: number;
+}
+
 interface AuthState {
-    version: 1;
+    version: 2;
     paired: boolean;
     deploymentBootstrap: { hash: string; expiresAt: number } | null;
     deploymentBootstrapHistory: string[];
@@ -24,8 +38,8 @@ interface AuthState {
     bootstrap: { hash: string; expiresAt: number } | null;
     recovery: { hash: string; expiresAt: number } | null;
     issuance: { startedAt: number; count: number };
-    sessionHash: string | null;
-    sessionLifetime: { issuedAt: number; expiresAt: number } | null;
+    device: { hash: string; expiresAt: number } | null;
+    sessions: StoredSession[];
     attempts: { startedAt: number; count: number };
 }
 
@@ -104,7 +118,14 @@ export class ControlAuth {
         return this.issue(state, "recovery");
     }
 
-    private issue(state: AuthState, kind: "bootstrap" | "recovery"): string {
+    /** 仅本地控制入口签发；追加设备，不撤销已授权浏览器。 */
+    issueDevice(): string {
+        const state = this.read();
+        if (!state.paired) throw new Error(FAILURE);
+        return this.issue(state, "device");
+    }
+
+    private issue(state: AuthState, kind: "bootstrap" | "recovery" | "device"): string {
         const now = this.now();
         if (now >= state.issuance.startedAt + ATTEMPT_WINDOW)
             state.issuance = { startedAt: now, count: 0 };
@@ -117,6 +138,10 @@ export class ControlAuth {
     }
 
     pair(code: string): string {
+        return this.pairWithRevocations(code).token;
+    }
+
+    pairWithRevocations(code: string): { token: string; revoked: string[] } {
         const state = this.read();
         const now = this.now();
         if (now >= state.attempts.startedAt + ATTEMPT_WINDOW) {
@@ -124,52 +149,100 @@ export class ControlAuth {
         }
         if (state.attempts.count >= ATTEMPT_LIMIT) throw new Error(FAILURE);
         state.attempts.count++;
-        const challenge = state.paired ? state.recovery : state.bootstrap;
+        const append =
+            state.paired &&
+            state.device !== null &&
+            now < state.device.expiresAt &&
+            matches(code, state.device.hash);
+        const challenge = append ? state.device : state.paired ? state.recovery : state.bootstrap;
         if (!challenge || now >= challenge.expiresAt || !matches(code, challenge.hash)) {
             this.write(state);
             throw new Error(FAILURE);
         }
+        const revoked = state.sessions
+            .filter(session => !append || now >= session.expiresAt)
+            .map(session => session.hash);
+        state.sessions = state.sessions.filter(session => now < session.expiresAt);
+        if (append && state.sessions.length >= 16) {
+            this.write(state);
+            throw new Error("已授权设备已达上限，请先撤销不再使用的设备");
+        }
         const token = randomBytes(32).toString("base64url");
         state.paired = true;
         state.bootstrap = null;
-        state.recovery = null;
-        state.sessionHash = digest(token);
-        state.sessionLifetime = { issuedAt: now, expiresAt: now + SESSION_TTL };
+        state.device = null;
+        if (!append) {
+            state.recovery = null;
+            state.sessions = [];
+        }
+        state.sessions.push({
+            id: randomBytes(16).toString("hex"),
+            hash: digest(token),
+            issuedAt: now,
+            expiresAt: now + SESSION_TTL,
+        });
         this.write(state);
-        return token;
+        return { token, revoked };
     }
 
     verify(token: string): boolean {
+        return this.currentSession(this.read(), token) !== undefined;
+    }
+
+    sessions(token: string): ControlSession[] {
         const state = this.read();
+        const current = this.currentSession(state, token);
+        if (!current) throw new Error(FAILURE);
         const now = this.now();
-        return (
-            state.sessionHash !== null &&
-            state.sessionLifetime !== null &&
-            now >= state.sessionLifetime.issuedAt &&
-            now < state.sessionLifetime.expiresAt &&
-            matches(token, state.sessionHash)
-        );
+        return state.sessions
+            .filter(session => now >= session.issuedAt && now < session.expiresAt)
+            .map(({ id, issuedAt, expiresAt }) => ({
+                id,
+                issuedAt,
+                expiresAt,
+                current: id === current.id,
+            }));
+    }
+
+    revokeSession(token: string, id: string): string | null {
+        const state = this.read();
+        if (!this.currentSession(state, token)) throw new Error(FAILURE);
+        if (typeof id !== "string" || !/^[a-f0-9]{32}$/.test(id)) throw new Error(FAILURE);
+        const target = state.sessions.find(session => session.id === id);
+        if (!target) return null;
+        state.sessions = state.sessions.filter(session => session.id !== id);
+        this.write(state);
+        return target.hash;
     }
 
     revoke(token: string): void {
         const state = this.read();
-        if (state.sessionHash === null || !matches(token, state.sessionHash)) return;
-        state.sessionHash = null;
-        state.sessionLifetime = null;
+        const remaining = state.sessions.filter(session => !matches(token, session.hash));
+        if (remaining.length === state.sessions.length) return;
+        state.sessions = remaining;
         this.write(state);
+    }
+
+    private currentSession(state: AuthState, token: string): StoredSession | undefined {
+        const now = this.now();
+        return state.sessions.find(
+            session =>
+                now >= session.issuedAt && now < session.expiresAt && matches(token, session.hash),
+        );
     }
 
     private read(): AuthState {
         if (this.writeFailed) throw new Error(FAILURE);
         try {
             const stat = fs.lstatSync(this.statePath);
-            if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096) {
+            if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16384) {
                 throw new Error(FAILURE);
             }
             const state: unknown = JSON.parse(fs.readFileSync(this.statePath, "utf8"));
             // 补齐旧结构，保留配对及限流；无签发时间的旧会话必须本机恢复。
             if (record(state)) {
-                if (!Object.hasOwn(state, "sessionLifetime")) state.sessionLifetime = null;
+                if (state.version === 1 && !Object.hasOwn(state, "sessionLifetime"))
+                    state.sessionLifetime = null;
                 if (!Object.hasOwn(state, "deploymentBootstrap")) state.deploymentBootstrap = null;
                 if (!Object.hasOwn(state, "deploymentBootstrapHistory"))
                     state.deploymentBootstrapHistory = record(state.deploymentBootstrap)
@@ -182,12 +255,37 @@ export class ControlAuth {
                 if (!Object.hasOwn(state, "issuance"))
                     state.issuance = { startedAt: this.now(), count: 0 };
             }
+            if (record(state) && state.version === 1) {
+                if (
+                    Object.hasOwn(state, "sessions") ||
+                    Object.hasOwn(state, "device") ||
+                    !validLegacySession(state) ||
+                    (!state.paired && state.sessionHash !== null)
+                )
+                    throw new Error(FAILURE);
+                const lifetime = state.sessionLifetime;
+                state.sessions =
+                    typeof state.sessionHash === "string" && record(lifetime)
+                        ? [
+                              {
+                                  id: digest(`device:${state.sessionHash}`).slice(0, 32),
+                                  hash: state.sessionHash,
+                                  issuedAt: lifetime.issuedAt,
+                                  expiresAt: lifetime.expiresAt,
+                              },
+                          ]
+                        : [];
+                delete state.sessionHash;
+                delete state.sessionLifetime;
+                state.device = null;
+                state.version = 2;
+            }
             if (!validState(state)) throw new Error(FAILURE);
             return state;
         } catch (error) {
             if (error instanceof Error && "code" in error && error.code === "ENOENT") {
                 return {
-                    version: 1,
+                    version: 2,
                     paired: false,
                     deploymentBootstrap: null,
                     deploymentBootstrapHistory: [],
@@ -196,8 +294,8 @@ export class ControlAuth {
                     bootstrap: null,
                     recovery: null,
                     issuance: { startedAt: this.now(), count: 0 },
-                    sessionHash: null,
-                    sessionLifetime: null,
+                    device: null,
+                    sessions: [],
                     attempts: { startedAt: this.now(), count: 0 },
                 };
             }
@@ -264,8 +362,7 @@ function record(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function validState(value: unknown): value is AuthState {
-    if (!record(value) || value.version !== 1 || typeof value.paired !== "boolean") return false;
+function validLegacySession(value: Record<string, unknown>): boolean {
     if (
         value.sessionHash !== null &&
         (typeof value.sessionHash !== "string" || !HASH.test(value.sessionHash))
@@ -285,9 +382,37 @@ function validState(value: unknown): value is AuthState {
         )
             return false;
     }
+    return true;
+}
+
+function validState(value: unknown): value is AuthState {
+    if (
+        !record(value) ||
+        value.version !== 2 ||
+        typeof value.paired !== "boolean" ||
+        Object.hasOwn(value, "sessionHash") ||
+        Object.hasOwn(value, "sessionLifetime")
+    )
+        return false;
+    if (
+        !Array.isArray(value.sessions) ||
+        value.sessions.length > 16 ||
+        value.sessions.some(
+            session =>
+                !record(session) ||
+                typeof session.id !== "string" ||
+                !/^[a-f0-9]{32}$/.test(session.id) ||
+                !validLegacySession({ sessionHash: session.hash, sessionLifetime: session }) ||
+                session.hash === null,
+        ) ||
+        new Set(value.sessions.map(session => session.id)).size !== value.sessions.length ||
+        new Set(value.sessions.map(session => session.hash)).size !== value.sessions.length
+    )
+        return false;
     for (const challenge of [
         value.bootstrap,
         value.recovery,
+        value.device,
         value.deploymentBootstrap,
         value.deploymentRecovery,
     ]) {
@@ -323,8 +448,8 @@ function validState(value: unknown): value is AuthState {
         (!value.paired && (value.deploymentRecovery !== null || recoveryHistory.length > 0))
     )
         return false;
-    if (value.paired ? value.bootstrap !== null : value.sessionHash !== null) return false;
-    if (!value.paired && value.recovery !== null) return false;
+    if (value.paired ? value.bootstrap !== null : value.sessions.length !== 0) return false;
+    if (!value.paired && (value.recovery !== null || value.device !== null)) return false;
     if (
         !record(value.issuance) ||
         !Number.isSafeInteger(value.issuance.startedAt) ||

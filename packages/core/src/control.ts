@@ -1,3 +1,5 @@
+import { revokeControlSession, listControlSessions, type ControlSession } from "./control-sessions.js";
+export type { ControlSession } from "./control-sessions.js";
 import type { ControlSendContext, ControlSendRequest, ControlSendOperation } from "./control-send.js";
 export type { ControlSendContext, ControlSendRequest, ControlSendOperation } from "./control-send.js";
 export { isControlSendContext, isControlSendRequest, isControlSendOperation } from "./control-send.js";
@@ -346,6 +348,19 @@ export class ControlClient {
         return this.transport.request("POST", "/api/control/auth/recovery", {});
     }
 
+    /** 本机签发追加设备码，不撤销其他浏览器。 */
+    authorizeDevice(): Promise<{ code: string }> {
+        return this.transport.request("POST", "/api/control/auth/device", {});
+    }
+
+    sessions(): Promise<{ sessions: ControlSession[] }> {
+        return listControlSessions(this.transport);
+    }
+
+    revokeSession(id: string): Promise<{ revoked: true }> {
+        return revokeControlSession(this.transport, id);
+    }
+
     pair(code: string): Promise<{ token: string }> {
         return this.transport.request("POST", "/api/control/auth/pair", { code });
     }
@@ -433,7 +448,7 @@ export function createHttpControlTransport(
                 body: body === undefined ? undefined : JSON.stringify(body),
                 cache: "no-store",
                 redirect: "error",
-                signal: method === "POST" && route === "/api/control/auth/logout"
+                signal: (method === "POST" && ["/api/control/auth/logout", "/api/control/auth/sessions/revoke"].includes(route)) || (method === "GET" && route === "/api/control/auth/sessions")
                     ? AbortSignal.timeout(15_000) : undefined,
             });
             const data = await response.json();

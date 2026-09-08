@@ -10,6 +10,15 @@ vi.mock("./host.js", () => ({ startControlHost: vi.fn() }));
 vi.mock("../cli-output.js", () => ({ writeCliOutput: mock.output }));
 import { runControlCommand } from "./command.js";
 describe("本地认证恢复命令", () => {
+    it("新增设备命令只请求本地追加授权，不使用恢复重置", async () => {
+        const authorizeDevice = vi.fn(async () => ({ code: "device-code" }));
+        const recoverAuthentication = vi.fn();
+        mock.client.mockReturnValue({ authorizeDevice, recoverAuthentication });
+        await runControlCommand(["node", "onebots", "auth", "device", "--data-dir", "/tmp/private-workspace"]);
+        expect(authorizeDevice).toHaveBeenCalledOnce();
+        expect(recoverAuthentication).not.toHaveBeenCalled();
+        expect(mock.output).toHaveBeenCalledWith("device-code");
+    });
     it("recover只请求本地控制client并输出本次码，不删文件或提前撤销", async () => {
         mock.client.mockReturnValue({
             recoverAuthentication: mock.recover,

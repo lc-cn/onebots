@@ -59,14 +59,15 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
         return true;
     }
     if (command === "auth") {
-        if (!["bootstrap", "recover"].includes(action))
+        if (!["bootstrap", "recover", "device"].includes(action))
             throw new Error(
-                "首次配对：onebots auth bootstrap；凭证丢失：onebots auth recover（可加 --data-dir 工作区）。恢复码 5 分钟有效，在 Web 配对页输入后旧凭证才失效",
+                "首次配对：onebots auth bootstrap；添加设备：onebots auth device（不撤销已有设备）；凭证丢失：onebots auth recover（可加 --data-dir 工作区）。恢复码 5 分钟有效，在 Web 配对页输入后所有旧设备凭证才失效",
             );
         if (options.length !== 1 && !(options.length === 3 && options[1] === "--data-dir"))
             throw new Error("认证命令只接受 --data-dir 工作区，不接受凭证参数");
         const result =
-            action === "recover" ? await client.recoverAuthentication() : await client.bootstrap();
+            action === "recover" ? await client.recoverAuthentication()
+                : action === "device" ? await client.authorizeDevice() : await client.bootstrap();
         writeCliOutput(result.code);
         return true;
     }

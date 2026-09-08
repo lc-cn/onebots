@@ -21,6 +21,7 @@ export async function runControlTui(
                 title: "OneBots 管理工作台",
                 choices: [
                     { value: "status", label: "查看状态" },
+                    { value: "device", label: "授权新浏览器设备" },
                     { value: "start", label: "启动网关" },
                     { value: "stop", label: "停止网关" },
                     { value: "restart", label: "重启网关" },
@@ -41,6 +42,9 @@ export async function runControlTui(
                 prompt.report(
                     `管理服务在线；网关：${state.gateway.actual}，期望：${state.gateway.desired}${state.gateway.recoveryRequired ? "；需要恢复检查" : ""}`,
                 );
+            } else if (action === "device") {
+                const { code } = await client.authorizeDevice();
+                prompt.report(`在新浏览器配对页输入：${code}（5 分钟有效，不撤销已有设备）。`);
             } else if (action === "start" || action === "stop" || action === "restart") {
                 const result = await client.gateway(action);
                 prompt.report(
