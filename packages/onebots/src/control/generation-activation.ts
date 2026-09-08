@@ -44,6 +44,8 @@ export interface GenerationActivationOptions {
     /** Only proves children owned by this live manager; never use as cold-start orphan proof. */
     hasLiveChildren(): boolean;
     configurationRecoveryRequired?(): boolean;
+    /** Verify candidate configuration under the lifecycle queue; guard must synchronously recheck its snapshot. */
+    verifyActivation?(generation: VerifiedGeneration): Promise<() => void>;
 }
 
 /** 仅供可信配置服务使用；事务中必须 await 操作，不得调用外层 facade。 */
@@ -235,6 +237,7 @@ export class GenerationActivationController {
             } else if (expected !== undefined && expected !== (this.state.active?.id ?? null)) {
                 throw new GenerationConflictError();
             }
+            const assertCurrent = await this.options.verifyActivation?.(verified);
             const before = structuredClone(this.state);
             const operation: GenerationActivationOperation = {
                 id: randomUUID(),
@@ -252,7 +255,9 @@ export class GenerationActivationController {
                 this.state = before;
                 throw error;
             }
+            let effectsStarted = false;
             try {
+                assertCurrent?.();
                 if (samePointer(operation.previous, target)) {
                     this.complete(operation);
                     await this.persist();
@@ -260,8 +265,11 @@ export class GenerationActivationController {
                 }
                 operation.phase = "stopping";
                 await this.persist();
+                assertCurrent?.();
+                effectsStarted = true;
                 requireSuccess(await this.options.gateway.suspend());
                 if (this.options.hasLiveChildren()) throw new Error("旧网关仍存活，禁止切换");
+                assertCurrent?.();
                 this.state.active = target;
                 operation.phase = "starting";
                 await this.persist();
@@ -272,6 +280,19 @@ export class GenerationActivationController {
                 this.complete(operation);
                 await this.persist();
             } catch (error) {
+                if (!effectsStarted) {
+                    operation.status = "failed";
+                    operation.phase = "failed";
+                    operation.finishedAt = new Date().toISOString();
+                    operation.error = "候选版本激活前检查失败，未执行网关切换";
+                    try {
+                        await this.persist();
+                    } catch (persistenceError) {
+                        this.markUnknown(operation, persistenceError);
+                        throw persistenceError;
+                    }
+                    return structuredClone(operation);
+                }
                 if (!(error instanceof GatewayActionFailure) || this.options.hasLiveChildren()) {
                     this.markUnknown(operation, error);
                     // Persist when possible; failure leaves the previous unfinished record for recovery.

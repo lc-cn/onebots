@@ -1,3 +1,4 @@
+import { GenerationConfigurationVerifier } from "./generation-configuration.js";
 import { authorizeControlHttp } from "./auth-check.js";
 import { ControlSendService } from "./send-service.js";
 import { respondControlSend } from "./send-http.js";
@@ -122,13 +123,16 @@ export async function startControlHost(options: ControlHostOptions) {
         driver,
         initialDesired: serviceMigrationStatus(workspace).pending ? "stopped" : "running",
     });
+    const readVerified = (id: string) => {
+        if (!generations) throw new Error("运行版本仓库不可用");
+        return generations.readVerified(id);
+    };
+    const activationVerification = new GenerationConfigurationVerifier(workspace, readVerified);
     lifecycle = new GenerationActivationController({
         statePath: path.join(controlDirectory(workspace), "active-generation.json"),
         gateway: controller,
-        readVerified: generationId => {
-            if (!generations) throw new Error("运行版本仓库不可用");
-            return generations.readVerified(generationId);
-        },
+        readVerified,
+        verifyActivation: generation => activationVerification.verify(generation),
         hasLiveChildren: () => driver.hasLiveChildren(),
         configurationRecoveryRequired: () =>
             configurationStorageUnavailable ||
@@ -411,6 +415,7 @@ export async function startControlHost(options: ControlHostOptions) {
     async function close() {
         if (closed) return;
         closed = true;
+        await activationVerification.close();
         await configuration?.close();
         await installation?.close();
         try {
