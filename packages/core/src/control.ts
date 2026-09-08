@@ -341,6 +341,26 @@ export class ControlClient {
         return this.transport.request("POST", "/api/control/auth/pair", { code });
     }
 
+    /** 撤销当前浏览器会话；传输失败时不得假定撤销成功。 */
+    async logout(): Promise<void> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+            const result: unknown = await Promise.race([
+                this.transport.request("POST", "/api/control/auth/logout", {}),
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(() => reject(new Error("会话撤销结果未确认")), 15_000);
+                }),
+            ]);
+            if (
+                !result || typeof result !== "object" || Array.isArray(result) ||
+                Object.keys(result).length !== 1 ||
+                !("loggedOut" in result) || result.loggedOut !== true
+            ) throw new Error("会话撤销结果未确认");
+        } finally {
+            if (timer !== undefined) clearTimeout(timer);
+        }
+    }
+
     planInstallation(
         selection: ControlExtensionSelection,
         expectedGenerationId: string | null,
@@ -400,6 +420,8 @@ export function createHttpControlTransport(
                 body: body === undefined ? undefined : JSON.stringify(body),
                 cache: "no-store",
                 redirect: "error",
+                signal: method === "POST" && route === "/api/control/auth/logout"
+                    ? AbortSignal.timeout(15_000) : undefined,
             });
             const data = await response.json();
             if (!response.ok)

@@ -25,10 +25,14 @@ const stateLabels = {
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 async function refresh() {
     if (!token.value) return;
+    const expectedToken = token.value;
     try {
-        state.value = await client.status();
+        const next = await client.status();
+        if (token.value !== expectedToken) return;
+        state.value = next;
         error.value = "";
     } catch (cause) {
+        if (token.value !== expectedToken) return;
         error.value = cause instanceof Error ? cause.message : "无法连接管理服务";
     }
 }
@@ -54,6 +58,19 @@ function reconnect() {
     state.value = undefined;
     code.value = "";
     error.value = "";
+}
+async function logout() {
+    busy.value = true;
+    error.value = "";
+    try {
+        await client.logout();
+        reconnect();
+    } catch {
+        error.value =
+            "无法确认服务端会话已撤销。请重试；若凭据已失效，可清除本地凭据后使用恢复码重新配对。";
+    } finally {
+        busy.value = false;
+    }
 }
 async function command(action: "start" | "stop" | "restart") {
     busy.value = true;
@@ -86,9 +103,13 @@ onUnmounted(() => {
                 <p class="text-xs tracking-widest text-fg-muted mb-3">ONEBOTS</p>
                 <h1 class="text-3xl font-semibold">控制台</h1>
                 <p class="text-fg-secondary mt-3">管理服务保持在线，网关可以独立启动与停止。</p>
-                <UiButton v-if="token" class="mt-3" :disabled="busy" @click="reconnect"
-                    >重新配对</UiButton
-                >
+                <div v-if="token" class="mt-3 flex gap-3">
+                    <UiButton :disabled="busy" @click="logout">退出登录</UiButton>
+                    <UiButton :disabled="busy" @click="reconnect">清除本地凭据</UiButton>
+                </div>
+                <p v-if="token" class="text-sm text-fg-secondary mt-3">
+                    退出登录会撤销服务端会话。仅清除本地凭据不会撤销会话；再次连接需申请恢复码。
+                </p>
             </header>
             <p v-if="error" role="alert" class="rounded-panel border border-danger p-4 text-danger">
                 {{ error }}

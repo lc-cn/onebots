@@ -36,3 +36,51 @@ it("恢复码仅本地签发，HTTP匿名和已有token均无重置权限，兑�
     const current = new ControlClient(createHttpControlTransport(url, () => next.token));
     await expect(current.status()).resolves.toHaveProperty("manager");
 });
+it("退出撤销跨管理服务重启保持，本地恢复可以重新配对", async () => {
+    directory = fs.mkdtempSync("/tmp/ob-logout-host-");
+    host = await startControlHost({ workspace: directory, port: 0 });
+    const endpoint = () => {
+        const address = host?.server.address();
+        if (!address || typeof address === "string") throw new Error("missing listener");
+        return `http://127.0.0.1:${address.port}`;
+    };
+    const local = createLocalControlClient(directory);
+    let url = endpoint();
+    let anonymous = new ControlClient(createHttpControlTransport(url, () => ""));
+    const { token } = await anonymous.pair((await local.bootstrap()).code);
+    const current = new ControlClient(createHttpControlTransport(url, () => token));
+    await expect(local.logout()).rejects.toThrow();
+    for (const body of ['{"token":"other"}', "[]", "null"]) {
+        const response = await fetch(`${url}/api/control/auth/logout`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body,
+        });
+        expect(response.ok).toBe(false);
+        await response.text();
+        await expect(current.status()).resolves.toHaveProperty("manager");
+    }
+    await expect(current.logout()).resolves.toBeUndefined();
+    expect(
+        (
+            await fetch(`${url}/api/control/status`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+        ).status,
+    ).toBe(401);
+    await host.close();
+    host = await startControlHost({ workspace: directory, port: 0 });
+    url = endpoint();
+    expect(
+        (
+            await fetch(`${url}/api/control/status`, {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+        ).status,
+    ).toBe(401);
+    anonymous = new ControlClient(createHttpControlTransport(url, () => ""));
+    const recovered = await anonymous.pair((await local.recoverAuthentication()).code);
+    await expect(
+        new ControlClient(createHttpControlTransport(url, () => recovered.token)).status(),
+    ).resolves.toHaveProperty("manager");
+});

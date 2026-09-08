@@ -9,7 +9,7 @@ import {
     claimServiceProcessOwnership,
     closeServiceProcessOwnership,
 } from "../service-migration-processes.js";
-import { handleControlAuth } from "./auth-api.js";
+import { handleControlAuthRequest } from "./auth-api.js";
 import { handleServiceMigrationRequest, serviceMigrationStatus } from "./service-migration-api.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -256,13 +256,7 @@ export async function startControlHost(options: ControlHostOptions) {
                     json(response, 403, { message: "控制请求来源无效" });
                     return;
                 }
-                const authentication = await handleControlAuth({
-                    pathname,
-                    method: request.method,
-                    local,
-                    auth,
-                    body: () => readBody(request),
-                });
+                const authentication = await handleControlAuthRequest(request, local, auth, mcp);
                 if (authentication) {
                     json(response, authentication.status, authentication.body);
                     return;
