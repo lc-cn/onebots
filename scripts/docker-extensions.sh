@@ -4,10 +4,27 @@ set +x
 set -eu
 set -f
 umask 077
+WIZARD=0
 ACTION=${1:-}
+if [ -z "$ACTION" ]; then
+  if [ ! -t 0 ]; then echo '请在终端运行此向导，或使用 install <扩展名> / rollback'; exit 2; fi
+  WIZARD=1
+  printf 'OneBots 扩展管理\n  1. 安装扩展\n  2. 恢复上一版本\n请选择 [1]: '
+  IFS= read -r CHOICE
+  case "${CHOICE:-1}" in
+    1)
+      printf '扩展名（如 icqq；多个名称用空格分隔）: '
+      IFS= read -r NAMES
+      set -- install $NAMES;;
+    2) set -- rollback;;
+    *) echo '已取消'; exit 0;;
+  esac
+  ACTION=$1
+fi
 if [ "$ACTION" != install ] && [ "$ACTION" != rollback ]; then
-  echo '用法: sh scripts/docker-extensions.sh install icqq [--apply]'
-  echo '      sh scripts/docker-extensions.sh rollback <当前版本ID> [--apply]'
+  echo '用法: sh scripts/docker-extensions.sh（交互向导）'
+  echo '      sh scripts/docker-extensions.sh install icqq [--apply]'
+  echo '      sh scripts/docker-extensions.sh rollback [--apply]'
   exit 2
 fi
 shift
@@ -20,18 +37,42 @@ for item in "$@"; do
   if [ "$ACTION" = rollback ]; then EXPECTED=$item; else PACKAGES="$PACKAGES $item"; fi
 done
 if [ "$ACTION" = install ] && [ -z "$PACKAGES" ]; then echo '请明确选择至少一个扩展'; exit 2; fi
-if [ "$ACTION" = rollback ] && [ -z "$EXPECTED" ]; then echo '请提供要回滚的当前版本 ID'; exit 2; fi
-DATA=${ONEBOTS_DATA_DIR:-"$(pwd)/data"}
+CONTAINER=${ONEBOTS_CONTAINER_NAME:-}
+if [ -z "$CONTAINER" ]; then
+  # 只识别当前 Compose 项目中的 onebots 服务，不扫描或猜测其他部署。
+  CONTAINER=$(docker compose ps -aq onebots 2>/dev/null || true)
+  case "$CONTAINER" in *'
+'*) echo '检测到多个 OneBots 容器，请用 ONEBOTS_CONTAINER_NAME 指定一个'; exit 1;; esac
+  CONTAINER=${CONTAINER:-onebots}
+fi
+RUNNING_IMAGE=$(docker inspect --format '{{.Image}}' "$CONTAINER" 2>/dev/null || true)
+DATA=${ONEBOTS_DATA_DIR:-}
+if [ -n "$RUNNING_IMAGE" ] && [ -z "$DATA" ]; then
+  DATA=$(docker inspect --format '{{range .Mounts}}{{if and (eq .Destination "/data") (eq .Type "bind")}}{{.Source}}{{end}}{{end}}' "$CONTAINER")
+  if [ -z "$DATA" ]; then echo '此部署未使用本地 /data 绑定目录，当前安装器不支持；不会改动容器'; exit 1; fi
+fi
+DATA=${DATA:-"$(pwd)/data"}
 mkdir -p "$DATA/extensions"
 STORE=$(cd "$DATA/extensions" && pwd -P)
-IMAGE=${ONEBOTS_IMAGE:-ghcr.io/lc-cn/onebots:master}
-CONTAINER=${ONEBOTS_CONTAINER_NAME:-onebots}
+IMAGE=${ONEBOTS_IMAGE:-${RUNNING_IMAGE:-ghcr.io/lc-cn/onebots:master}}
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then docker pull "$IMAGE"; fi
 IMAGE_ID=$(docker image inspect --format '{{.Id}}' "$IMAGE")
+if [ "$WIZARD" = 1 ]; then
+  printf '数据目录：%s\n' "$DATA"
+  if [ -n "$RUNNING_IMAGE" ]; then
+    APPLY=1
+    printf '目标容器：%s；完成后会短暂重启并检查运行状态。\n' "$CONTAINER"
+  else
+    echo '尚未创建容器；安装完成后运行 docker compose up -d。'
+  fi
+  printf '确认%s？[y/N]: ' "$(if [ "$ACTION" = install ]; then printf '安装%s' "$PACKAGES"; else printf '恢复上一版本'; fi)"
+  IFS= read -r ANSWER
+  case "$ANSWER" in y|Y|yes|YES) ;; *) echo '已取消'; exit 0;; esac
+fi
 if [ "$APPLY" = 1 ]; then
-  RUNNING_IMAGE=$(docker inspect --format '{{.Image}}' "$CONTAINER")
   if [ "$RUNNING_IMAGE" != "$IMAGE_ID" ]; then echo '目标容器与安装镜像不一致；请先使用相同镜像创建容器'; exit 1; fi
-  MOUNT_SOURCE=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Source}}{{end}}{{end}}' "$CONTAINER")
+  MOUNT_SOURCE=$(docker inspect --format '{{range .Mounts}}{{if and (eq .Destination "/data") (eq .Type "bind")}}{{.Source}}{{end}}{{end}}' "$CONTAINER")
+  if [ -z "$MOUNT_SOURCE" ]; then echo '目标容器未使用 /data 绑定目录，拒绝重启'; exit 1; fi
   MOUNT_SOURCE=$(cd "$MOUNT_SOURCE" && pwd -P)
   if [ "$MOUNT_SOURCE/extensions" != "$STORE" ]; then echo '目标容器未使用此 data 绑定目录，拒绝重启其他部署'; exit 1; fi
 fi
@@ -69,6 +110,9 @@ ready() {
   return 1
 }
 if [ "$ACTION" = rollback ]; then
+  # 在安装锁内读取当前版本，用户不用复制内部版本 ID。
+  if [ -z "$EXPECTED" ]; then EXPECTED=$(manager current); fi
+  if [ "$EXPECTED" = legacy ]; then echo '还没有可恢复的扩展版本'; exit 1; fi
   manager rollback "$EXPECTED"
   if [ "$APPLY" = 1 ]; then docker restart "$CONTAINER" >/dev/null; ready || { echo '回滚后在线验证失败，请检查容器日志'; exit 1; }; fi
   echo '[onebots] 已切回上一版本'; exit 0
@@ -123,5 +167,5 @@ if [ "$APPLY" = 1 ]; then
   fi
   echo "[onebots] $ID 已应用并通过在线验证"
 else
-  echo "[onebots] $ID 已验证并选为下次启动版本；请执行 docker compose restart onebots"
+  echo "[onebots] 安装完成。已有容器执行 docker compose restart onebots；首次部署执行 docker compose up -d。"
 fi

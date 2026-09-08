@@ -2,14 +2,29 @@
 
 官方镜像不包含 ICQQ 及 `@icqqjs/icqq`。私有扩展由你使用自己的包访问授权安装，不需要把 Token 交给长期运行的网关，也不需要向容器挂载 Docker socket。
 
-## 一次性安装器
+## 推荐：跟着向导完成
 
-在 **Docker 宿主机** 的 Compose 项目目录运行。需要本机 Docker CLI、POSIX shell，以及当前版本的官方镜像；Windows 可在 WSL 中执行。默认使用当前目录的 `data` 绑定目录、`ghcr.io/lc-cn/onebots:master` 镜像和名为 `onebots` 的容器。
+在 Docker 宿主机的 OneBots 仓库目录运行：
 
-下载与当前镜像版本匹配的仓库脚本，或在对应仓库 checkout 中运行：
+```bash
+sh scripts/docker-extensions.sh
+```
+
+选择「安装扩展」，输入 `icqq`，确认后按提示输入 Token。安装器自动识别当前 Compose 项目的 OneBots 容器、镜像和数据目录，安装并检查所需依赖，成功后重启，失败自动恢复。**不用填写镜像参数、编写 npmrc 或记住版本 ID。** 没有容器时会先准备好依赖，再提示运行 `docker compose up -d`。
+
+想撤销上次安装，再次打开向导，选择「恢复上一版本」即可。安装只准备扩展，不会自动启用账号或协议；随后进入 OneBots 工作台配置账号。
+
+需要本机 Docker CLI 和终端；Windows 可在 WSL 中执行。脚本与镜像应使用同一发布版本。目前支持本地 `data` 绑定目录，其他部署会明确提示，不会猜测或修改别的容器。
+
+::: details 高级用法、自动化与故障排查
+
+## 快捷命令与高级选项
+
+熟悉操作后可以跳过向导：
 
 ```bash
 sh scripts/docker-extensions.sh install icqq --apply
+sh scripts/docker-extensions.sh rollback --apply
 ```
 
 交互终端会隐藏输入 GitHub Packages Token。Token 需要 `read:packages` 和 `@icqqjs` 包访问资格；它只用于下载，不是 QQ 登录密码。脚本不会自动启用账号或协议。
@@ -32,7 +47,7 @@ sh scripts/docker-extensions.sh install telegram @onebots/protocol-onebot-v11
 
 仅允许当前镜像版本目录中的扩展；包版本由镜像目录指定。已有私有扩展会保留在新候选版本中，并与当前镜像的版本目录对齐，因此再次安装或升级时可能仍需提供其下载凭据。
 
-可通过环境变量指定部署位置，不能通过命令参数传 Token：
+默认沿用检测到的容器镜像与数据目录。只有特殊部署才需要环境变量，不能通过命令参数传 Token：
 
 ```bash
 ONEBOTS_IMAGE=ghcr.io/lc-cn/onebots:master \
@@ -89,13 +104,13 @@ sh scripts/docker-extensions.sh install icqq
 
 ## 回滚与故障排查
 
-安装成功时会输出版本 ID：
+无需查找版本 ID：
 
 ```bash
-sh scripts/docker-extensions.sh rollback 当前版本ID --apply
+sh scripts/docker-extensions.sh rollback --apply
 ```
 
-只能回滚当前版本，防止覆盖其他操作的切换。首次隔离安装也可以回退到原有 `/data/extensions` 布局。旧版本目录不会自动删除；确认不再用于回滚、且没有进程使用后再清理。回滚扩展不会回滚账号配置或数据库。
+在安装锁内自动读取当前版本，防止覆盖其他操作的切换；自动化也可显式传入期望的当前版本 ID。首次隔离安装也可以回退到原有 `/data/extensions` 布局。旧版本目录不会自动删除；确认不再用于回滚、且没有进程使用后再清理。回滚扩展不会回滚账号配置或数据库。
 
 - **401/403**：检查 registry、Token 权限和包访问资格；原始包管理器输出不会直接打印，以免包含认证信息。
 - **安装锁已存在**：先确认没有安装容器仍在运行。正常退出会释放锁；宿主强制断电或进程被杀死后可能保留锁，不会按超时自动抢占。确认所有相关容器已停止后，再由管理员处理 `data/extensions/.release-install.lock`。
@@ -117,3 +132,5 @@ docker build -f deploy/docker/Dockerfile.private \
 示例通过 BuildKit secret 和 tmpfs 下载，随后在不联网、不挂载凭据的独立步骤验证。安装产物位于 `/opt/onebots-private`，不会被 `/data` 挂载覆盖。此方式通过重新构建、替换镜像升级，不使用宿主脚本切换 `/data/extensions`。
 
 **派生镜像和构建缓存包含私有模块代码，必须限制访问，不能发布到公共镜像仓库。** Secret mount 保护凭据，不授予私有包的再分发权限。不要改成 `ARG TOKEN`、`ENV TOKEN`，也不要 `COPY .npmrc` 后再删除。
+
+:::

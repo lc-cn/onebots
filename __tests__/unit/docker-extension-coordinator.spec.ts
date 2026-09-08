@@ -43,3 +43,52 @@ esac
     expect(calls).not.toContain("docker-extension-release.mjs activate ");
     if (phase === "download") expect(calls).not.toContain("docker-extension-installer.mjs verify ");
 });
+
+it.each([true, false])("自动识别 Compose 部署并安全处理绑定目录（支持=%s）", supported => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-discovery-"));
+    roots.push(root);
+    const data = path.join(root, "data with spaces");
+    fs.mkdirSync(data);
+    const log = path.join(root, "calls");
+    fs.writeFileSync(
+        path.join(root, "docker"),
+        `#!/bin/sh
+printf '%s\\n' "$*" >> "$TEST_CALLS"
+case "$*" in
+  'compose ps -aq onebots') echo compose-gateway;;
+  'inspect --format {{.Image}} compose-gateway') echo sha256:running;;
+  'inspect --format {{range .Mounts}}'*) if [ "$TEST_SUPPORTED" = 1 ]; then printf '%s\\n' "$TEST_DATA"; fi;;
+  'image inspect --format'*) echo sha256:running;;
+  *'docker-extension-release.mjs current '*) echo installed-version;;
+esac
+`,
+        { mode: 0o755 },
+    );
+    const env: Record<string, string | undefined> = {
+        ...process.env,
+        PATH: `${root}:${process.env.PATH}`,
+        TEST_CALLS: log,
+        TEST_DATA: data,
+        TEST_SUPPORTED: supported ? "1" : "0",
+    };
+    for (const key of ["ONEBOTS_DATA_DIR", "ONEBOTS_IMAGE", "ONEBOTS_CONTAINER_NAME"])
+        delete env[key];
+    const result = spawnSync("sh", ["scripts/docker-extensions.sh", "rollback", "--apply"], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env,
+    });
+    expect(result.status).toBe(supported ? 0 : 1);
+    const calls = fs.readFileSync(log, "utf8");
+    if (supported) {
+        expect(calls).toContain(`type=bind,src=${fs.realpathSync(data)}/extensions,dst=/data/extensions`);
+        expect(calls).toMatch(
+            /docker-extension-release.mjs rollback \/data\/extensions \S+ installed-version/,
+        );
+        expect(calls).toContain("restart compose-gateway");
+        expect(calls).not.toContain("ghcr.io/lc-cn/onebots:master");
+    } else {
+        expect(calls).not.toContain("docker-extension-release.mjs init ");
+        expect(calls).not.toContain("restart ");
+    }
+});
