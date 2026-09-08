@@ -159,3 +159,10 @@ export function advanceManagerUpgrade(
     const next = parse({ ...expected, phase, managerId });
     file.replaceRaw(snapshot.revision, Buffer.from(JSON.stringify(next)));
 }
+
+/** 普通托管入口不能把未结束升级当成一次独立启停或卸载。 */
+export function assertNoPendingManagerUpgrade(workspace: string): void {
+    const status = managerUpgradeStatus(workspace);
+    if (status.pending || status.recoveryRequired)
+        throw new Error("管理程序升级尚待确认或对账，禁止其他系统服务操作");
+}

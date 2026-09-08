@@ -1,3 +1,4 @@
+import { assertNoPendingManagerUpgrade } from "./service-upgrade-workspace.js";
 import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -83,6 +84,7 @@ export async function reconcileManagerServiceOperation(
             throw failure();
         const spec = record.managerSpec;
         existingWorkspace(spec.workspace);
+        assertNoPendingManagerUpgrade(spec.workspace);
         if (readServiceMigrationPending(spec.workspace)) throw failure();
         const releaseWorkspace = acquireControlWorkspace(spec.workspace);
         try {
@@ -131,6 +133,7 @@ export async function reconcileManagerServiceOperation(
                     captured.dispose();
                 }
             }
+            assertNoPendingManagerUpgrade(spec.workspace);
             if (readServiceMigrationPending(spec.workspace)) throw failure();
             // 保留原 ID 和意图；完成记录也必须重新核验，不能凭旧成功跳过现场。
             const completed: ManagerServiceRecord = {

@@ -1,3 +1,4 @@
+import { assertNoPendingManagerUpgrade } from "./service-upgrade-workspace.js";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { readServiceMetadata } from "./service-metadata.js";
@@ -72,6 +73,7 @@ export async function uninstallManagerService(
         if (metadata.kind !== "control" || metadata.spec.scope !== scope)
             throw new Error("服务元数据无效，禁止卸载");
         const spec = metadata.spec;
+        assertNoPendingManagerUpgrade(spec.workspace);
         if (readServiceMigrationPending(spec.workspace))
             throw new Error("工作区仍在迁移中，禁止卸载");
         const journal = new FileManagerServiceJournal(

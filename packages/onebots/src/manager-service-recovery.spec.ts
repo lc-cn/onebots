@@ -317,3 +317,22 @@ describe("manager service explicit target-state reconciliation", () => {
         expect(f.effects).toEqual([]);
     });
 });
+
+it("普通stop对账不能跨过尚未完成的升级确认", async () => {
+    const f = fixture();
+    fs.writeFileSync(
+        path.join(f.workspace, ".control/manager-upgrade-pending.json"),
+        JSON.stringify({
+            schemaVersion: 1,
+            operationId: "upgrade",
+            candidateDigest: "a".repeat(64),
+            phase: "releasing",
+            managerId: "10000000-0000-4000-8000-000000000001",
+        }),
+        { mode: 0o600 },
+    );
+    await expect(
+        reconcileManagerServiceOperation("operation", "user", f.host, { platform: f.platform }),
+    ).rejects.toThrow();
+    expect(f.effects).toEqual([]);
+});

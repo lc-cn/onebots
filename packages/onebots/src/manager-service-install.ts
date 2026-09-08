@@ -1,3 +1,4 @@
+import { assertNoPendingManagerUpgrade } from "./service-upgrade-workspace.js";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -61,10 +62,12 @@ export async function installManagerService(
             path.join(files.stateDir, "manager-operations"),
         );
         if (journal.health().recoveryRequired) throw new Error("前次系统服务操作尚待对账");
+        assertNoPendingManagerUpgrade(spec.workspace);
         assertManagerServiceRuntime(spec, host);
         await (dependencies.assertAbsent ?? assertServiceAbsent)(spec.scope, host);
         const plan = prepareManagerServiceInstallation(spec, host);
         installation = plan;
+        assertNoPendingManagerUpgrade(spec.workspace);
         if (readServiceMigrationPending(spec.workspace))
             throw new Error("目标工作区仍在服务迁移中，禁止首次安装");
         if (

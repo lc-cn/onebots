@@ -1,3 +1,4 @@
+import { managerUpgradeStatus } from "./service-upgrade-workspace.js";
 import { ConfigurationFile } from "./configuration/configuration-file.js";
 import { renderInstalledManagerService } from "./manager-service-definition.js";
 import { isDeepStrictEqual } from "node:util";
@@ -113,6 +114,8 @@ async function inspectManagerServiceStatusSnapshot(
         return result;
     }
     const spec = metadata.spec;
+    const upgrade = managerUpgradeStatus(spec.workspace);
+    result.serviceRecoveryRequired = upgrade.pending || upgrade.recoveryRequired;
     function definitionCurrent(): boolean {
         try {
             return new ConfigurationFile(files.definition)
@@ -209,7 +212,9 @@ async function inspectManagerServiceStatusSnapshot(
         }
         result.manager.ipc = "available";
         result.serviceRecoveryRequired =
-            manager.serviceMigration.pending || manager.serviceMigration.recoveryRequired;
+            result.serviceRecoveryRequired ||
+            manager.serviceMigration.pending ||
+            manager.serviceMigration.recoveryRequired;
         result.gateway = {
             actual: manager.gateway.actual,
             desired: manager.gateway.desired,

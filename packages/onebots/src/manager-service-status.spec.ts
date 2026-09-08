@@ -242,3 +242,51 @@ describe("manager service readonly status", () => {
         );
     });
 });
+
+it.each(["prepared", "releasing", "released", "damaged"])(
+    "离线状态仍只读报告%s升级标记",
+    async phase => {
+        const f = fixture();
+        Object.assign(f.os, {
+            state: "stopped",
+            running: false,
+            processId: null,
+            identity: null,
+            quiescent: true,
+        });
+        fs.mkdirSync(path.join(f.spec.workspace, ".control"), { recursive: true, mode: 0o700 });
+        const file = path.join(f.spec.workspace, ".control/manager-upgrade-pending.json");
+        const bytes =
+            phase === "damaged"
+                ? "{"
+                : JSON.stringify({
+                      schemaVersion: 1,
+                      operationId: "upgrade",
+                      candidateDigest: "a".repeat(64),
+                      ...(phase === "prepared" ? {} : { phase, managerId: randomUUID() }),
+                  });
+        fs.writeFileSync(file, bytes, { mode: 0o600 });
+        const status = await inspectManagerServiceStatus("user", f.host, f.dependencies);
+        expect(status.serviceRecoveryRequired).toBe(phase !== "released");
+        expect(status.gateway.actual).toBe("unknown");
+        expect(f.ipc).not.toHaveBeenCalled();
+        expect(fs.readFileSync(file, "utf8")).toBe(bytes);
+    },
+);
+
+it("在线IPC不能覆盖磁盘上的升级待确认状态", async () => {
+    const f = fixture();
+    fs.mkdirSync(path.join(f.spec.workspace, ".control"), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(
+        path.join(f.spec.workspace, ".control/manager-upgrade-pending.json"),
+        JSON.stringify({
+            schemaVersion: 1,
+            operationId: "upgrade",
+            candidateDigest: "a".repeat(64),
+        }),
+        { mode: 0o600 },
+    );
+    const status = await inspectManagerServiceStatus("user", f.host, f.dependencies);
+    expect(status.manager.ipc).toBe("available");
+    expect(status.serviceRecoveryRequired).toBe(true);
+});

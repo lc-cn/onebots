@@ -299,3 +299,17 @@ it("byte-identical metadata replacement after unregister is preserved by capture
     expect(fs.existsSync(test.files.metadata)).toBe(true);
     expect(test.events).toEqual(["quiesce", "unregister"]);
 });
+
+it("损坏升级标记也阻止卸载，保留定义和数据", async () => {
+    const f = fixture();
+    fs.writeFileSync(path.join(f.workspace, ".control/manager-upgrade-pending.json"), "{", {
+        mode: 0o600,
+    });
+    const definition = fs.readFileSync(f.files.definition);
+    await expect(uninstallManagerService("user", f.host, { platform: f.platform })).rejects.toThrow(
+        "升级尚待",
+    );
+    expect(f.events).toEqual([]);
+    expect(fs.readFileSync(f.files.definition)).toEqual(definition);
+    for (const item of f.preserved) expect(fs.readFileSync(item.file)).toEqual(item.bytes);
+});

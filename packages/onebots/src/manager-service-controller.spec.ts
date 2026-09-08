@@ -318,3 +318,21 @@ it("start of a failed manager first quiesces and restores enablement before star
     expect(result.status).toBe("succeeded");
     expect(test.events).toEqual(["quiesce", "proof", "reload:true", "proof", "start"]);
 });
+
+it.each(["start", "stop", "restart"] as const)("升级维护阻止普通%s且不派发OS动作", async action => {
+    const f = fixture();
+    fs.writeFileSync(
+        path.join(f.workspace, ".control/manager-upgrade-pending.json"),
+        JSON.stringify({
+            schemaVersion: 1,
+            operationId: "upgrade",
+            candidateDigest: "a".repeat(64),
+        }),
+        { mode: 0o600 },
+    );
+    await expect(controlManagerService(action, "user", f.host, f.dependencies)).rejects.toThrow(
+        "升级尚待",
+    );
+    expect(f.events).toEqual([]);
+    expect(fs.existsSync(path.join(f.files.stateDir, "manager-operations"))).toBe(false);
+});

@@ -1,3 +1,4 @@
+import { assertNoPendingManagerUpgrade } from "./service-upgrade-workspace.js";
 import fs from "node:fs";
 import { assertManagerServiceRuntime } from "./manager-service-preflight.js";
 import path from "node:path";
@@ -65,6 +66,7 @@ export async function controlManagerService(
             new FileServiceMigrationJournal(migrationDirectory).health().recoveryRequired
         )
             throw new Error("系统服务迁移尚待对账，禁止新的服务操作");
+        assertNoPendingManagerUpgrade(spec.workspace);
         if (readServiceMigrationPending(spec.workspace))
             throw new Error("系统服务迁移尚未确认，禁止新的服务操作");
         const journal = new FileManagerServiceJournal(

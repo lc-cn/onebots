@@ -303,3 +303,23 @@ it.each(["missing", "damaged", "live-owner"])(
         else expect(fs.existsSync(receipt)).toBe(false);
     },
 );
+
+it("已有工作区升级待确认时不借首次安装改写托管契约", async () => {
+    const f = fixture();
+    fs.mkdirSync(path.join(f.workspace, ".control"), { mode: 0o700 });
+    fs.writeFileSync(
+        path.join(f.workspace, ".control/manager-upgrade-pending.json"),
+        JSON.stringify({
+            schemaVersion: 1,
+            operationId: "upgrade",
+            candidateDigest: "a".repeat(64),
+        }),
+        { mode: 0o600 },
+    );
+    await expect(installManagerService(f.spec, f.host, { platform: f.platform })).rejects.toThrow(
+        "升级尚待",
+    );
+    expect(f.effects).toEqual([]);
+    expect(fs.existsSync(f.files.definition)).toBe(false);
+    expect(fs.existsSync(f.files.metadata)).toBe(false);
+});
