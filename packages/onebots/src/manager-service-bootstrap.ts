@@ -5,6 +5,7 @@ import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import { getServiceFiles } from "./service-files.js";
 import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
+import { captureManagerServiceRemoval } from "./manager-service-removal.js";
 import { readServiceMetadata } from "./service-metadata.js";
 import { inspectServiceMigrationRecovery } from "./service-recovery-inspection.js";
 import { ServiceOperationStorage, closedServiceObject } from "./service-operation-storage.js";
@@ -14,6 +15,7 @@ import { installManagerServiceWhileLocked, type ManagerServiceInstallDependencie
 import { ManagerCandidateInstaller, type ManagerCandidateInstallerOptions } from "./manager-runtime/installer.js";
 import { GenerationStore } from "./installation/generation-store.js";
 import { createGenerationPlan, type GenerationArtifact } from "./installation/generation-plan.js";
+import { bundledPnpmExecutor } from "./installation/bundled-runtime-artifacts.js";
 import { freezeGenerationArtifacts } from "./installation/generation-artifacts.js";
 import { managerCandidateDigest } from "./manager-runtime/identity.js";
 import { verifyManagerServiceCandidate } from "./manager-service-upgrade-candidate.js";
@@ -72,6 +74,7 @@ export async function bootstrapManagerService(
         if (!existing && (journal.health().recoveryRequired || readServiceMetadata(files.metadata).kind !== "missing")) throw failure();
         installer = new ManagerCandidateInstaller({ operationsDirectory: path.join(home, "operations"),
             store: new GenerationStore({ root: path.join(home, "versions"), isActive: () => true }),
+            ...bundledPnpmExecutor(),
             ...(dependencies.download ? { download: dependencies.download } : {}) });
         const boundCandidate = binding.has("candidate.json");
         const installed = existing || boundCandidate
@@ -94,6 +97,13 @@ export async function bootstrapManagerService(
         if (existing) {
             const record = journal.recoverable(request.id);
             if (record.action !== "install" || !isDeepStrictEqual(record.managerSpec, spec)) throw failure();
+            if (record.status === "succeeded" && !record.recoveryRequired) {
+                const current = readServiceMetadata(files.metadata);
+                if (current.kind !== "control" || !isDeepStrictEqual(current.spec, spec)) throw failure();
+                const captured = captureManagerServiceRemoval(spec, host);
+                try { if (!captured.verifyRemaining()) throw failure(); }
+                finally { captured.dispose(); }
+            }
             return record; // 返回原操作事实，不重新写定义、reload 或释放维护门禁。
         }
         return await installManagerServiceWhileLocked(spec, request.id, host, dependencies);

@@ -1,26 +1,50 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { installManagerService } from "../manager-service-install.js";
+import {
+    bootstrapManagerService,
+    type ManagerBootstrapRequest,
+} from "../manager-service-bootstrap.js";
+import { bundledRuntimeArtifacts } from "../installation/bundled-runtime-artifacts.js";
 import { installManagerServiceCommand } from "./manager-service-install-command.js";
 import { options as installOptions } from "../commands/install.js";
 import type { ManagerServiceSpec } from "../manager-service-spec.js";
 import type { ManagerServiceRecord } from "../manager-service-journal.js";
 
-vi.mock("../manager-service-install.js", () => ({ installManagerService: vi.fn() }));
+vi.mock("../manager-service-install.js", () => {
+    throw new Error("旧 installManagerService 旁路不可由 CLI 导入");
+});
+vi.mock("../manager-service-bootstrap.js", () => ({ bootstrapManagerService: vi.fn() }));
+vi.mock("../installation/bundled-runtime-artifacts.js", () => ({
+    bundledRuntimeArtifacts: vi.fn(),
+}));
+const artifacts = {
+    host: { name: "onebots", version: "1.0.0", spec: "1.0.0" },
+    core: { name: "@onebots/core", version: "1.0.0", spec: "1.0.0" },
+};
 const roots: string[] = [];
 afterEach(() => {
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
-    vi.mocked(installManagerService).mockReset();
+    vi.mocked(bootstrapManagerService).mockReset();
+    vi.mocked(bundledRuntimeArtifacts).mockReset();
     roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true }));
 });
 function fixture() {
     const root = fs.realpathSync(fs.mkdtempSync("/tmp/ob-install-cli-"));
     roots.push(root);
-    vi.mocked(installManagerService).mockImplementation(async spec => record(spec));
+    vi.mocked(bundledRuntimeArtifacts).mockReturnValue(artifacts);
+    vi.mocked(bootstrapManagerService).mockImplementation(async request =>
+        record(candidateSpec(request), { id: request.id }),
+    );
     return root;
+}
+function candidateSpec(request: ManagerBootstrapRequest): ManagerServiceSpec {
+    return {
+        ...request.service,
+        workingDirectory: "/verified-candidate",
+        binPath: "/verified-candidate/node_modules/onebots/lib/bin.js",
+    };
 }
 function record(
     spec: ManagerServiceSpec,
@@ -53,44 +77,63 @@ describe("首次管理服务安装CLI", () => {
         const root = fixture();
         vi.stubEnv("ONEBOTS_WORKSPACE", undefined);
         await installManagerServiceCommand({});
-        expect(vi.mocked(installManagerService).mock.calls.at(-1)?.[0].workspace).toBe(
+        expect(vi.mocked(bootstrapManagerService).mock.calls.at(-1)?.[0].service.workspace).toBe(
             fs.realpathSync(process.cwd()),
         );
         vi.stubEnv("ONEBOTS_WORKSPACE", path.join(root, "from-env"));
         await installManagerServiceCommand({});
-        expect(vi.mocked(installManagerService).mock.calls.at(-1)?.[0].workspace).toBe(
+        expect(vi.mocked(bootstrapManagerService).mock.calls.at(-1)?.[0].service.workspace).toBe(
             path.join(root, "from-env"),
         );
         await installManagerServiceCommand({ dataDir: path.join(root, "explicit") });
-        expect(vi.mocked(installManagerService).mock.calls.at(-1)?.[0].workspace).toBe(
+        expect(vi.mocked(bootstrapManagerService).mock.calls.at(-1)?.[0].service.workspace).toBe(
             path.join(root, "explicit"),
         );
         expect(fs.existsSync(path.join(root, "from-env"))).toBe(false);
         expect(fs.existsSync(path.join(root, "explicit"))).toBe(false);
     });
-    it("未来目录只读规范化，当前Node/bin/cwd形成serve契约且成功不宣称已运行", async () => {
+    it("未来目录只读规范化，由 bootstrap 决定候选路径且成功不宣称已运行", async () => {
         const root = fixture();
         const link = path.join(root, "ancestor-link");
         fs.symlinkSync(root, link);
         const future = path.join(link, "not-created", "工作 区");
         const output = await installManagerServiceCommand({ dataDir: future });
         const workspace = path.join(root, "not-created", "工作 区");
-        expect(vi.mocked(installManagerService).mock.calls[0][0]).toEqual({
-            schemaVersion: 1,
-            runtimeKind: "control",
-            scope: "user",
-            workspace,
-            workingDirectory: fs.realpathSync(process.cwd()),
-            nodePath: process.execPath,
-            binPath: fileURLToPath(new URL("../bin.js", import.meta.url)),
-            host: "127.0.0.1",
-            port: 6727,
-        });
+        expect(vi.mocked(bootstrapManagerService).mock.calls[0]).toEqual([
+            {
+                id: "initial-install",
+                service: {
+                    schemaVersion: 1,
+                    runtimeKind: "control",
+                    scope: "user",
+                    workspace,
+                    nodePath: process.execPath,
+                    host: "127.0.0.1",
+                    port: 6727,
+                },
+            },
+            { artifacts },
+        ]);
         expect(fs.existsSync(path.join(root, "not-created"))).toBe(false);
-        expect(output).toMatchObject({ exitCode: 0, output: expect.stringContaining("尚未启动") });
-        expect(output.output).toContain("操作 install-test：succeeded（completed）");
+        expect(output).toMatchObject({
+            exitCode: 0,
+            output: expect.stringContaining("管理服务已注册；本命令不会启动服务。"),
+        });
+        expect(output.output).toContain("操作 initial-install：succeeded（completed）");
         expect(output.output).toContain("onebots auth bootstrap --data-dir '" + workspace + "'");
         expect(output.output).toContain("onebots start\n");
+    });
+    it("重复 CLI 请求使用同一个稳定安装 ID", async () => {
+        const root = fixture();
+        await installManagerServiceCommand({ dataDir: root });
+        await installManagerServiceCommand({ dataDir: root });
+        expect(vi.mocked(bootstrapManagerService).mock.calls.map(call => call[0].id)).toEqual([
+            "initial-install",
+            "initial-install",
+        ]);
+        expect(vi.mocked(bootstrapManagerService).mock.calls[0]).toEqual(
+            vi.mocked(bootstrapManagerService).mock.calls[1],
+        );
     });
     it("已有坏业务YAML不读取，显式系统scope和监听值直接传递", async () => {
         const root = fixture();
@@ -103,7 +146,7 @@ describe("首次管理服务安装CLI", () => {
             port: 7821,
         });
         expect(read).not.toHaveBeenCalled();
-        expect(vi.mocked(installManagerService).mock.calls[0][0]).toMatchObject({
+        expect(vi.mocked(bootstrapManagerService).mock.calls[0][0].service).toMatchObject({
             scope: "system",
             host: "0.0.0.0",
             port: 7821,
@@ -121,7 +164,7 @@ describe("首次管理服务安装CLI", () => {
             expect(await installManagerServiceCommand({ dataDir: directory })).toMatchObject({
                 exitCode: 2,
             });
-        expect(installManagerService).not.toHaveBeenCalled();
+        expect(bootstrapManagerService).not.toHaveBeenCalled();
         expect(fs.existsSync(path.join(root, "missing"))).toBe(false);
     });
     it("EACCES不是缺失，不吞异常继续向上创建候选", async () => {
@@ -137,7 +180,7 @@ describe("首次管理服务安装CLI", () => {
             output: "管理服务安装选项或目录无法确认，未执行安装。",
             exitCode: 2,
         });
-        expect(installManagerService).not.toHaveBeenCalled();
+        expect(bootstrapManagerService).not.toHaveBeenCalled();
     });
     it("非法输入不派发，异常和未知结果不泄露spec或原始错误", async () => {
         const root = fixture();
@@ -147,16 +190,21 @@ describe("首次管理服务安装CLI", () => {
         expect(
             await installManagerServiceCommand({ dataDir: root, register: ["mock"] } as never),
         ).toMatchObject({ exitCode: 2 });
-        expect(installManagerService).not.toHaveBeenCalled();
-        vi.mocked(installManagerService).mockImplementation(async spec =>
-            record(spec, { status: "interrupted", phase: "writing", recoveryRequired: true }),
+        expect(bootstrapManagerService).not.toHaveBeenCalled();
+        vi.mocked(bootstrapManagerService).mockImplementation(async request =>
+            record(candidateSpec(request), {
+                id: request.id,
+                status: "interrupted",
+                phase: "writing",
+                recoveryRequired: true,
+            }),
         );
         const unknown = await installManagerServiceCommand({ dataDir: root });
         expect(unknown.exitCode).toBe(1);
-        expect(unknown.output).toContain("操作 install-test：interrupted（writing）");
+        expect(unknown.output).toContain("操作 initial-install：interrupted（writing）");
         expect(unknown.output).not.toContain(root);
         expect(unknown.output).not.toContain("已安装");
-        vi.mocked(installManagerService).mockRejectedValue(new Error("private-secret raw spec"));
+        vi.mocked(bootstrapManagerService).mockRejectedValue(new Error("private-secret raw spec"));
         const failed = await installManagerServiceCommand({ dataDir: root });
         expect(failed.exitCode).toBe(1);
         expect(failed.output).not.toContain("private-secret");

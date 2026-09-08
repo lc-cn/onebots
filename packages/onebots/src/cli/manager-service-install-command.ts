@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { installManagerService } from "../manager-service-install.js";
+import { bootstrapManagerService } from "../manager-service-bootstrap.js";
+import { bundledRuntimeArtifacts } from "../installation/bundled-runtime-artifacts.js";
 import { parseManagerServiceSpec } from "../manager-service-spec.js";
 import type { CommandResult } from "./command-application.js";
 
@@ -67,7 +67,7 @@ export async function installManagerServiceCommand(
             ),
             workingDirectory: fs.realpathSync(process.cwd()),
             nodePath: process.execPath,
-            binPath: fileURLToPath(new URL("../bin.js", import.meta.url)),
+            binPath: process.execPath,
             host: options.host ?? "127.0.0.1",
             port: options.port ?? 6727,
         });
@@ -75,7 +75,11 @@ export async function installManagerServiceCommand(
         return { output: "管理服务安装选项或目录无法确认，未执行安装。", exitCode: 2 };
     }
     try {
-        const operation = await installManagerService(spec);
+        const { binPath: _binPath, workingDirectory: _workingDirectory, ...service } = spec;
+        const operation = await bootstrapManagerService(
+            { id: "initial-install", service },
+            { artifacts: bundledRuntimeArtifacts() },
+        );
         const label =
             "操作 " + operation.id + "：" + operation.status + "（" + operation.phase + "）";
         if (
@@ -86,7 +90,7 @@ export async function installManagerServiceCommand(
             return {
                 output:
                     label +
-                    "\n管理服务已安装，尚未启动。启动：\nonebots start" +
+                    "\n管理服务已注册；本命令不会启动服务。启动：\nonebots start" +
                     (spec.scope === "system" ? " --system" : "") +
                     "\n启动后在本机签发配对码：\nonebots auth bootstrap --data-dir " +
                     quote(spec.workspace),

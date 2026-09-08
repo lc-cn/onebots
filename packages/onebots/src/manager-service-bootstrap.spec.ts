@@ -269,3 +269,12 @@ describe("immutable manager bootstrap binding", () => {
         expect(mock.close).toHaveBeenCalledOnce();
     });
 });
+
+it("successful bootstrap receipt cannot claim a removed service is installed", async () => {
+    const f = fixture();
+    await bootstrapManagerService(f.request, f.dependencies, f.host);
+    fs.unlinkSync(f.files.metadata);
+    const effects = [...f.effects];
+    await expect(bootstrapManagerService(f.request, f.dependencies, f.host)).rejects.toThrow();
+    expect(f.effects).toEqual(effects);
+});
