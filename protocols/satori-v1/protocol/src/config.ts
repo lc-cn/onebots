@@ -1,4 +1,4 @@
-import { App } from "onebots";
+import { registerProtocolDefaults } from "onebots";
 
 // Satori Protocol Configuration
 declare module "onebots" {
@@ -71,7 +71,7 @@ export namespace SatoriConfig {
     }
 }
 
-App.registerGeneral("satori.v1", {
+registerProtocolDefaults("satori.v1", {
     use_http: false,
     use_ws: true,
     webhooks: [],

@@ -192,7 +192,7 @@ export async function runSetup(
     const loadPlugins =
         dependencies?.loadPlugins ??
         (async (adapterNames: string[], protocolNames: string[], applicationNames: string[]) => {
-            const runtime = await import("./runtime.js");
+            const runtime = await import("./runtime-plugins.js");
             return runtime.loadPlugins(adapterNames, protocolNames, applicationNames);
         });
     const failures = await loadPlugins(adapters, protocols, applications);

@@ -1,4 +1,4 @@
-import { App } from "onebots";
+import { registerProtocolDefaults } from "onebots";
 
 // OneBot V11 Protocol Configuration
 declare module "onebots" {
@@ -25,7 +25,7 @@ export namespace OneBotV11Config {
     }
 }
 
-App.registerGeneral("onebot.v11", {
+registerProtocolDefaults("onebot.v11", {
     use_http: true,
     use_ws: false,
     post_message_format: "array",

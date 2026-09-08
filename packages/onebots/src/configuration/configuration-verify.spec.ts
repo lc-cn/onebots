@@ -190,7 +190,9 @@ describe("配置隔离验证", () => {
         await fs.writeFile(
             path.join(host, "plugin-loader.js"),
             `import fs from 'node:fs';
-            fs.writeFileSync(${JSON.stringify(path.join(root, "observed.json"))}, JSON.stringify({home:process.env.HOME,secret:process.env.ONEBOTS_TEST_SECRET,mode:fs.statSync(process.env.HOME+'/request.json').mode & 511}));
+            const observedPath = ${JSON.stringify(path.join(root, "observed.json"))};
+            fs.writeFileSync(observedPath+'.tmp', JSON.stringify({home:process.env.HOME,secret:process.env.ONEBOTS_TEST_SECRET,mode:fs.statSync(process.env.HOME+'/request.json').mode & 511}));
+            fs.renameSync(observedPath+'.tmp', observedPath);
             await new Promise(()=>{});`,
         );
         try {

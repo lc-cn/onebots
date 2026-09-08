@@ -1,4 +1,4 @@
-import { App } from 'onebots';
+import { registerProtocolDefaults } from 'onebots';
 
 declare module 'onebots' {
     namespace Protocol {
@@ -8,4 +8,4 @@ declare module 'onebots' {
     }
 }
 
-App.registerGeneral('mcp.v1', {});
+registerProtocolDefaults('mcp.v1', {});

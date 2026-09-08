@@ -1,6 +1,9 @@
 import { ApplicationRegistry } from "@onebots/core";
-import { afterEach, describe, expect, it } from "vitest";
-import { loadPlugins } from "./runtime.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("./app.js", () => {
+    throw new Error("框架注册不能依赖旧管理宿主");
+});
+import { loadPlugins } from "./runtime-plugins.js";
 
 const promotedApplications = [
     "zhin",

@@ -1,7 +1,8 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { App, createOnebots } from "./app.js";
-import { ApplicationRegistry } from "@onebots/core";
+import { createOnebots } from "./app.js";
+import { loadPlugins } from "./runtime-plugins.js";
+export { loadPlugins } from "./runtime-plugins.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "./runtime-config-validator.js";
 import { createRuntimeShutdownCoordinator } from "./runtime-shutdown.js";
 
@@ -29,29 +30,6 @@ function formatProcessError(reason: unknown): string {
         }
     }
     return String(reason);
-}
-
-/** 加载命令指定的 adapter 与 protocol，并返回失败项。 */
-export async function loadPlugins(
-    adapters: string[],
-    protocols: string[],
-    applications: string[] = [],
-): Promise<string[]> {
-    const failures: string[] = [];
-    for (const adapter of adapters) {
-        if (!(await App.loadAdapterFactory(adapter))) failures.push(`adapter:${adapter}`);
-    }
-    for (const protocol of protocols) {
-        if (!(await App.loadProtocolFactory(protocol))) failures.push(`protocol:${protocol}`);
-    }
-    for (const application of applications) {
-        if (!(await App.loadApplicationFactory(application))) {
-            failures.push(`application:${application}`);
-            continue;
-        }
-        ApplicationRegistry.activate(application);
-    }
-    return failures;
 }
 
 /** 以前台模式运行桥接服务，并统一处理优雅关闭。 */

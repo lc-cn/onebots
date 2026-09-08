@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { BaseApp } from "@onebots/core";
-import { loadPlugins } from "../runtime.js";
+import { loadPlugins } from "../runtime-plugins.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "../runtime-config-validator.js";
 import { GatewayApp } from "./app.js";
 import {

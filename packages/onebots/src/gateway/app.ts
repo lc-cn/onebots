@@ -1,12 +1,12 @@
 import { BaseApp } from "@onebots/core";
 import packageMetadata from "../../package.json" with { type: "json" };
-import { mergeAppConfigDefaults } from "../app.js";
+import { mergeRuntimeConfigDefaults } from "../runtime-defaults.js";
 
 /** 只拥有平台和协议资源的真实宿主，无管理路由、管理凭据或管理 socket。 */
 export class GatewayApp extends BaseApp {
     constructor(config: BaseApp.Config) {
-        // 协议仍通过 App.registerGeneral 注册字段默认值；这不会创建账号或协议实例。
-        const runtimeConfig = mergeAppConfigDefaults(config);
+        // 注册表只提供协议字段默认值，不加载旧管理宿主或创建账号。
+        const runtimeConfig = mergeRuntimeConfigDefaults(config);
         delete runtimeConfig.username;
         delete runtimeConfig.password;
         delete runtimeConfig.access_token;

@@ -35,9 +35,7 @@ vi.mock('onebots', () => {
             registerSchema: vi.fn(),
             register: vi.fn(),
         },
-        App: {
-            registerGeneral: vi.fn(),
-        },
+        registerProtocolDefaults: vi.fn(),
         Account: class {},
         Adapter: class {},
         CommonEvent: {},

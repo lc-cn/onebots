@@ -1,4 +1,10 @@
 import {
+    mergeRuntimeConfigDefaults as mergeAppConfigDefaults,
+    runtimeDefaultConfig,
+    registerProtocolDefaults,
+} from "./runtime-defaults.js";
+export { mergeRuntimeConfigDefaults as mergeAppConfigDefaults, defineConfig } from "./runtime-defaults.js";
+import {
     AccountConfigDriftError,
     BaseApp,
     ConfigRestartRequiredError,
@@ -10,8 +16,6 @@ import {
     TokenManager,
     ApplicationRegistry,
     writeConfigFileAtomic,
-    deepClone,
-    deepMerge,
     type Account,
 } from "@onebots/core";
 import { getAppConfigSchema } from "./config-schema.js";
@@ -108,30 +112,6 @@ const client = (() => {
     }
     return "";
 })();
-
-export function mergeAppConfigDefaults(
-    config: App.Config,
-    defaults: App.Config = App.defaultConfig,
-): App.Config {
-    const defaultGeneral = defaults.general ?? {};
-    const configuredGeneral = config.general ?? {};
-    const general = Object.fromEntries(
-        [...new Set([...Object.keys(defaultGeneral), ...Object.keys(configuredGeneral)])].map(
-            key => [
-                key,
-                deepMerge(
-                    deepClone(defaultGeneral[key] ?? {}),
-                    deepClone(configuredGeneral[key] ?? {}),
-                ),
-            ],
-        ),
-    );
-    return {
-        ...defaults,
-        ...config,
-        general,
-    };
-}
 
 export class App extends BaseApp {
     public ws: WsServer;
@@ -675,18 +655,8 @@ export namespace App {
     export interface Config extends BaseApp.Config {
         plugins?: RuntimePluginSelection;
     }
-    export const defaultConfig: Config = {
-        ...BaseApp.defaultConfig,
-    };
-    export function registerGeneral<K extends keyof Protocol.Configs>(
-        key: K,
-        config: Protocol.Config<Protocol.Configs[K]>,
-    ) {
-        defaultConfig.general = {
-            ...defaultConfig.general,
-            [key]: config,
-        };
-    }
+    export const defaultConfig: Config = runtimeDefaultConfig;
+    export const registerGeneral = registerProtocolDefaults;
     export async function loadAdapterFactory(
         platform: string,
         maybeNames = pluginCandidates("adapter", platform),
@@ -769,8 +739,4 @@ export function createOnebots(
         disableClustering: true,
     });
     return new App(config as BaseApp.Config, runtimeContract);
-}
-
-export function defineConfig(config: BaseApp.Config) {
-    return config;
 }

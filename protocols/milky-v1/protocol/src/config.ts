@@ -1,4 +1,4 @@
-import { App } from "onebots";
+import { registerProtocolDefaults } from "onebots";
 // Milky Protocol Configuration
 // This file only exports configuration types
 declare module "onebots" {
@@ -55,7 +55,7 @@ export namespace MilkyConfig {
         filters?: Record<string, unknown>;
     }
 }
-App.registerGeneral("milky.v1", {
+registerProtocolDefaults("milky.v1", {
     use_http: true,
     use_ws: false,
 });

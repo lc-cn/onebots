@@ -148,7 +148,7 @@ export async function showCapabilities(
         dependencies ??
         ({
             loadPlugins: async (adapters: string[], protocols: string[]) => {
-                const { loadPlugins } = await import("../runtime.js");
+                const { loadPlugins } = await import("../runtime-plugins.js");
                 return loadPlugins(adapters, protocols);
             },
             getLoadedPlugins,
@@ -731,7 +731,7 @@ export async function runMcpStdio(
     options: RuntimeOptions & { account?: string },
 ): Promise<CommandResult> {
     const runtime = resolveConfiguredRuntimeOptions(options);
-    const { loadPlugins } = await import("../runtime.js");
+    const { loadPlugins } = await import("../runtime-plugins.js");
     const failures = await loadPlugins(runtime.adapters, runtime.protocols, runtime.applications);
     if (failures.length) throw new CliError(`无法加载插件: ${failures.join(", ")}`, 2);
 
