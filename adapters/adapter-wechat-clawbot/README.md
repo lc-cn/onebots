@@ -20,6 +20,7 @@ YAML 通常只需账号键、接收模式与可选超时，见文档站 [平台�
 ## 能力边界
 
 - 原生支持私聊文本、图片、视频、文件接收与发送，以及语音接收。出站媒体统一支持 HTTP(S)、本地路径、`file://`、`data:` URL 与 `base64://`/标准 `data` 字段。
+- 出站文本支持 `plain` 与 `markdown` 两种格式：默认纯文本模式移除常见 Markdown 标记但保留段落换行；`markdown` 模式将原文交给客户端渲染。媒体 caption 使用相同策略。
 - 每个事件保留 `raw_event`；未知 iLink item 投影为 `wechat_clawbot_raw`，不会伪造成文本。
 - iLink 消息可包含多个 item，适配器按原顺序完整投影。
 - 引用消息投影为标准 `reply` 段；工具调用进度保留为平台原生段。上游若实际下发 `group_id`，会按群消息投影，但当前通道不承诺群聊发送能力。
@@ -76,6 +77,7 @@ pnpm add @onebots/adapter-wechat-clawbot
 ```yaml
 wechat-clawbot.my_bot:
   receive_mode: polling # 或 manual
+  outbound_text_format: markdown # plain（默认）或 markdown
 ```
 
 ```bash

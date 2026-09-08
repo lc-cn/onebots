@@ -9,6 +9,7 @@ export * from "./events.js";
 export * from "./messages.js";
 export * from "./platform-actions.js";
 export * from "./sdk/ilink-bot.js";
+export type { IlinkBotOptions, OutboundTextFormat } from "./sdk/ilink-options.js";
 export type {
     IlinkBotEvents,
     IlinkInboundEventName,
@@ -48,6 +49,17 @@ export const wechatClawbotSchema: Schema = {
         ],
         description: "manual 保留登录与出站能力，但不启动 getupdates；由宿主调用 bot.ingest()",
         ui: { section: "transport" },
+    },
+    outbound_text_format: {
+        type: "string",
+        default: "plain",
+        label: "出站文本格式",
+        choices: [
+            { value: "plain", label: "纯文本（保留换行）" },
+            { value: "markdown", label: "Markdown 原样透传" },
+        ],
+        description: "plain 会移除常见 Markdown 标记但保留段落；markdown 将原文交给客户端渲染",
+        ui: { section: "advanced" },
     },
     qr_login_timeout_ms: {
         type: "number",

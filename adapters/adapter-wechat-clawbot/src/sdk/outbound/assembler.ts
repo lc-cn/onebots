@@ -1,5 +1,6 @@
 import type { IlinkJsonTransport } from "../transport/ilink-json-transport.js";
-import { coercePlainMarkdown } from "../internal/markdown-lite.js";
+import { formatOutboundText } from "../internal/markdown-lite.js";
+import type { OutboundTextFormat } from "../ilink-options.js";
 import { nextOutboundClientMarker } from "../internal/random-tags.js";
 import { AuthorKind, ItemKind, OutboxPhase } from "../protocol/wire-models.js";
 import type { OutboundWireEnvelope, WireCompositeItem } from "../protocol/wire-models.js";
@@ -44,8 +45,9 @@ export function packLiteralReply(
     peerKey: string,
     contextToken: string,
     markdown: string,
+    textFormat: OutboundTextFormat = "plain",
 ): OutboundWireEnvelope {
-    const flat = coercePlainMarkdown(markdown);
+    const formatted = formatOutboundText(markdown, textFormat);
     return {
         msg: {
             from_user_id: "",
@@ -53,7 +55,9 @@ export function packLiteralReply(
             client_id: nextOutboundClientMarker(),
             message_type: AuthorKind.Bot,
             message_state: OutboxPhase.Settled,
-            item_list: flat ? [{ type: ItemKind.Text, text_item: { text: flat } }] : undefined,
+            item_list: formatted
+                ? [{ type: ItemKind.Text, text_item: { text: formatted } }]
+                : undefined,
             context_token: contextToken,
         },
     };
@@ -64,8 +68,9 @@ export async function postLiteralReply(
     peerKey: string,
     contextToken: string,
     markdown: string,
+    textFormat: OutboundTextFormat = "plain",
 ): Promise<{ messageId: string }> {
-    const envelope = packLiteralReply(peerKey, contextToken, markdown);
+    const envelope = packLiteralReply(peerKey, contextToken, markdown, textFormat);
     await transport.dispatchOutboundEnvelope(envelope);
     return { messageId: envelope.msg?.client_id ?? "" };
 }
@@ -76,10 +81,14 @@ export async function postPhotoBundle(
     contextToken: string,
     staged: StagedCipherPayload,
     caption?: string,
+    textFormat: OutboundTextFormat = "plain",
 ): Promise<string> {
     const chain: WireCompositeItem[] = [];
     if (caption) {
-        chain.push({ type: ItemKind.Text, text_item: { text: coercePlainMarkdown(caption) } });
+        chain.push({
+            type: ItemKind.Text,
+            text_item: { text: formatOutboundText(caption, textFormat) },
+        });
     }
     chain.push({
         type: ItemKind.Image,
@@ -101,10 +110,14 @@ export async function postVideoBundle(
     contextToken: string,
     staged: StagedCipherPayload,
     caption?: string,
+    textFormat: OutboundTextFormat = "plain",
 ): Promise<string> {
     const chain: WireCompositeItem[] = [];
     if (caption) {
-        chain.push({ type: ItemKind.Text, text_item: { text: coercePlainMarkdown(caption) } });
+        chain.push({
+            type: ItemKind.Text,
+            text_item: { text: formatOutboundText(caption, textFormat) },
+        });
     }
     chain.push({
         type: ItemKind.Video,
@@ -126,10 +139,14 @@ export async function postFileBundle(
     contextToken: string,
     staged: StagedCipherPayload,
     caption?: string,
+    textFormat: OutboundTextFormat = "plain",
 ): Promise<string> {
     const chain: WireCompositeItem[] = [];
     if (caption) {
-        chain.push({ type: ItemKind.Text, text_item: { text: coercePlainMarkdown(caption) } });
+        chain.push({
+            type: ItemKind.Text,
+            text_item: { text: formatOutboundText(caption, textFormat) },
+        });
     }
     chain.push({
         type: ItemKind.File,
@@ -144,4 +161,33 @@ export async function postFileBundle(
         },
     });
     return emitFacetChain(transport, peerKey, contextToken, chain);
+}
+
+/** 将传输层与文本格式绑定为单个出站发送器，避免调用方重复传递策略。 */
+export function createOutboundSender(
+    transport: IlinkJsonTransport,
+    textFormat: OutboundTextFormat,
+) {
+    return {
+        postText: (peerKey: string, contextToken: string, markdown: string) =>
+            postLiteralReply(transport, peerKey, contextToken, markdown, textFormat),
+        postPhoto: (
+            peerKey: string,
+            contextToken: string,
+            staged: StagedCipherPayload,
+            caption?: string,
+        ) => postPhotoBundle(transport, peerKey, contextToken, staged, caption, textFormat),
+        postVideo: (
+            peerKey: string,
+            contextToken: string,
+            staged: StagedCipherPayload,
+            caption?: string,
+        ) => postVideoBundle(transport, peerKey, contextToken, staged, caption, textFormat),
+        postFile: (
+            peerKey: string,
+            contextToken: string,
+            staged: StagedCipherPayload,
+            caption?: string,
+        ) => postFileBundle(transport, peerKey, contextToken, staged, caption, textFormat),
+    };
 }
