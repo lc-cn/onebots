@@ -1,40 +1,22 @@
-import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const require = createRequire(new URL("../packages/onebots/package.json", import.meta.url));
-const yaml = require("js-yaml");
 const packageMetadata = require("./package.json");
 
 export const DOCKER_HEALTHCHECK_BODY_LIMIT_BYTES = 64 * 1024;
 export const DOCKER_EXPECTED_APPLICATION_VERSION = packageMetadata.version;
 
-export function readConfig(env = process.env) {
-    const configPath = env.ONEBOTS_CONFIG_PATH || "/data/config.yaml";
-    if (!fs.existsSync(configPath)) return {};
-    const parsed = yaml.load(fs.readFileSync(configPath, "utf8"));
-    if (parsed === undefined || parsed === null) return {};
-    if (typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error(`配置根节点不是对象: ${configPath}`);
-    }
-    return parsed;
+/** 与默认 Docker CMD 的 serve 一致：管理 PORT 不来自业务 YAML。 */
+export function readinessUrl(env = process.env) {
+    const port = Number(env.PORT ?? "6727");
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("管理端口无效");
+    return `http://127.0.0.1:${port}/ready`;
 }
 
-export function readinessUrl(config, env = process.env) {
-    if (env.ONEBOTS_HEALTHCHECK_URL) return env.ONEBOTS_HEALTHCHECK_URL;
-    const port = env.PORT || config.port || 6727;
-    const configuredPath = String(env.ONEBOTS_PATH ?? config.path ?? "").trim();
-    const prefix = configuredPath ? `/${configuredPath.replace(/^\/+|\/+$/g, "")}` : "";
-    return `http://127.0.0.1:${port}${prefix}/ready`;
-}
-
-export async function checkReadiness({
-    env = process.env,
-    config = readConfig(env),
-    fetcher = fetch,
-} = {}) {
-    const url = readinessUrl(config, env);
+export async function checkReadiness({ env = process.env, fetcher = fetch } = {}) {
+    const url = readinessUrl(env);
     const response = await fetcher(url, {
         headers: { accept: "application/json" },
         cache: "no-store",

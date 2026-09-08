@@ -6,8 +6,6 @@ import type {
     ControlConfigurationDraft,
     ControlConfigurationValidation,
     ControlConfigurationOperation,
-    ControlConfigurationChange,
-    ControlSecretChange,
 } from "@onebots/core/control";
 import UiButton from "../ui/UiButton.vue";
 import {
@@ -15,24 +13,20 @@ import {
     configurationRequest as bounded,
     matchingConfigurationTracking,
     readConfigurationTracking,
+    type ConfigurationTracking as Tracking,
 } from "./control-configuration-recovery.js";
 import ControlConfigurationFields from "./ControlConfigurationFields.vue";
 import type { SchemaFieldDef } from "./config/types.js";
-import { parseStructuredFieldValue } from "./config/utils.js";
 import {
     configurationGroups,
-    fieldKey,
+    configurationEdits,
+    configurationSecret,
     schemaRecord,
     valueAt,
 } from "./control-configuration-form.js";
 const props = defineProps<{ client: ControlClient }>();
 const emit = defineEmits<{ applied: [] }>();
 const STORAGE = "onebots.control.configuration";
-interface Tracking {
-    draftId?: string;
-    operationId?: string;
-    receiptId?: string;
-}
 const snapshot = ref<ControlConfigurationSnapshot>();
 const draft = ref<ControlConfigurationDraft>();
 const validation = ref<ControlConfigurationValidation>();
@@ -68,7 +62,7 @@ const fields = computed(() => groups.value.flatMap(group => group.fields));
 const dirty = computed(() => changed.value.size > 0);
 const locked = computed(() => busy.value || !draft.value || Boolean(tracking.value.operationId));
 const secret = (field: SchemaFieldDef) =>
-    projection.value?.secretStates.find(state => fieldKey(state.path) === field.key);
+    configurationSecret(field, projection.value?.secretStates ?? []);
 function remember(next: Tracking) {
     localStorage.setItem(STORAGE, JSON.stringify(next));
     tracking.value = next;
@@ -130,38 +124,22 @@ async function create() {
 }
 async function save(): Promise<boolean> {
     if (!draft.value) return false;
-    const changes: ControlConfigurationChange[] = [];
-    const secrets: ControlSecretChange[] = [];
-    for (const field of fields.value.filter(field => changed.value.has(field.key))) {
-        let value = values.value[field.key];
-        if (secret(field)) {
-            const action = modes.value[field.key] ?? "keep";
-            if (action === "set") {
-                if (value === undefined) {
-                    error.value = `请填写 ${field.label} 的新值`;
-                    return false;
-                }
-                secrets.push({ op: "set", path: field.path, value });
-            } else secrets.push({ op: action, path: field.path });
-        } else {
-            if (field.rule.type === "array" || field.rule.type === "object") {
-                const parsed = parseStructuredFieldValue(value, field.rule, field.label);
-                if (!parsed.ok) {
-                    error.value = parsed.message;
-                    return false;
-                }
-                value = parsed.value;
-            }
-            changes.push(
-                value === undefined
-                    ? { op: "remove", path: field.path }
-                    : { op: "set", path: field.path, value },
-            );
-        }
+    let edits: ReturnType<typeof configurationEdits>;
+    try {
+        edits = configurationEdits(
+            fields.value,
+            draft.value.secretStates,
+            values.value,
+            modes.value,
+            changed.value,
+        );
+    } catch (caught) {
+        error.value = caught instanceof Error ? caught.message : "字段格式无效";
+        return false;
     }
     busy.value = true;
     error.value = "";
-    const request = { expectedRevision: draft.value.revision, changes, secrets };
+    const request = { expectedRevision: draft.value.revision, ...edits };
     // 请求副本仅保留到本次传输；输入控件立即清除秘密，不写入浏览器存储。
     for (const field of fields.value) if (secret(field)) values.value[field.key] = undefined;
     try {
@@ -232,6 +210,27 @@ async function setProtocol(enabled: boolean) {
         );
     } catch {
         error.value = "协议修改未确认，请重读草稿核对。";
+    } finally {
+        busy.value = false;
+    }
+}
+async function editList(path: string[], action: "append" | "remove", index?: number) {
+    if (!draft.value || dirty.value || locked.value) return;
+    busy.value = true;
+    error.value = "";
+    try {
+        adopt(
+            await bounded(
+                props.client.editConfigurationList(draft.value.id, {
+                    expectedRevision: draft.value.revision,
+                    path,
+                    action,
+                    ...(index !== undefined ? { index } : {}),
+                }),
+            ),
+        );
+    } catch {
+        error.value = "列表修改未确认或版本已变化，请重读草稿核对。";
     } finally {
         busy.value = false;
     }
@@ -442,6 +441,8 @@ onUnmounted(() => {
                 :modes="modes"
                 :secret-states="draft.secretStates"
                 :locked="locked"
+                :list-locked="locked || dirty"
+                @list="editList"
                 @change="change"
                 @mode="mode" />
             <div class="flex flex-wrap gap-3">

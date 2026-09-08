@@ -15,6 +15,7 @@ import {
 import type { ConfigurationApplication } from "../configuration/configuration-application.js";
 import type { ConfigurationChange, SecretChange } from "../configuration/configuration-document.js";
 import type { GenerationStore, VerifiedGeneration } from "../installation/generation-store.js";
+import type { ConfigurationListChange } from "../configuration/configuration-list.js";
 
 export class ControlConfigurationService {
     private readonly abort = new AbortController();
@@ -80,6 +81,13 @@ export class ControlConfigurationService {
         return this.run(async () => {
             await this.workspace.refresh();
             return this.drafts.edit(request);
+        });
+    }
+    editList(request: ConfigurationListChange & { id: string; expectedRevision: string }) {
+        return this.run(async () => {
+            await this.workspace.refresh();
+            const { id, expectedRevision, ...change } = request;
+            return this.drafts.editList(id, expectedRevision, change);
         });
     }
     addAccount(request: {

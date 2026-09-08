@@ -336,7 +336,7 @@ process.on('message', message => {
                     body: "{}",
                 })
             ).status,
-        ).toBe(401);
+        ).toBe(403);
         expect((await fetch(`${running.url}/api/control/status`)).status).toBe(401);
         expect(
             (await fetch(`${running.url}/api/control/gateway/stop`, { method: "POST", body: "{}" }))

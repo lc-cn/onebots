@@ -34,6 +34,72 @@ function fixture() {
 }
 
 describe("control auth", () => {
+    it("恢复码不提前撤销旧凭证，重启后兑换一次才轮换会话", () => {
+        const { auth, reopen, statePath } = fixture();
+        const old = auth.pair(auth.issueBootstrap());
+        const code = auth.issueRecovery();
+        expect(reopen().verify(old)).toBe(true);
+        expect(() => reopen().pair("incorrect")).toThrow();
+        expect(reopen().verify(old)).toBe(true);
+        expect(fs.readFileSync(statePath, "utf8")).not.toContain(code);
+        const current = reopen().pair(code);
+        expect(reopen().verify(old)).toBe(false);
+        expect(reopen().verify(current)).toBe(true);
+        expect(() => reopen().pair(code)).toThrow();
+        expect(fs.readFileSync(statePath, "utf8")).not.toContain(current);
+    });
+
+    it("恢复码过期、替换与重新签发不能重置配对限流", () => {
+        const { auth, reopen, advance } = fixture();
+        const token = auth.pair(auth.issueBootstrap());
+        const expired = auth.issueRecovery();
+        advance(300_000);
+        expect(() => auth.pair(expired)).toThrow();
+        expect(auth.verify(token)).toBe(true);
+        const old = auth.issueRecovery();
+        const current = auth.issueRecovery();
+        expect(() => auth.pair(old)).toThrow();
+        for (let attempt = 0; attempt < 3; attempt++)
+            expect(() => reopen().pair("wrong")).toThrow();
+        const replaced = auth.issueRecovery();
+        expect(() => reopen().pair(replaced)).toThrow();
+        expect(auth.verify(token)).toBe(true);
+        advance(60_000);
+        const next = auth.pair(replaced);
+        expect(auth.verify(next)).toBe(true);
+        expect(() => auth.pair(current)).toThrow();
+    });
+
+    it("本地发码也有持久限流，旧格式会话可恢复且撤销后也可恢复", () => {
+        const { auth, reopen, statePath, advance } = fixture();
+        const token = auth.pair(auth.issueBootstrap());
+        const legacy = JSON.parse(fs.readFileSync(statePath, "utf8"));
+        delete legacy.recovery;
+        delete legacy.issuance;
+        fs.writeFileSync(statePath, JSON.stringify(legacy));
+        expect(reopen().verify(token)).toBe(true);
+        for (let index = 0; index < 5; index++) reopen().issueRecovery();
+        expect(() => reopen().issueRecovery()).toThrow();
+        expect(auth.verify(token)).toBe(true);
+        advance(60_000);
+        auth.revoke(token);
+        expect(auth.verify(auth.pair(auth.issueRecovery()))).toBe(true);
+    });
+
+    it("恢复消费落盘失败不会撤销旧会话或消费恢复码", () => {
+        const { auth, reopen, statePath } = fixture();
+        const token = auth.pair(auth.issueBootstrap());
+        const code = auth.issueRecovery();
+        const before = fs.readFileSync(statePath, "utf8");
+        const rename = vi.spyOn(fs, "renameSync").mockImplementationOnce(() => {
+            throw new Error("secret storage");
+        });
+        expect(() => auth.pair(code)).toThrow(/^控制认证失败$/);
+        rename.mockRestore();
+        expect(fs.readFileSync(statePath, "utf8")).toBe(before);
+        expect(reopen().verify(token)).toBe(true);
+        expect(reopen().verify(auth.pair(code))).toBe(true);
+    });
     it("配对只持久化摘要，重启后有效且配对码不能重放", () => {
         const { auth, statePath, reopen } = fixture();
         const code = auth.issueBootstrap();

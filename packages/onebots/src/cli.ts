@@ -15,6 +15,19 @@ const packageVersion = (createRequire(import.meta.url)("../package.json") as { v
 /** 启动文件路由 CLI；系统服务的内部入口会绕过 Pastel 和 Ink。 */
 export async function runCli(argv = process.argv): Promise<void> {
     try {
+        const interactive = process.stdin.isTTY === true && process.stdout.isTTY === true;
+        const { isDirectControlTuiInvocation, runControlTuiCommand } =
+            await import("./control/tui-command.js");
+        if (isDirectControlTuiInvocation(argv, interactive)) {
+            await runControlTuiCommand(
+                argv[2] === "setup"
+                    ? ["--setup", ...argv.slice(3)]
+                    : ["ui", "tui"].includes(argv[2])
+                      ? argv.slice(3)
+                      : argv.slice(2),
+            );
+            return;
+        }
         if (["serve", "auth", "control"].includes(argv[2])) {
             const { runControlCommand } = await import("./control/command.js");
             if (await runControlCommand(argv)) return;
@@ -25,6 +38,14 @@ export async function runCli(argv = process.argv): Promise<void> {
         );
         if (invocation.kind === "unknown") throw new CliError(`未知命令: ${invocation.command}`, 2);
         if (invocation.kind === "invalid") throw new CliError(invocation.message, 2);
+        if (invocation.kind === "cli" && ["ui", "tui", "setup"].includes(invocation.argv[2])) {
+            await runControlTuiCommand(
+                invocation.argv[2] === "setup"
+                    ? ["--setup", ...invocation.argv.slice(3)]
+                    : invocation.argv.slice(3),
+            );
+            return;
+        }
         if (invocation.kind === "service-runtime") {
             const parsedRuntime = parseServiceRuntimeInvocation(invocation.argv);
             const runtime = {

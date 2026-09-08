@@ -11,7 +11,7 @@ function invalid(): never {
 function object(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-function properties(schema: unknown): Record<string, unknown> | undefined {
+export function configurationProperties(schema: unknown): Record<string, unknown> | undefined {
     if (!object(schema)) return undefined;
     if (schema.type === "object") return object(schema.properties) ? schema.properties : undefined;
     if (
@@ -22,7 +22,7 @@ function properties(schema: unknown): Record<string, unknown> | undefined {
         return undefined;
     return schema;
 }
-function items(schema: Record<string, unknown>): unknown {
+export function configurationItems(schema: Record<string, unknown>): unknown {
     if (schema.items !== undefined) return schema.items;
     const fields = object(schema.ui) ? schema.ui.fields : undefined;
     if (!Array.isArray(fields)) return undefined;
@@ -32,6 +32,7 @@ function items(schema: Record<string, unknown>): unknown {
             !object(field) ||
             typeof field.key !== "string" ||
             !field.key ||
+            ["__proto__", "constructor", "prototype"].includes(field.key) ||
             Object.hasOwn(result, field.key)
         )
             invalid();
@@ -84,10 +85,10 @@ export function prepareConfigurationContainers(
                     Number(key) >= current.length
                 )
                     invalid();
-                child = items(schema);
+                child = configurationItems(schema);
             } else {
                 if (!object(current)) invalid();
-                const fields = properties(schema);
+                const fields = configurationProperties(schema);
                 if (!fields || !Object.hasOwn(fields, key)) invalid();
                 child = fields[key];
             }
@@ -105,7 +106,7 @@ export function prepareConfigurationContainers(
                 if (
                     index < 1 ||
                     Array.isArray(current) ||
-                    !properties(child) ||
+                    !configurationProperties(child) ||
                     child.sensitive === true
                 )
                     invalid();

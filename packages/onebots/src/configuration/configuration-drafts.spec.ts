@@ -42,6 +42,47 @@ function fixture() {
 }
 
 describe("管理配置草稿应用服务", () => {
+    it("危险ui字段不能使新增列表先持久化再投影失败", () => {
+        const { service, context, store } = fixture();
+        for (const key of ["__proto__", "constructor", "prototype"]) {
+            context.schemas.adapters.mock.rows = { type: "array", ui: { fields: [{ key, type: "string" }] } };
+            const draft = service.create(context.base);
+            const before = store.read(draft.id);
+            expect(() => service.editList(draft.id, draft.revision, {
+                path: ["mock.001.with.dot", "rows"], action: "append",
+            })).toThrow();
+            expect(store.read(draft.id)).toEqual(before);
+        }
+    });
+    it("列表删行重算秘密索引并以草稿revision拒绝旧索引请求", () => {
+        const { service, context, store } = fixture();
+        context.schemas.adapters.mock.rows = {
+            type: "array",
+            items: {
+                type: "object",
+                properties: {
+                    token: { type: "string", sensitive: true },
+                },
+            },
+        };
+        Object.assign(context.document["mock.001.with.dot"], {
+            rows: [{ token: "first" }, { token: "second" }],
+        });
+        const draft = service.create(context.base);
+        const change = { path: ["mock.001.with.dot", "rows"], action: "remove" as const, index: 0 };
+        const result = service.editList(draft.id, draft.revision, change);
+        expect(JSON.stringify(result)).not.toContain("second");
+        expect(result.secretStates).toContainEqual({
+            path: ["mock.001.with.dot", "rows", "0", "token"],
+            configured: true,
+        });
+        expect(store.read(draft.id).document["mock.001.with.dot"]).toMatchObject({
+            rows: [{ token: "second" }],
+        });
+        expect(() => service.editList(draft.id, draft.revision, change)).toThrow(
+            ConfigurationConflictError,
+        );
+    });
     it("显式账号和协议操作只选择对应扩展，删除容器不影响其他账号", () => {
         const { service, context, store } = fixture();
         context.schemas = normalizeConfigurationSchema({

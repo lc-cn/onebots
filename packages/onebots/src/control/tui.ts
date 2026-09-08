@@ -1,5 +1,6 @@
 import type { ControlClient } from "@onebots/core/control";
 import type { TuiPrompt } from "../tui/prompt.js";
+import { runControlConfiguration } from "./tui-configuration.js";
 import { createControlTerminalPrompt } from "./tui-terminal.js";
 import { runControlInstallation, trackControlInstallation } from "./tui-installation.js";
 
@@ -24,9 +25,7 @@ export async function runControlTui(
                     { value: "restart", label: "重启网关" },
                     { value: "install", label: "选择并安装依赖" },
                     { value: "track", label: "查询已有安装任务" },
-                    ...(options.onConfigure
-                        ? [{ value: "configure", label: "配置账号与协议" }]
-                        : []),
+                    { value: "configure", label: "配置账号与协议" },
                     { value: "quit", label: "退出工作台" },
                 ],
             });
@@ -53,7 +52,8 @@ export async function runControlTui(
                 if (/^[a-zA-Z0-9_-]{1,128}$/.test(id ?? ""))
                     await trackControlInstallation(client, prompt, id);
                 else prompt.report("任务 ID 无效。");
-            } else if (action === "configure") await options.onConfigure?.(client, prompt);
+            } else if (action === "configure")
+                await (options.onConfigure ?? runControlConfiguration)(client, prompt);
         } catch {
             prompt.report("操作已取消或结果暂不可确认。请查询原任务或管理状态，不要重复提交。");
         }

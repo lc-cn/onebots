@@ -18,6 +18,7 @@ import {
     type ConfigurationSchemaBundle,
 } from "./configuration-schema.js";
 import { prepareConfigurationContainers } from "./configuration-containers.js";
+import { editConfigurationList, type ConfigurationListChange } from "./configuration-list.js";
 
 export interface ConfigurationContext {
     base: ConfigurationBase;
@@ -89,6 +90,23 @@ export class ConfigurationDrafts {
         const result = applySecretChanges(changed, clean.secrets, paths);
         const saved = this.options.store.replace(draft.id, request.expectedRevision, result);
         return this.view(saved, context.schemas);
+    }
+
+    editList(id: string, expectedRevision: string, change: ConfigurationListChange) {
+        const draft = this.options.store.read(id);
+        const context = this.context(draft.base);
+        if (draft.revision !== expectedRevision) throw new ConfigurationConflictError();
+        const document = editConfigurationList(
+            context.schemas,
+            parseConfigurationDocument(draft.document),
+            change,
+        );
+        // 先验证目标投影，不允许写入后才发现草稿无法读取。
+        this.project(document, context.schemas);
+        return this.view(
+            this.options.store.replace(id, expectedRevision, document),
+            context.schemas,
+        );
     }
 
     /** 用户显式添加账号，仅建立空结构，不填凭据或协议，不操作运行配置。 */

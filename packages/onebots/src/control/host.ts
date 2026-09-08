@@ -1,3 +1,4 @@
+import { handleControlAuth } from "./auth-api.js";
 import fs from "node:fs";
 import path from "node:path";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
@@ -210,23 +211,15 @@ export async function startControlHost(options: ControlHostOptions) {
                     json(response, 403, { message: "控制请求来源无效" });
                     return;
                 }
-                if (
-                    pathname === "/api/control/auth/bootstrap" &&
-                    local &&
-                    request.method === "POST"
-                ) {
-                    if (!auth) throw new Error("控制认证存储不可用，请检查本地认证文件");
-                    json(response, 200, { code: auth.issueBootstrap() });
-                    return;
-                }
-                if (pathname === "/api/control/auth/pair" && request.method === "POST") {
-                    const body = await readBody(request);
-                    try {
-                        if (!auth || typeof body.code !== "string") throw new Error("认证失败");
-                        json(response, 200, { token: auth.pair(body.code) });
-                    } catch {
-                        json(response, 401, { message: "控制认证失败" });
-                    }
+                const authentication = await handleControlAuth({
+                    pathname,
+                    method: request.method,
+                    local,
+                    auth,
+                    body: () => readBody(request),
+                });
+                if (authentication) {
+                    json(response, authentication.status, authentication.body);
                     return;
                 }
                 if (!local) {

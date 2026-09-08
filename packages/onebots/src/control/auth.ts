@@ -17,6 +17,8 @@ interface AuthState {
     version: 1;
     paired: boolean;
     bootstrap: { hash: string; expiresAt: number } | null;
+    recovery: { hash: string; expiresAt: number } | null;
+    issuance: { startedAt: number; count: number };
     sessionHash: string | null;
     attempts: { startedAt: number; count: number };
 }
@@ -36,8 +38,24 @@ export class ControlAuth {
     issueBootstrap(): string {
         const state = this.read();
         if (state.paired) throw new Error(FAILURE);
+        return this.issue(state, "bootstrap");
+    }
+
+    /** 仅本地控制 socket 可调用；发码不撤销现有会话。 */
+    issueRecovery(): string {
+        const state = this.read();
+        if (!state.paired) throw new Error(FAILURE);
+        return this.issue(state, "recovery");
+    }
+
+    private issue(state: AuthState, kind: "bootstrap" | "recovery"): string {
+        const now = this.now();
+        if (now >= state.issuance.startedAt + ATTEMPT_WINDOW)
+            state.issuance = { startedAt: now, count: 0 };
+        if (state.issuance.count >= ATTEMPT_LIMIT) throw new Error(FAILURE);
+        state.issuance.count++;
         const code = randomBytes(24).toString("base64url");
-        state.bootstrap = { hash: digest(code), expiresAt: this.now() + BOOTSTRAP_TTL };
+        state[kind] = { hash: digest(code), expiresAt: now + BOOTSTRAP_TTL };
         this.write(state);
         return code;
     }
@@ -50,18 +68,15 @@ export class ControlAuth {
         }
         if (state.attempts.count >= ATTEMPT_LIMIT) throw new Error(FAILURE);
         state.attempts.count++;
-        if (
-            state.paired ||
-            !state.bootstrap ||
-            now >= state.bootstrap.expiresAt ||
-            !matches(code, state.bootstrap.hash)
-        ) {
+        const challenge = state.paired ? state.recovery : state.bootstrap;
+        if (!challenge || now >= challenge.expiresAt || !matches(code, challenge.hash)) {
             this.write(state);
             throw new Error(FAILURE);
         }
         const token = randomBytes(32).toString("base64url");
         state.paired = true;
         state.bootstrap = null;
+        state.recovery = null;
         state.sessionHash = digest(token);
         this.write(state);
         return token;
@@ -86,6 +101,12 @@ export class ControlAuth {
                 throw new Error(FAILURE);
             }
             const state: unknown = JSON.parse(fs.readFileSync(this.statePath, "utf8"));
+            // 已发布 version 1 没有恢复字段；只补结构，不重置现有限流或会话。
+            if (record(state)) {
+                if (!Object.hasOwn(state, "recovery")) state.recovery = null;
+                if (!Object.hasOwn(state, "issuance"))
+                    state.issuance = { startedAt: this.now(), count: 0 };
+            }
             if (!validState(state)) throw new Error(FAILURE);
             return state;
         } catch (error) {
@@ -94,6 +115,8 @@ export class ControlAuth {
                     version: 1,
                     paired: false,
                     bootstrap: null,
+                    recovery: null,
+                    issuance: { startedAt: this.now(), count: 0 },
                     sessionHash: null,
                     attempts: { startedAt: this.now(), count: 0 },
                 };
@@ -159,17 +182,28 @@ function validState(value: unknown): value is AuthState {
         (typeof value.sessionHash !== "string" || !HASH.test(value.sessionHash))
     )
         return false;
-    if (value.bootstrap !== null) {
+    for (const challenge of [value.bootstrap, value.recovery]) {
+        if (challenge === null) continue;
         if (
-            !record(value.bootstrap) ||
-            typeof value.bootstrap.hash !== "string" ||
-            !HASH.test(value.bootstrap.hash) ||
-            typeof value.bootstrap.expiresAt !== "number" ||
-            !Number.isSafeInteger(value.bootstrap.expiresAt)
+            !record(challenge) ||
+            typeof challenge.hash !== "string" ||
+            !HASH.test(challenge.hash) ||
+            typeof challenge.expiresAt !== "number" ||
+            !Number.isSafeInteger(challenge.expiresAt)
         )
             return false;
     }
     if (value.paired ? value.bootstrap !== null : value.sessionHash !== null) return false;
+    if (!value.paired && value.recovery !== null) return false;
+    if (
+        !record(value.issuance) ||
+        !Number.isSafeInteger(value.issuance.startedAt) ||
+        !Number.isInteger(value.issuance.count) ||
+        typeof value.issuance.count !== "number" ||
+        value.issuance.count < 0 ||
+        value.issuance.count > ATTEMPT_LIMIT
+    )
+        return false;
     return (
         record(value.attempts) &&
         typeof value.attempts.startedAt === "number" &&

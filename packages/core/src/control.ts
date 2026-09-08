@@ -187,6 +187,21 @@ export class ControlClient {
             request,
         );
     }
+    editConfigurationList(
+        id: string,
+        request: {
+            expectedRevision: string;
+            path: string[];
+            action: "append" | "remove";
+            index?: number;
+        },
+    ): Promise<ControlConfigurationDraft> {
+        return this.transport.request(
+            "POST",
+            `/api/control/configuration/drafts/${encodeURIComponent(id)}/list`,
+            request,
+        );
+    }
     validateConfigurationDraft(
         id: string,
         expectedRevision: string,
@@ -220,6 +235,11 @@ export class ControlClient {
 
     bootstrap(): Promise<{ code: string }> {
         return this.transport.request("POST", "/api/control/auth/bootstrap", {});
+    }
+
+    /** 仅受本地权限保护的控制连接可签发恢复码，HTTP 传输将被拒绝。 */
+    recoverAuthentication(): Promise<{ code: string }> {
+        return this.transport.request("POST", "/api/control/auth/recovery", {});
     }
 
     pair(code: string): Promise<{ token: string }> {

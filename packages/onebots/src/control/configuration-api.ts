@@ -25,6 +25,13 @@ export interface ConfigurationApiService {
         platform: string;
         accountId: string;
     }): Promise<unknown>;
+    editList(input: {
+        id: string;
+        expectedRevision: string;
+        path: string[];
+        action: "append" | "remove";
+        index?: number;
+    }): Promise<unknown>;
     validate(input: { id: string; expectedRevision: string }): Promise<unknown>;
     removeAccount(input: {
         id: string;
@@ -112,15 +119,53 @@ async function handle(input: ConfigurationRequest): Promise<{ status: number; bo
             ? { status: 404, body: { message: "配置操作不存在" } }
             : { status: 200, body: result };
     }
-    const draft = /^\/drafts\/([^/]+)(?:\/(edit|accounts|validate|remove-account|protocol))?$/.exec(
-        suffix,
-    );
+    const draft =
+        /^\/drafts\/([^/]+)(?:\/(edit|accounts|validate|remove-account|protocol|list))?$/.exec(
+            suffix,
+        );
     if (!isConfigurationPath(pathname) || !draft)
         return { status: 404, body: { message: "配置控制接口不存在" } };
     if (!UUID.test(draft[1])) invalid();
     const id = draft[1];
     if (!draft[2] && method === "GET") return { status: 200, body: await service.read(id) };
     if (method !== "POST") return { status: 404, body: { message: "配置控制接口不存在" } };
+    if (draft[2] === "list") {
+        const body = parseConfigurationDocument(await input.body());
+        objectFields(
+            body,
+            body.action === "append"
+                ? ["expectedRevision", "path", "action"]
+                : ["expectedRevision", "path", "action", "index"],
+        );
+        if (
+            !matches(body.expectedRevision, HASH) ||
+            !["append", "remove"].includes(String(body.action)) ||
+            !Array.isArray(body.path) ||
+            !body.path.length ||
+            body.path.length > 64 ||
+            body.path.some(
+                part =>
+                    typeof part !== "string" ||
+                    !part ||
+                    ["__proto__", "constructor", "prototype"].includes(part),
+            ) ||
+            (body.action === "remove" &&
+                (typeof body.index !== "number" ||
+                    !Number.isSafeInteger(body.index) ||
+                    body.index < 0))
+        )
+            invalid();
+        return {
+            status: 200,
+            body: await service.editList({
+                id,
+                expectedRevision: body.expectedRevision as string,
+                path: body.path as string[],
+                action: body.action as "append" | "remove",
+                ...(body.action === "remove" ? { index: body.index as number } : {}),
+            }),
+        };
+    }
     if (draft[2] === "remove-account") {
         const body = await fields(input, ["expectedRevision", "accountKey"]);
         if (

@@ -68,7 +68,7 @@ docker compose down
 
 ### 容器健康状态
 
-官方镜像内置健康检查，Compose 示例也显式启用同一探针。探针读取 `/data/config.yaml` 的 `port` 与 `path`，请求对应的 `/ready`，并要求 HTTP 成功、`application/json` 媒体类型、响应明确包含 `ready: true`，且声明 `onebots` 应用身份、与镜像内主包完全一致的运行版本及非空 `instance_id`。探针禁用缓存与重定向，并把响应正文限制为 64 KiB；旧 OneBots 实例、错误代理、通用成功页或持续发送数据的本地进程不能充当容器就绪证据。可用以下命令查看状态与最近失败原因：
+官方镜像内置健康检查，Compose 示例也显式启用同一探针。探针检查常驻管理服务的根路径 `/ready`，不读取业务 `config.yaml`，因此坏 YAML、网关停止或业务路径前缀不影响管理服务的健康判定，并要求 HTTP 成功、`application/json` 媒体类型、响应明确包含 `ready: true`，且声明 `onebots` 应用身份、与镜像内主包完全一致的运行版本及非空 `instance_id`。探针禁用缓存与重定向，并把响应正文限制为 64 KiB；旧 OneBots 实例、错误代理、通用成功页或持续发送数据的本地进程不能充当容器就绪证据。可用以下命令查看状态与最近失败原因：
 
 ```bash
 docker compose ps
@@ -77,7 +77,7 @@ docker inspect --format '{{json .State.Health}}' onebots
 
 只要任一已配置账号离线、协议出口未就绪，或磁盘配置与当前运行版本不同步，容器就会显示 `unhealthy`，便于负载均衡器和编排系统停止转发流量。宿主字段保存后出现该状态时，应完成页面要求的容器重启；意外漂移则应先核对挂载文件。Docker/Compose 的 `restart` 策略不会仅因 `unhealthy` 自动重启容器，仍应结合外部监控或编排策略处理持续故障。
 
-默认配置路径以外的部署可设置 `ONEBOTS_CONFIG_PATH`；`PORT` 和 `ONEBOTS_PATH` 会覆盖配置中的端口与路径。也可用 `ONEBOTS_HEALTHCHECK_URL` 直接指定完整就绪地址。Hugging Face 镜像继承此探针，并自动使用其 `PORT=7860`。
+探针与标准镜像的 `serve` 命令共用管理端 `PORT` 环境变量（默认 `6727`）。更改监听端口请设置 `PORT` 并同步端口映射；若自行覆盖 CMD 的 `--port`，必须让 `PORT` 与其一致。`ONEBOTS_CONFIG_PATH`、`ONEBOTS_PATH` 和旧 `ONEBOTS_HEALTHCHECK_URL` 不再改变探针目标。此处说明标准管理服务镜像，HF 旧入口的整体迁移仍待完成。
 
 ### 方式二：使用 docker run
 

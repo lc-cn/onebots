@@ -47,6 +47,14 @@ async function pair() {
         busy.value = false;
     }
 }
+function reconnect() {
+    // 仅移除此浏览器的凭证；服务端旧会话在本地恢复码兑换成功前保持有效。
+    token.value = "";
+    localStorage.removeItem("onebots.control.token");
+    state.value = undefined;
+    code.value = "";
+    error.value = "";
+}
 async function command(action: "start" | "stop" | "restart") {
     busy.value = true;
     error.value = "";
@@ -78,6 +86,9 @@ onUnmounted(() => {
                 <p class="text-xs tracking-widest text-fg-muted mb-3">ONEBOTS</p>
                 <h1 class="text-3xl font-semibold">控制台</h1>
                 <p class="text-fg-secondary mt-3">管理服务保持在线，网关可以独立启动与停止。</p>
+                <UiButton v-if="token" class="mt-3" :disabled="busy" @click="reconnect"
+                    >重新配对</UiButton
+                >
             </header>
             <p v-if="error" role="alert" class="rounded-panel border border-danger p-4 text-danger">
                 {{ error }}
@@ -88,6 +99,11 @@ onUnmounted(() => {
                     在本机运行
                     <code>onebots auth bootstrap --data-dir &lt;工作区&gt;</code
                     >，将单次配对码填在这里。Docker 中可通过 docker exec 运行该命令。
+                </p>
+                <p class="text-sm text-fg-secondary">
+                    已配对但凭证丢失？在管理服务所在机器运行
+                    <code>onebots auth recover --data-dir &lt;工作区&gt;</code>，在此输入恢复码。
+                    码在 5 分钟后失效；兑换成功才使旧凭证失效。不要删除认证文件。
                 </p>
                 <label class="block text-sm" for="pair-code">单次配对码</label>
                 <input

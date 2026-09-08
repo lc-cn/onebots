@@ -14,6 +14,7 @@ function fixture() {
         create: vi.fn(async () => ({ id: uuid })),
         read: vi.fn(async () => ({})),
         edit: vi.fn(async () => ({})),
+        editList: vi.fn(async () => ({})),
         addAccount: vi.fn(async () => ({})),
         removeAccount: vi.fn(async () => ({})),
         setProtocol: vi.fn(async () => ({})),
@@ -37,6 +38,20 @@ function fixture() {
     return { service, request };
 }
 describe("配置管理 API 边界", () => {
+    it("列表接口只接受空行追加或精确索引删除，拒绝夹带值", async () => {
+        const { request, service } = fixture();
+        const body = { expectedRevision: revision, path: ["mock.001.a", "rows"], action: "append" };
+        expect((await request(`/drafts/${uuid}/list`, body)).status).toBe(200);
+        expect(service.editList).toHaveBeenCalledWith({ id: uuid, ...body });
+        for (const input of [
+            { ...body, value: { token: "secret" } },
+            { ...body, index: 0 },
+            { ...body, action: "remove", index: -1 },
+            { ...body, path: ["__proto__"] },
+        ])
+            expect((await request(`/drafts/${uuid}/list`, input)).status).toBe(400);
+        expect(service.editList).toHaveBeenCalledTimes(1);
+    });
     it("路由只接入指定命名空间，服务缺失返回503", async () => {
         expect(isConfigurationPath(root)).toBe(true);
         expect(isConfigurationPath(`${root}-evil`)).toBe(false);
