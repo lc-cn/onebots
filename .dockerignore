@@ -4,6 +4,7 @@ node_modules
 **/lib
 **/dist
 *.tsbuildinfo
+**/*.tsbuildinfo
 
 # Git 与 IDE
 .git
@@ -39,3 +40,9 @@ adapters/adapter-icqq
 .env.*
 *.local
 .DS_Store
+
+# registry 认证只通过 secret mount 提供
+.npmrc
+**/.npmrc
+secrets
+**/secrets

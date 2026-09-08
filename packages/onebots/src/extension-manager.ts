@@ -1,3 +1,4 @@
+import { assertInProcessPackageMutationAllowed } from "./container-runtime.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -385,6 +386,7 @@ export class ExtensionManager {
     }
 
     async install(id: string): Promise<ExtensionMutationCommit<true>> {
+        assertInProcessPackageMutationAllowed();
         const entry = getTrustedExtensionCatalogEntry(id);
         if (!entry) throw new ExtensionNotFoundError("扩展不存在或不允许从管理端安装");
         if (this.installation) {
@@ -660,6 +662,7 @@ export class ExtensionManager {
         id: string,
         loadedPlugins: readonly LoadedPluginInfo[],
     ): Promise<ExtensionMutationCommit<false>> {
+        assertInProcessPackageMutationAllowed();
         const entry = getTrustedExtensionCatalogEntry(id);
         if (!entry) throw new ExtensionNotFoundError("扩展不存在或不允许从管理端卸载");
         if (this.installation) {

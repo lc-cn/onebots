@@ -5,6 +5,8 @@
 # 持久化：与标准镜像相同，数据在 /data；可信域名校验文件可放在 /data/static（config 中 public_static_dir: static），并纳入 data_backup.tar.gz 备份
 
 FROM ghcr.io/lc-cn/onebots:master
+# HF 继续使用其专用的快照恢复和扩展管理，不接入宿主 Docker 协调器。
+ENV ONEBOTS_EXTENSION_MODE=legacy
 
 # Hugging Face Spaces 默认暴露 7860，由 PORT 环境变量传入
 ENV PORT=7860

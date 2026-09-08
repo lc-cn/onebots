@@ -1,3 +1,4 @@
+import { assertInProcessPackageMutationAllowed } from "./container-runtime.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline/promises";
@@ -159,6 +160,7 @@ export async function requireUpdatePackageManager(
 
 /** 检查并更新 OneBots 与当前服务使用的插件。 */
 export async function runUpdate(options: UpdateOptions): Promise<UpdateRunResult> {
+    assertInProcessPackageMutationAllowed();
     if (options.packagesOnly && (!options.configPath || !fs.existsSync(options.configPath))) {
         throw new Error("--packages-only 需要可读取的配置文件，以便在保留新依赖前完成隔离预检");
     }

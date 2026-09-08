@@ -94,3 +94,7 @@ onebots run             # 显式前台运行网关
 ```
 
 交互式 `onebots setup` 也进入同一个工作台。非交互终端、CI 和服务内部入口保持命令行模式，继续使用 `setup`、`install`、`start`、`doctor` 等命令。
+
+## Docker 部署
+
+容器中的工作台只选择已安装扩展并编辑配置，不接收下载 Token 或安装宿主守护服务。私有扩展安装、验证、重启和回滚请使用 [Docker 私有扩展安装](/guide/docker-private-extensions) 的一次性安装器。

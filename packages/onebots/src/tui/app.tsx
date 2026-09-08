@@ -1,3 +1,4 @@
+import { isContainerRuntime } from "../container-runtime.js";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -51,6 +52,10 @@ export function OneBotsTui(options: TuiOptions) {
     const active = useRef<PendingPrompt | undefined>(undefined);
     const started = useRef(false);
     useEffect(() => {
+        if (isContainerRuntime()) {
+            setStatus("由 Docker 管理");
+            return;
+        }
         const controller = new ServiceController(options.system ? "system" : "user");
         const refresh = () => {
             try {
@@ -208,7 +213,8 @@ export function OneBotsTui(options: TuiOptions) {
                     OneBots 工作台
                 </Text>
                 <Text>
-                    {options.system ? "系统服务" : "用户服务"} · {status}
+                    {isContainerRuntime() ? "容器" : options.system ? "系统服务" : "用户服务"} ·{" "}
+                    {status}
                 </Text>
             </Box>
             <Text dimColor wrap="truncate-end">

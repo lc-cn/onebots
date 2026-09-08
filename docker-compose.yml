@@ -1,5 +1,7 @@
 # OneBots 网关 - Docker Compose（使用官方镜像，无需本地构建）
 # 使用：docker compose up -d
+# 私有扩展：在宿主运行 sh scripts/docker-extensions.sh install icqq --apply
+# 下载 Token 只交给一次性安装器，禁止给本服务挂载 npmrc 或 Docker socket。
 #
 # 必须挂载 ./data 到 /data，以持久化用户配置（config.yaml）与数据库，否则重启后配置会丢失
 

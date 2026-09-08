@@ -6,6 +6,13 @@ import { describe, expect, test } from "vitest";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("Docker 构建上下文", () => {
+    test("排除嵌套增量缓存和认证文件，防止缺失构建产物或泄露凭据", async () => {
+        const patterns = (await readFile(resolve(repositoryRoot, ".dockerignore"), "utf8")).split(
+            /\r?\n/,
+        );
+        for (const pattern of ["**/*.tsbuildinfo", ".npmrc", "**/.npmrc", "**/secrets"])
+            expect(patterns).toContain(pattern);
+    });
     test("在构建工作空间前复制子包继承的根 TypeScript 配置", async () => {
         const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
         const rootConfigCopy = dockerfile.indexOf(
@@ -24,7 +31,7 @@ describe("Docker 构建上下文", () => {
             "COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs",
         );
         expect(dockerfile).toContain(
-            "COPY --chown=node:node scripts/docker-extension-runtime.mjs ./scripts/docker-extension-runtime.mjs",
+            "COPY --chown=node:node scripts/docker-extension-runtime.mjs scripts/docker-extension-release.mjs scripts/docker-extension-installer.mjs ./scripts/",
         );
         expect(dockerfile).toContain(
             'HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "/app/scripts/docker-healthcheck.mjs"]',

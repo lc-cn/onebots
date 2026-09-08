@@ -1,3 +1,4 @@
+import { assertInProcessPackageMutationAllowed } from "../container-runtime.js";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -96,6 +97,7 @@ export async function installPackages(
     executePackage: InstallExecutor = executeInstall,
     progress?: (message: string) => void,
 ): Promise<void> {
+    assertInProcessPackageMutationAllowed();
     fs.mkdirSync(root, { recursive: true });
     const lock = acquirePackageMutationLock(root, {
         operation: "package_update",

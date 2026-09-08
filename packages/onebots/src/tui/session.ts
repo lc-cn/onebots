@@ -1,3 +1,5 @@
+import { isContainerRuntime } from "../container-runtime.js";
+import { selectContainerExtensions, containerServiceAction } from "./container.js";
 import * as path from "node:path";
 import { resolveGatewayBaseUrl } from "../doctor.js";
 import { getAppConfigSchema } from "../config-schema.js";
@@ -66,6 +68,19 @@ export function pageChoices(page: TerminalPage, workspace: TerminalWorkspace): P
             { value: "restore", label: "从备份恢复到草稿" },
         ],
     };
+    if (isContainerRuntime()) {
+        const labels: Record<string, string> = {
+            deploy: "保存配置，查看容器重启步骤",
+            stop: "查看容器停止命令",
+            status: "查看 Docker 状态命令",
+            logs: "查看容器日志命令",
+            doctor: "查看容器健康检查命令",
+            extensions: "选择已安装的扩展",
+        };
+        for (const choices of Object.values(actions))
+            for (const choice of choices)
+                if (labels[choice.value]) choice.label = labels[choice.value];
+    }
     return [
         ...actions[page],
         ...(summary.dirty && page !== "settings"
@@ -99,6 +114,8 @@ export function pageDescription(page: TerminalPage, workspace: TerminalWorkspace
         return `已选方案：${state.frameworks.join("、") || "无"}\n连接模板会同时提供 OneBots 端、框架端配置与检查步骤。`;
     if (page === "settings")
         return `配置文件：${workspace.configPath}\n运行目录：${workspace.root}\n${state.dirty ? `草稿修改：${state.changes.join("、")}` : "配置与磁盘一致"}`;
+    if (page === "service" && isContainerRuntime())
+        return "配置可在此保存；启动、停止、日志和在线状态由宿主 Docker/Compose 管理。";
     if (page === "service")
         return state.needsRestart
             ? "配置已保存，尚未应用到运行服务。选择“保存并启动 / 应用配置”。"
@@ -166,11 +183,13 @@ export async function runTuiSession(
                 message => prompt.report(message),
                 async () => {
                     if (action === "extensions") {
-                        const selection = await runInstallation(
-                            prompt,
-                            workspace.root,
-                            workspace.selection,
-                        );
+                        const selection = isContainerRuntime()
+                            ? await selectContainerExtensions(
+                                  prompt,
+                                  workspace.root,
+                                  workspace.selection,
+                              )
+                            : await runInstallation(prompt, workspace.root, workspace.selection);
                         workspace.select(selection);
                         page = "accounts";
                     } else if (action === "accounts" || action === "protocols") {
@@ -302,6 +321,7 @@ async function deployWorkspace(
     workspace: TerminalWorkspace,
     system: boolean,
 ) {
+    if (isContainerRuntime()) return containerServiceAction(prompt, workspace, "deploy");
     assertServiceTarget(workspace, system);
     if (
         !(await confirm(
@@ -347,6 +367,7 @@ async function runServiceAction(
     action: string,
     system: boolean,
 ) {
+    if (isContainerRuntime()) return containerServiceAction(prompt, workspace, action);
     if (action !== "doctor") assertServiceTarget(workspace, system);
     if (action === "stop" && !(await confirm(prompt, "停止当前服务？"))) return;
     prompt.progress?.(action === "doctor" ? "检查运行环境与配置" : "读取服务状态");

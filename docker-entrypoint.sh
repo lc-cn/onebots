@@ -50,6 +50,8 @@ case "$ONEBOTS_EXTENSION_ROOT" in
     exit 1
     ;;
 esac
+export ONEBOTS_CONTAINER=1
+export ONEBOTS_EXTENSION_MODE=isolated
 export ONEBOTS_EXTENSION_ROOT
 NODE_PATH="${ONEBOTS_EXTENSION_ROOT}/node_modules:/app/development/node_modules${NODE_PATH:+:${NODE_PATH}}"
 export NODE_PATH
@@ -61,8 +63,14 @@ if [ "$(id -u)" = "0" ]; then
     echo "[onebots] 错误: 无法将 /data 交给 node 用户，请检查挂载卷权限"
     exit 1
   fi
-  su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
-    node /app/scripts/docker-extension-runtime.mjs
+  RESOLVED_ROOT=$(su-exec node:node node /app/scripts/docker-extension-release.mjs resolve "$ONEBOTS_EXTENSION_ROOT")
+  if [ "$RESOLVED_ROOT" = "$ONEBOTS_EXTENSION_ROOT" ]; then
+    su-exec node:node env HOME=/home/node USER=node LOGNAME=node node /app/scripts/docker-extension-runtime.mjs
+  fi
+  ONEBOTS_EXTENSION_ROOT=$(su-exec node:node node /app/scripts/docker-extension-release.mjs resolve "$ONEBOTS_EXTENSION_ROOT")
+  export ONEBOTS_EXTENSION_ROOT
+  NODE_PATH="$ONEBOTS_EXTENSION_ROOT/node_modules:/app/development/node_modules"
+  export NODE_PATH
   cd "$ONEBOTS_EXTENSION_ROOT"
   exec su-exec node:node env HOME=/home/node USER=node LOGNAME=node \
     node /app/packages/onebots/lib/bin.js "$@"
@@ -73,6 +81,13 @@ if [ ! -r /data/config.yaml ] || [ ! -w /data ]; then
   echo "[onebots] 错误: 当前容器用户无法读取 /data/config.yaml 或写入 /data"
   exit 1
 fi
-node /app/scripts/docker-extension-runtime.mjs
+RESOLVED_ROOT=$(node /app/scripts/docker-extension-release.mjs resolve "$ONEBOTS_EXTENSION_ROOT")
+if [ "$RESOLVED_ROOT" = "$ONEBOTS_EXTENSION_ROOT" ]; then
+  node /app/scripts/docker-extension-runtime.mjs
+fi
+ONEBOTS_EXTENSION_ROOT=$(node /app/scripts/docker-extension-release.mjs resolve "$ONEBOTS_EXTENSION_ROOT")
+export ONEBOTS_EXTENSION_ROOT
+NODE_PATH="$ONEBOTS_EXTENSION_ROOT/node_modules:/app/development/node_modules"
+export NODE_PATH
 cd "$ONEBOTS_EXTENSION_ROOT"
 exec node /app/packages/onebots/lib/bin.js "$@"

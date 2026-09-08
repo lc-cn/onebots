@@ -33,6 +33,8 @@ RUN pnpm prune --prod
 # ---------- 运行阶段 ----------
 FROM node:24-alpine
 
+ENV ONEBOTS_CONTAINER=1
+ENV ONEBOTS_EXTENSION_MODE=isolated
 ENV COREPACK_HOME=/usr/local/share/corepack
 
 RUN apk add --no-cache su-exec \
@@ -51,7 +53,7 @@ COPY --chown=node:node --from=builder /app/adapters ./adapters
 COPY --chown=node:node --from=builder /app/protocols ./protocols
 COPY --chown=node:node --from=builder /app/development ./development
 COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs
-COPY --chown=node:node scripts/docker-extension-runtime.mjs ./scripts/docker-extension-runtime.mjs
+COPY --chown=node:node scripts/docker-extension-runtime.mjs scripts/docker-extension-release.mjs scripts/docker-extension-installer.mjs ./scripts/
 
 # 数据目录：挂载卷到 /data，配置文件为 /data/config.yaml
 EXPOSE 6727
