@@ -1,13 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-    authFetch,
-    getToken,
-    login,
-    loginWithToken,
-    logout,
-    refresh,
-    setToken,
-} from "./useAuth.js";
+import { authFetch, getToken, logout, refresh, setToken } from "./useAuth.js";
 
 function memoryStorage(): Storage {
     const values = new Map<string, string>();
@@ -49,7 +41,7 @@ function authenticationResponse(
     });
 }
 
-describe("Web 鉴权码登录", () => {
+describe("旧业务请求的会话刷新与退出", () => {
     beforeEach(() => {
         vi.stubGlobal("localStorage", memoryStorage());
     });
@@ -58,80 +50,7 @@ describe("Web 鉴权码登录", () => {
         vi.unstubAllGlobals();
     });
 
-    it("服务端拒绝候选鉴权码时保留已有会话", async () => {
-        setToken("existing-token", null, null);
-        vi.stubGlobal(
-            "fetch",
-            vi
-                .fn()
-                .mockResolvedValueOnce(healthResponse())
-                .mockResolvedValueOnce(authenticationResponse({ message: "鉴权码错误" }, 401)),
-        );
-
-        await expect(loginWithToken("wrong-token")).resolves.toEqual({
-            ok: false,
-            message: "鉴权码错误",
-        });
-        expect(getToken()).toBe("existing-token");
-    });
-
-    it("登录受限时显示服务端的重试时间并保留已有会话", async () => {
-        setToken("existing-token", null, null);
-        vi.stubGlobal(
-            "fetch",
-            vi
-                .fn()
-                .mockResolvedValueOnce(healthResponse())
-                .mockResolvedValueOnce(
-                    authenticationResponse(
-                        {
-                            message: "登录失败次数过多，请稍后再试",
-                            retryAfter: 275,
-                        },
-                        429,
-                    ),
-                ),
-        );
-
-        await expect(loginWithToken("candidate-token")).resolves.toEqual({
-            ok: false,
-            unavailable: true,
-            message: "登录失败次数过多，请稍后再试（请在 275 秒后重试）",
-        });
-        expect(getToken()).toBe("existing-token");
-    });
-
-    it("服务端确认候选鉴权码后才替换会话", async () => {
-        setToken("existing-token", null, null);
-        const fetcher = vi
-            .fn(async (_input: RequestInfo | URL, _init?: RequestInit) => healthResponse())
-            .mockResolvedValueOnce(healthResponse())
-            .mockResolvedValueOnce(
-                authenticationResponse({
-                    success: true,
-                    token: "verified-token",
-                    expiresAt: null,
-                    refreshToken: null,
-                }),
-            );
-        vi.stubGlobal("fetch", fetcher);
-
-        await expect(loginWithToken("verified-token")).resolves.toMatchObject({ ok: true });
-        expect(getToken()).toBe("verified-token");
-        expect(fetcher).toHaveBeenCalledTimes(2);
-        expect(fetcher.mock.calls[0]?.[0]).toContain("/health");
-        expect(fetcher.mock.calls[0]?.[1]).toMatchObject({
-            cache: "no-store",
-            redirect: "error",
-        });
-        const authenticationInit = fetcher.mock.calls[1]?.[1] as RequestInit;
-        expect(authenticationInit.redirect).toBe("error");
-        expect(new Headers(authenticationInit.headers).get("X-OneBots-Expected-Instance-Id")).toBe(
-            "instance-current",
-        );
-    });
-
-    it("登录超时返回可解释失败，刷新超时也会有界结束", async () => {
+    it("刷新超时有界结束且保留已有会话", async () => {
         setToken("existing-token", null, "refresh-token");
         const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
             expect(init?.signal).toBeInstanceOf(AbortSignal);
@@ -139,125 +58,9 @@ describe("Web 鉴权码登录", () => {
         });
         vi.stubGlobal("fetch", fetcher);
 
-        await expect(login("user", "password")).resolves.toEqual({
-            ok: false,
-            unavailable: true,
-            message: "拒绝发送管理凭据：health 不可达：timeout",
-        });
         await expect(refresh()).resolves.toEqual({ ok: false, unavailable: true });
         expect(getToken()).toBe("existing-token");
-        expect(fetcher).toHaveBeenCalledTimes(2);
-    });
-
-    it("成功状态但响应契约损坏时不提交候选会话", async () => {
-        setToken("existing-token", null, null);
-        vi.stubGlobal(
-            "fetch",
-            vi
-                .fn()
-                .mockResolvedValueOnce(healthResponse())
-                .mockResolvedValueOnce(
-                    new Response("not-json", {
-                        status: 200,
-                        headers: {
-                            "X-OneBots-Application": "onebots",
-                            "X-OneBots-Version": "1.2.8",
-                            "X-OneBots-Instance-Id": "instance-current",
-                            "X-OneBots-Runtime-Contract-Id": "sha256:contract-current",
-                        },
-                    }),
-                ),
-        );
-
-        await expect(loginWithToken("candidate-token")).resolves.toEqual({
-            ok: false,
-            unavailable: true,
-            message: "登录响应格式无效",
-        });
-        expect(getToken()).toBe("existing-token");
-    });
-
-    it("公开身份无效时不发送候选凭据", async () => {
-        setToken("existing-token", null, null);
-        const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-            Response.json({ status: "ok" }),
-        );
-        vi.stubGlobal("fetch", fetcher);
-
-        await expect(loginWithToken("candidate-secret")).resolves.toMatchObject({
-            ok: false,
-            unavailable: true,
-            message: expect.stringContaining("拒绝发送管理凭据"),
-        });
-
-        expect(fetcher).toHaveBeenCalledOnce();
-        expect(fetcher.mock.calls[0]?.[0]).toContain("/health");
-        expect(JSON.stringify(fetcher.mock.calls[0])).not.toContain("candidate-secret");
-        expect(getToken()).toBe("existing-token");
-    });
-
-    it("公开身份正文超限时不发送候选凭据", async () => {
-        setToken("existing-token", null, null);
-        const fetcher = vi.fn(
-            async () =>
-                new Response("{}", {
-                    headers: { "content-length": String(64 * 1024 + 1) },
-                }),
-        );
-        vi.stubGlobal("fetch", fetcher);
-
-        await expect(loginWithToken("candidate-secret")).resolves.toEqual({
-            ok: false,
-            unavailable: true,
-            message: "拒绝发送管理凭据：health 不可达：响应正文超过 64 KiB 上限",
-        });
-        expect(fetcher).toHaveBeenCalledOnce();
-        expect(JSON.stringify(fetcher.mock.calls[0])).not.toContain("candidate-secret");
-        expect(getToken()).toBe("existing-token");
-    });
-
-    it("认证回执正文超限时保留已有会话", async () => {
-        setToken("existing-token", null, null);
-        const oversizedResponse = authenticationResponse({ token: "candidate-token" });
-        oversizedResponse.headers.set("content-length", String(64 * 1024 + 1));
-        vi.stubGlobal(
-            "fetch",
-            vi
-                .fn()
-                .mockResolvedValueOnce(healthResponse())
-                .mockResolvedValueOnce(oversizedResponse),
-        );
-
-        await expect(loginWithToken("candidate-token")).resolves.toEqual({
-            ok: false,
-            unavailable: true,
-            message: "认证响应无效：响应正文超过 64 KiB 上限",
-        });
-        expect(getToken()).toBe("existing-token");
-    });
-
-    it("认证回执来自另一个实例时不提交候选会话", async () => {
-        setToken("existing-token", null, null);
-        vi.stubGlobal(
-            "fetch",
-            vi
-                .fn()
-                .mockResolvedValueOnce(healthResponse("instance-a"))
-                .mockResolvedValueOnce(
-                    authenticationResponse(
-                        { success: true, token: "candidate-token" },
-                        200,
-                        "instance-b",
-                    ),
-                ),
-        );
-
-        await expect(loginWithToken("candidate-token")).resolves.toEqual({
-            ok: false,
-            unavailable: true,
-            message: "认证响应实例不匹配：期望 instance-a，实际 instance-b",
-        });
-        expect(getToken()).toBe("existing-token");
+        expect(fetcher).toHaveBeenCalledTimes(1);
     });
 
     it("刷新令牌也先验证公开身份并只接受同实例回执", async () => {
@@ -313,5 +116,42 @@ describe("Web 鉴权码登录", () => {
 
         expect(getToken()).toBeNull();
         expect(fetcher).toHaveBeenCalledOnce();
+    });
+    it.each([
+        "invalid-identity",
+        "large-identity",
+        "large-receipt",
+        "wrong-instance",
+        "invalid-json",
+    ])("刷新保留共享的身份与响应边界：%s", async failure => {
+        setToken("existing-token", null, "refresh-secret");
+        const receipt = authenticationResponse(
+            { token: "unexpected-session" },
+            200,
+            failure === "wrong-instance" ? "other-instance" : "instance-current",
+        );
+        if (failure === "large-receipt")
+            receipt.headers.set("content-length", String(64 * 1024 + 1));
+        const identity =
+            failure === "invalid-identity"
+                ? Response.json({ status: "ok" })
+                : failure === "large-identity"
+                  ? new Response("{}", { headers: { "content-length": String(64 * 1024 + 1) } })
+                  : healthResponse();
+        const fetcher = vi
+            .fn()
+            .mockResolvedValueOnce(identity)
+            .mockResolvedValueOnce(
+                failure === "invalid-json"
+                    ? new Response("not-json", { headers: receipt.headers })
+                    : receipt,
+            );
+        vi.stubGlobal("fetch", fetcher);
+        await expect(refresh()).resolves.toEqual({ ok: false, unavailable: true });
+        expect(getToken()).toBe("existing-token");
+        if (failure === "invalid-identity" || failure === "large-identity") {
+            expect(fetcher).toHaveBeenCalledOnce();
+            expect(JSON.stringify(fetcher.mock.calls)).not.toContain("refresh-secret");
+        }
     });
 });

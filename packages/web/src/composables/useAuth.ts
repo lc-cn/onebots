@@ -1,14 +1,10 @@
 import { buildApiUrl } from "../config";
 import { readBoundedJsonResponse, ResponseBodyTooLargeError } from "../bounded-response.js";
 import { managementRequestInit } from "../management-request.js";
-import {
-    authenticationRequestErrorMessage,
-    authenticationRequestInit,
-} from "../authentication-request.js";
+import { authenticationRequestInit } from "../authentication-request.js";
 import {
     assertAuthenticationResponseIdentity,
     authenticationExchangeHeaders,
-    AuthenticationResponseIdentityError,
     verifyAuthenticationTarget,
 } from "../authentication-target.js";
 
@@ -17,10 +13,6 @@ const REFRESH_KEY = "onebots:authRefreshToken";
 const EXPIRES_KEY = "onebots:authExpiresAt";
 const EXPIRED_FLAG = "onebots:authExpired";
 const AUTHENTICATION_RESPONSE_BODY_LIMIT_BYTES = 64 * 1024;
-
-export type LoginResult =
-    | { ok: true; isDefaultCredentials: boolean }
-    | { ok: false; message: string; unavailable?: boolean };
 
 export type RefreshResult = { ok: true } | { ok: false; unavailable?: boolean };
 
@@ -117,109 +109,6 @@ export const authFetch = async (
     return response;
 };
 
-/** 使用鉴权码登录（Bearer Token，与 config 中 access_token 一致） */
-export const loginWithToken = async (accessToken: string): Promise<LoginResult> => {
-    const target = await verifyAuthenticationTarget();
-    if (!target.ok) return { ok: false, unavailable: true, message: target.message };
-    let response: Response;
-    try {
-        response = await fetch(
-            buildApiUrl("/api/auth/login"),
-            authenticationRequestInit({
-                method: "POST",
-                headers: authenticationExchangeHeaders(target.identity, {
-                    "Content-Type": "application/json",
-                }),
-                body: JSON.stringify({ access_token: accessToken.trim() }),
-            }),
-        );
-        assertAuthenticationResponseIdentity(response, target.identity);
-    } catch (error) {
-        return { ok: false, unavailable: true, message: authenticationExchangeErrorMessage(error) };
-    }
-
-    if (!response.ok) {
-        const fallback =
-            response.status === 401 ? "鉴权码错误" : `登录请求失败（HTTP ${response.status}）`;
-        const result = await readAuthenticationResponse(response);
-        if (!result.ok) return { ok: false, unavailable: true, message: result.message };
-        const failure = {
-            ok: false as const,
-            message: authenticationFailureMessage(response, result.value, fallback),
-        };
-        return response.status === 401 ? failure : { ...failure, unavailable: true };
-    }
-
-    const result = await readAuthenticationResponse(response);
-    if (!result.ok) return { ok: false, unavailable: true, message: result.message };
-    if (isRecord(result.value) && typeof result.value.token === "string" && result.value.token) {
-        setToken(
-            result.value.token,
-            typeof result.value.expiresAt === "number" ? result.value.expiresAt : null,
-            typeof result.value.refreshToken === "string" ? result.value.refreshToken : null,
-        );
-        return { ok: true, isDefaultCredentials: !!result.value.isDefaultCredentials };
-    }
-
-    return {
-        ok: false,
-        unavailable: true,
-        message: readMessage(result.value) || "登录响应格式无效",
-    };
-};
-
-export const login = async (username: string, password: string): Promise<LoginResult> => {
-    const target = await verifyAuthenticationTarget();
-    if (!target.ok) return { ok: false, unavailable: true, message: target.message };
-    let response: Response;
-    try {
-        response = await fetch(
-            buildApiUrl("/api/auth/login"),
-            authenticationRequestInit({
-                method: "POST",
-                headers: authenticationExchangeHeaders(target.identity, {
-                    "Content-Type": "application/json",
-                }),
-                body: JSON.stringify({ username, password }),
-            }),
-        );
-        assertAuthenticationResponseIdentity(response, target.identity);
-    } catch (error) {
-        return { ok: false, unavailable: true, message: authenticationExchangeErrorMessage(error) };
-    }
-
-    if (!response.ok) {
-        const fallback =
-            response.status === 401
-                ? "用户名或密码错误"
-                : `登录请求失败（HTTP ${response.status}）`;
-        const result = await readAuthenticationResponse(response);
-        if (!result.ok) return { ok: false, unavailable: true, message: result.message };
-        const failure = {
-            ok: false as const,
-            message: authenticationFailureMessage(response, result.value, fallback),
-        };
-        return response.status === 401 ? failure : { ...failure, unavailable: true };
-    }
-
-    const result = await readAuthenticationResponse(response);
-    if (!result.ok) return { ok: false, unavailable: true, message: result.message };
-    if (isRecord(result.value) && typeof result.value.token === "string" && result.value.token) {
-        setToken(
-            result.value.token,
-            typeof result.value.expiresAt === "number" ? result.value.expiresAt : null,
-            typeof result.value.refreshToken === "string" ? result.value.refreshToken : null,
-        );
-        return { ok: true, isDefaultCredentials: !!result.value.isDefaultCredentials };
-    }
-
-    return {
-        ok: false,
-        unavailable: true,
-        message: readMessage(result.value) || "登录响应格式无效",
-    };
-};
-
 export const logout = async () => {
     const token = getToken();
     if (!token) {
@@ -283,11 +172,6 @@ export const refresh = async (signal?: AbortSignal | null): Promise<RefreshResul
     return { ok: false, unavailable: true };
 };
 
-const authenticationExchangeErrorMessage = (error: unknown) =>
-    error instanceof AuthenticationResponseIdentityError
-        ? error.message
-        : authenticationRequestErrorMessage(error);
-
 type AuthenticationResponseResult = { ok: true; value: unknown } | { ok: false; message: string };
 
 const readAuthenticationResponse = async (
@@ -314,19 +198,3 @@ const readAuthenticationResponse = async (
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null;
-
-const readMessage = (value: unknown) =>
-    isRecord(value) && typeof value.message === "string" ? value.message.trim() : "";
-
-const authenticationFailureMessage = (response: Response, value: unknown, fallback: string) => {
-    const message = readMessage(value) || fallback;
-    if (response.status !== 429) return message;
-    const bodyRetryAfter = isRecord(value) ? value.retryAfter : undefined;
-    const retryAfter = normalizeRetryAfter(bodyRetryAfter ?? response.headers.get("Retry-After"));
-    return retryAfter === null ? message : `${message}（请在 ${retryAfter} 秒后重试）`;
-};
-
-const normalizeRetryAfter = (value: unknown): number | null => {
-    const parsed = typeof value === "number" ? value : Number(value);
-    return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 24 * 60 * 60 ? parsed : null;
-};

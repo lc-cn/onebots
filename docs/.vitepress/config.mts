@@ -143,6 +143,7 @@ const baseConfig = defineConfig({
                         { text: `准备工作`, link: "/guide/prepare" },
                         { text: `快速开始`, link: "/guide/start" },
                         { text: `OneBots 工作台`, link: "/guide/tui" },
+                        { text: `管理端登录与恢复`, link: "/guide/management-login" },
                         { text: `Docker 私有扩展`, link: "/guide/docker-private-extensions" },
                         { text: `Docker 部署`, link: "/guide/docker" },
                         { text: `系统架构`, link: "/guide/architecture" },
@@ -311,6 +312,7 @@ const baseConfig = defineConfig({
                     "/en/guide/": [
                         { text: "Preparation", link: "/en/guide/prepare" },
                         { text: "Quick Start", link: "/en/guide/start" },
+                        { text: "Management Login", link: "/en/guide/management-login" },
                         { text: "Docker Deployment", link: "/en/guide/docker" },
                         { text: "Architecture", link: "/en/guide/architecture" },
                         { text: "Client SDK", link: "/en/guide/client-sdk" },
