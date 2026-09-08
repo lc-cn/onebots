@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createGenerationPlan } from "../installation/generation-plan.js";
 import { GenerationInstaller } from "../installation/generation-installer.js";
 import { GenerationStore } from "../installation/generation-store.js";
 import { ControlInstallationService } from "./installation-service.js";
@@ -66,6 +67,39 @@ function fixture() {
         resolver,
         setActive: (id: string | null) => {
             active = id;
+            if (id !== null) {
+                const location = path.join(directory, id);
+                fs.mkdirSync(path.join(location, "node_modules/onebots/lib"), { recursive: true });
+                const plan = createGenerationPlan({
+                    ...resolver,
+                    selection: { adapters: [], protocols: [], applications: [] },
+                    extensions: [],
+                });
+                fs.writeFileSync(path.join(location, "plan.json"), JSON.stringify(plan));
+                fs.writeFileSync(
+                    path.join(location, "node_modules/onebots/package.json"),
+                    JSON.stringify({
+                        name: "onebots",
+                        version: resolver.host.version,
+                        dependencies: { "@onebots/core": resolver.core.version },
+                    }),
+                );
+                fs.writeFileSync(
+                    path.join(
+                        location,
+                        "node_modules/onebots/lib/extension-capability-catalog.json",
+                    ),
+                    JSON.stringify({
+                        schemaVersion: 2,
+                        packages: { "@onebots/adapter-mock": { version: "1.0.0" } },
+                    }),
+                );
+                vi.spyOn(store, "readVerified").mockReturnValue({
+                    id,
+                    directory: location,
+                    planDigest: plan.digest,
+                } as ReturnType<typeof store.readVerified>);
+            }
         },
     };
 }

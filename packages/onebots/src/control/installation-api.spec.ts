@@ -21,6 +21,14 @@ function fixture() {
     let active: string | null = null;
     const service = new ControlInstallationService({
         currentGenerationId: () => active,
+        currentSelection: () => ({ adapters: [], protocols: [], applications: [] }),
+        currentConfigurationRevision: () => "a".repeat(64),
+        resolveRelease: async () => ({
+            host: { name: "onebots", version: "1.2.13", spec: "1.2.13" },
+            core: { name: "@onebots/core", version: "1.0.0", spec: "1.0.0" },
+            extensionVersions: {},
+            archiveSha256: "b".repeat(64),
+        }),
         directory,
         store: new GenerationStore({
             root: path.join(directory, "generations"),
@@ -197,5 +205,32 @@ describe("installation HTTP boundary", () => {
         expect((await test.request("/api/control/installations/plan", "DELETE")).status).toBe(404);
         expect(isInstallationPath("/api/control/installations/catalog")).toBe(true);
         expect(isInstallationPath("/api/control/installations-evil")).toBe(false);
+    });
+});
+
+describe("升级计划HTTP边界", () => {
+    it("客户端只能提供双基线，不能指定目标包、版本或下载凭据", async () => {
+        const f = fixture();
+        const expected = { generationId: null, configRevision: "a".repeat(64) };
+        expect(isInstallationPath("/api/control/updates/plan")).toBe(true);
+        for (const body of [
+            {},
+            { expected: {} },
+            { expected: { ...expected, url: "private" } },
+            { expected, token: "private" },
+            { expected, version: "9.9.9" },
+        ]) {
+            expect((await f.request("/api/control/updates/plan", "POST", body)).status).toBe(400);
+        }
+        expect((await f.request("/api/control/updates/plan", "POST", { expected })).status).toBe(
+            200,
+        );
+        expect(
+            (
+                await f.request("/api/control/updates/plan", "POST", {
+                    expected: { ...expected, configRevision: "c".repeat(64) },
+                })
+            ).status,
+        ).toBe(409);
     });
 });

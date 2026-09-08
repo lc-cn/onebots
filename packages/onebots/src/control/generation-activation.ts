@@ -45,7 +45,7 @@ export interface GenerationActivationOptions {
     hasLiveChildren(): boolean;
     configurationRecoveryRequired?(): boolean;
     /** Verify candidate configuration under the lifecycle queue; guard must synchronously recheck its snapshot. */
-    verifyActivation?(generation: VerifiedGeneration): Promise<() => void>;
+    verifyActivation?(generation: VerifiedGeneration, expectedConfigRevision?: string): Promise<() => void>;
 }
 
 /** 仅供可信配置服务使用；事务中必须 await 操作，不得调用外层 facade。 */
@@ -220,7 +220,7 @@ export class GenerationActivationController {
         });
     }
 
-    activate(id: string, expected?: string | null): Promise<GenerationActivationOperation> {
+    activate(id: string, expected?: string | null, expectedConfigRevision?: string): Promise<GenerationActivationOperation> {
         return this.serial(async () => {
             this.assertWritable();
             const verified = this.options.readVerified(id);
@@ -237,7 +237,10 @@ export class GenerationActivationController {
             } else if (expected !== undefined && expected !== (this.state.active?.id ?? null)) {
                 throw new GenerationConflictError();
             }
-            const assertCurrent = await this.options.verifyActivation?.(verified);
+            if (expectedConfigRevision !== undefined &&
+                (!/^[a-f0-9]{64}$/.test(expectedConfigRevision) || !this.options.verifyActivation))
+                throw new Error("缺少升级配置验证能力或有效快照");
+            const assertCurrent = await this.options.verifyActivation?.(verified, expectedConfigRevision);
             const before = structuredClone(this.state);
             const operation: GenerationActivationOperation = {
                 id: randomUUID(),

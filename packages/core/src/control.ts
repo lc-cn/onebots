@@ -120,6 +120,15 @@ export interface ControlInstallPlan {
     recommendations: string[];
 }
 
+export interface ControlUpdatePlan {
+    state: "current" | "updates_available";
+    base: ControlConfigurationBase;
+    packages: Array<{ name: string; current: string | null; target: string }>;
+    peers: Array<{ requestedBy: string; packageName: string; range: string }>;
+    recommendations: string[];
+    installationPlan?: ControlInstallPlan;
+}
+
 export interface ControlInstallationCatalog {
     activeGenerationId: string | null;
     selection: ControlExtensionSelection;
@@ -359,6 +368,10 @@ export class ControlClient {
         } finally {
             if (timer !== undefined) clearTimeout(timer);
         }
+    }
+
+    planUpdate(expected: ControlConfigurationBase): Promise<ControlUpdatePlan> {
+        return this.transport.request("POST", "/api/control/updates/plan", { expected });
     }
 
     planInstallation(

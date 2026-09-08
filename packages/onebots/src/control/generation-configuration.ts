@@ -1,5 +1,6 @@
 import path from "node:path";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
+import { ConfigurationConflictError } from "../configuration/configuration-store.js";
 import { verifyConfiguration } from "../configuration/configuration-verify.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
 import type { VerifiedGeneration } from "../installation/generation-store.js";
@@ -18,9 +19,9 @@ export class GenerationConfigurationVerifier {
         this.source = new ConfigurationFile(path.join(workspace, "config.yaml"));
     }
 
-    verify(generation: VerifiedGeneration): Promise<() => void> {
+    verify(generation: VerifiedGeneration, expectedConfigRevision?: string): Promise<() => void> {
         if (this.abort.signal.aborted) return Promise.reject(new Error("版本验证已关闭"));
-        const work = this.validate(generation);
+        const work = this.validate(generation, expectedConfigRevision);
         this.pending.add(work);
         void work
             .finally(() => this.pending.delete(work))
@@ -35,8 +36,13 @@ export class GenerationConfigurationVerifier {
         await Promise.allSettled([...this.pending]);
     }
 
-    private async validate(generation: VerifiedGeneration): Promise<() => void> {
+    private async validate(
+        generation: VerifiedGeneration,
+        expectedConfigRevision?: string,
+    ): Promise<() => void> {
         const snapshot = this.source.read();
+        if (expectedConfigRevision !== undefined && expectedConfigRevision !== snapshot.revision)
+            throw new ConfigurationConflictError();
         const fingerprint = JSON.stringify(generation);
         const configured = getConfiguredPluginSelection(snapshot.document, true);
         const runtime = resolveGenerationRuntime(generation, {

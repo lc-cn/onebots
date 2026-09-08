@@ -24,15 +24,9 @@ import { GatewayController } from "./gateway-controller.js";
 import { NodeGatewayDriver } from "./gateway-driver.js";
 import { GenerationActivationController } from "./generation-activation.js";
 import { GenerationStore } from "../installation/generation-store.js";
-import {
-    readGenerationPlan,
-    resolveGenerationRuntime,
-} from "../installation/generation-runtime.js";
-import { recoverDownloadCredentials } from "../installation/generation-download.js";
-import {
-    ControlInstallationService,
-    type ControlInstallationOptions,
-} from "./installation-service.js";
+import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
+import type { ControlInstallationOptions } from "./installation-service.js";
+import { createHostInstallation } from "./host-installation.js";
 import { handleInstallationRequest, isInstallationPath } from "./installation-api.js";
 import { ConfigurationApplication } from "../configuration/configuration-application.js";
 import { ConfigurationRecoveryStore } from "../configuration/configuration-recovery-store.js";
@@ -132,7 +126,8 @@ export async function startControlHost(options: ControlHostOptions) {
         statePath: path.join(controlDirectory(workspace), "active-generation.json"),
         gateway: controller,
         readVerified,
-        verifyActivation: generation => activationVerification.verify(generation),
+        verifyActivation: (generation, revision) =>
+            activationVerification.verify(generation, revision),
         hasLiveChildren: () => driver.hasLiveChildren(),
         configurationRecoveryRequired: () =>
             configurationStorageUnavailable ||
@@ -160,30 +155,13 @@ export async function startControlHost(options: ControlHostOptions) {
         configurationStorageUnavailable = true;
         process.stderr.write("[onebots] 配置应用记录不可用，保留管理端用于诊断\n");
     }
-    let installation: ControlInstallationService | undefined;
-    try {
-        if (!ownershipAvailable) throw new Error("历史管理进程所有权不可确认");
-        const recovered = await recoverDownloadCredentials(
-            path.join(controlDirectory(workspace), "downloads"),
-        );
-        if (recovered.blocked.length) throw new Error("下载进程或凭据归属尚待核实");
-        if (generations)
-            installation = new ControlInstallationService({
-                ...options.installation,
-                directory: controlDirectory(workspace),
-                store: generations,
-                lifecycle,
-                currentGenerationId: () => lifecycle.status().active?.id ?? null,
-                currentSelection: () => {
-                    const active = lifecycle.activeGeneration();
-                    return active
-                        ? readGenerationPlan(active).selection
-                        : prepareGatewayWorkspace(workspace, options.runtimeRoot).selection;
-                },
-            });
-    } catch {
-        process.stderr.write("[onebots] 安装服务恢复未完成，保持管理端用于诊断\n");
-    }
+    const installation = await createHostInstallation(
+        options,
+        workspace,
+        generations,
+        lifecycle,
+        ownershipAvailable,
+    );
     const sockets = new Set<Duplex>();
     let closed = false;
     function activeAddress() {

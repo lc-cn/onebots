@@ -1,3 +1,11 @@
+import { activeInstallationResolver } from "./installation-active-resolver.js";
+import { ConfigurationConflictError } from "../configuration/configuration-store.js";
+import {
+    prepareInstallationUpdate,
+    type UpdateBase,
+    type UpdateConfirmation,
+} from "./installation-update.js";
+import type { ResolvedRelease } from "../installation/release-resolver.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,6 +55,8 @@ export interface ControlInstallationOptions {
     pnpmScript?: string;
     currentGenerationId?(): string | null;
     currentSelection?(): GenerationSelection;
+    currentConfigurationRevision?(): string;
+    resolveRelease?(): Promise<ResolvedRelease>;
 }
 
 /** CLI/TUI/Web 共用的安装应用服务；HTTP 层仅认证、解析和传送结果。 */
@@ -87,15 +97,23 @@ export class ControlInstallationService {
 
     /** 只读宿主目录，不依赖账号配置或下载扩展的执行结果。 */
     catalog(): ControlInstallationCatalog {
+        const activeGenerationId = this.options.currentGenerationId?.() ?? null;
+        const resolver = activeInstallationResolver(
+            this.options.store,
+            activeGenerationId,
+            this.resolver,
+        );
         const entries = (type: "adapter" | "protocol") =>
             TRUSTED_EXTENSION_CATALOG.filter(entry => entry.type === type).flatMap(entry => {
-                const version = getExtensionPackageCatalogEntry(entry.packageName)?.packageVersion;
+                const version = resolver.extensionVersions
+                    ? resolver.extensionVersions[entry.packageName]
+                    : getExtensionPackageCatalogEntry(entry.packageName)?.packageVersion;
                 return version
                     ? [{ name: entry.name, displayName: entry.displayName, version }]
                     : [];
             });
         return {
-            activeGenerationId: this.options.currentGenerationId?.() ?? null,
+            activeGenerationId,
             selection: structuredClone(
                 this.options.currentSelection?.() ?? {
                     adapters: [],
@@ -113,16 +131,59 @@ export class ControlInstallationService {
         if (this.closed) throw new Error("安装服务正在关闭");
         this.assertBase(expectedGenerationId);
         const resolver = await freezeGenerationArtifacts(
-            this.resolver,
+            activeInstallationResolver(this.options.store, expectedGenerationId, this.resolver),
             path.join(this.options.directory, "artifacts"),
         );
         const { plan, recommendations } = await resolveGenerationPlan(selection, resolver);
         if (this.closed) throw new Error("安装服务正在关闭");
         this.assertBase(expectedGenerationId);
+        return this.confirmPlan(plan, expectedGenerationId, recommendations);
+    }
+
+    async planUpdate(expected: UpdateBase) {
+        expected = { ...expected };
+        const assertCurrent = () => {
+            if (this.closed) throw new Error("安装服务正在关闭");
+            this.assertBase(expected.generationId);
+            this.assertConfiguration(expected.configRevision);
+        };
+        const result = await prepareInstallationUpdate({
+            expected: { ...expected },
+            store: this.options.store,
+            resolver: this.resolver,
+            artifactsDirectory: path.join(this.options.directory, "artifacts"),
+            currentSelection: this.options.currentSelection,
+            resolveRelease: this.options.resolveRelease,
+            assertCurrent,
+        });
+        assertCurrent();
+        const { plan, update, ...preview } = result;
+        return {
+            ...preview,
+            ...(result.state === "updates_available"
+                ? {
+                      installationPlan: this.confirmPlan(
+                          plan,
+                          expected.generationId,
+                          result.recommendations,
+                          update,
+                      ),
+                  }
+                : {}),
+        };
+    }
+
+    private confirmPlan(
+        plan: GenerationPlan,
+        expectedGenerationId: string | null,
+        recommendations: string[],
+        update?: UpdateConfirmation,
+    ) {
         const confirmation = {
             schemaVersion: 1 as const,
             baseGenerationId: expectedGenerationId,
             plan,
+            ...(update ? { update } : {}),
         };
         const id = digest(confirmation);
         const file = this.planFile(id);
@@ -171,8 +232,10 @@ export class ControlInstallationService {
                     throw new Error("安装操作绑定无效");
                 return operation;
             }
+            throw new Error("安装操作已绑定但记录缺失，必须先对账，禁止重新派发");
         }
         this.assertBase(confirmation.baseGenerationId);
+        if (confirmation.update) this.assertConfiguration(confirmation.update.configRevision);
         atomicWrite(bindingFile, {
             planId: request.planId,
             planDigest: plan.digest,
@@ -215,7 +278,14 @@ export class ControlInstallationService {
             binding.planDigest !== verified.planDigest
         )
             throw new Error("候选安装绑定无效");
-        return this.options.lifecycle.activate(id, binding.baseGenerationId);
+        const confirmation = this.readPlan(binding.planId);
+        return confirmation.update
+            ? this.options.lifecycle.activate(
+                  id,
+                  binding.baseGenerationId,
+                  confirmation.update.configRevision,
+              )
+            : this.options.lifecycle.activate(id, binding.baseGenerationId);
     }
 
     async close(): Promise<void> {
@@ -233,6 +303,15 @@ export class ControlInstallationService {
     private assertBase(expected: string | null): void {
         if (expected !== (this.options.currentGenerationId?.() ?? null))
             throw new GenerationConflictError();
+    }
+
+    private assertConfiguration(expected: string): void {
+        if (
+            typeof expected !== "string" ||
+            !/^[a-f0-9]{64}$/.test(expected) ||
+            this.options.currentConfigurationRevision?.() !== expected
+        )
+            throw new ConfigurationConflictError();
     }
 
     private bindingFile(id: string): string {
@@ -267,6 +346,7 @@ export class ControlInstallationService {
         schemaVersion: 1;
         baseGenerationId: string | null;
         plan: GenerationPlan;
+        update?: UpdateConfirmation;
     } {
         const file = this.planFile(id);
         try {
@@ -274,10 +354,17 @@ export class ControlInstallationService {
                 schemaVersion: 1;
                 baseGenerationId: string | null;
                 plan: GenerationPlan;
+                update?: UpdateConfirmation;
             };
             const plan = createGenerationPlan({ ...input.plan, target: input.plan });
             if (
                 input.schemaVersion !== 1 ||
+                (input.update !== undefined &&
+                    (!input.update ||
+                        Object.keys(input.update).sort().join(",") !==
+                            "archiveSha256,configRevision" ||
+                        !/^[a-f0-9]{64}$/.test(input.update.configRevision) ||
+                        !/^[a-f0-9]{64}$/.test(input.update.archiveSha256))) ||
                 !(input.baseGenerationId === null || typeof input.baseGenerationId === "string") ||
                 digest(input) !== id ||
                 JSON.stringify(plan) !== JSON.stringify(input.plan)

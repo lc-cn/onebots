@@ -1,10 +1,12 @@
 import { GenerationConflictError } from "./generation-activation.js";
+import { ConfigurationConflictError } from "../configuration/configuration-store.js";
 import type { GenerationSelection } from "../installation/generation-plan.js";
 import type { ControlInstallationService } from "./installation-service.js";
 
 export function isInstallationPath(pathname: string): boolean {
     return (
         pathname === "/api/control/installations" ||
+        pathname === "/api/control/updates/plan" ||
         pathname.startsWith("/api/control/installations/") ||
         pathname.startsWith("/api/control/generations/")
     );
@@ -28,14 +30,16 @@ export async function handleInstallationRequest(
     } catch (error) {
         return {
             status:
-                error instanceof GenerationConflictError
+                error instanceof GenerationConflictError || error instanceof ConfigurationConflictError
                     ? 409
                     : error instanceof InvalidRequest
                       ? 400
                       : 500,
             body: {
                 message:
-                    error instanceof GenerationConflictError
+                    error instanceof ConfigurationConflictError
+                        ? "配置已变化，请刷新并重新确认升级计划"
+                        : error instanceof GenerationConflictError
                         ? "运行版本已变化，请刷新并重新确认安装计划"
                         : error instanceof InvalidRequest
                           ? "安装请求无效"
@@ -50,6 +54,30 @@ async function handle(input: InstallationRequest): Promise<{ status: number; bod
     if (!service) return { status: 503, body: { message: "安装服务不可用，请检查本地工作区" } };
     if (pathname === "/api/control/installations/catalog" && method === "GET")
         return { status: 200, body: service.catalog() };
+    if (pathname === "/api/control/updates/plan" && method === "POST") {
+        const body = await bodyFields(input, ["expected"]);
+        const expected = body.expected;
+        if (!expected || typeof expected !== "object" || Array.isArray(expected))
+            throw new InvalidRequest();
+        const base = expected as Record<string, unknown>;
+        if (
+            Object.keys(base).length !== 2 ||
+            !(
+                base.generationId === null ||
+                (typeof base.generationId === "string" && /^[a-f0-9-]{36}$/.test(base.generationId))
+            ) ||
+            typeof base.configRevision !== "string" ||
+            !/^[a-f0-9]{64}$/.test(base.configRevision)
+        )
+            throw new InvalidRequest();
+        return {
+            status: 200,
+            body: await service.planUpdate({
+                generationId: typeof base.generationId === "string" ? base.generationId : null,
+                configRevision: base.configRevision,
+            }),
+        };
+    }
     if (pathname === "/api/control/installations/plan" && method === "POST") {
         const body = await bodyFields(input, ["selection", "expectedGenerationId"]);
         if (

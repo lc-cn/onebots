@@ -92,3 +92,11 @@ it("关闭撤销已签发复核能力并拒绝新验证", async () => {
     expect(check).toThrow("已关闭");
     await expect(f.service.verify(f.generation)).rejects.toThrow("已关闭");
 });
+
+it("升级确认的配置摘要在验证开始前必须仍匹配", async () => {
+    const f = fixture();
+    await expect(f.service.verify(f.generation, "f".repeat(64))).rejects.toThrow(
+        "配置已发生变化",
+    );
+    expect(f.verify).not.toHaveBeenCalled();
+});

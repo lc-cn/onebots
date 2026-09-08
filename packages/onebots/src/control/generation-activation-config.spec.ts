@@ -14,10 +14,11 @@ describe("candidate configuration verification", () => {
             if (running) await f.activation.start();
             const before = f.activation.status();
             const events = [...f.events];
-            await expect(f.activation.activate("target")).rejects.toThrow(
+            const revision = "a".repeat(64);
+            await expect(f.activation.activate("target", null, revision)).rejects.toThrow(
                 "invalid candidate configuration",
             );
-            expect(check).toHaveBeenCalledExactlyOnceWith(verified("target"));
+            expect(check).toHaveBeenCalledExactlyOnceWith(verified("target"), revision);
             expect(f.activation.status()).toEqual(before);
             expect(f.events).toEqual(events);
         },
