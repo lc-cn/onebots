@@ -6,6 +6,7 @@ export type ServiceMigrationPhase =
     | "writing-target"
     | "starting-manager"
     | "verifying"
+    | "releasing-target"
     | "stopping-target"
     | "restoring"
     | "restarting-old"
@@ -54,6 +55,8 @@ export interface ServiceMigrationPort {
      * 不得将未知子进程或任意启动失败等同已知配置损坏；原停止时不得启动。
      */
     verifyTarget(backup: ServiceMigrationBackup): Promise<boolean>;
+    /** 验收后开放管理操作；结果未知时只能对账，不能回退覆盖用户的新操作。 */
+    releaseTarget(backup: ServiceMigrationBackup): Promise<void>;
     stopTarget(backup: ServiceMigrationBackup): Promise<void>;
     /** 只有原始或本次候选文件摘要且进程已停止时才允许恢复。 */
     canRestore(backup: ServiceMigrationBackup): Promise<boolean>;

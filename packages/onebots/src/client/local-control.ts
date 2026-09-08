@@ -2,7 +2,7 @@ import http from "node:http";
 import { ControlClient, ControlRequestError, type ControlTransport } from "@onebots/core/control";
 import { controlSocket } from "../control/workspace.js";
 
-export function createLocalControlClient(workspace: string): ControlClient {
+export function createLocalControlTransport(workspace: string): ControlTransport {
     const transport: ControlTransport = {
         request<T>(method: "GET" | "POST", route: string, body?: unknown): Promise<T> {
             return new Promise((resolve, reject) => {
@@ -28,8 +28,15 @@ export function createLocalControlClient(workspace: string): ControlClient {
                         response.on("end", () => {
                             try {
                                 const data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-                                if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300)
-                                    throw new ControlRequestError(response.statusCode ?? 0, data.message ?? "本地控制请求失败");
+                                if (
+                                    !response.statusCode ||
+                                    response.statusCode < 200 ||
+                                    response.statusCode >= 300
+                                )
+                                    throw new ControlRequestError(
+                                        response.statusCode ?? 0,
+                                        data.message ?? "本地控制请求失败",
+                                    );
                                 resolve(data as T);
                             } catch (error) {
                                 reject(error);
@@ -40,10 +47,21 @@ export function createLocalControlClient(workspace: string): ControlClient {
                 request.setTimeout(60_000, () =>
                     request.destroy(new Error("控制操作结果暂不可确认，请查询状态")),
                 );
+                // socket idle timeout不能阻止持续小块响应；总期限同样有界。
+                const deadline = setTimeout(
+                    () => request.destroy(new Error("控制操作结果暂不可确认，请查询状态")),
+                    60_000,
+                );
+                deadline.unref();
+                request.once("close", () => clearTimeout(deadline));
                 request.on("error", reject);
                 request.end(body === undefined ? undefined : JSON.stringify(body));
             });
         },
     };
-    return new ControlClient(transport);
+    return transport;
+}
+
+export function createLocalControlClient(workspace: string): ControlClient {
+    return new ControlClient(createLocalControlTransport(workspace));
 }

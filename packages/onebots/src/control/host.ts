@@ -1,4 +1,9 @@
+import {
+    claimServiceProcessOwnership,
+    closeServiceProcessOwnership,
+} from "../service-migration-processes.js";
 import { handleControlAuth } from "./auth-api.js";
+import { handleServiceMigrationRequest, serviceMigrationStatus } from "./service-migration-api.js";
 import fs from "node:fs";
 import path from "node:path";
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
@@ -31,7 +36,7 @@ import {
     gatewayProcessExists,
 } from "./workspace.js";
 import { proxyGatewayHttp, proxyGatewayUpgrade } from "./proxy.js";
-import { listen, readBody } from "./http-utils.js";
+import { listen, readBody, jsonResponse as json } from "./http-utils.js";
 import { ControlConfigurationService } from "./configuration-service.js";
 import { handleConfigurationRequest, isConfigurationPath } from "./configuration-api.js";
 import packageMetadata from "../../package.json" with { type: "json" };
@@ -56,11 +61,13 @@ export async function startControlHost(options: ControlHostOptions) {
             path.dirname(createRequire(import.meta.url).resolve("@onebots/web/package.json")),
             "dist",
         );
+    const freshWorkspace = !fs.existsSync(controlDirectory(workspace));
     const release = acquireControlWorkspace(workspace);
     const id = randomUUID();
+    const ownershipAvailable = await claimServiceProcessOwnership(workspace, id, freshWorkspace);
     let auth: ControlAuth | undefined;
     let authAvailable = true;
-    let storageError = false;
+    let storageError = !ownershipAvailable || serviceMigrationStatus(workspace).recoveryRequired;
     let lifecycle: GenerationActivationController;
     let generations: GenerationStore | undefined;
     let configurationApplication: ConfigurationApplication | undefined;
@@ -104,7 +111,7 @@ export async function startControlHost(options: ControlHostOptions) {
     const controller = new GatewayController({
         statePath: path.join(controlDirectory(workspace), "gateway.json"),
         driver,
-        initialDesired: "running",
+        initialDesired: serviceMigrationStatus(workspace).pending ? "stopped" : "running",
     });
     lifecycle = new GenerationActivationController({
         statePath: path.join(controlDirectory(workspace), "active-generation.json"),
@@ -127,7 +134,7 @@ export async function startControlHost(options: ControlHostOptions) {
             ),
             lifecycle,
         });
-        if (generations)
+        if (generations && ownershipAvailable)
             configuration = new ControlConfigurationService({
                 directory: path.join(controlDirectory(workspace), "configuration"),
                 configFile: path.join(workspace, "config.yaml"),
@@ -142,6 +149,7 @@ export async function startControlHost(options: ControlHostOptions) {
     }
     let installation: ControlInstallationService | undefined;
     try {
+        if (!ownershipAvailable) throw new Error("历史管理进程所有权不可确认");
         const recovered = await recoverDownloadCredentials(
             path.join(controlDirectory(workspace), "downloads"),
         );
@@ -175,14 +183,6 @@ export async function startControlHost(options: ControlHostOptions) {
             driver.hasLiveChildren()
             ? state.instance?.address
             : undefined;
-    }
-
-    function json(response: ServerResponse, status: number, value: unknown) {
-        response.writeHead(status, {
-            "Content-Type": "application/json; charset=utf-8",
-            "Cache-Control": "no-store",
-        });
-        response.end(JSON.stringify(value));
     }
 
     async function handle(request: IncomingMessage, response: ServerResponse, local: boolean) {
@@ -244,10 +244,22 @@ export async function startControlHost(options: ControlHostOptions) {
                         return;
                     }
                 }
+                const migration = await handleServiceMigrationRequest({
+                    workspace,
+                    ownershipAvailable,
+                    pathname,
+                    method: request.method,
+                    local,
+                    body: () => readBody(request),
+                });
+                if (migration) {
+                    json(response, migration.status, migration.body);
+                    return;
+                }
                 if (pathname === "/api/control/status" && request.method === "GET") {
                     json(response, 200, {
                         schemaVersion: 1,
-                        manager: { id, version: packageMetadata.version },
+                        manager: { id, version: packageMetadata.version, pid: process.pid },
                         gateway: storageError
                             ? {
                                   ...controller.status(),
@@ -257,6 +269,8 @@ export async function startControlHost(options: ControlHostOptions) {
                               }
                             : controller.status(),
                         authAvailable,
+                        processOwnership: { available: ownershipAvailable },
+                        serviceMigration: serviceMigrationStatus(workspace),
                         generation: lifecycle.status(),
                         installationAvailable: Boolean(installation),
                         configuration: {
@@ -426,6 +440,7 @@ export async function startControlHost(options: ControlHostOptions) {
         );
         try {
             if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
+            if (ownershipAvailable) await closeServiceProcessOwnership(workspace, id);
         } finally {
             release();
         }

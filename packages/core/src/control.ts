@@ -1,7 +1,9 @@
 /** 无服务器或插件依赖的控制契约，CLI/TUI/Web 共用此入口。 */
 export interface ControlStatus {
     schemaVersion: 1;
-    manager: { id: string; version: string };
+    manager: { id: string; version: string; pid?: number };
+    serviceMigration?: { pending: boolean; recoveryRequired: boolean };
+    processOwnership?: { available: boolean };
     gateway: {
         desired: "running" | "stopped";
         actual: "starting" | "running" | "stopping" | "stopped" | "failed";

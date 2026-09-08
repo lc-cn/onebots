@@ -1,5 +1,13 @@
 import type http from "node:http";
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
+
+export function jsonResponse(response: ServerResponse, status: number, value: unknown): void {
+    response.writeHead(status, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+    });
+    response.end(JSON.stringify(value));
+}
 
 export function listen(server: http.Server, port: number | string, host?: string): Promise<void> {
     return new Promise((resolve, reject) => {

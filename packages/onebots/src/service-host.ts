@@ -11,7 +11,7 @@ export interface ServiceHost {
     exec(
         file: string,
         args: string[],
-        options?: { inherit?: boolean; ignoreError?: boolean },
+        options?: { inherit?: boolean; ignoreError?: boolean; timeoutMs?: number },
     ): string;
     spawn(file: string, args: string[]): Promise<number>;
 }
@@ -29,6 +29,7 @@ export function createDefaultServiceHost(): ServiceHost {
                     execFileSync(file, args, {
                         encoding: options?.inherit ? undefined : "utf8",
                         stdio: options?.inherit ? "inherit" : "pipe",
+                        timeout: options?.timeoutMs,
                     })?.toString() ?? ""
                 );
             } catch (error) {

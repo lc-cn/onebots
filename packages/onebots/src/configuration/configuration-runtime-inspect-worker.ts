@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import type { ConfigurationRuntimeInspectInput } from "./configuration-runtime-inspect.js";
 
-if (!process.send) process.exit(1);
+if (!process.send || !process.connected) process.exit(1);
 function stop(): void {
     try {
         process.kill(-process.pid, "SIGKILL");

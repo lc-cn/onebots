@@ -175,12 +175,15 @@ describe("generation verification worker", () => {
         async () => {
             const test = fixture();
             const pidFile = path.join(test.directory, "disconnect-helper.json");
+            const privateRoot = path.join(test.directory, "owners");
             fs.appendFileSync(
                 path.join(test.plugin, "lib/index.js"),
                 `
 import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {stdio:'ignore'});
+const owner=JSON.parse(fs.readFileSync(process.env.HOME+"/owner.json","utf8"));
+if(owner.phase!=="running" || owner.workerPid!==process.pid) throw new Error("ownership before import");
 fs.writeFileSync(${JSON.stringify(pidFile)}, JSON.stringify({helper:helper.pid,worker:process.pid}));
 await new Promise(() => {});
 `,
@@ -193,7 +196,7 @@ await new Promise(() => {});
                     import.meta.resolve("tsx/esm"),
                     "--input-type=module",
                     "-e",
-                    `import {verifyGeneration} from ${JSON.stringify(source)}; await verifyGeneration(${JSON.stringify(test.directory)},${JSON.stringify(test.plan)});`,
+                    `import {verifyGeneration} from ${JSON.stringify(source)}; await verifyGeneration(${JSON.stringify(test.directory)},${JSON.stringify(test.plan)},{privateRoot:${JSON.stringify(privateRoot)}});`,
                 ],
                 { stdio: "ignore" },
             );
@@ -203,6 +206,16 @@ await new Promise(() => {});
                 for (let attempt = 0; !fs.existsSync(pidFile) && attempt < 200; attempt++)
                     await new Promise(resolve => setTimeout(resolve, 10));
                 pids = JSON.parse(fs.readFileSync(pidFile, "utf8"));
+                const owners = fs.readdirSync(privateRoot);
+                expect(owners).toHaveLength(1);
+                const owner = JSON.parse(
+                    fs.readFileSync(path.join(privateRoot, owners[0], "owner.json"), "utf8"),
+                );
+                expect(owner).toMatchObject({
+                    phase: "running",
+                    workerPid: pids!.worker,
+                    parentPid: parent.pid,
+                });
                 parent.kill("SIGKILL");
                 await closed;
                 for (const pid of [pids!.helper, pids!.worker]) {
@@ -218,6 +231,7 @@ await new Promise(() => {});
                     }
                     expect(absent).toBe(true);
                 }
+                expect(fs.existsSync(path.join(privateRoot, owners[0], "owner.json"))).toBe(true);
                 expect(fs.existsSync(path.join(test.directory, "schemas.json"))).toBe(false);
             } finally {
                 parent.kill("SIGKILL");
@@ -251,6 +265,7 @@ await new Promise(() => {});
             const pending = verifyGeneration(test.directory, test.plan, {
                 timeoutMs: mode === "timeout" ? 500 : 5000,
                 signal: cancellation.signal,
+                privateRoot: path.join(test.directory, "owners"),
             }).then(
                 () => null,
                 error => error,
@@ -262,6 +277,7 @@ await new Promise(() => {});
                 pid = Number(fs.readFileSync(pidFile, "utf8"));
                 if (mode === "abort") cancellation.abort();
                 expect(await pending).toBeInstanceOf(Error);
+                expect(fs.readdirSync(path.join(test.directory, "owners"))).toEqual([]);
                 expect(() => process.kill(pid!, 0)).toThrow();
                 expect(fs.existsSync(path.join(test.directory, "schemas.json"))).toBe(false);
             } finally {

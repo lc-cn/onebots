@@ -891,12 +891,17 @@ describe("ExtensionManager", () => {
 
     it("共享运行目录中的不同管理器不能交错修改依赖", async () => {
         const { root, configPath } = fixture();
+        let enteredInstall!: () => void;
+        const entered = new Promise<void>(resolve => {
+            enteredInstall = resolve;
+        });
         let releaseInstall: (() => void) | undefined;
         const installGate = new Promise<void>(resolve => {
             releaseInstall = resolve;
         });
         const firstInstall = vi.fn(
             async (packageName: string, packageVersion: string, runtimeRoot: string) => {
+                enteredInstall();
                 await installGate;
                 installFixturePackage(packageName, packageVersion, runtimeRoot);
             },
@@ -920,14 +925,19 @@ describe("ExtensionManager", () => {
         });
 
         const first = firstManager.install("adapter:slack");
-        await vi.waitFor(() => expect(firstInstall).toHaveBeenCalledOnce());
-
-        await expect(secondManager.install("protocol:mcp-v1")).rejects.toThrow(
-            /adapter:slack.*安装事务.*进程.*请等待完成后重试/,
-        );
-        expect(secondInstall).not.toHaveBeenCalled();
-
-        releaseInstall?.();
+        try {
+            // 等待真正进入安装临界区，不能依赖全仓并发负载下的1秒轮询窗口。
+            await Promise.race([entered, first]);
+            expect(firstInstall).toHaveBeenCalledOnce();
+            await expect(secondManager.install("protocol:mcp-v1")).rejects.toThrow(
+                /adapter:slack.*安装事务.*进程.*请等待完成后重试/,
+            );
+            expect(secondInstall).not.toHaveBeenCalled();
+        } finally {
+            releaseInstall?.();
+            // 即使断言失败，也先收回本测试的异步操作，再允许afterEach删除工作区。
+            await Promise.allSettled([first]);
+        }
         await expect(first).resolves.toMatchObject({ restartRequired: true });
         await expect(secondManager.install("protocol:mcp-v1")).resolves.toMatchObject({
             restartRequired: true,

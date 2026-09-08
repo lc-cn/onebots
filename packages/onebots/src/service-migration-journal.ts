@@ -17,6 +17,7 @@ const phases = [
     "writing-target",
     "starting-manager",
     "verifying",
+    "releasing-target",
     "stopping-target",
     "restoring",
     "restarting-old",

@@ -43,6 +43,7 @@ export class ControlConfigurationService {
         this.source = new ConfigurationFile(options.configFile);
         this.recovery = new ConfigurationRecoveryStore(path.join(options.directory, "recovery"));
         this.workspace = new ConfigurationWorkspace({
+            privateRoot: path.join(options.directory, "schema-workers"),
             source: this.source,
             runtimeRoot: options.runtimeRoot,
             hostEntrypoint: path.resolve(import.meta.dirname, "../../lib/index.js"),

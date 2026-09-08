@@ -4,9 +4,15 @@ import path from "node:path";
 import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { ControlExtensionSelection } from "@onebots/core/control";
+import {
+    allocateConfigurationVerification,
+    writeConfigurationVerificationOwner,
+} from "./configuration-verify-ownership.js";
 import { parseConfigurationDocument } from "./configuration-document.js";
 
 export interface ConfigurationRuntimeInspectInput {
+    /** 管理服务必须传工作区内私有所有权目录。 */
+    privateRoot?: string;
     runtimeRoot: string;
     /** 仅允许管理服务提供；不得接收 HTTP 用户输入。 */
     hostEntrypoint?: string;
@@ -58,11 +64,16 @@ export async function inspectConfigurationRuntime(
         throw failure();
     }
     if (input.signal?.aborted) throw failure();
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-schema-inspect-"));
-    fs.chmodSync(home, 0o700);
+    const { directory: home, owner } = allocateConfigurationVerification(
+        input.privateRoot ??
+            path.join(os.tmpdir(), `onebots-schema-verifications-${process.getuid?.() ?? "user"}`),
+    );
+    let cleanupAllowed = true;
     try {
         return await new Promise((resolve, reject) => {
             const extension = import.meta.url.endsWith(".ts") ? "ts" : "js";
+            owner.phase = "spawning";
+            writeConfigurationVerificationOwner(home, owner);
             const worker = fork(
                 fileURLToPath(
                     new URL(`./configuration-runtime-inspect-worker.${extension}`, import.meta.url),
@@ -82,6 +93,7 @@ export async function inspectConfigurationRuntime(
                     stdio: ["ignore", "ignore", "ignore", "ipc"],
                 },
             );
+            cleanupAllowed = false;
             let result: ConfigurationRuntimeInspection | undefined;
             let failed = false;
             const kill = () => {
@@ -130,30 +142,45 @@ export async function inspectConfigurationRuntime(
                 clearTimeout(timer);
                 input.signal?.removeEventListener("abort", abort);
                 kill();
+                let reaped = true;
                 if (worker.pid)
                     for (let attempt = 0; attempt < 100; attempt++) {
                         try {
                             process.kill(-worker.pid, 0);
                         } catch (error) {
-                            if ((error as NodeJS.ErrnoException).code !== "ESRCH") failed = true;
+                            if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
+                                failed = true;
+                                reaped = false;
+                            }
                             break;
                         }
-                        if (attempt === 99) failed = true;
-                        else await new Promise(done => setTimeout(done, 20));
+                        if (attempt === 99) {
+                            failed = true;
+                            reaped = false;
+                        } else await new Promise(done => setTimeout(done, 20));
                     }
+                cleanupAllowed = reaped;
                 if (failed || code !== 0 || !result) reject(failure());
                 else resolve(result);
             });
-            worker.send({ runtimeRoot, hostEntrypoint, selection }, error => {
-                if (error) abort();
-            });
+            try {
+                if (!worker.pid) throw failure();
+                owner.phase = "running";
+                owner.workerPid = worker.pid;
+                writeConfigurationVerificationOwner(home, owner);
+                worker.send({ runtimeRoot, hostEntrypoint, selection }, error => {
+                    if (error) abort();
+                });
+            } catch {
+                abort();
+            }
             if (input.signal?.aborted) abort();
         });
     } catch {
         throw failure();
     } finally {
         try {
-            fs.rmSync(home, { recursive: true, force: true });
+            if (cleanupAllowed) fs.rmSync(home, { recursive: true, force: true });
         } catch {
             throw failure();
         }

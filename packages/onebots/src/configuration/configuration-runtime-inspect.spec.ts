@@ -1,3 +1,9 @@
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import {
+    recoverConfigurationVerifications,
+    readConfigurationVerificationOwner,
+} from "./configuration-verify-ownership.js";
 import { describe, it, expect } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -7,6 +13,69 @@ import { collectRuntimeSchemas } from "./configuration-schema-collection.js";
 
 const empty = { adapters: [], protocols: [], applications: [] };
 describe("受信运行环境 Schema 探测", () => {
+    it.each(["spawning", "running"])(
+        "父进程在 %s 阶段强杀仍保留可保守对账的所有权",
+        async phase => {
+            const root = await fs.mkdtemp(path.join(os.tmpdir(), "ob-inspect-owner-"));
+            const privateRoot = path.join(root, "owners");
+            const host = path.join(root, "node_modules/onebots");
+            await fs.mkdir(host, { recursive: true });
+            await fs.writeFile(
+                path.join(host, "package.json"),
+                JSON.stringify({ name: "onebots", type: "module", main: "index.js" }),
+            );
+            await fs.writeFile(path.join(host, "index.js"), "");
+            await fs.writeFile(path.join(host, "plugin-loader.js"), "await new Promise(()=>{});");
+            const source = new URL("./configuration-runtime-inspect.ts", import.meta.url).href;
+            const script = `import fs from 'node:fs'; import {inspectConfigurationRuntime} from ${JSON.stringify(source)};
+            const original = fs.renameSync;
+            fs.renameSync = (...args) => {
+                original(...args);
+                if(String(args[1]).endsWith('/owner.json')) {
+                    const owner=JSON.parse(fs.readFileSync(args[1],'utf8'));
+                    if(owner.phase===${JSON.stringify(phase)}) process.kill(process.pid,'SIGKILL');
+                }
+            };
+            await inspectConfigurationRuntime({runtimeRoot:${JSON.stringify(root)},privateRoot:${JSON.stringify(privateRoot)},selection:{adapters:[],protocols:[],applications:[]}});`;
+            const parent = spawn(
+                process.execPath,
+                ["--import", import.meta.resolve("tsx/esm"), "--input-type=module", "-e", script],
+                { stdio: "ignore" },
+            );
+            const closed = once(parent, "close");
+            let workerPid: number | null = null;
+            try {
+                await closed;
+                expect(parent.signalCode).toBe("SIGKILL");
+                const ids = await fs.readdir(privateRoot);
+                expect(ids).toHaveLength(1);
+                const owner = readConfigurationVerificationOwner(path.join(privateRoot, ids[0]));
+                expect(owner.phase).toBe(phase);
+                workerPid = owner.workerPid;
+                if (phase === "spawning") {
+                    expect(recoverConfigurationVerifications(privateRoot).blocked).toEqual(ids);
+                    expect(await fs.readdir(privateRoot)).toEqual(ids);
+                } else {
+                    // 父断连发生在 worker 安装监听前时，记录仍保留；绝不靠空内存映射删除。
+                    const recovery = recoverConfigurationVerifications(privateRoot);
+                    expect([...recovery.blocked, ...recovery.removed]).toEqual(ids);
+                    if (recovery.removed.length)
+                        expect(() => process.kill(-workerPid!, 0)).toThrow();
+                }
+            } finally {
+                parent.kill("SIGKILL");
+                await closed;
+                if (workerPid) {
+                    try {
+                        process.kill(-workerPid, "SIGKILL");
+                    } catch {
+                        /* fixture may already be gone */
+                    }
+                }
+                await fs.rm(root, { recursive: true, force: true });
+            }
+        },
+    );
     it("空工作目录通过管理服务明确宿主入口探测，不依赖 cwd 安装 onebots", async () => {
         const runtimeRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ob-empty-cwd-inspect-"));
         try {
@@ -170,15 +239,17 @@ describe("受信运行环境 Schema 探测", () => {
             await fs.writeFile(path.join(root, "node_modules/onebots/index.js"), "");
             await fs.writeFile(
                 path.join(root, "node_modules/onebots/plugin-loader.js"),
-                `import fs from 'node:fs';import {spawn} from 'node:child_process';const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});fs.writeFileSync(${JSON.stringify(path.join(root, "pid"))},JSON.stringify([process.pid,child.pid]));await new Promise(()=>{});`,
+                `import fs from 'node:fs';const owner=JSON.parse(fs.readFileSync(process.env.HOME+'/owner.json','utf8'));if(owner.phase!=='running'||owner.workerPid!==process.pid)throw new Error('ownership');import {spawn} from 'node:child_process';const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});fs.writeFileSync(${JSON.stringify(path.join(root, "pid"))},JSON.stringify([process.pid,child.pid]));await new Promise(()=>{});`,
             );
             await expect(
                 inspectConfigurationRuntime({
                     runtimeRoot: root,
                     selection: empty,
                     timeoutMs: 300,
+                    privateRoot: path.join(root, "owners"),
                 }),
             ).rejects.toThrow("运行环境配置能力探测未完成");
+            expect(await fs.readdir(path.join(root, "owners"))).toEqual([]);
             const pids: number[] = JSON.parse(await fs.readFile(path.join(root, "pid"), "utf8"));
             for (const pid of pids) expect(() => process.kill(pid, 0)).toThrow();
             const abort = new AbortController();

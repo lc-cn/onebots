@@ -10,7 +10,7 @@ export async function migrateSystemService(options: {
     id: string;
     /** 只读获取真实旧定义与状态，不能执行停机、写盘或安装。 */
     capture(): Promise<ServiceMigrationBackup>;
-    port: ServiceMigrationPort;
+    port: ServiceMigrationPort | ((backup: ServiceMigrationBackup) => ServiceMigrationPort);
 }) {
     const release = acquireServiceMigrationLock(options.stateDirectory);
     try {
@@ -18,7 +18,8 @@ export async function migrateSystemService(options: {
             path.join(options.stateDirectory, "migrations"),
         );
         const backup = await options.capture();
-        return await new ServiceMigrationTransaction(journal, options.port).run(options.id, backup);
+        const port = typeof options.port === "function" ? options.port(backup) : options.port;
+        return await new ServiceMigrationTransaction(journal, port).run(options.id, backup);
     } finally {
         release();
     }

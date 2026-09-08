@@ -76,7 +76,10 @@ async function upgrade(port: number, target: string): Promise<string> {
 describe("control host integration", () => {
     it("先查看平台Schema，再通过草稿添加账号和协议完成真实协议调用", async () => {
         const root = workspace();
-        fs.writeFileSync(path.join(root, "config.yaml"), "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\n  applications: []\n");
+        fs.writeFileSync(
+            path.join(root, "config.yaml"),
+            "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\n  applications: []\n",
+        );
         // 每个测试声明自己的运行依赖，不能依赖开发目录中未写入 manifest 的本地链接。
         const runtimeRoot = workspace();
         fs.writeFileSync(path.join(runtimeRoot, "package.json"), '{"type":"module"}');
@@ -85,19 +88,45 @@ describe("control host integration", () => {
             ["@onebots/adapter-mock", "adapters/adapter-mock"],
             ["@onebots/protocol-onebot-v11", "protocols/onebot-v11/protocol"],
             ["onebots", "packages/onebots"],
-        ]) fs.symlinkSync(path.resolve(directory), path.join(runtimeRoot, "node_modules", name), "dir");
+        ])
+            fs.symlinkSync(
+                path.resolve(directory),
+                path.join(runtimeRoot, "node_modules", name),
+                "dir",
+            );
         const running = await start(root, gatewayEntrypoint, runtimeRoot);
         const client = await pair(running);
         const snapshot = await client.configurationSnapshot();
         expect(snapshot.schemas.adapters).toHaveProperty("mock");
         const draft = await client.createConfigurationDraft(snapshot.base);
-        const account = await client.addConfigurationAccount(draft.id, { expectedRevision: draft.revision, platform: "mock", accountId: "003.with.dot" });
-        const protocol = await client.setConfigurationProtocol(draft.id, { expectedRevision: account.revision, accountKey: "mock.003.with.dot", protocol: "onebot.v11", enabled: true });
-        const edited = await client.editConfigurationDraft(draft.id, { expectedRevision: protocol.revision, changes: [{ op: "set", path: ["mock.003.with.dot", "onebot.v11", "use_http"], value: true }], secrets: [] });
+        const account = await client.addConfigurationAccount(draft.id, {
+            expectedRevision: draft.revision,
+            platform: "mock",
+            accountId: "003.with.dot",
+        });
+        const protocol = await client.setConfigurationProtocol(draft.id, {
+            expectedRevision: account.revision,
+            accountKey: "mock.003.with.dot",
+            protocol: "onebot.v11",
+            enabled: true,
+        });
+        const edited = await client.editConfigurationDraft(draft.id, {
+            expectedRevision: protocol.revision,
+            changes: [
+                { op: "set", path: ["mock.003.with.dot", "onebot.v11", "use_http"], value: true },
+            ],
+            secrets: [],
+        });
         const validation = await client.validateConfigurationDraft(draft.id, edited.revision);
         expect(validation.valid).toBe(true);
-        expect((await client.applyConfiguration("account-api", validation.receiptId!)).status).toBe("succeeded");
-        const response = await fetch(`${running.url}/mock/003.with.dot/onebot/v11/get_login_info`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+        expect((await client.applyConfiguration("account-api", validation.receiptId!)).status).toBe(
+            "succeeded",
+        );
+        const response = await fetch(`${running.url}/mock/003.with.dot/onebot/v11/get_login_info`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: "{}",
+        });
         expect(response.status).toBe(200);
         expect((await response.json()).status).toBe("ok");
     });
@@ -132,8 +161,22 @@ describe("control host integration", () => {
         expect((await fetch(`${running.url}/`)).status).toBe(200);
         expect((await client.gateway("start")).status).toBe("succeeded");
     });
+    it("旧管理目录无进程所有权凭据仅保留诊断，不静默升级自证", async () => {
+        const root = workspace();
+        fs.mkdirSync(path.join(root, ".control"), { mode: 0o700 });
+        const running = await start(root);
+        const client = await pair(running);
+        const status = await client.status();
+        expect(status).toHaveProperty("processOwnership.available", false);
+        for (const action of ["start", "stop", "restart"] as const)
+            await expect(client.gateway(action)).rejects.toThrow("历史管理进程所有权不可确认");
+        expect((await fetch(`${running.url}/ready`)).status).toBe(200);
+        expect(fs.existsSync(path.join(root, ".control/process-ownership.json"))).toBe(false);
+    });
     it("配置应用记录损坏时保留管理端并拒绝启动，停止仍可执行", async () => {
         const root = workspace();
+        const initial = await start(root);
+        await initial.host.close();
         const records = path.join(root, ".control/configuration-applications");
         fs.mkdirSync(records, { recursive: true });
         fs.writeFileSync(path.join(records, "broken.json"), '{"private-config-secret":');

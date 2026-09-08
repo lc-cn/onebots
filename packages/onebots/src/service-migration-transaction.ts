@@ -53,6 +53,13 @@ export class ServiceMigrationTransaction {
             if (operation.phase === "prepared") return this.unknown(operation);
             return this.rollback(operation, backup);
         }
+        // 开放后用户可能已修改配置或启停；释放响应/最终日志未知时不得回退。
+        try {
+            this.phase(operation, "releasing-target");
+            await this.port.releaseTarget(backup);
+        } catch {
+            return this.unknown(operation);
+        }
         operation.status = "succeeded";
         operation.phase = "completed";
         try {

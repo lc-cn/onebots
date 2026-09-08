@@ -29,6 +29,7 @@ export class ConfigurationWorkspace {
     constructor(
         private readonly options: {
             source: ConfigurationFile;
+            privateRoot?: string;
             runtimeRoot: string;
             hostEntrypoint: string;
             activeGeneration(): VerifiedGeneration | null;
@@ -54,6 +55,7 @@ export class ConfigurationWorkspace {
             : bundle(
                   (
                       await (this.options.inspect ?? inspectConfigurationRuntime)({
+                          privateRoot: this.options.privateRoot,
                           runtimeRoot: this.options.runtimeRoot,
                           hostEntrypoint: this.options.hostEntrypoint,
                           selection,
@@ -78,6 +80,7 @@ export class ConfigurationWorkspace {
             : bundle(
                   (
                       await (this.options.inspect ?? inspectConfigurationRuntime)({
+                          privateRoot: this.options.privateRoot,
                           runtimeRoot: this.options.runtimeRoot,
                           hostEntrypoint: this.options.hostEntrypoint,
                           selection: { adapters: [], protocols: [], applications: [] },

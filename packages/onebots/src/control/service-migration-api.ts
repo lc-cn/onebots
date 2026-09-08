@@ -1,0 +1,44 @@
+import {
+    readServiceMigrationPending,
+    releaseServiceMigrationPending,
+} from "../service-migration-workspace.js";
+
+export function serviceMigrationStatus(workspace: string) {
+    try {
+        const pending = readServiceMigrationPending(workspace);
+        return { pending: Boolean(pending), recoveryRequired: false };
+    } catch {
+        return { pending: true, recoveryRequired: true };
+    }
+}
+
+/** 在鉴权之后调用；host在其整个生命周期持有工作区锁。 */
+export async function handleServiceMigrationRequest(input: {
+    workspace: string;
+    ownershipAvailable?: boolean;
+    pathname: string;
+    method: string;
+    local: boolean;
+    body: () => Promise<unknown>;
+}) {
+    if (input.method === "POST" && input.ownershipAvailable === false)
+        return { status: 423, body: { message: "历史管理进程所有权不可确认，暂时禁止修改" } };
+    if (input.pathname === "/api/control/service-migration/release") {
+        if (!input.local) return { status: 403, body: { message: "迁移确认仅允许本机控制通道" } };
+        if (input.method !== "POST") return { status: 405, body: { message: "不支持此方法" } };
+        try {
+            const body = await input.body();
+            if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error();
+            const value = body as Record<string, unknown>;
+            if (Object.keys(value).length !== 1 || typeof value.operationId !== "string")
+                throw new Error();
+            releaseServiceMigrationPending(input.workspace, value.operationId);
+            return { status: 200, body: { released: true } };
+        } catch {
+            return { status: 409, body: { message: "迁移确认结果未核实，请在本机对账" } };
+        }
+    }
+    if (input.method === "POST" && serviceMigrationStatus(input.workspace).pending)
+        return { status: 423, body: { message: "系统服务迁移尚未确认，暂时禁止修改" } };
+    return null;
+}

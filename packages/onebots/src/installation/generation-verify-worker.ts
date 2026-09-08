@@ -142,7 +142,7 @@ async function verify(directory: string, plan: GenerationPlan): Promise<string> 
     return collectRuntimeSchemas(core, plan.selection);
 }
 
-if (!process.send) process.exit(1);
+if (!process.send || !process.connected) process.exit(1);
 process.once("message", async (value: { directory: string; plan: GenerationPlan }) => {
     try {
         const schemas = await verify(value.directory, value.plan);

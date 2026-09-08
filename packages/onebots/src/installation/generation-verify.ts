@@ -5,9 +5,16 @@ import { fork } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createGenerationPlan, type GenerationPlan } from "./generation-plan.js";
+import {
+    allocateConfigurationVerification,
+    writeConfigurationVerificationOwner,
+    type ConfigurationVerificationOwner,
+} from "../configuration/configuration-verify-ownership.js";
 import type { GenerationVerification } from "./generation-store.js";
 
 export interface GenerationVerifyOptions {
+    /** 管理服务必须传工作区内私有所有权目录。 */
+    privateRoot?: string;
     timeoutMs?: number;
     signal?: AbortSignal;
 }
@@ -18,6 +25,7 @@ export async function verifyGeneration(
     plan: GenerationPlan,
     options: GenerationVerifyOptions = {},
 ): Promise<GenerationVerification> {
+    if (process.platform === "win32") throw new Error("当前平台无法确认验证进程组退出");
     const timeout = options.timeoutMs ?? 60_000;
     if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 300_000)
         throw new Error("验证超时设置无效");
@@ -38,10 +46,24 @@ export async function verifyGeneration(
     const schemaFile = path.join(root, "schemas.json");
     if (fs.existsSync(path.join(root, "receipt.json")))
         throw new Error("不能重新验证已提交运行版本");
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-verify-"));
-    fs.chmodSync(home, 0o700);
+    const { directory: home, owner } = allocateConfigurationVerification(
+        options.privateRoot ??
+            path.join(
+                os.tmpdir(),
+                `onebots-generation-verifications-${process.getuid?.() ?? "user"}`,
+            ),
+    );
+    const lifecycle = { cleanupAllowed: true };
     try {
-        const schemas = await runWorker(root, verifiedPlan, home, timeout, options.signal);
+        const schemas = await runWorker(
+            root,
+            verifiedPlan,
+            home,
+            owner,
+            lifecycle,
+            timeout,
+            options.signal,
+        );
         const temporary = `${schemaFile}.${randomUUID()}.tmp`;
         try {
             fs.writeFileSync(temporary, schemas, { flag: "wx", mode: 0o600 });
@@ -65,7 +87,7 @@ export async function verifyGeneration(
             },
         };
     } finally {
-        fs.rmSync(home, { recursive: true, force: true });
+        if (lifecycle.cleanupAllowed) fs.rmSync(home, { recursive: true, force: true });
     }
 }
 
@@ -73,6 +95,8 @@ function runWorker(
     directory: string,
     plan: GenerationPlan,
     home: string,
+    owner: ConfigurationVerificationOwner,
+    lifecycle: { cleanupAllowed: boolean },
     timeout: number,
     signal?: AbortSignal,
 ): Promise<string> {
@@ -90,6 +114,8 @@ function runWorker(
             if (process.env[key]) environment[key] = process.env[key];
         }
         const extension = import.meta.url.endsWith(".ts") ? "ts" : "js";
+        owner.phase = "spawning";
+        writeConfigurationVerificationOwner(home, owner);
         const worker = fork(
             fileURLToPath(new URL(`./generation-verify-worker.${extension}`, import.meta.url)),
             [],
@@ -101,6 +127,7 @@ function runWorker(
                 stdio: ["ignore", "ignore", "ignore", "ipc"],
             },
         );
+        lifecycle.cleanupAllowed = false;
         let schemas: string | undefined;
         let error: Error | undefined;
         const killOwnedGroup = () => {
@@ -151,6 +178,7 @@ function runWorker(
         worker.once("close", async code => {
             clearTimeout(timer);
             signal?.removeEventListener("abort", abort);
+            let reaped = true;
             // Plugin imports can create ordinary helpers; ready/exit alone does not reap them.
             if (process.platform !== "win32" && worker.pid) {
                 killOwnedGroup();
@@ -159,20 +187,32 @@ function runWorker(
                         process.kill(-worker.pid, 0);
                     } catch (cause) {
                         if ((cause as NodeJS.ErrnoException).code === "ESRCH") break;
+                        reaped = false;
                         error ??= new Error("候选验证进程组无法确认退出");
                         break;
                     }
-                    if (attempt === 99) error ??= new Error("候选验证进程组仍存活");
-                    else await new Promise(done => setTimeout(done, 20));
+                    if (attempt === 99) {
+                        reaped = false;
+                        error ??= new Error("候选验证进程组仍存活");
+                    } else await new Promise(done => setTimeout(done, 20));
                 }
             }
+            lifecycle.cleanupAllowed = reaped;
             if (error || code !== 0 || schemas === undefined)
                 reject(error ?? new Error("候选验证进程未完成"));
             else resolve(schemas);
         });
-        worker.send({ directory, plan }, sendError => {
-            if (sendError) fail("候选验证进程通信失败");
-        });
+        try {
+            if (!worker.pid) throw new Error();
+            owner.phase = "running";
+            owner.workerPid = worker.pid;
+            writeConfigurationVerificationOwner(home, owner);
+            worker.send({ directory, plan }, sendError => {
+                if (sendError) fail("候选验证进程通信失败");
+            });
+        } catch {
+            fail("候选验证所有权记录失败");
+        }
         if (signal?.aborted) abort();
     });
 }

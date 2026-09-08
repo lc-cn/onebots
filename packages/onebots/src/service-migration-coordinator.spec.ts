@@ -40,6 +40,7 @@ function fixture() {
         writeTarget: async () => {},
         startTarget: async () => {},
         verifyTarget: async () => true,
+        releaseTarget: async () => undefined,
         stopTarget: async () => {},
         canRestore: async () => true,
         restoreOriginal: async () => {},

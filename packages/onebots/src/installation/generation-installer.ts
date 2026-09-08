@@ -22,7 +22,7 @@ export interface GenerationInstallerOptions {
     verify(
         directory: string,
         plan: GenerationPlan,
-        options: { signal?: AbortSignal },
+        options: { signal?: AbortSignal; privateRoot: string },
     ): Promise<GenerationVerification>;
     /** 仅受信宿主配置可覆盖执行器，HTTP 请求不得指定可执行文件或验证器。 */
     download?: (input: GenerationDownloadInput) => Promise<void>;
@@ -138,8 +138,8 @@ export class GenerationInstaller {
                     token: options.token,
                     signal: options.signal,
                     pnpmExecutable: this.options.pnpmExecutable,
-                pnpmScript: this.options.pnpmScript,
-                credentialRoot: path.join(path.dirname(this.directory), "downloads"),
+                    pnpmScript: this.options.pnpmScript,
+                    credentialRoot: path.join(path.dirname(this.directory), "downloads"),
                 });
             } finally {
                 // Keep no installer-owned credential reference while verification code runs.
@@ -161,6 +161,7 @@ export class GenerationInstaller {
             current = { ...current, phase: "verifying" };
             this.save(current);
             const evidence = await this.options.verify(candidate.directory, plan, {
+                privateRoot: path.join(path.dirname(this.directory), "generation-verifications"),
                 signal: options.signal,
             });
             options.signal?.throwIfAborted();
