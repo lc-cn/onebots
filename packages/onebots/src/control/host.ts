@@ -18,7 +18,7 @@ import type { Duplex } from "node:stream";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { ControlAuth } from "./auth.js";
-import { consumeDeploymentBootstrapEnvironment } from "./auth-deployment.js";
+import { consumeDeploymentAuthenticationEnvironment } from "./auth-deployment.js";
 import { GatewayController } from "./gateway-controller.js";
 import { NodeGatewayDriver } from "./gateway-driver.js";
 import { GenerationActivationController } from "./generation-activation.js";
@@ -58,7 +58,7 @@ export interface ControlHostOptions {
     installation?: Omit<ControlInstallationOptions, "directory" | "store" | "lifecycle">;
 }
 export async function startControlHost(options: ControlHostOptions) {
-    const installDeploymentAuth = consumeDeploymentBootstrapEnvironment();
+    const installDeploymentAuth = consumeDeploymentAuthenticationEnvironment();
     fs.mkdirSync(options.workspace, { recursive: true });
     const workspace = fs.realpathSync(options.workspace);
     const socketPath = controlSocket(workspace);

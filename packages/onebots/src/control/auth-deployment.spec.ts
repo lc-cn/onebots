@@ -4,7 +4,7 @@ import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import { ControlAuth } from "./auth.js";
-import { consumeDeploymentBootstrapEnvironment } from "./auth-deployment.js";
+import { consumeDeploymentAuthenticationEnvironment } from "./auth-deployment.js";
 vi.mock("node:fs", async original => ({
     ...(await original<typeof import("node:fs")>()),
     renameSync: vi.fn((await original<typeof import("node:fs")>()).renameSync),
@@ -31,7 +31,7 @@ it("environment is removed immediately, code is hash-only and pair is single use
     const test = fixture(),
         code = randomBytes(32).toString("base64url");
     const env = { ONEBOTS_BOOTSTRAP_CODE: code, HF_TOKEN: "download-only" };
-    const install = consumeDeploymentBootstrapEnvironment(env)!;
+    const install = consumeDeploymentAuthenticationEnvironment(env)!;
     expect(env).toEqual({ HF_TOKEN: "download-only" });
     install(test.restart());
     expect(() => install(test.restart())).toThrow("控制认证失败");
@@ -66,12 +66,14 @@ it("restart cannot extend expiration; fresh deployment code rotates without revi
 it("invalid deployment input is consumed from environment; HF_TOKEN is never accepted", () => {
     const test = fixture(),
         env = { ONEBOTS_BOOTSTRAP_CODE: "weak-secret" };
-    const install = consumeDeploymentBootstrapEnvironment(env)!;
+    const install = consumeDeploymentAuthenticationEnvironment(env)!;
     expect(env).toEqual({});
     expect(() => install(test.restart())).toThrow("控制认证失败");
     expect(fs.existsSync(test.options.statePath)).toBe(false);
     expect(
-        consumeDeploymentBootstrapEnvironment({ HF_TOKEN: randomBytes(32).toString("base64url") }),
+        consumeDeploymentAuthenticationEnvironment({
+            HF_TOKEN: randomBytes(32).toString("base64url"),
+        }),
     ).toBeUndefined();
 });
 it("publication uncertainty consumes deployment intent and blocks the current instance", () => {
@@ -114,4 +116,31 @@ it("rotation history is bounded and local challenge is preserved across deployme
     ).toThrow("请通过本机控制入口处理");
     expect(fs.readFileSync(test.options.statePath, "utf8")).toBe(before);
     expect(test.restart().verify(test.restart().pair(local))).toBe(true);
+});
+
+it("恢复秘密与初始化秘密都立即清除，冲突不能隐式授权", () => {
+    const test = fixture();
+    const env = {
+        ONEBOTS_BOOTSTRAP_CODE: randomBytes(32).toString("base64url"),
+        ONEBOTS_RECOVERY_CODE: randomBytes(32).toString("base64url"),
+    };
+    const install = consumeDeploymentAuthenticationEnvironment(env)!;
+    expect(env).toEqual({});
+    expect(() => install(test.restart())).toThrow("控制认证失败");
+    expect(() => install(test.restart())).toThrow("控制认证失败");
+    expect(fs.existsSync(test.options.statePath)).toBe(false);
+});
+it("恢复秘密闭包仅可消费一次，不提前撤销当前会话", () => {
+    const test = fixture();
+    const auth = test.restart();
+    const token = auth.pair(auth.issueBootstrap());
+    const code = randomBytes(32).toString("base64url");
+    const env = { ONEBOTS_RECOVERY_CODE: code };
+    const install = consumeDeploymentAuthenticationEnvironment(env)!;
+    expect(env).toEqual({});
+    install(auth);
+    expect(() => install(auth)).toThrow("控制认证失败");
+    expect(auth.verify(token)).toBe(true);
+    expect(auth.verify(auth.pair(code))).toBe(true);
+    expect(auth.verify(token)).toBe(false);
 });

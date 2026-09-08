@@ -10,8 +10,14 @@ const prefix = `onebots-hf-check-${randomUUID()}`;
 const containers = [],
     volumes = [];
 const code = randomBytes(32).toString("base64url");
+const recoveryCode = randomBytes(32).toString("base64url");
 const downloadToken = randomBytes(32).toString("base64url");
-const environment = { ...process.env, ONEBOTS_BOOTSTRAP_CODE: code, HF_TOKEN: downloadToken };
+const environment = {
+    ...process.env,
+    ONEBOTS_BOOTSTRAP_CODE: code,
+    ONEBOTS_RECOVERY_CODE: recoveryCode,
+    HF_TOKEN: downloadToken,
+};
 let stage = "initialization";
 function docker(args, input) {
     try {
@@ -46,7 +52,7 @@ function volume(suffix) {
     docker(["volume", "create", name]);
     return name;
 }
-function start(name, storage) {
+function start(name, storage, recovery = false) {
     containers.push(name);
     docker([
         "run",
@@ -54,7 +60,7 @@ function start(name, storage) {
         "--name",
         name,
         "--env",
-        "ONEBOTS_BOOTSTRAP_CODE",
+        recovery ? "ONEBOTS_RECOVERY_CODE" : "ONEBOTS_BOOTSTRAP_CODE",
         "--env",
         "HF_TOKEN",
         "--publish",
@@ -117,7 +123,7 @@ function seed(storage, source) {
         source,
     ]);
 }
-function noCredentialLogs(name, token) {
+function noCredentialLogs(name, ...tokens) {
     const result = spawnSync("docker", ["logs", name], {
         encoding: "utf8",
         timeout: 30_000,
@@ -126,7 +132,9 @@ function noCredentialLogs(name, token) {
     assert.equal(result.status, 0);
     const logs = (result.stdout || "") + (result.stderr || "");
     assert.ok(
-        ![code, downloadToken, token].filter(Boolean).some(secret => logs.includes(secret)),
+        ![code, recoveryCode, downloadToken, ...tokens]
+            .filter(Boolean)
+            .some(secret => logs.includes(secret)),
         "credential appeared in container logs",
     );
 }
@@ -158,7 +166,7 @@ const state = JSON.parse(fs.readFileSync('/data/.control/gateway.json','utf8'));
 if (!state.instance?.pid || state.actual !== 'running') throw new Error('not-ready');
 phase = 'environment';
 const keys = fs.readFileSync('/proc/'+state.instance.pid+'/environ','utf8').split('\\0').map(item=>item.split('=')[0]);
-process.stdout.write(JSON.stringify({safe: keys.includes('PATH') && !keys.includes('ONEBOTS_BOOTSTRAP_CODE') && !keys.includes('HF_TOKEN')}));
+process.stdout.write(JSON.stringify({safe: keys.includes('PATH') && !keys.includes('ONEBOTS_BOOTSTRAP_CODE') && !keys.includes('ONEBOTS_RECOVERY_CODE') && !keys.includes('HF_TOKEN')}));
 } catch(error) { process.stdout.write(JSON.stringify({phase, errno:['EACCES','EPERM','ENOENT'].includes(error.code)?error.code:'UNKNOWN'})); }`,
     );
     const isolated = JSON.parse(isolation);
@@ -192,6 +200,25 @@ process.stdout.write(JSON.stringify({safe: keys.includes('PATH') && !keys.includ
     assert.equal(client(name, { action: "replay", code }).rejected, true);
     await httpStatus(url, "/", 200);
     noCredentialLogs(name, token);
+    stage = "deployment recovery on preserved volume";
+    docker(["stop", "--time", "20", name]);
+    const recoveredName = `${prefix}-recovered`;
+    start(recoveredName, storage, true);
+    const recoveryUrl = await base(recoveredName);
+    assert.equal(client(recoveredName, { token }).gateway.desired, "stopped");
+    const next = client(recoveredName, { action: "pair", code: recoveryCode });
+    const rejected = await fetch(`${recoveryUrl}/api/control/status`, {
+        headers: { authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(3000),
+    });
+    assert.equal(rejected.status, 401);
+    await rejected.body?.cancel();
+    assert.equal(client(recoveredName, { token: next.token }).gateway.desired, "stopped");
+    docker(["restart", "--time", "20", recoveredName]);
+    await base(recoveredName);
+    assert.equal(client(recoveredName, { action: "replay", code: recoveryCode }).rejected, true);
+    assert.equal(client(recoveredName, { token: next.token }).gateway.desired, "stopped");
+    noCredentialLogs(recoveredName, token, next.token);
     stage = "damaged existing configuration";
     const brokenVolume = volume("damaged"),
         broken = `${prefix}-damaged`;

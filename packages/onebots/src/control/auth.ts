@@ -18,6 +18,8 @@ interface AuthState {
     paired: boolean;
     deploymentBootstrap: { hash: string; expiresAt: number } | null;
     deploymentBootstrapHistory: string[];
+    deploymentRecovery: { hash: string; expiresAt: number } | null;
+    deploymentRecoveryHistory: string[];
     bootstrap: { hash: string; expiresAt: number } | null;
     recovery: { hash: string; expiresAt: number } | null;
     issuance: { startedAt: number; count: number };
@@ -46,6 +48,15 @@ export class ControlAuth {
 
     /** 仅受信部署入口；一次性消费标记永久保留，不能替代本地恢复码。 */
     installDeploymentBootstrap(code: string): void {
+        this.installDeployment(code, "bootstrap");
+    }
+
+    /** 已配对部署的显式恢复入口；仅成功兑换后替换当前浏览器会话。 */
+    installDeploymentRecovery(code: string): void {
+        this.installDeployment(code, "recovery");
+    }
+
+    private installDeployment(code: string, kind: "bootstrap" | "recovery"): void {
         if (
             typeof code !== "string" ||
             !/^[A-Za-z0-9_-]{43}$/.test(code) ||
@@ -54,21 +65,33 @@ export class ControlAuth {
         )
             throw new Error(FAILURE);
         const state = this.read();
+        if (kind === "recovery" && !state.paired) throw new Error(FAILURE);
+        const history =
+            kind === "bootstrap"
+                ? state.deploymentBootstrapHistory
+                : state.deploymentRecoveryHistory;
+        const otherHistory =
+            kind === "bootstrap"
+                ? state.deploymentRecoveryHistory
+                : state.deploymentBootstrapHistory;
         const hash = digest(code);
-        if (state.paired || state.deploymentBootstrapHistory.includes(hash)) return;
-        if (state.deploymentBootstrapHistory.length >= 16)
+        if (otherHistory.includes(hash)) throw new Error(FAILURE);
+        if ((kind === "bootstrap" && state.paired) || history.includes(hash)) return;
+        if (history.length >= 16)
             throw new Error("部署配对码轮换次数已达上限，请通过本机控制入口处理");
-        const replace =
-            state.bootstrap === null ||
-            state.deploymentBootstrapHistory.includes(state.bootstrap.hash);
-        // 已有本地配对码保持不变；环境注入不是隐式替换入口。
         const now = this.now();
+        const replace =
+            state[kind] === null ||
+            history.includes(state[kind].hash) ||
+            (kind === "recovery" && now >= state[kind].expiresAt);
+        // 本地签发的 challenge 优先；部署注入只替换旧部署 challenge。
         const challenge = { hash, expiresAt: now + BOOTSTRAP_TTL };
-        state.deploymentBootstrapHistory.push(hash);
-        state.deploymentBootstrap = challenge;
+        history.push(hash);
+        if (kind === "bootstrap") state.deploymentBootstrap = challenge;
+        else state.deploymentRecovery = challenge;
         this.writeDeployment(state); // 先持久消费，未知结果不得在重启后重新发码。
         if (!replace) return;
-        state.bootstrap = challenge;
+        state[kind] = challenge;
         this.writeDeployment(state);
     }
 
@@ -140,6 +163,9 @@ export class ControlAuth {
                     state.deploymentBootstrapHistory = record(state.deploymentBootstrap)
                         ? [state.deploymentBootstrap.hash]
                         : [];
+                if (!Object.hasOwn(state, "deploymentRecovery")) state.deploymentRecovery = null;
+                if (!Object.hasOwn(state, "deploymentRecoveryHistory"))
+                    state.deploymentRecoveryHistory = [];
                 if (!Object.hasOwn(state, "recovery")) state.recovery = null;
                 if (!Object.hasOwn(state, "issuance"))
                     state.issuance = { startedAt: this.now(), count: 0 };
@@ -153,6 +179,8 @@ export class ControlAuth {
                     paired: false,
                     deploymentBootstrap: null,
                     deploymentBootstrapHistory: [],
+                    deploymentRecovery: null,
+                    deploymentRecoveryHistory: [],
                     bootstrap: null,
                     recovery: null,
                     issuance: { startedAt: this.now(), count: 0 },
@@ -230,7 +258,12 @@ function validState(value: unknown): value is AuthState {
         (typeof value.sessionHash !== "string" || !HASH.test(value.sessionHash))
     )
         return false;
-    for (const challenge of [value.bootstrap, value.recovery, value.deploymentBootstrap]) {
+    for (const challenge of [
+        value.bootstrap,
+        value.recovery,
+        value.deploymentBootstrap,
+        value.deploymentRecovery,
+    ]) {
         if (challenge === null) continue;
         if (
             !record(challenge) ||
@@ -241,18 +274,26 @@ function validState(value: unknown): value is AuthState {
         )
             return false;
     }
+    for (const [history, challenge] of [
+        [value.deploymentBootstrapHistory, value.deploymentBootstrap],
+        [value.deploymentRecoveryHistory, value.deploymentRecovery],
+    ]) {
+        if (
+            !Array.isArray(history) ||
+            history.length > 16 ||
+            history.some(hash => typeof hash !== "string" || !HASH.test(hash)) ||
+            new Set(history).size !== history.length ||
+            (challenge !== null && (!record(challenge) || !history.includes(challenge.hash)))
+        )
+            return false;
+    }
+    const bootstrapHistory = value.deploymentBootstrapHistory;
+    const recoveryHistory = value.deploymentRecoveryHistory;
     if (
-        !Array.isArray(value.deploymentBootstrapHistory) ||
-        value.deploymentBootstrapHistory.length > 16 ||
-        value.deploymentBootstrapHistory.some(
-            hash => typeof hash !== "string" || !HASH.test(hash),
-        ) ||
-        new Set(value.deploymentBootstrapHistory).size !==
-            value.deploymentBootstrapHistory.length ||
-        (value.deploymentBootstrap !== null &&
-            !value.deploymentBootstrapHistory.includes(
-                (value.deploymentBootstrap as { hash: string }).hash,
-            ))
+        !Array.isArray(bootstrapHistory) ||
+        !Array.isArray(recoveryHistory) ||
+        bootstrapHistory.some(hash => recoveryHistory.includes(hash)) ||
+        (!value.paired && (value.deploymentRecovery !== null || recoveryHistory.length > 0))
     )
         return false;
     if (value.paired ? value.bootstrap !== null : value.sessionHash !== null) return false;
