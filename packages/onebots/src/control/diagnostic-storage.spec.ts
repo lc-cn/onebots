@@ -103,7 +103,9 @@ describe("管理域只读存储诊断", () => {
     });
     it("静态目录允许绝对路径，相对路径仅严格子目录，缺失不创建", () => {
         const root = fixture(),
-            external = fixture();
+            external = path.join(fixture(), "public");
+        // 私有父目录是被检查的安全边界；Linux 的 /tmp 本身不能充当目标直接父目录。
+        fs.mkdirSync(external, { mode: 0o755 });
         fs.mkdirSync(path.join(root, "public"), { mode: 0o755 });
         expect(inspectDiagnosticStorage(root, { public_static_dir: " public " }).publicStatic).toBe(
             "ready",
