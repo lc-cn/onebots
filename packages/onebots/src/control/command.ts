@@ -4,12 +4,18 @@ import { createLocalControlClient } from "../client/local-control.js";
 import { startControlHost } from "./host.js";
 import { writeCliOutput } from "../cli-output.js";
 import { runConfigurationCommand } from "./configuration-command.js";
+import { parseServeOptions, SERVE_HELP } from "./serve-options.js";
 
 /** 新控制入口只在独立架构分支启用，所有启停调用同一客户端。 */
 export async function runControlCommand(argv: string[]): Promise<boolean> {
     const command = argv[2];
     if (!["serve", "auth", "control"].includes(command)) return false;
     const options = argv.slice(3);
+    const serve = command === "serve" ? parseServeOptions(options) : undefined;
+    if (serve === null) {
+        writeCliOutput(SERVE_HELP);
+        return true;
+    }
     if (command === "control" && options[0] === "config") {
         await runConfigurationCommand(options.slice(1));
         return true;
@@ -25,13 +31,7 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
         option("--data-dir", process.env.ONEBOTS_WORKSPACE ?? process.cwd()),
     );
     if (command === "serve") {
-        const port = Number(option("--port", process.env.PORT ?? "6727"));
-        if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("管理端口无效");
-        const host = await startControlHost({
-            workspace,
-            port,
-            host: option("--host", "127.0.0.1"),
-        });
+        const host = await startControlHost(serve!);
         writeCliOutput(
             `[onebots] 管理服务已启动；首次配对请运行 onebots auth bootstrap --data-dir ${workspace}`,
         );

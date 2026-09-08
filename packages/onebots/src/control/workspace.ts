@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import { acquireExclusiveFileLock } from "../exclusive-file-lock.js";
 import yaml from "js-yaml";
 import { getConfiguredPluginSelection } from "../runtime-plugin-selection.js";
 import packageMetadata from "../../package.json" with { type: "json" };
@@ -26,45 +26,12 @@ export function acquireControlWorkspace(root: string): () => void {
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
     if (fs.lstatSync(directory).isSymbolicLink()) throw new Error("管理服务目录不能是符号链接");
     fs.chmodSync(directory, 0o700);
-    const lock = path.join(directory, "manager-lock.sqlite");
-    try {
-        const descriptor = fs.openSync(lock, "wx", 0o600);
-        fs.closeSync(descriptor);
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-    }
-    const stat = fs.lstatSync(lock);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1)
-        throw new Error("管理服务锁数据库必须是独立常规文件");
-    fs.chmodSync(lock, 0o600);
-    let database: DatabaseSync | undefined;
-    try {
-        database = new DatabaseSync(lock);
-        database.exec("PRAGMA busy_timeout = 0");
-        // 仅用一次写事务持锁，无需表。先建表再抢锁会产生两次独立写事务，
-        // 新数据库并发初始化时可能互相撞锁，导致所有竞争者均失败。
-        database.exec("BEGIN IMMEDIATE");
-    } catch (error) {
-        database?.close();
-        if (
-            error instanceof Error &&
-            "errcode" in error &&
-            (error.errcode === 5 || error.errcode === 6)
-        )
-            throw new Error("此工作区已有管理服务，禁止重复启动");
-        throw new Error("管理服务锁数据库无法使用，请检查本地卷与文件状态", { cause: error });
-    }
-    const held = database;
-    let released = false;
-    return () => {
-        if (released) return;
-        released = true;
-        try {
-            held.exec("ROLLBACK");
-        } finally {
-            held.close();
-        }
-    };
+    return acquireExclusiveFileLock(path.join(directory, "manager-lock.sqlite"), {
+        busyMessage: "此工作区已有管理服务，禁止重复启动",
+        invalidMessage: "管理服务锁数据库必须是独立常规文件",
+        unavailableMessage: "管理服务锁数据库无法使用，请检查本地卷与文件状态",
+        repairPermissions: true,
+    });
 }
 
 /** 冷恢复只探测旧 leader 与 POSIX 进程组，绝不向历史 PID 发送终止信号。 */
