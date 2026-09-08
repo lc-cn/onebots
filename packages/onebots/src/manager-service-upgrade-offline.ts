@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { parseManagerServiceRecord, type ManagerServiceRecord } from "./manager-service-journal.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
@@ -9,7 +8,7 @@ import { getServiceFiles } from "./service-files.js";
 import { readServiceMigrationPending } from "./service-migration-workspace.js";
 import { verifyServiceMigrationProcessesWhileLocked } from "./service-migration-processes.js";
 import { completeStoppedManagerUpgradeWhileLocked, readManagerUpgradePending } from "./service-upgrade-workspace.js";
-import { readRunningManagerCandidate, managerCandidateDigest } from "./manager-runtime/identity.js";
+import { verifyManagerServiceCandidate } from "./manager-service-upgrade-candidate.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import type { ServiceHost } from "./service-host.js";
@@ -41,16 +40,7 @@ export async function releaseStoppedManagerServiceUpgrade(
         fs.realpathSync(spec.workspace) !== spec.workspace) throw failure();
     const unlock = acquireControlWorkspace(spec.workspace);
     try {
-        const inspectCandidate = () => {
-            const candidate = readRunningManagerCandidate(pathToFileURL(
-                path.join(path.dirname(spec.binPath), "control/host.js"),
-            ).href);
-            if (managerCandidateDigest(candidate) !== record.upgrade!.candidateDigest ||
-                candidate.management.checks.authenticationV2 !== true ||
-                fs.realpathSync(spec.workingDirectory) !== candidate.directory ||
-                fs.realpathSync(spec.binPath) !== fs.realpathSync(path.join(candidate.directory, "node_modules/onebots/lib/bin.js")) ||
-                fs.realpathSync(spec.nodePath) !== fs.realpathSync(process.execPath)) throw failure();
-        };
+        const inspectCandidate = () => verifyManagerServiceCandidate(spec, record.upgrade!.candidateDigest);
         inspectCandidate();
         const captured = captureManagerServiceRemoval(spec, host);
         try {
