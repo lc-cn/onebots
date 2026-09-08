@@ -6,6 +6,9 @@ export function createLocalControlTransport(workspace: string): ControlTransport
     const transport: ControlTransport = {
         request<T>(method: "GET" | "POST", route: string, body?: unknown): Promise<T> {
             return new Promise((resolve, reject) => {
+                // 发布检查包含远端目录与归档验证；仅此只读检查允许较长等待。
+                const timeout = method === "POST" && route === "/api/control/updates/plan"
+                    ? 120_000 : 60_000;
                 const request = http.request(
                     {
                         socketPath: controlSocket(workspace),
@@ -44,13 +47,13 @@ export function createLocalControlTransport(workspace: string): ControlTransport
                         });
                     },
                 );
-                request.setTimeout(60_000, () =>
+                request.setTimeout(timeout, () =>
                     request.destroy(new Error("控制操作结果暂不可确认，请查询状态")),
                 );
                 // socket idle timeout不能阻止持续小块响应；总期限同样有界。
                 const deadline = setTimeout(
                     () => request.destroy(new Error("控制操作结果暂不可确认，请查询状态")),
-                    60_000,
+                    timeout,
                 );
                 deadline.unref();
                 request.once("close", () => clearTimeout(deadline));

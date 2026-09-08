@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { ControlClient, ControlInstallOperation } from "@onebots/core/control";
+import type {
+    ControlClient,
+    ControlInstallOperation,
+    ControlInstallPlan,
+} from "@onebots/core/control";
 import type { TuiPrompt } from "../tui/prompt.js";
 
 export interface ControlInstallationTuiOptions {
@@ -54,6 +58,16 @@ export async function runControlInstallation(
             throw new Error("扩展选择无效");
     }
     const plan = await client.planInstallation(selection, catalog.activeGenerationId);
+    await confirmControlInstallation(client, prompt, plan, options);
+}
+
+/** 安装和升级共用确认、私有授权、任务跟踪及独立激活流程。 */
+export async function confirmControlInstallation(
+    client: ControlClient,
+    prompt: TuiPrompt,
+    plan: ControlInstallPlan,
+    options: ControlInstallationTuiOptions = {},
+): Promise<void> {
     const detail = [
         ...plan.packages.map(item => `${item.name}@${item.version}`),
         ...plan.peers.map(

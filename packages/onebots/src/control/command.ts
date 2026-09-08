@@ -71,7 +71,13 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
         return true;
     }
     if (action === "status") writeCliOutput(JSON.stringify(await client.status()));
-    else if (action === "plan") {
+    else if (action === "plan-update") {
+        if (options.length !== 1 && !(options.length === 3 && options[1] === "--data-dir"))
+            throw new Error("升级计划只接受 --data-dir 工作区，不接受版本或下载授权参数");
+        const source = await client.configurationSource();
+        if (source.state !== "ready") throw new Error("请先修复配置，再检查网关运行版本更新");
+        writeCliOutput(JSON.stringify(await client.planUpdate(source.base)));
+    } else if (action === "plan") {
         const names = (name: string) =>
             option(name, "")
                 .split(",")
@@ -115,7 +121,7 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
         if (operation.status === "failed") process.exitCode = 1;
     } else
         throw new Error(
-            "控制命令应为 status、start、stop、restart、plan、install、installation、cancel-installation 或 activate",
+            "控制命令应为 status、start、stop、restart、plan、plan-update、install、installation、cancel-installation 或 activate",
         );
     return true;
 }

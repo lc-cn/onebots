@@ -6,8 +6,15 @@ import type {
     ControlInstallationCatalog,
     ControlInstallOperation,
     ControlInstallPlan,
+    ControlUpdatePlan,
 } from "@onebots/core/control";
 import UiButton from "../ui/UiButton.vue";
+import ControlInstallPlanPreview from "./ControlInstallPlanPreview.vue";
+import ControlUpdatePreview from "./ControlUpdatePreview.vue";
+import {
+    createControlUpdateCheck,
+    boundedControlRequest as bounded,
+} from "./control-update-check.js";
 
 const props = defineProps<{ client: ControlClient }>();
 const emit = defineEmits<{ applied: [] }>();
@@ -22,6 +29,7 @@ const STORAGE_KEY = "onebots.control.installation";
 const catalog = ref<Catalog>();
 const selected = ref<ControlExtensionSelection>({ adapters: [], protocols: [], applications: [] });
 const plan = ref<ControlInstallPlan>();
+const updatePreview = ref<ControlUpdatePlan>();
 const tracking = ref<Tracking>();
 const operation = ref<ControlInstallOperation>();
 const privateToken = ref("");
@@ -33,6 +41,7 @@ const watching = ref(true);
 const selectionKnown = ref(false);
 const applied = ref(false);
 let disposed = false;
+let catalogRevision = 0;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const terminal = computed(
     () =>
@@ -69,24 +78,47 @@ function validSelection(value: unknown): value is ControlExtensionSelection {
     });
 }
 
-async function bounded<T>(promise: Promise<T>): Promise<T> {
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    try {
-        return await Promise.race([
-            promise,
-            new Promise<never>((_, reject) => {
-                timeout = setTimeout(() => reject(new Error("timeout")), 15_000);
-            }),
-        ]);
-    } finally {
-        clearTimeout(timeout);
-    }
+const updateCheck = createControlUpdateCheck({
+    client: () => props.client,
+    blocked: () => busy.value || !!tracking.value || disposed,
+    bounded,
+    begin: () => {
+        catalogRevision++;
+        busy.value = true;
+        error.value = "";
+        note.value = "";
+        plan.value = undefined;
+        updatePreview.value = undefined;
+        privateToken.value = "";
+    },
+    accept: result => {
+        updatePreview.value = result;
+        plan.value = result.installationPlan;
+    },
+    fail: reason => {
+        error.value =
+            reason === "damaged"
+                ? "当前配置已损坏，请先在配置管理中修复，再检查升级。"
+                : "无法确认网关升级计划。请检查网络、安装收据和当前配置后重试；当前运行版本未改变。";
+    },
+    end: () => {
+        busy.value = false;
+    },
+});
+function leaveUpdate() {
+    if (busy.value || tracking.value || disposed) return;
+    updatePreview.value = undefined;
+    plan.value = undefined;
+    privateToken.value = "";
+    void loadCatalog();
 }
 
 async function loadCatalog() {
+    const request = ++catalogRevision;
+    const client = props.client;
     try {
-        const result: Catalog = await bounded(props.client.installationCatalog());
-        if (disposed) return;
+        const result: Catalog = await bounded(client.installationCatalog());
+        if (disposed || request !== catalogRevision || client !== props.client) return;
         catalog.value = result;
         selectionKnown.value = validSelection(result.selection);
         if (selectionKnown.value && result.selection) {
@@ -97,6 +129,7 @@ async function loadCatalog() {
             };
         }
     } catch {
+        if (disposed || request !== catalogRevision || client !== props.client) return;
         error.value = "无法读取安装目录，请稍后刷新。";
     }
 }
@@ -126,12 +159,13 @@ async function query() {
 }
 
 async function createPlan() {
-    if (!selectionKnown.value || tracking.value) return;
+    if (busy.value || disposed || !selectionKnown.value || tracking.value) return;
+    updatePreview.value = undefined;
     busy.value = true;
     error.value = "";
     note.value = "";
     try {
-        plan.value = await bounded(
+        const result = await bounded(
             props.client.planInstallation(
                 {
                     adapters: [...selected.value.adapters],
@@ -141,7 +175,9 @@ async function createPlan() {
                 catalog.value!.activeGenerationId,
             ),
         );
+        if (!disposed) plan.value = result;
     } catch {
+        if (disposed) return;
         error.value = "无法生成安装计划，请刷新目录后重新确认所选扩展。";
         await loadCatalog();
     } finally {
@@ -252,6 +288,7 @@ async function newPlan() {
     tracking.value = undefined;
     operation.value = undefined;
     plan.value = undefined;
+    updatePreview.value = undefined;
     privateToken.value = "";
     applied.value = false;
     error.value = "";
@@ -298,6 +335,7 @@ onMounted(async () => {
 });
 onUnmounted(() => {
     disposed = true;
+    updateCheck.dispose();
     clearTimeout(timer);
     privateToken.value = "";
 });
@@ -307,13 +345,27 @@ onUnmounted(() => {
     <section class="border-t border-border pt-6 space-y-5" aria-labelledby="installation-heading">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-                <h2 id="installation-heading" class="text-lg font-medium">安装与扩展</h2>
+                <h2 id="installation-heading" class="text-lg font-medium">安装、扩展与升级</h2>
                 <p class="text-sm text-fg-secondary mt-2">
                     选择完整依赖集合。安装先验证，确认后再应用；不会自动创建账号或开启协议。
                 </p>
             </div>
-            <UiButton v-if="!tracking" :disabled="busy" @click="loadCatalog">刷新目录</UiButton>
+            <UiButton v-if="!tracking" :disabled="busy || !!updatePreview" @click="loadCatalog"
+                >刷新目录</UiButton
+            >
         </div>
+        <div v-if="!tracking" class="flex flex-wrap items-center gap-3">
+            <UiButton :disabled="busy" @click="updateCheck.run">检查网关升级</UiButton>
+            <p class="text-sm text-fg-secondary">只升级网关运行版本，不升级管理服务或 CLI。</p>
+        </div>
+        <p v-if="busy && updateCheck.isRunning()" role="status" class="text-sm text-fg-secondary">
+            正在读取并验证发布目录，最多等待两分钟。此步骤不会安装或应用运行版本。
+        </p>
+        <ControlUpdatePreview
+            v-if="updatePreview && !tracking"
+            :preview="updatePreview"
+            :busy="busy"
+            @leave="leaveUpdate" />
         <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
         <p v-if="note" role="status" class="text-sm text-fg-secondary">{{ note }}</p>
         <p
@@ -321,7 +373,7 @@ onUnmounted(() => {
             class="border border-border rounded-control p-3 text-sm text-fg-secondary">
             服务端尚未提供当前完整依赖集合。为避免覆盖已安装扩展，暂不允许生成计划，请刷新或升级管理服务。
         </p>
-        <div v-if="catalog && !tracking" class="grid gap-4 sm:grid-cols-3">
+        <div v-if="catalog && !tracking && !updatePreview" class="grid gap-4 sm:grid-cols-3">
             <fieldset
                 v-for="section in sections"
                 :key="section.key"
@@ -361,64 +413,22 @@ onUnmounted(() => {
             </fieldset>
         </div>
         <UiButton
-            v-if="!tracking"
+            v-if="!tracking && !updatePreview"
             variant="primary"
             :loading="busy"
             :disabled="!selectionKnown"
             @click="createPlan"
             >查看安装计划</UiButton
         >
-        <section v-if="plan && !tracking" class="border border-border rounded-panel p-4 space-y-4">
-            <h3 class="font-medium">确认安装计划</h3>
-            <p class="text-sm text-fg-secondary">
-                这是完整集合。取消勾选的依赖不会保留在新运行版本中。
-            </p>
-            <ul class="text-sm space-y-1 break-all">
-                <li v-for="item in plan.packages" :key="item.name">
-                    {{ item.name }} <span class="text-fg-muted">{{ item.version }}</span>
-                </li>
-            </ul>
-            <details v-if="plan.peers.length" class="text-sm">
-                <summary class="cursor-pointer">必需对等依赖（{{ plan.peers.length }} 项）</summary>
-                <ul class="mt-2 space-y-1 break-all">
-                    <li v-for="peer in plan.peers" :key="`${peer.requestedBy}:${peer.packageName}`">
-                        {{ peer.packageName }} {{ peer.range
-                        }}<span class="block text-xs text-fg-muted"
-                            >{{ peer.requestedBy }} 需要</span
-                        >
-                    </li>
-                </ul>
-            </details>
-            <p
-                v-for="recommendation in plan.recommendations"
-                :key="recommendation"
-                class="text-sm text-fg-secondary">
-                {{ recommendation }}
-            </p>
-            <label v-if="privateNeeded" class="block space-y-2 text-sm">
-                <span>GitHub Packages 读取授权（read:packages）</span>
-                <input
-                    v-model="privateToken"
-                    type="password"
-                    autocomplete="off"
-                    spellcheck="false"
-                    maxlength="512"
-                    :disabled="!secureTransport"
-                    class="w-full rounded-control border border-border bg-surface p-3" />
-                <span class="block text-xs text-fg-muted"
-                    >仅用于这次下载，提交后清空，不保存到浏览器或配置。{{
-                        secureTransport ? "" : "请通过 HTTPS 或本机连接提交。"
-                    }}</span
-                >
-            </label>
-            <UiButton
-                variant="primary"
-                :loading="busy"
-                :disabled="!!privateNeeded && (!privateToken || !secureTransport)"
-                @click="install"
-                >确认并安装</UiButton
-            >
-        </section>
+        <ControlInstallPlanPreview
+            v-if="plan && !tracking"
+            v-model="privateToken"
+            :plan="plan"
+            :upgrade="!!updatePreview"
+            :private-needed="!!privateNeeded"
+            :secure-transport="secureTransport"
+            :busy="busy"
+            @install="install" />
         <section
             v-if="tracking"
             class="border border-border rounded-panel p-4 space-y-4"
