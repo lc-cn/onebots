@@ -79,14 +79,18 @@ const account = await client.addConfigurationAccount(draft.id, {
 const protocol = await client.setConfigurationProtocol(draft.id, {
     expectedRevision: account.revision, accountKey: 'mock.bot', protocol: 'onebot.v11', enabled: true,
 });
+const mcp = await client.setConfigurationProtocol(draft.id, {
+    expectedRevision: protocol.revision, accountKey: 'mock.bot', protocol: 'mcp.v1', enabled: true,
+});
 const edited = await client.editConfigurationDraft(draft.id, {
-    expectedRevision: protocol.revision,
+    expectedRevision: mcp.revision,
     changes: [{ op: 'set', path: ['mock.bot', 'onebot.v11', 'use_http'], value: true }], secrets: [],
 });
 const validation = await client.validateConfigurationDraft(draft.id, edited.revision);
 assert.equal(validation.valid, true);
 assert.ok(validation.receiptId);
 const applyId = `ci-config-${randomUUID()}`;
+let mcpSession;
 try {
     assert.equal((await client.applyConfiguration(applyId, validation.receiptId)).status, 'succeeded');
     assert.equal((await client.applyConfiguration(applyId, validation.receiptId)).status, 'succeeded');
@@ -96,9 +100,24 @@ try {
     });
     assert.equal(response.status, 200);
     assert.equal((await response.json()).status, 'ok');
+    mcpSession = await client.openMcp('mock/bot');
+    const initialized = await client.exchangeMcp(mcpSession.id, JSON.stringify({
+        jsonrpc: '2.0', id: 1, method: 'initialize',
+        params: { protocolVersion: '2025-03-26', capabilities: {},
+            clientInfo: { name: 'docker-ci', version: '1' } },
+    }));
+    assert.equal(JSON.parse(initialized.message).result.serverInfo.name, 'onebots-mcp');
+    assert.deepEqual(await client.exchangeMcp(mcpSession.id,
+        '{"jsonrpc":"2.0","method":"notifications/initialized"}'), { message: null });
+    const ping = await client.exchangeMcp(mcpSession.id,
+        '{"jsonrpc":"2.0","id":2,"method":"ping"}');
+    assert.deepEqual(JSON.parse(ping.message), { jsonrpc: '2.0', id: 2, result: {} });
+
 } finally {
     assert.equal((await client.gateway('stop')).status, 'succeeded');
 }
+assert.ok(mcpSession);
+await assert.rejects(client.pollMcp(mcpSession.id));
 await publicStatus('/', 200);
 await publicStatus('/ready', 200);
 await publicStatus('/mock/bot/onebot/v11/get_login_info', 503);

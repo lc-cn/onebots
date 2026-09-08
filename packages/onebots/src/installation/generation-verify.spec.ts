@@ -259,7 +259,8 @@ import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {stdio:'ignore'});
 fs.writeFileSync(${JSON.stringify(groupFile)}, String(process.pid));
-fs.writeFileSync(${JSON.stringify(pidFile)}, String(helper.pid));
+fs.writeFileSync(${JSON.stringify(pidFile + ".tmp")}, String(helper.pid));
+fs.renameSync(${JSON.stringify(pidFile + ".tmp")}, ${JSON.stringify(pidFile)});
 await new Promise(() => {});
 `,
             );
@@ -277,6 +278,7 @@ await new Promise(() => {});
                 for (let attempt = 0; !fs.existsSync(pidFile) && attempt < 100; attempt++)
                     await new Promise(resolve => setTimeout(resolve, 10));
                 pid = Number(fs.readFileSync(pidFile, "utf8"));
+                expect(Number.isSafeInteger(pid) && pid > 0, "helper PID必须完整且为正整数").toBe(true);
                 if (mode === "abort") cancellation.abort();
                 expect(await pending).toBeInstanceOf(Error);
                 expect(fs.readdirSync(path.join(test.directory, "owners"))).toEqual([]);

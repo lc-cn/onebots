@@ -2,7 +2,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import yaml from "js-yaml";
-import { BaseAppConfigSchema, writeConfigFileAtomic, type Account } from "@onebots/core";
+import { BaseAppConfigSchema, writeConfigFileAtomic } from "@onebots/core";
 import { ServiceController, type ServiceScope, type ServiceSpec } from "../service-manager.js";
 import {
     preflightInstalledServiceRuntime,
@@ -52,7 +52,6 @@ import { inspectDoctorServiceMetadata } from "../doctor-service-metadata.js";
 import { assertInstalledServiceDefinitionCurrent } from "../service-definition-preflight.js";
 import { inspectServiceStatus, type ServiceStatusDependencies } from "../service-status.js";
 import { createServiceRuntimeContractId } from "../service-runtime-contract.js";
-import { loadMcpStdioTransport, type McpStdioTransportStarter } from "../mcp-stdio-runtime.js";
 import type { DoctorCheck } from "../doctor-endpoint.js";
 import { inspectServiceControlPlanePermissions } from "../service-control-plane-permissions.js";
 import {
@@ -724,121 +723,6 @@ function sendTimeoutMs(value: unknown): number {
     return Number.isFinite(seconds) && seconds > 0
         ? Math.min(Math.round(seconds * 1_000), 300_000)
         : 30_000;
-}
-
-/** 以 stdio 模式运行 MCP 服务，通过 stdin/stdout 进行 JSON-RPC 通信。 */
-export async function runMcpStdio(
-    options: RuntimeOptions & { account?: string },
-): Promise<CommandResult> {
-    const runtime = resolveConfiguredRuntimeOptions(options);
-    const { loadPlugins } = await import("../runtime-plugins.js");
-    const failures = await loadPlugins(runtime.adapters, runtime.protocols, runtime.applications);
-    if (failures.length) throw new CliError(`无法加载插件: ${failures.join(", ")}`, 2);
-
-    const { createOnebots } = await import("../app.js");
-    const app = createOnebots(runtime.configPath, {
-        configPath: runtime.configPath,
-        adapters: runtime.adapters,
-        protocols: runtime.protocols,
-        applications: runtime.applications,
-        nodePath: process.execPath,
-        binPath: path.resolve(process.argv[1]),
-        workingDirectory: process.cwd(),
-    });
-
-    await app.start();
-
-    await runStartedMcpStdio(app, options.account);
-    return {};
-}
-
-interface StartedMcpApp {
-    adapters: {
-        values(): IterableIterator<{
-            platform: unknown;
-            getAccount(accountId: string): Account | undefined;
-            accounts: { values(): IterableIterator<Account> };
-        }>;
-    };
-    enhancedLogger: {
-        error(message: string, context?: Record<string, unknown>): void;
-    };
-    stop(): Promise<void>;
-}
-
-/** 已启动 App 的 MCP stdio 交接边界；交接前任一步失败都会释放账号、协议和监听器。 */
-export async function runStartedMcpStdio(
-    app: StartedMcpApp,
-    accountOption?: string,
-    loadTransport: () => Promise<McpStdioTransportStarter> = loadMcpStdioTransport,
-    waitForClose: () => Promise<void> = () => new Promise(() => undefined),
-): Promise<void> {
-    let stopPromise: Promise<void> | undefined;
-    const stopApp = () => (stopPromise ??= app.stop());
-    try {
-        const targetAccount = selectMcpAccount(app, accountOption);
-        const mcpProtocol = targetAccount.protocols?.find(
-            protocol => protocol.name === "mcp" && protocol.version === "v1",
-        );
-        if (!mcpProtocol) {
-            throw new CliError(
-                `账号 ${targetAccount.platform}/${targetAccount.account_id} 未配置 mcp.v1 协议。\n` +
-                    `请在 config.yaml 对应账号下添加:\n  mcp.v1: {}`,
-                2,
-            );
-        }
-
-        const startStdioTransport = await loadTransport();
-        startStdioTransport({
-            protocol: mcpProtocol,
-            onClose: stopApp,
-            onError: error =>
-                app.enhancedLogger.error("MCP stdio 消息处理失败", {
-                    error: error instanceof Error ? error.message : String(error),
-                }),
-        });
-        await waitForClose();
-    } catch (error) {
-        app.enhancedLogger.error("MCP stdio 交接失败，正在停止已启动的应用", {
-            error: error instanceof Error ? error.message : String(error),
-        });
-        const cleanupError = await stopApp().then(
-            () => null,
-            failure => failure,
-        );
-        if (cleanupError) {
-            app.enhancedLogger.error("MCP stdio 交接失败后的应用清理未完成", {
-                error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-            });
-            throw new AggregateError(
-                [error, cleanupError],
-                `MCP stdio 启动失败且应用清理失败：${error instanceof Error ? error.message : String(error)}`,
-            );
-        }
-        throw error;
-    }
-}
-
-function selectMcpAccount(app: StartedMcpApp, accountOption?: string): Account {
-    if (accountOption) {
-        const [platform, accountId] = accountOption.split("/");
-        if (!platform || !accountId) {
-            throw new CliError("--account 格式: platform/account_id（如 qq/my-bot）", 2);
-        }
-        for (const adapter of app.adapters.values()) {
-            if (String(adapter.platform) !== platform) continue;
-            const account = adapter.getAccount(accountId);
-            if (account) return account;
-        }
-        throw new CliError(`找不到账号 ${accountOption}`, 2);
-    }
-
-    for (const adapter of app.adapters.values()) {
-        for (const account of adapter.accounts.values()) {
-            return account;
-        }
-    }
-    throw new CliError("没有可用的账号，请在配置中添加至少一个适配器账号", 2);
 }
 
 async function preflightInstalledService(

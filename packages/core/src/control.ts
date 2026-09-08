@@ -153,6 +153,22 @@ export interface ControlGenerationActivation {
 export class ControlClient {
     constructor(private readonly transport: ControlTransport) {}
 
+    openMcp(account?: string): Promise<{ id: string; gatewayInstanceId: string }> {
+        return this.transport.request("POST", "/api/control/mcp/open", { account });
+    }
+
+    exchangeMcp(id: string, message: string): Promise<{ message: string | null }> {
+        return this.transport.request("POST", "/api/control/mcp/exchange", { id, message });
+    }
+
+    pollMcp(id: string): Promise<{ events: string[] }> {
+        return this.transport.request("POST", "/api/control/mcp/poll", { id });
+    }
+
+    closeMcp(id: string): Promise<{ closed: true }> {
+        return this.transport.request("POST", "/api/control/mcp/close", { id });
+    }
+
     configurationSnapshot(): Promise<ControlConfigurationSnapshot> {
         return this.transport.request("GET", "/api/control/configuration");
     }

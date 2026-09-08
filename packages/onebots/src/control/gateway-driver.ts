@@ -1,3 +1,5 @@
+import { GatewayMcpClient } from "./gateway-mcp-client.js";
+import type { GatewayMcpRequest, GatewayMcpResult } from "../gateway/mcp-contracts.js";
 import { waitForProcessGroupExit } from "../process-group-exit.js";
 import { fork, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -38,6 +40,7 @@ interface ManagedChild {
     closed: Promise<void>;
     exited: boolean;
     stopping: boolean;
+    mcp?: GatewayMcpClient;
 }
 
 /** This is process lifecycle isolation, not a security sandbox for hostile plugins. */
@@ -94,6 +97,12 @@ export class NodeGatewayDriver implements GatewayDriver {
                 dependencyVersion: prepared.dependencyVersion,
             };
             const ready = await this.handshake(managed, start);
+            if (ready.capabilities?.includes("mcp"))
+                managed.mcp = new GatewayMcpClient(child, {
+                    protocolVersion: 1,
+                    controlInstanceId: this.options.controlInstanceId,
+                    gatewayInstanceId: id,
+                });
             return { id, pid: child.pid, address: ready.address };
         } catch (error) {
             if (managed) await this.terminate(managed);
@@ -108,6 +117,13 @@ export class NodeGatewayDriver implements GatewayDriver {
         }
     }
 
+    mcp(instanceId: string, request: GatewayMcpRequest): Promise<GatewayMcpResult> {
+        const managed = this.children.get(instanceId);
+        if (!managed || managed.stopping || managed.exited || !managed.mcp)
+            return Promise.reject(new Error("MCP 网关不可用"));
+        return managed.mcp.request(request);
+    }
+
     async stop(instance: GatewayInstance): Promise<void> {
         const managed = this.children.get(instance.id);
         if (!managed) throw new Error("未持有该网关实例，不能按旧 PID 停机");
@@ -116,6 +132,7 @@ export class NodeGatewayDriver implements GatewayDriver {
             return;
         }
         managed.stopping = true;
+        managed.mcp?.close();
         if (managed.child.connected) {
             managed.child.send(
                 {
@@ -153,6 +170,7 @@ export class NodeGatewayDriver implements GatewayDriver {
         });
         child.once("close", (code, signal) => {
             managed.exited = true;
+            managed.mcp?.close();
             finish();
             const error = managed.stopping
                 ? undefined
@@ -211,6 +229,7 @@ export class NodeGatewayDriver implements GatewayDriver {
 
     private async terminate(managed: ManagedChild): Promise<void> {
         managed.stopping = true;
+        managed.mcp?.close();
         const deadline = performance.now() + 7500;
         const remaining = (maximum: number) =>
             Math.max(0, Math.min(maximum, deadline - performance.now()));
@@ -287,6 +306,10 @@ function isReady(value: unknown, start: GatewayStartMessage): value is GatewayRe
         message.gatewayInstanceId === start.gatewayInstanceId &&
         message.configVersion === start.configVersion &&
         message.dependencyVersion === start.dependencyVersion &&
+        (message.capabilities === undefined ||
+            (Array.isArray(message.capabilities) &&
+                message.capabilities.length === 1 &&
+                message.capabilities[0] === "mcp")) &&
         message.address?.host === "127.0.0.1" &&
         Number.isInteger(message.address.port) &&
         message.address.port > 0 &&

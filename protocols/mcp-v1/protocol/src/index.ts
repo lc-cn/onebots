@@ -95,6 +95,7 @@ export class McpV1Protocol extends Protocol<"v1", McpV1Config> {
         const notification = this.convertToMcpNotification(event);
         if (!notification) return;
 
+        this.emit("mcp.notification", JSON.stringify({ jsonrpc: "2.0", ...notification }));
         const data = JSON.stringify(notification);
         for (const client of this.sseClients.values()) {
             if (client.initialized) {
@@ -340,7 +341,7 @@ export class McpV1Protocol extends Protocol<"v1", McpV1Config> {
         }
 
         // 标记初始化
-        if (request.method === "initialized") {
+        if (request.method === "initialized" || request.method === "notifications/initialized") {
             return null;
         }
 

@@ -1,3 +1,6 @@
+import { GatewayMcpSessions } from "./mcp-sessions.js";
+import { handleGatewayMcpMessage } from "./mcp-ipc.js";
+import type { GatewayMcpReply } from "./mcp-contracts.js";
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { BaseApp } from "@onebots/core";
@@ -14,8 +17,9 @@ import {
 let startMessage: GatewayStartMessage | undefined;
 let app: GatewayApp | undefined;
 let stopping = false;
+let mcpSessions: GatewayMcpSessions | undefined;
 
-function send(message: GatewayChildMessage): void {
+function send(message: GatewayChildMessage | GatewayMcpReply): void {
     if (process.connected) process.send?.(message);
 }
 
@@ -34,6 +38,8 @@ function failure(code: GatewayFailedMessage["code"], message: string): void {
 async function stop(timeoutMs = 15_000): Promise<void> {
     if (stopping) return;
     stopping = true;
+    mcpSessions?.close();
+    mcpSessions = undefined;
     // 即使 SDK 留下活动句柄，也必须在截止时间前退出。
     setTimeout(() => process.exit(1), Math.min(timeoutMs, 30_000));
     try {
@@ -74,8 +80,10 @@ async function start(message: GatewayStartMessage): Promise<void> {
         if (!address || typeof address === "string" || address.address !== "127.0.0.1") {
             throw new Error("网关未监听私有回环地址");
         }
+        mcpSessions = new GatewayMcpSessions(app);
         send({
             type: "gateway.ready",
+            capabilities: ["mcp"],
             protocolVersion: 1,
             controlInstanceId: message.controlInstanceId,
             gatewayInstanceId: message.gatewayInstanceId,
@@ -112,6 +120,8 @@ for (const name of Object.keys(process.env)) {
 }
 const handshakeTimer = setTimeout(() => process.exit(1), 30_000);
 process.on("message", value => {
+    if (handleGatewayMcpMessage(value, startMessage, stopping ? undefined : mcpSessions, send))
+        return;
     if (!isGatewayParentMessage(value)) {
         failure("INVALID_MESSAGE", "网关 IPC 消息格式无效");
         return;

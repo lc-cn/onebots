@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('onebots', () => {
-    class Protocol {
+vi.mock('onebots', async () => {
+    const { EventEmitter } = await import('node:events');
+    class Protocol extends EventEmitter {
         public logger = {
             debug: vi.fn(),
             info: vi.fn(),
@@ -21,12 +22,12 @@ vi.mock('onebots', () => {
             public _account: unknown,
             cfg: unknown,
         ) {
+            super();
             this.adapter = _adapter;
             this.account = _account;
             this.config = (cfg ?? {}) as Record<string, unknown>;
         }
 
-        removeAllListeners() {}
     }
 
     return {
@@ -263,11 +264,11 @@ describe('McpV1Protocol handleStdioMessage', () => {
         expect(parsed.error.code).toBe(-32600);
     });
 
-    it('returns null for initialized notification', async () => {
+    it.each(['initialized', 'notifications/initialized'])('returns null for %s notification', async method => {
         const { protocol } = createProtocol();
         const result = await protocol.handleStdioMessage(JSON.stringify({
             jsonrpc: '2.0',
-            method: 'initialized',
+            method,
         }));
         expect(result).toBeNull();
     });
@@ -284,5 +285,36 @@ describe('McpV1Protocol lifecycle', () => {
         const { protocol } = createProtocol();
         await protocol.stop();
         expect(protocol.logger.info).toHaveBeenCalled();
+    });
+});
+
+describe('McpV1Protocol dedicated notification output', () => {
+    const event = {
+        type: 'message', message_type: 'private', message_id: { string: '42' },
+        sender: { id: { string: '7' }, name: 'sender' }, raw_message: 'hello', timestamp: 123,
+    };
+    it('real dispatch emits a serialized JSON-RPC notification and preserves SSE payload', () => {
+        const { protocol } = createProtocol();
+        const notification = vi.fn(), write = vi.fn();
+        protocol.on('mcp.notification', notification);
+        const clients = Reflect.get(protocol, 'sseClients') as Map<string, unknown>;
+        clients.set('active', { initialized: true, write });
+        protocol.dispatch(event as never);
+        const payload = { method: 'notifications/message', params: {
+            platform: 'qq', account_id: 'bot_123', message_type: 'private', message_id: '42',
+            sender: { id: '7', name: 'sender' }, raw_message: 'hello', timestamp: 123,
+        } };
+        expect(notification).toHaveBeenCalledExactlyOnceWith(JSON.stringify({ jsonrpc: '2.0', ...payload }));
+        expect(write).toHaveBeenCalledExactlyOnceWith('message', JSON.stringify(payload));
+    });
+    it('filtered and unsupported events produce no notification', () => {
+        const { protocol } = createProtocol();
+        const notification = vi.fn(); protocol.on('mcp.notification', notification);
+        Reflect.set(protocol, 'filterFn', () => false);
+        protocol.dispatch(event as never);
+        expect(notification).not.toHaveBeenCalled();
+        Reflect.set(protocol, 'filterFn', () => true);
+        protocol.dispatch({ type: 'unsupported' } as never);
+        expect(notification).not.toHaveBeenCalled();
     });
 });

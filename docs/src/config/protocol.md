@@ -226,7 +226,7 @@ mcp.v1:
 **stdio（推荐）**：AI Agent 自动启动命令并通过管道通信，无需网络配置。
 
 ```bash
-onebots mcp --config config.yaml --account qq/my-bot
+onebots mcp --data-dir /path/to/onebots-data --account qq/my-bot
 ```
 
 **HTTP/SSE**：随 OneBots 服务启动，适用于远程访问。

@@ -1,3 +1,6 @@
+import { ControlMcpService } from "./mcp-api.js";
+import { respondControlMcp } from "./mcp-http.js";
+import { serveControlWeb } from "./web-assets.js";
 import { createControlSnapshotResponder, gatewayDiagnosticStatus } from "./diagnostics.js";
 import {
     claimServiceProcessOwnership,
@@ -188,6 +191,20 @@ export async function startControlHost(options: ControlHostOptions) {
             : undefined;
     }
 
+    const mcp = new ControlMcpService({
+        currentGateway: () => {
+            if (
+                closed ||
+                storageError ||
+                !activeAddress() ||
+                serviceMigrationStatus(workspace).pending
+            )
+                return undefined;
+            return controller.status().instance?.id;
+        },
+        forward: (instanceId, request) => driver.mcp(instanceId, request),
+    });
+
     async function handle(request: IncomingMessage, response: ServerResponse, local: boolean) {
         try {
             const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
@@ -281,6 +298,7 @@ export async function startControlHost(options: ControlHostOptions) {
                     respondSnapshot(response, pathname, status, server.address());
                     return;
                 }
+                if (await respondControlMcp(mcp, request, response, pathname, local, auth)) return;
                 if (isInstallationPath(pathname)) {
                     const address = request.socket.remoteAddress;
                     const result = await handleInstallationRequest({
@@ -352,36 +370,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 json(response, 404, { message: "本地控制接口不存在" });
                 return;
             }
-            if (request.method === "GET" && (pathname === "/" || pathname.startsWith("/assets/"))) {
-                const relative =
-                    pathname === "/" ? "index.html" : decodeURIComponent(pathname.slice(1));
-                const file = path.resolve(webRoot, relative);
-                if (
-                    !file.startsWith(`${path.resolve(webRoot)}${path.sep}`) ||
-                    !fs.existsSync(file)
-                ) {
-                    json(response, 404, { message: "管理端产物不存在，请完成 Web 构建" });
-                    return;
-                }
-                const contentType = file.endsWith(".html")
-                    ? "text/html; charset=utf-8"
-                    : file.endsWith(".js")
-                      ? "text/javascript"
-                      : file.endsWith(".css")
-                        ? "text/css"
-                        : file.endsWith(".woff2")
-                          ? "font/woff2"
-                          : "application/octet-stream";
-                response.writeHead(200, {
-                    "Content-Type": contentType,
-                    "Referrer-Policy": "no-referrer",
-                    "X-Content-Type-Options": "nosniff",
-                });
-                fs.createReadStream(file)
-                    .on("error", () => response.destroy())
-                    .pipe(response);
-                return;
-            }
+            if (serveControlWeb(request, response, pathname, webRoot)) return;
             proxyGatewayHttp(request, response, activeAddress());
         } catch {
             if (!response.headersSent)
