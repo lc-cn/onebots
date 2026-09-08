@@ -42,10 +42,12 @@ async function contender(root: string) {
             `
         import { acquireControlWorkspace } from ${JSON.stringify(workspaceModule)};
         let release;
-        process.on('message', command => {
+        process.on('message', input => {
+            const command = typeof input === 'string' ? input : input.command;
+            const root = typeof input === 'string' ? ${JSON.stringify(root)} : (input.root ?? ${JSON.stringify(root)});
             if (command === 'acquire') {
                 try {
-                    release = acquireControlWorkspace(${JSON.stringify(root)});
+                    release = acquireControlWorkspace(root);
                     process.send('acquired');
                 } catch (error) { process.send({ failure: error.message }); }
             } else if (command === 'release') {
@@ -67,9 +69,9 @@ async function contender(root: string) {
     expect(ready).toBe("ready");
     return {
         child,
-        request(command: string) {
+        request(command: string, rootOverride?: string) {
             const response = message(child, () => diagnostics);
-            child.send(command);
+            child.send(rootOverride ? { command, root: rootOverride } : command);
             return response;
         },
     };
@@ -106,6 +108,29 @@ function message(child: ChildProcess, diagnostics: () => string): Promise<unknow
 }
 
 describe("control workspace lock", () => {
+    it("八个独立进程反复竞争全新数据库，每轮恰有一个赢家", async () => {
+        const root = fixture();
+        const contenders = await Promise.all(Array.from({ length: 8 }, () => contender(root)));
+        for (let round = 0; round < 40; round++) {
+            const current = path.join(root, String(round));
+            const results = await Promise.all(
+                contenders.map(item => item.request("acquire", current)),
+            );
+            expect(
+                results.filter(value => value === "acquired"),
+                `round=${round}: ${JSON.stringify(results)}`,
+            ).toHaveLength(1);
+            expect(results.filter(value => value !== "acquired")).toEqual(
+                Array.from({ length: 7 }, () => ({
+                    failure: "此工作区已有管理服务，禁止重复启动",
+                })),
+            );
+            expect(await contenders[results.indexOf("acquired")].request("release")).toBe(
+                "released",
+            );
+        }
+    });
+
     it("独立进程同时抢锁只有一个成功，正常释放后同一数据库可重用", async () => {
         const root = fixture();
         const contenders = await Promise.all([contender(root), contender(root), contender(root)]);

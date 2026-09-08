@@ -2,6 +2,8 @@ import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { GatewayController, GatewayStartReapedError } from "./gateway-controller.js";
+import { ConfigurationFile } from "../configuration/configuration-file.js";
 import { NodeGatewayDriver } from "./gateway-driver.js";
 
 const folders: string[] = [];
@@ -20,6 +22,7 @@ async function fixture(mode = "ready") {
         entrypoint,
         `
 import { writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 process.on('disconnect', () => process.exit(0));
 if (${JSON.stringify(mode)} === 'ignore-stop') process.on('SIGTERM', () => {});
 process.on('message', message => {
@@ -29,10 +32,12 @@ process.on('message', message => {
     }
     const mode = ${JSON.stringify(mode)};
     writeFileSync(message.workspacePath + '/environment.json', JSON.stringify(process.env));
+    writeFileSync(message.workspacePath + '/pid.txt', String(process.pid));
     console.log('fixture-started');
     if (mode === 'timeout') return;
     if (mode === 'exit') process.exit(3);
     const ready = {...message, type:'gateway.ready', address:{host:'127.0.0.1', port:12345}};
+    if (mode === 'helper') { const helper=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'}); writeFileSync(message.workspacePath+'/helper.txt',String(helper.pid)); ready.gatewayInstanceId='wrong'; }
     if (mode === 'identity') ready.gatewayInstanceId = 'wrong-instance';
     if (mode === 'version') ready.dependencyVersion = 'wrong-version';
     if (mode === 'address') ready.address.host = '0.0.0.0';
@@ -62,6 +67,63 @@ process.on('message', message => {
 }
 
 describe("NodeGatewayDriver real fork lifecycle", () => {
+    it("真实损坏YAML在prepare阶段失败，保持running意图但不留下恢复门禁", async () => {
+        const folder = await mkdtemp(join(tmpdir(), "onebots-prepare-failed-"));
+        folders.push(folder);
+        const filename = join(folder, "config.yaml");
+        await writeFile(filename, "invalid: [private-secret");
+        const source = new ConfigurationFile(filename);
+        const driver = new NodeGatewayDriver({
+            controlInstanceId: "test",
+            onExit: () => {},
+            prepare: async () => {
+                source.read();
+                throw new Error("unreachable");
+            },
+        });
+        const controller = new GatewayController({ statePath: join(folder, "state.json"), driver });
+        await controller.initialize();
+        expect((await controller.start()).status).toBe("failed");
+        expect(controller.status()).toMatchObject({
+            actual: "failed",
+            desired: "running",
+            recoveryRequired: false,
+        });
+        expect(driver.hasLiveChildren()).toBe(false);
+        expect(JSON.stringify(controller.status())).not.toContain("private-secret");
+    });
+    it("握手失败回收真实helper后才返回可信失败", async () => {
+        const { driver, folder } = await fixture("helper");
+        await expect(driver.start()).rejects.toBeInstanceOf(GatewayStartReapedError);
+        const pid = Number(await readFile(join(folder, "helper.txt"), "utf8"));
+        expect(() => process.kill(pid, 0)).toThrow();
+        expect(driver.hasLiveChildren()).toBe(false);
+    });
+    it("owned握手失败但进程组清理失败，绝不能声明已回收", async () => {
+        const { driver, folder } = await fixture("identity");
+        const originalKill = process.kill.bind(process);
+        const mocked = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+            if (pid < 0 && signal !== 0)
+                throw Object.assign(new Error("denied"), { code: "EPERM" });
+            return originalKill(pid, signal);
+        });
+        try {
+            let failure: unknown;
+            try {
+                await driver.start();
+            } catch (error) {
+                failure = error;
+            }
+            expect(failure).toBeInstanceOf(Error);
+            expect(failure).not.toBeInstanceOf(GatewayStartReapedError);
+            expect(driver.hasLiveChildren()).toBe(true);
+        } finally {
+            mocked.mockRestore();
+            const pid = Number(await readFile(join(folder, "pid.txt"), "utf8"));
+            originalKill(-pid, "SIGKILL");
+            await vi.waitFor(() => expect(driver.hasLiveChildren()).toBe(false));
+        }
+    });
     it("returns the validated address, keeps credentials out of env, and reaps stop", async () => {
         vi.stubEnv("NODE_AUTH_TOKEN", "private-test-download-secret");
         vi.stubEnv("ONEBOTS_CONTROL_TOKEN", "private-test-control-secret");
@@ -92,7 +154,7 @@ describe("NodeGatewayDriver real fork lifecycle", () => {
         "rejects %s handshakes and cleans the child",
         async mode => {
             const { driver } = await fixture(mode);
-            await expect(driver.start()).rejects.toThrow("握手无效");
+            await expect(driver.start()).rejects.toBeInstanceOf(GatewayStartReapedError);
             expect(driver.hasLiveChildren()).toBe(false);
         },
     );
@@ -122,6 +184,8 @@ describe("NodeGatewayDriver real fork lifecycle", () => {
         } finally {
             await driver.stop(second);
         }
-        expect(onExit.mock.calls.map(call => call[0])).toEqual([first.id, second.id]);
+        await vi.waitFor(() =>
+            expect(onExit.mock.calls.map(call => call[0])).toEqual([first.id, second.id]),
+        );
     });
 });

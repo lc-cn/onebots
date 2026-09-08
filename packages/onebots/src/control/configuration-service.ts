@@ -6,6 +6,8 @@ import {
 import { ConfigurationDrafts } from "../configuration/configuration-drafts.js";
 import { ConfigurationWorkspace } from "../configuration/configuration-workspace.js";
 import { ConfigurationValidation } from "../configuration/configuration-validation.js";
+import { ConfigurationRecoveryStore } from "../configuration/configuration-recovery-store.js";
+import { ConfigurationConflictError } from "../configuration/configuration-store.js";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
 import { readGenerationConfigurationSchema } from "../configuration/configuration-runtime-schema.js";
 import {
@@ -22,6 +24,9 @@ export class ControlConfigurationService {
     private readonly pending = new Set<Promise<unknown>>();
     private closed = false;
     private readonly workspace: ConfigurationWorkspace;
+    private readonly source: ConfigurationFile;
+    private readonly store: ConfigurationStore;
+    private readonly recovery: ConfigurationRecoveryStore;
     private readonly drafts: ConfigurationDrafts;
     private readonly validation: ConfigurationValidation;
     constructor(
@@ -34,15 +39,21 @@ export class ControlConfigurationService {
             activeGeneration(): VerifiedGeneration | null;
         },
     ) {
-        const store = new ConfigurationStore(path.join(options.directory, "drafts"));
+        const store = (this.store = new ConfigurationStore(path.join(options.directory, "drafts")));
+        this.source = new ConfigurationFile(options.configFile);
+        this.recovery = new ConfigurationRecoveryStore(path.join(options.directory, "recovery"));
         this.workspace = new ConfigurationWorkspace({
-            source: new ConfigurationFile(options.configFile),
+            source: this.source,
             runtimeRoot: options.runtimeRoot,
             hostEntrypoint: path.resolve(import.meta.dirname, "../../lib/index.js"),
             activeGeneration: options.activeGeneration,
             readSchema: id => readGenerationConfigurationSchema(options.generations, id),
         });
-        this.drafts = new ConfigurationDrafts({ store, current: () => this.workspace.current() });
+        this.drafts = new ConfigurationDrafts({
+            store,
+            current: () => this.workspace.current(),
+            repairCurrent: base => this.workspace.currentRepair(base),
+        });
         this.validation = new ConfigurationValidation({
             directory: path.join(options.directory, "validations"),
             privateRoot: path.join(options.directory, "verification-workers"),
@@ -54,6 +65,38 @@ export class ControlConfigurationService {
         });
     }
 
+    sourceState() {
+        const source = this.source.inspect();
+        return {
+            state: source.state,
+            base: {
+                generationId: this.options.activeGeneration()?.id ?? null,
+                configRevision: source.revision,
+            },
+            ...(source.state === "damaged" ? { reason: source.reason, repairAvailable: true } : {}),
+        };
+    }
+    createRepair(base: ConfigurationBase) {
+        return this.run(async () => {
+            const state = this.sourceState();
+            if (
+                state.state !== "damaged" ||
+                state.base.configRevision !== base.configRevision ||
+                state.base.generationId !== base.generationId
+            )
+                throw new ConfigurationConflictError();
+            const original = this.source.readRaw();
+            if (original.revision !== base.configRevision) throw new ConfigurationConflictError();
+            const reference = this.recovery.backup(original);
+            const context = await this.workspace.refreshRepair(base);
+            return { draft: this.drafts.createRepair(base, reference), schemas: context.schemas };
+        });
+    }
+    private async refreshDraft(id: string) {
+        const draft = this.store.read(id);
+        if (draft.mode === "repair") await this.workspace.refreshRepair(draft.base);
+        else await this.workspace.refresh();
+    }
     snapshot() {
         return this.run(async () => {
             const context = await this.workspace.refresh();
@@ -66,9 +109,20 @@ export class ControlConfigurationService {
             return this.drafts.create(base);
         });
     }
+    readContext(id: string) {
+        return this.run(async () => {
+            await this.refreshDraft(id);
+            const draft = this.store.read(id);
+            const context =
+                draft.mode === "repair"
+                    ? this.workspace.currentRepair(draft.base)
+                    : this.workspace.current();
+            return { draft: this.drafts.read(id), schemas: context.schemas };
+        });
+    }
     read(id: string) {
         return this.run(async () => {
-            await this.workspace.refresh();
+            await this.refreshDraft(id);
             return this.drafts.read(id);
         });
     }
@@ -79,13 +133,13 @@ export class ControlConfigurationService {
         secrets: SecretChange[];
     }) {
         return this.run(async () => {
-            await this.workspace.refresh();
+            await this.refreshDraft(request.id);
             return this.drafts.edit(request);
         });
     }
     editList(request: ConfigurationListChange & { id: string; expectedRevision: string }) {
         return this.run(async () => {
-            await this.workspace.refresh();
+            await this.refreshDraft(request.id);
             const { id, expectedRevision, ...change } = request;
             return this.drafts.editList(id, expectedRevision, change);
         });
@@ -97,7 +151,7 @@ export class ControlConfigurationService {
         accountId: string;
     }) {
         return this.run(async () => {
-            await this.workspace.refresh();
+            await this.refreshDraft(request.id);
             return this.drafts.addAccount(
                 request.id,
                 request.expectedRevision,
@@ -108,7 +162,7 @@ export class ControlConfigurationService {
     }
     removeAccount(request: { id: string; expectedRevision: string; accountKey: string }) {
         return this.run(async () => {
-            await this.workspace.refresh();
+            await this.refreshDraft(request.id);
             return this.drafts.removeAccount(
                 request.id,
                 request.expectedRevision,
@@ -124,7 +178,7 @@ export class ControlConfigurationService {
         enabled: boolean;
     }) {
         return this.run(async () => {
-            await this.workspace.refresh();
+            await this.refreshDraft(request.id);
             return this.drafts.setProtocol(request.id, request);
         });
     }
@@ -139,6 +193,11 @@ export class ControlConfigurationService {
     }
     apply(request: { id: string; receiptId: string }) {
         return this.run(() => this.validation.apply(request.id, request.receiptId));
+    }
+    reconcile(request: { id: string; expectedRevision: string }) {
+        return this.run(() =>
+            this.options.application.reconcileRestore(request.id, request.expectedRevision),
+        );
     }
     operation(id: string) {
         return this.options.application.hasOperation(id)

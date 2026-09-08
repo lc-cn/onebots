@@ -8,7 +8,14 @@ export interface ConfigurationBase {
     configRevision: string;
 }
 
+export interface ConfigurationRepairReference {
+    backupId: string;
+    originalRevision: string;
+}
+
 export interface ConfigurationDraft {
+    mode?: "repair";
+    repair?: ConfigurationRepairReference;
     schemaVersion: 1;
     id: string;
     revision: string;
@@ -40,6 +47,21 @@ export class ConfigurationStore {
         return structuredClone(draft);
     }
 
+    createRepair(
+        base: ConfigurationBase,
+        document: Record<string, unknown>,
+        repair: ConfigurationRepairReference,
+    ): ConfigurationDraft {
+        const draft = this.make(
+            randomUUID(),
+            base,
+            document,
+            parseConfigurationRepairReference(repair, base),
+        );
+        this.write(draft);
+        return structuredClone(draft);
+    }
+
     read(id: string): ConfigurationDraft {
         try {
             const file = this.file(id);
@@ -56,13 +78,23 @@ export class ConfigurationStore {
             const value = raw as Record<string, unknown>;
             if (value.schemaVersion !== 1 || value.id !== id || typeof value.revision !== "string")
                 throw new Error("invalid");
+            const repairing = value.mode === "repair";
+            const keys = repairing
+                ? "base,document,id,mode,repair,revision,schemaVersion"
+                : "base,document,id,revision,schemaVersion";
+            if (Object.keys(value).sort().join(",") !== keys) throw new Error("invalid");
             const draft = this.make(
                 id,
                 value.base as ConfigurationBase,
                 value.document as Record<string, unknown>,
+                repairing
+                    ? parseConfigurationRepairReference(
+                          value.repair,
+                          value.base as ConfigurationBase,
+                      )
+                    : undefined,
             );
-            if (draft.revision !== value.revision || Object.keys(value).length !== 5)
-                throw new Error("invalid");
+            if (draft.revision !== value.revision) throw new Error("invalid");
             return draft;
         } catch {
             // 不把 JSON 片段、路径或配置值带入可见诊断。
@@ -77,7 +109,7 @@ export class ConfigurationStore {
     ): ConfigurationDraft {
         const previous = this.read(id);
         if (previous.revision !== expectedRevision) throw new ConfigurationConflictError();
-        const draft = this.make(id, previous.base, document);
+        const draft = this.make(id, previous.base, document, previous.repair);
         this.write(draft);
         return structuredClone(draft);
     }
@@ -86,15 +118,23 @@ export class ConfigurationStore {
         id: string,
         base: ConfigurationBase,
         document: Record<string, unknown>,
+        repair?: ConfigurationRepairReference,
     ): ConfigurationDraft {
         validateBase(base);
         const serialized = canonicalConfiguration(document);
         const snapshot = JSON.parse(serialized) as Record<string, unknown>;
         const ownedBase = { generationId: base.generationId, configRevision: base.configRevision };
+        const mode = repair
+            ? { mode: "repair" as const, repair: parseConfigurationRepairReference(repair, base) }
+            : undefined;
         const revision = createHash("sha256")
-            .update(JSON.stringify([id, ownedBase, serialized]))
+            .update(
+                JSON.stringify(
+                    mode ? [id, ownedBase, serialized, mode] : [id, ownedBase, serialized],
+                ),
+            )
             .digest("hex");
-        return { schemaVersion: 1, id, revision, base: ownedBase, document: snapshot };
+        return { schemaVersion: 1, id, revision, base: ownedBase, document: snapshot, ...mode };
     }
 
     private file(id: string): string {
@@ -149,9 +189,32 @@ function validateBase(base: ConfigurationBase): void {
         typeof base !== "object" ||
         Array.isArray(base) ||
         Object.keys(base).length !== 2 ||
-        !(base.generationId === null || (typeof base.generationId === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(base.generationId))) ||
+        !(
+            base.generationId === null ||
+            (typeof base.generationId === "string" &&
+                /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+                    base.generationId,
+                ))
+        ) ||
         typeof base.configRevision !== "string" ||
         !/^[a-f0-9]{64}$/.test(base.configRevision)
     )
         throw new Error("配置基础版本无效");
+}
+
+/** 修复授权引用只允许不透明标识与原始字节摘要，不接受文件路径。 */
+export function parseConfigurationRepairReference(
+    value: unknown,
+    base: ConfigurationBase,
+): ConfigurationRepairReference {
+    validateBase(base);
+    const parsed = parseConfigurationDocument(value);
+    if (
+        Object.keys(parsed).sort().join(",") !== "backupId,originalRevision" ||
+        typeof parsed.backupId !== "string" ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(parsed.backupId) ||
+        parsed.originalRevision !== base.configRevision
+    )
+        throw new Error("配置修复引用无效");
+    return { backupId: parsed.backupId, originalRevision: base.configRevision };
 }

@@ -23,14 +23,71 @@ function prompt(answers: string[][]) {
     };
     return { ui, requests, reports };
 }
-function transport(handler: (route: string, body: unknown) => unknown) {
+function transport(
+    handler: (route: string, body: unknown) => unknown,
+    source: () => unknown = () => ({ state: "ready", base }),
+) {
     const request = vi.fn(
-        async <T>(_method: "GET" | "POST", route: string, body?: unknown): Promise<T> =>
-            handler(route, body) as T,
+        async <T>(_method: "GET" | "POST", route: string, body?: unknown): Promise<T> => {
+            if (route.endsWith("/source")) return source() as T;
+            const result = handler(route, body);
+            return (
+                route.endsWith("/context") &&
+                !(result && typeof result === "object" && "draft" in result)
+                    ? { draft: result, schemas: {} }
+                    : result
+            ) as T;
+        },
     );
     return { client: new ControlClient({ request }), request };
 }
 describe("TUI 配置草稿", () => {
+    it("损坏源须明确确认私有备份与空修复，取消不写", async () => {
+        for (const accepted of [false, true]) {
+            const ui = prompt([
+                ["new"],
+                [accepted ? "yes" : "no"],
+                ...(accepted ? [["back"]] : []),
+            ]);
+            const api = transport(
+                () => ({ draft: initial(), schemas: {} }),
+                () => ({ state: "damaged", base }),
+            );
+            await runControlConfiguration(api.client, ui.ui);
+            expect(ui.requests[1].detail).toContain("私有备份");
+            expect(api.request.mock.calls.some(call => call[1].endsWith("/repair-drafts"))).toBe(
+                accepted,
+            );
+            expect(
+                api.request.mock.calls.some(call => call[1] === "/api/control/configuration"),
+            ).toBe(false);
+        }
+    });
+    it("恢复修复草稿直接读取context，网络错误绝不假装源已损坏", async () => {
+        const resumed = prompt([["resume"], ["draft"], ["back"]]);
+        const api = transport(
+            () => ({ draft: initial(), schemas: {} }),
+            () => {
+                throw new Error("source must not be called");
+            },
+        );
+        await runControlConfiguration(api.client, resumed.ui);
+        expect(api.request.mock.calls.map(call => call[1])).toEqual([
+            "/api/control/configuration/drafts/draft/context",
+        ]);
+        const offline = prompt([["new"]]);
+        const broken = transport(
+            () => ({}),
+            () => {
+                throw new Error("network unavailable");
+            },
+        );
+        await expect(runControlConfiguration(broken.client, offline.ui)).rejects.toThrow(
+            "network unavailable",
+        );
+        expect(offline.requests).toHaveLength(1);
+        expect(broken.request.mock.calls).toHaveLength(1);
+    });
     it("对象列表通过专用API追加删除，嵌套秘密仅走secret操作", async () => {
         const ui = prompt([
             ["0"],

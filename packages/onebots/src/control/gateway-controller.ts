@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 
+/** 仅受信 driver 在本次启动未产生进程或已确认回收全部所属进程后抛出。 */
+export class GatewayStartReapedError extends Error {}
+
 export interface GatewayInstance {
     id: string;
     readonly pid?: number;
@@ -226,7 +229,13 @@ export class GatewayController {
         this.state.recoveryRequired = true;
         await this.persist();
         this.effectAttempted = true;
-        const instance = await this.options.driver.start();
+        let instance: GatewayInstance;
+        try {
+            instance = await this.options.driver.start();
+        } catch (error) {
+            if (error instanceof GatewayStartReapedError) this.state.recoveryRequired = false;
+            throw error;
+        }
         if (!instance?.id) throw new Error("网关握手缺少实例标识");
         this.instance = instance;
         this.state.instance = structuredClone(instance);

@@ -2,9 +2,13 @@ import { createHash } from "node:crypto";
 import type { VerifiedGeneration } from "../installation/generation-store.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
 import { getConfiguredPluginSelection } from "../runtime-plugin-selection.js";
-import { ConfigurationConflictError, type ConfigurationDraft } from "./configuration-store.js";
+import {
+    ConfigurationConflictError,
+    type ConfigurationDraft,
+    type ConfigurationBase,
+} from "./configuration-store.js";
 import type { ConfigurationFile } from "./configuration-file.js";
-import type { ConfigurationContext } from "./configuration-drafts.js";
+import type { ConfigurationContext, ConfigurationRepairContext } from "./configuration-drafts.js";
 import {
     normalizeConfigurationSchema,
     type ConfigurationSchemaBundle,
@@ -21,6 +25,7 @@ interface CachedSchema {
 /** 把当前配置、活动运行版本和可信 Schema 合成客户端唯一上下文。 */
 export class ConfigurationWorkspace {
     private cached?: CachedSchema;
+    private repairCached?: ConfigurationRepairContext;
     constructor(
         private readonly options: {
             source: ConfigurationFile;
@@ -35,7 +40,7 @@ export class ConfigurationWorkspace {
     base() {
         return {
             generationId: this.options.activeGeneration()?.id ?? null,
-            configRevision: this.options.source.read().revision,
+            configRevision: this.options.source.inspect().revision,
         };
     }
 
@@ -62,6 +67,48 @@ export class ConfigurationWorkspace {
             throw new ConfigurationConflictError();
         this.cached = { generationId: generation?.id ?? null, selectionKey, schemas };
         return this.current();
+    }
+
+    /** 损坏配置只提供当前已验证版本的能力，不尝试从原始字节猜扩展选择。 */
+    async refreshRepair(expected: ConfigurationBase): Promise<ConfigurationRepairContext> {
+        this.assertRepairBase(expected);
+        const generation = this.options.activeGeneration();
+        const schemas = generation
+            ? this.options.readSchema(generation.id)
+            : bundle(
+                  (
+                      await (this.options.inspect ?? inspectConfigurationRuntime)({
+                          runtimeRoot: this.options.runtimeRoot,
+                          hostEntrypoint: this.options.hostEntrypoint,
+                          selection: { adapters: [], protocols: [], applications: [] },
+                      })
+                  ).schemas,
+              );
+        this.assertRepairBase(expected);
+        this.repairCached = { base: structuredClone(expected), schemas };
+        return this.currentRepair(expected);
+    }
+
+    currentRepair(expected: ConfigurationBase): ConfigurationRepairContext {
+        this.assertRepairBase(expected);
+        if (
+            !this.repairCached ||
+            this.repairCached.base.generationId !== expected.generationId ||
+            this.repairCached.base.configRevision !== expected.configRevision
+        )
+            throw new ConfigurationConflictError();
+        return structuredClone(this.repairCached);
+    }
+
+    private assertRepairBase(expected: ConfigurationBase): void {
+        const snapshot = this.options.source.inspect();
+        if (
+            !expected ||
+            snapshot.state !== "damaged" ||
+            snapshot.revision !== expected.configRevision ||
+            (this.options.activeGeneration()?.id ?? null) !== expected.generationId
+        )
+            throw new ConfigurationConflictError();
     }
 
     current(): ConfigurationContext {

@@ -40,6 +40,8 @@ jobs:
           docker exec -i --user 1000:1000 -e CONTROL_VERIFY_RESTART=1 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs
       - name: Verify dependency generation and protocol API
         run: docker exec -i --user 1000:1000 onebots-control-ci node --input-type=module < scripts/verify-control-installation.mjs
+      - name: Verify damaged configuration repair
+        run: docker exec -i --user 1000:1000 -e CONTROL_VERIFY_REPAIR=disposable-ci-volume onebots-control-ci node --input-type=module < scripts/verify-control-repair.mjs
       - name: Clean verification container
         if: always()
         run: |

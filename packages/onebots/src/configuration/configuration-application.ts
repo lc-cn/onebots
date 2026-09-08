@@ -1,6 +1,14 @@
+import {
+    privateDirectory,
+    readFile,
+    atomic,
+    checkRepair,
+    checkRepairRevisions,
+} from "./configuration-application-storage.js";
+import { reconcileRepair } from "./configuration-reconciliation.js";
 import fs from "node:fs";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type {
     GenerationActivationController,
     ConfigurationTransactionPort,
@@ -13,6 +21,7 @@ import {
     canonicalConfiguration,
     ConfigurationConflictError,
     type ConfigurationBase,
+    type ConfigurationRepairReference,
 } from "./configuration-store.js";
 
 export interface ConfigurationSourceSnapshot {
@@ -23,14 +32,23 @@ export interface ConfigurationApplicationOptions {
     directory: string;
     source: {
         read(): ConfigurationSourceSnapshot;
+        serialize?(document: unknown): Buffer;
+        inspect?(): { state: "ready" | "damaged"; revision: string };
+        replaceRaw?(
+            expectedRevision: string,
+            bytes: Uint8Array,
+        ): { revision: string; bytes: Buffer };
         replace(
             expectedRevision: string,
             document: Record<string, unknown>,
         ): ConfigurationSourceSnapshot;
     };
-    lifecycle: Pick<GenerationActivationController, "runConfigurationTransaction">;
+    lifecycle: Pick<GenerationActivationController, "runConfigurationTransaction"> &
+        Partial<Pick<GenerationActivationController, "runConfigurationRecoveryTransaction">>;
+    recovery?: { read(reference: ConfigurationRepairReference): Buffer };
 }
 export interface ConfigurationApplicationInput {
+    repair?: ConfigurationRepairReference;
     id: string;
     validationId: string;
     base: ConfigurationBase;
@@ -43,15 +61,19 @@ export interface ConfigurationApplicationOperation {
     phase: "accepted" | "stopping" | "writing" | "starting" | "restoring" | "completed" | "failed";
     recoveryRequired: boolean;
     rolledBack?: boolean;
+    sourceState?: "damaged";
     configRevision?: string;
     error?: "CONFIG_APPLY_FAILED" | "CONFIG_RECOVERY_REQUIRED";
 }
-interface Journal extends ConfigurationApplicationOperation {
+export interface ConfigurationApplicationJournal extends ConfigurationApplicationOperation {
+    mode?: "repair";
+    repair?: ConfigurationRepairReference;
     schemaVersion: 1;
     base: ConfigurationBase;
     desired: "running" | "stopped";
     documentDigest: string;
     previousDigest: string;
+    candidateRevision?: string;
 }
 const HASH = /^[a-f0-9]{64}$/;
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -88,6 +110,38 @@ export class ConfigurationApplication {
     health(): { recoveryRequired: boolean } {
         return { recoveryRequired: this.blocked };
     }
+    async reconcileRestore(
+        id: string,
+        expectedRevision: string,
+    ): Promise<ConfigurationApplicationOperation> {
+        if (
+            !HASH.test(expectedRevision) ||
+            !this.options.lifecycle.runConfigurationRecoveryTransaction
+        )
+            throw invalid();
+        return this.options.lifecycle.runConfigurationRecoveryTransaction(async port => {
+            const operation = this.read(id);
+            if (!operation.recoveryRequired || operation.mode !== "repair" || !operation.repair)
+                throw invalid();
+            try {
+                const result = reconcileRepair(
+                    operation,
+                    expectedRevision,
+                    port,
+                    this.options,
+                    value => this.save(value),
+                );
+                this.blocked = fs
+                    .readdirSync(this.directory)
+                    .filter(name => name.endsWith(".json"))
+                    .some(name => this.read(name.slice(0, -5)).recoveryRequired);
+                return publicOperation(result);
+            } catch (error) {
+                if (error instanceof ConfigurationConflictError) throw error;
+                return this.unknown(operation);
+            }
+        });
+    }
     status(id: string): ConfigurationApplicationOperation {
         return publicOperation(this.read(id));
     }
@@ -112,25 +166,36 @@ export class ConfigurationApplication {
                 typeof snapshot.id !== "string" ||
                 !ID.test(String(snapshot.validationId)) ||
                 typeof snapshot.validationId !== "string" ||
-                Object.keys(snapshot).sort().join(",") !== "base,document,id,validationId"
+                Object.keys(snapshot).sort().join(",") !==
+                    (snapshot.repair === undefined
+                        ? "base,document,id,validationId"
+                        : "base,document,id,repair,validationId")
             )
                 throw invalid();
             checkBase(snapshot.base);
+            if (snapshot.repair !== undefined) checkRepair(snapshot.repair, snapshot.base);
             request = {
                 id: snapshot.id,
                 validationId: snapshot.validationId,
                 base: snapshot.base as unknown as ConfigurationBase,
                 document: parseConfigurationDocument(snapshot.document),
+                ...(snapshot.repair !== undefined
+                    ? { repair: snapshot.repair as unknown as ConfigurationRepairReference }
+                    : {}),
             };
         } catch {
             return Promise.reject(invalid());
         }
         return this.options.lifecycle.runConfigurationTransaction(async port => {
             const candidate = bytes(request.document);
+            // 修复写入与冷恢复均从同一规范文档序列化，避免键顺序改变原始摘要。
+            if (request.repair) request.document = parseConfigurationDocument(JSON.parse(candidate));
             const candidateDigest = digest(candidate);
             if (fs.existsSync(this.file(request.id))) {
                 const previous = this.read(request.id);
                 if (
+                    previous.repair?.backupId !== request.repair?.backupId ||
+                    previous.repair?.originalRevision !== request.repair?.originalRevision ||
                     previous.validationId !== request.validationId ||
                     previous.documentDigest !== candidateDigest ||
                     previous.base.configRevision !== request.base.configRevision ||
@@ -141,10 +206,23 @@ export class ConfigurationApplication {
             }
             if (this.blocked || port.gatewayStatus().recoveryRequired)
                 throw new Error("配置应用需要人工对账");
-            let before: ConfigurationSourceSnapshot;
+            let before: { revision: string; document?: Record<string, unknown> };
             try {
-                before = this.options.source.read();
-            } catch {
+                if (request.repair) {
+                    const inspection = this.options.source.inspect?.();
+                    if (inspection?.state !== "damaged") throw new ConfigurationConflictError();
+                    if (
+                        !this.options.source.replaceRaw ||
+                        !this.options.source.serialize ||
+                        !this.options.recovery
+                    )
+                        throw invalid();
+                    const original = this.options.recovery.read(request.repair);
+                    if (digest(original) !== request.base.configRevision) throw invalid();
+                    before = { revision: inspection.revision };
+                } else before = this.options.source.read();
+            } catch (error) {
+                if (error instanceof ConfigurationConflictError) throw error;
                 throw invalid();
             }
             if (
@@ -152,21 +230,34 @@ export class ConfigurationApplication {
                 before.revision !== request.base.configRevision
             )
                 throw new ConfigurationConflictError();
-            const previousBytes = bytes(before.document);
-            const operation: Journal = {
+            const previousBytes = request.repair ? undefined : bytes(before.document);
+            const operation: ConfigurationApplicationJournal = {
                 schemaVersion: 1,
                 id: request.id,
                 validationId: request.validationId,
                 base: { ...request.base },
                 desired: port.gatewayStatus().desired,
                 documentDigest: candidateDigest,
-                previousDigest: digest(previousBytes),
+                previousDigest: request.repair
+                    ? request.repair.originalRevision
+                    : digest(previousBytes!),
+                ...(request.repair
+                    ? { mode: "repair" as const, repair: { ...request.repair } }
+                    : {}),
+                ...(request.repair
+                    ? {
+                          candidateRevision: digest(
+                              this.options.source.serialize!(request.document),
+                          ),
+                      }
+                    : {}),
                 status: "running",
                 phase: "accepted",
                 recoveryRequired: false,
             };
             try {
-                this.saveDocument(operation.previousDigest, previousBytes);
+                if (previousBytes !== undefined)
+                    this.saveDocument(operation.previousDigest, previousBytes);
                 this.saveDocument(candidateDigest, candidate);
                 this.save(operation);
             } catch {
@@ -178,7 +269,7 @@ export class ConfigurationApplication {
     }
 
     private async execute(
-        operation: Journal,
+        operation: ConfigurationApplicationJournal,
         document: Record<string, unknown>,
         port: ConfigurationTransactionPort,
     ): Promise<ConfigurationApplicationOperation> {
@@ -198,6 +289,8 @@ export class ConfigurationApplication {
             const next = this.options.source.replace(operation.base.configRevision, document);
             if (
                 !HASH.test(next.revision) ||
+                (operation.candidateRevision !== undefined &&
+                    operation.candidateRevision !== next.revision) ||
                 digest(bytes(next.document)) !== operation.documentDigest
             )
                 throw invalid();
@@ -224,40 +317,55 @@ export class ConfigurationApplication {
     }
 
     private async rollback(
-        operation: Journal,
+        operation: ConfigurationApplicationJournal,
         port: ConfigurationTransactionPort,
     ): Promise<ConfigurationApplicationOperation> {
         try {
-            const current = this.options.source.read();
+            const current = operation.repair
+                ? this.options.source.inspect?.()
+                : this.options.source.read();
+            if (!current) throw invalid();
             const expected = operation.configRevision ?? operation.base.configRevision;
             if (current.revision !== expected) throw invalid();
             operation.phase = "restoring";
             this.save(operation);
             if (operation.configRevision !== undefined) {
-                const restored = this.options.source.replace(
-                    expected,
-                    this.readDocument(operation.previousDigest),
-                );
-                if (
-                    digest(bytes(restored.document)) !== operation.previousDigest ||
-                    !HASH.test(restored.revision)
-                )
-                    throw invalid();
-                operation.configRevision = restored.revision;
+                if (operation.repair) {
+                    const original = this.options.recovery?.read(operation.repair);
+                    if (!original || digest(original) !== operation.previousDigest) throw invalid();
+                    const restored = this.options.source.replaceRaw?.(expected, original);
+                    if (!restored || restored.revision !== operation.previousDigest)
+                        throw invalid();
+                    operation.configRevision = restored.revision;
+                } else {
+                    const restored = this.options.source.replace(
+                        expected,
+                        this.readDocument(operation.previousDigest),
+                    );
+                    if (
+                        digest(bytes(restored.document)) !== operation.previousDigest ||
+                        !HASH.test(restored.revision)
+                    )
+                        throw invalid();
+                    operation.configRevision = restored.revision;
+                }
             }
             if (port.hasLiveChildren()) throw invalid();
-            if (operation.desired === "running") {
+            if (operation.desired === "running" && !operation.repair) {
                 const started = await port.start();
                 if (started.status !== "succeeded") throw invalid();
             }
             if (
-                this.options.source.read().revision !==
+                (operation.repair
+                    ? this.options.source.inspect?.().revision
+                    : this.options.source.read().revision) !==
                 (operation.configRevision ?? operation.base.configRevision)
             )
                 throw invalid();
             operation.status = "failed";
             operation.phase = "failed";
             operation.rolledBack = true;
+            if (operation.repair) operation.sourceState = "damaged";
             operation.error = "CONFIG_APPLY_FAILED";
             this.save(operation);
             return publicOperation(operation);
@@ -266,7 +374,7 @@ export class ConfigurationApplication {
         }
     }
 
-    private unknown(operation: Journal): ConfigurationApplicationOperation {
+    private unknown(operation: ConfigurationApplicationJournal): ConfigurationApplicationOperation {
         this.blocked = true;
         delete operation.rolledBack;
         operation.status = "failed";
@@ -285,10 +393,10 @@ export class ConfigurationApplication {
         if (typeof id !== "string" || !ID.test(id)) throw invalid();
         return path.join(this.directory, `${id}.json`);
     }
-    private save(operation: Journal): void {
+    private save(operation: ConfigurationApplicationJournal): void {
         atomic(this.file(operation.id), JSON.stringify(operation));
     }
-    private read(id: string): Journal {
+    private read(id: string): ConfigurationApplicationJournal {
         try {
             const raw = parseConfigurationDocument(JSON.parse(readFile(this.file(id), 16_384)));
             checkBase(raw.base);
@@ -315,6 +423,9 @@ export class ConfigurationApplication {
                 typeof raw.recoveryRequired !== "boolean" ||
                 (raw.configRevision !== undefined &&
                     (typeof raw.configRevision !== "string" || !HASH.test(raw.configRevision))) ||
+                (raw.candidateRevision !== undefined &&
+                    (typeof raw.candidateRevision !== "string" ||
+                        !HASH.test(raw.candidateRevision))) ||
                 (raw.rolledBack !== undefined && typeof raw.rolledBack !== "boolean") ||
                 (raw.error !== undefined &&
                     !["CONFIG_APPLY_FAILED", "CONFIG_RECOVERY_REQUIRED"].includes(
@@ -322,9 +433,15 @@ export class ConfigurationApplication {
                     ))
             )
                 throw invalid();
-            const operation = raw as unknown as Journal;
-            this.readDocument(operation.documentDigest);
-            this.readDocument(operation.previousDigest);
+            const operation = raw as unknown as ConfigurationApplicationJournal;
+            const document = this.readDocument(operation.documentDigest);
+            if (operation.mode !== undefined || operation.repair !== undefined) {
+                if (operation.mode !== "repair") throw invalid();
+                checkRepair(operation.repair, operation.base);
+                checkRepairRevisions(operation, document, this.options.source);
+                const original = this.options.recovery?.read(operation.repair!);
+                if (!original || digest(original) !== operation.previousDigest) throw invalid();
+            } else this.readDocument(operation.previousDigest);
             return operation;
         } catch {
             throw invalid();
@@ -346,7 +463,9 @@ export class ConfigurationApplication {
     }
 }
 
-function publicOperation(value: Journal): ConfigurationApplicationOperation {
+function publicOperation(
+    value: ConfigurationApplicationJournal,
+): ConfigurationApplicationOperation {
     return {
         id: value.id,
         validationId: value.validationId,
@@ -354,6 +473,7 @@ function publicOperation(value: Journal): ConfigurationApplicationOperation {
         phase: value.phase,
         recoveryRequired: value.recoveryRequired,
         ...(value.rolledBack !== undefined ? { rolledBack: value.rolledBack } : {}),
+        ...(value.sourceState === "damaged" ? { sourceState: "damaged" as const } : {}),
         ...(value.configRevision !== undefined ? { configRevision: value.configRevision } : {}),
         ...(value.error !== undefined ? { error: value.error } : {}),
     };
@@ -374,47 +494,6 @@ function checkBase(value: unknown): void {
 function bytes(document: unknown): string {
     return canonicalConfiguration(parseConfigurationDocument(document));
 }
-function digest(content: string): string {
+function digest(content: string | Uint8Array): string {
     return createHash("sha256").update(content).digest("hex");
-}
-function privateDirectory(directory: string): void {
-    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-    if (!fs.lstatSync(directory).isDirectory() || fs.lstatSync(directory).isSymbolicLink())
-        throw invalid();
-    fs.chmodSync(directory, 0o700);
-}
-function readFile(file: string, max: number): string {
-    const stat = fs.lstatSync(file);
-    if (
-        !stat.isFile() ||
-        stat.isSymbolicLink() ||
-        stat.nlink !== 1 ||
-        stat.size > max ||
-        (process.platform !== "win32" && (stat.mode & 0o077) !== 0)
-    )
-        throw invalid();
-    return fs.readFileSync(file, "utf8");
-}
-function atomic(file: string, content: string): void {
-    const temporary = `${file}.${randomUUID()}.tmp`;
-    try {
-        const descriptor = fs.openSync(temporary, "wx", 0o600);
-        try {
-            fs.writeFileSync(descriptor, content);
-            fs.fsyncSync(descriptor);
-        } finally {
-            fs.closeSync(descriptor);
-        }
-        fs.renameSync(temporary, file);
-        if (process.platform !== "win32") {
-            const parent = fs.openSync(path.dirname(file), "r");
-            try {
-                fs.fsyncSync(parent);
-            } finally {
-                fs.closeSync(parent);
-            }
-        }
-    } finally {
-        fs.rmSync(temporary, { force: true });
-    }
 }

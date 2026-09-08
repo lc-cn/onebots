@@ -55,6 +55,12 @@ export interface ConfigurationTransactionPort {
     start(): Promise<{ status: string }>;
 }
 
+/** 恢复事务只读取生命周期事实；不能启动、停止或自行对账未知实例。 */
+export type ConfigurationRecoveryTransactionPort = Pick<
+    ConfigurationTransactionPort,
+    "activeGenerationId" | "hasLiveChildren" | "gatewayStatus"
+>;
+
 /**
  * Host must route ALL start/stop/restart/shutdown/activate writes through this facade.
  * Do not also expose its underlying GatewayController to client handlers or recovery timers.
@@ -162,6 +168,42 @@ export class GenerationActivationController {
             } finally {
                 open = false;
                 await Promise.allSettled([...pending]);
+            }
+        });
+    }
+
+    runConfigurationRecoveryTransaction<T>(
+        task: (port: ConfigurationRecoveryTransactionPort) => Promise<T>,
+    ): Promise<T> {
+        return this.serial(async () => {
+            this.assertInitialized();
+            if (this.state.recoveryRequired) throw new Error("版本切换需要对账，禁止恢复配置");
+            if (this.options.gateway.status().recoveryRequired)
+                throw new Error("网关实例需要对账，禁止恢复配置");
+            if (this.options.hasLiveChildren()) throw new Error("网关子进程仍存活，禁止恢复配置");
+            let open = true;
+            const check = () => {
+                if (!open) throw new Error("配置事务已结束");
+            };
+            const port: ConfigurationRecoveryTransactionPort = {
+                activeGenerationId: () => {
+                    check();
+                    return this.state.active?.id ?? null;
+                },
+                hasLiveChildren: () => {
+                    check();
+                    return this.options.hasLiveChildren();
+                },
+                gatewayStatus: () => {
+                    check();
+                    const { desired, recoveryRequired } = this.options.gateway.status();
+                    return { desired, recoveryRequired };
+                },
+            };
+            try {
+                return await this.configurationContext.run(true, () => task(port));
+            } finally {
+                open = false;
             }
         });
     }

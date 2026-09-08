@@ -5,6 +5,11 @@ import { writeCliOutput } from "../cli-output.js";
 import { parseConfigurationDocument } from "../configuration/configuration-document.js";
 
 export const CONFIGURATION_HELP = `onebots control config <命令> [--data-dir 工作区]
+  reconcile --request 操作ID --revision SHA256
+                                 本地对账中断修复，恢复原始坏文件，不启动网关
+  source                         检查配置源状态（不输出损坏原文）
+  repair --stdin                 管道JSON：base、strategy:"new-empty"；私有备份后创建空修复草稿
+  context --draft UUID           读取草稿及其可信Schema（支持修复草稿）
   snapshot                       读取脱敏快照
   create                         从当前快照基线创建草稿，不应用
   read --draft UUID               读取脱敏草稿
@@ -20,6 +25,10 @@ export const CONFIGURATION_HELP = `onebots control config <命令> [--data-dir �
 应用必须显式提供验证收据；重试沿用同一操作ID，不自动重新应用。`;
 type Client = Pick<
     ControlClient,
+    | "reconcileConfiguration"
+    | "configurationSource"
+    | "createConfigurationRepairDraft"
+    | "configurationDraftContext"
     | "configurationSnapshot"
     | "createConfigurationDraft"
     | "configurationDraft"
@@ -59,6 +68,10 @@ export async function runConfigurationCommand(
     }
     const [action, ...rest] = args;
     const allowed: Record<string, string[]> = {
+        reconcile: ["--request", "--revision"],
+        source: [],
+        repair: ["--stdin"],
+        context: ["--draft"],
         snapshot: [],
         create: [],
         read: ["--draft"],
@@ -96,7 +109,43 @@ export async function runConfigurationCommand(
         );
         const client = (dependencies.createClient ?? createLocalControlClient)(workspace);
         let result: unknown;
-        if (action === "snapshot") result = await client.configurationSnapshot();
+        if (action === "reconcile")
+            result = await client.reconcileConfiguration(
+                options.get("--request")!,
+                options.get("--revision")!,
+            );
+        else if (action === "source") result = await client.configurationSource();
+        else if (action === "context")
+            result = await client.configurationDraftContext(options.get("--draft")!);
+        else if (action === "repair") {
+            const body = await readJson(dependencies.stdin ?? process.stdin);
+            const base = body.base;
+            if (
+                Object.keys(body).length !== 2 ||
+                !Object.hasOwn(body, "base") ||
+                body.strategy !== "new-empty" ||
+                !base ||
+                typeof base !== "object" ||
+                Array.isArray(base) ||
+                Object.keys(base).length !== 2 ||
+                !Object.hasOwn(base, "generationId") ||
+                !Object.hasOwn(base, "configRevision")
+            )
+                invalid();
+            const expected = base as { generationId: unknown; configRevision: unknown };
+            if (
+                !(
+                    expected.generationId === null ||
+                    (typeof expected.generationId === "string" && UUID.test(expected.generationId))
+                ) ||
+                typeof expected.configRevision !== "string" ||
+                !HASH.test(expected.configRevision)
+            )
+                invalid();
+            result = await client.createConfigurationRepairDraft(
+                expected as { generationId: string | null; configRevision: string },
+            );
+        } else if (action === "snapshot") result = await client.configurationSnapshot();
         else if (action === "create") {
             const snapshot = await client.configurationSnapshot();
             result = await client.createConfigurationDraft(snapshot.base);

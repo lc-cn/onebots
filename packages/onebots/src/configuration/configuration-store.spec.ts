@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -90,5 +91,57 @@ describe("私有配置草稿", () => {
         });
         expect(() => canonicalConfiguration(document)).toThrow("配置文档或修改请求无效");
         expect(Object.hasOwn({}, "polluted")).toBe(false);
+    });
+});
+
+describe("修复草稿模式", () => {
+    it("普通草稿保留旧格式和摘要算法", () => {
+        const { root, store } = setup();
+        const draft = store.create(base, { x: 1 });
+        expect(draft.revision).toBe(
+            createHash("sha256")
+                .update(JSON.stringify([draft.id, base, canonicalConfiguration({ x: 1 })]))
+                .digest("hex"),
+        );
+        expect(Object.keys(draft).sort()).toEqual([
+            "base",
+            "document",
+            "id",
+            "revision",
+            "schemaVersion",
+        ]);
+        expect(new ConfigurationStore(root).read(draft.id)).toEqual(draft);
+    });
+    it("修复引用独立快照，编辑和重启均保留，篡改模式或备份不可读取", () => {
+        const { root, store } = setup();
+        const repair = { backupId: randomUUID(), originalRevision: base.configRevision };
+        const draft = store.createRepair(base, {}, repair);
+        repair.backupId = randomUUID();
+        expect(draft.repair).not.toEqual(repair);
+        const edited = store.replace(draft.id, draft.revision, { x: 1 });
+        expect(edited.mode).toBe("repair");
+        expect(new ConfigurationStore(root).read(draft.id).repair).toEqual(draft.repair);
+        for (const altered of [
+            { ...edited, repair },
+            { ...edited, mode: "normal" },
+            { ...edited, repair: undefined },
+            { ...edited, mode: undefined },
+        ]) {
+            fs.writeFileSync(path.join(root, `${draft.id}.json`), JSON.stringify(altered));
+            expect(() => store.read(draft.id)).toThrow("配置草稿不存在或已损坏");
+        }
+    });
+    it("拒绝路径备份、额外字段与不匹配的原始版本", () => {
+        const { store } = setup();
+        for (const repair of [
+            { backupId: "../../synthetic-secret", originalRevision: base.configRevision },
+            { backupId: randomUUID(), originalRevision: "b".repeat(64) },
+            {
+                backupId: randomUUID(),
+                originalRevision: base.configRevision,
+                path: "/private/secret",
+            },
+        ])
+            expect(() => store.createRepair(base, {}, repair)).toThrow("配置修复引用无效");
     });
 });

@@ -8,6 +8,8 @@ import {
 import { parseConfigurationDocument } from "./configuration-document.js";
 import {
     canonicalConfiguration,
+    parseConfigurationRepairReference,
+    type ConfigurationRepairReference,
     ConfigurationConflictError,
     type ConfigurationBase,
     type ConfigurationDraft,
@@ -41,6 +43,8 @@ export interface ConfigurationValidationResult {
     draftRevision: string;
 }
 interface Receipt {
+    mode?: "repair";
+    repair?: ConfigurationRepairReference;
     schemaVersion: 1;
     id: string;
     draftId: string;
@@ -107,6 +111,9 @@ export class ConfigurationValidation {
                 base: { ...draft.base },
                 runtimeFingerprint: context.fingerprint,
                 documentDigest: documentDigest(draft.document),
+                ...(draft.mode === "repair"
+                    ? { mode: "repair" as const, repair: { ...draft.repair! } }
+                    : {}),
             };
             this.write(receipt);
             return {
@@ -137,6 +144,7 @@ export class ConfigurationValidation {
             if (
                 draft.revision !== receipt.draftRevision ||
                 !sameBase(draft.base, receipt.base) ||
+                !sameMode(draft, receipt) ||
                 documentDigest(draft.document) !== receipt.documentDigest
             )
                 throw new ConfigurationConflictError();
@@ -150,6 +158,7 @@ export class ConfigurationValidation {
                 validationId: receiptId,
                 base: { ...receipt.base },
                 document: parseConfigurationDocument(draft.document),
+                ...(receipt.mode === "repair" ? { repair: { ...receipt.repair! } } : {}),
             });
         } catch (error) {
             if (error instanceof ConfigurationConflictError) throw error;
@@ -165,6 +174,7 @@ export class ConfigurationValidation {
         if (
             current.revision !== expected.revision ||
             !sameBase(current.base, expected.base) ||
+            !sameMode(current, expected) ||
             documentDigest(current.document) !== documentDigest(expected.document)
         )
             throw new ConfigurationConflictError();
@@ -209,7 +219,9 @@ export class ConfigurationValidation {
         const raw = parseConfigurationDocument(JSON.parse(fs.readFileSync(file, "utf8")));
         if (
             Object.keys(raw).sort().join(",") !==
-                "base,documentDigest,draftId,draftRevision,id,runtimeFingerprint,schemaVersion" ||
+                (raw.mode === "repair"
+                    ? "base,documentDigest,draftId,draftRevision,id,mode,repair,runtimeFingerprint,schemaVersion"
+                    : "base,documentDigest,draftId,draftRevision,id,runtimeFingerprint,schemaVersion") ||
             raw.schemaVersion !== 1 ||
             raw.id !== id ||
             typeof raw.draftId !== "string" ||
@@ -230,6 +242,8 @@ export class ConfigurationValidation {
             !HASH.test(base.configRevision)
         )
             throw failure();
+        if (raw.mode === "repair")
+            parseConfigurationRepairReference(raw.repair, base as unknown as ConfigurationBase);
         return raw as unknown as Receipt;
     }
     private write(receipt: Receipt): void {
@@ -262,4 +276,15 @@ function sameBase(a: ConfigurationBase, b: ConfigurationBase): boolean {
 }
 function documentDigest(document: Record<string, unknown>): string {
     return createHash("sha256").update(canonicalConfiguration(document)).digest("hex");
+}
+
+function sameMode(
+    a: Pick<Receipt, "mode" | "repair">,
+    b: Pick<Receipt, "mode" | "repair">,
+): boolean {
+    return (
+        a.mode === b.mode &&
+        a.repair?.backupId === b.repair?.backupId &&
+        a.repair?.originalRevision === b.repair?.originalRevision
+    );
 }

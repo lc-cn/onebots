@@ -41,7 +41,8 @@ export function acquireControlWorkspace(root: string): () => void {
     try {
         database = new DatabaseSync(lock);
         database.exec("PRAGMA busy_timeout = 0");
-        database.exec("CREATE TABLE IF NOT EXISTS workspace_lock (id INTEGER PRIMARY KEY)");
+        // 仅用一次写事务持锁，无需表。先建表再抢锁会产生两次独立写事务，
+        // 新数据库并发初始化时可能互相撞锁，导致所有竞争者均失败。
         database.exec("BEGIN IMMEDIATE");
     } catch (error) {
         database?.close();
@@ -66,14 +67,21 @@ export function acquireControlWorkspace(root: string): () => void {
     };
 }
 
-export function processExists(pid: number): boolean {
-    try {
-        process.kill(pid, 0);
-        return true;
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
-        throw error;
+/** 冷恢复只探测旧 leader 与 POSIX 进程组，绝不向历史 PID 发送终止信号。 */
+export function gatewayProcessExists(pid: number): boolean {
+    if (!Number.isSafeInteger(pid) || pid < 1 || pid > 0x7fffffff || process.platform === "win32")
+        throw new Error("无法确认历史网关进程组状态");
+    let exists = false;
+    for (const target of [pid, -pid]) {
+        try {
+            process.kill(target, 0);
+            exists = true;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ESRCH")
+                throw new Error("无法确认历史网关进程组状态");
+        }
     }
+    return exists;
 }
 
 /** 网关只接收配置快照，管理认证从不进入该文件。 */

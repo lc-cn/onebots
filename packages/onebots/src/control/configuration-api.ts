@@ -11,6 +11,9 @@ import {
 /** 此接口只接收已投影服务，不得把私有草稿库或原始配置文件直接作为 service。 */
 export interface ConfigurationApiService {
     snapshot(): Promise<unknown>;
+    sourceState(): unknown;
+    createRepair(base: ConfigurationBase): Promise<unknown>;
+    readContext(id: string): Promise<unknown>;
     create(base: ConfigurationBase): Promise<unknown>;
     read(id: string): Promise<unknown>;
     edit(input: {
@@ -46,6 +49,7 @@ export interface ConfigurationApiService {
         enabled: boolean;
     }): Promise<unknown>;
     apply(input: { id: string; receiptId: string }): Promise<unknown>;
+    reconcile(input: { id: string; expectedRevision: string }): Promise<unknown>;
     operation(id: string): unknown;
 }
 interface ConfigurationRequest {
@@ -54,6 +58,7 @@ interface ConfigurationRequest {
     body(): Promise<Record<string, unknown>>;
     service?: ConfigurationApiService;
     allowCredentials: boolean;
+    local?: boolean;
 }
 const ROOT = "/api/control/configuration";
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -88,6 +93,35 @@ export async function handleConfigurationRequest(
 async function handle(input: ConfigurationRequest): Promise<{ status: number; body: unknown }> {
     const { service, pathname, method } = input;
     if (!service) return { status: 503, body: { message: "配置服务不可用，请检查本地工作区" } };
+    if (pathname === `${ROOT}/reconcile` && method === "POST") {
+        if (input.local !== true)
+            return { status: 403, body: { message: "中断修复仅允许通过本地控制连接对账" } };
+        const body = await fields(input, ["id", "expectedRevision"]);
+        if (!matches(body.id, ID) || !matches(body.expectedRevision, HASH)) invalid();
+        return {
+            status: 200,
+            body: await service.reconcile({
+                id: body.id as string,
+                expectedRevision: body.expectedRevision as string,
+            }),
+        };
+    }
+    if (pathname === `${ROOT}/source` && method === "GET")
+        return { status: 200, body: await service.sourceState() };
+    if (pathname === `${ROOT}/repair-drafts` && method === "POST") {
+        const body = await fields(input, ["base", "strategy"]);
+        const base = objectFields(body.base, ["generationId", "configRevision"]);
+        if (
+            body.strategy !== "new-empty" ||
+            !(base.generationId === null || matches(base.generationId, UUID)) ||
+            !matches(base.configRevision, HASH)
+        )
+            invalid();
+        return {
+            status: 201,
+            body: await service.createRepair(base as unknown as ConfigurationBase),
+        };
+    }
     if (pathname === ROOT && method === "GET")
         return { status: 200, body: await service.snapshot() };
     if (pathname === `${ROOT}/drafts` && method === "POST") {
@@ -120,13 +154,15 @@ async function handle(input: ConfigurationRequest): Promise<{ status: number; bo
             : { status: 200, body: result };
     }
     const draft =
-        /^\/drafts\/([^/]+)(?:\/(edit|accounts|validate|remove-account|protocol|list))?$/.exec(
+        /^\/drafts\/([^/]+)(?:\/(edit|accounts|validate|remove-account|protocol|list|context))?$/.exec(
             suffix,
         );
     if (!isConfigurationPath(pathname) || !draft)
         return { status: 404, body: { message: "配置控制接口不存在" } };
     if (!UUID.test(draft[1])) invalid();
     const id = draft[1];
+    if (draft[2] === "context" && method === "GET")
+        return { status: 200, body: await service.readContext(id) };
     if (!draft[2] && method === "GET") return { status: 200, body: await service.read(id) };
     if (method !== "POST") return { status: 404, body: { message: "配置控制接口不存在" } };
     if (draft[2] === "list") {

@@ -7,7 +7,11 @@ import {
     type GatewayReadyMessage,
     type GatewayStartMessage,
 } from "../gateway/contracts.js";
-import type { GatewayDriver, GatewayInstance } from "./gateway-controller.js";
+import {
+    GatewayStartReapedError,
+    type GatewayDriver,
+    type GatewayInstance,
+} from "./gateway-controller.js";
 
 export interface GatewayPreparation {
     configPath: string;
@@ -43,13 +47,16 @@ export class NodeGatewayDriver implements GatewayDriver {
     constructor(private readonly options: NodeGatewayDriverOptions) {}
 
     hasLiveChildren(): boolean {
-        return this.starting || [...this.children.values()].some(child => !child.exited);
+        return (
+            this.starting ||
+            [...this.children.values()].some(child => !child.exited || groupExists(child.child.pid))
+        );
     }
 
     async start(): Promise<GatewayInstance> {
         if (this.hasLiveChildren()) throw new Error("已有受管网关实例，不能重复启动");
         for (const [id, child] of this.children) {
-            if (child.exited) this.children.delete(id);
+            if (child.exited && !groupExists(child.child.pid)) this.children.delete(id);
         }
         this.starting = true;
         let managed: ManagedChild | undefined;
@@ -66,6 +73,7 @@ export class NodeGatewayDriver implements GatewayDriver {
                 child = fork(prepared.entrypoint, [], {
                     cwd: prepared.runtimeRoot,
                     execArgv: [],
+                    detached: process.platform !== "win32",
                     env: gatewayEnvironment(),
                     stdio: ["ignore", log.fd, log.fd, "ipc"],
                 });
@@ -88,7 +96,12 @@ export class NodeGatewayDriver implements GatewayDriver {
             return { id, pid: child.pid, address: ready.address };
         } catch (error) {
             if (managed) await this.terminate(managed);
-            throw error;
+            // Windows 尚无受验收的进程树回收能力，不能把单个 child.close 升格为确认。
+            if (managed && process.platform === "win32")
+                throw new Error("当前平台无法确认网关进程树已回收");
+            throw new GatewayStartReapedError(
+                error instanceof Error ? error.message : "网关启动失败且已确认未留运行实例",
+            );
         } finally {
             this.starting = false;
         }
@@ -97,7 +110,10 @@ export class NodeGatewayDriver implements GatewayDriver {
     async stop(instance: GatewayInstance): Promise<void> {
         const managed = this.children.get(instance.id);
         if (!managed) throw new Error("未持有该网关实例，不能按旧 PID 停机");
-        if (managed.exited) return;
+        if (managed.exited) {
+            await this.terminate(managed);
+            return;
+        }
         managed.stopping = true;
         if (managed.child.connected) {
             managed.child.send(
@@ -113,9 +129,8 @@ export class NodeGatewayDriver implements GatewayDriver {
                 },
             );
         }
-        if (!(await waitForClose(managed, this.options.stopTimeoutMs ?? 10_000))) {
-            await this.terminate(managed);
-        }
+        await waitForClose(managed, this.options.stopTimeoutMs ?? 10_000);
+        await this.terminate(managed);
     }
 
     private track(child: ChildProcess, id: string, logPath: string): ManagedChild {
@@ -142,6 +157,7 @@ export class NodeGatewayDriver implements GatewayDriver {
                 ? undefined
                 : (processError ?? `网关进程退出 (code=${code}, signal=${signal ?? "none"})`);
             Promise.resolve()
+                .then(() => this.terminate(managed))
                 .then(() => this.options.onExit(id, error))
                 .catch(() => {
                     void appendFile(logPath, "[onebots] 网关退出观察器处理失败\n").catch(() => {
@@ -193,15 +209,38 @@ export class NodeGatewayDriver implements GatewayDriver {
     }
 
     private async terminate(managed: ManagedChild): Promise<void> {
-        if (managed.exited) return;
         managed.stopping = true;
-        managed.child.kill("SIGTERM");
-        if (!(await waitForClose(managed, 500))) {
-            managed.child.kill("SIGKILL");
-            if (!(await waitForClose(managed, 5_000))) {
-                throw new Error("网关终止后仍未确认退出，禁止启动新实例");
+        const signal = (value: NodeJS.Signals) => {
+            try {
+                if (process.platform !== "win32" && managed.child.pid)
+                    process.kill(-managed.child.pid, value);
+                else if (!managed.exited) managed.child.kill(value);
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== "ESRCH")
+                    throw new Error("网关进程组清理失败，禁止启动新实例");
             }
+        };
+        if (!managed.exited || groupExists(managed.child.pid)) signal("SIGTERM");
+        if (!(await waitForClose(managed, 500))) {
+            signal("SIGKILL");
+            if (!(await waitForClose(managed, 5_000)))
+                throw new Error("网关终止后仍未确认退出，禁止启动新实例");
         }
+        if (groupExists(managed.child.pid)) signal("SIGKILL");
+        for (let attempt = 0; groupExists(managed.child.pid); attempt++) {
+            if (attempt >= 100) throw new Error("网关进程组仍未确认退出，禁止启动新实例");
+            await new Promise(resolve => setTimeout(resolve, 20));
+        }
+    }
+}
+
+function groupExists(pid: number | undefined): boolean {
+    if (!pid || process.platform === "win32") return false;
+    try {
+        process.kill(-pid, 0);
+        return true;
+    } catch (error) {
+        return (error as NodeJS.ErrnoException).code !== "ESRCH";
     }
 }
 

@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GatewayController, type GatewayDriver } from "./gateway-controller.js";
+import {
+    GatewayController,
+    GatewayStartReapedError,
+    type GatewayDriver,
+} from "./gateway-controller.js";
 
 const folders: string[] = [];
 afterEach(async () => {
@@ -25,6 +29,28 @@ async function fixture(driver?: GatewayDriver) {
 }
 
 describe("GatewayController", () => {
+    it("只信任专门启动回收错误，普通错误即使伪造字段仍保持unknown门禁", async () => {
+        for (const trusted of [false, true]) {
+            const error = trusted
+                ? new GatewayStartReapedError("已回收")
+                : Object.assign(new Error("unknown"), {
+                      name: "GatewayStartReapedError",
+                      reaped: true,
+                  });
+            const { controller } = await fixture({
+                start: async () => {
+                    throw error;
+                },
+                stop: async () => {},
+            });
+            expect((await controller.start()).status).toBe("failed");
+            expect(controller.status()).toMatchObject({
+                desired: "running",
+                actual: "failed",
+                recoveryRequired: !trusted,
+            });
+        }
+    });
     it("suspends for an internal switch without changing desired state or closing the controller", async () => {
         const { controller } = await fixture();
         await controller.start();

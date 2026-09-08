@@ -337,3 +337,101 @@ describe("generation activation serialized lifecycle", () => {
         expect(restored.status().gateway.recoveryRequired).toBe(false);
     });
 });
+
+describe("configuration recovery serialized readonly port", () => {
+    it("only exempts configuration recovery and revokes every capability", async () => {
+        const { activation, state } = await fixture();
+        state.configurationRecovery = true;
+        const port = await activation.runConfigurationRecoveryTransaction(async port => {
+            expect(Object.keys(port).sort()).toEqual([
+                "activeGenerationId",
+                "gatewayStatus",
+                "hasLiveChildren",
+            ]);
+            expect(port.hasLiveChildren()).toBe(false);
+            expect(port.activeGenerationId()).toBeNull();
+            await expect(activation.start()).rejects.toThrow("事务端口");
+            await expect(
+                activation.runConfigurationRecoveryTransaction(async () => 1),
+            ).rejects.toThrow("事务端口");
+            await expect(activation.runConfigurationTransaction(async () => 1)).rejects.toThrow(
+                "事务端口",
+            );
+            return port;
+        });
+        for (const method of Object.values(port)) expect(() => method()).toThrow("配置事务已结束");
+        await expect(activation.start()).rejects.toThrow("配置事务需要对账");
+    });
+    it("keeps lifecycle mutations behind recovery until it completes", async () => {
+        const { activation, events } = await fixture();
+        let release!: () => void;
+        let entered!: () => void;
+        const barrier = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const ready = new Promise<void>(resolve => {
+            entered = resolve;
+        });
+        const recovery = activation.runConfigurationRecoveryTransaction(async () => {
+            entered();
+            await barrier;
+        });
+        await ready;
+        const start = activation.start();
+        await new Promise(resolve => setImmediate(resolve));
+        expect(events).toEqual([]);
+        release();
+        await recovery;
+        await start;
+        expect(events).toEqual(["start:bundled"]);
+    });
+    it("checks initialization and current owned children before entering", async () => {
+        const { activation, options } = await fixture();
+        await expect(
+            new GenerationActivationController(options).runConfigurationRecoveryTransaction(
+                async () => 1,
+            ),
+        ).rejects.toThrow("尚未初始化");
+        await activation.start();
+        await expect(activation.runConfigurationRecoveryTransaction(async () => 1)).rejects.toThrow(
+            "子进程仍存活",
+        );
+        await activation.stop();
+        expect(await activation.runConfigurationRecoveryTransaction(async () => "safe")).toBe(
+            "safe",
+        );
+    });
+    it("does not infer a cold gateway is gone from the new driver's empty child map", async () => {
+        const { activation, statePath, options, state } = await fixture();
+        await activation.start();
+        state.live = false;
+        const gateway = new GatewayController({
+            statePath: join(dirname(statePath), "gateway.json"),
+            driver: {
+                start: async () => {
+                    throw new Error("must not spawn");
+                },
+                stop: async () => {
+                    throw new Error("must not stop unknown instance");
+                },
+            },
+        });
+        const cold = new GenerationActivationController({ ...options, gateway });
+        await cold.initialize();
+        await expect(cold.runConfigurationRecoveryTransaction(async () => 1)).rejects.toThrow(
+            "网关实例需要对账",
+        );
+    });
+    it("does not bypass an interrupted generation activation", async () => {
+        const { activation, statePath, options } = await fixture();
+        await activation.activate("target");
+        const disk = JSON.parse(await readFile(statePath, "utf8"));
+        disk.operations.at(-1).status = "running";
+        await writeFile(statePath, JSON.stringify(disk));
+        const cold = new GenerationActivationController(options);
+        await cold.initialize();
+        await expect(cold.runConfigurationRecoveryTransaction(async () => 1)).rejects.toThrow(
+            "版本切换需要对账",
+        );
+    });
+});

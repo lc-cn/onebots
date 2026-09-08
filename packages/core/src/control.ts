@@ -44,6 +44,7 @@ export interface ControlConfigurationProjection {
     unknownPaths: string[][];
 }
 export interface ControlConfigurationDraft extends ControlConfigurationProjection {
+    mode?: "repair";
     id: string;
     revision: string;
     base: ControlConfigurationBase;
@@ -71,6 +72,7 @@ export interface ControlConfigurationOperation {
     phase: "accepted" | "stopping" | "writing" | "starting" | "restoring" | "completed" | "failed";
     recoveryRequired: boolean;
     rolledBack?: boolean;
+    sourceState?: "damaged";
     configRevision?: string;
     error?: string;
 }
@@ -121,6 +123,7 @@ export interface ControlGenerationActivation {
     finishedAt?: string;
     error?: string;
     rolledBack?: boolean;
+    sourceState?: "damaged";
 }
 
 export class ControlClient {
@@ -128,6 +131,39 @@ export class ControlClient {
 
     configurationSnapshot(): Promise<ControlConfigurationSnapshot> {
         return this.transport.request("GET", "/api/control/configuration");
+    }
+    reconcileConfiguration(
+        id: string,
+        expectedRevision: string,
+    ): Promise<ControlConfigurationOperation> {
+        return this.transport.request("POST", "/api/control/configuration/reconcile", {
+            id,
+            expectedRevision,
+        });
+    }
+    configurationSource(): Promise<{
+        state: "ready" | "damaged";
+        base: ControlConfigurationBase;
+        reason?: "INVALID_YAML";
+        repairAvailable?: boolean;
+    }> {
+        return this.transport.request("GET", "/api/control/configuration/source");
+    }
+    createConfigurationRepairDraft(
+        base: ControlConfigurationBase,
+    ): Promise<{ draft: ControlConfigurationDraft; schemas: Record<string, unknown> }> {
+        return this.transport.request("POST", "/api/control/configuration/repair-drafts", {
+            base,
+            strategy: "new-empty",
+        });
+    }
+    configurationDraftContext(
+        id: string,
+    ): Promise<{ draft: ControlConfigurationDraft; schemas: Record<string, unknown> }> {
+        return this.transport.request(
+            "GET",
+            `/api/control/configuration/drafts/${encodeURIComponent(id)}/context`,
+        );
     }
     createConfigurationDraft(base: ControlConfigurationBase): Promise<ControlConfigurationDraft> {
         return this.transport.request("POST", "/api/control/configuration/drafts", { base });

@@ -42,15 +42,87 @@ function fixture() {
 }
 
 describe("管理配置草稿应用服务", () => {
+    it("显式repair从空plugins创建，不读取损坏源；后续编辑保留修复引用", () => {
+        const { store, context } = fixture();
+        let revision = context.base.configRevision;
+        const service = new ConfigurationDrafts({
+            store,
+            current: () => {
+                throw new Error("damaged source");
+            },
+            repairCurrent: () => ({
+                base: { ...context.base, configRevision: revision },
+                schemas: context.schemas,
+            }),
+        });
+        expect(() => service.create(context.base)).toThrow();
+        expect(() => service.snapshot()).toThrow();
+        const repair = {
+            backupId: "11111111-1111-4111-8111-111111111111",
+            originalRevision: context.base.configRevision,
+        };
+        const created = service.createRepair(context.base, repair);
+        expect(created.mode).toBe("repair");
+        expect(created).not.toHaveProperty("repair");
+        expect(store.read(created.id).repair).toEqual(repair);
+        expect(created.document).toEqual({
+            plugins: { adapters: [], protocols: [], applications: [] },
+        });
+        expect(JSON.stringify(created)).not.toContain("private-token");
+        const account = service.addAccount(created.id, created.revision, "mock", "new");
+        const edited = service.edit({
+            id: account.id,
+            expectedRevision: account.revision,
+            changes: [],
+            secrets: [{ op: "set", path: ["mock.new", "token"], value: "repair-secret" }],
+        });
+        expect(service.read(edited.id).mode).toBe("repair");
+        expect(store.read(edited.id).repair).toEqual(repair);
+        expect(JSON.stringify(edited)).not.toContain("repair-secret");
+        revision = "b".repeat(64);
+        expect(() => service.read(edited.id)).toThrow(ConfigurationConflictError);
+        expect(() =>
+            service.edit({
+                id: edited.id,
+                expectedRevision: edited.revision,
+                changes: [],
+                secrets: [],
+            }),
+        ).toThrow(ConfigurationConflictError);
+    });
+    it("没有显式repair上下文不能创建修复草稿；普通草稿不能借repair旁路读取", () => {
+        const { store, context, service } = fixture();
+        expect(() =>
+            service.createRepair(context.base, {
+                backupId: "11111111-1111-4111-8111-111111111111",
+                originalRevision: context.base.configRevision,
+            }),
+        ).toThrow(ConfigurationConflictError);
+        const ordinary = service.create(context.base);
+        const damaged = new ConfigurationDrafts({
+            store,
+            current: () => {
+                throw new Error("damaged");
+            },
+            repairCurrent: () => ({ base: context.base, schemas: context.schemas }),
+        });
+        expect(() => damaged.read(ordinary.id)).toThrow("damaged");
+    });
     it("危险ui字段不能使新增列表先持久化再投影失败", () => {
         const { service, context, store } = fixture();
         for (const key of ["__proto__", "constructor", "prototype"]) {
-            context.schemas.adapters.mock.rows = { type: "array", ui: { fields: [{ key, type: "string" }] } };
+            context.schemas.adapters.mock.rows = {
+                type: "array",
+                ui: { fields: [{ key, type: "string" }] },
+            };
             const draft = service.create(context.base);
             const before = store.read(draft.id);
-            expect(() => service.editList(draft.id, draft.revision, {
-                path: ["mock.001.with.dot", "rows"], action: "append",
-            })).toThrow();
+            expect(() =>
+                service.editList(draft.id, draft.revision, {
+                    path: ["mock.001.with.dot", "rows"],
+                    action: "append",
+                }),
+            ).toThrow();
             expect(store.read(draft.id)).toEqual(before);
         }
     });

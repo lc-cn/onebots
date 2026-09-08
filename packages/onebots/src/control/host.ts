@@ -21,13 +21,14 @@ import {
 } from "./installation-service.js";
 import { handleInstallationRequest, isInstallationPath } from "./installation-api.js";
 import { ConfigurationApplication } from "../configuration/configuration-application.js";
+import { ConfigurationRecoveryStore } from "../configuration/configuration-recovery-store.js";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
 import {
     acquireControlWorkspace,
     controlDirectory,
     controlSocket,
     prepareGatewayWorkspace,
-    processExists,
+    gatewayProcessExists,
 } from "./workspace.js";
 import { proxyGatewayHttp, proxyGatewayUpgrade } from "./proxy.js";
 import { listen, readBody } from "./http-utils.js";
@@ -60,7 +61,6 @@ export async function startControlHost(options: ControlHostOptions) {
     let auth: ControlAuth | undefined;
     let authAvailable = true;
     let storageError = false;
-    let currentStartFailed = false;
     let lifecycle: GenerationActivationController;
     let generations: GenerationStore | undefined;
     let configurationApplication: ConfigurationApplication | undefined;
@@ -122,6 +122,9 @@ export async function startControlHost(options: ControlHostOptions) {
         configurationApplication = new ConfigurationApplication({
             directory: path.join(controlDirectory(workspace), "configuration-applications"),
             source: new ConfigurationFile(path.join(workspace, "config.yaml")),
+            recovery: new ConfigurationRecoveryStore(
+                path.join(controlDirectory(workspace), "configuration/recovery"),
+            ),
             lifecycle,
         });
         if (generations)
@@ -287,6 +290,7 @@ export async function startControlHost(options: ControlHostOptions) {
                         method: request.method,
                         body: () => readBody(request, 1_048_576),
                         service: configuration,
+                        local,
                         allowCredentials:
                             local ||
                             address === "127.0.0.1" ||
@@ -307,17 +311,16 @@ export async function startControlHost(options: ControlHostOptions) {
                     }
                     if (controller.status().recoveryRequired && !driver.hasLiveChildren()) {
                         const prior = controller.status().instance;
-                        if (prior?.pid && processExists(prior.pid))
+                        if (prior?.pid && gatewayProcessExists(prior.pid))
                             throw new Error("旧实例仍存在，拒绝重复启动");
-                        if (!prior && !currentStartFailed)
-                            throw new Error("前次启动结果未知，不能认定旧进程已退出");
+                        if (!prior) throw new Error("前次启动结果未知，不能认定旧进程已退出");
                         if (prior && !prior.pid)
                             throw new Error("旧实例身份无法核实，需检查本地运行状态");
                         await lifecycle.reconcileStopped(state => {
                             if (driver.hasLiveChildren()) return false;
                             return state.instance?.pid
-                                ? !processExists(state.instance.pid)
-                                : !state.instance && currentStartFailed;
+                                ? !gatewayProcessExists(state.instance.pid)
+                                : false;
                         });
                     }
                     const operation = await (action === "start"
@@ -325,7 +328,6 @@ export async function startControlHost(options: ControlHostOptions) {
                         : action === "stop"
                           ? lifecycle.stop()
                           : lifecycle.restart());
-                    currentStartFailed = operation.status === "failed" && !driver.hasLiveChildren();
                     json(response, 200, operation);
                     return;
                 }
@@ -449,14 +451,14 @@ export async function startControlHost(options: ControlHostOptions) {
                 state.instance?.pid
             ) {
                 const previousPid = state.instance.pid;
-                for (let attempt = 0; attempt < 30 && processExists(previousPid); attempt++)
+                for (let attempt = 0; attempt < 30 && gatewayProcessExists(previousPid); attempt++)
                     await new Promise(resolve => setTimeout(resolve, 100));
-                if (!processExists(previousPid)) {
+                if (!gatewayProcessExists(previousPid)) {
                     await lifecycle.reconcileStopped(
                         current =>
                             current.instance?.pid === previousPid &&
                             !driver.hasLiveChildren() &&
-                            !processExists(previousPid),
+                            !gatewayProcessExists(previousPid),
                     );
                     state = controller.status();
                 }
@@ -469,8 +471,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 !configurationApplication?.health().recoveryRequired &&
                 state.desired === "running"
             ) {
-                const operation = await lifecycle.start();
-                currentStartFailed = operation.status === "failed" && !driver.hasLiveChildren();
+                await lifecycle.start();
             }
         } catch {
             storageError = true;

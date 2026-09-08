@@ -1,6 +1,7 @@
 import {
     ConfigurationConflictError,
     type ConfigurationBase,
+    type ConfigurationRepairReference,
     type ConfigurationDraft,
     type ConfigurationStore,
 } from "./configuration-store.js";
@@ -26,12 +27,19 @@ export interface ConfigurationContext {
     schemas: ConfigurationSchemaBundle;
 }
 
+/** 修复编辑上下文没有可冒充为源配置的 document。 */
+export interface ConfigurationRepairContext {
+    base: ConfigurationBase;
+    schemas: ConfigurationSchemaBundle;
+}
+
 /** 草稿应用服务只返回脱敏投影；实际应用由唯一生命周期队列另行执行。 */
 export class ConfigurationDrafts {
     constructor(
         private readonly options: {
             store: ConfigurationStore;
             current(): ConfigurationContext;
+            repairCurrent?(expected: ConfigurationBase): ConfigurationRepairContext;
         },
     ) {}
 
@@ -51,9 +59,20 @@ export class ConfigurationDrafts {
         );
     }
 
+    createRepair(expected: ConfigurationBase, repair: ConfigurationRepairReference) {
+        const context = this.repairContext(expected);
+        const document: ConfigurationDocument = {
+            plugins: { adapters: [], protocols: [], applications: [] },
+        };
+        return this.view(
+            this.options.store.createRepair(context.base, document, repair),
+            context.schemas,
+        );
+    }
+
     read(id: string) {
         const draft = this.options.store.read(id);
-        return this.view(draft, this.context(draft.base).schemas);
+        return this.view(draft, this.draftContext(draft).schemas);
     }
 
     edit(request: {
@@ -63,7 +82,7 @@ export class ConfigurationDrafts {
         secrets: SecretChange[];
     }) {
         const draft = this.options.store.read(request.id);
-        const context = this.context(draft.base);
+        const context = this.draftContext(draft);
         if (draft.revision !== request.expectedRevision) throw new ConfigurationConflictError();
         const clean = parseConfigurationDocument({
             changes: request.changes,
@@ -94,7 +113,7 @@ export class ConfigurationDrafts {
 
     editList(id: string, expectedRevision: string, change: ConfigurationListChange) {
         const draft = this.options.store.read(id);
-        const context = this.context(draft.base);
+        const context = this.draftContext(draft);
         if (draft.revision !== expectedRevision) throw new ConfigurationConflictError();
         const document = editConfigurationList(
             context.schemas,
@@ -112,7 +131,7 @@ export class ConfigurationDrafts {
     /** 用户显式添加账号，仅建立空结构，不填凭据或协议，不操作运行配置。 */
     addAccount(id: string, expectedRevision: string, platform: string, accountId: string) {
         const draft = this.options.store.read(id);
-        const context = this.context(draft.base);
+        const context = this.draftContext(draft);
         if (draft.revision !== expectedRevision) throw new ConfigurationConflictError();
         if (
             typeof platform !== "string" ||
@@ -136,7 +155,7 @@ export class ConfigurationDrafts {
 
     removeAccount(id: string, expectedRevision: string, accountKey: string) {
         const draft = this.options.store.read(id);
-        const context = this.context(draft.base);
+        const context = this.draftContext(draft);
         if (draft.revision !== expectedRevision) throw new ConfigurationConflictError();
         const document = parseConfigurationDocument(draft.document);
         account(document, context.schemas, accountKey);
@@ -157,7 +176,7 @@ export class ConfigurationDrafts {
         },
     ) {
         const draft = this.options.store.read(id);
-        const context = this.context(draft.base);
+        const context = this.draftContext(draft);
         if (draft.revision !== request.expectedRevision) throw new ConfigurationConflictError();
         if (
             typeof request.protocol !== "string" ||
@@ -181,6 +200,22 @@ export class ConfigurationDrafts {
         );
     }
 
+    private draftContext(draft: ConfigurationDraft): ConfigurationRepairContext {
+        return draft.mode === "repair" ? this.repairContext(draft.base) : this.context(draft.base);
+    }
+
+    private repairContext(expected: ConfigurationBase): ConfigurationRepairContext {
+        if (!this.options.repairCurrent) throw new ConfigurationConflictError();
+        const current = this.options.repairCurrent(expected);
+        if (
+            !expected ||
+            current.base.generationId !== expected.generationId ||
+            current.base.configRevision !== expected.configRevision
+        )
+            throw new ConfigurationConflictError();
+        return current;
+    }
+
     private context(expected: ConfigurationBase): ConfigurationContext {
         const current = this.options.current();
         if (
@@ -197,6 +232,7 @@ export class ConfigurationDrafts {
             id: draft.id,
             revision: draft.revision,
             base: structuredClone(draft.base),
+            ...(draft.mode === "repair" ? { mode: "repair" as const } : {}),
             ...this.project(draft.document, schemas),
         };
     }

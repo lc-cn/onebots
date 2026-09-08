@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -235,5 +236,112 @@ describe("configuration validation receipts", () => {
         await expect(test.validation.validate(test.draft.id, test.draft.revision)).rejects.toThrow(
             /^配置校验回执不可用，请重新校验草稿$/,
         );
+    });
+});
+
+describe("修复回执授权", () => {
+    it("普通旧回执即使补齐修复字段也不能授权普通草稿修复", async () => {
+        const test = fixture();
+        const result = await test.validation.validate(test.draft.id, test.draft.revision);
+        const file = path.join(test.options.directory, `${result.receiptId}.json`);
+        const receipt = JSON.parse(fs.readFileSync(file, "utf8"));
+        expect(receipt).not.toHaveProperty("mode");
+        fs.writeFileSync(
+            file,
+            JSON.stringify({
+                ...receipt,
+                mode: "repair",
+                repair: {
+                    backupId: randomUUID(),
+                    originalRevision: test.base.configRevision,
+                },
+            }),
+        );
+        const apply = vi.spyOn(test.application, "apply");
+        await expect(test.validation.apply("old-receipt", result.receiptId!)).rejects.toThrow(
+            "配置已发生变化",
+        );
+        expect(apply).not.toHaveBeenCalled();
+    });
+
+    it("绑定修复引用且仅从校验回执传给应用，不返回秘密或备份路径", async () => {
+        const test = fixture();
+        const repair = { backupId: randomUUID(), originalRevision: test.base.configRevision };
+        const draft = test.store.createRepair(test.base, { token: "synthetic-secret" }, repair);
+        const result = await test.validation.validate(draft.id, draft.revision);
+        expect(Object.keys(result).sort()).toEqual([
+            "draftRevision",
+            "issues",
+            "receiptId",
+            "valid",
+        ]);
+        const content = fs.readFileSync(
+            path.join(test.options.directory, `${result.receiptId}.json`),
+            "utf8",
+        );
+        expect(content).not.toContain("synthetic-secret");
+        expect(JSON.parse(content)).toMatchObject({ mode: "repair", repair });
+        const apply = vi
+            .spyOn(test.application, "apply")
+            .mockRejectedValue(new Error("synthetic-secret"));
+        await expect(test.validation.apply("repair-op", result.receiptId!)).rejects.toThrow(
+            "配置校验回执不可用",
+        );
+        expect(apply).toHaveBeenCalledWith(
+            expect.objectContaining({ repair, validationId: result.receiptId }),
+        );
+    });
+    it("旧普通回执不能升级为修复授权，修复回执不可降级或更换备份", async () => {
+        const test = fixture();
+        const draft = test.store.createRepair(
+            test.base,
+            {},
+            { backupId: randomUUID(), originalRevision: test.base.configRevision },
+        );
+        const result = await test.validation.validate(draft.id, draft.revision);
+        const file = path.join(test.options.directory, `${result.receiptId}.json`);
+        const receipt = JSON.parse(fs.readFileSync(file, "utf8"));
+        const normal = { ...receipt };
+        delete normal.mode;
+        delete normal.repair;
+        const apply = vi.spyOn(test.application, "apply");
+        for (const altered of [
+            normal,
+            { ...receipt, repair: { ...receipt.repair, backupId: randomUUID() } },
+        ]) {
+            fs.writeFileSync(file, JSON.stringify(altered));
+            await expect(test.validation.apply("repair-op", result.receiptId!)).rejects.toThrow(
+                "配置已发生变化",
+            );
+        }
+        for (const altered of [
+            { ...receipt, mode: "normal" },
+            { ...receipt, repair: undefined },
+        ]) {
+            fs.writeFileSync(file, JSON.stringify(altered));
+            await expect(test.validation.apply("repair-op", result.receiptId!)).rejects.toThrow(
+                "配置校验回执不可用",
+            );
+        }
+        expect(apply).not.toHaveBeenCalled();
+    });
+    it("校验期间修复引用变更即使伪造相同revision也拒绝发回执", async () => {
+        const test = fixture();
+        const draft = test.store.createRepair(
+            test.base,
+            {},
+            { backupId: randomUUID(), originalRevision: test.base.configRevision },
+        );
+        test.verify.mockImplementation(async () => {
+            vi.spyOn(test.store, "read").mockReturnValue({
+                ...draft,
+                repair: { ...draft.repair!, backupId: randomUUID() },
+            });
+            return { valid: true, issues: [] };
+        });
+        await expect(test.validation.validate(draft.id, draft.revision)).rejects.toThrow(
+            "配置已发生变化",
+        );
+        expect(fs.readdirSync(test.options.directory)).toEqual([]);
     });
 });

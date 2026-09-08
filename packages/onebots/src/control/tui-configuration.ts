@@ -55,13 +55,29 @@ export async function runControlConfiguration(
             await trackControlConfiguration(client, prompt, id);
         return;
     }
-    const snapshot = await client.configurationSnapshot();
-    const schemas = snapshot.schemas;
+    let schemas: Record<string, unknown>;
     let draft: ControlConfigurationDraft;
     if (mode === "resume") {
         const [id] = await prompt.ask({ title: "输入草稿 ID" });
-        draft = await client.configurationDraft(id);
-    } else draft = await client.createConfigurationDraft(snapshot.base);
+        ({ draft, schemas } = await client.configurationDraftContext(id));
+    } else {
+        const source = await client.configurationSource();
+        if (source.state === "damaged") {
+            if (
+                !(await confirmControlAction(
+                    prompt,
+                    "原配置损坏：确认创建修复草稿？",
+                    "管理服务将先保存原始配置的私有备份，再建立空配置草稿；不会猜测旧账号或协议。只有验证并确认应用后才替换原文件。",
+                ))
+            )
+                return;
+            ({ draft, schemas } = await client.createConfigurationRepairDraft(source.base));
+        } else if (source.state === "ready") {
+            const snapshot = await client.configurationSnapshot();
+            schemas = snapshot.schemas;
+            draft = await client.createConfigurationDraft(snapshot.base);
+        } else throw new Error("配置源状态不可确认");
+    }
     prompt.report(`草稿 ID：${draft.id}。修改仅保存到草稿，验证并确认应用后才影响网关。`);
     while (true) {
         const [action] = await prompt.ask({
@@ -81,7 +97,7 @@ export async function runControlConfiguration(
         if (action === "back") return;
         try {
             if (action === "reload") {
-                draft = await client.configurationDraft(draft.id);
+                ({ draft, schemas } = await client.configurationDraftContext(draft.id));
                 continue;
             }
             if (action === "base")

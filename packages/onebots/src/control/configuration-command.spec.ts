@@ -25,6 +25,29 @@ function fixture() {
     return { calls, request, output, run };
 }
 describe("配置 CLI", () => {
+    it("source/context只读取，repair要求stdin显式new-empty策略和基线", async () => {
+        const { run, calls } = fixture();
+        await run(["source"]);
+        await run(["context", "--draft", uuid]);
+        const base = { generationId: null, configRevision: hash };
+        await run(["repair", "--stdin"], JSON.stringify({ base, strategy: "new-empty" }));
+        expect(calls.map(call => call.route)).toEqual([
+            "/api/control/configuration/source",
+            `/api/control/configuration/drafts/${uuid}/context`,
+            "/api/control/configuration/repair-drafts",
+        ]);
+        expect(calls[2].body).toEqual({ base, strategy: "new-empty" });
+        for (const value of [
+            { base },
+            { base, strategy: "guess-old" },
+            { base, strategy: "new-empty", raw: "private-yaml" },
+        ])
+            await expect(run(["repair", "--stdin"], JSON.stringify(value))).rejects.toThrow();
+        await expect(
+            run(["repair", "--stdin"], JSON.stringify({ base, strategy: "new-empty" }), true),
+        ).rejects.toThrow();
+        expect(calls).toHaveLength(3);
+    });
     it("账号删除和协议启停原样派发，不猜协议名或补默认", async () => {
         const { run, calls, output } = fixture();
         const account = { expectedRevision: hash, accountKey: "qq.account.with.dots" };
