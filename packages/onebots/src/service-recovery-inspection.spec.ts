@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     inspectServiceRecovery,
     inspectServiceMigrationRecovery,
+    inspectServiceRecoveryDetails,
 } from "./service-recovery-inspection.js";
 import { FileManagerServiceJournal } from "./manager-service-journal.js";
 const roots: string[] = [];
@@ -47,6 +48,62 @@ function noWrites() {
     return () => spies.forEach(spy => expect(spy).not.toHaveBeenCalled());
 }
 describe("系统操作恢复状态纯只读检查", () => {
+    it("列出待核实操作 ID 和阶段，不暴露工作区、宿主或快照", () => {
+        const root = fixture();
+        const f = prepare(root);
+        const before = fs.readFileSync(f.file);
+        const verifyNoWrites = noWrites();
+        expect(inspectServiceRecoveryDetails(root)).toEqual({
+            serviceRecoveryRequired: true,
+            readable: true,
+            truncated: false,
+            operations: [
+                {
+                    kind: "manager",
+                    id: "test",
+                    action: "start",
+                    phase: "prepared",
+                    status: "running",
+                },
+            ],
+        });
+        expect(JSON.stringify(inspectServiceRecoveryDetails(root))).not.toContain(root);
+        expect(fs.readFileSync(f.file)).toEqual(before);
+        verifyNoWrites();
+    });
+    it("任意记录损坏时不展示先前读到的局部列表", () => {
+        const root = fixture();
+        prepare(root);
+        fs.writeFileSync(path.join(root, "manager-operations/zzz.json"), '{"secret":', {
+            mode: 0o600,
+        });
+        expect(inspectServiceRecoveryDetails(root)).toEqual({
+            serviceRecoveryRequired: true,
+            readable: false,
+            truncated: false,
+            operations: [],
+        });
+    });
+    it("截断仅影响展示，不能把更多未完成操作当作不存在", () => {
+        const root = fixture();
+        const f = prepare(root);
+        const raw = JSON.parse(fs.readFileSync(f.file, "utf8"));
+        for (let index = 0; index < 100; index++) {
+            const id = `more-${index}`;
+            fs.writeFileSync(
+                path.join(root, `manager-operations/${id}.json`),
+                JSON.stringify({ ...raw, id }),
+                { mode: 0o600 },
+            );
+        }
+        const result = inspectServiceRecoveryDetails(root);
+        expect(result).toMatchObject({
+            serviceRecoveryRequired: true,
+            readable: true,
+            truncated: true,
+        });
+        expect(result.operations).toHaveLength(100);
+    });
     it("精确普通操作对账可单独检查迁移，但不能忽略损坏迁移痕迹", () => {
         const root = fixture();
         prepare(root);

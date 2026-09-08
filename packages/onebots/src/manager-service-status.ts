@@ -7,7 +7,10 @@ import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import { inspectMigrationManager } from "./service-migration-manager.js";
-import { inspectServiceRecovery } from "./service-recovery-inspection.js";
+import {
+    inspectServiceRecoveryDetails,
+    type ServiceRecoveryDetails,
+} from "./service-recovery-inspection.js";
 import type { ServiceScope } from "./service-definition.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
@@ -17,6 +20,7 @@ export interface ManagerServiceStatus {
     scope: ServiceScope;
     installation: "missing" | "legacy" | "invalid" | "control";
     serviceRecoveryRequired: boolean;
+    recovery: ServiceRecoveryDetails;
     manager: {
         state: ServicePlatformState["state"] | "unknown";
         enabled: boolean | null;
@@ -54,9 +58,8 @@ export async function inspectManagerServiceStatus(
 ): Promise<ManagerServiceStatus> {
     const result = await inspectManagerServiceStatusSnapshot(scope, host, dependencies);
     try {
-        result.serviceRecoveryRequired ||= inspectServiceRecovery(
-            getServiceFiles(scope, host).stateDir,
-        ).serviceRecoveryRequired;
+        result.recovery = inspectServiceRecoveryDetails(getServiceFiles(scope, host).stateDir);
+        result.serviceRecoveryRequired ||= result.recovery.serviceRecoveryRequired;
     } catch {
         result.serviceRecoveryRequired = true;
     }
@@ -72,6 +75,12 @@ async function inspectManagerServiceStatusSnapshot(
         scope,
         installation: "invalid",
         serviceRecoveryRequired: false,
+        recovery: {
+            serviceRecoveryRequired: true,
+            readable: false,
+            truncated: false,
+            operations: [],
+        },
         manager: { state: "unknown", enabled: null, loaded: null, pid: null, ipc: "not-queried" },
         gateway: {
             actual: "unknown",

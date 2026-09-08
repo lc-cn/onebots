@@ -38,11 +38,33 @@ export async function managerServiceStatusCommand(
             : 0;
     if (options.json) return { output: JSON.stringify(status, null, 2), exitCode };
     const recoveryMessage = "系统服务操作或迁移结果尚待核实，请在本机对账，勿重复启停或安装。";
+    const recoveryLines: string[] = [];
+    if (!status.recovery.readable)
+        recoveryLines.push("操作记录无法完整读取，未展示不可信的操作列表。");
+    else {
+        for (const operation of status.recovery.operations)
+            recoveryLines.push(
+                `待核实操作 ${operation.id}：${operation.action ?? "迁移"} / ${operation.status}（${operation.phase}）`,
+            );
+        if (status.recovery.truncated)
+            recoveryLines.push("仅显示前 100 条；存在更多待核实记录，不能单独解除阻断。");
+        const operation = status.recovery.operations[0];
+        if (
+            !status.recovery.truncated &&
+            status.recovery.operations.length === 1 &&
+            operation.kind === "manager" &&
+            ["stop", "uninstall"].includes(operation.action ?? "")
+        )
+            recoveryLines.push(
+                `核验目标是否已达到：onebots recover --operation ${operation.id}${options.system ? " --system" : ""}（不会重放系统动作）。`,
+            );
+    }
     if (status.installation !== "control")
         return {
             output:
                 diagnostics[status.diagnostic!] +
-                (status.serviceRecoveryRequired ? "\n" + recoveryMessage : ""),
+                (status.serviceRecoveryRequired ? "\n" + recoveryMessage : "") +
+                (recoveryLines.length ? "\n" + recoveryLines.join("\n") : ""),
             exitCode,
         };
     const enabled =
@@ -55,6 +77,7 @@ export async function managerServiceStatusCommand(
         lines.push("网关配置无效，管理服务仍在运行，可通过控制台修复。");
     if (status.gateway.recoveryRequired) lines.push("网关前次操作结果尚待核实。");
     if (status.serviceRecoveryRequired) lines.push(recoveryMessage);
+    lines.push(...recoveryLines);
     if (status.diagnostic) lines.push(diagnostics[status.diagnostic]);
     return { output: lines.join("\n"), exitCode };
 }

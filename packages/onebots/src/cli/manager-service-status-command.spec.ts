@@ -12,6 +12,12 @@ function status(): ManagerServiceStatus {
         scope: "user",
         installation: "control",
         serviceRecoveryRequired: false,
+        recovery: {
+            serviceRecoveryRequired: false,
+            readable: true,
+            truncated: false,
+            operations: [],
+        },
         manager: { state: "running", enabled: true, loaded: true, pid: 42, ipc: "available" },
         gateway: {
             actual: "failed",
@@ -23,6 +29,60 @@ function status(): ManagerServiceStatus {
     };
 }
 describe("manager status CLI", () => {
+    it("元数据已删除时仍显示原卸载操作，并给出匹配范围的对账命令", async () => {
+        const value = status();
+        value.installation = "missing";
+        value.diagnostic = "not-installed";
+        value.serviceRecoveryRequired = true;
+        value.recovery = {
+            serviceRecoveryRequired: true,
+            readable: true,
+            truncated: false,
+            operations: [
+                {
+                    kind: "manager",
+                    id: "original-operation",
+                    action: "uninstall",
+                    status: "interrupted",
+                    phase: "verifying",
+                },
+            ],
+        };
+        vi.mocked(inspectManagerServiceStatus).mockResolvedValue(value);
+        const result = await managerServiceStatusCommand({ system: true });
+        expect(result.output).toContain("待核实操作 original-operation");
+        expect(result.output).toContain("onebots recover --operation original-operation --system");
+        expect(result.exitCode).toBe(1);
+    });
+    it("多个或不可完整读取的操作不推荐单项对账", async () => {
+        const value = status();
+        value.serviceRecoveryRequired = true;
+        value.recovery = {
+            serviceRecoveryRequired: true,
+            readable: true,
+            truncated: false,
+            operations: ["first", "second"].map(id => ({
+                kind: "manager",
+                id,
+                action: "stop",
+                status: "interrupted",
+                phase: "stopping",
+            })),
+        };
+        vi.mocked(inspectManagerServiceStatus).mockResolvedValue(value);
+        expect((await managerServiceStatusCommand({ system: false })).output).not.toContain(
+            "onebots recover",
+        );
+        value.recovery = {
+            serviceRecoveryRequired: true,
+            readable: false,
+            truncated: false,
+            operations: [],
+        };
+        const result = await managerServiceStatusCommand({ system: false });
+        expect(result.output).toContain("无法完整读取");
+        expect(result.output).not.toContain("onebots recover");
+    });
     it("系统操作待对账独立于正常网关，文本及JSON均非零退出", async () => {
         const value = {
             ...status(),

@@ -96,12 +96,38 @@ describe("manager service readonly status", () => {
             chmod = vi.spyOn(fs, "chmodSync");
         const result = await inspectManagerServiceStatus("user", f.host, f.dependencies);
         expect(result.serviceRecoveryRequired).toBe(true);
+        expect(result.recovery.operations).toEqual([
+            {
+                kind: "manager",
+                id: "unfinished",
+                action: "start",
+                phase: "prepared",
+                status: "running",
+            },
+        ]);
+        expect(JSON.stringify(result.recovery)).not.toContain(f.spec.workspace);
         expect(result.manager.ipc).toBe("available");
         expect(result.gateway.recoveryRequired).toBe(false);
         expect(fs.readFileSync(file)).toEqual(before);
         expect(write).not.toHaveBeenCalled();
         expect(mkdir).not.toHaveBeenCalled();
         expect(chmod).not.toHaveBeenCalled();
+    });
+    it("没有元数据也保留可见操作 ID，不初始化工作区或猜测 OS 状态", async () => {
+        const f = fixture();
+        const journal = new FileManagerServiceJournal(
+            path.join(f.files.stateDir, "manager-operations"),
+        );
+        journal.prepare({ id: "lost-output", action: "stop", desiredEnabled: true, spec: f.spec });
+        fs.unlinkSync(f.files.metadata);
+        const write = vi.spyOn(fs, "writeFileSync");
+        const result = await inspectManagerServiceStatus("user", f.host, f.dependencies);
+        expect(result.installation).toBe("missing");
+        expect(result.recovery.operations[0].id).toBe("lost-output");
+        expect(result.serviceRecoveryRequired).toBe(true);
+        expect(f.inspect).not.toHaveBeenCalled();
+        expect(f.ipc).not.toHaveBeenCalled();
+        expect(write).not.toHaveBeenCalled();
     });
     it("损坏系统记录与IPC迁移门禁分别进入独立恢复摘要", async () => {
         const f = fixture();

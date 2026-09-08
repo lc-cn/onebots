@@ -5,6 +5,19 @@ import { parseManagerServiceRecord } from "./manager-service-journal.js";
 import { parseServiceMigrationRecord } from "./service-migration-journal.js";
 
 const ID = "[A-Za-z0-9_-]{1,128}";
+export interface ServiceRecoveryOperation {
+    kind: "manager" | "migration";
+    id: string;
+    action: string | null;
+    phase: string;
+    status: string;
+}
+export interface ServiceRecoveryDetails {
+    serviceRecoveryRequired: boolean;
+    readable: boolean;
+    truncated: boolean;
+    operations: ServiceRecoveryOperation[];
+}
 function fail(): never {
     throw new Error("系统操作恢复状态无法读取");
 }
@@ -60,7 +73,11 @@ function read(file: string, maximum: number): unknown {
         fail();
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw.bytes));
 }
-function inspect(directory: string, migration: boolean): boolean {
+function inspect(
+    directory: string,
+    migration: boolean,
+    operations?: ServiceRecoveryOperation[],
+): boolean {
     const before = entries(directory);
     if (!before) return false;
     let pending = false;
@@ -82,20 +99,38 @@ function inspect(directory: string, migration: boolean): boolean {
             const record = parseServiceMigrationRecord(raw);
             if (record.id !== match[1]) fail();
             referenced.add(record.backupDigest + ".backup.json");
-            pending ||=
+            const unfinished =
                 record.recoveryRequired ||
                 record.phase !== "completed" ||
                 !(
                     record.status === "succeeded" ||
                     (record.status === "failed" && record.rolledBack)
                 );
+            pending ||= unfinished;
+            if (unfinished)
+                operations?.push({
+                    kind: "migration",
+                    id: record.id,
+                    action: null,
+                    phase: record.phase,
+                    status: record.status,
+                });
         } else {
             const record = parseManagerServiceRecord(raw);
             if (record.id !== match[1]) fail();
-            pending ||=
+            const unfinished =
                 record.recoveryRequired ||
                 record.phase !== "completed" ||
                 !["succeeded", "failed"].includes(record.status);
+            pending ||= unfinished;
+            if (unfinished)
+                operations?.push({
+                    kind: "manager",
+                    id: record.id,
+                    action: record.action,
+                    phase: record.phase,
+                    status: record.status,
+                });
         }
     }
     if (
@@ -127,13 +162,26 @@ export function inspectServiceMigrationRecovery(stateDirectory: string): boolean
 export function inspectServiceRecovery(stateDirectory: string): {
     serviceRecoveryRequired: boolean;
 } {
+    return {
+        serviceRecoveryRequired:
+            inspectServiceRecoveryDetails(stateDirectory).serviceRecoveryRequired,
+    };
+}
+/** 只投影操作标识与阶段；损坏或变化时丢弃整份列表，不泄漏 spec、备份和文件路径。 */
+export function inspectServiceRecoveryDetails(stateDirectory: string): ServiceRecoveryDetails {
     try {
         if (!path.isAbsolute(stateDirectory) || /[\u0000-\u001f\u007f]/.test(stateDirectory))
             fail();
-        const manager = inspect(path.join(stateDirectory, "manager-operations"), false);
-        const migration = inspect(path.join(stateDirectory, "migrations"), true);
-        return { serviceRecoveryRequired: manager || migration };
+        const operations: ServiceRecoveryOperation[] = [];
+        const manager = inspect(path.join(stateDirectory, "manager-operations"), false, operations);
+        const migration = inspect(path.join(stateDirectory, "migrations"), true, operations);
+        return {
+            serviceRecoveryRequired: manager || migration,
+            readable: true,
+            truncated: operations.length > 100,
+            operations: operations.slice(0, 100),
+        };
     } catch {
-        return { serviceRecoveryRequired: true };
+        return { serviceRecoveryRequired: true, readable: false, truncated: false, operations: [] };
     }
 }
