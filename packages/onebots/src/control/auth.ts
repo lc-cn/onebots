@@ -16,6 +16,8 @@ export interface ControlAuthOptions {
 interface AuthState {
     version: 1;
     paired: boolean;
+    deploymentBootstrap: { hash: string; expiresAt: number } | null;
+    deploymentBootstrapHistory: string[];
     bootstrap: { hash: string; expiresAt: number } | null;
     recovery: { hash: string; expiresAt: number } | null;
     issuance: { startedAt: number; count: number };
@@ -27,6 +29,7 @@ interface AuthState {
 export class ControlAuth {
     private readonly statePath: string;
     private readonly now: () => number;
+    private writeFailed = false;
 
     constructor(options: ControlAuthOptions) {
         this.statePath = path.resolve(options.statePath);
@@ -39,6 +42,34 @@ export class ControlAuth {
         const state = this.read();
         if (state.paired) throw new Error(FAILURE);
         return this.issue(state, "bootstrap");
+    }
+
+    /** 仅受信部署入口；一次性消费标记永久保留，不能替代本地恢复码。 */
+    installDeploymentBootstrap(code: string): void {
+        if (
+            typeof code !== "string" ||
+            !/^[A-Za-z0-9_-]{43}$/.test(code) ||
+            Buffer.from(code, "base64url").length !== 32 ||
+            Buffer.from(code, "base64url").toString("base64url") !== code
+        )
+            throw new Error(FAILURE);
+        const state = this.read();
+        const hash = digest(code);
+        if (state.paired || state.deploymentBootstrapHistory.includes(hash)) return;
+        if (state.deploymentBootstrapHistory.length >= 16)
+            throw new Error("部署配对码轮换次数已达上限，请通过本机控制入口处理");
+        const replace =
+            state.bootstrap === null ||
+            state.deploymentBootstrapHistory.includes(state.bootstrap.hash);
+        // 已有本地配对码保持不变；环境注入不是隐式替换入口。
+        const now = this.now();
+        const challenge = { hash, expiresAt: now + BOOTSTRAP_TTL };
+        state.deploymentBootstrapHistory.push(hash);
+        state.deploymentBootstrap = challenge;
+        this.writeDeployment(state); // 先持久消费，未知结果不得在重启后重新发码。
+        if (!replace) return;
+        state.bootstrap = challenge;
+        this.writeDeployment(state);
     }
 
     /** 仅本地控制 socket 可调用；发码不撤销现有会话。 */
@@ -95,6 +126,7 @@ export class ControlAuth {
     }
 
     private read(): AuthState {
+        if (this.writeFailed) throw new Error(FAILURE);
         try {
             const stat = fs.lstatSync(this.statePath);
             if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 4096) {
@@ -103,6 +135,11 @@ export class ControlAuth {
             const state: unknown = JSON.parse(fs.readFileSync(this.statePath, "utf8"));
             // 已发布 version 1 没有恢复字段；只补结构，不重置现有限流或会话。
             if (record(state)) {
+                if (!Object.hasOwn(state, "deploymentBootstrap")) state.deploymentBootstrap = null;
+                if (!Object.hasOwn(state, "deploymentBootstrapHistory"))
+                    state.deploymentBootstrapHistory = record(state.deploymentBootstrap)
+                        ? [state.deploymentBootstrap.hash]
+                        : [];
                 if (!Object.hasOwn(state, "recovery")) state.recovery = null;
                 if (!Object.hasOwn(state, "issuance"))
                     state.issuance = { startedAt: this.now(), count: 0 };
@@ -114,6 +151,8 @@ export class ControlAuth {
                 return {
                     version: 1,
                     paired: false,
+                    deploymentBootstrap: null,
+                    deploymentBootstrapHistory: [],
                     bootstrap: null,
                     recovery: null,
                     issuance: { startedAt: this.now(), count: 0 },
@@ -122,6 +161,15 @@ export class ControlAuth {
                 };
             }
             // 认证边界统一拒绝，不把磁盘内容或解析错误带入响应/日志。
+            throw new Error(FAILURE);
+        }
+    }
+
+    private writeDeployment(state: AuthState): void {
+        try {
+            this.write(state);
+        } catch {
+            this.writeFailed = true;
             throw new Error(FAILURE);
         }
     }
@@ -182,7 +230,7 @@ function validState(value: unknown): value is AuthState {
         (typeof value.sessionHash !== "string" || !HASH.test(value.sessionHash))
     )
         return false;
-    for (const challenge of [value.bootstrap, value.recovery]) {
+    for (const challenge of [value.bootstrap, value.recovery, value.deploymentBootstrap]) {
         if (challenge === null) continue;
         if (
             !record(challenge) ||
@@ -193,6 +241,20 @@ function validState(value: unknown): value is AuthState {
         )
             return false;
     }
+    if (
+        !Array.isArray(value.deploymentBootstrapHistory) ||
+        value.deploymentBootstrapHistory.length > 16 ||
+        value.deploymentBootstrapHistory.some(
+            hash => typeof hash !== "string" || !HASH.test(hash),
+        ) ||
+        new Set(value.deploymentBootstrapHistory).size !==
+            value.deploymentBootstrapHistory.length ||
+        (value.deploymentBootstrap !== null &&
+            !value.deploymentBootstrapHistory.includes(
+                (value.deploymentBootstrap as { hash: string }).hash,
+            ))
+    )
+        return false;
     if (value.paired ? value.bootstrap !== null : value.sessionHash !== null) return false;
     if (!value.paired && value.recovery !== null) return false;
     if (

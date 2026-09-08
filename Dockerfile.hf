@@ -4,9 +4,8 @@
 # 文档：https://huggingface.co/docs/hub/spaces-sdks-docker
 # 持久化：与标准镜像相同，数据在 /data；可信域名校验文件可放在 /data/static（config 中 public_static_dir: static），并纳入 data_backup.tar.gz 备份
 
-FROM ghcr.io/lc-cn/onebots:master
-# HF 继续使用其专用的快照恢复和扩展管理，不接入宿主 Docker 协调器。
-ENV ONEBOTS_EXTENSION_MODE=legacy
+ARG ONEBOTS_BASE_IMAGE=ghcr.io/lc-cn/onebots:master
+FROM ${ONEBOTS_BASE_IMAGE}
 
 # Hugging Face Spaces 默认暴露 7860，由 PORT 环境变量传入
 ENV PORT=7860
@@ -18,5 +17,5 @@ COPY --chown=node:node scripts/hf-data-archive-restore.mjs /app/scripts/hf-data-
 RUN chmod +x /docker-entrypoint-hf.sh
 ENTRYPOINT ["/docker-entrypoint-hf.sh"]
 
-# 仅加载用户在配置中选择的扩展。
-CMD ["-c", "/data/config.yaml"]
+# 与标准 Docker 共用管理服务，管理端口不写入业务配置。
+CMD ["serve", "--data-dir", "/data", "--host", "0.0.0.0"]

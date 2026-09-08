@@ -1,4 +1,7 @@
 import { readFile } from "node:fs/promises";
+import fs from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
@@ -93,11 +96,13 @@ describe("Docker 构建上下文", () => {
                 source.indexOf("exec su-exec node:node"),
             );
             if (entrypoint.endsWith("-hf.sh")) {
-                // HF 尚未切换管理宿主，原恢复流程的权限与受信扩展根约束继续保留。
+                // HF 与标准镜像使用同一管理宿主，恢复过程不执行历史扩展。
                 expect(source).toContain('if [ "$(id -u)" != "0" ] && [ ! -w /data ]; then');
-                expect(source).toContain("node /app/scripts/docker-extension-runtime.mjs");
-                expect(source).toContain("ONEBOTS_EXTENSION_ROOT 必须是绝对路径");
-                expect(source).toContain('cd "$ONEBOTS_EXTENSION_ROOT"');
+                expect(source).not.toContain("node /app/scripts/docker-extension-runtime.mjs");
+                expect(source).toContain(
+                    "unset HF_TOKEN ONEBOTS_EXTENSION_ROOT ONEBOTS_EXTENSION_MODE NODE_PATH",
+                );
+                expect(source).toContain("cd /app/development");
             } else {
                 const nonRootWriteGuard = source.indexOf("if [ ! -w /data ]; then");
                 const directExec = source.indexOf(
@@ -144,43 +149,122 @@ describe("Docker 构建上下文", () => {
 
             expect(privateUmask).toBeGreaterThanOrEqual(0);
             expect(firstDataWrite).toBeGreaterThan(privateUmask);
-            if (entrypoint.endsWith("-hf.sh"))
-                expect(source).toContain("chmod 600 /data/config.yaml");
-            else expect(source).not.toContain("config.sample.yaml");
+            expect(source).not.toContain("config.sample.yaml");
             expect(source).toContain("无法将");
-            if (entrypoint.endsWith("-hf.sh")) expect(source).toContain("配置权限收紧为 0600");
         },
     );
 
-    test("HF 入口恢复轻量扩展清单并使用受信任恢复模式", async () => {
+    test("HF只恢复可移植数据，不修改网络或执行旧扩展", async () => {
         const source = await readFile(resolve(repositoryRoot, "docker-entrypoint-hf.sh"), "utf8");
         const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile.hf"), "utf8");
-
-        expect(source).toContain("extensions_backup.json");
-        expect(source).toContain("/data/extensions/hf-restore.json");
+        expect(dockerfile).toContain('CMD ["serve", "--data-dir", "/data", "--host", "0.0.0.0"]');
+        expect(source).not.toMatch(
+            /docker-extension-runtime|extensions_backup|hf-restore\.json|tar -xzf|curl /,
+        );
+        expect(source).not.toMatch(/resolv\.conf|config\.sample|sed .*config|echo .*port.*config/);
         expect(source).toContain("hf-repository-download.mjs data_backup.tar.gz");
         expect(source).toContain("hf-repository-download.mjs config_backup.yaml");
-        expect(source).toContain("hf-repository-download.mjs extensions_backup.json");
         expect(source).toContain("node /app/scripts/hf-data-archive-restore.mjs");
-        expect(source).not.toContain("tar -xzf");
-        expect(source).not.toContain("curl ");
-        const clearStaleArchive = source.indexOf("rm -f /tmp/data_backup.tar.gz");
-        const downloadArchive = source.indexOf("hf-repository-download.mjs data_backup.tar.gz");
-        expect(clearStaleArchive).toBeGreaterThanOrEqual(0);
-        expect(clearStaleArchive).toBeLessThan(downloadArchive);
-        expect(source.indexOf("rm -f /tmp/data_backup.tar.gz", downloadArchive)).toBeGreaterThan(
-            downloadArchive,
-        );
-        expect(source).toContain("docker-extension-runtime.mjs --restore");
-        expect(source.indexOf("extensions_backup.json")).toBeLessThan(
-            source.indexOf("docker-extension-runtime.mjs --restore"),
-        );
-        expect(dockerfile).toContain(
-            "COPY --chown=node:node scripts/hf-repository-download.mjs /app/scripts/hf-repository-download.mjs",
-        );
-        expect(dockerfile).toContain(
-            "COPY --chown=node:node scripts/hf-data-archive-restore.mjs /app/scripts/hf-data-archive-restore.mjs",
-        );
-        expect(dockerfile).not.toContain("apk add --no-cache curl");
+        expect(source.indexOf("unset HF_TOKEN")).toBeLessThan(source.indexOf("exec su-exec"));
+        expect(dockerfile).not.toContain("ONEBOTS_EXTENSION_MODE=legacy");
+        const base = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
+        expect(base).not.toMatch(/mkdir[^\n]*\/data\/static/);
     });
+});
+
+// 仅替换容器绝对挂载路径；实际 /bin/sh 分支执行，node/uid 使用受控替身。
+describe("HF入口恢复分支", () => {
+    test.each(["blank", "existing", "interrupted", "config-interrupted", "restore-failed"])(
+        "%s 卷不会执行未知恢复或历史依赖",
+        async scenario => {
+            const root = fs.mkdtempSync(resolve(tmpdir(), "hf-entry-test-"));
+            try {
+                const volume = resolve(root, "volume");
+                const app = resolve(root, "app");
+                const bin = resolve(root, "bin");
+                fs.mkdirSync(volume);
+                fs.mkdirSync(resolve(app, "development"), { recursive: true });
+                fs.mkdirSync(bin);
+                const calls = resolve(root, "calls");
+                const config = resolve(volume, "config.yaml");
+                if (scenario === "existing") fs.writeFileSync(config, "synthetic-secret: [\r\n");
+                if (scenario === "interrupted")
+                    fs.mkdirSync(resolve(volume, ".hf-restore-interrupted"));
+                if (scenario === "config-interrupted")
+                    fs.writeFileSync(
+                        resolve(volume, "config.yaml.123.fixture.tmp"),
+                        "partial-private-config",
+                    );
+                fs.writeFileSync(resolve(bin, "id"), "#!/bin/sh\necho 1000\n", { mode: 0o700 });
+                fs.writeFileSync(
+                    resolve(bin, "node"),
+                    `#!/bin/sh
+printf '%s\\n' "$*" >> "$CALL_LOG"
+case "$1" in
+  *hf-repository-download.mjs) [ "$SCENARIO" = restore-failed ]; exit $? ;;
+  *hf-data-archive-restore.mjs) exit 1 ;;
+  *lib/bin.js) [ -z "\${HF_TOKEN:-}\${ONEBOTS_EXTENSION_ROOT:-}\${NODE_PATH:-}" ] || exit 9; exit 0 ;;
+  *) exit 10 ;;
+esac
+`,
+                    { mode: 0o700 },
+                );
+                const source = (
+                    await readFile(resolve(repositoryRoot, "docker-entrypoint-hf.sh"), "utf8")
+                )
+                    .replaceAll("/tmp/data_backup.tar.gz", resolve(root, "backup.tar.gz"))
+                    .replaceAll("/data", volume)
+                    .replaceAll("/app", app);
+                const script = resolve(root, "entry.sh");
+                fs.writeFileSync(script, source);
+                let failed = false;
+                try {
+                    execFileSync("/bin/sh", [script], {
+                        env: {
+                            ...process.env,
+                            PATH: `${bin}:${process.env.PATH}`,
+                            SCENARIO: scenario,
+                            CALL_LOG: calls,
+                            HF_REPO_ID: "test/repo",
+                            HF_TOKEN: "synthetic",
+                            ONEBOTS_EXTENSION_ROOT: "/legacy",
+                            NODE_PATH: "/legacy",
+                        },
+                        stdio: "pipe",
+                        timeout: 5000,
+                    });
+                } catch {
+                    failed = true;
+                }
+                const log = fs.existsSync(calls) ? fs.readFileSync(calls, "utf8") : "";
+                expect(failed).toBe(
+                    ["interrupted", "config-interrupted", "restore-failed"].includes(scenario),
+                );
+                if (["interrupted", "config-interrupted"].includes(scenario)) expect(log).toBe("");
+                if (scenario === "config-interrupted") {
+                    expect(
+                        fs.readFileSync(resolve(volume, "config.yaml.123.fixture.tmp"), "utf8"),
+                    ).toBe("partial-private-config");
+                    expect(fs.existsSync(config)).toBe(false);
+                }
+                if (scenario === "existing") {
+                    expect(log).not.toContain("hf-repository-download");
+                    expect(fs.readFileSync(config, "utf8")).toBe("synthetic-secret: [\r\n");
+                }
+                if (scenario === "blank") {
+                    expect(log).toContain("data_backup.tar.gz");
+                    expect(log).toContain("config_backup.yaml");
+                }
+                if (scenario === "restore-failed") {
+                    expect(log).toContain("hf-data-archive-restore");
+                    expect(log).not.toContain("config_backup.yaml");
+                    expect(log).not.toContain("lib/bin.js");
+                } else if (!["interrupted", "config-interrupted"].includes(scenario))
+                    expect(log).toContain(`lib/bin.js serve --data-dir ${volume} --host 0.0.0.0`);
+                expect(log).not.toContain("docker-extension");
+            } finally {
+                fs.rmSync(root, { recursive: true, force: true });
+            }
+        },
+    );
 });

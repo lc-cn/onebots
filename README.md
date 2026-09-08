@@ -311,10 +311,15 @@ flowchart LR
 **务必挂载数据目录**，否则重启丢配置：
 
 ```bash
-docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots ghcr.io/lc-cn/onebots:master
+docker build -t onebots-control .
+docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots onebots-control
 ```
 
-首次运行后会在 `./data` 生成一个不含平台账号的安全起步配置，避免用空凭据连接外部平台；随机管理鉴权码只写入 `./data/config.yaml`，不会输出到日志。无法读取配置文件的托管平台可预先通过 Secret 设置 `ONEBOTS_ACCESS_TOKEN`。登录后再添加账号并设置协议访问令牌。详见 **[文档：Docker 部署](https://onebots.pages.dev/guide/docker)**（含 Hugging Face Spaces）。
+本架构分支尚未发布到 `master` 镜像；验证时请先从当前代码构建对应镜像，勿混用新入口与旧镜像。容器运行常驻管理服务，空工作区不预设账号或协议，配置损坏时仍可进入管理端修复。
+
+使用 `docker exec -u node onebots node /app/packages/onebots/lib/bin.js auth bootstrap --data-dir /data` 在本机签发设备配对码，再在网页配对建立会话。管理端不再使用配置文件中的永久 token 或 `ONEBOTS_ACCESS_TOKEN`。依赖通过管理端安装、验证并显式激活 generation，持久化在 `/data/.control`，不再使用旧 `extensions` 安装目录。
+
+HF 等无终端部署可通过 Secret 设置 `ONEBOTS_BOOTSTRAP_CODE`：32 随机字节编码为 43 字符 base64url，启动后五分钟内配对；同码重启不续期，未配对时最多使用 16 个全新码，不能覆盖已有会话。配对后删除 Secret。HF 仅向空卷安全恢复已有备份，不改写 YAML 端口或系统 DNS；新管理端尚未接入旧版自动上传备份。详见 **[Docker 部署](https://onebots.pages.dev/guide/docker)**（含 HF 配对、备份边界与会话恢复限制）。
 
 ### 方式 B：npm 安装（Mock 试跑）
 

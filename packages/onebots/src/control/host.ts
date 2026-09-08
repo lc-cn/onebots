@@ -12,6 +12,7 @@ import type { Duplex } from "node:stream";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { ControlAuth } from "./auth.js";
+import { consumeDeploymentBootstrapEnvironment } from "./auth-deployment.js";
 import { GatewayController } from "./gateway-controller.js";
 import { NodeGatewayDriver } from "./gateway-driver.js";
 import { GenerationActivationController } from "./generation-activation.js";
@@ -41,7 +42,6 @@ import { listen, readBody, jsonResponse as json } from "./http-utils.js";
 import { ControlConfigurationService } from "./configuration-service.js";
 import { handleConfigurationRequest, isConfigurationPath } from "./configuration-api.js";
 import packageMetadata from "../../package.json" with { type: "json" };
-
 export interface ControlHostOptions {
     workspace: string;
     host?: string;
@@ -51,8 +51,8 @@ export interface ControlHostOptions {
     gatewayEntrypoint?: string;
     installation?: Omit<ControlInstallationOptions, "directory" | "store" | "lifecycle">;
 }
-
 export async function startControlHost(options: ControlHostOptions) {
+    const installDeploymentAuth = consumeDeploymentBootstrapEnvironment();
     fs.mkdirSync(options.workspace, { recursive: true });
     const workspace = fs.realpathSync(options.workspace);
     const socketPath = controlSocket(workspace);
@@ -85,6 +85,7 @@ export async function startControlHost(options: ControlHostOptions) {
     }
     try {
         auth = new ControlAuth({ statePath: path.join(controlDirectory(workspace), "auth.json") });
+        installDeploymentAuth?.(auth);
     } catch {
         authAvailable = false;
         process.stderr.write("[onebots] 控制认证存储不可用，远程管理已禁用\n");

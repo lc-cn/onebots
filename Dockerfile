@@ -45,7 +45,7 @@ RUN apk add --no-cache su-exec \
   && corepack enable \
   && corepack prepare pnpm@9.15.9 --activate \
   && chown -R node:node "$COREPACK_HOME" \
-  && mkdir -p /data/static \
+  && mkdir -p /data \
   && chown -R node:node /data
 WORKDIR /app
 

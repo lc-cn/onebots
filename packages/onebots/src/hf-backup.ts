@@ -50,10 +50,14 @@ const defaultDependencies: HfBackupDependencies = {
             [
                 "-czf",
                 "-",
-                "--exclude=./extensions/node_modules",
-                "--exclude=./extensions/.pnpm-store",
-                "--exclude=./extensions/package.json",
-                "--exclude=./extensions/pnpm-lock.yaml",
+                "--exclude=./.control",
+                "--exclude=./extensions",
+                "--exclude=node_modules",
+                "--exclude=.pnpm-store",
+                "--exclude=.npmrc",
+                "--exclude=./.npm",
+                "--exclude=./.cache",
+                "--exclude=./.hf-restore-*",
                 "-C",
                 directory,
                 ".",
@@ -259,13 +263,19 @@ export function assertHfBackupTreeRestorable(configDirectory: string): void {
 }
 
 function isExcludedHfBackupEntry(relative: string): boolean {
+    const components = relative.split("/");
     return (
-        relative === "extensions/node_modules" ||
-        relative.startsWith("extensions/node_modules/") ||
-        relative === "extensions/.pnpm-store" ||
-        relative.startsWith("extensions/.pnpm-store/") ||
-        relative === "extensions/package.json" ||
-        relative === "extensions/pnpm-lock.yaml"
+        [
+            ".control",
+            "extensions",
+            "node_modules",
+            ".pnpm-store",
+            ".npm",
+            ".cache",
+            ".npmrc",
+        ].includes(components[0]) ||
+        components[0].startsWith(".hf-restore-") ||
+        components.some(component => ["node_modules", ".pnpm-store", ".npmrc"].includes(component))
     );
 }
 

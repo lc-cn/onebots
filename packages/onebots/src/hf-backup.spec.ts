@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -179,6 +180,45 @@ describe("Hugging Face backup", () => {
             success: false,
             message: "响应正文超过 64 KiB 上限",
         });
+    });
+
+    it("real archive excludes control credentials and dependencies but keeps account data", async () => {
+        const fixture = createFixture();
+        configureHfEnvironment();
+        for (const name of [
+            ".control/downloads/secret",
+            "extensions/generations/receipt.json",
+            "node_modules/plugin/index.js",
+            "data/icqq/session.json",
+            "data/onebots.db",
+            "static/file.txt",
+        ]) {
+            const file = path.join(fixture.root, name);
+            fs.mkdirSync(path.dirname(file), { recursive: true });
+            fs.writeFileSync(file, "state");
+        }
+        const fetcher = vi.fn<typeof fetch>(async () => Response.json({ ok: true }));
+        const service = new HfBackupService({}, fixture.root, fixture.configPath, { fetcher });
+        const result = await service.backupData("plugins: {}");
+        expect(result.success).toBe(true);
+        expect(result.dataArchiveIncluded).toBe(true);
+        const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body)) as {
+            files: Array<{ path: string; content: string }>;
+        };
+        const archive = body.files.find(file => file.path === "data_backup.tar.gz")!;
+        const listing = execFileSync("tar", ["-tzf", "-"], {
+            input: Buffer.from(archive.content, "base64"),
+            encoding: "utf8",
+        });
+        for (const forbidden of [".control", "extensions", "node_modules"])
+            expect(listing).not.toContain(forbidden);
+        for (const preserved of [
+            "config.yaml",
+            "data/icqq/session.json",
+            "data/onebots.db",
+            "static/file.txt",
+        ])
+            expect(listing).toContain(preserved);
     });
 
     function createFixture() {

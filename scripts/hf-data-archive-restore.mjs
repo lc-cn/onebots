@@ -42,6 +42,8 @@ export function restoreHfDataArchive({
     const names = runTarStep(runTar, ["-tzf", archivePath], listingOptions, "目录读取");
     const verbose = runTarStep(runTar, ["-tvzf", archivePath], listingOptions, "类型读取");
     const expectedEntries = validateHfArchiveListings(names, verbose, entryLimit);
+    if (fs.readdirSync(targetRoot).length !== 0)
+        throw new Error("HF 恢复仅允许空工作区；已有内容或未完成恢复必须人工处理");
     const stagingRoot = fs.mkdtempSync(path.join(targetRoot, ".hf-restore-"));
     fs.chmodSync(stagingRoot, 0o700);
     try {
@@ -54,7 +56,31 @@ export function restoreHfDataArchive({
         const staging = inspectStagingTree(stagingRoot, expandedLimitBytes, entryLimit);
         assertExtractedEntries(expectedEntries, staging.entries);
         assertSafeOverlayTargets(targetRoot, staging);
+        const marker = path.join(targetRoot, ".hf-restore-incomplete");
+        const handle = fs.openSync(marker, "wx", 0o600);
+        try {
+            fs.writeFileSync(handle, "HF_RESTORE_INCOMPLETE_V1\n");
+            fs.fsyncSync(handle);
+        } finally {
+            fs.closeSync(handle);
+        }
+        syncDirectory(targetRoot);
+        // 挂载点不能原子替换；失败保留已持久标记和现场，禁止再次覆盖式重放。
         applyPrivateOverlay(targetRoot, staging);
+        fs.unlinkSync(marker);
+        try {
+            syncDirectory(targetRoot);
+        } catch (error) {
+            // 完成标记删除的持久化未知时重新封锁；不可将 fsync 失败报告为成功。
+            const failed = fs.openSync(marker, "wx", 0o600);
+            try {
+                fs.writeFileSync(failed, "HF_RESTORE_INCOMPLETE_V1\n");
+                fs.fsyncSync(failed);
+            } finally {
+                fs.closeSync(failed);
+            }
+            throw error;
+        }
         return {
             entries: staging.entries.length,
             files: staging.files.length,
@@ -105,6 +131,19 @@ function normalizeArchiveEntry(rawName) {
     if (components[0]?.startsWith(".hf-restore-")) {
         throw new Error(`HF 数据归档占用内部暂存路径: ${rawName}`);
     }
+    if (
+        [
+            ".control",
+            "extensions",
+            "node_modules",
+            ".pnpm-store",
+            ".npm",
+            ".cache",
+            ".npmrc",
+        ].includes(components[0]) ||
+        components.some(component => ["node_modules", ".pnpm-store", ".npmrc"].includes(component))
+    )
+        throw new Error("HF 数据归档包含不可移植的运行状态或依赖目录");
     return components.join("/");
 }
 
@@ -186,7 +225,8 @@ function lstatIfPresent(targetPath) {
 function applyPrivateOverlay(targetRoot, staging) {
     for (const directory of staging.directories) {
         const target = path.join(targetRoot, directory.relative);
-        if (!fs.existsSync(target)) fs.mkdirSync(target, { mode: 0o700 });
+        fs.mkdirSync(target, { mode: 0o700 });
+        syncDirectory(path.dirname(target));
     }
     for (const file of staging.files) {
         const target = path.join(targetRoot, file.relative);
@@ -201,11 +241,22 @@ function applyPrivateOverlay(targetRoot, staging) {
             } finally {
                 fs.closeSync(handle);
             }
-            fs.renameSync(temporary, target);
+            fs.linkSync(temporary, target); // 原缺失发布，绝不覆盖并发出现的目标。
+            fs.unlinkSync(temporary);
+            syncDirectory(path.dirname(target));
             completed = true;
         } finally {
             if (!completed) fs.rmSync(temporary, { force: true });
         }
+    }
+}
+
+function syncDirectory(directory) {
+    const descriptor = fs.openSync(directory, "r");
+    try {
+        fs.fsyncSync(descriptor);
+    } finally {
+        fs.closeSync(descriptor);
     }
 }
 
