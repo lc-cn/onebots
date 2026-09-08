@@ -53,8 +53,15 @@ describe("显式管理服务对账 CLI", () => {
         );
         expect(result).toEqual({
             exitCode: 0,
-            output: "操作 operation_123：succeeded（completed）\n已确认该停止或卸载操作达到目标；仅更新对账记录，未重放系统动作。",
+            output: "操作 operation_123：succeeded（completed）\n已确认该服务操作达到目标；仅更新对账记录，未重放系统动作。",
         });
+        expect(result.output).not.toContain(secret);
+    });
+    it("已释放升级对账成功时明确只补日志", async () => {
+        vi.mocked(reconcileManagerServiceOperation).mockResolvedValue({ ...record(), action: "upgrade" });
+        const result = await managerServiceRecoveryCommand({ operation: "operation_123" });
+        expect(result.exitCode).toBe(0);
+        expect(result.output).toContain("仅更新对账记录，未重放系统动作");
         expect(result.output).not.toContain(secret);
     });
     it.each(["", "../id", "a b", "a\n", "a".repeat(129)])(

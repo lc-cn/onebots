@@ -1,4 +1,5 @@
 import { managerUpgradeStatus } from "../service-upgrade-workspace.js";
+import type { ManagerUpgradeIdentity } from "./service-upgrade-release.js";
 import {
     readServiceMigrationPending,
     releaseServiceMigrationPending,
@@ -26,7 +27,20 @@ export async function handleServiceMigrationRequest(input: {
     local: boolean;
     body: () => Promise<unknown>;
     releaseUpgrade?: (body: unknown) => Promise<void>;
+    upgradeIdentity?: () => ManagerUpgradeIdentity;
 }) {
+    if (input.pathname === "/api/control/service-upgrade/identity") {
+        if (!input.local) return { status: 403, body: { message: "升级身份仅允许本机控制通道" } };
+        if (input.method !== "GET") return { status: 405, body: { message: "不支持此方法" } };
+        if (input.ownershipAvailable === false)
+            return { status: 423, body: { message: "历史管理进程所有权不可确认" } };
+        try {
+            if (!input.upgradeIdentity) throw new Error();
+            return { status: 200, body: input.upgradeIdentity() };
+        } catch {
+            return { status: 409, body: { message: "升级身份暂时无法核实" } };
+        }
+    }
     if (input.method === "POST" && input.ownershipAvailable === false)
         return { status: 423, body: { message: "历史管理进程所有权不可确认，暂时禁止修改" } };
     if (input.pathname === "/api/control/service-upgrade/release") {

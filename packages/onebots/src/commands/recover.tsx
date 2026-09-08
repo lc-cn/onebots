@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CommandRunner } from "../cli/command-runner.js";
 import { managerServiceRecoveryCommand } from "../cli/manager-service-recovery-command.js";
 
-export const description = "对账已达到目标的停止或卸载操作（不重放系统动作）";
+export const description = "对账已达到目标的停止、卸载或已释放升级操作（不重放系统动作）";
 export const options = z
     .object({
         operation: z

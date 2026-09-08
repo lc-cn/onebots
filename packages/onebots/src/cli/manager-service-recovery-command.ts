@@ -6,7 +6,7 @@ export interface ManagerServiceRecoveryOptions {
     system?: boolean;
 }
 const pending =
-    "未确认已达到停止或卸载目标；保留操作记录，未重放任何系统动作。这不是完整自动恢复。";
+    "未确认已达到停止、卸载或已释放升级的目标；保留操作记录，未重放任何系统动作。这不是完整自动恢复。";
 const phases = new Set([
     "prepared",
     "stopping",
@@ -49,11 +49,11 @@ export async function managerServiceRecoveryCommand(
             record.status === "succeeded" &&
             record.phase === "completed" &&
             !record.recoveryRequired &&
-            ["stop", "uninstall"].includes(record.action)
+            ["stop", "uninstall", "upgrade"].includes(record.action)
         )
             return {
                 exitCode: 0,
-                output: `${summary}\n已确认该停止或卸载操作达到目标；仅更新对账记录，未重放系统动作。`,
+                output: `${summary}\n已确认该服务操作达到目标；仅更新对账记录，未重放系统动作。`,
             };
         return { exitCode: 1, output: `${summary}\n${pending}` };
     } catch {

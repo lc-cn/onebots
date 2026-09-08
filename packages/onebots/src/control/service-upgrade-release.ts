@@ -5,6 +5,31 @@ import {
 import type { GenerationActivationController } from "./generation-activation.js";
 import { advanceManagerUpgrade, readManagerUpgradePending } from "../service-upgrade-workspace.js";
 
+export interface ManagerUpgradeIdentity {
+    managerId: string;
+    candidateDigest: string | null;
+}
+
+/** 只接受可信 host 自身的模块地址；每次查询重核，并拒绝启动后的身份替换。 */
+export function createManagerUpgradeIdentity(
+    managerId: string,
+    hostModuleUrl: string,
+): () => ManagerUpgradeIdentity {
+    const read = () => {
+        try {
+            return managerCandidateDigest(readRunningManagerCandidate(hostModuleUrl));
+        } catch {
+            // 普通安装或损坏收据不能证明候选身份，不向客户端暴露文件系统细节。
+            return null;
+        }
+    };
+    const initial = read();
+    return () => {
+        const current = read();
+        return { managerId, candidateDigest: initial && initial === current ? current : null };
+    };
+}
+
 /** 本机OS事务确认请求；当前host持工作区锁，候选身份由host自身工件证明提供。 */
 export async function releaseManagerUpgrade(input: {
     workspace: string;

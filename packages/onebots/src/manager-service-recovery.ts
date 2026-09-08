@@ -1,3 +1,4 @@
+import { verifyReleasedManagerServiceUpgrade } from "./manager-service-upgrade-recovery.js";
 import { assertNoPendingManagerUpgrade } from "./service-upgrade-workspace.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -57,7 +58,7 @@ function existingWorkspace(workspace: string): void {
     }
 }
 
-/** 本机显式对账：只确认已完成的 stop/uninstall，不重启、不删除文件、不重放未知动作。 */
+/** 本机显式对账：只确认已完成的 stop/uninstall 或已释放升级，不重启、不删除文件、不重放未知动作。 */
 export async function reconcileManagerServiceOperation(
     id: string,
     scope: ServiceScope,
@@ -80,6 +81,15 @@ export async function reconcileManagerServiceOperation(
             path.join(files.stateDir, "manager-operations"),
         );
         const record = journal.recoverable(id);
+        if (record.managerSpec.scope === scope && record.action === "upgrade") {
+            existingWorkspace(record.managerSpec.workspace);
+            await verifyReleasedManagerServiceUpgrade(record, host, dependencies.platform);
+            const completed: ManagerServiceRecord = {
+                ...record, phase: "completed", status: "succeeded", recoveryRequired: false,
+            };
+            journal.save(completed);
+            return journal.read(id);
+        }
         if (record.managerSpec.scope !== scope || !["stop", "uninstall"].includes(record.action))
             throw failure();
         const spec = record.managerSpec;

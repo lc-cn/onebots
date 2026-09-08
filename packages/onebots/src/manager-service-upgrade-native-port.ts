@@ -90,7 +90,7 @@ export function createManagerServiceUpgradeNativePort(
         candidate(value); filesUnchanged(value, true);
         const before = await driver.inspect();
         const manager = await inspect(value.managerSpec.workspace);
-        if (before.state !== "running" || !before.running || before.processId !== manager.manager.pid ||
+        if (before.state !== "running" || !before.running || !before.identity || before.processId !== manager.manager.pid ||
             before.enabled !== value.desiredEnabled || !isDeepStrictEqual(before, await driver.inspect()) ||
             before.definitionPath !== getServiceFiles(value.managerSpec.scope, host).definition ||
             manager.manager.id === previousManagerId ||

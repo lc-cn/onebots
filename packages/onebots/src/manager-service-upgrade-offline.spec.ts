@@ -1,3 +1,4 @@
+import { reconcileManagerServiceOperation } from "./manager-service-recovery.js";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -42,7 +43,7 @@ async function fixture() {
     try { install.apply(); } finally { install.dispose(); }
     const files = getServiceFiles("user", host);
     const capture = captureManagerServiceRemoval(spec, host); const snapshot = structuredClone(capture.snapshot); capture.dispose();
-    const journal = new FileManagerServiceJournal(path.join(root, "journal"));
+    const journal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
     let record = journal.prepare({ id: "upgrade", action: "upgrade", desiredEnabled: true, spec,
         upgrade: { previousSpec: { ...spec, binPath: path.join(root, "old.js") },
             previousCandidateDigest: "a".repeat(64), candidateDigest: "b".repeat(64),
@@ -111,4 +112,28 @@ it("在线释放中断不能通过离线入口绕过恢复", async () => {
     fs.writeFileSync(marker, bytes);
     await expect(releaseStoppedManagerServiceUpgrade(f.record, f.host, f.platform)).rejects.toThrow();
     expect(fs.readFileSync(marker, "utf8")).toBe(bytes);
+});
+
+it("冷启动对账只补已离线释放操作的最终日志，重复核验拒绝 OS 漂移", async () => {
+    const f = await fixture();
+    await releaseStoppedManagerServiceUpgrade(f.record, f.host, f.platform);
+    const markerPath = path.join(f.workspace, ".control/manager-upgrade-pending.json");
+    const marker = fs.readFileSync(markerPath);
+    const completed = await reconcileManagerServiceOperation("upgrade", "user", f.host, { platform: f.platform });
+    expect(completed).toMatchObject({ phase: "completed", status: "succeeded", recoveryRequired: false });
+    expect(fs.readFileSync(markerPath)).toEqual(marker);
+    expect(fs.readFileSync(path.join(f.workspace, ".control/gateway.json"))).toEqual(f.gateway);
+    expect(fs.readFileSync(path.join(f.workspace, "config.yaml"), "utf8")).toBe("broken: [\r\n");
+    f.state.running = true;
+    await expect(reconcileManagerServiceOperation("upgrade", "user", f.host, { platform: f.platform })).rejects.toThrow();
+    expect(f.platform.start).not.toHaveBeenCalled();
+    expect(f.platform.reload).not.toHaveBeenCalled();
+    expect(f.platform.quiesce).not.toHaveBeenCalled();
+});
+it("冷启动对账不能将未释放操作补成完成", async () => {
+    const f = await fixture();
+    await expect(reconcileManagerServiceOperation("upgrade", "user", f.host, { platform: f.platform })).rejects.toThrow();
+    expect(readManagerUpgradePending(f.workspace)?.phase).toBeUndefined();
+    expect(f.platform.start).not.toHaveBeenCalled();
+    expect(f.platform.reload).not.toHaveBeenCalled();
 });

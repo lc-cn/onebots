@@ -18,6 +18,7 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
         "service-upgrade-workspace.js",
     );
     const { acquireControlWorkspace, controlSocket } = await load("control/workspace.js");
+    const { createLocalControlTransport } = await load("client/local-control.js");
     const { createLocalControlClient } = await load("client/local-control.js");
     const home = path.join(temporary, "manager");
     const unlock = acquireControlWorkspace(home);
@@ -71,6 +72,15 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
         });
         running = await launch(candidate.directory, canonical, temporary);
         const status = await client.status();
+        const verifyIdentity = async () => {
+            const current = await client.status();
+            const identity = await createLocalControlTransport(canonical).request(
+                "GET", "/api/control/service-upgrade/identity",
+            );
+            assert.deepEqual(identity, { managerId: current.manager.id, candidateDigest: digest });
+            return identity;
+        };
+        const initialIdentity = await verifyIdentity();
         assert.equal(status.gateway.actual, "stopped");
         assert.equal(status.gateway.desired, "running");
         await assert.rejects(client.gateway("start"));
@@ -92,6 +102,8 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
         await running.close();
         running = undefined;
         running = await launch(candidate.directory, canonical, temporary);
+        const restartedIdentity = await verifyIdentity();
+        assert.notEqual(restartedIdentity.managerId, initialIdentity.managerId);
         assert.equal(await release(), 200);
         assert.equal((await client.status()).gateway.actual, "stopped");
         await running.close();
