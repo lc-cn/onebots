@@ -95,7 +95,10 @@ try {
         extensions: [],
         selection: { adapters: [], protocols: [], applications: [] },
     });
-    const privateRoot = fs.mkdtempSync("/tmp/ob-mv-");
+    const verificationRoot = fs.mkdtempSync("/tmp/ob-mv-");
+    // 真正越过 sockaddr_un 上限，包含多字节路径；工作区仍在 owner 子树中。
+    const privateRoot = path.join(verificationRoot, "候选管理程序".repeat(12));
+    fs.mkdirSync(privateRoot, { mode: 0o700 });
     try {
         const proof = await verifyManagerCandidate(runtime, plan, { privateRoot });
         assert.equal(proof.planDigest, plan.digest);
@@ -111,8 +114,10 @@ try {
         }
     } finally {
         // 未证明退出的验证目录不能被外层临时目录清理抹掉。
-        if (fs.readdirSync(privateRoot).length === 0) fs.rmdirSync(privateRoot);
-        else process.stderr.write(`候选验证保留恢复证据 ${privateRoot}\n`);
+        if (fs.readdirSync(privateRoot).length === 0) {
+            fs.rmdirSync(privateRoot);
+            fs.rmdirSync(verificationRoot);
+        } else process.stderr.write(`候选验证保留恢复证据 ${privateRoot}\n`);
     }
     const client = createLocalControlClient(workspace);
     const options = {

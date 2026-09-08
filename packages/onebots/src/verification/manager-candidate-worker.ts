@@ -46,6 +46,7 @@ process.once(
                 throw new Error();
             prepareServiceMigrationWorkspace(input.workspace, randomUUID(), "stopped");
             prepareServiceProcessOwnershipSeed(input.workspace);
+            process.chdir(input.workspace);
             const { startControlHost: start } = await import(
                 pathToFileURL(path.join(lib, "control/host.js")).href
             );

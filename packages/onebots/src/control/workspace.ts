@@ -13,7 +13,12 @@ export function controlDirectory(root: string): string {
 export function controlSocket(root: string): string {
     if (process.platform === "win32")
         throw new Error("Windows 本地控制传输尚待 ACL 验收，当前不开放命名管道");
-    return path.join(controlDirectory(root), "control.sock");
+    const socket = path.join(controlDirectory(root), "control.sock");
+    // sockaddr_un 包含终止字节；使用各 POSIX 平台可接受的保守上限。
+    if (Buffer.byteLength(socket) <= 103) return socket;
+    // 隔离候选 worker 固定在自己的工作区内执行；相对地址仍落在同一所有权目录。
+    if (path.resolve(root) === process.cwd()) return path.join(".control", "control.sock");
+    throw new Error("本地控制套接字路径过长，请在工作区目录内执行或使用较短的工作区路径");
 }
 
 /**
