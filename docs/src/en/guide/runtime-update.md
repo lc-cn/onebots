@@ -10,6 +10,8 @@ Run `onebots ui --data-dir <workspace>` and select the gateway runtime update ac
 
 In the Web installation panel, check for gateway updates and review current and target versions before confirming installation. Checks may take two minutes and do not install packages or switch the gateway. Apply the verified candidate separately; existing task tracking remains the recovery path.
 
+The top-level `onebots update --check --data-dir <workspace>` checks gateway updates only, exiting 2 when updates exist or 0 otherwise. In an interactive terminal, `onebots update --data-dir <workspace>` uses the same confirmation flow. Legacy `--yes`, `--packages-only`, service scope and plugin selection flags are rejected; this command no longer mutates installed program packages or restarts the OS service. Management binary upgrades remain unfinished.
+
 For scripts, obtain a plan first:
 
 ```sh

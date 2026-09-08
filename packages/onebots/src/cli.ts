@@ -38,6 +38,11 @@ export async function runCli(argv = process.argv): Promise<void> {
         );
         if (invocation.kind === "unknown") throw new CliError(`未知命令: ${invocation.command}`, 2);
         if (invocation.kind === "invalid") throw new CliError(invocation.message, 2);
+        if (invocation.kind === "cli" && invocation.argv[2] === "update") {
+            const { runManagerUpdate } = await import("./cli/manager-update.js");
+            process.exitCode = await runManagerUpdate(invocation.argv.slice(3));
+            return;
+        }
         if (invocation.kind === "cli" && invocation.argv[2] === "send") {
             const { runManagerSend } = await import("./cli/manager-send.js");
             process.exitCode = await runManagerSend(invocation.argv.slice(3));

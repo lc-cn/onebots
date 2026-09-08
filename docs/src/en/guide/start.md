@@ -1,5 +1,9 @@
 # Quick Start
 
+::: warning
+The one-command installer targets the published stable version and has not been migrated to `codex/service-architecture`. For the architecture branch, build from source and run `onebots serve --data-dir <workspace>`. Do not use the legacy installer to update this branch.
+:::
+
 ## One-command installation (recommended)
 
 On Linux and macOS, the installer checks the runtime, installs an isolated Node.js 24 when needed, installs OneBots with the Web console and OneBot v11, creates a secure configuration, and registers a persistent user service. It installs OneBots and its matching Web dependency first, then reads the default protocol version from the extension-version catalog published inside that main package. A missing Web entry point or mismatched installed protocol version stops the run before configuration or service creation:
