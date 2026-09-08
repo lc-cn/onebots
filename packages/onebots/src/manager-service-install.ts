@@ -29,21 +29,40 @@ import {
 import { acquireControlWorkspace } from "./control/workspace.js";
 import type { ServicePlatform } from "./service-platform.js";
 
-/** 首次系统安装只启用托管定义，不启动manager，不写业务配置。 */
+export interface ManagerServiceInstallDependencies {
+    assertAbsent?: typeof assertServiceAbsent;
+    platform?: ServicePlatform;
+}
+
+/** 首次系统安装只启用托管定义，不启动 manager，不写业务配置。 */
 export async function installManagerService(
     input: ManagerServiceSpec,
     host: ServiceHost = createDefaultServiceHost(),
-    dependencies: {
-        assertAbsent?: typeof assertServiceAbsent;
-        platform?: ServicePlatform;
-    } = {},
+    dependencies: ManagerServiceInstallDependencies = {},
 ) {
     const spec = parseManagerServiceSpec(input);
     if (!["linux", "darwin"].includes(host.platform))
         throw new Error("此系统尚未通过管理服务安装验收");
     if (spec.scope === "system" && host.uid !== 0) throw new Error("系统级服务需要管理员权限");
+    const release = acquireServiceMigrationLock(getServiceFiles(spec.scope, host).stateDir);
+    try { return await installManagerServiceWhileLocked(spec, randomUUID(), host, dependencies); }
+    finally { release(); }
+}
+
+/** 内部 bootstrap 调用方须持服务锁；稳定 ID 贯穿候选准备和系统注册，绝不重派已有 ID。 */
+export async function installManagerServiceWhileLocked(
+    input: ManagerServiceSpec,
+    operationId: string,
+    host: ServiceHost,
+    dependencies: ManagerServiceInstallDependencies = {},
+) {
+    if (typeof operationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(operationId))
+        throw new Error("管理服务安装操作 ID 无效");
+    const spec = parseManagerServiceSpec(input);
+    if (!["linux", "darwin"].includes(host.platform))
+        throw new Error("此系统尚未通过管理服务安装验收");
+    if (spec.scope === "system" && host.uid !== 0) throw new Error("系统级服务需要管理员权限");
     const files = getServiceFiles(spec.scope, host);
-    const release = acquireServiceMigrationLock(files.stateDir);
     let installation: ManagerServiceInstallation | undefined;
     try {
         const metadata = readServiceMetadata(files.metadata);
@@ -76,7 +95,7 @@ export async function installManagerService(
         )
             throw new Error("已有工作区进程归属或退出状态未确认，禁止首次安装");
         const record = journal.prepare({
-            id: randomUUID(),
+            id: operationId,
             action: "install",
             desiredEnabled: true,
             spec,
@@ -134,11 +153,7 @@ export async function installManagerService(
         }
         return { ...record };
     } finally {
-        try {
-            installation?.dispose();
-        } finally {
-            release();
-        }
+        installation?.dispose();
     }
 }
 function exists(file: string): boolean {
