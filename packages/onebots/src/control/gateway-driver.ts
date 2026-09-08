@@ -1,3 +1,4 @@
+import { waitForProcessGroupExit } from "../process-group-exit.js";
 import { fork, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, open } from "node:fs/promises";
@@ -210,27 +211,40 @@ export class NodeGatewayDriver implements GatewayDriver {
 
     private async terminate(managed: ManagedChild): Promise<void> {
         managed.stopping = true;
-        const signal = (value: NodeJS.Signals) => {
+        const deadline = performance.now() + 7500;
+        const remaining = (maximum: number) =>
+            Math.max(0, Math.min(maximum, deadline - performance.now()));
+        const signal = async (value: NodeJS.Signals) => {
             try {
                 if (process.platform !== "win32" && managed.child.pid)
                     process.kill(-managed.child.pid, value);
                 else if (!managed.exited) managed.child.kill(value);
             } catch (error) {
-                if ((error as NodeJS.ErrnoException).code !== "ESRCH")
-                    throw new Error("网关进程组清理失败，禁止启动新实例");
+                const code = (error as NodeJS.ErrnoException).code;
+                if (code === "ESRCH") return;
+                if (
+                    code === "EPERM" &&
+                    managed.child.pid &&
+                    process.platform !== "win32" &&
+                    (await waitForProcessGroupExit(managed.child.pid, remaining(2000))) === "exited"
+                )
+                    return;
+                throw new Error("网关进程组清理失败，禁止启动新实例");
             }
         };
-        if (!managed.exited || groupExists(managed.child.pid)) signal("SIGTERM");
-        if (!(await waitForClose(managed, 500))) {
-            signal("SIGKILL");
-            if (!(await waitForClose(managed, 5_000)))
+        if (!managed.exited || groupExists(managed.child.pid)) await signal("SIGTERM");
+        if (!(await waitForClose(managed, remaining(500)))) {
+            await signal("SIGKILL");
+            if (!(await waitForClose(managed, remaining(5_000))))
                 throw new Error("网关终止后仍未确认退出，禁止启动新实例");
         }
-        if (groupExists(managed.child.pid)) signal("SIGKILL");
-        for (let attempt = 0; groupExists(managed.child.pid); attempt++) {
-            if (attempt >= 100) throw new Error("网关进程组仍未确认退出，禁止启动新实例");
-            await new Promise(resolve => setTimeout(resolve, 20));
-        }
+        if (groupExists(managed.child.pid)) await signal("SIGKILL");
+        if (
+            process.platform !== "win32" &&
+            managed.child.pid &&
+            (await waitForProcessGroupExit(managed.child.pid, remaining(2000))) !== "exited"
+        )
+            throw new Error("网关进程组仍未确认退出，禁止启动新实例");
     }
 }
 

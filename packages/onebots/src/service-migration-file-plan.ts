@@ -1,13 +1,10 @@
 import path from "node:path";
 import yaml from "js-yaml";
 import type { ServiceHost } from "./service-host.js";
-import type { ServiceSpec } from "./service-definition.js";
+import { parseLegacyServiceSpec } from "./service-metadata.js";
 import { getServiceFiles } from "./service-files.js";
 import { parseManagerServiceSpec } from "./manager-service-spec.js";
-import {
-    renderManagerSystemdUnit,
-    renderManagerLaunchdPlist,
-} from "./manager-service-definition.js";
+import { renderInstalledManagerService } from "./manager-service-definition.js";
 import { createServiceMigrationConfig } from "./service-migration-config.js";
 import { ConfigurationFile } from "./configuration/configuration-file.js";
 import {
@@ -37,7 +34,13 @@ export function createServiceMigrationFilePlan(
             byRole.get("metadata")?.path !== paths.metadata
         )
             throw new Error();
-        const legacy = readLegacy(byRole.get("metadata")!.contentBase64);
+        const legacy = parseLegacyServiceSpec(
+            JSON.parse(
+                new TextDecoder("utf-8", { fatal: true }).decode(
+                    Buffer.from(byRole.get("metadata")!.contentBase64, "base64"),
+                ),
+            ),
+        );
         const original = byRole.get("configuration");
         if (
             !original ||
@@ -67,14 +70,7 @@ export function createServiceMigrationFilePlan(
                           workspace: target.workspace,
                       }).document,
                   );
-        const definition =
-            host.platform === "linux"
-                ? renderManagerSystemdUnit(target)
-                : renderManagerLaunchdPlist(
-                      target,
-                      path.join(paths.stateDir, "onebots.log"),
-                      path.join(paths.stateDir, "onebots-error.log"),
-                  );
+        const definition = renderInstalledManagerService(target, host.platform, paths.stateDir);
         return {
             sourceState: document === null ? "damaged" : "ready",
             files: [
@@ -90,39 +86,4 @@ export function createServiceMigrationFilePlan(
     } catch {
         throw new Error("旧服务文件迁移计划无效，禁止写入");
     }
-}
-
-function readLegacy(contentBase64: string): ServiceSpec {
-    const document = parseConfigurationDocument(
-        JSON.parse(
-            new TextDecoder("utf-8", { fatal: true }).decode(Buffer.from(contentBase64, "base64")),
-        ),
-    );
-    const required = [
-        "scope",
-        "configPath",
-        "adapters",
-        "protocols",
-        "nodePath",
-        "binPath",
-        "workingDirectory",
-    ];
-    if (
-        required.some(key => !Object.hasOwn(document, key)) ||
-        Object.keys(document).some(key => ![...required, "applications"].includes(key)) ||
-        !["user", "system"].includes(String(document.scope))
-    )
-        throw new Error();
-    for (const key of ["configPath", "nodePath", "binPath", "workingDirectory"]) {
-        const value = document[key];
-        if (typeof value !== "string" || !path.isAbsolute(value) || /[\0\r\n]/.test(value))
-            throw new Error();
-    }
-    for (const key of ["adapters", "protocols", "applications"]) {
-        const value = document[key];
-        if (key === "applications" && value === undefined) continue;
-        if (!Array.isArray(value) || value.some(item => typeof item !== "string"))
-            throw new Error();
-    }
-    return document as unknown as ServiceSpec;
 }

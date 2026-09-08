@@ -83,6 +83,70 @@ function fixture(options: LaunchdServicePlatformOptions = {}) {
 }
 
 describe("launchd service platform", () => {
+    it("uses durable manager ownership proof only for an explicitly unloaded cold instance", async () => {
+        const proof = vi.fn(async () => true);
+        const f = fixture({ confirmUnloadedProcesses: proof });
+        Object.assign(f.state, { loaded: false, running: false, enabled: false });
+        expect((await f.platform.inspect()).quiescent).toBe(true);
+        expect(proof).toHaveBeenCalledTimes(1);
+        await f.platform.start();
+        expect(await f.platform.inspect()).toMatchObject({ state: "running", enabled: false });
+    });
+    it("false or throwing ownership proof never yields quiescence", async () => {
+        const denied = fixture({ confirmUnloadedProcesses: async () => false });
+        Object.assign(denied.state, { loaded: false, running: false });
+        expect((await denied.platform.inspect()).quiescent).toBe(false);
+        await expect(denied.platform.start()).rejects.toThrow("无法安全确认");
+        expect(denied.calls.some(call => ["enable", "bootstrap"].includes(call[1]))).toBe(false);
+        const broken = fixture({
+            confirmUnloadedProcesses: async () => {
+                throw new Error("secret ownership");
+            },
+        });
+        Object.assign(broken.state, { loaded: false, running: false });
+        await expect(broken.platform.inspect()).rejects.toThrow(
+            /^无法安全确认 launchd 服务及其进程组状态$/,
+        );
+    });
+    it("does not consult proof for loaded, unknown OS, fresh, or surviving known groups", async () => {
+        const proof = vi.fn(async () => true);
+        const f = fixture({ confirmUnloadedProcesses: proof });
+        await f.platform.inspect();
+        expect(proof).not.toHaveBeenCalled();
+        f.state.running = false; // loaded stopped still must not use workspace proof
+        await f.platform.inspect();
+        expect(proof).not.toHaveBeenCalled();
+        f.state.loaded = false; // historical group remains alive
+        expect((await f.platform.inspect()).quiescent).toBe(false);
+        expect(proof).not.toHaveBeenCalled();
+        f.state.leader = false;
+        f.state.members = false;
+        expect((await f.platform.inspect()).quiescent).toBe(true);
+        expect(proof).toHaveBeenCalledTimes(1);
+        proof.mockClear();
+        const fresh = fixture({ freshDefinition: true, confirmUnloadedProcesses: proof });
+        Object.assign(fresh.state, { loaded: false, running: false });
+        expect((await fresh.platform.inspect()).quiescent).toBe(true);
+        expect(proof).not.toHaveBeenCalled();
+        const unknown = fixture({ confirmUnloadedProcesses: proof });
+        unknown.state.rawState = "mystery";
+        await expect(unknown.platform.inspect()).rejects.toThrow();
+        expect(proof).not.toHaveBeenCalled();
+    });
+    it("an instance loaded while durable proof is pending invalidates that proof", async () => {
+        const f = fixture({
+            confirmUnloadedProcesses: async () => {
+                f.state.loaded = true;
+                f.state.running = true;
+                return true;
+            },
+        });
+        Object.assign(f.state, { loaded: false, running: false });
+        await expect(f.platform.inspect()).rejects.toThrow("无法安全确认");
+        expect(f.calls.some(call => ["enable", "bootstrap", "bootout"].includes(call[1]))).toBe(
+            false,
+        );
+    });
     it("observes fixed identity, path and an independent real ps group", async () => {
         const f = fixture();
         expect(await f.platform.inspect()).toEqual({

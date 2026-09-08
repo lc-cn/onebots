@@ -1,3 +1,4 @@
+import { waitForProcessGroupExit } from "../process-group-exit.js";
 import { spawn } from "node:child_process";
 import { lstat, mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -193,7 +194,9 @@ async function runDownload(
             try {
                 process.kill(-child.pid, signal);
             } catch (error) {
-                if ((error as NodeJS.ErrnoException).code !== "ESRCH") failed = true;
+                // EPERM 仍属未知，必须等 close 后的有界 ESRCH 证明，不能在此清理所有权。
+                if (!["ESRCH", "EPERM"].includes((error as NodeJS.ErrnoException).code ?? ""))
+                    failed = true;
             }
         };
         const terminate = () => {
@@ -256,18 +259,12 @@ async function runDownload(
             if (process.platform !== "win32") killGroup("SIGKILL");
             try {
                 await ownerWritten;
-                if (process.platform !== "win32" && child.pid) {
-                    for (let attempt = 0; attempt < 100; attempt++) {
-                        try {
-                            process.kill(-child.pid, 0);
-                        } catch (error) {
-                            if ((error as NodeJS.ErrnoException).code === "ESRCH") break;
-                            throw error;
-                        }
-                        if (attempt === 99) throw new Error("下载进程组仍存活");
-                        await new Promise(done => setTimeout(done, 20));
-                    }
-                }
+                if (
+                    process.platform !== "win32" &&
+                    child.pid &&
+                    (await waitForProcessGroupExit(child.pid, 2000)) !== "exited"
+                )
+                    throw new Error("下载进程组未确认退出");
                 await updateDownloadOwner(input.credentialDirectory, input.owner, {
                     phase: "idle",
                     downloaderPid: null,

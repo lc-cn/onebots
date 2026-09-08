@@ -1,3 +1,4 @@
+import { waitForProcessGroupExit } from "../process-group-exit.js";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -136,7 +137,8 @@ function runWorker(
                 if (process.platform === "win32") worker.kill("SIGKILL");
                 else process.kill(-worker.pid, "SIGKILL");
             } catch (cause) {
-                if ((cause as NodeJS.ErrnoException).code !== "ESRCH")
+                // EPERM 仍属未知，必须等 close 后的有界 ESRCH 证明，不能在此清理所有权。
+                if (!["ESRCH", "EPERM"].includes((cause as NodeJS.ErrnoException).code ?? ""))
                     error ??= new Error("候选验证进程组无法回收");
             }
         };
@@ -182,20 +184,12 @@ function runWorker(
             // Plugin imports can create ordinary helpers; ready/exit alone does not reap them.
             if (process.platform !== "win32" && worker.pid) {
                 killOwnedGroup();
-                for (let attempt = 0; attempt < 100; attempt++) {
-                    try {
-                        process.kill(-worker.pid, 0);
-                    } catch (cause) {
-                        if ((cause as NodeJS.ErrnoException).code === "ESRCH") break;
-                        reaped = false;
-                        error ??= new Error("候选验证进程组无法确认退出");
-                        break;
-                    }
-                    if (attempt === 99) {
-                        reaped = false;
-                        error ??= new Error("候选验证进程组仍存活");
-                    } else await new Promise(done => setTimeout(done, 20));
-                }
+                const state = await waitForProcessGroupExit(worker.pid, 2000);
+                reaped = state === "exited";
+                if (!reaped)
+                    error ??= new Error(
+                        state === "timeout" ? "候选验证进程组仍存活" : "候选验证进程组无法确认退出",
+                    );
             }
             lifecycle.cleanupAllowed = reaped;
             if (error || code !== 0 || schemas === undefined)

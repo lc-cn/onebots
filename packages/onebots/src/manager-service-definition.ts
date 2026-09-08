@@ -117,3 +117,19 @@ ${args}
 </plist>
 `;
 }
+
+/** 安装、迁移及控制核验共用同一托管定义，防止日志路径等隐式约定漂移。 */
+export function renderInstalledManagerService(
+    spec: ManagerServiceSpec,
+    platform: NodeJS.Platform,
+    stateDirectory: string,
+): string {
+    if (platform === "linux") return renderManagerSystemdUnit(spec);
+    if (platform === "darwin")
+        return renderManagerLaunchdPlist(
+            spec,
+            path.join(stateDirectory, "onebots.log"),
+            path.join(stateDirectory, "onebots-error.log"),
+        );
+    throw new Error("此系统尚未通过管理服务定义验收");
+}

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGenerationPlan } from "./generation-plan.js";
@@ -251,12 +251,14 @@ await new Promise(() => {});
         async mode => {
             const test = fixture();
             const pidFile = path.join(test.directory, "helper-cancel.pid");
+            const groupFile = path.join(test.directory, "helper-cancel.pgid");
             fs.appendFileSync(
                 path.join(test.plugin, "lib/index.js"),
                 `
 import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {stdio:'ignore'});
+fs.writeFileSync(${JSON.stringify(groupFile)}, String(process.pid));
 fs.writeFileSync(${JSON.stringify(pidFile)}, String(helper.pid));
 await new Promise(() => {});
 `,
@@ -278,18 +280,88 @@ await new Promise(() => {});
                 if (mode === "abort") cancellation.abort();
                 expect(await pending).toBeInstanceOf(Error);
                 expect(fs.readdirSync(path.join(test.directory, "owners"))).toEqual([]);
-                expect(() => process.kill(pid!, 0)).toThrow();
+                let probeThrew = false;
+                try {
+                    process.kill(pid!, 0);
+                } catch {
+                    probeThrew = true; /* 与原toThrow断言保持完全相同的成功条件。 */
+                }
+                let diagnostic: string | undefined;
+                if (!probeThrew) {
+                    const expectedGroup = fs.readFileSync(groupFile, "utf8").trim();
+                    let snapshot: string;
+                    try {
+                        snapshot =
+                            execFileSync(
+                                "/bin/ps",
+                                ["-o", "pid=,ppid=,pgid=,stat=,lstart=", "-p", String(pid)],
+                                {
+                                    encoding: "utf8",
+                                    timeout: 2000,
+                                    stdio: ["ignore", "pipe", "pipe"],
+                                },
+                            ).trim() || "PID在ps取证时已消失";
+                    } catch (error) {
+                        const detail = error as {
+                            status?: number;
+                            stdout?: string | Buffer;
+                            stderr?: string | Buffer;
+                        };
+                        snapshot =
+                            detail.status === 1 &&
+                            !String(detail.stdout ?? "").trim() &&
+                            !String(detail.stderr ?? "").trim()
+                                ? "PID在ps取证时已消失"
+                                : "ps取证不可用（无权限或查询失败）";
+                    }
+                    diagnostic = `helper PID=${pid}; expected worker PGID=${expectedGroup}; initial kill(pid,0) succeeded; ps(pid,ppid,pgid,stat,lstart): ${snapshot}`;
+                }
+                expect(probeThrew, diagnostic).toBe(true);
                 expect(fs.existsSync(path.join(test.directory, "schemas.json"))).toBe(false);
             } finally {
                 cancellation.abort();
                 await pending;
-                if (pid) {
-                    try {
-                        process.kill(pid, "SIGKILL");
-                    } catch {
-                        /* Expected already reaped. */
-                    }
+                // worker所属进程组由verifyGeneration回收；旧PID可能已重用，测试不盲杀。
+            }
+        },
+    );
+    it.skipIf(process.platform === "win32").each(["transient", "permanent"])(
+        "%s EPERM只在确认ESRCH后释放所有权",
+        async mode => {
+            const test = fixture(),
+                privateRoot = path.join(test.directory, "owners");
+            const original = process.kill.bind(process);
+            let probes = 0;
+            const probe = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+                if (pid < 0 && signal === 0) {
+                    probes++;
+                    if (mode === "permanent" || probes === 1)
+                        throw Object.assign(new Error("permission"), { code: "EPERM" });
                 }
+                return original(pid, signal);
+            });
+            try {
+                const result = verifyGeneration(test.directory, test.plan, { privateRoot });
+                if (mode === "transient") {
+                    await expect(result).resolves.toHaveProperty("checks.singleHost", true);
+                    expect(fs.readdirSync(privateRoot)).toEqual([]);
+                } else {
+                    await expect(result).rejects.toThrow("候选验证进程组无法确认退出");
+                    const owners = fs.readdirSync(privateRoot);
+                    expect(owners).toHaveLength(1);
+                    expect(
+                        JSON.parse(
+                            fs.readFileSync(
+                                path.join(privateRoot, owners[0], "owner.json"),
+                                "utf8",
+                            ),
+                        ).phase,
+                    ).toBe("running");
+                    expect(fs.existsSync(path.join(test.directory, "schemas.json"))).toBe(false);
+                }
+                expect(probes).toBeGreaterThan(1);
+            } finally {
+                probe.mockRestore();
             }
         },
     );

@@ -1,3 +1,4 @@
+import { waitForProcessGroupExit } from "../process-group-exit.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -101,7 +102,9 @@ export async function inspectConfigurationRuntime(
                 try {
                     process.kill(-worker.pid, "SIGKILL");
                 } catch (error) {
-                    if ((error as NodeJS.ErrnoException).code !== "ESRCH") failed = true;
+                    // EPERM 仍属未知，必须等 close 后的有界 ESRCH 证明，不能在此清理所有权。
+                if (!["ESRCH", "EPERM"].includes((error as NodeJS.ErrnoException).code ?? ""))
+                        failed = true;
                 }
             };
             const abort = () => {
@@ -142,23 +145,9 @@ export async function inspectConfigurationRuntime(
                 clearTimeout(timer);
                 input.signal?.removeEventListener("abort", abort);
                 kill();
-                let reaped = true;
-                if (worker.pid)
-                    for (let attempt = 0; attempt < 100; attempt++) {
-                        try {
-                            process.kill(-worker.pid, 0);
-                        } catch (error) {
-                            if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
-                                failed = true;
-                                reaped = false;
-                            }
-                            break;
-                        }
-                        if (attempt === 99) {
-                            failed = true;
-                            reaped = false;
-                        } else await new Promise(done => setTimeout(done, 20));
-                    }
+                const reaped =
+                    !worker.pid || (await waitForProcessGroupExit(worker.pid, 2000)) === "exited";
+                if (!reaped) failed = true;
                 cleanupAllowed = reaped;
                 if (failed || code !== 0 || !result) reject(failure());
                 else resolve(result);

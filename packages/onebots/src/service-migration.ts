@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import { assertManagerServiceRuntime } from "./manager-service-preflight.js";
 import { randomUUID } from "node:crypto";
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import { getServiceFiles } from "./service-files.js";
@@ -29,19 +29,7 @@ export async function migrateInstalledService(
         id,
         capture: async () => {
             // 新运行文件与Node版本先检查，不能等停掉旧服务后才发现缺失。
-            try {
-                fs.accessSync(target.nodePath, fs.constants.X_OK);
-                fs.accessSync(target.binPath, fs.constants.R_OK);
-                if (!fs.statSync(target.nodePath).isFile() || !fs.statSync(target.binPath).isFile())
-                    throw new Error();
-                const version = host
-                    .exec(target.nodePath, ["--version"], { timeoutMs: 5000 })
-                    .trim();
-                const major = /^v(\d+)\.\d+\.\d+$/.exec(version)?.[1];
-                if (!major || Number(major) < 24) throw new Error();
-            } catch {
-                throw new Error("目标管理程序或 Node.js 运行环境不可用，旧服务未修改");
-            }
+            assertManagerServiceRuntime(target, host);
             return captureServiceMigration(target, host, {
                 inspect: async () => {
                     const state = await platform.inspect();

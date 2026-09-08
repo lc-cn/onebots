@@ -1,3 +1,4 @@
+import { waitForProcessGroupExit } from "../process-group-exit.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -181,7 +182,8 @@ function run(
             try {
                 process.kill(-worker.pid, "SIGKILL");
             } catch (cause) {
-                if ((cause as NodeJS.ErrnoException).code !== "ESRCH")
+                // EPERM 仍属未知，必须等 close 后的有界 ESRCH 证明，不能在此清理所有权。
+                if (!["ESRCH", "EPERM"].includes((cause as NodeJS.ErrnoException).code ?? ""))
                     error = new ConfigurationVerificationError("CLEANUP_FAILED");
             }
         };
@@ -204,19 +206,8 @@ function run(
             clearTimeout(timer);
             signal?.removeEventListener("abort", abort);
             kill();
-            if (worker.pid)
-                for (let attempt = 0; attempt < 100; attempt++) {
-                    try {
-                        process.kill(-worker.pid, 0);
-                    } catch (cause) {
-                        if ((cause as NodeJS.ErrnoException).code !== "ESRCH")
-                            error = new ConfigurationVerificationError("CLEANUP_FAILED");
-                        break;
-                    }
-                    if (attempt === 99)
-                        error = new ConfigurationVerificationError("CLEANUP_FAILED");
-                    else await new Promise(done => setTimeout(done, 20));
-                }
+            if (worker.pid && (await waitForProcessGroupExit(worker.pid, 2000)) !== "exited")
+                error = new ConfigurationVerificationError("CLEANUP_FAILED");
             if (error || code !== 0 || !result)
                 reject(error ?? new ConfigurationVerificationError("WORKER_FAILED"));
             else resolve(result);

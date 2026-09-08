@@ -56,6 +56,25 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             throw invalid();
         }
     }
+    /** 调用方持服务锁；不以新metadata或新的操作ID绕过旧迁移的恢复门禁。 */
+    health(): { recoveryRequired: boolean } {
+        try {
+            this.checkDirectory();
+            return {
+                recoveryRequired:
+                    this.blocked ||
+                    fs
+                        .readdirSync(this.directory)
+                        .some(
+                            name =>
+                                name.endsWith(".journal.json") &&
+                                !finished(this.read(name.slice(0, -13))),
+                        ),
+            };
+        } catch {
+            return { recoveryRequired: true };
+        }
+    }
     prepare(id: string, backup: ServiceMigrationBackup): ServiceMigrationRecord {
         try {
             this.checkDirectory();
@@ -89,7 +108,9 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
     read(id: string): ServiceMigrationRecord {
         try {
             this.checkDirectory();
-            const record = parseRecord(JSON.parse(readPrivate(this.file(id), 0o600, 16_384)));
+            const record = parseServiceMigrationRecord(
+                JSON.parse(readPrivate(this.file(id), 0o600, 16_384)),
+            );
             if (record.id !== id) throw invalid();
             this.backup(record);
             return record;
@@ -100,7 +121,7 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
     backup(record: ServiceMigrationRecord): ServiceMigrationBackup {
         try {
             this.checkDirectory();
-            const clean = parseRecord(record);
+            const clean = parseServiceMigrationRecord(record);
             const content = readPrivate(this.backupFile(clean.backupDigest), 0o400, LIMIT);
             const backup = parseBackup(JSON.parse(content));
             if (hash(canonical(backup)) !== clean.backupDigest || content !== canonical(backup))
@@ -113,7 +134,7 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
     save(record: ServiceMigrationRecord): void {
         try {
             this.checkDirectory();
-            const clean = parseRecord(record);
+            const clean = parseServiceMigrationRecord(record);
             const previous = this.read(clean.id);
             if (previous.backupDigest !== clean.backupDigest) throw invalid();
             if (
@@ -235,7 +256,7 @@ function parseBackup(input: unknown): ServiceMigrationBackup {
     if (Buffer.byteLength(canonical(backup)) > LIMIT) throw invalid();
     return backup;
 }
-function parseRecord(input: unknown): ServiceMigrationRecord {
+export function parseServiceMigrationRecord(input: unknown): ServiceMigrationRecord {
     const value = object(input, [
         "schemaVersion",
         "id",

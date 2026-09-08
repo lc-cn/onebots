@@ -4,7 +4,7 @@ import {
     recoverConfigurationVerifications,
     readConfigurationVerificationOwner,
 } from "./configuration-verify-ownership.js";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -227,6 +227,35 @@ describe("受信运行环境 Schema 探测", () => {
         expect(invoked).toBe(false);
         expect(result.runtimeOnly).toContain("$.adapters.fixture.field.validate");
         expect(result.runtimeOnly).toContain("$.adapters.fixture.field.default");
+    });
+    it.each(["transient", "permanent"])("Schema清理 %s EPERM仍只凭ESRCH释放owner", async mode => {
+        const runtimeRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ob-inspect-permission-"));
+        const privateRoot = path.join(runtimeRoot, "owners");
+        const original = process.kill.bind(process);
+        let calls = 0;
+        const mocked = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+            if (pid < 0 && signal === 0 && (mode === "permanent" || calls++ === 0))
+                throw Object.assign(new Error("permission"), { code: "EPERM" });
+            return original(pid, signal);
+        });
+        try {
+            const pending = inspectConfigurationRuntime({
+                runtimeRoot,
+                privateRoot,
+                selection: empty,
+                hostEntrypoint: path.resolve("packages/onebots/lib/index.js"),
+            });
+            if (mode === "transient") {
+                await expect(pending).resolves.toHaveProperty("fingerprint");
+                expect(await fs.readdir(privateRoot)).toEqual([]);
+            } else {
+                await expect(pending).rejects.toThrow("运行环境配置能力探测未完成");
+                expect(await fs.readdir(privateRoot)).toHaveLength(1);
+            }
+        } finally {
+            mocked.mockRestore();
+            await fs.rm(runtimeRoot, { recursive: true, force: true });
+        }
     });
     it("缺失扩展、取消和超时只返回固定错误并回收进程", async () => {
         const root = await fs.mkdtemp(path.join(os.tmpdir(), "ob-inspect-wait-"));

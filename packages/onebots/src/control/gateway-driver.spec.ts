@@ -99,6 +99,26 @@ describe("NodeGatewayDriver real fork lifecycle", () => {
         expect(() => process.kill(pid, 0)).toThrow();
         expect(driver.hasLiveChildren()).toBe(false);
     });
+    it("owned终止信号短暂EPERM后仍须等到ESRCH才能返回可信失败", async () => {
+        const { driver } = await fixture("identity");
+        const original = process.kill.bind(process);
+        let injected = false;
+        const mocked = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+            if (!injected && pid < 0 && signal !== 0) {
+                injected = true;
+                original(pid, "SIGKILL");
+                throw Object.assign(new Error("group transition"), { code: "EPERM" });
+            }
+            return original(pid, signal);
+        });
+        try {
+            await expect(driver.start()).rejects.toBeInstanceOf(GatewayStartReapedError);
+            expect(injected).toBe(true);
+            expect(driver.hasLiveChildren()).toBe(false);
+        } finally {
+            mocked.mockRestore();
+        }
+    });
     it("owned握手失败但进程组清理失败，绝不能声明已回收", async () => {
         const { driver, folder } = await fixture("identity");
         const originalKill = process.kill.bind(process);

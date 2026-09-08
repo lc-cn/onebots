@@ -1,3 +1,4 @@
+import { isLaunchdServiceMissing } from "./service-platform-presence.js";
 import path from "node:path";
 import { LAUNCHD_LABEL, type ServiceScope } from "./service-definition.js";
 import type { ServiceHost } from "./service-host.js";
@@ -8,6 +9,8 @@ export interface LaunchdServicePlatformOptions {
     freshDefinition?: boolean;
     /** 只能进行 signal 0 存活探测；注入边界供无宿主服务的测试使用。 */
     processExists?(pid: number): boolean;
+    /** 新管理工作区的持久所有权证明；仅OS明确unloaded且已知进程组全退出时调用。 */
+    confirmUnloadedProcesses?(): Promise<boolean>;
     now?(): number;
     sleep?(milliseconds: number): Promise<void>;
     stopTimeoutMs?: number;
@@ -53,6 +56,7 @@ export class LaunchdServicePlatform implements ServicePlatform {
     private readonly now: () => number;
     private readonly sleep: (milliseconds: number) => Promise<void>;
     private readonly timeout: number;
+    private readonly confirmUnloadedProcesses?: () => Promise<boolean>;
     private readonly groups = new Set<number>();
     private fresh: boolean;
     private unprovenGroup = false;
@@ -76,6 +80,7 @@ export class LaunchdServicePlatform implements ServicePlatform {
         this.domain = scope === "system" ? "system" : `gui/${host.uid}`;
         this.target = `${this.domain}/${LAUNCHD_LABEL}`;
         this.exists = options.processExists ?? processExists;
+        this.confirmUnloadedProcesses = options.confirmUnloadedProcesses;
         this.now = options.now ?? Date.now;
         this.sleep =
             options.sleep ??
@@ -97,15 +102,12 @@ export class LaunchdServicePlatform implements ServicePlatform {
         try {
             output = this.command(["print", this.target], deadline);
         } catch (error) {
-            const failure = error as { status?: unknown; stderr?: unknown };
-            const stderr = Buffer.isBuffer(failure.stderr)
-                ? failure.stderr.toString("utf8")
-                : failure.stderr;
-            const domain = this.domain === "system" ? "system" : `user gui: ${this.host.uid}`;
             if (
-                failure.status === 113 &&
-                stderr ===
-                    `Bad request.\nCould not find service "${LAUNCHD_LABEL}" in domain for ${domain}\n`
+                isLaunchdServiceMissing(
+                    error,
+                    this.domain === "system" ? "system" : "user",
+                    this.host.uid,
+                )
             )
                 return null;
             unavailable();
@@ -163,6 +165,14 @@ export class LaunchdServicePlatform implements ServicePlatform {
         }
         return gone;
     }
+    private async unloadedQuiescent(enabled: boolean, deadline?: number): Promise<boolean> {
+        if (this.unprovenGroup || (this.groups.size > 0 && !this.groupsGone())) return false;
+        if (this.fresh || !this.confirmUnloadedProcesses) return this.groupsGone();
+        if ((await this.confirmUnloadedProcesses()) !== true) return false;
+        // 异步持久证据期间若OS加载状态或启用状态变化，不能拼接两个时点的证据。
+        if (this.loaded(deadline) !== null || this.enabled(deadline) !== enabled) unavailable();
+        return !this.unprovenGroup && (this.groups.size === 0 || this.groupsGone());
+    }
     async inspect(): Promise<ServicePlatformState> {
         return this.inspectWithin();
     }
@@ -179,7 +189,7 @@ export class LaunchdServicePlatform implements ServicePlatform {
                     definitionPath: this.expectedDefinitionPath,
                     processId: null,
                     identity: null,
-                    quiescent: this.groupsGone(),
+                    quiescent: await this.unloadedQuiescent(enabled, deadline),
                 };
             this.fresh = false;
             if (data.get("path") !== this.expectedDefinitionPath) unavailable();
