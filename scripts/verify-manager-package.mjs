@@ -1,3 +1,4 @@
+import { verifyManagerUpgrade } from "./verify-manager-upgrade.mjs";
 /** 验证真实 npm 安装产物；不安装系统服务，不使用平台凭据。 */
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -99,6 +100,7 @@ try {
     // 真正越过 sockaddr_un 上限，包含多字节路径；工作区仍在 owner 子树中。
     const privateRoot = path.join(verificationRoot, "候选管理程序".repeat(12));
     fs.mkdirSync(privateRoot, { mode: 0o700 });
+    safeToRemove = false;
     try {
         const proof = await verifyManagerCandidate(runtime, plan, { privateRoot });
         assert.equal(proof.planDigest, plan.digest);
@@ -161,6 +163,7 @@ try {
     assert.equal((await client.status()).gateway.actual, "stopped");
     await host.close();
     host = undefined;
+    await verifyManagerUpgrade(runtime, archives, temporary);
     safeToRemove = true;
     process.stdout.write(
         "✓ 实际 npm 产物：候选维护启动与损坏入口拒绝、验证进程回收、Web入口及资源、匿名控制拒绝、零扩展、网关启停和停止意图跨重启保持通过（未安装原生系统服务）\n",
