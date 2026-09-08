@@ -109,6 +109,67 @@ function fixture() {
 }
 
 describe("generation verification worker", () => {
+    it("从实际注册表导出协议映射并与配置读取共用收据工件", async () => {
+        const test = fixture();
+        fs.appendFileSync(
+            path.join(test.core, "lib/index.js"),
+            `
+            ProtocolRegistry.getProtocolNames = () => ['custom-wire'];
+            ProtocolRegistry.getVersions = name => name === 'custom-wire' ? ['v2'] : [];
+            ProtocolRegistry.has = (name, version) => name === 'custom-wire' && version === 'v2';
+            ProtocolRegistry.getSchema = key => key === 'custom-wire.v2' ? { token: { type: 'string', sensitive: true } } : undefined;
+        `,
+        );
+        test.writePackage("@onebots/protocol-custom-wire-v2");
+        const plan = createGenerationPlan({
+            ...test.plan,
+            extensions: [
+                ...test.plan.extensions,
+                {
+                    type: "protocol",
+                    name: "custom-wire-v2",
+                    packageName: "@onebots/protocol-custom-wire-v2",
+                    version: "1.0.0",
+                    spec: "1.0.0",
+                    peerDependencies: {},
+                },
+            ],
+            selection: { ...test.plan.selection, protocols: ["custom-wire-v2"] },
+        });
+        const verification = await verifyGeneration(test.directory, plan);
+        const schemas = JSON.parse(
+            fs.readFileSync(path.join(test.directory, "schemas.json"), "utf8"),
+        );
+        expect(schemas.protocolMetadata).toEqual([
+            { registrationName: "custom-wire-v2", name: "custom-wire", version: "v2" },
+        ]);
+        const { GenerationStore } = await import("./generation-store.js");
+        const { readGenerationConfigurationSchema } =
+            await import("../configuration/configuration-runtime-schema.js");
+        const store = new GenerationStore({
+            root: path.join(test.directory, "generations"),
+            isActive: () => false,
+        });
+        const candidate = store.allocate("schema-test", plan.digest);
+        fs.cpSync(
+            path.join(test.directory, "node_modules"),
+            path.join(candidate.directory, "node_modules"),
+            { recursive: true },
+        );
+        for (const name of ["pnpm-lock.yaml", "schemas.json"])
+            fs.copyFileSync(path.join(test.directory, name), path.join(candidate.directory, name));
+        store.commitVerified(candidate.id, verification);
+        const bundle = readGenerationConfigurationSchema(store, candidate.id);
+        expect(bundle.protocols["custom-wire.v2"].token).toEqual({
+            type: "string",
+            sensitive: true,
+        });
+        expect(bundle.protocols["custom-wire-v2"]).toBeUndefined();
+        fs.appendFileSync(path.join(candidate.directory, "schemas.json"), " ");
+        expect(() => readGenerationConfigurationSchema(store, candidate.id)).toThrow(
+            "运行版本缺少有效配置 Schema",
+        );
+    });
     it.skipIf(process.platform === "win32")(
         "管理父进程强杀后IPC断连回收验证worker及其helper",
         async () => {

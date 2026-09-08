@@ -2,7 +2,7 @@
  * 仅使用公开测试扩展与 Mock 账号；宿主工件由镜像配置，禁止用于生产数据卷。
  */
 import assert from 'node:assert/strict';
-import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { createLocalControlClient } from '/app/packages/onebots/lib/client/local-control.js';
 
@@ -71,9 +71,25 @@ assert.ok(before.gateway.instance?.id);
 await publicStatus('/mock/bot/onebot/v11/get_login_info', 404);
 assert.equal((await client.activateGeneration(operation.candidateId)).status, 'succeeded');
 assert.equal((await client.status()).gateway.instance.id, before.gateway.instance.id);
-await writeFile(configPath, 'plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\n  applications: []\nmock.bot:\n  nickname: CI Mock\n  onebot.v11:\n    use_http: true\n', { mode: 0o600 });
+const snapshot = await client.configurationSnapshot();
+const draft = await client.createConfigurationDraft(snapshot.base);
+const account = await client.addConfigurationAccount(draft.id, {
+    expectedRevision: draft.revision, platform: 'mock', accountId: 'bot',
+});
+const protocol = await client.setConfigurationProtocol(draft.id, {
+    expectedRevision: account.revision, accountKey: 'mock.bot', protocol: 'onebot.v11', enabled: true,
+});
+const edited = await client.editConfigurationDraft(draft.id, {
+    expectedRevision: protocol.revision,
+    changes: [{ op: 'set', path: ['mock.bot', 'onebot.v11', 'use_http'], value: true }], secrets: [],
+});
+const validation = await client.validateConfigurationDraft(draft.id, edited.revision);
+assert.equal(validation.valid, true);
+assert.ok(validation.receiptId);
+const applyId = `ci-config-${randomUUID()}`;
 try {
-    assert.equal((await client.gateway('restart')).status, 'succeeded');
+    assert.equal((await client.applyConfiguration(applyId, validation.receiptId)).status, 'succeeded');
+    assert.equal((await client.applyConfiguration(applyId, validation.receiptId)).status, 'succeeded');
     const response = await fetch(`${base}/mock/bot/onebot/v11/get_login_info`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
         signal: AbortSignal.timeout(10_000),

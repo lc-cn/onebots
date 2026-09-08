@@ -24,11 +24,12 @@ function workspace(): string {
     return directory;
 }
 
-async function start(root: string, entrypoint = gatewayEntrypoint) {
+async function start(root: string, entrypoint = gatewayEntrypoint, runtimeRoot?: string) {
     const host = await startControlHost({
         workspace: root,
         port: 0,
         gatewayEntrypoint: entrypoint,
+        runtimeRoot,
     });
     cleanups.push(() => host.close());
     const address = host.server.address();
@@ -73,6 +74,73 @@ async function upgrade(port: number, target: string): Promise<string> {
 }
 
 describe("control host integration", () => {
+    it("先查看平台Schema，再通过草稿添加账号和协议完成真实协议调用", async () => {
+        const root = workspace();
+        fs.writeFileSync(path.join(root, "config.yaml"), "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\n  applications: []\n");
+        const running = await start(root, gatewayEntrypoint, path.resolve("development"));
+        const client = await pair(running);
+        const snapshot = await client.configurationSnapshot();
+        expect(snapshot.schemas.adapters).toHaveProperty("mock");
+        const draft = await client.createConfigurationDraft(snapshot.base);
+        const account = await client.addConfigurationAccount(draft.id, { expectedRevision: draft.revision, platform: "mock", accountId: "003.with.dot" });
+        const protocol = await client.setConfigurationProtocol(draft.id, { expectedRevision: account.revision, accountKey: "mock.003.with.dot", protocol: "onebot.v11", enabled: true });
+        const edited = await client.editConfigurationDraft(draft.id, { expectedRevision: protocol.revision, changes: [{ op: "set", path: ["mock.003.with.dot", "onebot.v11", "use_http"], value: true }], secrets: [] });
+        const validation = await client.validateConfigurationDraft(draft.id, edited.revision);
+        expect(validation.valid).toBe(true);
+        expect((await client.applyConfiguration("account-api", validation.receiptId!)).status).toBe("succeeded");
+        const response = await fetch(`${running.url}/mock/003.with.dot/onebot/v11/get_login_info`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+        expect(response.status).toBe(200);
+        expect((await response.json()).status).toBe("ok");
+    });
+    it("空白工作区通过统一HTTP客户端完成草稿校验应用，保持停止意图", async () => {
+        const root = workspace();
+        const running = await start(root);
+        const client = await pair(running);
+        await client.gateway("stop");
+        const snapshot = await client.configurationSnapshot();
+        expect(snapshot.document.plugins).toEqual({
+            adapters: [],
+            protocols: [],
+            applications: [],
+        });
+        const draft = await client.createConfigurationDraft(snapshot.base);
+        const edited = await client.editConfigurationDraft(draft.id, {
+            expectedRevision: draft.revision,
+            changes: [{ op: "set", path: ["log_level"], value: "debug" }],
+            secrets: [],
+        });
+        const verified = await client.validateConfigurationDraft(draft.id, edited.revision);
+        expect(verified.valid).toBe(true);
+        expect(verified.receiptId).toBeTruthy();
+        const operation = await client.applyConfiguration("http-config-apply", verified.receiptId!);
+        expect(operation.status).toBe("succeeded");
+        expect((await client.status()).gateway.desired).toBe("stopped");
+        expect((await client.status()).gateway.actual).toBe("stopped");
+        expect((await client.configurationSnapshot()).document.log_level).toBe("debug");
+        expect(await client.applyConfiguration("http-config-apply", verified.receiptId!)).toEqual(
+            operation,
+        );
+        expect((await fetch(`${running.url}/`)).status).toBe(200);
+        expect((await client.gateway("start")).status).toBe("succeeded");
+    });
+    it("配置应用记录损坏时保留管理端并拒绝启动，停止仍可执行", async () => {
+        const root = workspace();
+        const records = path.join(root, ".control/configuration-applications");
+        fs.mkdirSync(records, { recursive: true });
+        fs.writeFileSync(path.join(records, "broken.json"), '{"private-config-secret":');
+        const running = await start(root);
+        const client = await pair(running);
+        const state = await client.status();
+        expect(state.gateway.actual).not.toBe("running");
+        expect(JSON.stringify(state)).not.toContain("private-config-secret");
+        await expect(client.gateway("start")).rejects.toThrow();
+        expect((await client.gateway("stop")).status).toBe("succeeded");
+        expect((await fetch(`${running.url}/`)).status).toBe(200);
+        expect((await fetch(`${running.url}/ready`)).status).toBe(200);
+        expect(fs.readFileSync(path.join(records, "broken.json"), "utf8")).toContain(
+            "private-config-secret",
+        );
+    });
     it("网关ready后的状态写入失败仍保留Web并允许修复存储后安全关闭", async () => {
         const root = workspace();
         const entrypoint = path.join(root, "fault-gateway.mjs");

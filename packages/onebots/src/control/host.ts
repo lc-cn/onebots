@@ -19,6 +19,8 @@ import {
     type ControlInstallationOptions,
 } from "./installation-service.js";
 import { handleInstallationRequest, isInstallationPath } from "./installation-api.js";
+import { ConfigurationApplication } from "../configuration/configuration-application.js";
+import { ConfigurationFile } from "../configuration/configuration-file.js";
 import {
     acquireControlWorkspace,
     controlDirectory,
@@ -27,6 +29,9 @@ import {
     processExists,
 } from "./workspace.js";
 import { proxyGatewayHttp, proxyGatewayUpgrade } from "./proxy.js";
+import { listen, readBody } from "./http-utils.js";
+import { ControlConfigurationService } from "./configuration-service.js";
+import { handleConfigurationRequest, isConfigurationPath } from "./configuration-api.js";
 import packageMetadata from "../../package.json" with { type: "json" };
 
 export interface ControlHostOptions {
@@ -57,6 +62,9 @@ export async function startControlHost(options: ControlHostOptions) {
     let currentStartFailed = false;
     let lifecycle: GenerationActivationController;
     let generations: GenerationStore | undefined;
+    let configurationApplication: ConfigurationApplication | undefined;
+    let configuration: ControlConfigurationService | undefined;
+    let configurationStorageUnavailable = false;
     try {
         generations = new GenerationStore({
             root: path.join(controlDirectory(workspace), "generations"),
@@ -105,7 +113,29 @@ export async function startControlHost(options: ControlHostOptions) {
             return generations.readVerified(generationId);
         },
         hasLiveChildren: () => driver.hasLiveChildren(),
+        configurationRecoveryRequired: () =>
+            configurationStorageUnavailable ||
+            Boolean(configurationApplication?.health().recoveryRequired),
     });
+    try {
+        configurationApplication = new ConfigurationApplication({
+            directory: path.join(controlDirectory(workspace), "configuration-applications"),
+            source: new ConfigurationFile(path.join(workspace, "config.yaml")),
+            lifecycle,
+        });
+        if (generations)
+            configuration = new ControlConfigurationService({
+                directory: path.join(controlDirectory(workspace), "configuration"),
+                configFile: path.join(workspace, "config.yaml"),
+                runtimeRoot: options.runtimeRoot ?? process.cwd(),
+                generations,
+                application: configurationApplication,
+                activeGeneration: () => lifecycle.activeGeneration(),
+            });
+    } catch {
+        configurationStorageUnavailable = true;
+        process.stderr.write("[onebots] 配置应用记录不可用，保留管理端用于诊断\n");
+    }
     let installation: ControlInstallationService | undefined;
     try {
         const recovered = await recoverDownloadCredentials(
@@ -136,6 +166,8 @@ export async function startControlHost(options: ControlHostOptions) {
         return state.actual === "running" &&
             !state.recoveryRequired &&
             !lifecycle.status().recoveryRequired &&
+            !configurationStorageUnavailable &&
+            !configurationApplication?.health().recoveryRequired &&
             driver.hasLiveChildren()
             ? state.instance?.address
             : undefined;
@@ -231,6 +263,11 @@ export async function startControlHost(options: ControlHostOptions) {
                         authAvailable,
                         generation: lifecycle.status(),
                         installationAvailable: Boolean(installation),
+                        configuration: {
+                            recoveryRequired:
+                                configurationStorageUnavailable ||
+                                Boolean(configurationApplication?.health().recoveryRequired),
+                        },
                     });
                     return;
                 }
@@ -241,6 +278,22 @@ export async function startControlHost(options: ControlHostOptions) {
                         method: request.method,
                         body: () => readBody(request),
                         service: installation,
+                        allowCredentials:
+                            local ||
+                            address === "127.0.0.1" ||
+                            address === "::1" ||
+                            address === "::ffff:127.0.0.1",
+                    });
+                    json(response, result.status, result.body);
+                    return;
+                }
+                if (isConfigurationPath(pathname)) {
+                    const address = request.socket.remoteAddress;
+                    const result = await handleConfigurationRequest({
+                        pathname,
+                        method: request.method,
+                        body: () => readBody(request, 1_048_576),
+                        service: configuration,
                         allowCredentials:
                             local ||
                             address === "127.0.0.1" ||
@@ -356,6 +409,7 @@ export async function startControlHost(options: ControlHostOptions) {
     async function close() {
         if (closed) return;
         closed = true;
+        await configuration?.close();
         await installation?.close();
         try {
             if (!storageError || driver.hasLiveChildren()) await lifecycle.shutdown();
@@ -418,6 +472,8 @@ export async function startControlHost(options: ControlHostOptions) {
                 !storageError &&
                 !lifecycle.status().recoveryRequired &&
                 !state.recoveryRequired &&
+                !configurationStorageUnavailable &&
+                !configurationApplication?.health().recoveryRequired &&
                 state.desired === "running"
             ) {
                 const operation = await lifecycle.start();
@@ -432,32 +488,4 @@ export async function startControlHost(options: ControlHostOptions) {
         await close();
         throw error;
     }
-}
-
-function listen(server: http.Server, port: number | string, host?: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        const error = (cause: Error) => reject(cause);
-        server.once("error", error);
-        const ready = () => {
-            server.off("error", error);
-            resolve();
-        };
-        if (typeof port === "string") server.listen(port, ready);
-        else server.listen(port, host, ready);
-    });
-}
-
-async function readBody(request: IncomingMessage): Promise<Record<string, unknown>> {
-    let size = 0;
-    const chunks: Buffer[] = [];
-    for await (const value of request) {
-        const chunk = Buffer.from(value);
-        size += chunk.length;
-        if (size > 16_384) throw new Error("控制请求过大");
-        chunks.push(chunk);
-    }
-    const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-        throw new Error("控制请求无效");
-    return parsed as Record<string, unknown>;
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { VerifiedGeneration } from "../installation/generation-store.js";
@@ -42,6 +43,16 @@ export interface GenerationActivationOptions {
     readVerified(id: string): VerifiedGeneration;
     /** Only proves children owned by this live manager; never use as cold-start orphan proof. */
     hasLiveChildren(): boolean;
+    configurationRecoveryRequired?(): boolean;
+}
+
+/** 仅供可信配置服务使用；事务中必须 await 操作，不得调用外层 facade。 */
+export interface ConfigurationTransactionPort {
+    activeGenerationId(): string | null;
+    hasLiveChildren(): boolean;
+    gatewayStatus(): { desired: "running" | "stopped"; recoveryRequired?: boolean };
+    suspend(): Promise<{ status: string }>;
+    start(): Promise<{ status: string }>;
 }
 
 /**
@@ -58,6 +69,7 @@ export class GenerationActivationController {
     };
     private initialized = false;
     private queue: Promise<unknown> = Promise.resolve();
+    private readonly configurationContext = new AsyncLocalStorage<boolean>();
 
     constructor(private readonly options: GenerationActivationOptions) {}
 
@@ -105,6 +117,53 @@ export class GenerationActivationController {
     }
     shutdown(): Promise<GatewayOperation> {
         return this.lifecycle("shutdown");
+    }
+
+    runConfigurationTransaction<T>(
+        task: (port: ConfigurationTransactionPort) => Promise<T>,
+    ): Promise<T> {
+        return this.serial(async () => {
+            this.assertWritable();
+            let open = true;
+            const pending = new Set<Promise<unknown>>();
+            const check = () => {
+                if (!open) throw new Error("配置事务已结束");
+            };
+            const action = (method: "start" | "suspend") => {
+                check();
+                const result = this.options.gateway[method]();
+                pending.add(result);
+                // 即使可信调用方忘记 await，也不能让生命周期操作跨出事务队列。
+                void result.then(
+                    () => pending.delete(result),
+                    () => pending.delete(result),
+                );
+                return result;
+            };
+            const port: ConfigurationTransactionPort = {
+                activeGenerationId: () => {
+                    check();
+                    return this.state.active?.id ?? null;
+                },
+                hasLiveChildren: () => {
+                    check();
+                    return this.options.hasLiveChildren();
+                },
+                gatewayStatus: () => {
+                    check();
+                    const { desired, recoveryRequired } = this.options.gateway.status();
+                    return { desired, recoveryRequired };
+                },
+                suspend: () => action("suspend"),
+                start: () => action("start"),
+            };
+            try {
+                return await this.configurationContext.run(true, () => task(port));
+            } finally {
+                open = false;
+                await Promise.allSettled([...pending]);
+            }
+        });
     }
 
     /** Host supplies identity-aware evidence; absence from a fresh driver's map is not evidence. */
@@ -254,12 +313,18 @@ export class GenerationActivationController {
 
     private assertWritable(): void {
         this.assertInitialized();
+        if (this.options.configurationRecoveryRequired?.())
+            throw new Error("配置事务需要对账，禁止继续启动或切换");
         if (this.state.recoveryRequired) throw new Error("版本切换需要对账，禁止继续启动或切换");
         if (this.options.gateway.status().recoveryRequired)
             throw new Error("网关实例需要对账，禁止在未知旧实例之上启动或切换");
     }
 
     private serial<T>(task: () => Promise<T>): Promise<T> {
+        if (this.configurationContext.getStore())
+            return Promise.reject(
+                new Error("配置事务内部必须使用事务端口，不能调用生命周期 facade"),
+            );
         const result = this.queue.then(task);
         this.queue = result.catch(() => undefined); // Each caller receives its own failure.
         return result;

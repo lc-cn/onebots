@@ -99,14 +99,14 @@ describe("runtime config validation", () => {
         ).toThrow(/mock\.demo\.token.*required.*mock\.demo\.test\.v1\.use_http.*boolean/);
     });
 
-    it("rejects an account before startup when it has no loaded protocol outlet", () => {
+    it("allows a configured platform account without forcing a protocol outlet", () => {
         registerTestPlugins();
 
         expect(() =>
             validateRuntimeConfig({
                 "mock.demo": { token: "secret" },
             }),
-        ).toThrow(/mock\.demo.*至少需要配置一个已加载的协议出口/);
+        ).not.toThrow();
     });
 
     it("拒绝静默忽略缺少账号 ID 的已加载适配器配置", () => {
@@ -168,7 +168,7 @@ describe("runtime config validation", () => {
         ).not.toThrow();
     });
 
-    it("keeps dormant protocol configuration while still requiring a loaded outlet", () => {
+    it("keeps dormant protocol configuration without enabling an outlet", () => {
         expect(() =>
             validateRuntimeConfig({ general: { "ghost.v1": { use_http: true } } }),
         ).not.toThrow();
@@ -185,7 +185,7 @@ describe("runtime config validation", () => {
             validateRuntimeConfig({
                 "mock.demo": { token: "secret", "ghost.v1": {} },
             }),
-        ).toThrow(/至少需要配置一个已加载的协议出口/);
+        ).not.toThrow();
 
         ProtocolRegistry.register("test", "v1", (() => undefined) as unknown as Protocol.Factory);
         ProtocolRegistry.registerSchema("test.v1", protocolSchema);

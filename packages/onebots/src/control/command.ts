@@ -3,12 +3,17 @@ import { randomUUID } from "node:crypto";
 import { createLocalControlClient } from "../client/local-control.js";
 import { startControlHost } from "./host.js";
 import { writeCliOutput } from "../cli-output.js";
+import { runConfigurationCommand } from "./configuration-command.js";
 
 /** 新控制入口只在独立架构分支启用，所有启停调用同一客户端。 */
 export async function runControlCommand(argv: string[]): Promise<boolean> {
     const command = argv[2];
     if (!["serve", "auth", "control"].includes(command)) return false;
     const options = argv.slice(3);
+    if (command === "control" && options[0] === "config") {
+        await runConfigurationCommand(options.slice(1));
+        return true;
+    }
     function option(name: string, fallback: string): string {
         const index = options.indexOf(name);
         if (index < 0) return fallback;
@@ -48,6 +53,11 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
     }
     const client = createLocalControlClient(workspace);
     const action = options[0];
+    if (command === "control" && action === "tui") {
+        const { runControlTui } = await import("./tui.js");
+        await runControlTui(client);
+        return true;
+    }
     if (command === "auth") {
         if (action !== "bootstrap") throw new Error("使用 onebots auth bootstrap 获取单次配对码");
         const result = await client.bootstrap();

@@ -29,7 +29,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm exec vitest run packages/onebots/src __tests__/unit/docker* __tests__/unit/pack-control-runtime.spec.ts
+      - run: pnpm test
       - run: pnpm packages:pack:check
       - run: docker build -t onebots-control-ci .
       - name: Verify blank Docker control service

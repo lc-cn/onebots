@@ -53,6 +53,7 @@ async function fixture() {
     const events: string[] = [];
     const state = {
         live: false,
+        configurationRecovery: false,
         failTarget: false,
         leakTarget: false,
         failRollback: false,
@@ -96,6 +97,7 @@ async function fixture() {
             return verified(id);
         },
         hasLiveChildren: () => state.live,
+        configurationRecoveryRequired: () => state.configurationRecovery,
     };
     activation = new GenerationActivationController(options);
     await activation.initialize();
@@ -103,6 +105,62 @@ async function fixture() {
 }
 
 describe("generation activation serialized lifecycle", () => {
+    it("holds concurrent start and activation behind the entire configuration transaction", async () => {
+        const { activation, events } = await fixture();
+        let release!: () => void;
+        let entered!: () => void;
+        const barrier = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const ready = new Promise<void>(resolve => {
+            entered = resolve;
+        });
+        const configuration = activation.runConfigurationTransaction(async port => {
+            expect(port.activeGenerationId()).toBeNull();
+            entered();
+            await barrier;
+            expect(events).toEqual([]);
+            expect((await port.start()).status).toBe("succeeded");
+            return "committed";
+        });
+        await ready;
+        const start = activation.start();
+        const activate = activation.activate("target");
+        await new Promise(resolve => setImmediate(resolve));
+        expect(events).toEqual([]);
+        release();
+        expect(await configuration).toBe("committed");
+        expect((await start).status).toBe("succeeded");
+        expect((await activate).status).toBe("succeeded");
+        expect(events).toEqual(["start:bundled", "stop", "start:target"]);
+    });
+
+    it("blocks recovery writes at execution time while allowing stop and shutdown", async () => {
+        const { activation, state, events } = await fixture();
+        await activation.start();
+        state.configurationRecovery = true;
+        await expect(activation.start()).rejects.toThrow("配置事务需要对账");
+        await expect(activation.restart()).rejects.toThrow("配置事务需要对账");
+        await expect(activation.activate("target")).rejects.toThrow("配置事务需要对账");
+        await expect(activation.runConfigurationTransaction(async () => "no")).rejects.toThrow(
+            "配置事务需要对账",
+        );
+        expect((await activation.stop()).status).toBe("succeeded");
+        expect((await activation.shutdown()).status).toBe("succeeded");
+        expect(events).toEqual(["start:bundled", "stop"]);
+    });
+
+    it("rejects reentrant facade calls without deadlock and revokes the transaction port", async () => {
+        const { activation } = await fixture();
+        const port = await activation.runConfigurationTransaction(async port => {
+            await expect(activation.start()).rejects.toThrow("事务端口");
+            await expect(activation.activate("target")).rejects.toThrow("事务端口");
+            return port;
+        });
+        expect(() => port.start()).toThrow("配置事务已结束");
+        expect((await activation.start()).status).toBe("succeeded");
+    });
+
     it("serializes two clients CAS and refresh retries never restart the applied candidate", async () => {
         const { activation, events, options } = await fixture();
         await activation.start();

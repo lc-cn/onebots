@@ -134,70 +134,12 @@ async function verify(directory: string, plan: GenerationPlan): Promise<string> 
         );
         if (!result?.loaded) throw new Error("registration");
     }
-    const adapters: Record<string, unknown> = {};
-    const protocols: Record<string, unknown> = {};
-    const applications: Record<string, unknown> = {};
-    for (const name of plan.selection.adapters) {
-        if (!core.AdapterRegistry.has(name)) throw new Error("adapter");
-        const schema = core.AdapterRegistry.getSchema(name);
-        if (!schema) throw new Error("schema");
-        adapters[name] = schema;
-    }
-    for (const name of plan.selection.protocols) {
-        const match = /^(.*)-(v\d+)$/.exec(name);
-        if (!match || !core.ProtocolRegistry.has(match[1], match[2])) throw new Error("protocol");
-        const schema = core.ProtocolRegistry.getSchema(`${match[1]}.${match[2]}`);
-        if (!schema) throw new Error("schema");
-        protocols[name] = schema;
-    }
-    for (const name of plan.selection.applications) {
-        if (!core.ApplicationRegistry.has(name)) throw new Error("application");
-        const application = core.ApplicationRegistry.get(name);
-        applications[name] = { name, displayName: application.displayName };
-    }
-    const runtimeOnly: string[] = [];
-    const converted = serialize({ adapters, protocols, applications }, "$", runtimeOnly, new Set());
-    const schemas = JSON.stringify({ schemaVersion: 1, ...(converted as object), runtimeOnly });
-    if (Buffer.byteLength(schemas) > 1024 * 1024) throw new Error("schema size");
-    return schemas;
-}
-
-function serialize(
-    value: unknown,
-    location: string,
-    runtimeOnly: string[],
-    ancestors: Set<object>,
-): unknown {
-    if (typeof value === "function" || value === undefined) {
-        runtimeOnly.push(location);
-        return undefined;
-    }
-    if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (value instanceof RegExp) return { source: value.source, flags: value.flags };
-    if (!value || typeof value !== "object" || ancestors.has(value) || ancestors.size > 50)
-        throw new Error("schema serialization");
-    ancestors.add(value);
-    try {
-        if (Array.isArray(value))
-            return value.map((item, index) =>
-                serialize(item, `${location}[${index}]`, runtimeOnly, ancestors),
-            );
-        if (
-            Object.getPrototypeOf(value) !== Object.prototype &&
-            Object.getPrototypeOf(value) !== null
-        )
-            throw new Error("schema object");
-        const result: Record<string, unknown> = {};
-        for (const [key, item] of Object.entries(value)) {
-            const converted = serialize(item, `${location}.${key}`, runtimeOnly, ancestors);
-            if (converted !== undefined)
-                Object.defineProperty(result, key, { value: converted, enumerable: true });
-        }
-        return result;
-    } finally {
-        ancestors.delete(value);
-    }
+    const extension = import.meta.url.endsWith(".ts") ? "ts" : "js";
+    const { collectRuntimeSchemas } = await import(
+        new URL(`../configuration/configuration-schema-collection.${extension}`, import.meta.url)
+            .href
+    );
+    return collectRuntimeSchemas(core, plan.selection);
 }
 
 if (!process.send) process.exit(1);

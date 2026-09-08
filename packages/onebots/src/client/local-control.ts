@@ -1,5 +1,5 @@
 import http from "node:http";
-import { ControlClient, type ControlTransport } from "@onebots/core/control";
+import { ControlClient, ControlRequestError, type ControlTransport } from "@onebots/core/control";
 import { controlSocket } from "../control/workspace.js";
 
 export function createLocalControlClient(workspace: string): ControlClient {
@@ -29,7 +29,7 @@ export function createLocalControlClient(workspace: string): ControlClient {
                             try {
                                 const data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
                                 if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300)
-                                    throw new Error(data.message ?? "本地控制请求失败");
+                                    throw new ControlRequestError(response.statusCode ?? 0, data.message ?? "本地控制请求失败");
                                 resolve(data as T);
                             } catch (error) {
                                 reject(error);
