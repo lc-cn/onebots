@@ -1,3 +1,6 @@
+import { authorizeControlHttp } from "./auth-check.js";
+import { ControlSendService } from "./send-service.js";
+import { respondControlSend } from "./send-http.js";
 import { ControlMcpService } from "./mcp-api.js";
 import { respondControlMcp } from "./mcp-http.js";
 import { serveControlWeb } from "./web-assets.js";
@@ -204,6 +207,25 @@ export async function startControlHost(options: ControlHostOptions) {
         },
         forward: (instanceId, request) => driver.mcp(instanceId, request),
     });
+    let sending: ControlSendService | undefined;
+    try {
+        sending = new ControlSendService({
+            directory: path.join(controlDirectory(workspace), "messages"),
+            currentContext: () => {
+                const instanceId =
+                    !closed &&
+                    !storageError &&
+                    activeAddress() &&
+                    !serviceMigrationStatus(workspace).pending
+                        ? controller.status().instance?.id
+                        : undefined;
+                return instanceId ? driver.sendContext(instanceId) : undefined;
+            },
+            forward: request => driver.send(request.expected.gatewayInstanceId, request),
+        });
+    } catch {
+        process.stderr.write("[onebots] 发送操作记录不可用，管理端保留用于诊断\n");
+    }
 
     async function handle(request: IncomingMessage, response: ServerResponse, local: boolean) {
         try {
@@ -246,23 +268,9 @@ export async function startControlHost(options: ControlHostOptions) {
                     return;
                 }
                 if (!local) {
-                    let authorized = false;
-                    try {
-                        authorized =
-                            auth?.verify(
-                                (request.headers.authorization ?? "").replace(/^Bearer\s+/i, ""),
-                            ) ?? false;
-                    } catch {
-                        if (authAvailable)
-                            process.stderr.write(
-                                "[onebots] 控制认证存储不可读取，远程请求已拒绝\n",
-                            );
-                        authAvailable = false;
-                    }
-                    if (!authorized) {
-                        json(response, 401, { message: "控制认证失败" });
-                        return;
-                    }
+                    const checked = authorizeControlHttp(auth, request, response, authAvailable);
+                    if (checked.storageUnavailable) authAvailable = false;
+                    if (!checked.authorized) return;
                 }
                 const migration = await handleServiceMigrationRequest({
                     workspace,
@@ -298,6 +306,8 @@ export async function startControlHost(options: ControlHostOptions) {
                     respondSnapshot(response, pathname, status, server.address());
                     return;
                 }
+                if (await respondControlSend(sending, request, response, pathname, local, auth))
+                    return;
                 if (await respondControlMcp(mcp, request, response, pathname, local, auth)) return;
                 if (isInstallationPath(pathname)) {
                     const address = request.socket.remoteAddress;
@@ -421,6 +431,7 @@ export async function startControlHost(options: ControlHostOptions) {
             closed = false;
             throw new Error("网关尚未确认退出，保留管理锁");
         }
+        await sending?.close();
         for (const socket of sockets) socket.destroy();
         await Promise.all(
             [server, local].map(

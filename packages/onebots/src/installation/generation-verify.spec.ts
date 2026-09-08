@@ -184,7 +184,8 @@ import fs from 'node:fs';
 const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {stdio:'ignore'});
 const owner=JSON.parse(fs.readFileSync(process.env.HOME+"/owner.json","utf8"));
 if(owner.phase!=="running" || owner.workerPid!==process.pid) throw new Error("ownership before import");
-fs.writeFileSync(${JSON.stringify(pidFile)}, JSON.stringify({helper:helper.pid,worker:process.pid}));
+fs.writeFileSync(${JSON.stringify(pidFile + ".tmp")}, JSON.stringify({helper:helper.pid,worker:process.pid}));
+fs.renameSync(${JSON.stringify(pidFile + ".tmp")}, ${JSON.stringify(pidFile)});
 await new Promise(() => {});
 `,
             );
@@ -206,6 +207,7 @@ await new Promise(() => {});
                 for (let attempt = 0; !fs.existsSync(pidFile) && attempt < 200; attempt++)
                     await new Promise(resolve => setTimeout(resolve, 10));
                 pids = JSON.parse(fs.readFileSync(pidFile, "utf8"));
+                expect(pids && [pids.helper, pids.worker].every(pid => Number.isSafeInteger(pid) && pid > 0)).toBe(true);
                 const owners = fs.readdirSync(privateRoot);
                 expect(owners).toHaveLength(1);
                 const owner = JSON.parse(
@@ -377,13 +379,15 @@ import {spawn} from 'node:child_process';
 import fs from 'node:fs';
 const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {stdio:'ignore'});
 helper.unref();
-fs.writeFileSync(${JSON.stringify(pidFile)}, String(helper.pid));
+fs.writeFileSync(${JSON.stringify(pidFile + ".tmp")}, String(helper.pid));
+fs.renameSync(${JSON.stringify(pidFile + ".tmp")}, ${JSON.stringify(pidFile)});
 `,
         );
         let pid: number | undefined;
         try {
             await verifyGeneration(test.directory, test.plan);
             pid = Number(fs.readFileSync(pidFile, "utf8"));
+            expect(Number.isSafeInteger(pid) && pid > 0).toBe(true);
             expect(() => process.kill(pid!, 0)).toThrow();
         } finally {
             if (!pid && fs.existsSync(pidFile)) pid = Number(fs.readFileSync(pidFile, "utf8"));

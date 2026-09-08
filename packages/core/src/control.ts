@@ -1,3 +1,6 @@
+import type { ControlSendContext, ControlSendRequest, ControlSendOperation } from "./control-send.js";
+export type { ControlSendContext, ControlSendRequest, ControlSendOperation } from "./control-send.js";
+export { isControlSendContext, isControlSendRequest, isControlSendOperation } from "./control-send.js";
 /** 无服务器或插件依赖的控制契约，CLI/TUI/Web 共用此入口。 */
 export interface ControlStatus {
     schemaVersion: 1;
@@ -311,6 +314,18 @@ export class ControlClient {
 
     gateway(action: "start" | "stop" | "restart"): Promise<ControlOperation> {
         return this.transport.request("POST", `/api/control/gateway/${action}`, {});
+    }
+
+    sendContext(): Promise<ControlSendContext> {
+        return this.transport.request("GET", "/api/control/messages/context");
+    }
+
+    sendMessage(request: ControlSendRequest): Promise<ControlSendOperation> {
+        return this.transport.request("POST", "/api/control/messages/send", request);
+    }
+
+    sendOperation(id: string): Promise<ControlSendOperation> {
+        return this.transport.request("GET", `/api/control/messages/operations/${encodeURIComponent(id)}`);
     }
 
     bootstrap(): Promise<{ code: string }> {

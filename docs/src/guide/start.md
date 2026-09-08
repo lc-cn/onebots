@@ -97,7 +97,7 @@ setup 不会写入占位平台账号；它只为本次 `-p` 实际加载的协�
 
 账号身份由 core 统一验证，因为它同时组成配置键和协议 URL 路径。别名可使用 Unicode、`@`、冒号、连字符、下划线和内部点号；空白、控制字符、`/`、`\\`、`%`、`?`、`#` 以及单独的 `.` / `..` 会在 Web 向导、账号管理 API、启动、热重载、doctor 和服务预检的共同边界被拒绝。`telegram.bot.eu` 仍会被解析为平台 `telegram`、账号 `bot.eu`，不会在第二个点号处截断。
 
-`onebots ui --web -c config.yaml` 会打开管理页面实际所在的本机 origin。宿主 `path` 只作为 Router HTTP 前缀，不会被误拼到页面地址；页面会从运行时元数据读取它。`onebots send -c config.yaml --channel <platform.account> --target_type private <target> <message>` 同样复用规范前缀和管理鉴权优先级：`ONEBOTS_ACCESS_TOKEN` 优先于文件 token；只有用户名密码时会先登录取得 Bearer 会话，并在发送成功或失败后撤销。发送命令会先用不含凭据的 `/health` 探针确认目标是与当前 CLI 同版本的 OneBots，再把登录和发送绑定到该进程的 `instance_id`；只有响应头和 JSON 成功回执均证明来自同一实例时才报告成功。显式 `--url` 只接受不含 URL 凭据、查询串或 fragment 的 HTTP(S) 网关根地址，避免把管理令牌发送到歧义目标。
+`onebots send --data-dir /path/to/onebots-data --account 平台/账号 --target-type private 目标 消息` 连接已有管理服务，不读取旧登录凭据、不启动账号，也不要求启用输出协议。目标 ID 默认保留字符串（含前导零），需要数字时显式指定 `--target-id-type number`。命令先输出操作 ID；超时、断连或结果未知时，用 `onebots send --data-dir /path/to/onebots-data --operation-id 操作ID --json` 查询，不要重新发送。管理服务先持久化请求摘要再单次调用绑定的网关快照，同一操作 ID 不重复发送；记录不包含消息正文或目标。
 
 如果通过 `ONEBOTS_EXTENSION_ROOT` 把依赖安装到独立运行目录，请在同一环境中执行 `onebots install`。安装命令会把该扩展根固化为服务的工作目录，使 Web 扩展中心安装依赖、隔离预检和守护进程重启后的插件解析始终使用同一位置；从其他 shell 目录执行不会再写入错误的 `WorkingDirectory`。`onebots doctor` 会单独验证扩展根与已安装服务工作目录的真实路径是否一致，发现旧定义或环境漂移时要求重新安装服务定义。
 

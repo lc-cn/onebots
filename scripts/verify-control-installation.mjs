@@ -91,6 +91,7 @@ assert.equal(validation.valid, true);
 assert.ok(validation.receiptId);
 const applyId = `ci-config-${randomUUID()}`;
 let mcpSession;
+let sendReceipt;
 try {
     assert.equal((await client.applyConfiguration(applyId, validation.receiptId)).status, 'succeeded');
     assert.equal((await client.applyConfiguration(applyId, validation.receiptId)).status, 'succeeded');
@@ -100,6 +101,15 @@ try {
     });
     assert.equal(response.status, 200);
     assert.equal((await response.json()).status, 'ok');
+    const messageRequest = {
+        id: randomUUID(), expected: await client.sendContext(), account: 'mock/bot',
+        targetType: 'private', targetId: '00123', message: 'docker-ci-mock-only',
+    };
+    sendReceipt = await client.sendMessage(messageRequest);
+    assert.equal(sendReceipt.status, 'succeeded');
+    assert.equal(typeof sendReceipt.messageId, 'string');
+    assert.deepEqual(await client.sendMessage(messageRequest), sendReceipt);
+
     mcpSession = await client.openMcp('mock/bot');
     const initialized = await client.exchangeMcp(mcpSession.id, JSON.stringify({
         jsonrpc: '2.0', id: 1, method: 'initialize',
@@ -116,6 +126,8 @@ try {
 } finally {
     assert.equal((await client.gateway('stop')).status, 'succeeded');
 }
+assert.ok(sendReceipt);
+assert.deepEqual(await client.sendOperation(sendReceipt.id), sendReceipt);
 assert.ok(mcpSession);
 await assert.rejects(client.pollMcp(mcpSession.id));
 await publicStatus('/', 200);

@@ -1,3 +1,6 @@
+import { GatewaySendExecutor } from "./send-executor.js";
+import { handleGatewaySendMessage } from "./send-ipc.js";
+import type { GatewaySendReply } from "./send-contracts.js";
 import { GatewayMcpSessions } from "./mcp-sessions.js";
 import { handleGatewayMcpMessage } from "./mcp-ipc.js";
 import type { GatewayMcpReply } from "./mcp-contracts.js";
@@ -18,8 +21,9 @@ let startMessage: GatewayStartMessage | undefined;
 let app: GatewayApp | undefined;
 let stopping = false;
 let mcpSessions: GatewayMcpSessions | undefined;
+let sendExecutor: GatewaySendExecutor | undefined;
 
-function send(message: GatewayChildMessage | GatewayMcpReply): void {
+function send(message: GatewayChildMessage | GatewayMcpReply | GatewaySendReply): void {
     if (process.connected) process.send?.(message);
 }
 
@@ -38,6 +42,8 @@ function failure(code: GatewayFailedMessage["code"], message: string): void {
 async function stop(timeoutMs = 15_000): Promise<void> {
     if (stopping) return;
     stopping = true;
+    sendExecutor?.close();
+    sendExecutor = undefined;
     mcpSessions?.close();
     mcpSessions = undefined;
     // 即使 SDK 留下活动句柄，也必须在截止时间前退出。
@@ -81,9 +87,13 @@ async function start(message: GatewayStartMessage): Promise<void> {
             throw new Error("网关未监听私有回环地址");
         }
         mcpSessions = new GatewayMcpSessions(app);
+        sendExecutor = new GatewaySendExecutor(app, {
+            gatewayInstanceId: message.gatewayInstanceId,
+            configVersion: message.configVersion,
+        });
         send({
             type: "gateway.ready",
-            capabilities: ["mcp"],
+            capabilities: ["mcp", "send"],
             protocolVersion: 1,
             controlInstanceId: message.controlInstanceId,
             gatewayInstanceId: message.gatewayInstanceId,
@@ -120,6 +130,8 @@ for (const name of Object.keys(process.env)) {
 }
 const handshakeTimer = setTimeout(() => process.exit(1), 30_000);
 process.on("message", value => {
+    if (handleGatewaySendMessage(value, startMessage, stopping ? undefined : sendExecutor, send))
+        return;
     if (handleGatewayMcpMessage(value, startMessage, stopping ? undefined : mcpSessions, send))
         return;
     if (!isGatewayParentMessage(value)) {

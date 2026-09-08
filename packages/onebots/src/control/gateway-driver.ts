@@ -1,3 +1,14 @@
+import { GatewayRequestClient, GatewayRequestError } from "./gateway-request-client.js";
+import {
+    isGatewaySendMessage,
+    isGatewaySendReply,
+    type GatewaySendResult,
+} from "../gateway/send-contracts.js";
+import {
+    isControlSendContext,
+    type ControlSendContext,
+    type ControlSendRequest,
+} from "@onebots/core/control";
 import { GatewayMcpClient } from "./gateway-mcp-client.js";
 import type { GatewayMcpRequest, GatewayMcpResult } from "../gateway/mcp-contracts.js";
 import { waitForProcessGroupExit } from "../process-group-exit.js";
@@ -41,6 +52,8 @@ interface ManagedChild {
     exited: boolean;
     stopping: boolean;
     mcp?: GatewayMcpClient;
+    requests?: GatewayRequestClient;
+    sendContext?: ControlSendContext;
 }
 
 /** This is process lifecycle isolation, not a security sandbox for hostile plugins. */
@@ -97,8 +110,22 @@ export class NodeGatewayDriver implements GatewayDriver {
                 dependencyVersion: prepared.dependencyVersion,
             };
             const ready = await this.handshake(managed, start);
+            if (
+                ready.capabilities?.includes("send") &&
+                !isControlSendContext({
+                    gatewayInstanceId: id,
+                    configVersion: prepared.configVersion,
+                })
+            )
+                throw new Error("发送网关上下文无效");
+            managed.requests = new GatewayRequestClient(child);
+            if (ready.capabilities?.includes("send"))
+                managed.sendContext = {
+                    gatewayInstanceId: id,
+                    configVersion: prepared.configVersion,
+                };
             if (ready.capabilities?.includes("mcp"))
-                managed.mcp = new GatewayMcpClient(child, {
+                managed.mcp = new GatewayMcpClient(managed.requests, {
                     protocolVersion: 1,
                     controlInstanceId: this.options.controlInstanceId,
                     gatewayInstanceId: id,
@@ -117,6 +144,72 @@ export class NodeGatewayDriver implements GatewayDriver {
         }
     }
 
+    sendContext(instanceId: string): ControlSendContext | undefined {
+        const managed = this.children.get(instanceId);
+        return managed &&
+            !managed.stopping &&
+            !managed.exited &&
+            managed.child.connected &&
+            managed.child.exitCode === null &&
+            managed.child.signalCode === null &&
+            managed.sendContext
+            ? { ...managed.sendContext }
+            : undefined;
+    }
+    send(instanceId: string, request: ControlSendRequest): Promise<GatewaySendResult> {
+        const context = this.sendContext(instanceId),
+            managed = this.children.get(instanceId);
+        if (
+            !context ||
+            !managed?.requests ||
+            request.expected?.gatewayInstanceId !== context.gatewayInstanceId ||
+            request.expected?.configVersion !== context.configVersion
+        )
+            return Promise.reject(new GatewayRequestError("rejected", "发送网关上下文不匹配"));
+        const identity = {
+            protocolVersion: 1 as const,
+            controlInstanceId: this.options.controlInstanceId,
+            gatewayInstanceId: instanceId,
+        };
+        return managed.requests.request({
+            encode: requestId => {
+                const message = { ...identity, type: "gateway.send" as const, requestId, request };
+                if (!isGatewaySendMessage(message)) throw new Error();
+                return message;
+            },
+            decode: (value, requestId) => {
+                if (
+                    !isGatewaySendReply(value) ||
+                    value.requestId !== requestId ||
+                    value.controlInstanceId !== identity.controlInstanceId ||
+                    value.gatewayInstanceId !== instanceId ||
+                    value.configVersion !== context.configVersion ||
+                    value.operationId !== request.id
+                )
+                    return;
+                return value.outcome === "succeeded"
+                    ? { ok: true, result: value.result! }
+                    : {
+                          ok: false,
+                          error: new GatewayRequestError(
+                              value.outcome,
+                              value.outcome === "rejected"
+                                  ? "网关拒绝发送请求"
+                                  : "消息发送结果未知，请勿自动重试",
+                          ),
+                      };
+            },
+            errors: {
+                unavailable: "发送网关不可用",
+                limit: "未完成网关请求已达上限",
+                invalid: "发送请求无效",
+                timeout: "消息发送超时，结果未知，请勿自动重试",
+                send: "发送通信中断，结果未知，请勿自动重试",
+                closed: "发送网关已关闭，结果未知，请勿自动重试",
+            },
+        });
+    }
+
     mcp(instanceId: string, request: GatewayMcpRequest): Promise<GatewayMcpResult> {
         const managed = this.children.get(instanceId);
         if (!managed || managed.stopping || managed.exited || !managed.mcp)
@@ -132,7 +225,7 @@ export class NodeGatewayDriver implements GatewayDriver {
             return;
         }
         managed.stopping = true;
-        managed.mcp?.close();
+        managed.requests?.close();
         if (managed.child.connected) {
             managed.child.send(
                 {
@@ -170,7 +263,7 @@ export class NodeGatewayDriver implements GatewayDriver {
         });
         child.once("close", (code, signal) => {
             managed.exited = true;
-            managed.mcp?.close();
+            managed.requests?.close();
             finish();
             const error = managed.stopping
                 ? undefined
@@ -229,7 +322,7 @@ export class NodeGatewayDriver implements GatewayDriver {
 
     private async terminate(managed: ManagedChild): Promise<void> {
         managed.stopping = true;
-        managed.mcp?.close();
+        managed.requests?.close();
         const deadline = performance.now() + 7500;
         const remaining = (maximum: number) =>
             Math.max(0, Math.min(maximum, deadline - performance.now()));
@@ -308,8 +401,9 @@ function isReady(value: unknown, start: GatewayStartMessage): value is GatewayRe
         message.dependencyVersion === start.dependencyVersion &&
         (message.capabilities === undefined ||
             (Array.isArray(message.capabilities) &&
-                message.capabilities.length === 1 &&
-                message.capabilities[0] === "mcp")) &&
+                message.capabilities.length <= 2 &&
+                new Set(message.capabilities).size === message.capabilities.length &&
+                message.capabilities.every(value => value === "mcp" || value === "send"))) &&
         message.address?.host === "127.0.0.1" &&
         Number.isInteger(message.address.port) &&
         message.address.port > 0 &&
