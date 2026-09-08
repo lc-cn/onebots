@@ -422,4 +422,4 @@ MCP 管理链路：`onebots mcp --data-dir 工作区 [--account 平台/账号]` 
 
 旧认证退役须与旧管理宿主整体处理：新 GatewayApp 与 ControlAuth 均不加载旧 routes/auth，但 --service-runtime 和公开 App/createOnebots 仍可启动旧 App 及其业务路由。删除鉴权之前须迁移或明确退役账号验证与SSE、消息调试历史、终端与日志、静态文件管理、备份、账号单独启停等消费者，并将旧系统服务回滚改为使用保存的旧版本工件；不能留下未保护的旧 /api 接口。协议及账号 access_token、通用核心TokenManager、网关环境清理和旧凭据迁移逻辑不属于要删除的管理登录入口。
 
-一键安装脚本 install.sh/install.ps1 尚使用旧 update -c --yes --packages-only 流程，仍是发布阻断项。它们当前安装公开 npm 稳定版本，不能据此宣称支持本重构分支；替换引导安装与重复运行事务之前不得发布新架构。
+一键安装脚本已移除旧 setup/update 原地流程：Linux/macOS 首次引导只向空目录安装管理程序，公开 npm 下载使用隔离环境和配置，验证新架构与 Web 工件后调用唯一服务 install/start/status。服务工作目录固定到持久 runtime；无默认协议、账号或长期登录凭据输出。成功重复执行不修改或重启；旧数据、失败候选及结果不明的操作不自动覆盖或重派。PowerShell 在原生托管未验收时于修改前明确拒绝并引导 Docker。公开 npm 尚未发布本分支的新架构包，真实系统安装、故障恢复及管理程序升级仍是发布前验收项。
