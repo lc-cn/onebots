@@ -1,4 +1,9 @@
-import { assertInProcessPackageMutationAllowed } from "../container-runtime.js";
+export {
+    createInstallationPlan,
+    type InstallationPlan,
+    type InstallationBackend,
+} from "./installation.js";
+import { assertInProcessPackageMutationAllowed } from "./container-runtime.js";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -7,24 +12,15 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { ApplicationRegistry } from "@onebots/core";
-import metadata from "../../package.json" with { type: "json" };
-import { TRUSTED_EXTENSION_CATALOG as EXTENSION_CATALOG } from "../trusted-extension-catalog.js";
-import { getExtensionPackageCatalogEntry } from "../extension-capability-catalog.js";
-import { listFrameworkProfiles } from "../framework-integration.js";
+import metadata from "../package.json" with { type: "json" };
 import {
     buildExtensionInstallInvocation,
     PACKAGE_MANAGER_MUTATION_TIMEOUT_MS,
     type PackageInstallInvocation,
-} from "../package-manager.js";
-import { acquirePackageMutationLock } from "../package-mutation-lock.js";
-import { inspectPlugin, pluginCandidates, tryLoadRegisteredPlugin } from "../plugin-loader.js";
-import type { RuntimePluginSelection } from "../runtime-plugin-selection.js";
-
-export interface InstallationPlan {
-    selection: RuntimePluginSelection;
-    packages: string[];
-    peers: string[];
-}
+} from "./package-manager.js";
+import { acquirePackageMutationLock } from "./package-mutation-lock.js";
+import { inspectPlugin, pluginCandidates, tryLoadRegisteredPlugin } from "./plugin-loader.js";
+import type { RuntimePluginSelection } from "./runtime-plugin-selection.js";
 
 /** 全局/npx 引导安装完本地宿主后，后续表单必须在同一份 core 注册表中执行。 */
 export class TuiLocalRuntime extends Error {
@@ -34,46 +30,6 @@ export class TuiLocalRuntime extends Error {
     ) {
         super("切换到已安装的本地 OneBots，继续验证与配置");
     }
-}
-
-export function createInstallationPlan(selection: RuntimePluginSelection): InstallationPlan {
-    const packages: string[] = [];
-    for (const [type, names] of [
-        ["adapter", selection.adapters],
-        ["protocol", selection.protocols],
-    ] as const) {
-        for (const name of names) {
-            const entry = EXTENSION_CATALOG.find(item => item.type === type && item.name === name);
-            if (!entry) throw new Error(`安装目录中没有 ${type}:${name}`);
-            const version = getExtensionPackageCatalogEntry(entry.packageName)?.packageVersion;
-            if (!version) throw new Error(`缺少 ${entry.packageName} 的已验证版本`);
-            packages.push(`${entry.packageName}@${version}`);
-        }
-    }
-    for (const name of selection.applications ?? []) {
-        const profile = listFrameworkProfiles().find(item => item.id === name);
-        if (!profile) throw new Error(`未知框架方案：${name}`);
-        const protocol = profile.protocol.replace(".", "-");
-        if (!selection.protocols.includes(protocol))
-            throw new Error(`${profile.displayName} 方案需要 ${protocol}，请返回协议选择页勾选`);
-    }
-    const peers = packages.flatMap(spec =>
-        Object.entries(
-            getExtensionPackageCatalogEntry(spec.slice(0, spec.lastIndexOf("@")))
-                ?.peerDependencies ?? {},
-        ).map(([name, range]) => `${name}@${range}`),
-    );
-    return { selection, packages: [...new Set(packages)], peers: [...new Set(peers)] };
-}
-
-export interface InstallationDependencies {
-    install(
-        packages: string[],
-        root: string,
-        token: string,
-        progress?: (message: string) => void,
-    ): Promise<void>;
-    verify(selection: RuntimePluginSelection, root: string): Promise<void>;
 }
 
 const execute = promisify(execFile);
@@ -212,8 +168,16 @@ export function localRuntimeBin(root: string): string | undefined {
     if (
         local.status === "ready" &&
         fs.realpathSync(local.entryPath) !==
-            fs.realpathSync(path.resolve(import.meta.dirname, "../../lib/index.js"))
+            fs.realpathSync(path.resolve(import.meta.dirname, "../lib/index.js"))
     ) {
         return path.join(path.dirname(local.entryPath), "bin.js");
     }
+}
+
+export function createLocalInstallationBackend(): import("./installation.js").InstallationBackend {
+    return {
+        install: (packages, root, token, progress) =>
+            installPackages(packages, root, token, undefined, progress),
+        verify: loadSelection,
+    };
 }

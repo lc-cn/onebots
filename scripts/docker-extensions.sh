@@ -12,10 +12,7 @@ if [ -z "$ACTION" ]; then
   printf 'OneBots 扩展管理\n  1. 安装扩展\n  2. 恢复上一版本\n请选择 [1]: '
   IFS= read -r CHOICE
   case "${CHOICE:-1}" in
-    1)
-      printf '扩展名（如 icqq；多个名称用空格分隔）: '
-      IFS= read -r NAMES
-      set -- install $NAMES;;
+    1) set -- install;;
     2) set -- rollback;;
     *) echo '已取消'; exit 0;;
   esac
@@ -36,7 +33,7 @@ for item in "$@"; do
   case "$item" in ''|*[!a-zA-Z0-9@/._-]*) echo '扩展参数无效'; exit 2;; esac
   if [ "$ACTION" = rollback ]; then EXPECTED=$item; else PACKAGES="$PACKAGES $item"; fi
 done
-if [ "$ACTION" = install ] && [ -z "$PACKAGES" ]; then echo '请明确选择至少一个扩展'; exit 2; fi
+if [ "$ACTION" = install ] && [ "$WIZARD" = 0 ] && [ -z "$PACKAGES" ]; then echo '请明确选择至少一个扩展'; exit 2; fi
 CONTAINER=${ONEBOTS_CONTAINER_NAME:-}
 if [ -z "$CONTAINER" ]; then
   # 只识别当前 Compose 项目中的 onebots 服务，不扫描或猜测其他部署。
@@ -54,6 +51,7 @@ fi
 DATA=${DATA:-"$(pwd)/data"}
 mkdir -p "$DATA/extensions"
 STORE=$(cd "$DATA/extensions" && pwd -P)
+DATA=$(dirname "$STORE")
 IMAGE=${ONEBOTS_IMAGE:-${RUNNING_IMAGE:-ghcr.io/lc-cn/onebots:master}}
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then docker pull "$IMAGE"; fi
 IMAGE_ID=$(docker image inspect --format '{{.Id}}' "$IMAGE")
@@ -65,9 +63,11 @@ if [ "$WIZARD" = 1 ]; then
   else
     echo '尚未创建容器；安装完成后运行 docker compose up -d。'
   fi
-  printf '确认%s？[y/N]: ' "$(if [ "$ACTION" = install ]; then printf '安装%s' "$PACKAGES"; else printf '恢复上一版本'; fi)"
-  IFS= read -r ANSWER
-  case "$ANSWER" in y|Y|yes|YES) ;; *) echo '已取消'; exit 0;; esac
+  if [ "$ACTION" = rollback ]; then
+    printf '确认恢复上一版本？[y/N]: '
+    IFS= read -r ANSWER
+    case "$ANSWER" in y|Y|yes|YES) ;; *) echo '已取消'; exit 0;; esac
+  fi
 fi
 if [ "$APPLY" = 1 ]; then
   if [ "$RUNNING_IMAGE" != "$IMAGE_ID" ]; then echo '目标容器与安装镜像不一致；请先使用相同镜像创建容器'; exit 1; fi
@@ -83,8 +83,11 @@ cleanup() {
   outcome=$?
   trap - EXIT
   set +e
-  docker rm -f "onebots-download-$ID" "onebots-verify-$ID" >/dev/null 2>&1
+  docker rm -f "onebots-download-$ID" "onebots-verify-$ID" "onebots-plan-$ID" "onebots-configure-$ID" >/dev/null 2>&1
   if [ "$LOCKED" = 1 ]; then manager unlock "$ID" >/dev/null 2>&1; fi
+  # 临时 UI 文件由容器 UID 1000 创建；由同一 UID 清理，避免宿主权限差异。
+  docker run --rm --network none --read-only --user 1000:1000 --entrypoint node \
+    --mount "type=bind,src=$TEMP,dst=/request" "$IMAGE_ID" -e 'const fs=require("fs"); for(const name of fs.readdirSync("/request"))fs.rmSync("/request/"+name,{recursive:true,force:true});' >/dev/null 2>&1
   rm -rf "$TEMP"
   exit "$outcome"
 }
@@ -120,6 +123,20 @@ fi
 manager plan > "$TEMP/previous-plan.json"
 chmod 644 "$TEMP/previous-plan.json"
 NPMRC=${ONEBOTS_NPMRC_FILE:-}
+if [ "$WIZARD" = 1 ]; then
+  set --
+  if [ -f "$DATA/config.yaml" ]; then set -- --mount "type=bind,src=$DATA/config.yaml,dst=/run/onebots/config.yaml,readonly"; fi
+  # 复用 TUI 表单，只交接选择和临时凭据；不挂载数据卷、旧依赖或 Docker socket。
+  docker run --rm -it --name "onebots-plan-$ID" --network none --read-only --cap-drop ALL \
+    --cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
+    --tmpfs /tmp:rw,nosuid,nodev --security-opt no-new-privileges --user 0:0 --entrypoint sh \
+    --mount "type=bind,src=$TEMP,dst=/request" -e ONEBOTS_INSTALL_AUTH_AVAILABLE="${NPMRC:+1}" "$@" "$IMAGE_ID" \
+    -c 'chown -R node:node /request; chmod 755 /request; exec su-exec node:node node /app/packages/onebots/lib/tui/installation-app.js /request'
+  PACKAGES=$(docker run --rm --network none --read-only --user 1000:1000 --entrypoint node \
+    --mount "type=bind,src=$TEMP/request.json,dst=/request.json,readonly" "$IMAGE_ID" --input-type=module \
+    -e 'await import("/app/packages/onebots/lib/index.js"); const {readInstallationRequest}=await import("/app/packages/onebots/lib/installation-request.js"); console.log(readInstallationRequest("/request.json").packages.map(spec=>spec.slice(0,spec.lastIndexOf("@"))).join(" "));')
+  if [ -z "$NPMRC" ]; then NPMRC="$TEMP/npmrc"; fi
+fi
 if [ -n "$NPMRC" ] && [ ! -f "$NPMRC" ]; then echo 'ONEBOTS_NPMRC_FILE 不是可读文件'; exit 1; fi
 PRIVATE_ICQQ=0
 case " $PACKAGES " in *' icqq '*|*' @onebots/adapter-icqq '*) PRIVATE_ICQQ=1;; esac
@@ -157,6 +174,13 @@ docker run --rm --name "onebots-verify-$ID" --network none --read-only --cap-dro
   --mount "type=bind,src=$STORE/releases/$ID,dst=$CANDIDATE" \
   "$IMAGE_ID" /app/scripts/docker-extension-installer.mjs verify "$CANDIDATE" "$ID" ${ONEBOTS_ALLOW_BUILD:-}
 manager activate
+if [ "$WIZARD" = 1 ]; then
+  echo '[onebots] 依赖验证通过，进入账号配置工作台。保存配置并退出后，由宿主应用。'
+  docker run --rm -it --name "onebots-configure-$ID" --mount "type=bind,src=$(dirname "$STORE"),dst=/data" \
+    --mount "type=bind,src=$TEMP/request.json,dst=/run/onebots/installation-request.json,readonly" \
+    -e ONEBOTS_INSTALLATION_REQUEST=/run/onebots/installation-request.json \
+    "$IMAGE_ID" ui --configure
+fi
 if [ "$APPLY" = 1 ]; then
   if ! docker restart "$CONTAINER" >/dev/null || ! ready; then
     echo '[onebots] 新版本上线验证失败，正在恢复上一版本'

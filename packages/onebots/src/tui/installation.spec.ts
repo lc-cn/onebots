@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createInstallationPlan } from "./installation.js";
+import { createInstallationPlan } from "../installation-local.js";
 import { runInstallation } from "./onboarding.js";
 import { TuiCancelled, type PromptRequest, type TuiPrompt } from "./prompt.js";
 

@@ -14,22 +14,8 @@ import {
 } from "./docker-extension-release.mjs";
 
 const PACKAGE_NAME = /^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/;
-export function makeInstallPlan(names, catalog, existing = {}) {
-    const requested = { ...existing };
-    for (const short of names) {
-        const name = short.startsWith("@onebots/") ? short : `@onebots/adapter-${short}`;
-        if (!PACKAGE_NAME.test(name) || !catalog.packages[name])
-            throw new Error(`当前镜像不支持此扩展：${short}`);
-        requested[name] = catalog.packages[name].version;
-    }
-    for (const name of Object.keys(requested)) {
-        const entry = catalog.packages[name];
-        if (!entry || !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(entry.version))
-            throw new Error(`当前镜像缺少 ${name} 的已验证版本`);
-        requested[name] = entry.version;
-    }
-    return requested;
-}
+export { resolveInstallationPackages as makeInstallPlan } from "../packages/onebots/lib/installation.js";
+import { resolveInstallationPackages as makeInstallPlan } from "../packages/onebots/lib/installation.js";
 function environment(home) {
     return {
         PATH: process.env.PATH,

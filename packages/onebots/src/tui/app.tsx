@@ -9,7 +9,9 @@ import type { RuntimePluginSelection } from "../runtime-plugin-selection.js";
 import { ServiceController } from "../service-manager.js";
 import { resolveServiceWorkingDirectory } from "../cli/command-application.js";
 import { TerminalWorkspace, TERMINAL_PAGES, type TerminalPage } from "./workspace.js";
-import { localRuntimeBin } from "./installation.js";
+import { readInstallationRequest } from "../installation-request.js";
+import { loadSelection } from "../installation-local.js";
+import { localRuntimeBin } from "../installation-local.js";
 import { runTuiSession, type SessionPrompt } from "./session.js";
 import { PromptView, TuiCancelled, type PromptRequest } from "./prompt.js";
 
@@ -118,6 +120,13 @@ export function OneBotsTui(options: TuiOptions) {
                     source: "source" in snapshot ? (snapshot.source as string) : undefined,
                     draft: snapshot.draft as Record<string, unknown>,
                 });
+            }
+            const installationRequest = process.env.ONEBOTS_INSTALLATION_REQUEST;
+            if (installationRequest) {
+                delete process.env.ONEBOTS_INSTALLATION_REQUEST;
+                const plan = readInstallationRequest(installationRequest);
+                await loadSelection(plan.selection, workspace.root);
+                workspace.select(plan.selection);
             }
             if (options.selection) {
                 const previous = workspace.selection;

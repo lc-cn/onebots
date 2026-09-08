@@ -10,9 +10,9 @@
 sh scripts/docker-extensions.sh
 ```
 
-选择「安装扩展」，输入 `icqq`，确认后按提示输入 Token。安装器自动识别当前 Compose 项目的 OneBots 容器、镜像和数据目录，安装并检查所需依赖，成功后重启，失败自动恢复。**不用填写镜像参数、编写 npmrc 或记住版本 ID。** 没有容器时会先准备好依赖，再提示运行 `docker compose up -d`。
+选择「安装扩展」后，直接使用 OneBots TUI 的同一套表单：勾选平台、填写必要凭据、选择协议和下游框架，最后统一确认。安装器自动识别当前 Compose 项目的 OneBots 容器、镜像和数据目录，安装并检查所需依赖，成功后重启，失败自动恢复。**不用填写镜像参数、编写 npmrc 或记住版本 ID。** 没有容器时会先准备好依赖，再提示运行 `docker compose up -d`。
 
-想撤销上次安装，再次打开向导，选择「恢复上一版本」即可。安装只准备扩展，不会自动启用账号或协议；随后进入 OneBots 工作台配置账号。
+想撤销上次安装，再次打开向导，选择「恢复上一版本」即可。安装只准备扩展，不会自动启用账号或协议；依赖验证通过后，同一命令会继续打开 OneBots 工作台配置账号与协议；保存并退出后由宿主应用。
 
 需要本机 Docker CLI 和终端；Windows 可在 WSL 中执行。脚本与镜像应使用同一发布版本。目前支持本地 `data` 绑定目录，其他部署会明确提示，不会猜测或修改别的容器。
 
@@ -89,7 +89,7 @@ sh scripts/docker-extensions.sh install icqq --apply
 
 配置、数据库仍在 `data` 中。新扩展保存在 `data/extensions/releases/<版本ID>`，选择记录为 `data/extensions/active-release.json`。重启不会重新下载；Token 失效不会妨碍已经安装好的模块运行。不要把旧的 `node_modules` 从其他系统或架构直接复制过来。
 
-普通 Docker 工作台只选择**已经安装**的扩展，并编辑配置；运行页提供宿主 Docker 操作步骤。Web 和 CLI 不会就地安装、更新或卸载隔离模式的在线依赖；仍可按原有流程停用账号出口。HF 的旧扩展恢复机制保持独立，不适用此宿主协调器。
+长期运行容器里的工作台只选择**已经安装**的扩展，并编辑配置；宿主命令通过隔离的 TUI 请求阶段提供完整安装流程，两个入口共用安装能力；运行页提供宿主 Docker 操作步骤。Web 和 CLI 不会就地安装、更新或卸载隔离模式的在线依赖；仍可按原有流程停用账号出口。HF 的旧扩展恢复机制保持独立，不适用此宿主协调器。
 
 ## 需要构建脚本的依赖
 
@@ -132,5 +132,23 @@ docker build -f deploy/docker/Dockerfile.private \
 示例通过 BuildKit secret 和 tmpfs 下载，随后在不联网、不挂载凭据的独立步骤验证。安装产物位于 `/opt/onebots-private`，不会被 `/data` 挂载覆盖。此方式通过重新构建、替换镜像升级，不使用宿主脚本切换 `/data/extensions`。
 
 **派生镜像和构建缓存包含私有模块代码，必须限制访问，不能发布到公共镜像仓库。** Secret mount 保护凭据，不授予私有包的再分发权限。不要改成 `ARG TOKEN`、`ENV TOKEN`，也不要 `COPY .npmrc` 后再删除。
+
+## 开发者：复用安装能力
+
+`onebots` 导出 `createInstallationPlan`、`InstallationOperation` 和执行后端。计划统一解析可信扩展版本、必需 peer 和框架协议要求；后端负责具体环境中的执行。TUI 只收集输入与展示进度，不再维护另一套安装计划。
+
+```ts
+import { createInstallationPlan, InstallationOperation, createLocalInstallationBackend } from 'onebots';
+
+const plan = createInstallationPlan({
+    adapters: ['telegram'],
+    protocols: ['onebot-v11'],
+    applications: ['nonebot'],
+});
+const installation = new InstallationOperation(plan, createLocalInstallationBackend(), process.cwd());
+await installation.run(''); // 使用已有 npm 认证；也可传入本次安装凭据，勿记录日志。
+```
+
+验证失败后再次调用同一操作的 `run()` 只重试验证，不重复安装。Docker 使用 `createDockerRequestBackend` 生成临时请求，状态为 `requested`，并不表示依赖已安装；宿主执行隔离下载、离线验证和版本切换后才进入配置。请求文件不含凭据，认证文件不会挂载到配置工作台或运行网关。安装本身不会开启账号出口。
 
 :::

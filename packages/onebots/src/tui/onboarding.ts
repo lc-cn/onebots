@@ -1,14 +1,14 @@
+import {
+    createInstallationPlan,
+    InstallationOperation,
+    requiresInstallationCredential,
+    type InstallationBackend,
+} from "../installation.js";
 import metadata from "../../package.json" with { type: "json" };
 import { TRUSTED_EXTENSION_CATALOG as catalog } from "../trusted-extension-catalog.js";
 import { listFrameworkProfiles } from "../framework-integration.js";
 import type { RuntimePluginSelection } from "../runtime-plugin-selection.js";
-import {
-    createInstallationPlan,
-    installPackages,
-    loadSelection,
-    TuiLocalRuntime,
-    type InstallationDependencies,
-} from "./installation.js";
+import { createLocalInstallationBackend, TuiLocalRuntime } from "../installation-local.js";
 import { TuiCancelled, type TuiPrompt } from "./prompt.js";
 
 /** 安装向导保存选择与当前步骤，失败只重试失败阶段；认证信息只存在本次会话。 */
@@ -16,11 +16,7 @@ export async function runInstallation(
     prompt: TuiPrompt,
     root: string,
     initial: RuntimePluginSelection,
-    dependencies: InstallationDependencies = {
-        install: (packages, root, token, progress) =>
-            installPackages(packages, root, token, undefined, progress),
-        verify: loadSelection,
-    },
+    dependencies: InstallationBackend = createLocalInstallationBackend(),
 ): Promise<RuntimePluginSelection> {
     const selection = structuredClone(initial);
     let step = 0;
@@ -49,14 +45,15 @@ export async function runInstallation(
                                 label: `${item.displayName} · ${item.description}`,
                             })),
                     });
-                    if (!selection.adapters.includes("icqq")) token = "";
+                    if (!requiresInstallationCredential(selection, dependencies.retainedPackages))
+                        token = "";
                     step = 1;
                 } else if (step === 1) {
-                    if (selection.adapters.includes("icqq")) {
+                    if (requiresInstallationCredential(selection, dependencies.retainedPackages)) {
                         const [answer] = await prompt.ask({
                             title: "ICQQ 安装凭据",
                             secret: true,
-                            detail: `GitHub Packages Token 需要 read:packages 和 @icqqjs 包读取权限。\nhttps://github.com/settings/tokens\n${token ? "已输入凭据，留空保留。" : "留空使用已有 npm 认证。"}本次安装结束后清除，不写入配置。`,
+                            detail: `GitHub Packages Token 需要 read:packages 和 @icqqjs 包读取权限。\nhttps://github.com/settings/tokens\n${token ? "已输入凭据，留空保留。" : (dependencies.credentialHint ?? "留空使用已有 npm 认证。")}本次安装结束后清除，不写入配置。`,
                         });
                         if (answer) token = answer;
                     }
@@ -119,25 +116,26 @@ export async function runInstallation(
                         step = Number(action);
                         continue;
                     }
-                    let installed = false;
+                    const operation = new InstallationOperation(plan, dependencies, root);
                     while (true) {
                         try {
-                            if (!installed) {
-                                prompt.progress?.("安装依赖");
-                                await dependencies.install(plan.packages, root, token, message =>
-                                    prompt.progress?.(message),
+                            const result = await operation.run(token, message =>
+                                prompt.progress?.(message),
+                            );
+                            if (result === "requested") {
+                                prompt.report(
+                                    "选择已确认，交给隔离安装器执行；尚未安装或验证依赖。",
                                 );
-                                installed = true;
+                                return selection;
                             }
-                            prompt.progress?.("验证插件加载与注册");
-                            await dependencies.verify(selection, root);
                             prompt.report("依赖已验证。下一步配置账号和协议，然后统一保存并启动。");
                             return selection;
                         } catch (error) {
                             if (error instanceof TuiLocalRuntime) throw error;
                             prompt.report(error instanceof Error ? error.message : "安装未完成");
                             const [recovery] = await prompt.ask({
-                                title: installed ? "插件验证失败" : "依赖安装失败",
+                                title:
+                                    operation.phase === "verify" ? "插件验证失败" : "依赖安装失败",
                                 choices: [
                                     { value: "retry", label: "重试当前阶段（保留选择）" },
                                     { value: "credentials", label: "修改凭据后重试安装" },
@@ -155,7 +153,11 @@ export async function runInstallation(
             } catch (error) {
                 if (!(error instanceof TuiCancelled)) throw error;
                 if (step === 0 || step === 4) throw error;
-                step = step === 2 && !selection.adapters.includes("icqq") ? 0 : step - 1;
+                step =
+                    step === 2 &&
+                    !requiresInstallationCredential(selection, dependencies.retainedPackages)
+                        ? 0
+                        : step - 1;
             }
         }
     } finally {

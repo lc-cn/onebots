@@ -16,7 +16,7 @@ import {
 } from "../cli/command-application.js";
 import { withCliOutput } from "../cli-output.js";
 import { getWebUrl, openWeb } from "../ui.js";
-import { loadSelection, TuiLocalRuntime } from "./installation.js";
+import { loadSelection, TuiLocalRuntime } from "../installation-local.js";
 import { runInstallation } from "./onboarding.js";
 import { configureAccounts } from "./configuration.js";
 import { editSchema } from "./form.js";

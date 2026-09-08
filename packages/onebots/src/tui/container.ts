@@ -4,7 +4,7 @@ import { TRUSTED_EXTENSION_CATALOG } from "../trusted-extension-catalog.js";
 import { inspectPlugin, pluginCandidates } from "../plugin-loader.js";
 import { listFrameworkProfiles } from "../framework-integration.js";
 import type { RuntimePluginSelection } from "../runtime-plugin-selection.js";
-import { createInstallationPlan, loadSelection } from "./installation.js";
+import { createInstallationPlan, loadSelection } from "../installation-local.js";
 import { confirm, type TuiPrompt } from "./prompt.js";
 import type { TerminalWorkspace } from "./workspace.js";
 
