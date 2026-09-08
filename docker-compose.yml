@@ -1,5 +1,5 @@
 # OneBots 网关 - Docker Compose（使用官方镜像，无需本地构建）
-# 使用：docker compose up -d
+# 使用：docker compose up -d；首次无配置时保持等待，再运行下面的安装向导。
 # 私有扩展：在宿主运行 sh scripts/docker-extensions.sh，按提示操作
 # 下载 Token 只交给一次性安装器，禁止给本服务挂载 npmrc 或 Docker socket。
 #

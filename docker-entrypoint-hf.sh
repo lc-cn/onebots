@@ -22,6 +22,7 @@ fi
 mkdir -p /data
 mkdir -p /data/static
 HF_PORT="${PORT:-7860}"
+export PORT="$HF_PORT"
 
 # 使用公共 DNS，避免 HF 等环境中容器内 DNS 不可达导致 api.telegram.org、discord.com 等 ENOTFOUND
 if [ -w /etc/resolv.conf ] 2>/dev/null; then
@@ -57,7 +58,7 @@ else
       echo "[onebots] 已从仓库恢复 config_backup.yaml 到 /data/config.yaml"
     else
       rm -f /data/config.yaml
-      echo "[onebots] 未找到或下载 config_backup.yaml 失败，将使用默认配置"
+      echo "[onebots] 未找到或下载 config_backup.yaml 失败，将进入空白工作区"
     fi
   fi
   # 新卷只恢复受信任扩展的轻量清单；已有持久化扩展目录保持本地依赖不变。
@@ -73,13 +74,9 @@ else
 fi
 
 if [ ! -f /data/config.yaml ]; then
-  if [ -f /app/packages/onebots/lib/config.sample.yaml ]; then
-    cp /app/packages/onebots/lib/config.sample.yaml /data/config.yaml
-    echo "[onebots] 已创建默认配置 /data/config.yaml (Hugging Face)"
-  else
-    echo "[onebots] 错误: 未找到 config.sample.yaml"
-    exit 1
-  fi
+  # HF 无宿主交互终端，仅创建空白管理工作区，不预填平台账号或协议出口。
+  printf 'plugins:\n  adapters: []\n  protocols: []\n  applications: []\n' > /data/config.yaml
+  echo "[onebots] 已创建空白工作区，请在管理端安装扩展并填写配置 (Hugging Face)"
 fi
 
 if ! chmod 600 /data/config.yaml; then

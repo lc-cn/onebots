@@ -13,32 +13,27 @@ fi
 # 持久化数据目录（配置、数据库、可选 static 校验文件等）
 mkdir -p /data/static
 
-# 若挂载的 /data 下没有 config.yaml，则从示例复制一份
-if [ ! -f /data/config.yaml ]; then
-  mkdir -p /data
-  if [ -f /app/packages/onebots/lib/config.sample.yaml ]; then
-    cp /app/packages/onebots/lib/config.sample.yaml /data/config.yaml
-    if ! chmod 600 /data/config.yaml; then
-      echo "[onebots] 错误: 无法将新配置权限收紧为 0600: /data/config.yaml"
-      exit 1
-    fi
-    echo "[onebots] 已创建默认配置 /data/config.yaml，可按需修改后重启容器"
-  else
-    echo "[onebots] 错误: 未找到 config.sample.yaml，请挂载包含 config.yaml 的卷到 /data"
-    exit 1
-  fi
-fi
-
-# 未显式传 -c/--config 时强制使用 /data/config.yaml，保证配置持久化在挂载卷内
+# 配置只由用户确认保存；首次部署不会复制示例账号、协议或凭据。
 HAS_CONFIG=0
+CONFIG_PATH=/data/config.yaml
+EXPECT_CONFIG=0
+INTERACTIVE_SETUP=0
 for arg in "$@"; do
-  if [ "$arg" = "-c" ] || [ "$arg" = "--config" ]; then
-    HAS_CONFIG=1
-    break
-  fi
+  if [ "$EXPECT_CONFIG" = 1 ]; then CONFIG_PATH=$arg; EXPECT_CONFIG=0; continue; fi
+  case "$arg" in
+    -c|--config) HAS_CONFIG=1; EXPECT_CONFIG=1;;
+    --config=*) HAS_CONFIG=1; CONFIG_PATH=${arg#--config=};;
+    ui|tui|setup|--help|--version) INTERACTIVE_SETUP=1;;
+  esac
 done
-if [ "$HAS_CONFIG" = 0 ]; then
-  set -- -c /data/config.yaml "$@"
+if [ "$EXPECT_CONFIG" = 1 ]; then echo '[onebots] --config 需要文件路径'; exit 2; fi
+if [ "$HAS_CONFIG" = 0 ]; then set -- -c /data/config.yaml "$@"; fi
+if [ "$INTERACTIVE_SETUP" = 0 ] && [ ! -f "$CONFIG_PATH" ]; then
+  echo '[onebots] 等待首次配置。请在宿主运行 sh scripts/docker-extensions.sh，安装依赖并在工作台填写、保存配置。'
+  # 等待时不启动网关，也不宣告健康；收到停止信号立即退出，避免反复重启。
+  trap 'exit 0' TERM INT
+  while [ ! -f "$CONFIG_PATH" ]; do sleep 2 & wait "$!"; done
+  trap - TERM INT
 fi
 
 # 扩展清单与后续安装依赖保存在数据卷；NODE_PATH 仅作为镜像内置依赖的兼容回退。
@@ -77,7 +72,7 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 # 显式 --user 启动时尊重调用方身份，并在启动前给出清晰的卷权限错误。
-if [ ! -r /data/config.yaml ] || [ ! -w /data ]; then
+if { [ -e "$CONFIG_PATH" ] && [ ! -r "$CONFIG_PATH" ]; } || [ ! -w /data ]; then
   echo "[onebots] 错误: 当前容器用户无法读取 /data/config.yaml 或写入 /data"
   exit 1
 fi

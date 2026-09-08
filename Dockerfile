@@ -60,15 +60,10 @@ EXPOSE 6727
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "/app/scripts/docker-healthcheck.mjs"]
 
-# 若 /data/config.yaml 不存在则从示例复制，再启动网关
+# 配置由安装工作台生成，入口不会复制示例配置
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
-# 默认：前台启动网关，使用 /data/config.yaml，并注册常用适配器与协议
-CMD [ \
-  "-c", "/data/config.yaml", \
-  "-r", "kook", "-r", "qq", "-r", "telegram", "-r", "feishu", "-r", "slack", \
-  "-r", "teams", "-r", "wecom", "-r", "wecom-kf", "-r", "discord", "-r", "dingtalk", "-r", "wechat", "-r", "wechat-clawbot", \
-  "-p", "milky-v1", "-p", "satori-v1", "-p", "onebot-v12", "-p", "onebot-v11" \
-]
+# 只加载用户配置中的扩展；没有配置时等待安装工作台完成首次设置。
+CMD ["-c", "/data/config.yaml"]

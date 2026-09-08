@@ -7,7 +7,7 @@ import { prepareCliInvocation } from "./cli-invocation.js";
 import { CliError } from "./cli/command-application.js";
 import { writeCliError } from "./cli-output.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
-import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
+import { getConfiguredPluginSelection } from "./runtime-plugin-selection.js";
 
 const packageVersion = (createRequire(import.meta.url)("../package.json") as { version: string })
     .version;
@@ -67,7 +67,7 @@ export function resolveServiceRuntimeOptions(options: {
 }) {
     if (!fs.existsSync(options.configPath)) return options;
     const source = fs.readFileSync(options.configPath, "utf8");
-    const selection = getRuntimePluginSelection(parseRuntimeConfig(source));
+    const selection = getConfiguredPluginSelection(parseRuntimeConfig(source));
     return selection
         ? {
               ...options,

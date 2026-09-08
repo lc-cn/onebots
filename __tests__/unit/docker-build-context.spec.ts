@@ -76,9 +76,11 @@ describe("Docker 构建上下文", () => {
 
             expect(privateUmask).toBeGreaterThanOrEqual(0);
             expect(firstDataWrite).toBeGreaterThan(privateUmask);
-            expect(source).toContain("chmod 600 /data/config.yaml");
+            if (entrypoint.endsWith("-hf.sh"))
+                expect(source).toContain("chmod 600 /data/config.yaml");
+            else expect(source).not.toContain("config.sample.yaml");
             expect(source).toContain("无法将");
-            expect(source).toContain("配置权限收紧为 0600");
+            if (entrypoint.endsWith("-hf.sh")) expect(source).toContain("配置权限收紧为 0600");
         },
     );
 

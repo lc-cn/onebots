@@ -107,7 +107,7 @@ export function pageDescription(page: TerminalPage, workspace: TerminalWorkspace
     if (page === "accounts")
         return state.accounts.length
             ? state.accounts.join("\n")
-            : "尚无机器人账号。先在扩展页选择平台，再添加账号。";
+            : "尚无机器人账号。添加账号时，只展示已选择平台的配置表单；凭据由你填写。";
     if (page === "protocols")
         return "安装协议与启用账号出口分别管理。选择账号后配置连接方式与鉴权。";
     if (page === "frameworks")

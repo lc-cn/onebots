@@ -10,7 +10,10 @@ import {
     type ServicePreflightSpec,
 } from "../service-preflight.js";
 import type { RuntimeOptions, ScopeOptions } from "./command-options.js";
-import { getRuntimePluginSelection } from "../runtime-plugin-selection.js";
+import {
+    getRuntimePluginSelection,
+    getConfiguredPluginSelection,
+} from "../runtime-plugin-selection.js";
 import { formatRuntimeConfigDiagnostic, parseRuntimeConfig } from "../runtime-config-validator.js";
 import { getLoadedPlugins, type LoadedPluginInfo } from "../plugin-loader.js";
 import {
@@ -90,7 +93,7 @@ export function normalizeRuntimeOptions(options: RuntimeOptions) {
 export function resolveConfiguredRuntimeOptions(options: RuntimeOptions) {
     const runtime = normalizeRuntimeOptions(options);
     if (!fs.existsSync(runtime.configPath)) return runtime;
-    const configured = getRuntimePluginSelection(
+    const configured = getConfiguredPluginSelection(
         parseRuntimeConfig(fs.readFileSync(runtime.configPath, "utf8")),
     );
     if (!configured) return runtime;

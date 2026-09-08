@@ -180,6 +180,10 @@ if [ "$WIZARD" = 1 ]; then
     --mount "type=bind,src=$TEMP/request.json,dst=/run/onebots/installation-request.json,readonly" \
     -e ONEBOTS_INSTALLATION_REQUEST=/run/onebots/installation-request.json \
     "$IMAGE_ID" ui --configure
+  if [ ! -f "$DATA/config.yaml" ]; then
+    echo '[onebots] 依赖已就绪，但配置尚未保存。网关保持等待配置，不会启动示例账号；可再次运行向导继续。'
+    exit 0
+  fi
 fi
 if [ "$APPLY" = 1 ]; then
   if ! docker restart "$CONTAINER" >/dev/null || ! ready; then
