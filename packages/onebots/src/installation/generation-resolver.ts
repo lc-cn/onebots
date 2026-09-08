@@ -27,6 +27,8 @@ export interface GenerationResolverConfig {
     host: GenerationArtifact;
     core: GenerationArtifact;
     target?: GenerationTarget;
+    /** 仅由已验证目标发布目录提供，不接受 HTTP 直接注入版本表。 */
+    extensionVersions?: Readonly<Record<string, string>>;
     /** 仅受信宿主/开发测试注入，不接受 HTTP 请求指定工件或可执行路径。 */
     artifacts?: Readonly<Record<string, GenerationArtifact>>;
     /** 本地 tgz 的原始 manifest 可由受信宿主读取后注入，仍执行完整身份校验。 */
@@ -65,7 +67,9 @@ export async function resolveGenerationPlan(
                 item => item.type === type && item.name === name,
             );
             const version =
-                entry && getExtensionPackageCatalogEntry(entry.packageName)?.packageVersion;
+                entry && (config.extensionVersions
+                    ? config.extensionVersions[entry.packageName]
+                    : getExtensionPackageCatalogEntry(entry.packageName)?.packageVersion);
             if (!entry || !version || !semver.valid(version))
                 throw new Error("所选扩展不在宿主可信版本目录中");
             requested.push({ type, name, packageName: entry.packageName, version });
