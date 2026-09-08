@@ -92,6 +92,27 @@ export class FileManagerServiceJournal {
             return { recoveryRequired: true };
         }
     }
+    /** 调用方持服务锁；只读取精确目标，绝不放宽其他操作的恢复门禁。 */
+    recoverable(id: string): ManagerServiceRecord {
+        try {
+            if (this.corrupted || typeof id !== "string" || !ID.test(id)) throw failure();
+            const names = this.storage.list().sort();
+            let target: ManagerServiceRecord | undefined;
+            for (const name of names) {
+                const record = this.read(name.slice(0, -5));
+                if (record.id === id) target = record;
+                else if (!finished(record)) throw failure();
+            }
+            if (
+                !target ||
+                canonicalServiceJson(names) !== canonicalServiceJson(this.storage.list().sort())
+            )
+                throw failure();
+            return target;
+        } catch {
+            throw failure();
+        }
+    }
     prepare(input: ManagerServicePreparation): ManagerServiceRecord {
         try {
             const value = closedServiceObject(input, [

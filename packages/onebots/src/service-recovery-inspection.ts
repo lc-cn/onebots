@@ -114,6 +114,16 @@ function inspect(directory: string, migration: boolean): boolean {
     return pending;
 }
 /** 纯只读摘要，不实例化会mkdir/chmod/coldmark的journal；未知痕迹保守要求对账。 */
+export function inspectServiceMigrationRecovery(stateDirectory: string): boolean {
+    try {
+        if (!path.isAbsolute(stateDirectory) || /[\u0000-\u001f\u007f]/.test(stateDirectory))
+            fail();
+        return inspect(path.join(stateDirectory, "migrations"), true);
+    } catch {
+        return true;
+    }
+}
+
 export function inspectServiceRecovery(stateDirectory: string): {
     serviceRecoveryRequired: boolean;
 } {

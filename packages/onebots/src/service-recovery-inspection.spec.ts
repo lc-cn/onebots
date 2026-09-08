@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { inspectServiceRecovery } from "./service-recovery-inspection.js";
+import {
+    inspectServiceRecovery,
+    inspectServiceMigrationRecovery,
+} from "./service-recovery-inspection.js";
 import { FileManagerServiceJournal } from "./manager-service-journal.js";
 const roots: string[] = [];
 afterEach(() => {
@@ -44,6 +47,17 @@ function noWrites() {
     return () => spies.forEach(spy => expect(spy).not.toHaveBeenCalled());
 }
 describe("系统操作恢复状态纯只读检查", () => {
+    it("精确普通操作对账可单独检查迁移，但不能忽略损坏迁移痕迹", () => {
+        const root = fixture();
+        prepare(root);
+        expect(inspectServiceRecovery(root).serviceRecoveryRequired).toBe(true);
+        expect(inspectServiceMigrationRecovery(root)).toBe(false);
+        fs.mkdirSync(path.join(root, "migrations"), { mode: 0o700 });
+        fs.writeFileSync(path.join(root, "migrations/broken.journal.json"), "{", { mode: 0o600 });
+        const verifyNoWrites = noWrites();
+        expect(inspectServiceMigrationRecovery(root)).toBe(true);
+        verifyNoWrites();
+    });
     it("缺失及空目录均无pending，查询不创建任何文件或目录", () => {
         const root = fixture();
         fs.mkdirSync(path.join(root, "manager-operations"), { mode: 0o700 });

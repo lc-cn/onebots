@@ -14,7 +14,7 @@ export async function managerServiceUninstallCommand(
                 exitCode: 0,
             };
         return {
-            output: `${summary}\n卸载结果尚待对账，保留操作记录；请勿重复卸载或重新安装。`,
+            output: `${summary}\n卸载结果尚待对账，保留操作记录；请勿重复卸载或重新安装。\n可执行 onebots recover --operation ${record.id}${options.system ? " --system" : ""} 核验是否已卸载；该命令不会继续删除文件。`,
             exitCode: 1,
         };
     } catch (error) {

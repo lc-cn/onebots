@@ -17,7 +17,7 @@ export async function managerServiceCommand(
                 exitCode: 0,
             };
         return {
-            output: `${summary}\n管理服务操作未确认成功，请在本机对账；未改变网关期望状态，请勿重复执行。`,
+            output: `${summary}\n管理服务操作未确认成功，请在本机对账；未改变网关期望状态，请勿重复执行。${action === "stop" ? `\n可执行 onebots recover --operation ${record.id}${options.system ? " --system" : ""} 核验是否已停止；该命令不会重放系统动作。` : ""}`,
             exitCode: 1,
         };
     } catch (error) {

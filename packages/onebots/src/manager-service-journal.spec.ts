@@ -283,3 +283,60 @@ it("non-uninstall refuses snapshots; legacy uninstall without snapshot stays unt
     expect(() => cold.read("old")).toThrow();
     expect(fs.readFileSync(file, "utf8")).toBe(legacy);
 });
+
+it("recoverable returns the sole exact pending target without rewriting records", () => {
+    const test = fixture();
+    const done = test.journal.prepare({
+        id: "done",
+        action: "stop",
+        desiredEnabled: true,
+        spec: test.spec,
+    });
+    test.journal.save({ ...done, phase: "completed", status: "succeeded" });
+    const pending = test.journal.prepare({
+        id: "pending",
+        action: "stop",
+        desiredEnabled: true,
+        spec: test.spec,
+    });
+    const before = fs
+        .readdirSync(test.root)
+        .map(name => [name, fs.readFileSync(path.join(test.root, name))] as const);
+    const write = vi.spyOn(fs, "writeFileSync");
+    expect(test.journal.recoverable("pending")).toEqual(pending);
+    expect(() => test.journal.recoverable("done")).toThrow();
+    expect(() => test.journal.recoverable("missing")).toThrow();
+    expect(() => test.journal.recoverable("../pending")).toThrow();
+    expect(write).not.toHaveBeenCalled();
+    for (const [name, bytes] of before)
+        expect(fs.readFileSync(path.join(test.root, name))).toEqual(bytes);
+    vi.restoreAllMocks();
+    const cold = new FileManagerServiceJournal(test.root);
+    const interrupted = cold.recoverable("pending");
+    expect(interrupted.status).toBe("interrupted");
+    cold.save({ ...interrupted, phase: "completed", status: "failed", recoveryRequired: false });
+    expect(cold.recoverable("pending").status).toBe("failed");
+    expect(cold.recoverable("done").status).toBe("succeeded");
+});
+it("recoverable refuses another pending, corrupt, mismatched or unknown record", () => {
+    const test = fixture();
+    const record = test.journal.prepare({
+        id: "target",
+        action: "stop",
+        desiredEnabled: true,
+        spec: test.spec,
+    });
+    const other = path.join(test.root, "other.json");
+    for (const value of [
+        JSON.stringify({ ...record, id: "other" }),
+        "synthetic-secret",
+        JSON.stringify(record),
+    ]) {
+        fs.writeFileSync(other, value, { mode: 0o600 });
+        expect(() => test.journal.recoverable("target")).toThrow("管理服务操作记录未确认");
+        expect(fs.readFileSync(other, "utf8")).toBe(value);
+    }
+    fs.unlinkSync(other);
+    fs.writeFileSync(path.join(test.root, "unknown.tmp"), "private");
+    expect(() => test.journal.recoverable("target")).toThrow();
+});

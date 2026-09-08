@@ -9,9 +9,75 @@ import { downloadGeneration, recoverDownloadCredentials } from "./generation-dow
 const roots: string[] = [];
 const parents: ChildProcess[] = [];
 afterEach(async () => {
-    for (const child of parents.splice(0)) child.kill("SIGKILL");
-    await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+    // 先请求本次夹具自行退出；不根据磁盘里读出的历史 PID 发信号。
+    const pendingRoots = roots.splice(0);
+    const failures: unknown[] = [];
+    const workers: number[] = [];
+    const downloads = new Map<string, number>();
+    for (const root of pendingRoots) {
+        try {
+            const running = await report(path.join(root, "candidate"));
+            if (Number.isSafeInteger(running.pid) && running.pid > 0)
+                downloads.set(root, running.pid);
+            const owner = JSON.parse(await readFile(path.join(running.home, "owner.json"), "utf8"));
+            if (Number.isSafeInteger(owner.workerPid) && owner.workerPid > 0)
+                workers.push(owner.workerPid);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") failures.push(error);
+        }
+        try {
+            await writeFile(path.join(root, "fixture-stop"), "stop");
+        } catch (error) {
+            failures.push(error);
+        }
+    }
+    for (const child of parents.splice(0)) {
+        if (child.exitCode !== null || child.signalCode !== null) continue;
+        try {
+            const exited = once(child, "exit");
+            child.kill("SIGKILL"); // 仅持有本测试 spawn 返回的 ChildProcess。
+            await exited;
+        } catch (error) {
+            failures.push(error);
+        }
+    }
+    for (const pid of workers) {
+        try {
+            await waitGone(pid);
+        } catch (error) {
+            failures.push(error);
+        }
+    }
+    for (const root of pendingRoots) {
+        try {
+            const names = await readdir(root);
+            if (downloads.has(root)) await waitGone(downloads.get(root)!);
+            else if (names.includes("fixture-active")) {
+                for (let attempt = 0; ; attempt++) {
+                    if ((await readdir(root)).includes("fixture-exited")) break;
+                    if (attempt > 500) throw new Error("本次下载夹具尚未退出，保留临时目录");
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+            }
+            if (!failures.length) await rm(root, { recursive: true, force: true });
+        } catch (error) {
+            failures.push(error);
+        }
+    }
+    if (failures.length) throw new AggregateError(failures, "下载夹具清理未确认，保留现场");
 });
+async function waitGone(pid: number) {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            process.kill(pid, 0);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+            throw error;
+        }
+        if (attempt > 500) throw new Error("下载进程尚未退出，保留临时目录");
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
+}
 
 async function fixture(mode = "success") {
     const root = await mkdtemp(path.join(os.tmpdir(), "onebots-download-test-"));
@@ -22,13 +88,24 @@ async function fixture(mode = "success") {
     await writeFile(
         script,
         `
-import { readFileSync, writeFileSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, statSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 const args = process.argv.slice(2);
 if (args.includes('--version')) {
  process.stdout.write(${JSON.stringify(mode)} === 'wrong-version' ? '12.3.4' : '9.15.9');
  process.exit(0);
+}
+const fixtureRoot = path.dirname(process.argv[1]);
+writeFileSync(path.join(fixtureRoot, 'fixture-active'), 'active');
+process.on('exit', () => writeFileSync(path.join(fixtureRoot, 'fixture-exited'), 'exited'));
+const cleanupTimer = setInterval(() => {
+ if (existsSync(path.join(fixtureRoot, 'fixture-stop'))) process.exit(0);
+}, 10);
+cleanupTimer.unref();
+function publishReport(value) {
+ writeFileSync('report.json.tmp', JSON.stringify(value));
+ renameSync('report.json.tmp', 'report.json');
 }
 const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
 const auth = process.env.NPM_CONFIG_USERCONFIG;
@@ -45,7 +122,7 @@ if (!args.includes('--ignore-scripts') && manifest.scripts?.postinstall) {
  spawnSync(process.execPath, ['-e', manifest.scripts.postinstall]);
 }
 if (${JSON.stringify(mode)} === 'failure') {
- writeFileSync('report.json', JSON.stringify(report));
+ publishReport(report);
  process.stdout.write(config); process.stderr.write('github_pat_test_secret parent-secret'); process.exit(1);
 }
 if (${JSON.stringify(mode)} === 'stubborn') {
@@ -60,7 +137,7 @@ if (${JSON.stringify(mode)} === 'stubborn') {
 } else {
  writeFileSync('pnpm-lock.yaml', 'lockfileVersion: 9.0\\n');
 }
-writeFileSync('report.json', JSON.stringify(report));
+publishReport(report);
 `,
     );
     return { root, directory, script };
@@ -114,15 +191,7 @@ await downloadGeneration(${JSON.stringify({ directory, manifest, token: "github_
             expect(await readFile(running.auth, "utf8")).toContain("github_pat_test_secret");
         } finally {
             process.kill(running.pid, "SIGTERM");
-        }
-        for (let attempt = 0; ; attempt++) {
-            try {
-                process.kill(running.pid, 0);
-            } catch {
-                break;
-            }
-            if (attempt > 500) throw new Error("模拟下载进程未退出");
-            await new Promise(resolve => setTimeout(resolve, 10));
+            await waitGone(running.pid);
         }
         expect(await recoverDownloadCredentials(credentialRoot)).toEqual({
             removed: [owner.id],
