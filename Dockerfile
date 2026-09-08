@@ -34,7 +34,6 @@ RUN pnpm prune --prod
 FROM node:24-alpine
 
 ENV ONEBOTS_CONTAINER=1
-ENV ONEBOTS_EXTENSION_MODE=isolated
 ENV COREPACK_HOME=/usr/local/share/corepack
 
 RUN apk add --no-cache su-exec \
@@ -60,10 +59,10 @@ EXPOSE 6727
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "/app/scripts/docker-healthcheck.mjs"]
 
-# 配置由安装工作台生成，入口不会复制示例配置
+# 管理服务独立于网关运行，空数据卷直接提供控制台
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
-# 只加载用户配置中的扩展；没有配置时等待安装工作台完成首次设置。
-CMD ["-c", "/data/config.yaml"]
+# 仅管理服务持有公共入口和网关生命周期。
+CMD ["serve", "--data-dir", "/data", "--host", "0.0.0.0"]

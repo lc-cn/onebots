@@ -1,0 +1,121 @@
+import fs from "node:fs";
+import path from "node:path";
+import { createHash } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
+import yaml from "js-yaml";
+import { getConfiguredPluginSelection } from "../runtime-plugin-selection.js";
+import packageMetadata from "../../package.json" with { type: "json" };
+
+export function controlDirectory(root: string): string {
+    return path.join(path.resolve(root), ".control");
+}
+
+export function controlSocket(root: string): string {
+    if (process.platform === "win32")
+        throw new Error("Windows 本地控制传输尚待 ACL 验收，当前不开放命名管道");
+    return path.join(controlDirectory(root), "control.sock");
+}
+
+/**
+ * 只支持提供可靠 SQLite 文件锁的本地卷，不支持 NFS/多主机共享工作区。
+ * 专用数据库长期保持写事务，崩溃由 OS 释放锁；不得删除或替换数据库文件。
+ */
+export function acquireControlWorkspace(root: string): () => void {
+    fs.mkdirSync(path.resolve(root), { recursive: true, mode: 0o700 });
+    const directory = controlDirectory(fs.realpathSync(root));
+    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    if (fs.lstatSync(directory).isSymbolicLink()) throw new Error("管理服务目录不能是符号链接");
+    fs.chmodSync(directory, 0o700);
+    const lock = path.join(directory, "manager-lock.sqlite");
+    try {
+        const descriptor = fs.openSync(lock, "wx", 0o600);
+        fs.closeSync(descriptor);
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+    const stat = fs.lstatSync(lock);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1)
+        throw new Error("管理服务锁数据库必须是独立常规文件");
+    fs.chmodSync(lock, 0o600);
+    let database: DatabaseSync | undefined;
+    try {
+        database = new DatabaseSync(lock);
+        database.exec("PRAGMA busy_timeout = 0");
+        database.exec("CREATE TABLE IF NOT EXISTS workspace_lock (id INTEGER PRIMARY KEY)");
+        database.exec("BEGIN IMMEDIATE");
+    } catch (error) {
+        database?.close();
+        if (
+            error instanceof Error &&
+            "errcode" in error &&
+            (error.errcode === 5 || error.errcode === 6)
+        )
+            throw new Error("此工作区已有管理服务，禁止重复启动");
+        throw new Error("管理服务锁数据库无法使用，请检查本地卷与文件状态", { cause: error });
+    }
+    const held = database;
+    let released = false;
+    return () => {
+        if (released) return;
+        released = true;
+        try {
+            held.exec("ROLLBACK");
+        } finally {
+            held.close();
+        }
+    };
+}
+
+export function processExists(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
+        throw error;
+    }
+}
+
+/** 网关只接收配置快照，管理认证从不进入该文件。 */
+export function prepareGatewayWorkspace(root: string, runtimeRoot = process.cwd()) {
+    const configPath = path.join(root, "config.yaml");
+    if (!fs.existsSync(configPath)) {
+        fs.writeFileSync(
+            configPath,
+            yaml.dump({ plugins: { adapters: [], protocols: [], applications: [] } }),
+            { flag: "wx", mode: 0o600 },
+        );
+    }
+    let config: unknown;
+    try {
+        config = yaml.load(fs.readFileSync(configPath, "utf8"));
+    } catch {
+        throw new Error("网关配置无法读取或解析，请检查工作区配置");
+    }
+    if (!config || typeof config !== "object" || Array.isArray(config))
+        throw new Error("网关配置必须是 YAML 对象，管理服务仍可用于修复");
+    const runtime = { ...config } as Record<string, unknown>;
+    delete runtime.username;
+    delete runtime.password;
+    delete runtime.access_token;
+    const content = yaml.dump(runtime);
+    const configVersion = createHash("sha256").update(content).digest("hex");
+    const snapshots = path.join(controlDirectory(root), "configurations");
+    fs.mkdirSync(snapshots, { recursive: true, mode: 0o700 });
+    const snapshot = path.join(snapshots, `${configVersion}.yaml`);
+    if (!fs.existsSync(snapshot)) fs.writeFileSync(snapshot, content, { flag: "wx", mode: 0o600 });
+    const selection = getConfiguredPluginSelection(runtime, true) ?? {
+        adapters: [],
+        protocols: [],
+        applications: [],
+    };
+    return {
+        configPath: snapshot,
+        workspacePath: path.resolve(root),
+        selection: { ...selection, applications: selection.applications ?? [] },
+        configVersion,
+        dependencyVersion: `bundled:${packageMetadata.version}`,
+        entrypoint: path.resolve(import.meta.dirname, "../gateway/entry.js"),
+        runtimeRoot: path.resolve(runtimeRoot),
+    };
+}

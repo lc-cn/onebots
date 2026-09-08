@@ -24,7 +24,7 @@ describe("Docker 构建上下文", () => {
         expect(workspaceBuild).toBeGreaterThan(rootConfigCopy);
     });
 
-    test("运行镜像包含基于 readiness 的健康检查", async () => {
+    test("运行镜像包含独立管理服务的健康检查", async () => {
         const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
 
         expect(dockerfile).toContain(
@@ -53,18 +53,54 @@ describe("Docker 构建上下文", () => {
         for (const entrypoint of ["docker-entrypoint.sh", "docker-entrypoint-hf.sh"]) {
             const source = await readFile(resolve(repositoryRoot, entrypoint), "utf8");
             expect(source).toContain('if [ "$(id -u)" = "0" ]; then');
-            expect(source).toContain('if [ "$(id -u)" != "0" ] && [ ! -w /data ]; then');
             expect(source).toContain("chown -R node:node /data");
-            expect(source).toContain("node /app/scripts/docker-extension-runtime.mjs");
-            expect(source).toContain("ONEBOTS_EXTENSION_ROOT 必须是绝对路径");
-            expect(source).toContain('cd "$ONEBOTS_EXTENSION_ROOT"');
             expect(source).toContain(
                 "exec su-exec node:node env HOME=/home/node USER=node LOGNAME=node",
             );
             expect(source.indexOf("chown -R node:node /data")).toBeLessThan(
                 source.indexOf("exec su-exec node:node"),
             );
+            if (entrypoint.endsWith("-hf.sh")) {
+                // HF 尚未切换管理宿主，原恢复流程的权限与受信扩展根约束继续保留。
+                expect(source).toContain('if [ "$(id -u)" != "0" ] && [ ! -w /data ]; then');
+                expect(source).toContain("node /app/scripts/docker-extension-runtime.mjs");
+                expect(source).toContain("ONEBOTS_EXTENSION_ROOT 必须是绝对路径");
+                expect(source).toContain('cd "$ONEBOTS_EXTENSION_ROOT"');
+            } else {
+                const nonRootWriteGuard = source.indexOf("if [ ! -w /data ]; then");
+                const directExec = source.indexOf(
+                    'exec node /app/packages/onebots/lib/bin.js "$@"',
+                );
+                expect(nonRootWriteGuard).toBeGreaterThan(source.indexOf("exec su-exec node:node"));
+                expect(directExec).toBeGreaterThan(nonRootWriteGuard);
+                expect(source).toContain("当前容器用户无法写入 /data");
+                expect(source).toContain("if ! chown -R node:node /data; then");
+            }
         }
+    });
+
+    test("标准 Docker 默认只启动管理服务，空卷不生成平台配置或等待宿主脚本", async () => {
+        const source = await readFile(resolve(repositoryRoot, "docker-entrypoint.sh"), "utf8");
+        const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
+        const command = dockerfile.split(/\r?\n/).find(line => line.startsWith("CMD "));
+
+        expect(command).toBe('CMD ["serve", "--data-dir", "/data", "--host", "0.0.0.0"]');
+        expect(dockerfile).toContain('ENTRYPOINT ["/docker-entrypoint.sh"]');
+        expect(source).toContain('node /app/packages/onebots/lib/bin.js "$@"');
+        expect(source).not.toContain("config.sample.yaml");
+        expect(source).not.toContain("config.yaml");
+        expect(source).not.toContain("docker-extension-runtime.mjs");
+        expect(source).not.toContain("ONEBOTS_EXTENSION_ROOT");
+        expect(source).not.toMatch(/\b(?:while|until|sleep)\b/);
+        const runtimeCommands = source
+            .replace(/\\\r?\n/g, " ")
+            .split(/\r?\n/)
+            .filter(line => line.includes("/onebots/lib/bin.js"))
+            .join("\n");
+        expect(runtimeCommands).not.toMatch(/(?:^|\s)-(?:r|p|t)\s/m);
+        expect(source).not.toMatch(/--(?:register|protocol|application)(?:\s|=)/);
+        // 网关生灭归管理服务；入口不自行加后台进程或重启循环。
+        expect(source).not.toMatch(/(?:^|\s)(?:nohup|supervisord)\s|\s&\s*$/m);
     });
 
     test.each(["docker-entrypoint.sh", "docker-entrypoint-hf.sh"])(

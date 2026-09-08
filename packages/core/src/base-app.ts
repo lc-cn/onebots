@@ -476,6 +476,17 @@ export class BaseApp extends Koa {
         );
     }
 
+    /** 宿主可限定传输监听地址；平台与协议仍使用同一个真实 HTTP Server。 */
+    protected async listenHttpServer(): Promise<void> {
+        await new Promise<void>((resolve, reject) => {
+            this.httpServer.once("error", reject);
+            this.httpServer.listen(resolveListenPort(this.config.port, process.env.PORT), () => {
+                this.httpServer.removeListener("error", reject);
+                resolve();
+            });
+        });
+    }
+
     async start() {
         this.assertCanStart();
         if (this.isStarted) return;
@@ -486,22 +497,15 @@ export class BaseApp extends Koa {
             await this.lifecycle.start();
 
             // 启动 HTTP 服务器
-            await new Promise<void>((resolve, reject) => {
-                this.httpServer.once("error", reject);
-                this.httpServer.listen(
-                    resolveListenPort(this.config.port, process.env.PORT),
-                    () => {
-                        this.httpServer.removeListener("error", reject);
-                        resolve();
-                    },
-                );
-            });
+            await this.listenHttpServer();
 
             const address = this.httpServer.address();
             const listeningPort =
                 address && typeof address === "object" ? address.port : this.config.port;
+            const listeningHost =
+                address && typeof address === "object" ? address.address : "0.0.0.0";
             this.enhancedLogger.mark(
-                `Server listening at http://0.0.0.0:${listeningPort}${this.config.path || "/"}`,
+                `Server listening at http://${listeningHost.includes(":") ? `[${listeningHost}]` : listeningHost}:${listeningPort}${this.config.path || "/"}`,
                 { port: listeningPort, path: this.config.path },
             );
 

@@ -15,6 +15,10 @@ const packageVersion = (createRequire(import.meta.url)("../package.json") as { v
 /** 启动文件路由 CLI；系统服务的内部入口会绕过 Pastel 和 Ink。 */
 export async function runCli(argv = process.argv): Promise<void> {
     try {
+        if (["serve", "auth", "control"].includes(argv[2])) {
+            const { runControlCommand } = await import("./control/command.js");
+            if (await runControlCommand(argv)) return;
+        }
         const invocation = prepareCliInvocation(
             argv,
             process.stdin.isTTY === true && process.stdout.isTTY === true,
