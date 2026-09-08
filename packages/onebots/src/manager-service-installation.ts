@@ -12,7 +12,7 @@ interface Candidate {
     path: string;
     bytes: Buffer;
     mode: number;
-    owned?: { dev: number; ino: number };
+    owned?: { descriptor: number; dev: number; ino: number };
 }
 export interface ManagerServiceInstallation {
     readonly definitionPath: string;
@@ -20,6 +20,8 @@ export interface ManagerServiceInstallation {
     /** 调用者须先持服务锁并持久记录安装意图。只创建原本缺失的文件，不调用 OS。 */
     apply(): void;
     verify(): boolean;
+    /** 关闭文件身份锚点，不删除文件；释放后不可继续使用计划。 */
+    dispose(): void;
     /** 仅移除本对象创建且身份、字节、权限未变化的文件。任何未知均拒绝整次回滚。 */
     rollback(): void;
     /** 只更新启用状态，不 bootstrap/start；调用者提供受信首次安装的平台驱动。 */
@@ -80,9 +82,14 @@ function sync(directory: string): void {
 function equal(candidate: Candidate): boolean {
     try {
         parents(path.dirname(candidate.path), false);
+        if (!candidate.owned) return false;
+        const anchor = fs.fstatSync(candidate.owned.descriptor);
         const stat = fs.lstatSync(candidate.path);
         if (
-            !candidate.owned ||
+            !anchor.isFile() ||
+            anchor.nlink !== 1 ||
+            anchor.dev !== candidate.owned.dev ||
+            anchor.ino !== candidate.owned.ino ||
             !stat.isFile() ||
             stat.isSymbolicLink() ||
             stat.nlink !== 1 ||
@@ -103,6 +110,7 @@ function publish(candidate: Candidate): void {
     if (exists(candidate.path)) throw fail();
     const temporary = path.join(directory, `.onebots-install-${randomUUID()}`);
     const descriptor = fs.openSync(temporary, "wx", 0o600);
+    let anchor: number | undefined;
     try {
         try {
             fs.writeFileSync(descriptor, candidate.bytes);
@@ -111,12 +119,19 @@ function publish(candidate: Candidate): void {
         } finally {
             fs.closeSync(descriptor);
         }
+        // 在发布前固定仍存活的临时 inode；unlink 后 inode 也不能被外部替换复用。
+        anchor = fs.openSync(temporary, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+        const stat = fs.fstatSync(anchor);
+        const temporaryStat = fs.lstatSync(temporary);
+        if (!stat.isFile() || stat.nlink !== 1 || stat.dev !== temporaryStat.dev ||
+            stat.ino !== temporaryStat.ino || temporaryStat.isSymbolicLink()) throw fail();
         fs.linkSync(temporary, candidate.path); // 原缺失 CAS，不覆盖竞态中新建的文件。
-        const stat = fs.lstatSync(temporary);
-        candidate.owned = { dev: stat.dev, ino: stat.ino };
+        candidate.owned = { descriptor: anchor, dev: stat.dev, ino: stat.ino };
+        anchor = undefined; // 已发布的候选由 rollback/dispose 释放，部分失败也保留证据。
         fs.unlinkSync(temporary);
         sync(directory);
     } finally {
+        if (anchor !== undefined) fs.closeSync(anchor);
         fs.rmSync(temporary, { force: true });
     }
 }
@@ -145,12 +160,13 @@ export function prepareManagerServiceInstallation(
         },
     ];
     let attempted = false;
-    const verify = () => candidates.every(equal);
+    let disposed = false;
+    const verify = () => !disposed && candidates.every(equal);
     return {
         definitionPath: files.definition,
         metadataPath: files.metadata,
         apply() {
-            if (attempted) throw fail();
+            if (disposed || attempted) throw fail();
             attempted = true;
             // 再次核验全部目标缺失，不能在已知冲突后留下第一份文件。
             if (candidates.some(candidate => exists(candidate.path))) throw fail();
@@ -163,7 +179,25 @@ export function prepareManagerServiceInstallation(
             if (!verify()) throw fail();
         },
         verify,
+        dispose() {
+            if (disposed) return;
+            disposed = true;
+            let failed = false;
+            for (const candidate of candidates) {
+                const owned = candidate.owned;
+                if (!owned) continue;
+                candidate.owned = undefined;
+                try {
+                    fs.closeSync(owned.descriptor);
+                } catch {
+                    // close 可能已经生效；不重试同一数字 FD，仍尝试释放其他锚点。
+                    failed = true;
+                }
+            }
+            if (failed) throw fail();
+        },
         rollback() {
+            if (disposed) throw fail();
             const owned = candidates.filter(candidate => candidate.owned);
             if (owned.some(candidate => !equal(candidate))) throw fail();
             // 原本没有创建的目标如果出现，属于外部写入，不能把部分回退谎报为成功。
@@ -172,7 +206,9 @@ export function prepareManagerServiceInstallation(
             for (const candidate of [...owned].reverse()) {
                 if (!equal(candidate)) throw fail();
                 fs.unlinkSync(candidate.path);
+                const descriptor = candidate.owned!.descriptor;
                 candidate.owned = undefined;
+                fs.closeSync(descriptor);
                 sync(path.dirname(candidate.path));
             }
         },

@@ -9,7 +9,10 @@ import { assertManagerServiceRuntime } from "./manager-service-preflight.js";
 import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
 import { FileManagerServiceJournal, type ManagerServicePhase } from "./manager-service-journal.js";
-import { prepareManagerServiceInstallation } from "./manager-service-installation.js";
+import {
+    prepareManagerServiceInstallation,
+    type ManagerServiceInstallation,
+} from "./manager-service-installation.js";
 import { assertServiceAbsent } from "./service-platform-presence.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
@@ -40,6 +43,7 @@ export async function installManagerService(
     if (spec.scope === "system" && host.uid !== 0) throw new Error("系统级服务需要管理员权限");
     const files = getServiceFiles(spec.scope, host);
     const release = acquireServiceMigrationLock(files.stateDir);
+    let installation: ManagerServiceInstallation | undefined;
     try {
         const metadata = readServiceMetadata(files.metadata);
         if (metadata.kind === "legacy")
@@ -60,6 +64,7 @@ export async function installManagerService(
         assertManagerServiceRuntime(spec, host);
         await (dependencies.assertAbsent ?? assertServiceAbsent)(spec.scope, host);
         const plan = prepareManagerServiceInstallation(spec, host);
+        installation = plan;
         if (readServiceMigrationPending(spec.workspace))
             throw new Error("目标工作区仍在服务迁移中，禁止首次安装");
         if (
@@ -126,7 +131,11 @@ export async function installManagerService(
         }
         return { ...record };
     } finally {
-        release();
+        try {
+            installation?.dispose();
+        } finally {
+            release();
+        }
     }
 }
 function exists(file: string): boolean {

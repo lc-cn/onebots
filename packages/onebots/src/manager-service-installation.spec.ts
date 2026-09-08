@@ -2,15 +2,22 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { prepareManagerServiceInstallation } from "./manager-service-installation.js";
+import { prepareManagerServiceInstallation, type ManagerServiceInstallation } from "./manager-service-installation.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform } from "./service-platform.js";
 
 const roots: string[] = [];
+const plans: ManagerServiceInstallation[] = [];
+function prepare(spec: ManagerServiceSpec, host: ServiceHost): ManagerServiceInstallation {
+    const plan = prepareManagerServiceInstallation(spec, host);
+    plans.push(plan);
+    return plan;
+}
 afterEach(() => {
     vi.restoreAllMocks();
+    for (const plan of plans.splice(0)) plan.dispose();
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 function fixture(platform: "linux" | "darwin" = "darwin") {
@@ -50,7 +57,7 @@ describe("新管理服务首次安装文件端口", () => {
             fs.writeFileSync(path.join(f.spec.workspace, "config.yaml"), "broken: [");
             fs.mkdirSync(path.join(f.spec.workspace, ".control"));
             fs.writeFileSync(path.join(f.spec.workspace, ".control/auth.json"), "preserve-auth");
-            const plan = prepareManagerServiceInstallation(f.spec, f.host);
+            const plan = prepare(f.spec, f.host);
             expect(fs.existsSync(f.files.stateDir)).toBe(false);
             plan.apply();
             expect(plan.verify()).toBe(true);
@@ -95,12 +102,12 @@ describe("新管理服务首次安装文件端口", () => {
         const file = f.files[key];
         fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
         fs.writeFileSync(file, "broken", { mode: 0o600 });
-        expect(() => prepareManagerServiceInstallation(f.spec, f.host)).toThrow();
+        expect(() => prepare(f.spec, f.host)).toThrow();
         expect(fs.readFileSync(file, "utf8")).toBe("broken");
     });
     it("prepare后出现新文件时拒绝，绝不覆盖或回退外部文件", () => {
         const f = fixture(),
-            plan = prepareManagerServiceInstallation(f.spec, f.host);
+            plan = prepare(f.spec, f.host);
         fs.mkdirSync(f.files.stateDir, { recursive: true, mode: 0o700 });
         fs.writeFileSync(f.files.metadata, "other", { mode: 0o600 });
         expect(() => plan.apply()).toThrow();
@@ -110,7 +117,7 @@ describe("新管理服务首次安装文件端口", () => {
     });
     it("候选写盘失败只清理本次临时文件，不留下假成功定义", () => {
         const f = fixture(),
-            plan = prepareManagerServiceInstallation(f.spec, f.host);
+            plan = prepare(f.spec, f.host);
         vi.spyOn(fs, "writeFileSync").mockImplementation(() => {
             throw new Error("disk-write");
         });
@@ -121,7 +128,7 @@ describe("新管理服务首次安装文件端口", () => {
     });
     it("第二文件发布失败保留首文件证据，由调用者显式回退自有候选", () => {
         const f = fixture(),
-            plan = prepareManagerServiceInstallation(f.spec, f.host);
+            plan = prepare(f.spec, f.host);
         const original = fs.linkSync;
         vi.spyOn(fs, "linkSync").mockImplementation((from, to) => {
             if (to === f.files.metadata) throw new Error("disk failure");
@@ -133,35 +140,107 @@ describe("新管理服务首次安装文件端口", () => {
         plan.rollback();
         expect(fs.existsSync(f.files.definition)).toBe(false);
     });
-    it("部分完成时外部替换任一候选，回退在删除前整体拒绝", () => {
+    it.each(["definition", "metadata"] as const)("同字节替换 %s 也拒绝回退，保留所有文件", key => {
         const f = fixture(),
-            plan = prepareManagerServiceInstallation(f.spec, f.host);
+            plan = prepare(f.spec, f.host);
         plan.apply();
-        const original = fs.readFileSync(f.files.definition);
-        fs.unlinkSync(f.files.definition);
-        fs.writeFileSync(f.files.definition, original, { mode: 0o644 });
+        const original = fs.readFileSync(f.files[key]);
+        const stat = fs.statSync(f.files[key]);
+        fs.unlinkSync(f.files[key]);
+        fs.writeFileSync(f.files[key], original, { mode: stat.mode & 0o777 });
         expect(plan.verify()).toBe(false);
         expect(() => plan.rollback()).toThrow();
         expect(fs.existsSync(f.files.metadata)).toBe(true);
+        expect(fs.existsSync(f.files.definition)).toBe(true);
     });
+    it.each(["dispose", "rollback", "publish-failure"] as const)(
+        "%s 释放全部只读文件锚点，dispose 幂等且不删除已发布文件",
+        action => {
+            const f = fixture(), plan = prepare(f.spec, f.host);
+            const descriptors: number[] = [];
+            const open = fs.openSync;
+            vi.spyOn(fs, "openSync").mockImplementation((file, flags, mode) => {
+                const descriptor = open(file, flags, mode);
+                if (flags === (fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW))
+                    descriptors.push(descriptor);
+                return descriptor;
+            });
+            if (action === "publish-failure") {
+                vi.spyOn(fs, "linkSync").mockImplementation(() => {
+                    throw new Error("publication failed");
+                });
+                expect(() => plan.apply()).toThrow("publication failed");
+                expect(descriptors).toHaveLength(1);
+            } else {
+                plan.apply();
+                expect(descriptors).toHaveLength(2);
+                for (const descriptor of descriptors) expect(fs.fstatSync(descriptor).nlink).toBe(1);
+                if (action === "rollback") plan.rollback();
+            }
+            if (action !== "dispose") {
+                for (const descriptor of descriptors)
+                    expect(() => fs.fstatSync(descriptor)).toThrow(expect.objectContaining({ code: "EBADF" }));
+            }
+            plan.dispose();
+            plan.dispose();
+            for (const descriptor of descriptors)
+                expect(() => fs.fstatSync(descriptor)).toThrow(expect.objectContaining({ code: "EBADF" }));
+            expect(plan.verify()).toBe(false);
+            expect(() => plan.apply()).toThrow();
+            expect(() => plan.rollback()).toThrow();
+            expect(fs.existsSync(f.files.definition)).toBe(action === "dispose");
+            expect(fs.existsSync(f.files.metadata)).toBe(action === "dispose");
+        },
+    );
+    it.each(["dispose", "rollback"] as const)(
+        "%s 的 close 已成功却报错时不重复关闭 FD，仍释放其他锚点",
+        action => {
+            const f = fixture(), plan = prepare(f.spec, f.host);
+            const descriptors: number[] = [];
+            const open = fs.openSync;
+            vi.spyOn(fs, "openSync").mockImplementation((file, flags, mode) => {
+                const descriptor = open(file, flags, mode);
+                if (flags === (fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW))
+                    descriptors.push(descriptor);
+                return descriptor;
+            });
+            plan.apply();
+            const close = fs.closeSync;
+            const calls: number[] = [];
+            const first = action === "dispose" ? descriptors[0] : descriptors[1];
+            vi.spyOn(fs, "closeSync").mockImplementation(descriptor => {
+                calls.push(descriptor);
+                close(descriptor);
+                if (descriptor === first) throw new Error("close result unknown");
+            });
+            expect(() => plan[action]()).toThrow();
+            // rollback 的剩余锚点由 finally dispose 释放；dispose 本身须遍历全部。
+            plan.dispose();
+            plan.dispose();
+            for (const descriptor of descriptors) {
+                expect(calls.filter(value => value === descriptor)).toHaveLength(1);
+                expect(() => fs.fstatSync(descriptor)).toThrow(expect.objectContaining({ code: "EBADF" }));
+            }
+        },
+    );
     it("拒绝符号链接祖先、占位链接、开放状态目录与Windows", () => {
         const f = fixture();
         fs.symlinkSync(f.root, path.join(f.root, "Library"));
-        expect(() => prepareManagerServiceInstallation(f.spec, f.host)).toThrow();
+        expect(() => prepare(f.spec, f.host)).toThrow();
         fs.unlinkSync(path.join(f.root, "Library"));
         fs.mkdirSync(path.dirname(f.files.definition), { recursive: true, mode: 0o700 });
         fs.symlinkSync(path.join(f.root, "missing"), f.files.definition);
-        expect(() => prepareManagerServiceInstallation(f.spec, f.host)).toThrow();
+        expect(() => prepare(f.spec, f.host)).toThrow();
         const other = fixture();
         fs.mkdirSync(other.files.stateDir, { recursive: true, mode: 0o755 });
-        expect(() => prepareManagerServiceInstallation(other.spec, other.host).apply()).toThrow();
+        expect(() => prepare(other.spec, other.host).apply()).toThrow();
         expect(() =>
-            prepareManagerServiceInstallation(other.spec, { ...other.host, platform: "win32" }),
+            prepare(other.spec, { ...other.host, platform: "win32" }),
         ).toThrow();
     });
     it("OS重载后发现实际运行/未知静止时不得报告安装验收通过", async () => {
         const f = fixture(),
-            plan = prepareManagerServiceInstallation(f.spec, f.host);
+            plan = prepare(f.spec, f.host);
         plan.apply();
         const platform: ServicePlatform = {
             inspect: async () => ({
