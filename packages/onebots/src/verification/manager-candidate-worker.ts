@@ -7,6 +7,7 @@ import { prepareServiceMigrationWorkspace } from "../service-migration-workspace
 import { prepareServiceProcessOwnershipSeed } from "../service-migration-processes.js";
 import type { ManagerCandidateVerification } from "./manager-candidate.js";
 import type { startControlHost } from "../control/host.js";
+import { prepareManagerAuthenticationProbe } from "./manager-authentication.js";
 
 if (!process.send || !process.connected) process.exit(1);
 const stop = () => {
@@ -46,6 +47,7 @@ process.once(
                 throw new Error();
             prepareServiceMigrationWorkspace(input.workspace, randomUUID(), "stopped");
             prepareServiceProcessOwnershipSeed(input.workspace);
+            const authentication = prepareManagerAuthenticationProbe(input.workspace);
             process.chdir(input.workspace);
             const { startControlHost: start } = await import(
                 pathToFileURL(path.join(lib, "control/host.js")).href
@@ -82,11 +84,7 @@ process.once(
                     .status !== 200
             )
                 throw new Error();
-            if (
-                (await fetch(`${origin}/api/control/status`, { signal: AbortSignal.timeout(5000) }))
-                    .status !== 401
-            )
-                throw new Error();
+            await authentication.verify(origin);
             // 维护期不能通过本地请求启动网关或开放配置写入。
             let rejected = false;
             try {
@@ -97,6 +95,7 @@ process.once(
             if (!rejected || host.controller.status().actual !== "stopped") throw new Error();
             await host.close();
             host = undefined;
+            authentication.assertPreserved();
             process.send?.(input.expected, () => process.exit(0));
         } catch {
             // 不将候选异常、路径或配置内容发送给父进程。

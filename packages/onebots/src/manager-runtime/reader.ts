@@ -43,6 +43,7 @@ export function readVerifiedManagerCandidate(root: string, id: string): Verified
                 managementStartup: true,
                 webAssets: true,
                 anonymousDenied: true,
+                authenticationV2: true,
                 maintenance: true,
                 closed: true,
             },

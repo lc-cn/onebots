@@ -17,6 +17,7 @@ export interface ManagerCandidateVerification {
         managementStartup: true;
         webAssets: true;
         anonymousDenied: true;
+        authenticationV2: true;
         maintenance: true;
         closed: true;
     };
@@ -68,6 +69,7 @@ export async function verifyManagerCandidate(
             managementStartup: true,
             webAssets: true,
             anonymousDenied: true,
+            authenticationV2: true,
             maintenance: true,
             closed: true,
         },
@@ -81,7 +83,11 @@ export async function verifyManagerCandidate(
             cwd: root,
             directory: allocation.directory,
             owner: allocation.owner,
-            request: { root, workspace: path.join(fs.realpathSync(allocation.directory), "workspace"), expected },
+            request: {
+                root,
+                workspace: path.join(fs.realpathSync(allocation.directory), "workspace"),
+                expected,
+            },
             timeoutMs,
             signal: options.signal,
             lifecycle,

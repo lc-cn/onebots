@@ -234,7 +234,6 @@ describe("manager upgrade durable identity", () => {
             { ...upgrade, snapshot: { ...upgrade.snapshot, platform: "win32" } },
             ...[
                 { processId: 123, identity: null },
-                { processId: null, identity: "pid-123" },
                 { enabled: false },
             ].map(initial => ({
                 ...upgrade,

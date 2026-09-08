@@ -12,6 +12,7 @@ export interface ManagerUpgradePending {
     candidateDigest: string;
     phase?: "releasing" | "released";
     managerId?: string;
+    completion?: "offline";
 }
 const failure = () => new Error("管理程序升级维护状态无法确认，请在本机对账");
 function parse(input: unknown): ManagerUpgradePending {
@@ -21,6 +22,7 @@ function parse(input: unknown): ManagerUpgradePending {
         ![
             "candidateDigest,operationId,schemaVersion",
             "candidateDigest,managerId,operationId,phase,schemaVersion",
+            "candidateDigest,completion,operationId,phase,schemaVersion",
         ].includes(Object.keys(value).sort().join()) ||
         value.schemaVersion !== 1 ||
         typeof value.operationId !== "string" ||
@@ -29,18 +31,18 @@ function parse(input: unknown): ManagerUpgradePending {
         !/^[a-f0-9]{64}$/.test(value.candidateDigest)
     )
         throw failure();
-    if (
-        value.phase !== undefined &&
+    const offline = value.completion === "offline" && value.phase === "released" &&
+        !Object.hasOwn(value, "managerId");
+    if (Object.hasOwn(value, "completion") && !offline) throw failure();
+    if (value.phase !== undefined && !offline &&
         ((value.phase !== "releasing" && value.phase !== "released") ||
-            typeof value.managerId !== "string" ||
-            !/^[a-f0-9-]{36}$/.test(value.managerId))
-    )
+            typeof value.managerId !== "string" || !/^[a-f0-9-]{36}$/.test(value.managerId)))
         throw failure();
     return {
         ...(value.phase
             ? {
                   phase: value.phase as "releasing" | "released",
-                  managerId: value.managerId as string,
+                  ...(offline ? { completion: "offline" as const } : { managerId: value.managerId as string }),
               }
             : {}),
         schemaVersion: 1,
@@ -177,6 +179,22 @@ export function advanceManagerUpgrade(
     )
         throw failure();
     const next = parse({ ...expected, phase, managerId });
+    file.replaceRaw(snapshot.revision, Buffer.from(JSON.stringify(next)));
+}
+
+/** 仅 OS 升级事务持工作区锁并完成离线核验后调用，不向远程提供此入口。 */
+export function completeStoppedManagerUpgradeWhileLocked(
+    workspace: string,
+    expected: ManagerUpgradePending,
+): void {
+    expected = parse(expected);
+    if (expected.phase) throw failure();
+    const file = new ConfigurationFile(path.join(workspace, ".control", MARKER));
+    const snapshot = file.readRaw();
+    if (JSON.stringify(readManagerUpgradePending(workspace)) !== JSON.stringify(expected) ||
+        JSON.stringify(parse(JSON.parse(snapshot.bytes.toString("utf8")))) !== JSON.stringify(expected))
+        throw failure();
+    const next = parse({ ...expected, phase: "released", completion: "offline" });
     file.replaceRaw(snapshot.revision, Buffer.from(JSON.stringify(next)));
 }
 

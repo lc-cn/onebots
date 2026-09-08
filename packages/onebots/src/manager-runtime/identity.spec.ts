@@ -56,6 +56,7 @@ function fixture() {
             managementStartup: true,
             webAssets: true,
             anonymousDenied: true,
+            authenticationV2: true,
             maintenance: true,
             closed: true,
         },
@@ -121,6 +122,17 @@ it("拒绝错误候选归属及缺失管理证明", () => {
     fs.writeFileSync(receipt, JSON.stringify(value));
     fs.unlinkSync(path.join(f.candidate.directory, "manager-verification.json"));
     expect(() => readRunningManagerCandidate(pathToFileURL(f.host).href)).toThrow();
+});
+it("旧启动证明缺少多设备认证兼容检查时拒绝，不能推定兼容", () => {
+    const f = fixture();
+    const file = path.join(f.candidate.directory, "manager-verification.json");
+    const proof = JSON.parse(fs.readFileSync(file, "utf8"));
+    delete proof.verification.checks.authenticationV2;
+    fs.writeFileSync(file, JSON.stringify(proof));
+    const before = snapshot(f.root);
+    expect(() => readVerifiedManagerCandidate(f.root, f.candidate.id)).toThrow("版本收据不一致");
+    expect(() => readRunningManagerCandidate(pathToFileURL(f.host).href)).toThrow();
+    expect(snapshot(f.root)).toBe(before);
 });
 it("拒绝候选内错误入口、外置宿主及非file URL", () => {
     const f = fixture(),

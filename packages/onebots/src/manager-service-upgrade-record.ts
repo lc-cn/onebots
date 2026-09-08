@@ -38,7 +38,7 @@ export function parseManagerServiceUpgrade(
         !/^[0-9a-f]{64}$/.test(value.candidateDigest) ||
         value.previousCandidateDigest === value.candidateDigest ||
         snapshot.initial.enabled !== desiredEnabled ||
-        (snapshot.initial.processId === null) !== (snapshot.initial.identity === null)
+        (snapshot.initial.processId !== null && snapshot.initial.identity === null)
     )
         throw fail();
     return {
