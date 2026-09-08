@@ -1,3 +1,4 @@
+import { managerUpgradeStatus } from "../service-upgrade-workspace.js";
 import {
     readServiceMigrationPending,
     releaseServiceMigrationPending,
@@ -6,7 +7,11 @@ import {
 export function serviceMigrationStatus(workspace: string) {
     try {
         const pending = readServiceMigrationPending(workspace);
-        return { pending: Boolean(pending), recoveryRequired: false };
+        const upgrade = managerUpgradeStatus(workspace);
+        return {
+            pending: Boolean(pending) || upgrade.pending,
+            recoveryRequired: upgrade.recoveryRequired,
+        };
     } catch {
         return { pending: true, recoveryRequired: true };
     }
@@ -23,6 +28,8 @@ export async function handleServiceMigrationRequest(input: {
 }) {
     if (input.method === "POST" && input.ownershipAvailable === false)
         return { status: 423, body: { message: "历史管理进程所有权不可确认，暂时禁止修改" } };
+    if (input.method === "POST" && managerUpgradeStatus(input.workspace).pending)
+        return { status: 423, body: { message: "管理程序升级尚未确认，暂时禁止修改" } };
     if (input.pathname === "/api/control/service-migration/release") {
         if (!input.local) return { status: 403, body: { message: "迁移确认仅允许本机控制通道" } };
         if (input.method !== "POST") return { status: 405, body: { message: "不支持此方法" } };

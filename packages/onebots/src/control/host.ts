@@ -1,3 +1,4 @@
+import { managerUpgradeStatus } from "../service-upgrade-workspace.js";
 import { GenerationConfigurationVerifier } from "./generation-configuration.js";
 import { authorizeControlHttp } from "./auth-check.js";
 import { ControlSendService } from "./send-service.js";
@@ -461,6 +462,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 !state.recoveryRequired &&
                 !configurationStorageUnavailable &&
                 !configurationApplication?.health().recoveryRequired &&
+                !managerUpgradeStatus(workspace).pending &&
                 state.desired === "running"
             ) {
                 await lifecycle.start();
