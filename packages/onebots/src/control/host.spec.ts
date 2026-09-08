@@ -77,7 +77,16 @@ describe("control host integration", () => {
     it("先查看平台Schema，再通过草稿添加账号和协议完成真实协议调用", async () => {
         const root = workspace();
         fs.writeFileSync(path.join(root, "config.yaml"), "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\n  applications: []\n");
-        const running = await start(root, gatewayEntrypoint, path.resolve("development"));
+        // 每个测试声明自己的运行依赖，不能依赖开发目录中未写入 manifest 的本地链接。
+        const runtimeRoot = workspace();
+        fs.writeFileSync(path.join(runtimeRoot, "package.json"), '{"type":"module"}');
+        fs.mkdirSync(path.join(runtimeRoot, "node_modules/@onebots"), { recursive: true });
+        for (const [name, directory] of [
+            ["@onebots/adapter-mock", "adapters/adapter-mock"],
+            ["@onebots/protocol-onebot-v11", "protocols/onebot-v11/protocol"],
+            ["onebots", "packages/onebots"],
+        ]) fs.symlinkSync(path.resolve(directory), path.join(runtimeRoot, "node_modules", name), "dir");
+        const running = await start(root, gatewayEntrypoint, runtimeRoot);
         const client = await pair(running);
         const snapshot = await client.configurationSnapshot();
         expect(snapshot.schemas.adapters).toHaveProperty("mock");
