@@ -1,14 +1,12 @@
-import { waitForProcessGroupExit } from "../process-group-exit.js";
+import { runOwnedWorker, OwnedWorkerError } from "../verification/owned-worker.js";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { fork } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createGenerationPlan, type GenerationPlan } from "./generation-plan.js";
 import {
     allocateConfigurationVerification,
-    writeConfigurationVerificationOwner,
     type ConfigurationVerificationOwner,
 } from "../configuration/configuration-verify-ownership.js";
 import type { GenerationVerification } from "./generation-store.js";
@@ -101,86 +99,29 @@ function runWorker(
     timeout: number,
     signal?: AbortSignal,
 ): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const environment: NodeJS.ProcessEnv = {
-            HOME: home,
-            USERPROFILE: home,
-            TMPDIR: home,
-            TMP: home,
-            TEMP: home,
-            NODE_ENV: "production",
-            ONEBOTS_VERIFY_PROCESS_GROUP: process.platform === "win32" ? "0" : "1",
-        };
-        for (const key of ["PATH", "SystemRoot", "WINDIR", "LANG", "LC_ALL"]) {
-            if (process.env[key]) environment[key] = process.env[key];
-        }
-        const extension = import.meta.url.endsWith(".ts") ? "ts" : "js";
-        owner.phase = "spawning";
-        writeConfigurationVerificationOwner(home, owner);
-        const worker = fork(
-            fileURLToPath(new URL(`./generation-verify-worker.${extension}`, import.meta.url)),
-            [],
-            {
-                cwd: directory,
-                env: environment,
-                execArgv: [],
-                detached: process.platform !== "win32",
-                stdio: ["ignore", "ignore", "ignore", "ipc"],
-            },
-        );
-        lifecycle.cleanupAllowed = false;
-        let settled = false;
-        let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
-        let schemas: string | undefined;
-        let error: Error | undefined;
-        const killOwnedGroup = () => {
-            if (!worker.pid) return;
-            try {
-                if (process.platform === "win32") worker.kill("SIGKILL");
-                else process.kill(-worker.pid, "SIGKILL");
-            } catch (cause) {
-                // EPERM 仍属未知，必须等 close 后的有界 ESRCH 证明，不能在此清理所有权。
-                if (!["ESRCH", "EPERM"].includes((cause as NodeJS.ErrnoException).code ?? ""))
-                    error ??= new Error("候选验证进程组无法回收");
-            }
-        };
-        const fail = (message: string) => {
-            if (settled) return;
-            error ??= new Error(message);
-            killOwnedGroup();
-            cleanupTimer ??= setTimeout(() => {
-                if (settled) return;
-                settled = true;
-                lifecycle.cleanupAllowed = false;
-                clearTimeout(timer);
-                signal?.removeEventListener("abort", abort);
-                // 不等待未知子进程无限占用 IPC；所有权保留给冷恢复，绝不重派。
-                try {
-                    if (worker.connected) worker.disconnect();
-                } catch {
-                    /* IPC 已不可用，仍按回收未知处理。 */
-                }
-                worker.channel?.unref();
-                worker.unref();
-                reject(new Error("候选验证进程组无法确认退出，已保留所有权记录"));
-            }, 2000);
-        };
-        const abort = () => fail("候选验证已取消");
-        const timer = setTimeout(() => fail("候选验证超时"), timeout);
-        signal?.addEventListener("abort", abort, { once: true });
-        worker.on("error", () => fail("候选验证进程失败"));
-        worker.on("message", value => {
-            if (settled) return;
+    const extension = import.meta.url.endsWith(".ts") ? "ts" : "js";
+    let decodeError: Error | undefined;
+    return runOwnedWorker({
+        entrypoint: fileURLToPath(
+            new URL(`./generation-verify-worker.${extension}`, import.meta.url),
+        ),
+        cwd: directory,
+        directory: home,
+        owner,
+        request: { directory, plan },
+        timeoutMs: timeout,
+        signal,
+        lifecycle,
+        decode(value: unknown): string {
             if (
-                schemas !== undefined ||
                 !value ||
                 typeof value !== "object" ||
                 !("schemas" in value) ||
                 typeof value.schemas !== "string" ||
                 Buffer.byteLength(value.schemas) > 1024 * 1024
             ) {
-                fail("候选依赖、宿主身份或插件注册验证失败");
-                return;
+                decodeError = new Error("候选依赖、宿主身份或插件注册验证失败");
+                throw decodeError;
             }
             try {
                 const parsed = JSON.parse(value.schemas);
@@ -192,45 +133,22 @@ function runWorker(
                     !Array.isArray(parsed.runtimeOnly)
                 )
                     throw new Error();
-                schemas = value.schemas;
+                return value.schemas;
             } catch {
-                fail("候选 Schema 验证失败");
+                decodeError = new Error("候选 Schema 验证失败");
+                throw decodeError;
             }
-        });
-        worker.once("close", async code => {
-            if (settled) return;
-            clearTimeout(timer);
-            clearTimeout(cleanupTimer);
-            signal?.removeEventListener("abort", abort);
-            let reaped = true;
-            // Plugin imports can create ordinary helpers; ready/exit alone does not reap them.
-            if (process.platform !== "win32" && worker.pid) {
-                killOwnedGroup();
-                const state = await waitForProcessGroupExit(worker.pid, 2000);
-                reaped = state === "exited";
-                if (!reaped)
-                    error ??= new Error(
-                        state === "timeout" ? "候选验证进程组仍存活" : "候选验证进程组无法确认退出",
-                    );
-            }
-            if (settled) return;
-            settled = true;
-            lifecycle.cleanupAllowed = reaped;
-            if (error || code !== 0 || schemas === undefined)
-                reject(error ?? new Error("候选验证进程未完成"));
-            else resolve(schemas);
-        });
-        try {
-            if (!worker.pid) throw new Error();
-            owner.phase = "running";
-            owner.workerPid = worker.pid;
-            writeConfigurationVerificationOwner(home, owner);
-            worker.send({ directory, plan }, sendError => {
-                if (sendError) fail("候选验证进程通信失败");
-            });
-        } catch {
-            fail("候选验证所有权记录失败");
-        }
-        if (signal?.aborted) abort();
+        },
+    }).catch((error: unknown) => {
+        if (!(error instanceof OwnedWorkerError)) throw error;
+        const messages = {
+            CANCELLED: "候选验证已取消",
+            TIMEOUT: "候选验证超时",
+            CLEANUP_FAILED: "候选验证进程组无法确认退出，已保留所有权记录",
+            WORKER_FAILED: "候选验证进程失败",
+        };
+        throw error.code === "WORKER_FAILED" && decodeError
+            ? decodeError
+            : new Error(messages[error.code]);
     });
 }

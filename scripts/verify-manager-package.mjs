@@ -79,6 +79,41 @@ try {
     const { createLocalControlClient } = await import(
         pathToFileURL(path.join(packageRoot, "lib/client/local-control.js")).href
     );
+    const { verifyManagerCandidate } = await import(
+        pathToFileURL(path.join(packageRoot, "lib/verification/manager-candidate.js")).href
+    );
+    const { createGenerationPlan } = await import(
+        pathToFileURL(path.join(packageRoot, "lib/installation/generation-plan.js")).href
+    );
+    const hostVersion = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"))).version;
+    const coreVersion = JSON.parse(
+        fs.readFileSync(path.join(runtime, "node_modules/@onebots/core/package.json")),
+    ).version;
+    const plan = createGenerationPlan({
+        host: { name: "onebots", version: hostVersion, spec: hostVersion },
+        core: { name: "@onebots/core", version: coreVersion, spec: coreVersion },
+        extensions: [],
+        selection: { adapters: [], protocols: [], applications: [] },
+    });
+    const privateRoot = fs.mkdtempSync("/tmp/ob-mv-");
+    try {
+        const proof = await verifyManagerCandidate(runtime, plan, { privateRoot });
+        assert.equal(proof.planDigest, plan.digest);
+        assert.equal(proof.checks.maintenance, true);
+        assert.deepEqual(fs.readdirSync(privateRoot), []);
+        const entrypoint = path.join(packageRoot, "lib/control/host.js");
+        fs.renameSync(entrypoint, `${entrypoint}.disabled`);
+        try {
+            await assert.rejects(verifyManagerCandidate(runtime, plan, { privateRoot }));
+            assert.deepEqual(fs.readdirSync(privateRoot), []);
+        } finally {
+            fs.renameSync(`${entrypoint}.disabled`, entrypoint);
+        }
+    } finally {
+        // 未证明退出的验证目录不能被外层临时目录清理抹掉。
+        if (fs.readdirSync(privateRoot).length === 0) fs.rmdirSync(privateRoot);
+        else process.stderr.write(`候选验证保留恢复证据 ${privateRoot}\n`);
+    }
     const client = createLocalControlClient(workspace);
     const options = {
         workspace,
@@ -123,7 +158,7 @@ try {
     host = undefined;
     safeToRemove = true;
     process.stdout.write(
-        "✓ 实际 npm 产物：Web入口及资源、匿名控制拒绝、零扩展、网关启停和停止意图跨重启保持通过（未安装原生系统服务）\n",
+        "✓ 实际 npm 产物：候选维护启动与损坏入口拒绝、验证进程回收、Web入口及资源、匿名控制拒绝、零扩展、网关启停和停止意图跨重启保持通过（未安装原生系统服务）\n",
     );
 } finally {
     if (host) {
