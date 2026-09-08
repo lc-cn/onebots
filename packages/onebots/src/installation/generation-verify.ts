@@ -129,6 +129,8 @@ function runWorker(
             },
         );
         lifecycle.cleanupAllowed = false;
+        let settled = false;
+        let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
         let schemas: string | undefined;
         let error: Error | undefined;
         const killOwnedGroup = () => {
@@ -143,14 +145,32 @@ function runWorker(
             }
         };
         const fail = (message: string) => {
+            if (settled) return;
             error ??= new Error(message);
             killOwnedGroup();
+            cleanupTimer ??= setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                lifecycle.cleanupAllowed = false;
+                clearTimeout(timer);
+                signal?.removeEventListener("abort", abort);
+                // 不等待未知子进程无限占用 IPC；所有权保留给冷恢复，绝不重派。
+                try {
+                    if (worker.connected) worker.disconnect();
+                } catch {
+                    /* IPC 已不可用，仍按回收未知处理。 */
+                }
+                worker.channel?.unref();
+                worker.unref();
+                reject(new Error("候选验证进程组无法确认退出，已保留所有权记录"));
+            }, 2000);
         };
         const abort = () => fail("候选验证已取消");
         const timer = setTimeout(() => fail("候选验证超时"), timeout);
         signal?.addEventListener("abort", abort, { once: true });
         worker.on("error", () => fail("候选验证进程失败"));
         worker.on("message", value => {
+            if (settled) return;
             if (
                 schemas !== undefined ||
                 !value ||
@@ -178,7 +198,9 @@ function runWorker(
             }
         });
         worker.once("close", async code => {
+            if (settled) return;
             clearTimeout(timer);
+            clearTimeout(cleanupTimer);
             signal?.removeEventListener("abort", abort);
             let reaped = true;
             // Plugin imports can create ordinary helpers; ready/exit alone does not reap them.
@@ -191,6 +213,8 @@ function runWorker(
                         state === "timeout" ? "候选验证进程组仍存活" : "候选验证进程组无法确认退出",
                     );
             }
+            if (settled) return;
+            settled = true;
             lifecycle.cleanupAllowed = reaped;
             if (error || code !== 0 || schemas === undefined)
                 reject(error ?? new Error("候选验证进程未完成"));

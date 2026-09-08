@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { verifyConfiguration } from "./configuration-verify.js";
+import { verifyConfiguration, recoverConfigurationVerifications } from "./configuration-verify.js";
 
 const selection = { adapters: [], protocols: [], applications: [] };
 describe("配置隔离验证", () => {
@@ -107,7 +107,7 @@ describe("配置隔离验证", () => {
             await fs.rm(runtimeRoot, { recursive: true, force: true });
         }
     });
-    it("父进程强杀后 worker 清理含秘密文件并退出", async () => {
+    it("父进程强杀后清理敏感请求，保留owner供冷恢复", async () => {
         const root = await fs.mkdtemp(path.join(os.tmpdir(), "ob-config-crash-"));
         const privateDirectory = path.join(root, "private");
         const host = path.join(root, "node_modules/onebots");
@@ -122,19 +122,10 @@ describe("配置隔离验证", () => {
             path.join(host, "plugin-loader.js"),
             `import fs from 'node:fs';fs.writeFileSync(${JSON.stringify(path.join(root, "ready"))}, String(process.pid));await new Promise(()=>{});`,
         );
-        await fs.writeFile(
-            path.join(privateDirectory, "request.json"),
-            JSON.stringify({
-                runtimeRoot: root,
-                selection,
-                document: { token: "private-test-value" },
-            }),
-            { mode: 0o600 },
-        );
         const script = path.join(root, "parent.mjs");
         await fs.writeFile(
             script,
-            `import {fork} from 'node:child_process';const child=fork(${JSON.stringify(path.resolve("packages/onebots/src/configuration/configuration-verify-worker.ts"))},[${JSON.stringify(privateDirectory)}],{detached:true,execArgv:[],stdio:['ignore','ignore','ignore','ipc'],env:{HOME:${JSON.stringify(privateDirectory)}}});child.send({type:'start'});`,
+            `import {verifyConfiguration} from ${JSON.stringify(path.resolve("packages/onebots/lib/configuration/configuration-verify.js"))};await verifyConfiguration({runtimeRoot:${JSON.stringify(root)},privateRoot:${JSON.stringify(privateDirectory)},selection:${JSON.stringify(selection)},document:{token:'private-test-value'},timeoutMs:60000});`,
         );
         const parent = spawn(process.execPath, [script], { stdio: "ignore" });
         const exited = new Promise(resolve => parent.once("close", resolve));
@@ -154,7 +145,8 @@ describe("配置隔离验证", () => {
             let cleaned = false;
             for (let attempt = 0; attempt < 100; attempt++) {
                 try {
-                    await fs.stat(privateDirectory);
+                    const [id] = await fs.readdir(privateDirectory);
+                    await fs.stat(path.join(privateDirectory, id, "request.json"));
                 } catch {
                     cleaned = true;
                     break;
@@ -172,6 +164,17 @@ describe("配置隔离验证", () => {
                 await new Promise(resolve => setTimeout(resolve, 20));
             }
             expect(workerPid).toBe(0);
+            const [id] = await fs.readdir(privateDirectory);
+            const owner = JSON.parse(
+                await fs.readFile(path.join(privateDirectory, id, "owner.json"), "utf8"),
+            );
+            expect(owner.parentPid).toBe(parent.pid);
+            expect(owner.phase).toBe("running");
+            expect(recoverConfigurationVerifications(privateDirectory)).toEqual({
+                removed: [id],
+                blocked: [],
+            });
+            expect(await fs.readdir(privateDirectory)).toEqual([]);
         } finally {
             parent.kill("SIGKILL");
             await exited;

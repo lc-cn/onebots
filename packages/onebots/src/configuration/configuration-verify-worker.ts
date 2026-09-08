@@ -9,12 +9,14 @@ import type {
 
 const directory = process.argv[2];
 if (!process.send || !directory) process.exit(1);
-function clean(): void {
-    fs.rmSync(directory, { recursive: true, force: true });
+function clearRequest(): void {
+    // 子进程只清理自己的敏感请求；owner.json 必须保留到父进程证明整组退出。
+    // 父进程崩溃或回收不明时，冷恢复仍需读取该记录，不能由 worker 提前删除目录。
+    fs.rmSync(path.join(directory, "request.json"), { force: true });
 }
 function stop(): void {
     try {
-        clean();
+        clearRequest();
     } finally {
         try {
             process.kill(-process.pid, "SIGKILL");
@@ -99,12 +101,12 @@ process.once("message", async (message: unknown) => {
         )
             throw new Error();
         const result = await verify();
-        clean();
+        clearRequest();
         process.send?.(result, () => process.exit(0));
     } catch {
         // 配置、插件异常和日志全部留在私有进程，不能发送原始错误。
         try {
-            clean();
+            clearRequest();
         } finally {
             process.exit(1);
         }

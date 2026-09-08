@@ -175,6 +175,8 @@ function run(
                 stdio: ["ignore", "ignore", "ignore", "ipc"],
             },
         );
+        let settled = false;
+        let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
         let result: ConfigurationVerification | undefined;
         let error: ConfigurationVerificationError | undefined;
         const kill = () => {
@@ -188,14 +190,31 @@ function run(
             }
         };
         const fail = (code: ConfigurationVerificationError["code"]) => {
+            if (settled) return;
             error ??= new ConfigurationVerificationError(code);
             kill();
+            cleanupTimer ??= setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                signal?.removeEventListener("abort", abort);
+                // 无 close 证据时保留 owner。断开 IPC 触发 worker 自清理，但不推断成功。
+                try {
+                    if (worker.connected) worker.disconnect();
+                } catch {
+                    /* IPC 已不可用，仍按回收未知处理。 */
+                }
+                worker.channel?.unref();
+                worker.unref();
+                reject(new ConfigurationVerificationError("CLEANUP_FAILED"));
+            }, 2000);
         };
         const abort = () => fail("CANCELLED");
         const timer = setTimeout(() => fail("TIMEOUT"), timeout);
         signal?.addEventListener("abort", abort, { once: true });
         worker.on("error", () => fail("WORKER_FAILED"));
         worker.on("message", (value: unknown) => {
+            if (settled) return;
             if (result || !isResult(value)) {
                 fail("WORKER_FAILED");
                 return;
@@ -203,11 +222,15 @@ function run(
             result = value;
         });
         worker.once("close", async code => {
+            if (settled) return;
             clearTimeout(timer);
+            clearTimeout(cleanupTimer);
             signal?.removeEventListener("abort", abort);
             kill();
             if (worker.pid && (await waitForProcessGroupExit(worker.pid, 2000)) !== "exited")
                 error = new ConfigurationVerificationError("CLEANUP_FAILED");
+            if (settled) return;
+            settled = true;
             if (error || code !== 0 || !result)
                 reject(error ?? new ConfigurationVerificationError("WORKER_FAILED"));
             else resolve(result);

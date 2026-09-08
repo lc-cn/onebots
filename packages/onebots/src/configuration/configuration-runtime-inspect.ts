@@ -95,6 +95,8 @@ export async function inspectConfigurationRuntime(
                 },
             );
             cleanupAllowed = false;
+            let settled = false;
+            let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
             let result: ConfigurationRuntimeInspection | undefined;
             let failed = false;
             const kill = () => {
@@ -103,18 +105,36 @@ export async function inspectConfigurationRuntime(
                     process.kill(-worker.pid, "SIGKILL");
                 } catch (error) {
                     // EPERM 仍属未知，必须等 close 后的有界 ESRCH 证明，不能在此清理所有权。
-                if (!["ESRCH", "EPERM"].includes((error as NodeJS.ErrnoException).code ?? ""))
+                    if (!["ESRCH", "EPERM"].includes((error as NodeJS.ErrnoException).code ?? ""))
                         failed = true;
                 }
             };
             const abort = () => {
+                if (settled) return;
                 failed = true;
                 kill();
+                cleanupTimer ??= setTimeout(() => {
+                    if (settled) return;
+                    settled = true;
+                    cleanupAllowed = false;
+                    clearTimeout(timer);
+                    input.signal?.removeEventListener("abort", abort);
+                    // 无 close 证据时保留 owner，断开 IPC 不代表进程组已回收。
+                    try {
+                        if (worker.connected) worker.disconnect();
+                    } catch {
+                        /* IPC 已不可用，仍按回收未知处理。 */
+                    }
+                    worker.channel?.unref();
+                    worker.unref();
+                    reject(failure());
+                }, 2000);
             };
             const timer = setTimeout(abort, timeout);
             input.signal?.addEventListener("abort", abort, { once: true });
             worker.on("error", abort);
             worker.on("message", (value: unknown) => {
+                if (settled) return;
                 try {
                     if (result || !value || typeof value !== "object") throw failure();
                     const wire = value as { schemas?: unknown; fingerprint?: unknown };
@@ -142,11 +162,15 @@ export async function inspectConfigurationRuntime(
                 }
             });
             worker.once("close", async code => {
+                if (settled) return;
                 clearTimeout(timer);
+                clearTimeout(cleanupTimer);
                 input.signal?.removeEventListener("abort", abort);
                 kill();
                 const reaped =
                     !worker.pid || (await waitForProcessGroupExit(worker.pid, 2000)) === "exited";
+                if (settled) return;
+                settled = true;
                 if (!reaped) failed = true;
                 cleanupAllowed = reaped;
                 if (failed || code !== 0 || !result) reject(failure());
