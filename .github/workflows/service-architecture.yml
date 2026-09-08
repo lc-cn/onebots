@@ -31,6 +31,8 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm packages:pack:check
+      - name: Verify installed npm management runtime
+        run: node scripts/verify-manager-package.mjs
       - run: docker build -t onebots-control-ci .
       - name: Verify blank Docker control service
         run: |
