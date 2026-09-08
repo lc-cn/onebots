@@ -25,9 +25,21 @@ export async function handleServiceMigrationRequest(input: {
     method: string;
     local: boolean;
     body: () => Promise<unknown>;
+    releaseUpgrade?: (body: unknown) => Promise<void>;
 }) {
     if (input.method === "POST" && input.ownershipAvailable === false)
         return { status: 423, body: { message: "历史管理进程所有权不可确认，暂时禁止修改" } };
+    if (input.pathname === "/api/control/service-upgrade/release") {
+        if (!input.local) return { status: 403, body: { message: "升级确认仅允许本机控制通道" } };
+        if (input.method !== "POST") return { status: 405, body: { message: "不支持此方法" } };
+        try {
+            if (!input.releaseUpgrade) throw new Error();
+            await input.releaseUpgrade(await input.body());
+            return { status: 200, body: { released: true } };
+        } catch {
+            return { status: 409, body: { message: "升级确认结果未核实，请在本机对账" } };
+        }
+    }
     if (input.method === "POST" && managerUpgradeStatus(input.workspace).pending)
         return { status: 423, body: { message: "管理程序升级尚未确认，暂时禁止修改" } };
     if (input.pathname === "/api/control/service-migration/release") {

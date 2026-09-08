@@ -5,7 +5,8 @@ import {
     type GenerationInstallerOptions,
 } from "../installation/generation-installer.js";
 import { type GenerationPlan } from "../installation/generation-plan.js";
-import { type VerifiedGeneration } from "../installation/generation-store.js";
+import { readVerifiedManagerCandidate, type VerifiedManagerCandidate } from "./reader.js";
+export type { VerifiedManagerCandidate } from "./reader.js";
 import { verifyGeneration } from "../installation/generation-verify.js";
 import {
     verifyManagerCandidate,
@@ -17,9 +18,6 @@ interface ManagerProof {
     schemaVersion: 1;
     candidateId: string;
     verification: ManagerCandidateVerification;
-}
-export interface VerifiedManagerCandidate extends VerifiedGeneration {
-    management: ManagerCandidateVerification;
 }
 export type ManagerCandidateInstallerOptions = Omit<GenerationInstallerOptions, "verify">;
 
@@ -77,40 +75,7 @@ export class ManagerCandidateInstaller {
 
     readCandidate(id: string): VerifiedManagerCandidate {
         const candidate = this.options.store.readVerified(id);
-        const file = path.join(candidate.directory, PROOF);
-        const stat = fs.lstatSync(file);
-        if (
-            !stat.isFile() ||
-            stat.isSymbolicLink() ||
-            stat.nlink !== 1 ||
-            stat.size > 4096 ||
-            (stat.mode & 0o077) !== 0 ||
-            (process.getuid && stat.uid !== process.getuid())
-        )
-            throw new Error("管理程序候选启动证明无效");
-        const expected: ManagerProof = {
-            schemaVersion: 1,
-            candidateId: candidate.id,
-            verification: {
-                schemaVersion: 1,
-                planDigest: candidate.planDigest,
-                hostVersion: candidate.receipt.hostVersion,
-                coreVersion: candidate.receipt.coreVersion,
-                nodeAbi: candidate.receipt.nodeAbi,
-                platform: candidate.receipt.platform,
-                arch: candidate.receipt.arch,
-                checks: {
-                    managementStartup: true,
-                    webAssets: true,
-                    anonymousDenied: true,
-                    maintenance: true,
-                    closed: true,
-                },
-            },
-        };
-        if (JSON.stringify(JSON.parse(fs.readFileSync(file, "utf8"))) !== JSON.stringify(expected))
-            throw new Error("管理程序候选启动证明与版本收据不一致");
-        return { ...candidate, management: expected.verification };
+        return readVerifiedManagerCandidate(path.dirname(candidate.directory), id);
     }
 
     close(): Promise<void> {

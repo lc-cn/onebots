@@ -10,13 +10,18 @@ export interface ManagerUpgradePending {
     schemaVersion: 1;
     operationId: string;
     candidateDigest: string;
+    phase?: "releasing" | "released";
+    managerId?: string;
 }
 const failure = () => new Error("管理程序升级维护状态无法确认，请在本机对账");
 function parse(input: unknown): ManagerUpgradePending {
     if (!input || typeof input !== "object" || Array.isArray(input)) throw failure();
     const value = input as Record<string, unknown>;
     if (
-        Object.keys(value).sort().join() !== "candidateDigest,operationId,schemaVersion" ||
+        ![
+            "candidateDigest,operationId,schemaVersion",
+            "candidateDigest,managerId,operationId,phase,schemaVersion",
+        ].includes(Object.keys(value).sort().join()) ||
         value.schemaVersion !== 1 ||
         typeof value.operationId !== "string" ||
         !/^[A-Za-z0-9_-]{1,128}$/.test(value.operationId) ||
@@ -24,7 +29,20 @@ function parse(input: unknown): ManagerUpgradePending {
         !/^[a-f0-9]{64}$/.test(value.candidateDigest)
     )
         throw failure();
+    if (
+        value.phase !== undefined &&
+        ((value.phase !== "releasing" && value.phase !== "released") ||
+            typeof value.managerId !== "string" ||
+            !/^[a-f0-9-]{36}$/.test(value.managerId))
+    )
+        throw failure();
     return {
+        ...(value.phase
+            ? {
+                  phase: value.phase as "releasing" | "released",
+                  managerId: value.managerId as string,
+              }
+            : {}),
         schemaVersion: 1,
         operationId: value.operationId,
         candidateDigest: value.candidateDigest,
@@ -52,7 +70,11 @@ export function readManagerUpgradePending(workspace: string): ManagerUpgradePend
 }
 export function managerUpgradeStatus(workspace: string) {
     try {
-        return { pending: Boolean(readManagerUpgradePending(workspace)), recoveryRequired: false };
+        const marker = readManagerUpgradePending(workspace);
+        return {
+            pending: Boolean(marker && marker.phase !== "released"),
+            recoveryRequired: marker?.phase === "releasing",
+        };
     } catch {
         return { pending: true, recoveryRequired: true };
     }
@@ -68,6 +90,7 @@ export async function prepareManagerUpgradeWorkspace(
     input: ManagerUpgradePending,
 ): Promise<void> {
     const pending = parse(input);
+    if (pending.phase) throw failure();
     if (
         process.platform === "win32" ||
         !path.isAbsolute(workspace) ||
@@ -108,4 +131,31 @@ export async function prepareManagerUpgradeWorkspace(
     } finally {
         release();
     }
+}
+
+/** 仅常驻host持工作区锁与生命周期队列时使用；CAS之前不派发外部动作。 */
+export function advanceManagerUpgrade(
+    workspace: string,
+    expected: ManagerUpgradePending,
+    phase: "releasing" | "released",
+    managerId: string,
+): void {
+    if (
+        (phase === "releasing" && expected.phase) ||
+        (phase === "released" &&
+            (expected.phase !== "releasing" || expected.managerId !== managerId))
+    )
+        throw failure();
+    expected = parse(expected);
+    const file = new ConfigurationFile(path.join(workspace, ".control", MARKER));
+    const current = readManagerUpgradePending(workspace);
+    const snapshot = file.readRaw();
+    if (
+        JSON.stringify(current) !== JSON.stringify(expected) ||
+        JSON.stringify(parse(JSON.parse(snapshot.bytes.toString("utf8")))) !==
+            JSON.stringify(expected)
+    )
+        throw failure();
+    const next = parse({ ...expected, phase, managerId });
+    file.replaceRaw(snapshot.revision, Buffer.from(JSON.stringify(next)));
 }

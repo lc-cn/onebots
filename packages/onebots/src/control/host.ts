@@ -1,3 +1,4 @@
+import { createManagerUpgradeRelease } from "./service-upgrade-release.js";
 import { managerUpgradeStatus } from "../service-upgrade-workspace.js";
 import { GenerationConfigurationVerifier } from "./generation-configuration.js";
 import { authorizeControlHttp } from "./auth-check.js";
@@ -134,6 +135,13 @@ export async function startControlHost(options: ControlHostOptions) {
             configurationStorageUnavailable ||
             Boolean(configurationApplication?.health().recoveryRequired),
     });
+    const releaseUpgrade = createManagerUpgradeRelease(
+        workspace,
+        id,
+        import.meta.url,
+        lifecycle,
+        () => !closed && !storageError && ownershipAvailable,
+    );
     try {
         configurationApplication = new ConfigurationApplication({
             directory: path.join(controlDirectory(workspace), "configuration-applications"),
@@ -256,6 +264,7 @@ export async function startControlHost(options: ControlHostOptions) {
                     method: request.method,
                     local,
                     body: () => readBody(request),
+                    releaseUpgrade,
                 });
                 if (migration) {
                     json(response, migration.status, migration.body);

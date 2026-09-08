@@ -154,33 +154,9 @@ export class GenerationStore {
     }
 
     readVerified(id: string): VerifiedGeneration {
-        const candidate = this.candidate(id);
-        const value = readJson(path.join(candidate.directory, RECEIPT));
-        validateVerification(value);
-        if (
-            value.schemaVersion !== 1 ||
-            value.phase !== "verified" ||
-            value.id !== id ||
-            value.storeId !== this.storeId ||
-            value.operationId !== candidate.operationId ||
-            value.planDigest !== candidate.planDigest ||
-            typeof value.verifiedAt !== "string" ||
-            !Number.isFinite(Date.parse(value.verifiedAt)) ||
-            typeof value.lockDigest !== "string" ||
-            !DIGEST.test(value.lockDigest) ||
-            typeof value.schemasDigest !== "string" ||
-            !DIGEST.test(value.schemasDigest)
-        )
-            throw new Error("运行版本验证收据无效");
-        const manifests = verifyRuntime(candidate.directory, value);
-        if (
-            value.hostManifestDigest !== manifests.hostManifestDigest ||
-            value.coreManifestDigest !== manifests.coreManifestDigest ||
-            value.lockDigest !== fileDigest(path.join(candidate.directory, LOCK)) ||
-            value.schemasDigest !== schemaDigest(path.join(candidate.directory, SCHEMAS))
-        )
-            throw new Error("运行版本锁文件或 Schema 已变化，必须重新生成候选版本");
-        return { ...candidate, receipt: value as unknown as GenerationReceipt };
+        const candidate = readVerifiedGeneration(this.root, id);
+        if (candidate.receipt.storeId !== this.storeId) throw new Error("版本仓库身份已变化");
+        return candidate;
     }
 
     /** 仅清理本仓库拥有的未验证候选；已验证版本的保留/回收另由控制服务管理。 */
@@ -193,27 +169,7 @@ export class GenerationStore {
     }
 
     private candidate(id: string): GenerationCandidate {
-        if (!ID.test(id)) throw new Error("运行版本标识无效");
-        const directory = path.join(this.root, id);
-        const stat = fs.lstatSync(directory);
-        if (
-            !stat.isDirectory() ||
-            stat.isSymbolicLink() ||
-            fs.realpathSync(directory) !== directory
-        )
-            throw new Error("运行版本目录归属无效");
-        const value = readJson(path.join(directory, CANDIDATE));
-        if (
-            value.schemaVersion !== 1 ||
-            value.phase !== "candidate" ||
-            value.id !== id ||
-            value.storeId !== this.storeId ||
-            !safeOperation(value.operationId) ||
-            typeof value.planDigest !== "string" ||
-            !DIGEST.test(value.planDigest)
-        )
-            throw new Error("候选版本所有权记录无效");
-        return { id, directory, operationId: value.operationId, planDigest: value.planDigest };
+        return readCandidateRecord(this.root, this.storeId, id);
     }
 }
 
@@ -320,4 +276,74 @@ function writeAtomic(file: string, value: unknown): void {
     } finally {
         fs.rmSync(temporary, { force: true });
     }
+}
+
+/** 只读打开已有仓库；不创建目录、修复权限或生成仓库身份。 */
+function readStoreIdentity(input: string): { root: string; id: string } {
+    if (!path.isAbsolute(input)) throw new Error("版本仓库路径无效");
+    const root = path.resolve(input);
+    const stat = fs.lstatSync(root);
+    if (
+        !stat.isDirectory() ||
+        stat.isSymbolicLink() ||
+        fs.realpathSync(root) !== root ||
+        (stat.mode & 0o077) !== 0 ||
+        (process.getuid && stat.uid !== process.getuid())
+    )
+        throw new Error("版本仓库归属无效");
+    const identity = readJson(path.join(root, "store.json"));
+    if (identity.schemaVersion !== 1 || typeof identity.id !== "string" || !ID.test(identity.id))
+        throw new Error("版本仓库身份无效");
+    return { root, id: identity.id };
+}
+/** 完整复核既有收据，无目录、权限或日志写入。工件仍依赖可信用户独占。 */
+export function readVerifiedGeneration(root: string, id: string): VerifiedGeneration {
+    const store = readStoreIdentity(root);
+    const candidate = readCandidateRecord(store.root, store.id, id);
+    const value = readJson(path.join(candidate.directory, RECEIPT));
+    validateVerification(value);
+    if (
+        value.schemaVersion !== 1 ||
+        value.phase !== "verified" ||
+        value.id !== id ||
+        value.storeId !== store.id ||
+        value.operationId !== candidate.operationId ||
+        value.planDigest !== candidate.planDigest ||
+        typeof value.verifiedAt !== "string" ||
+        !Number.isFinite(Date.parse(value.verifiedAt)) ||
+        typeof value.lockDigest !== "string" ||
+        !DIGEST.test(value.lockDigest) ||
+        typeof value.schemasDigest !== "string" ||
+        !DIGEST.test(value.schemasDigest)
+    )
+        throw new Error("运行版本验证收据无效");
+    const manifests = verifyRuntime(candidate.directory, value);
+    if (
+        value.hostManifestDigest !== manifests.hostManifestDigest ||
+        value.coreManifestDigest !== manifests.coreManifestDigest ||
+        value.lockDigest !== fileDigest(path.join(candidate.directory, LOCK)) ||
+        value.schemasDigest !== schemaDigest(path.join(candidate.directory, SCHEMAS))
+    )
+        throw new Error("运行版本锁文件或 Schema 已变化，必须重新生成候选版本");
+    return { ...candidate, receipt: value as unknown as GenerationReceipt };
+}
+
+function readCandidateRecord(root: string, storeId: string, id: string): GenerationCandidate {
+    if (!ID.test(id)) throw new Error("运行版本标识无效");
+    const directory = path.join(root, id);
+    const stat = fs.lstatSync(directory);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || fs.realpathSync(directory) !== directory)
+        throw new Error("运行版本目录归属无效");
+    const value = readJson(path.join(directory, CANDIDATE));
+    if (
+        value.schemaVersion !== 1 ||
+        value.phase !== "candidate" ||
+        value.id !== id ||
+        value.storeId !== storeId ||
+        !safeOperation(value.operationId) ||
+        typeof value.planDigest !== "string" ||
+        !DIGEST.test(value.planDigest)
+    )
+        throw new Error("候选版本所有权记录无效");
+    return { id, directory, operationId: value.operationId, planDigest: value.planDigest };
 }
