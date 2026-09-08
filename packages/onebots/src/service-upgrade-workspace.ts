@@ -49,7 +49,9 @@ function parse(input: unknown): ManagerUpgradePending {
     };
 }
 export function readManagerUpgradePending(workspace: string): ManagerUpgradePending | null {
-    const file = path.join(workspace, ".control", MARKER);
+    return readUpgradeFile(path.join(workspace, ".control", MARKER));
+}
+function readUpgradeFile(file: string): ManagerUpgradePending | null {
     let stat: fs.Stats;
     try {
         stat = fs.lstatSync(file);
@@ -108,12 +110,30 @@ export async function prepareManagerUpgradeWorkspace(
         throw failure();
     const release = acquireControlWorkspace(workspace);
     try {
+        const previous = readManagerUpgradePending(workspace);
         if (
             readServiceMigrationPending(workspace) ||
-            readManagerUpgradePending(workspace) ||
+            (previous && previous.phase !== "released") ||
             !(await verifyServiceMigrationProcessesWhileLocked(workspace))
         )
             throw failure();
+        if (
+            previous?.operationId === pending.operationId ||
+            readManagerUpgradeHistory(workspace, pending.operationId)
+        )
+            throw failure();
+        if (previous) {
+            const file = new ConfigurationFile(path.join(directory, MARKER));
+            const snapshot = file.readRaw();
+            if (
+                JSON.stringify(parse(JSON.parse(snapshot.bytes.toString("utf8")))) !==
+                JSON.stringify(previous)
+            )
+                throw failure();
+            archiveCompleted(workspace, previous, snapshot.bytes);
+            file.replaceRaw(snapshot.revision, Buffer.from(JSON.stringify(pending)));
+            return;
+        }
         // 排他创建：写入中断也留下可见的封锁证据，不能留下“无标记”的部分升级。
         const descriptor = fs.openSync(path.join(directory, MARKER), "wx", 0o600);
         try {
@@ -165,4 +185,62 @@ export function assertNoPendingManagerUpgrade(workspace: string): void {
     const status = managerUpgradeStatus(workspace);
     if (status.pending || status.recoveryRequired)
         throw new Error("管理程序升级尚待确认或对账，禁止其他系统服务操作");
+}
+
+/** 已完成记录只读查询；不能将缺失、损坏记录视为新操作授权。 */
+export function readManagerUpgradeHistory(
+    workspace: string,
+    operationId: string,
+): ManagerUpgradePending | null {
+    if (typeof operationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(operationId))
+        throw failure();
+    const directory = path.join(workspace, ".control/manager-upgrade-history");
+    if (!historyDirectory(directory)) return null;
+    const record = readUpgradeFile(path.join(directory, `${operationId}.json`));
+    if (record && (record.operationId !== operationId || record.phase !== "released"))
+        throw failure();
+    return record;
+}
+function historyDirectory(directory: string): boolean {
+    let stat: fs.Stats;
+    try {
+        stat = fs.lstatSync(directory);
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+        throw failure();
+    }
+    if (
+        !stat.isDirectory() ||
+        stat.isSymbolicLink() ||
+        (stat.mode & 0o7777) !== 0o700 ||
+        (process.getuid && stat.uid !== process.getuid())
+    )
+        throw failure();
+    return true;
+}
+function archiveCompleted(workspace: string, previous: ManagerUpgradePending, bytes: Buffer): void {
+    const directory = path.join(workspace, ".control/manager-upgrade-history");
+    if (!historyDirectory(directory)) fs.mkdirSync(directory, { mode: 0o700 });
+    const file = path.join(directory, `${previous.operationId}.json`);
+    const existing = readManagerUpgradeHistory(workspace, previous.operationId);
+    if (existing) {
+        if (!new ConfigurationFile(file).readRaw().bytes.equals(bytes)) throw failure();
+    } else {
+        const descriptor = fs.openSync(file, "wx", 0o600);
+        try {
+            fs.writeFileSync(descriptor, bytes);
+            fs.fsyncSync(descriptor);
+        } finally {
+            fs.closeSync(descriptor);
+        }
+    }
+    // 归档持久成功后才CAS替换当前标记；中断不删除任何已完成证据。
+    for (const target of [file, directory, path.dirname(directory)]) {
+        const descriptor = fs.openSync(target, "r");
+        try {
+            fs.fsyncSync(descriptor);
+        } finally {
+            fs.closeSync(descriptor);
+        }
+    }
 }

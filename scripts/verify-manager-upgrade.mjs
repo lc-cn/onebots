@@ -14,7 +14,9 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
     const { createGenerationPlan } = await load("installation/generation-plan.js");
     const { ManagerCandidateInstaller } = await load("manager-runtime/installer.js");
     const { managerCandidateDigest } = await load("manager-runtime/identity.js");
-    const { prepareManagerUpgradeWorkspace } = await load("service-upgrade-workspace.js");
+    const { prepareManagerUpgradeWorkspace, readManagerUpgradeHistory } = await load(
+        "service-upgrade-workspace.js",
+    );
     const { acquireControlWorkspace, controlSocket } = await load("control/workspace.js");
     const { createLocalControlClient } = await load("client/local-control.js");
     const home = path.join(temporary, "manager");
@@ -72,11 +74,11 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
         assert.equal(status.gateway.actual, "stopped");
         assert.equal(status.gateway.desired, "running");
         await assert.rejects(client.gateway("start"));
-        const release = async () => {
+        const release = async (operationId = "actual-upgrade") => {
             const { manager } = await client.status();
             return post(controlSocket(canonical), {
                 managerId: manager.id,
-                operationId: "actual-upgrade",
+                operationId,
                 candidateDigest: digest,
             });
         };
@@ -94,8 +96,22 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
         assert.equal((await client.status()).gateway.actual, "stopped");
         await running.close();
         running = undefined;
+        // 第二次维护确认复用同一已验证候选，验证连续操作与历史身份隔离；不是另一次发版。
+        await prepareManagerUpgradeWorkspace(canonical, {
+            schemaVersion: 1,
+            operationId: "next-upgrade",
+            candidateDigest: digest,
+        });
+        assert.equal(readManagerUpgradeHistory(canonical, "actual-upgrade").phase, "released");
+        running = await launch(candidate.directory, canonical, temporary);
+        assert.equal(await release(), 409);
+        assert.equal((await client.status()).serviceMigration.pending, true);
+        assert.equal(await release("next-upgrade"), 200);
+        assert.equal((await client.status()).gateway.actual, "stopped");
+        await running.close();
+        running = undefined;
         process.stdout.write(
-            "✓ 真实管理候选：pnpm下载、双验证收据、旧进程退出、维护接管、本地确认、幂等重放及重启保持停止通过（未切换OS服务）\n",
+            "✓ 真实管理候选：pnpm下载、双验证收据、旧进程退出、维护接管、本地确认、幂等重放、重启保持停止及连续维护归档通过（未切换OS服务）\n",
         );
     } finally {
         if (running) await running.close();
