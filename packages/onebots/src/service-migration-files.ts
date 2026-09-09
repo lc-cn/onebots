@@ -19,6 +19,7 @@ interface Entry {
     parent: { path: string; dev: number; ino: number };
     original: Snapshot | null;
     target: Snapshot | null;
+    restored: Snapshot | null;
 }
 const LIMIT = 1_048_576;
 const failure = () => new Error("服务迁移文件已变化或不可用，禁止覆盖");
@@ -30,7 +31,12 @@ const failure = () => new Error("服务迁移文件已变化或不可用，禁�
  */
 export class ServiceMigrationFiles {
     private readonly entries: Entry[];
-    constructor(backup: ServiceMigrationBackup, targets: ServiceMigrationTargetFile[]) {
+    constructor(
+        backup: ServiceMigrationBackup,
+        targets: ServiceMigrationTargetFile[],
+        /** 从持久化旧工件契约派生，不能使用临时客户端路径。省略时恢复原文件。 */
+        rollback: ServiceMigrationTargetFile[] = [],
+    ) {
         try {
             const value = plain(backup, [
                 "schemaVersion",
@@ -50,6 +56,7 @@ export class ServiceMigrationFiles {
             if (originals.length < 3) throw failure();
             const entries = new Map<string, Entry>();
             const roles = new Set<string>();
+            const runtimeDefinitions = new Set<string>();
             for (const item of originals) {
                 const file = plain(item, ["role", "path", "mode", "contentBase64"]);
                 if (
@@ -66,10 +73,13 @@ export class ServiceMigrationFiles {
                     throw failure();
                 const entry = location(file.path);
                 if (entries.has(entry.file)) throw failure();
+                if (file.role === "definition" || file.role === "metadata")
+                    runtimeDefinitions.add(entry.file);
                 entries.set(entry.file, {
                     ...entry,
                     original: snapshot(bytes, file.mode),
                     target: null,
+                    restored: snapshot(bytes, file.mode),
                 });
             }
             if (!["definition", "metadata", "configuration"].every(role => roles.has(role)))
@@ -84,7 +94,23 @@ export class ServiceMigrationFiles {
                 const target = snapshot(file.bytes, file.mode);
                 const previous = entries.get(entry.file);
                 if (previous) previous.target = target;
-                else entries.set(entry.file, { ...entry, original: null, target });
+                else entries.set(entry.file, { ...entry, original: null, target, restored: null });
+            }
+            const restored = new Set<string>();
+            for (const item of array(rollback, 4)) {
+                const file = plain(item, ["path", "bytes", "mode"]);
+                if (!Buffer.isBuffer(file.bytes)) throw failure();
+                const locationEntry = location(file.path);
+                const entry = entries.get(locationEntry.file);
+                // 回退只能改变已备份文件，不能凭恢复计划增加任意写入目标。
+                if (
+                    !entry?.original ||
+                    !runtimeDefinitions.has(entry.file) ||
+                    restored.has(entry.file)
+                )
+                    throw failure();
+                restored.add(entry.file);
+                entry.restored = snapshot(file.bytes, file.mode);
             }
             this.entries = [...entries.values()];
         } catch {
@@ -101,6 +127,13 @@ export class ServiceMigrationFiles {
     matchesTarget(): boolean {
         try {
             return this.entries.every(entry => equal(read(entry), entry.target ?? entry.original));
+        } catch {
+            return false;
+        }
+    }
+    matchesRestored(): boolean {
+        try {
+            return this.entries.every(entry => equal(read(entry), entry.restored));
         } catch {
             return false;
         }
@@ -131,15 +164,15 @@ export class ServiceMigrationFiles {
             for (let index = 0; index < this.entries.length; index++) {
                 const entry = this.entries[index];
                 const current = observed[index];
-                if (equal(current, entry.original)) continue;
-                if (entry.original) write(entry, current, entry.original);
+                if (equal(current, entry.restored)) continue;
+                if (entry.restored) write(entry, current, entry.restored);
                 else {
                     if (!equal(read(entry), current)) throw failure();
                     fs.unlinkSync(entry.file);
                     sync(entry.parent.path);
                 }
             }
-            if (!this.matchesOriginal()) throw failure();
+            if (!this.matchesRestored()) throw failure();
         } catch {
             throw failure();
         }
@@ -147,7 +180,11 @@ export class ServiceMigrationFiles {
     private restorable(): Array<Snapshot | null> {
         return this.entries.map(entry => {
             const current = read(entry);
-            if (!equal(current, entry.original) && !(entry.target && equal(current, entry.target)))
+            if (
+                !equal(current, entry.original) &&
+                !(entry.target && equal(current, entry.target)) &&
+                !equal(current, entry.restored)
+            )
                 throw failure();
             return current;
         });

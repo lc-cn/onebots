@@ -47,6 +47,75 @@ function fixture() {
     return { root, bytes, backup, targets, boundary: new ServiceMigrationFiles(backup, targets) };
 }
 describe("migration file CAS and recovery", () => {
+    it("restores retained runtime definitions without rewriting original history or account bytes", () => {
+        const test = fixture();
+        const rollback = test.backup.files.slice(0, 2).map(file => ({
+            path: file.path,
+            bytes: Buffer.from(`retained-runtime:${file.role}`),
+            mode: 0o600,
+        }));
+        const history = structuredClone(test.backup);
+        const files = new ServiceMigrationFiles(test.backup, test.targets, rollback);
+        files.apply();
+        files.restore();
+        expect(files.matchesRestored()).toBe(true);
+        expect(files.matchesOriginal()).toBe(false);
+        expect(files.matchesTarget()).toBe(false);
+        expect(test.backup).toEqual(history);
+        expect(fs.readFileSync(test.backup.files[2].path)).toEqual(test.bytes);
+        expect(() => files.apply()).toThrow();
+        files.restore();
+        expect(files.matchesRestored()).toBe(true);
+    });
+    it("retains partial rollback evidence and refuses foreign edits before continuing", () => {
+        const test = fixture();
+        const rollback = test.backup.files.slice(0, 2).map(file => ({
+            path: file.path,
+            bytes: Buffer.from(`retained:${file.role}`),
+            mode: 0o600,
+        }));
+        const files = new ServiceMigrationFiles(test.backup, test.targets, rollback);
+        files.apply();
+        const rename = fs.renameSync;
+        vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
+            if (String(to) === rollback[1].path) throw new Error("interrupted rollback");
+            rename(from, to);
+        });
+        expect(() => files.restore()).toThrow();
+        expect(fs.readFileSync(rollback[0].path)).toEqual(rollback[0].bytes);
+        expect(files.canRestore()).toBe(true);
+        vi.restoreAllMocks();
+        fs.writeFileSync(rollback[0].path, "foreign");
+        expect(files.canRestore()).toBe(false);
+        expect(() => files.restore()).toThrow();
+        expect(fs.readFileSync(rollback[1].path)).toEqual(test.bytes);
+        fs.writeFileSync(rollback[0].path, rollback[0].bytes);
+        files.restore();
+        expect(files.matchesRestored()).toBe(true);
+    });
+    it("rollback cannot introduce an unbacked file or duplicate write target", () => {
+        const test = fixture();
+        expect(
+            () =>
+                new ServiceMigrationFiles(test.backup, test.targets, [
+                    {
+                        path: test.backup.files[2].path,
+                        bytes: Buffer.from("replacement credentials"),
+                        mode: 0o600,
+                    },
+                ]),
+        ).toThrow();
+        expect(
+            () => new ServiceMigrationFiles(test.backup, test.targets, [test.targets[1]]),
+        ).toThrow();
+        expect(
+            () =>
+                new ServiceMigrationFiles(test.backup, test.targets, [
+                    test.targets[0],
+                    test.targets[0],
+                ]),
+        ).toThrow();
+    });
     it("writes exact target bytes and modes while preserving untouched originals; restores original binary bytes", () => {
         const test = fixture();
         expect(test.boundary.matchesOriginal()).toBe(true);
