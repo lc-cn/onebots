@@ -34,11 +34,40 @@ export interface ManagerServiceUpgradeRequest {
     /** CLI 准备候选前读取的活动管理版本；存在时在服务锁内做 CAS。 */
     expectedPreviousDigest?: string;
 }
-export class ManagerServiceUpgradeRejectedError extends Error {}
-const failure = () =>
-    new ManagerServiceUpgradeRejectedError(
-        "管理服务升级准备失败，未派发系统动作；请核对已纳管候选及待恢复操作",
-    );
+export type ManagerServiceUpgradeRejectionCode =
+    | "INVALID_REQUEST"
+    | "SERVICE_BUSY"
+    | "SERVICE_METADATA_INVALID"
+    | "CANDIDATE_INVALID"
+    | "SERVICE_STATE_CHANGED"
+    | "SERVICE_FILES_INVALID"
+    | "PLATFORM_INITIAL_INVALID"
+    | "PLATFORM_UNSTABLE"
+    | "SERVICE_FILES_CHANGED"
+    | "PREFLIGHT_FAILED";
+const rejectionCodes = new Set<ManagerServiceUpgradeRejectionCode>([
+    "INVALID_REQUEST",
+    "SERVICE_BUSY",
+    "SERVICE_METADATA_INVALID",
+    "CANDIDATE_INVALID",
+    "SERVICE_STATE_CHANGED",
+    "SERVICE_FILES_INVALID",
+    "PLATFORM_INITIAL_INVALID",
+    "PLATFORM_UNSTABLE",
+    "SERVICE_FILES_CHANGED",
+    "PREFLIGHT_FAILED",
+]);
+export class ManagerServiceUpgradeRejectedError extends Error {
+    readonly code: ManagerServiceUpgradeRejectionCode;
+    constructor(code: unknown = "PREFLIGHT_FAILED") {
+        super("管理服务升级准备失败，未派发系统动作；请核对已纳管候选及待恢复操作");
+        this.code = rejectionCodes.has(code as ManagerServiceUpgradeRejectionCode)
+            ? (code as ManagerServiceUpgradeRejectionCode)
+            : "PREFLIGHT_FAILED";
+    }
+}
+const failure = (code: ManagerServiceUpgradeRejectionCode = "PREFLIGHT_FAILED") =>
+    new ManagerServiceUpgradeRejectedError(code);
 
 /**
  * 本机外部协调入口；不能在待停止的 manager 自身执行。
@@ -71,34 +100,39 @@ export async function upgradeManagerService(
         (host.platform !== "linux" && host.platform !== "darwin") ||
         (value.scope === "system" && host.uid !== 0)
     )
-        throw failure();
+        throw failure("INVALID_REQUEST");
     const scope = value.scope;
     const files = getServiceFiles(scope, host);
     let releaseService: () => void;
     try {
         releaseService = acquireServiceMigrationLock(files.stateDir);
     } catch {
-        throw failure();
+        throw failure("SERVICE_BUSY");
     }
     const releases: (() => void)[] = [];
     let operationFailed = false;
     let transactionEntered = false;
     try {
-        if (inspectServiceMigrationRecovery(files.stateDir)) throw failure();
+        if (inspectServiceMigrationRecovery(files.stateDir)) throw failure("SERVICE_BUSY");
         const journal = new FileManagerServiceJournal(
             path.join(files.stateDir, "manager-operations"),
         );
-        if (journal.health().recoveryRequired) throw failure();
+        if (journal.health().recoveryRequired) throw failure("SERVICE_BUSY");
         const metadata = readServiceMetadata(files.metadata);
-        if (metadata.kind !== "control" || metadata.spec.scope !== scope) throw failure();
+        if (metadata.kind !== "control" || metadata.spec.scope !== scope)
+            throw failure("SERVICE_METADATA_INVALID");
         const previousSpec = metadata.spec;
-        assertNoPendingManagerUpgrade(previousSpec.workspace);
-        if (readServiceMigrationPending(previousSpec.workspace)) throw failure();
+        try {
+            assertNoPendingManagerUpgrade(previousSpec.workspace);
+        } catch {
+            throw failure("SERVICE_BUSY");
+        }
+        if (readServiceMigrationPending(previousSpec.workspace)) throw failure("SERVICE_BUSY");
         const previous = readRunningManagerCandidate(
             pathToFileURL(path.join(path.dirname(previousSpec.binPath), "control/host.js")).href,
         );
         const directory = value.candidateDirectory;
-        if (fs.realpathSync(directory) !== directory) throw failure();
+        if (fs.realpathSync(directory) !== directory) throw failure("CANDIDATE_INVALID");
         const target = readVerifiedManagerCandidate(
             path.dirname(directory),
             path.basename(directory),
@@ -112,7 +146,8 @@ export async function upgradeManagerService(
             ),
         ].sort();
         for (const home of homes) {
-            if (home === previousSpec.workspace || fs.realpathSync(home) !== home) throw failure();
+            if (home === previousSpec.workspace || fs.realpathSync(home) !== home)
+                throw failure("CANDIDATE_INVALID");
             for (const item of [home, path.join(home, ".control")]) {
                 const stat = fs.lstatSync(item);
                 if (
@@ -121,7 +156,7 @@ export async function upgradeManagerService(
                     (stat.mode & 0o077) !== 0 ||
                     (process.getuid && stat.uid !== process.getuid())
                 )
-                    throw failure();
+                    throw failure("CANDIDATE_INVALID");
             }
             releases.push(acquireControlWorkspace(home));
         }
@@ -130,7 +165,7 @@ export async function upgradeManagerService(
             value.expectedPreviousDigest !== undefined &&
             previousDigest !== value.expectedPreviousDigest
         )
-            throw failure();
+            throw failure("SERVICE_STATE_CHANGED");
         const spec = {
             ...previousSpec,
             workingDirectory: target.directory,
@@ -138,7 +173,7 @@ export async function upgradeManagerService(
         };
         verifyManagerServiceCandidate(previousSpec, previousDigest);
         verifyManagerServiceCandidate(spec, value.candidateDigest);
-        if (previousDigest === value.candidateDigest) throw failure();
+        if (previousDigest === value.candidateDigest) throw failure("CANDIDATE_INVALID");
         const confirm = dependencies.confirmStopped ?? verifyServiceMigrationProcesses;
         const platform =
             dependencies.platform ??
@@ -147,9 +182,19 @@ export async function upgradeManagerService(
                 : new LaunchdServicePlatform(host, scope, files.definition, {
                       confirmUnloadedProcesses: () => confirm(spec.workspace),
                   }));
-        const captured = captureManagerServiceRemoval(previousSpec, host);
+        let captured: ReturnType<typeof captureManagerServiceRemoval>;
         try {
-            const initial = await platform.inspect();
+            captured = captureManagerServiceRemoval(previousSpec, host);
+        } catch {
+            throw failure("SERVICE_FILES_INVALID");
+        }
+        try {
+            let initial;
+            try {
+                initial = await platform.inspect();
+            } catch {
+                throw failure("PLATFORM_INITIAL_INVALID");
+            }
             if (
                 initial.definitionPath !== files.definition ||
                 (initial.state === "running"
@@ -157,11 +202,18 @@ export async function upgradeManagerService(
                     : initial.state !== "stopped" ||
                       initial.running ||
                       initial.processId !== null ||
-                      !initial.quiescent) ||
-                !isDeepStrictEqual(initial, await platform.inspect()) ||
-                !captured.verifyRemaining()
+                      !initial.quiescent)
             )
-                throw failure();
+                throw failure("PLATFORM_INITIAL_INVALID");
+            let confirmed;
+            try {
+                confirmed = await platform.inspect();
+            } catch {
+                throw failure("PLATFORM_UNSTABLE");
+            }
+            if (!isDeepStrictEqual(initial, confirmed))
+                throw failure("PLATFORM_UNSTABLE");
+            if (!captured.verifyRemaining()) throw failure("SERVICE_FILES_CHANGED");
             transactionEntered = true;
             return await runManagerServiceUpgrade(
                 {

@@ -228,12 +228,13 @@ function managerUpdateFailure(
     system: boolean,
     expectedVersion?: string,
 ): Error {
-    if (
-        error instanceof ManagerUpgradeCandidateRejectedError ||
-        error instanceof ManagerServiceUpgradeRejectedError
-    )
+    if (error instanceof ManagerUpgradeCandidateRejectedError)
         return new Error(
-            `操作 ${id} 在系统效果派发前被明确拒绝。可修复原因后查询原操作，或创建新的升级操作。`,
+            `操作 ${id} 的候选安装在系统效果派发前被明确拒绝。可修复依赖或候选工件后查询原操作，或创建新的升级操作。`,
+        );
+    if (error instanceof ManagerServiceUpgradeRejectedError)
+        return new Error(
+            `操作 ${id} 的系统服务预检在系统效果派发前被明确拒绝（${error.code}）。修复服务状态后可查询原操作，或创建新的升级操作。`,
         );
     return new Error(
         `操作 ${id} 的结果尚未确认。候选阶段仅可用 update --manager --operation ${id}${expectedVersion ? ` --version ${expectedVersion}` : ""}${system ? " --system" : ""} 离线核对候选，验证后继续同一服务切换；若已进入系统服务事务，请用 recover --operation ${id}${system ? " --system" : ""} 对账。禁止重新安装或重派系统动作。`,
