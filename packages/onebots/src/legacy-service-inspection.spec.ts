@@ -99,46 +99,7 @@ describe("legacy service read-only inspection", () => {
     it("has no lifecycle mutation methods", () => {
         const methods = Object.getOwnPropertyNames(LegacyServiceInspection.prototype);
         expect(methods).not.toEqual(
-            expect.arrayContaining(["install", "start", "stop", "restart", "uninstall"]),
+            expect.arrayContaining(["install", "start", "stop", "restart", "status", "uninstall"]),
         );
-    });
-});
-
-it.each([
-    ["stderr", 'Could not find service "onebots"'],
-    ["stdout", Buffer.from("service onebots not found")],
-    ["message", "service not found"],
-    ["message", "unknown service"],
-    ["stderr", "no such process"],
-])("classifies unloaded launchd from %s without exposing command output", (field, value) => {
-    const test = fixture("darwin");
-    const error = new Error("secret command details");
-    Object.assign(error, { [field as string]: value });
-    vi.mocked(test.host.exec).mockImplementation(() => {
-        throw error;
-    });
-    expect(test.inspection.status()).toEqual({
-        installed: true,
-        running: false,
-        scope: "user",
-        detail: "launchd 任务未加载",
-    });
-});
-
-it.each(["darwin", "linux"] as const)("redacts unknown %s status failures", platform => {
-    const test = fixture(platform);
-    const error = Object.assign(new Error("secret message"), {
-        stderr: Buffer.from("secret stderr"),
-        stdout: "secret stdout",
-    });
-    vi.mocked(test.host.exec).mockImplementation(() => {
-        throw error;
-    });
-    expect(test.inspection.status()).toEqual({
-        installed: true,
-        running: false,
-        scope: "user",
-        detail: "旧服务状态无法确认",
-        error: "进程管理器状态查询失败",
     });
 });

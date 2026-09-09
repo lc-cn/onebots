@@ -114,25 +114,20 @@ describe("OneBots CLI v2", () => {
         });
     });
 
-    it("rejects removed command namespaces before Pastel renders a route", () => {
-        expect(prepareCliInvocation(["node", "onebots", "gateway"])).toEqual({
-            kind: "unknown",
-            command: "gateway",
-        });
-    });
+    it.each(["gateway", "service", "daemon", "config"])(
+        "rejects removed command namespace %s before Pastel renders a route",
+        command => {
+            expect(prepareCliInvocation(["node", "onebots", command])).toEqual({
+                kind: "unknown",
+                command,
+            });
+        },
+    );
 
-    it("moves shared options to the concrete config subroute", () => {
-        expect(
-            prepareCliInvocation(["node", "onebots", "-c", "config.yaml", "config", "get", "port"]),
-        ).toEqual({
-            kind: "cli",
-            argv: ["node", "onebots", "config", "get", "port", "-c", "config.yaml"],
-        });
-        expect(
-            prepareCliInvocation(["node", "onebots", "config", "get", "-r", "qq", "port"]),
-        ).toEqual({
-            kind: "cli",
-            argv: ["node", "onebots", "config", "get", "port", "-r", "qq"],
+    it("rejects help for the removed config command instead of exposing legacy routes", () => {
+        expect(prepareCliInvocation(["node", "onebots", "config", "--help"])).toEqual({
+            kind: "unknown",
+            command: "config",
         });
     });
 

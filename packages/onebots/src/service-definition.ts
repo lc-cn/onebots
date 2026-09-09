@@ -17,20 +17,6 @@ export interface ServiceSpec {
     workingDirectory: string;
 }
 
-export interface ServiceStatus {
-    installed: boolean;
-    running: boolean;
-    scope: ServiceScope;
-    detail: string;
-    /** 存在时表示 running 只是保守占位，进程管理器没有给出权威状态。 */
-    error?: string;
-}
-
-export interface ServiceCommandOptions {
-    follow?: boolean;
-    lines?: number;
-}
-
 export function buildServiceArgs(
     spec: ServiceSpec,
     command: ServiceRuntimeCommand = "run",

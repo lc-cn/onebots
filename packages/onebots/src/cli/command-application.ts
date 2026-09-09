@@ -1,8 +1,6 @@
 /** OneBots CLI 命令背后的无路由 application module。 */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import yaml from "js-yaml";
-import { BaseAppConfigSchema, writeConfigFileAtomic } from "@onebots/core";
 import type { RuntimeOptions } from "./command-options.js";
 import {
     getRuntimePluginSelection,
@@ -146,97 +144,4 @@ export async function showCapabilities(
         raw: options.json,
         exitCode: failures.length ? 2 : report.complete ? undefined : 1,
     };
-}
-
-/** 读取点分隔路径表示的配置项。 */
-export function getConfig(options: RuntimeOptions, key: string): CommandResult {
-    const data = readConfig(normalizeRuntimeOptions(options).configPath);
-    const value = key.split(".").reduce<unknown>((current, part) => {
-        if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
-        return current[part as keyof typeof current];
-    }, data);
-    return { output: value === undefined ? "" : String(value) };
-}
-
-/** 写入点分隔路径表示的配置项，并保留备份。 */
-export function setConfig(options: RuntimeOptions, key: string, value: string): CommandResult {
-    const file = normalizeRuntimeOptions(options).configPath;
-    const data = readConfig(file);
-    const keys = parseWritableConfigPath(key);
-    let current = data;
-    for (const part of keys.slice(0, -1)) {
-        if (!current[part] || typeof current[part] !== "object" || Array.isArray(current[part]))
-            current[part] = {};
-        current = current[part] as Record<string, unknown>;
-    }
-    const leaf = keys.at(-1)!;
-    const expectedType = resolveConfigSetType(keys, current[leaf]);
-    current[leaf] = parseConfigSetValue(key, value, expectedType);
-    writeConfigFileAtomic(file, yaml.dump(data), { backup: true });
-    return { output: `已设置 ${key}` };
-}
-
-/** 以 YAML 返回完整配置。 */
-export function listConfig(options: RuntimeOptions): CommandResult {
-    return { output: yaml.dump(readConfig(normalizeRuntimeOptions(options).configPath)) };
-}
-
-function readConfig(file: string): Record<string, unknown> {
-    if (!fs.existsSync(file)) throw new CliError(`配置文件不存在: ${file}`, 2);
-    try {
-        return parseRuntimeConfig(fs.readFileSync(file, "utf8"));
-    } catch (error) {
-        throw new CliError(`配置文件无效: ${formatRuntimeConfigDiagnostic(error)}`, 2);
-    }
-}
-
-type ConfigSetScalarType = "string" | "number" | "boolean";
-const RESERVED_CONFIG_PATH_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
-
-function parseWritableConfigPath(key: string): string[] {
-    const keys = key.split(".");
-    if (keys.some(part => !part.trim())) {
-        throw new CliError("配置路径不能包含空字段", 2);
-    }
-    const reserved = keys.find(part => RESERVED_CONFIG_PATH_SEGMENTS.has(part));
-    if (reserved) {
-        throw new CliError(`配置路径包含不允许写入的保留字段: ${reserved}`, 2);
-    }
-    return keys;
-}
-
-/** 顶层基础 Schema 优先于损坏的现有值；嵌套字段沿用其当前标量类型。 */
-function resolveConfigSetType(keys: string[], existing: unknown): ConfigSetScalarType | undefined {
-    if (keys.length === 1) {
-        const rule = BaseAppConfigSchema[keys[0]] as { type?: unknown } | undefined;
-        if (rule && ["string", "number", "boolean"].includes(String(rule.type))) {
-            return rule.type as ConfigSetScalarType;
-        }
-    }
-    return ["string", "number", "boolean"].includes(typeof existing)
-        ? (typeof existing as ConfigSetScalarType)
-        : undefined;
-}
-
-function parseConfigSetValue(
-    key: string,
-    value: string,
-    expectedType: ConfigSetScalarType | undefined,
-): string | number | boolean {
-    if (expectedType === "string") return value;
-    if (expectedType === "boolean") {
-        if (value === "true") return true;
-        if (value === "false") return false;
-        throw new CliError(`配置项 ${key} 需要布尔值 true 或 false`, 2);
-    }
-    const numeric = Number(value);
-    if (expectedType === "number") {
-        if (!value.trim() || !Number.isFinite(numeric)) {
-            throw new CliError(`配置项 ${key} 需要有限数字`, 2);
-        }
-        return numeric;
-    }
-    if (value === "true") return true;
-    if (value === "false") return false;
-    return Number.isFinite(numeric) && value.trim() ? numeric : value;
 }

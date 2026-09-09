@@ -1,6 +1,6 @@
 /** OneBots CLI 进程入口的参数规范化 seam。 */
 
-const REMOVED_NAMESPACES = new Set(["gateway", "service", "daemon"]);
+const REMOVED_NAMESPACES = new Set(["gateway", "service", "daemon", "config"]);
 const MANAGEMENT_VALUE_OPTIONS = new Set(["--data-dir", "--host", "--port"]);
 
 const RUNTIME_OPTIONS = new Set([
