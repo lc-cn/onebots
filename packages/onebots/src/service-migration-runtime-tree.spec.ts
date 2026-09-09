@@ -47,6 +47,41 @@ function npmFixture() {
 }
 
 describe.skipIf(process.platform === "win32")("旧运行目录完整快照", () => {
+    it("排除持久目录，不读取其中不适合复制的内容", async () => {
+        const test = npmFixture();
+        test.write("config.yaml", "private-config");
+        const data = path.join(test.source, "data");
+        fs.mkdirSync(data, { mode: 0o700 });
+        fs.symlinkSync("/outside/private", path.join(data, "external"));
+        const receipt = await captureLegacyRuntimeTree(test.source, test.store, test.id, [
+            "config.yaml",
+            "data",
+        ]);
+        expect(fs.existsSync(path.join(receipt.root, "config.yaml"))).toBe(false);
+        expect(fs.existsSync(path.join(receipt.root, "data"))).toBe(false);
+        expect(fs.readFileSync(path.join(test.source, "config.yaml"), "utf8")).toBe(
+            "private-config",
+        );
+        await verifyLegacyRuntimeTree(receipt);
+    });
+    it("程序链接依赖被排除数据时拒绝快照，不留下可用回执", async () => {
+        const test = npmFixture();
+        test.write("data/private", "secret");
+        fs.symlinkSync("data/private", path.join(test.source, "alias"));
+        await expect(
+            captureLegacyRuntimeTree(test.source, test.store, test.id, ["data"]),
+        ).rejects.toThrow();
+        expect(fs.existsSync(path.join(test.store, test.id))).toBe(false);
+    });
+    it.each([".", "../outside", "/outside", "data/../bin.js", "data\\secret"])(
+        "拒绝非法排除路径 %s",
+        async excluded => {
+            const test = npmFixture();
+            await expect(
+                captureLegacyRuntimeTree(test.source, test.store, test.id, [excluded]),
+            ).rejects.toThrow();
+        },
+    );
     it("保留 npm 依赖闭包，源目录删除后仍运行旧程序", async () => {
         const test = npmFixture();
         test.write("assets/empty.txt", "");

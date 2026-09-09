@@ -46,6 +46,7 @@ export async function captureLegacyRuntimeTree(
     sourceRoot: string,
     storeDirectory: string,
     id: string,
+    excludedPaths: string[] = [],
 ): Promise<LegacyRuntimeTreeReceipt> {
     try {
         if (!uuid.test(id) || !path.isAbsolute(sourceRoot) || !path.isAbsolute(storeDirectory))
@@ -67,7 +68,8 @@ export async function captureLegacyRuntimeTree(
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         }
-        const entries = await scanRuntimeTree(source);
+        const excluded = [...excludedPaths];
+        const entries = await scanRuntimeTree(source, false, excluded);
         const expectedDigest = digest(entries);
         // 失败时保留私有候选用于显式清理；绝不递归删除可能已交付或归属不明的目录。
         const staging = await mkdtemp(path.join(store, `.${id}-`));
@@ -116,7 +118,7 @@ export async function captureLegacyRuntimeTree(
             await syncDirectory(path.join(runtime, entry.path));
         }
         if (
-            digest(await scanRuntimeTree(source)) !== expectedDigest ||
+            digest(await scanRuntimeTree(source, false, excluded)) !== expectedDigest ||
             digest(await scanRuntimeTree(runtime, true)) !== expectedDigest
         )
             throw runtimeTreeError();

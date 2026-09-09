@@ -69,13 +69,34 @@ export async function hashRuntimeFile(
     }
 }
 /** 不遍历链接目标；目标必须完整位于同一棵物理树内。 */
-export async function scanRuntimeTree(root: string, snapshot = false): Promise<RuntimeTreeEntry[]> {
+export async function scanRuntimeTree(
+    root: string,
+    snapshot = false,
+    excludedPaths: string[] = [],
+): Promise<RuntimeTreeEntry[]> {
+    const excluded = new Set(excludedPaths);
+    if (
+        (snapshot && excluded.size) ||
+        excluded.size !== excludedPaths.length ||
+        [...excluded].some(
+            item =>
+                !item ||
+                item === "." ||
+                item === ".." ||
+                item.startsWith("../") ||
+                path.isAbsolute(item) ||
+                path.posix.normalize(item) !== item ||
+                /[\u0000-\u001f\u007f\\]/u.test(item),
+        )
+    )
+        throw runtimeTreeError();
     const original = await lstat(root);
     if (!original.isDirectory() || original.isSymbolicLink() || (await realpath(root)) !== root)
         throw runtimeTreeError();
     const entries: RuntimeTreeEntry[] = [];
     let total = 0;
     const visit = async (relative: string): Promise<void> => {
+        if (excluded.has(relative)) return;
         if (entries.length >= 100000 || relative.length > 4096) throw runtimeTreeError();
         const absolute = relative === "." ? root : path.join(root, relative);
         const stat = await lstat(absolute);

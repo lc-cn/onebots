@@ -29,6 +29,16 @@ export interface RetainedLegacyRuntime {
     rollback: ServiceSpec;
 }
 const invalid = () => new Error("旧运行工件与服务回退契约不匹配，禁止切换");
+/** 仅排除旧内核明确使用的配置与持久数据，不接受客户端任意忽略运行文件。 */
+export function legacyRuntimeExclusions(original: ServiceSpec, sourceRoot: string): string[] {
+    return [
+        original.configPath,
+        path.join(path.dirname(original.configPath), "data"),
+        path.join(path.dirname(original.configPath), ".control"),
+    ]
+        .filter(file => within(sourceRoot, file))
+        .map(file => path.relative(sourceRoot, file).split(path.sep).join("/"));
+}
 function tree(input: unknown): LegacyRuntimeTreeReceipt {
     const value = closedServiceObject(input, ["schemaVersion", "id", "root", "digest"]);
     if (
@@ -109,8 +119,6 @@ export function parseRetainedLegacyRuntime(input: unknown): RetainedLegacyRuntim
     )
         throw invalid();
     const original = parseLegacyServiceSpec(value.original);
-    // 配置及其账号数据目录必须独立保留，不能随旧安装目录被替换或删除。
-    if (within(value.sourceRoot, path.dirname(original.configPath))) throw invalid();
     const rollback = parseLegacyServiceSpec(value.rollback);
     if (!isDeepStrictEqual(rollback, mapped(original, value.sourceRoot, runtime, node)))
         throw invalid();
@@ -131,7 +139,15 @@ export async function bindRetainedLegacyRuntime(
         rollback: mapped(original, sourceRoot, runtime, node),
     });
     const sourceDigest = createHash("sha256")
-        .update(JSON.stringify(await scanRuntimeTree(sourceRoot)))
+        .update(
+            JSON.stringify(
+                await scanRuntimeTree(
+                    sourceRoot,
+                    false,
+                    legacyRuntimeExclusions(original, sourceRoot),
+                ),
+            ),
+        )
         .digest("hex");
     if (
         sourceDigest !== result.runtime.digest ||
