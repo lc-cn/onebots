@@ -5,6 +5,7 @@ import {
     parseManagerServiceSpec,
     type ManagerServiceSpec,
 } from "./manager-service-spec.js";
+import { renderWindowsManagerServiceDefinition } from "./service-platform-windows.js";
 
 /** 留给管理服务收回下载器和网关的时间；超时由系统托管者清理剩余进程。 */
 export const MANAGER_SERVICE_STOP_TIMEOUT_SECONDS = 90;
@@ -131,5 +132,6 @@ export function renderInstalledManagerService(
             path.join(stateDirectory, "onebots.log"),
             path.join(stateDirectory, "onebots-error.log"),
         );
+    if (platform === "win32") return renderWindowsManagerServiceDefinition(spec);
     throw new Error("此系统尚未通过管理服务定义验收");
 }

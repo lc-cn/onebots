@@ -173,6 +173,10 @@ const cliEnvironment = {
     ONEBOTS_RUNTIME_ARTIFACTS: path.join(artifacts, "manifest.json"),
 };
 
+const { renderLaunchdPlist } = await import(
+    path.join(runtime, "node_modules/onebots/lib/service-definition.js")
+);
+
 function invokeCli(args, statuses = [0]) {
     return execute(cli, args, {
         cwd: runtime,
@@ -235,6 +239,148 @@ async function assertManagementOnline(port) {
     assert.equal((await fetch(`http://127.0.0.1:${port}/api/control/status`)).status, 401);
 }
 
+async function verifyLegacyMigration(port, operationIds) {
+    const legacyRuntime = path.join(temporary, "legacy-launchd-runtime");
+    const legacyData = path.join(temporary, "legacy-launchd-data");
+    const legacyCore = path.join(legacyRuntime, "node_modules/@onebots/core");
+    fs.mkdirSync(legacyCore, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(legacyData, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(
+        path.join(legacyRuntime, "package.json"),
+        JSON.stringify({
+            name: "onebots",
+            private: true,
+            version: "1.0.0",
+            type: "module",
+            dependencies: { "@onebots/core": "1.0.0" },
+        }),
+        { mode: 0o600 },
+    );
+    fs.writeFileSync(
+        path.join(legacyCore, "package.json"),
+        JSON.stringify({ name: "@onebots/core", private: true, version: "1.0.0" }),
+        { mode: 0o600 },
+    );
+    const legacyBin = path.join(legacyRuntime, "bin.js");
+    fs.writeFileSync(
+        legacyBin,
+        "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 60_000);\n",
+        { mode: 0o600 },
+    );
+    const legacyConfig = path.join(legacyData, "config.yaml");
+    fs.writeFileSync(legacyConfig, "general: {}\n", { mode: 0o600 });
+    fs.writeFileSync(path.join(legacyData, "acceptance-user-data.txt"), "legacy-preserve-me\n", {
+        mode: 0o600,
+    });
+    const legacy = {
+        scope: "user",
+        configPath: legacyConfig,
+        adapters: [],
+        protocols: [],
+        applications: [],
+        nodePath: process.execPath,
+        binPath: legacyBin,
+        workingDirectory: legacyRuntime,
+    };
+    fs.mkdirSync(path.dirname(DEFINITION), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(STATE_DIRECTORY, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(METADATA, `${JSON.stringify(legacy)}\n`, { mode: 0o600 });
+    fs.writeFileSync(
+        DEFINITION,
+        renderLaunchdPlist(
+            legacy,
+            path.join(STATE_DIRECTORY, "onebots.log"),
+            path.join(STATE_DIRECTORY, "onebots-error.log"),
+        ),
+        { mode: 0o600 },
+    );
+    execute("/bin/launchctl", ["bootstrap", DOMAIN, DEFINITION]);
+    await eventually(
+        () => execute("/bin/launchctl", ["print", `${DOMAIN}/${LABEL}`]).stdout,
+        value => /\bstate\s*=\s*running\b/u.test(value),
+        "旧 launchd 服务未稳定运行",
+    );
+    const legacyStatus = cliJson(["status", "--json"], [1]);
+    assert.equal(legacyStatus.installation, "legacy");
+    assert.equal(legacyStatus.diagnostic, "migration-required");
+
+    const migrationOutput = invokeCli([
+        "migrate",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+    ]).stdout;
+    const migrationId = operation(migrationOutput, "migrate");
+    operationIds.push(migrationId);
+    const migrationJournal = path.join(
+        STATE_DIRECTORY,
+        "migrations",
+        `${migrationId}.journal.json`,
+    );
+    const journalBeforeColdStart = fs.readFileSync(migrationJournal);
+    const beforeColdStart = await eventually(
+        () => ({
+            os: cliJson(["status", "--json"]),
+            control: cliJson(["control", "status", "--data-dir", legacyData]),
+        }),
+        value =>
+            value.os.installation === "control" &&
+            value.os.manager.state === "running" &&
+            value.os.manager.ipc === "available" &&
+            value.control.gateway.desired === "running" &&
+            value.control.gateway.actual === "running",
+        "旧 launchd 服务迁移后管理进程或网关未稳定运行",
+    );
+    assert.equal(
+        JSON.parse(journalBeforeColdStart).id,
+        migrationId,
+        "迁移完成记录必须持久化公开 CLI 返回的 operation ID",
+    );
+    await assertManagementOnline(port);
+
+    execute("/bin/kill", ["-KILL", String(beforeColdStart.os.manager.pid)]);
+    const afterColdStart = await eventually(
+        () => ({
+            os: cliJson(["status", "--json"]),
+            control: cliJson(["control", "status", "--data-dir", legacyData]),
+        }),
+        value =>
+            value.os.manager.state === "running" &&
+            value.os.manager.ipc === "available" &&
+            value.os.manager.pid !== beforeColdStart.os.manager.pid &&
+            value.control.manager.id !== beforeColdStart.control.manager.id &&
+            value.control.gateway.desired === "running" &&
+            value.control.gateway.actual === "running" &&
+            value.control.gateway.instance?.id !== beforeColdStart.control.gateway.instance?.id,
+        "launchd 未在管理进程异常退出后完成冷启动恢复",
+    );
+    assert.ok(afterColdStart.os.manager.pid);
+    assert.deepEqual(
+        fs.readFileSync(migrationJournal),
+        journalBeforeColdStart,
+        "冷启动不得改写或重派已完成的迁移 operation",
+    );
+    assert.equal(
+        fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
+        "legacy-preserve-me\n",
+    );
+    await assertManagementOnline(port);
+
+    operationIds.push(operation(invokeCli(["stop"]).stdout, "stop migrated service"));
+    await eventually(
+        () => cliJson(["status", "--json"]),
+        value => value.manager.state === "stopped" && value.manager.pid === null,
+        "迁移后的 launchd 管理服务未稳定停止",
+    );
+    operationIds.push(operation(invokeCli(["uninstall"]).stdout, "uninstall migrated service"));
+    assertLaunchdAbsent();
+    assert.equal(
+        fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
+        "legacy-preserve-me\n",
+    );
+}
+
 function ownedInstallation() {
     try {
         const metadata = JSON.parse(fs.readFileSync(METADATA, "utf8"));
@@ -257,6 +403,10 @@ let completed = false;
 let installedByThisRun = false;
 let effectUnknown = false;
 try {
+    effectUnknown = true;
+    await verifyLegacyMigration(port, operationIds);
+    effectUnknown = false;
+
     effectUnknown = true;
     const installedOutput = invokeCli([
         "install",
@@ -405,7 +555,7 @@ try {
     assert.equal(new Set(operationIds).size, operationIds.length, "生命周期操作 ID 必须互不相同");
     completed = true;
     process.stdout.write(
-        "✓ 真实 launchd 用户级生命周期：当前打包工件、公开 CLI、空白管理端、PID/实例切换、网关意图及卸载保留数据均通过\n",
+        "✓ 真实 launchd 用户级验收：旧服务迁移、异常退出冷启动、operation 持久性、空白新安装生命周期及卸载保留数据均通过\n",
     );
 } finally {
     // 仅在最近一次外部效果结果已知且元数据仍绑定本次临时工作区时尝试公开卸载。

@@ -52,11 +52,20 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Setup Go for Windows service host
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache-dependency-path: native/windows-host/go.sum
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build packages
         run: pnpm build
+
+      - name: Build packaged Windows service hosts
+        run: node scripts/build-windows-host.mjs
 
       - name: Install NoneBot interoperability dependencies
         run: python -m pip install -r interop/nonebot/requirements.txt

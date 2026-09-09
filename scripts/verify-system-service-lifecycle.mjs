@@ -159,6 +159,10 @@ const cliEnvironment = {
     ONEBOTS_RUNTIME_ARTIFACTS: path.join(artifacts, "manifest.json"),
 };
 
+const { renderSystemdUnit } = await import(
+    path.join(runtime, "node_modules/onebots/lib/service-definition.js")
+);
+
 function invokeCli(args, statuses = [0]) {
     return execute(cli, args, {
         cwd: runtime,
@@ -219,11 +223,152 @@ async function assertManagementOnline(port) {
     );
 }
 
+async function verifyLegacyMigration(port, operationIds) {
+    const legacyRuntime = path.join(temporary, "legacy-systemd-runtime");
+    const legacyData = path.join(temporary, "legacy-systemd-data");
+    const legacyCore = path.join(legacyRuntime, "node_modules/@onebots/core");
+    fs.mkdirSync(legacyCore, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(legacyData, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(
+        path.join(legacyRuntime, "package.json"),
+        JSON.stringify({
+            name: "onebots",
+            private: true,
+            version: "1.0.0",
+            type: "module",
+            dependencies: { "@onebots/core": "1.0.0" },
+        }),
+        { mode: 0o600 },
+    );
+    fs.writeFileSync(
+        path.join(legacyCore, "package.json"),
+        JSON.stringify({ name: "@onebots/core", private: true, version: "1.0.0" }),
+        { mode: 0o600 },
+    );
+    const legacyBin = path.join(legacyRuntime, "bin.js");
+    fs.writeFileSync(
+        legacyBin,
+        "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 60_000);\n",
+        { mode: 0o600 },
+    );
+    const legacyConfig = path.join(legacyData, "config.yaml");
+    fs.writeFileSync(legacyConfig, "general: {}\n", { mode: 0o600 });
+    fs.writeFileSync(path.join(legacyData, "acceptance-user-data.txt"), "legacy-preserve-me\n", {
+        mode: 0o600,
+    });
+    const legacy = {
+        scope: "system",
+        configPath: legacyConfig,
+        adapters: [],
+        protocols: [],
+        applications: [],
+        nodePath: process.execPath,
+        binPath: legacyBin,
+        workingDirectory: legacyRuntime,
+    };
+    fs.mkdirSync(STATE_DIRECTORY, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(METADATA, `${JSON.stringify(legacy)}\n`, { mode: 0o600 });
+    fs.writeFileSync(DEFINITION, renderSystemdUnit(legacy), { mode: 0o600 });
+    execute("systemctl", ["daemon-reload"]);
+    execute("systemctl", ["enable", "--now", SERVICE]);
+    await eventually(
+        () => execute("systemctl", ["is-active", SERVICE], { statuses: [0, 3] }).stdout,
+        value => value === "active",
+        "旧 systemd 服务未稳定运行",
+    );
+    const legacyStatus = cliJson(["status", "--system", "--json"], [1]);
+    assert.equal(legacyStatus.installation, "legacy");
+    assert.equal(legacyStatus.diagnostic, "migration-required");
+
+    const migrationOutput = invokeCli([
+        "migrate",
+        "--system",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+    ]).stdout;
+    const migrationId = operation(migrationOutput, "migrate");
+    operationIds.push(migrationId);
+    const migrationJournal = path.join(
+        STATE_DIRECTORY,
+        "migrations",
+        `${migrationId}.journal.json`,
+    );
+    const journalBeforeColdStart = fs.readFileSync(migrationJournal);
+    const beforeColdStart = await eventually(
+        () => ({
+            os: cliJson(["status", "--system", "--json"]),
+            control: cliJson(["control", "status", "--data-dir", legacyData]),
+        }),
+        value =>
+            value.os.installation === "control" &&
+            value.os.manager.state === "running" &&
+            value.os.manager.ipc === "available" &&
+            value.control.gateway.desired === "running" &&
+            value.control.gateway.actual === "running",
+        "旧 systemd 服务迁移后管理进程或网关未稳定运行",
+    );
+    assert.equal(
+        JSON.parse(journalBeforeColdStart).id,
+        migrationId,
+        "迁移完成记录必须持久化公开 CLI 返回的 operation ID",
+    );
+    await assertManagementOnline(port);
+
+    execute("systemctl", ["kill", "--kill-who=all", "--signal=SIGKILL", SERVICE]);
+    const afterColdStart = await eventually(
+        () => ({
+            os: cliJson(["status", "--system", "--json"]),
+            control: cliJson(["control", "status", "--data-dir", legacyData]),
+        }),
+        value =>
+            value.os.manager.state === "running" &&
+            value.os.manager.ipc === "available" &&
+            value.os.manager.pid !== beforeColdStart.os.manager.pid &&
+            value.control.manager.id !== beforeColdStart.control.manager.id &&
+            value.control.gateway.desired === "running" &&
+            value.control.gateway.actual === "running" &&
+            value.control.gateway.instance?.id !== beforeColdStart.control.gateway.instance?.id,
+        "systemd 未在管理进程异常退出后完成冷启动恢复",
+    );
+    assert.ok(afterColdStart.os.manager.pid);
+    assert.deepEqual(
+        fs.readFileSync(migrationJournal),
+        journalBeforeColdStart,
+        "冷启动不得改写或重派已完成的迁移 operation",
+    );
+    assert.equal(
+        fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
+        "legacy-preserve-me\n",
+    );
+    await assertManagementOnline(port);
+
+    operationIds.push(operation(invokeCli(["stop", "--system"]).stdout, "stop migrated service"));
+    await eventually(
+        () => cliJson(["status", "--system", "--json"]),
+        value => value.manager.state === "stopped" && value.manager.pid === null,
+        "迁移后的 systemd 管理服务未稳定停止",
+    );
+    operationIds.push(
+        operation(invokeCli(["uninstall", "--system"]).stdout, "uninstall migrated service"),
+    );
+    assertSystemServiceAbsent();
+    assert.equal(
+        fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
+        "legacy-preserve-me\n",
+    );
+}
+
 const port = await freePort();
 const operationIds = [];
 let completed = false;
 let effectUnknown = false;
 try {
+    effectUnknown = true;
+    await verifyLegacyMigration(port, operationIds);
+    effectUnknown = false;
+
     effectUnknown = true;
     const installedOutput = invokeCli([
         "install",
@@ -360,7 +505,7 @@ try {
     assert.equal(new Set(operationIds).size, operationIds.length, "生命周期操作 ID 必须互不相同");
     completed = true;
     process.stdout.write(
-        "✓ 真实 systemd 系统级生命周期：当前打包工件、公开 CLI、PID/实例切换、网关意图、管理端在线及卸载保留数据均通过\n",
+        "✓ 真实 systemd 系统级验收：旧服务迁移、异常退出冷启动、operation 持久性、新安装生命周期及卸载保留数据均通过\n",
     );
 } finally {
     if (completed) fs.rmSync(temporary, { recursive: true, force: true });

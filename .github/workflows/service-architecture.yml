@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   launchd-service:
-    name: Real launchd lifecycle
+    name: Real launchd migration and lifecycle
     runs-on: macos-14
     timeout-minutes: 30
     env:
@@ -30,13 +30,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:packages
-      - name: Verify public CLI against real launchd
+      - name: Verify migration, cold recovery, and lifecycle on real launchd
         env:
           ONEBOTS_LAUNCHD_ACCEPTANCE: "1"
         run: node scripts/verify-launchd-service-lifecycle.mjs
 
   system-service:
-    name: Real systemd lifecycle
+    name: Real systemd migration and lifecycle
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -52,7 +52,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:packages
-      - name: Verify public CLI against real systemd
+      - name: Verify migration, cold recovery, and lifecycle on real systemd
         run: |
           sudo env \
             "PATH=$PATH" \
@@ -173,8 +173,13 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache-dependency-path: native/windows-host/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: node scripts/build-windows-host.mjs
       - run: pnpm test
       - run: pnpm packages:pack:check
       - name: Verify installed npm management runtime

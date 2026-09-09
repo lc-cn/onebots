@@ -7,6 +7,8 @@ export interface ServiceHost {
     homedir: string;
     uid?: number;
     isElevated?: boolean;
+    /** Windows安装调用者的真实SID；只作为受保护管道的最小控制身份。 */
+    windowsSid?: string;
     env: NodeJS.ProcessEnv;
     exec(
         file: string,
@@ -22,6 +24,7 @@ export function createDefaultServiceHost(): ServiceHost {
         homedir: os.homedir(),
         uid: typeof process.getuid === "function" ? process.getuid() : undefined,
         isElevated: process.platform === "win32" ? windowsIsElevated() : undefined,
+        windowsSid: process.platform === "win32" ? windowsCurrentSid() : undefined,
         env: process.env,
         exec(file, args, options) {
             try {
@@ -45,6 +48,25 @@ export function createDefaultServiceHost(): ServiceHost {
             });
         },
     };
+}
+
+function windowsCurrentSid(): string | undefined {
+    try {
+        const output = execFileSync(
+            "powershell.exe",
+            [
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value",
+            ],
+            { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 },
+        ).trim();
+        return /^S-1-(?:[0-9]+-)+[0-9]+$/.test(output) ? output : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 function windowsIsElevated(): boolean {

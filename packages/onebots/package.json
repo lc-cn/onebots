@@ -34,6 +34,8 @@
     "/lib/**/*.js",
     "/lib/**/*.d.ts",
     "/lib/**/*.json",
+    "/lib/native/win32-x64/onebots-windows-host.exe",
+    "/lib/native/win32-arm64/onebots-windows-host.exe",
     "!lib/**/*.spec.*",
     "!lib/**/*.test.*",
     "!lib/**/__tests__/**"

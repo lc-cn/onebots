@@ -51,6 +51,22 @@ export function assertServiceAbsent(scope: ServiceScope, host: ServiceHost): voi
             }
             throw new Error(); // print 成功意味着身份存在，即使没有PID也不能安装覆盖。
         }
+        if (host.platform === "win32") {
+            if (scope !== "system" || host.isElevated !== true) throw new Error();
+            const output = host.exec(
+                "powershell.exe",
+                [
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    `$service=Get-CimInstance Win32_Service -Filter \"Name='${SERVICE_NAME}'\";if($null -eq $service){'absent'}else{'present'}`,
+                ],
+                { timeoutMs: 5000 },
+            );
+            if (output === "absent\r\n" || output === "absent\n") return;
+            throw new Error();
+        }
         if (host.platform !== "linux") throw new Error();
         const expected = Object.entries(ABSENT_SYSTEMD);
         const output = host.exec(

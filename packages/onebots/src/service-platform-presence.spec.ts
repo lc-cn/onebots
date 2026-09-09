@@ -109,6 +109,24 @@ describe("首次安装 OS 身份缺失证明", () => {
                 ),
             ).toThrow("无法证明");
     });
+    it("Windows仅接受管理员system范围的精确absent结果", () => {
+        const h = host("linux", () => "absent\r\n");
+        h.platform = "win32";
+        h.isElevated = true;
+        expect(() => assertServiceAbsent("system", h)).not.toThrow();
+        expect(h.exec).toHaveBeenCalledWith(
+            "powershell.exe",
+            expect.arrayContaining(["-NonInteractive", "-Command"]),
+            { timeoutMs: 5000 },
+        );
+        for (const output of ["present\r\n", "absent", "absent\r\nextra"])
+            expect(() => {
+                const candidate = host("linux", () => output);
+                candidate.platform = "win32";
+                candidate.isElevated = true;
+                assertServiceAbsent("system", candidate);
+            }).toThrow("无法证明");
+    });
     it("无效user域和未实现平台不运行命令", () => {
         for (const uid of [undefined, -1, 1.5, 0xffffffff]) {
             const h = host("darwin", () => "");
