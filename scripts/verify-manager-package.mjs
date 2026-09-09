@@ -1,4 +1,5 @@
 import { verifyManagerBootstrap } from "./verify-manager-bootstrap.mjs";
+import { verifyManagerMigration } from "./verify-manager-migration.mjs";
 import { verifyManagerUpgrade } from "./verify-manager-upgrade.mjs";
 /** 验证真实 npm 安装产物；不安装系统服务，不使用平台凭据。 */
 import assert from "node:assert/strict";
@@ -166,9 +167,10 @@ try {
     host = undefined;
     await verifyManagerUpgrade(runtime, archives, temporary);
     await verifyManagerBootstrap(runtime, archives, temporary);
+    await verifyManagerMigration(runtime, archives, temporary);
     safeToRemove = true;
     process.stdout.write(
-        "✓ 实际 npm 产物：候选维护启动与损坏入口拒绝、验证进程回收、Web入口及资源、匿名控制拒绝、零扩展、网关启停和停止意图跨重启保持通过（未安装原生系统服务）\n",
+        "✓ 实际 npm 产物：候选维护启动与损坏入口拒绝、验证进程回收、Web入口及资源、匿名控制拒绝、零扩展、网关启停、停止意图跨重启保持及真实管理候选迁移通过（未安装原生系统服务）\n",
     );
 } finally {
     if (host) {
