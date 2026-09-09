@@ -161,7 +161,7 @@ jobs:
 
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
     steps:
@@ -186,6 +186,26 @@ jobs:
           docker exec -i --user 1000:1000 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs
           docker restart onebots-control-ci
           docker exec -i --user 1000:1000 -e CONTROL_VERIFY_RESTART=1 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs
+      - name: Verify ICQQ private peer installation through public CLI
+        env:
+          GH_PKG_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
+        run: |
+          test -n "$GH_PKG_TOKEN"
+          docker cp scripts/verify-private-installation-cli.mjs onebots-control-ci:/tmp/verify-private-installation-cli.mjs
+          printf '%s' "$GH_PKG_TOKEN" | docker exec -i --user 1000:1000 onebots-control-ci node /tmp/verify-private-installation-cli.mjs
+          docker logs onebots-control-ci 2>&1 | node -e '
+            const chunks = [];
+            process.stdin.on("data", chunk => chunks.push(chunk));
+            process.stdin.on("end", () => {
+              if (Buffer.concat(chunks).includes(Buffer.from(process.env.GH_PKG_TOKEN))) {
+                console.error("ICQQ 下载凭据出现在容器日志中");
+                process.exit(1);
+              }
+            });
+          '
+          docker rm -f onebots-control-ci
+          docker volume rm onebots-control-ci-data
+          docker run -d --name onebots-control-ci --mount type=volume,source=onebots-control-ci-data,target=/data onebots-control-ci
       - name: Verify dependency generation and protocol API
         run: docker exec -i --user 1000:1000 onebots-control-ci node --input-type=module < scripts/verify-control-installation.mjs
       - name: Verify damaged configuration repair
