@@ -8,6 +8,7 @@ import (
 	"io"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
@@ -16,6 +17,17 @@ import (
 
 // Historical node-windows/WinSW service ID. Never supplied by a caller.
 const legacySystemServiceName = "onebotsgateway.exe"
+
+// SCM cannot return account passwords. Never treat virtual/domain/gMSA identities
+// as recreatable registrations merely because their current process can be read.
+func restorableLegacyAccount(account string) bool {
+	switch strings.ToLower(account) {
+	case "localsystem", `nt authority\localservice`, `nt authority\networkservice`:
+		return true
+	default:
+		return false
+	}
+}
 
 type legacySCMConfiguration struct {
 	ServiceType      uint32   `json:"serviceType"`
@@ -100,6 +112,9 @@ func observeLegacySCM(service legacySCMReader, security func() (string, error), 
 	config, err := service.Config()
 	if err != nil {
 		return legacySCMInspection{}, err
+	}
+	if !restorableLegacyAccount(config.ServiceStartName) {
+		return legacySCMInspection{}, errors.New("legacy service account cannot be restored without unavailable credentials")
 	}
 	status, err := service.Query()
 	if err != nil {

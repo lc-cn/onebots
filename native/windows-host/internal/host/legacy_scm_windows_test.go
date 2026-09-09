@@ -17,6 +17,7 @@ type legacyReaderFixture struct {
 	status svc.Status
 	reads  int
 	change bool
+	mutate func(*mgr.Config)
 }
 
 func (f *legacyReaderFixture) Config() (mgr.Config, error) {
@@ -24,6 +25,9 @@ func (f *legacyReaderFixture) Config() (mgr.Config, error) {
 	value := f.config
 	if f.change && f.reads > 1 {
 		value.BinaryPathName = `C:\foreign.exe`
+	}
+	if f.mutate != nil && f.reads > 1 {
+		f.mutate(&value)
 	}
 	return value, nil
 }
@@ -81,5 +85,61 @@ func TestLegacyInspectionRejectsTransientOrUnownedStates(t *testing.T) {
 	value, err := stableLegacySCMInspection(f, legacySecurity, legacyProcess)
 	if err != nil || value.Process != nil || value.RestorationReady {
 		t.Fatal("stopped is not descendant exit evidence")
+	}
+}
+
+func TestLegacySnapshotRejectsAccountsRequiringUnrecoverableCredentials(t *testing.T) {
+	for _, account := range []string{"", `DOMAIN\user`, `DOMAIN\gmsa$`, `NT SERVICE\onebotsgateway.exe`, ".\\user", "LocalSystem "} {
+		f := legacyFixture()
+		f.config.ServiceStartName = account
+		if _, err := stableLegacySCMInspection(f, legacySecurity, legacyProcess); err == nil {
+			t.Fatalf("accepted account %q", account)
+		}
+	}
+	for _, account := range []string{"LocalSystem", `NT AUTHORITY\LocalService`, `nt authority\networkservice`} {
+		f := legacyFixture()
+		f.config.ServiceStartName = account
+		value, err := stableLegacySCMInspection(f, legacySecurity, legacyProcess)
+		if err != nil || value.Configuration.Account != account {
+			t.Fatalf("lost original account %q", account)
+		}
+	}
+}
+
+func TestLegacySnapshotRejectsSecurityAndConfigurationDrift(t *testing.T) {
+	calls := 0
+	if _, err := stableLegacySCMInspection(legacyFixture(), func() (string, error) {
+		calls++
+		if calls > 1 {
+			return "O:SYG:SYD:(A;;GA;;;BA)", nil
+		}
+		return legacySecurity()
+	}, legacyProcess); err == nil {
+		t.Fatal("accepted changed DACL")
+	}
+}
+
+func TestLegacySnapshotBindsEveryReadableConfigurationField(t *testing.T) {
+	changes := map[string]func(*mgr.Config){
+		"startType":        func(c *mgr.Config) { c.StartType++ },
+		"errorControl":     func(c *mgr.Config) { c.ErrorControl++ },
+		"binaryPath":       func(c *mgr.Config) { c.BinaryPathName += " changed" },
+		"loadOrderGroup":   func(c *mgr.Config) { c.LoadOrderGroup = "changed" },
+		"tagId":            func(c *mgr.Config) { c.TagId++ },
+		"dependencies":     func(c *mgr.Config) { c.Dependencies = []string{"changed"} },
+		"account":          func(c *mgr.Config) { c.ServiceStartName = `NT AUTHORITY\LocalService` },
+		"displayName":      func(c *mgr.Config) { c.DisplayName = "changed" },
+		"description":      func(c *mgr.Config) { c.Description = "changed" },
+		"sidType":          func(c *mgr.Config) { c.SidType++ },
+		"delayedAutoStart": func(c *mgr.Config) { c.DelayedAutoStart = !c.DelayedAutoStart },
+	}
+	for name, mutate := range changes {
+		t.Run(name, func(t *testing.T) {
+			f := legacyFixture()
+			f.mutate = mutate
+			if _, err := stableLegacySCMInspection(f, legacySecurity, legacyProcess); err == nil {
+				t.Fatal("accepted configuration drift")
+			}
+		})
 	}
 }
