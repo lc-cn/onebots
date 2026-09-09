@@ -18,6 +18,9 @@ export interface ServicePlatform {
     quiesce(): Promise<void>;
     /** 定义文件由迁移文件事务写入；重读定义并恢复启用状态，返回双重稳定停态但绝不启动。 */
     reload(enabled: boolean): Promise<ServicePlatformState>;
-    /** 启动或对账现有实例，返回PID、实例身份、定义路径及启用状态均稳定的运行态。 */
-    start(): Promise<ServicePlatformState>;
+    /**
+     * 启动或对账现有实例，返回PID、实例身份、定义路径及启用状态均稳定的运行态。
+     * 提供expectedInitialState时，首次OS观察必须完全相同，否则须在派发副作用前拒绝。
+     */
+    start(expectedInitialState?: ServicePlatformState): Promise<ServicePlatformState>;
 }

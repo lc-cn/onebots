@@ -1,4 +1,14 @@
 import { parseServiceMigrationRecord } from "./service-migration-record.js";
+import {
+    deriveServiceMigrationReloaded,
+    deriveServiceMigrationRollbackCompleted,
+    deriveServiceMigrationStarted,
+    deriveServiceMigrationTransition,
+} from "./service-migration-journal-transition.js";
+import {
+    consumeServiceMigrationEffectProof,
+    isServiceMigrationEffectProof,
+} from "./service-migration-effect-proof.js";
 export {
     parseServiceMigrationRecord,
     parseServiceMigrationReloadOldReceipt,
@@ -11,9 +21,12 @@ import { isDeepStrictEqual } from "node:util";
 import { parseLegacyServiceSpec } from "./service-metadata.js";
 import { parseManagerServiceSpec, type ManagerServiceSpec } from "./manager-service-spec.js";
 import { parseRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
+import { parseServiceMigrationBackup as parseBackup } from "./service-migration-backup.js";
 import type { RetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import type {
     ServiceMigrationBackup,
+    ServiceMigrationEffectProof,
+    ServiceMigrationJournalTransition,
     ServiceMigrationRecord,
     ServiceMigrationJournal,
 } from "./service-migration-types.js";
@@ -43,9 +56,14 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
                 try {
                     const record = this.read(name.slice(0, -13));
                     if (record.status === "running") {
-                        record.status = "interrupted";
-                        record.recoveryRequired = true;
-                        this.save(record);
+                        if (record.schemaVersion === 2)
+                            this.transition(record, { type: "interrupt" });
+                        else
+                            this.save({
+                                ...record,
+                                status: "interrupted",
+                                recoveryRequired: true,
+                            });
                     }
                 } catch {
                     this.blocked = true; /* 损坏记录保留，绝不视为全新安装。 */
@@ -246,8 +264,8 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             this.checkDirectory();
             const clean = parseServiceMigrationRecord(record);
             const previous = this.read(clean.id);
-            // 当前生产者只写v1；严格v2记录须由后续闭合事务创建，禁止普通save升级格式。
-            if (previous.schemaVersion !== clean.schemaVersion) throw invalid();
+            // v2只能经过下方专用CAS状态机；普通save继续服务尚未迁移的v1调用链。
+            if (previous.schemaVersion !== 1 || clean.schemaVersion !== 1) throw invalid();
             if (previous.backupDigest !== clean.backupDigest) throw invalid();
             if (!isDeepStrictEqual(previous.previousBackupDigests, clean.previousBackupDigests))
                 throw invalid();
@@ -279,6 +297,33 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             throw invalid();
         }
     }
+    transition(
+        expected: Readonly<ServiceMigrationRecord>,
+        command: ServiceMigrationJournalTransition | ServiceMigrationEffectProof,
+    ): ServiceMigrationRecord {
+        try {
+            this.checkDirectory();
+            const previous = this.read(expected.id);
+            if (canonical(previous) !== canonical(expected)) throw invalid();
+            const backup = this.backup(previous);
+            const next = isServiceMigrationEffectProof(command)
+                ? (() => {
+                      const proof = consumeServiceMigrationEffectProof(this, previous, command);
+                      if (proof.kind === "reloaded")
+                          return deriveServiceMigrationReloaded(previous, backup, proof.payload);
+                      if (proof.kind === "started")
+                          return deriveServiceMigrationStarted(previous, backup, proof.payload);
+                      return deriveServiceMigrationRollbackCompleted(previous, backup);
+                  })()
+                : deriveServiceMigrationTransition(previous, backup, command);
+            this.backup(next);
+            if (canonical(this.read(previous.id)) !== canonical(previous)) throw invalid();
+            atomic(this.file(previous.id), canonical(next), 0o600);
+            return this.read(previous.id);
+        } catch {
+            throw invalid();
+        }
+    }
     private file(id: string): string {
         if (typeof id !== "string" || !ID.test(id)) throw invalid();
         return path.join(this.directory, `${id}.journal.json`);
@@ -299,107 +344,6 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             throw invalid();
     }
 }
-function object(value: unknown, keys: string[]): Record<string, unknown> {
-    if (
-        !value ||
-        typeof value !== "object" ||
-        Array.isArray(value) ||
-        ![Object.prototype, null].includes(Object.getPrototypeOf(value))
-    )
-        throw invalid();
-    const own = Reflect.ownKeys(value);
-    if (
-        own.length !== keys.length ||
-        own.some(key => typeof key !== "string" || !keys.includes(key))
-    )
-        throw invalid();
-    const output: Record<string, unknown> = {};
-    for (const key of keys) {
-        const descriptor = Object.getOwnPropertyDescriptor(value, key);
-        if (!descriptor?.enumerable || !("value" in descriptor)) throw invalid();
-        output[key] = descriptor.value;
-    }
-    return output;
-}
-function parseBackup(input: unknown): ServiceMigrationBackup {
-    const value = object(input, [
-        "schemaVersion",
-        "target",
-        "previousRunning",
-        "previousEnabled",
-        "files",
-        ...(input && typeof input === "object" && Object.hasOwn(input, "retainedRuntime")
-            ? ["retainedRuntime"]
-            : []),
-        ...(input && typeof input === "object" && Object.hasOwn(input, "targetCandidateDigest")
-            ? ["targetCandidateDigest"]
-            : []),
-    ]);
-    if (
-        value.schemaVersion !== 1 ||
-        typeof value.previousRunning !== "boolean" ||
-        typeof value.previousEnabled !== "boolean" ||
-        !Array.isArray(value.files) ||
-        Reflect.ownKeys(value.files).length !== value.files.length + 1 ||
-        value.files.length < 3 ||
-        value.files.length > 4
-    )
-        throw invalid();
-    const target = parseManagerServiceSpec(value.target);
-    if (
-        Object.hasOwn(value, "targetCandidateDigest") &&
-        (typeof value.targetCandidateDigest !== "string" ||
-            !HASH.test(value.targetCandidateDigest) ||
-            !Object.hasOwn(value, "retainedRuntime"))
-    )
-        throw invalid();
-    const roles = new Set<string>();
-    const paths = new Set<string>();
-    const files = Array.from({ length: value.files.length }, (_, index) => {
-        const descriptor = Object.getOwnPropertyDescriptor(value.files, String(index));
-        if (!descriptor || !("value" in descriptor)) throw invalid();
-        const file = object(descriptor.value, ["role", "path", "mode", "contentBase64"]);
-        if (
-            typeof file.role !== "string" ||
-            !["definition", "metadata", "configuration", "runner"].includes(file.role) ||
-            roles.has(file.role) ||
-            typeof file.path !== "string" ||
-            file.path.length > 4096 ||
-            !path.isAbsolute(file.path) ||
-            /[\u0000\r\n]/.test(file.path) ||
-            paths.has(path.resolve(file.path)) ||
-            typeof file.mode !== "number" ||
-            !Number.isInteger(file.mode) ||
-            file.mode < 0 ||
-            file.mode > 0o777 ||
-            typeof file.contentBase64 !== "string" ||
-            file.contentBase64.length > 2 * 1024 * 1024 ||
-            Buffer.from(file.contentBase64, "base64").toString("base64") !== file.contentBase64
-        )
-            throw invalid();
-        roles.add(file.role);
-        paths.add(path.resolve(file.path));
-        return file as unknown as ServiceMigrationBackup["files"][number];
-    });
-    if (!["definition", "metadata", "configuration"].every(role => roles.has(role)))
-        throw invalid();
-    const backup = {
-        schemaVersion: 1 as const,
-        target,
-        previousRunning: value.previousRunning,
-        previousEnabled: value.previousEnabled,
-        files,
-        ...(Object.hasOwn(value, "retainedRuntime")
-            ? { retainedRuntime: parseRetainedLegacyRuntime(value.retainedRuntime) }
-            : {}),
-        ...(typeof value.targetCandidateDigest === "string"
-            ? { targetCandidateDigest: value.targetCandidateDigest }
-            : {}),
-    };
-    if (Buffer.byteLength(canonical(backup)) > LIMIT) throw invalid();
-    return backup;
-}
-
 function finished(record: ServiceMigrationRecord): boolean {
     return (
         !record.recoveryRequired &&

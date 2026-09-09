@@ -34,6 +34,22 @@ export interface ServiceMigrationStartOldReceipt {
     processId: number;
     identity: string;
 }
+export type ServiceMigrationJournalTransition =
+    | { type: "target-written" }
+    | { type: "advance-target" }
+    | { type: "begin-rollback"; origin: ServiceMigrationRollbackOrigin }
+    | { type: "restoring" }
+    | { type: "reloading-old" }
+    | { type: "complete-success" }
+    | { type: "interrupt" };
+declare const migrationProof: unique symbol;
+export type ServiceMigrationReloadedProof = { readonly [migrationProof]: "reloaded" };
+export type ServiceMigrationStartedProof = { readonly [migrationProof]: "started" };
+export type ServiceMigrationRestoredProof = { readonly [migrationProof]: "restored" };
+export type ServiceMigrationEffectProof =
+    | ServiceMigrationReloadedProof
+    | ServiceMigrationStartedProof
+    | ServiceMigrationRestoredProof;
 export interface ServiceMigrationFile {
     role: "definition" | "metadata" | "configuration" | "runner";
     path: string;
@@ -53,7 +69,7 @@ export interface ServiceMigrationBackup {
     targetCandidateDigest?: string;
 }
 export interface ServiceMigrationRecord {
-    /** 当前生产者仍写v1；v2仅供严格读取，待闭合事务一次启用。 */
+    /** 准备与工件绑定阶段保留v1；目标写入确认及闭合回退事务升级为v2。 */
     schemaVersion: 1 | 2;
     id: string;
     backupDigest: string;
@@ -63,11 +79,11 @@ export interface ServiceMigrationRecord {
     status: "running" | "succeeded" | "failed" | "interrupted";
     recoveryRequired: boolean;
     rolledBack: boolean;
-    /** v2回退来源；未来必须由journal专用事务绑定。 */
+    /** v2回退来源；只能由journal专用事务绑定。 */
     rollbackOrigin?: ServiceMigrationRollbackOrigin;
-    /** v2旧定义重载收据；当前没有生产写入入口。 */
+    /** v2旧定义重载收据；由稳定OS观测生成并经journal专用事务绑定。 */
     reloadOldReceipt?: ServiceMigrationReloadOldReceipt;
-    /** v2旧实例启动收据；当前没有生产写入入口。 */
+    /** v2旧实例启动收据；仅在原服务应运行时绑定。 */
     startOldReceipt?: ServiceMigrationStartOldReceipt;
 }
 export interface ServiceMigrationJournal {
@@ -76,6 +92,10 @@ export interface ServiceMigrationJournal {
     read(id: string): ServiceMigrationRecord;
     backup(record: ServiceMigrationRecord): ServiceMigrationBackup;
     save(record: ServiceMigrationRecord): void;
+    transition(
+        expected: Readonly<ServiceMigrationRecord>,
+        command: ServiceMigrationJournalTransition | ServiceMigrationEffectProof,
+    ): ServiceMigrationRecord;
 }
 
 /** 平台驱动须给出实际观测，绝不能以请求已发出或PID文件缺失代替停止证明。 */
@@ -96,7 +116,21 @@ export interface ServiceMigrationPort {
     stopTarget(backup: ServiceMigrationBackup): Promise<void>;
     /** 只有原始或本次候选文件摘要且进程已停止时才允许恢复。 */
     canRestore(backup: ServiceMigrationBackup): Promise<boolean>;
+    /** 只恢复旧文件；重载系统定义是下一项独立外部效果。 */
     restoreOriginal(backup: ServiceMigrationBackup): Promise<void>;
-    startOriginal(backup: ServiceMigrationBackup): Promise<void>;
-    verifyRestored(backup: ServiceMigrationBackup): Promise<boolean>;
+    /** 重载旧定义并返回与备份及完整回退契约绑定的稳定停态收据。 */
+    reloadOriginal(
+        backup: ServiceMigrationBackup,
+        backupDigest: string,
+    ): Promise<ServiceMigrationReloadOldReceipt>;
+    /** 仅接受同一Port实例刚生成的重载收据，不会隐式重载或选择另一实例。 */
+    startOriginal(
+        backup: ServiceMigrationBackup,
+        reloadReceipt?: ServiceMigrationReloadOldReceipt,
+    ): Promise<ServiceMigrationStartOldReceipt>;
+    verifyRestored(
+        backup: ServiceMigrationBackup,
+        reloadReceipt?: ServiceMigrationReloadOldReceipt,
+        startReceipt?: ServiceMigrationStartOldReceipt,
+    ): Promise<boolean>;
 }

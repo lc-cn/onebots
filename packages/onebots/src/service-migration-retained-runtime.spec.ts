@@ -535,12 +535,13 @@ if (plugin.identity !== identity) throw new Error('split module');
                                     ...state,
                                     state: "stopped",
                                     running: false,
+                                    loaded: false,
                                     quiescent: true,
                                     processId: null,
                                     identity: null,
                                 };
                             },
-                            reload: async () => {},
+                            reload: async () => structuredClone(state),
                             start: async () => {
                                 const spec = JSON.parse(fs.readFileSync(paths.metadata, "utf8"));
                                 if (spec.runtimeKind === "control") {
@@ -560,10 +561,12 @@ if (plugin.identity !== identity) throw new Error('split module');
                                     ...state,
                                     state: "running",
                                     running: true,
+                                    loaded: true,
                                     quiescent: false,
                                     processId: 200,
                                     identity: "new-instance",
                                 };
+                                return structuredClone(state);
                             },
                         },
                         manager: {

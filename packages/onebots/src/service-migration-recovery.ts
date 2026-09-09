@@ -18,6 +18,7 @@ import {
     retainedRollbackFiles,
     verifyRetainedLegacyRuntime,
 } from "./service-migration-retained-runtime.js";
+import { recoverInterruptedServiceMigrationV2 } from "./service-migration-cold-recovery.js";
 
 const failure = () => new Error("无法确认迁移尚未切换且旧服务未变，保留恢复记录；未执行系统动作");
 const rollbackFailure = () =>
@@ -115,6 +116,17 @@ export async function rollbackStoppedServiceMigration(
             !record.recoveryRequired
         )
             return record;
+        if (record.schemaVersion === 2) {
+            if (!platform && host.platform !== "linux") throw rollbackFailure();
+            const driver = platform ?? new SystemdServicePlatform(host, scope, paths.definition);
+            return await recoverInterruptedServiceMigrationV2({
+                journal,
+                record,
+                backup,
+                host,
+                platform: driver,
+            });
+        }
         if (
             record.status !== "interrupted" ||
             !record.recoveryRequired ||

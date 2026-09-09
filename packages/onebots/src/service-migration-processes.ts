@@ -272,15 +272,21 @@ export async function verifyServiceMigrationProcessesWhileLocked(
 export async function verifyNeverStartedServiceMigrationProcessesWhileLocked(
     workspace: string,
     operationId: string,
+    expectedDesired: "running" | "stopped" = "running",
 ): Promise<boolean> {
     try {
-        const workspaceState = inspectServiceMigrationRollbackWorkspace(workspace, operationId);
+        const workspaceState = inspectServiceMigrationRollbackWorkspace(
+            workspace,
+            operationId,
+            expectedDesired,
+        );
         const control = root(workspace);
         const receipt = readReceipt(control);
         if (receipt.phase !== "never-started" || !neverStartedQuiet(control)) return false;
         return (
             readReceipt(control).phase === "never-started" &&
-            inspectServiceMigrationRollbackWorkspace(workspace, operationId) === workspaceState
+            inspectServiceMigrationRollbackWorkspace(workspace, operationId, expectedDesired) ===
+                workspaceState
         );
     } catch {
         return false;

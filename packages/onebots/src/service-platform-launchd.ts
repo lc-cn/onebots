@@ -398,10 +398,12 @@ export class LaunchdServicePlatform implements ServicePlatform {
             return unavailable();
         }
     }
-    async start(): Promise<ServicePlatformState> {
+    async start(expectedInitialState?: ServicePlatformState): Promise<ServicePlatformState> {
         try {
             const deadline = this.now() + this.timeout;
             const before = await this.inspectWithin(deadline);
+            if (expectedInitialState && !isDeepStrictEqual(before, expectedInitialState))
+                unavailable();
             if (before.running) {
                 if (!before.identity) unavailable();
                 return await this.stable(

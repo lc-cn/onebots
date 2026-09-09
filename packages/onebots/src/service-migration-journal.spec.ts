@@ -2,7 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ServiceMigrationRollbackCoordinator } from "./service-migration-effect-proof.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
+import { deriveServiceMigrationTransition } from "./service-migration-journal-transition.js";
 import type { ServiceMigrationBackup } from "./service-migration-types.js";
 const folders: string[] = [];
 afterEach(() => {
@@ -137,6 +139,159 @@ describe("service migration private journal", () => {
         expect(() => test.journal.save({ ...record, backupDigest: "f".repeat(64) })).toThrow();
         expect(() => test.journal.save({ ...record, schemaVersion: 2 })).toThrow();
         expect(() => test.journal.save({ ...record, status: "succeeded" })).toThrow();
+    });
+    it("moves the successful target path through dedicated v2 CAS only", () => {
+        const test = fixture();
+        let record = test.journal.prepare("forward", test.backup);
+        test.journal.save({ ...record, phase: "writing-target" });
+        record = test.journal.read(record.id);
+        record = test.journal.transition(record, { type: "target-written" });
+        expect(record).toMatchObject({ schemaVersion: 2, phase: "target-written" });
+        expect(() => test.journal.save({ ...record, phase: "verifying" })).toThrow();
+        record = test.journal.transition(record, { type: "advance-target" });
+        expect(record.phase).toBe("starting-manager");
+        record = test.journal.transition(record, { type: "advance-target" });
+        record = test.journal.transition(record, { type: "advance-target" });
+        record = test.journal.transition(record, { type: "complete-success" });
+        expect(record).toMatchObject({
+            phase: "completed",
+            status: "succeeded",
+            recoveryRequired: false,
+            rolledBack: false,
+        });
+        expect(() => test.journal.transition(record, { type: "interrupt" })).toThrow();
+    });
+    it("derives commands from closed descriptors instead of proxy property reads", () => {
+        const test = fixture();
+        let record = test.journal.prepare("proxy", test.backup);
+        test.journal.save({ ...record, phase: "writing-target" });
+        record = test.journal.read(record.id);
+        const command = new Proxy(
+            { type: "target-written" as const },
+            {
+                get: () => "advance-target",
+            },
+        );
+        expect(test.journal.transition(record, command)).toMatchObject({
+            schemaVersion: 2,
+            phase: "target-written",
+        });
+    });
+    it("does not share backup history arrays with the expected record", () => {
+        const test = fixture();
+        const history = ["c".repeat(64)];
+        const previous = {
+            schemaVersion: 2 as const,
+            id: "history-copy",
+            backupDigest: "a".repeat(64),
+            previousBackupDigests: history,
+            phase: "target-written" as const,
+            status: "running" as const,
+            recoveryRequired: false,
+            rolledBack: false,
+        };
+        const next = deriveServiceMigrationTransition(previous, test.backup, {
+            type: "advance-target",
+        });
+        next.previousBackupDigests!.push("d".repeat(64));
+        expect(previous.previousBackupDigests).toEqual(["c".repeat(64)]);
+    });
+    it("rejects public raw receipt and rollback-completion commands", () => {
+        const test = fixture();
+        let record = test.journal.prepare("rollback", test.backup);
+        test.journal.save({ ...record, phase: "stopping-old" });
+        record = test.journal.read(record.id);
+        record = test.journal.transition(record, {
+            type: "begin-rollback",
+            origin: "pre-target",
+        });
+        record = test.journal.transition(record, { type: "reloading-old" });
+        for (const command of [
+            { type: "reloaded-old", receipt: {} },
+            { type: "started-old", receipt: {} },
+            { type: "complete-rollback" },
+        ])
+            expect(() => test.journal.transition(record, command as never)).toThrow();
+    });
+    it("binds opaque effect proof to the issuing journal and exact record", async () => {
+        const first = fixture();
+        const second = fixture();
+        const prepare = (test: ReturnType<typeof fixture>) => {
+            let record = test.journal.prepare("bound-proof", test.backup);
+            test.journal.save({ ...record, phase: "stopping-old" });
+            record = test.journal.read(record.id);
+            record = test.journal.transition(record, {
+                type: "begin-rollback",
+                origin: "pre-target",
+            });
+            return test.journal.transition(record, { type: "reloading-old" });
+        };
+        const expected = prepare(first);
+        const other = prepare(second);
+        let proof: Parameters<typeof first.journal.transition>[1] | undefined;
+        const spy = vi.spyOn(first.journal, "transition").mockImplementation((_record, command) => {
+            proof = command;
+            throw new Error("capture");
+        });
+        const coordinator = new ServiceMigrationRollbackCoordinator(
+            first.journal,
+            {
+                reloadOriginal: async () => ({
+                    schemaVersion: 1,
+                    backupDigest: expected.backupDigest,
+                    rollbackContractDigest: "b".repeat(64),
+                    enabled: first.backup.previousEnabled,
+                    loaded: true,
+                    definitionPath: "/tmp/definition",
+                }),
+                startOriginal: async () => {
+                    throw new Error("unused");
+                },
+                verifyRestored: async () => false,
+            },
+            first.backup,
+        );
+        await expect(coordinator.reload(expected)).rejects.toThrow("capture");
+        spy.mockRestore();
+        expect(proof).toBeDefined();
+        expect(() => second.journal.transition(other, proof!)).toThrow();
+        expect(first.journal.transition(expected, proof!)).toMatchObject({
+            phase: "starting-old",
+        });
+        expect(() => first.journal.transition(expected, proof!)).toThrow();
+    });
+    it("keeps stopped rollback intent closed and rejects stale transitions", () => {
+        const test = fixture();
+        test.backup.previousRunning = false;
+        let record = test.journal.prepare("stopped", test.backup);
+        test.journal.save({ ...record, phase: "writing-target" });
+        record = test.journal.read(record.id);
+        const stale = record;
+        expect(() =>
+            test.journal.transition(record, {
+                type: "begin-rollback",
+                origin: "unknown",
+            } as never),
+        ).toThrow();
+        record = test.journal.transition(record, {
+            type: "begin-rollback",
+            origin: "target-written",
+        });
+        expect(() =>
+            test.journal.transition(record, {
+                type: "restoring",
+                extra: true,
+            } as never),
+        ).toThrow();
+        expect(() => test.journal.transition(stale, { type: "target-written" })).toThrow();
+        record = test.journal.transition(record, { type: "restoring" });
+        record = test.journal.transition(record, { type: "reloading-old" });
+        expect(() =>
+            test.journal.transition(record, {
+                type: "reloaded-old",
+                receipt: {},
+            } as never),
+        ).toThrow();
     });
 });
 

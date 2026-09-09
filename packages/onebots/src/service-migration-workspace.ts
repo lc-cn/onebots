@@ -132,13 +132,14 @@ export function blockServiceMigrationWorkspace(workspace: string, operationId: s
 export function inspectServiceMigrationRollbackWorkspace(
     workspace: string,
     operationId: string,
+    expectedDesired: "running" | "stopped" = "running",
 ): "pending" | "blocked" {
     try {
         if (typeof operationId !== "string" || !ID.test(operationId)) throw failure();
         const directory = path.join(workspaceRoot(workspace), ".control");
         checkDirectory(directory);
         const pending = readMarker(path.join(directory, MARKER));
-        if (pending.seed.operationId !== operationId || pending.seed.desired !== "running")
+        if (pending.seed.operationId !== operationId || pending.seed.desired !== expectedDesired)
             throw failure();
         const blocked = path.join(directory, BLOCKED);
         if (!exists(blocked)) {

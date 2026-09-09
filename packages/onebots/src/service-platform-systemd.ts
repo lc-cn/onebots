@@ -250,10 +250,26 @@ export class SystemdServicePlatform implements ServicePlatform {
         deadline: number,
         accepts: (state: ServicePlatformState) => boolean,
     ): Promise<ServicePlatformState> {
+        let generation: { processId: number | null; identity: string } | null = null;
+        const bindGeneration = (state: ServicePlatformState) => {
+            if (state.identity !== null) {
+                if (!generation) {
+                    generation = { processId: state.processId, identity: state.identity };
+                    return;
+                }
+                if (state.identity !== generation.identity) unavailable();
+                if (generation.processId === null) generation.processId = state.processId;
+                else if (state.processId !== generation.processId) unavailable();
+                return;
+            }
+            if (generation) unavailable();
+        };
         for (;;) {
             const first = await this.inspectWithin(deadline);
+            bindGeneration(first);
             if (accepts(first)) {
                 const second = await this.inspectWithin(deadline);
+                bindGeneration(second);
                 if (accepts(second) && isDeepStrictEqual(first, second)) return second;
                 unavailable();
             }
@@ -298,9 +314,11 @@ export class SystemdServicePlatform implements ServicePlatform {
                 state.definitionPath === this.expectedDefinitionPath,
         );
     }
-    async start(): Promise<ServicePlatformState> {
+    async start(expectedInitialState?: ServicePlatformState): Promise<ServicePlatformState> {
         const deadline = this.now() + this.timeout;
         const current = await this.inspectWithin(deadline);
+        if (expectedInitialState && !isDeepStrictEqual(current, expectedInitialState))
+            unavailable();
         if (!current.loaded || (!current.running && !current.quiescent)) unavailable();
         const enabled = current.enabled;
         if (!current.running) this.command(["start", "--no-block", "--", UNIT], deadline);

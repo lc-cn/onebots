@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
 import { ServiceMigrationTransaction } from "./service-migration-transaction.js";
+import { digestServiceMigrationReloadOldReceipt } from "./service-migration-retained-runtime.js";
 import type {
     ServiceMigrationBackup,
     ServiceMigrationPort,
@@ -45,6 +46,9 @@ function fixture(previousRunning = true) {
         restoreAllowed: true,
         stopTargetFails: false,
         stopOldFails: false,
+        writeTargetFails: false,
+        reloadOldFails: false,
+        startOldFails: false,
         releaseFails: false,
     };
     const act = (name: string, phase: ServiceMigrationPhase) => {
@@ -58,7 +62,10 @@ function fixture(previousRunning = true) {
             if (state.stopOldFails) throw new Error("unknown");
         },
         verifyQuiescent: async () => state.quiescent,
-        writeTarget: async () => act("write-target", "writing-target"),
+        writeTarget: async () => {
+            act("write-target", "writing-target");
+            if (state.writeTargetFails) throw new Error("unknown");
+        },
         startTarget: async () => act("start-target", "starting-manager"),
         verifyTarget: async () => state.targetValid,
         releaseTarget: async () => {
@@ -71,7 +78,29 @@ function fixture(previousRunning = true) {
         },
         canRestore: async () => state.restoreAllowed,
         restoreOriginal: async () => act("restore", "restoring"),
-        startOriginal: async () => act("start-old", "restarting-old"),
+        reloadOriginal: async (_backup, backupDigest) => {
+            act("reload-old", "reloading-old");
+            if (state.reloadOldFails) throw new Error("unknown");
+            return {
+                schemaVersion: 1,
+                backupDigest,
+                rollbackContractDigest: "b".repeat(64),
+                enabled: backup.previousEnabled,
+                loaded: true,
+                definitionPath: "/data/definition",
+            };
+        },
+        startOriginal: async (_backup, reloadReceipt) => {
+            act("start-old", "starting-old");
+            if (state.startOldFails) throw new Error("unknown");
+            if (!reloadReceipt) throw new Error("missing receipt");
+            return {
+                schemaVersion: 1,
+                reloadReceiptDigest: digestServiceMigrationReloadOldReceipt(reloadReceipt),
+                processId: 42,
+                identity: "stable-old-instance",
+            };
+        },
         verifyRestored: async () => true,
     };
     return {
@@ -100,15 +129,15 @@ describe("持久化服务迁移事务", () => {
     });
     it("释放意图落盘失败不开放管理操作，也不回退已验收的目标", async () => {
         const t = fixture();
-        const save = t.journal.save.bind(t.journal);
-        vi.spyOn(t.journal, "save").mockImplementation(record => {
-            if (record.phase === "releasing-target" && record.status === "running")
+        const transition = t.journal.transition.bind(t.journal);
+        vi.spyOn(t.journal, "transition").mockImplementation((record, command) => {
+            if (record.phase === "verifying" && command.type === "advance-target")
                 throw new Error("private disk failure");
-            save(record);
+            return transition(record, command);
         });
         const result = await t.transaction.run("migration", t.backup);
         expect(result).toMatchObject({
-            phase: "releasing-target",
+            phase: "verifying",
             status: "interrupted",
             recoveryRequired: true,
             rolledBack: false,
@@ -121,15 +150,14 @@ describe("持久化服务迁移事务", () => {
     });
     it("释放成功但completed落盘失败只标未知，不停止目标或恢复旧服务", async () => {
         const t = fixture();
-        const save = t.journal.save.bind(t.journal);
-        vi.spyOn(t.journal, "save").mockImplementation(record => {
-            if (record.phase === "completed" && record.status === "succeeded")
-                throw new Error("private disk failure");
-            save(record);
+        const transition = t.journal.transition.bind(t.journal);
+        vi.spyOn(t.journal, "transition").mockImplementation((record, command) => {
+            if (command.type === "complete-success") throw new Error("private disk failure");
+            return transition(record, command);
         });
         const result = await t.transaction.run("migration", t.backup);
         expect(result).toMatchObject({
-            phase: "completed",
+            phase: "releasing-target",
             status: "interrupted",
             recoveryRequired: true,
             rolledBack: false,
@@ -185,9 +213,10 @@ describe("持久化服务迁移事务", () => {
                           "start-target",
                           "stop-target",
                           "restore",
+                          "reload-old",
                           "start-old",
                       ]
-                    : ["stop-old", "write-target", "stop-target", "restore"],
+                    : ["stop-old", "write-target", "stop-target", "restore", "reload-old"],
             );
         },
     );
@@ -202,6 +231,63 @@ describe("持久化服务迁移事务", () => {
         expect(t.calls).not.toContain("restore");
         await expect(t.transaction.run("another", t.backup)).rejects.toThrow();
     });
+    it("旧定义reload结果未知时保留reloading-old意图且不启动旧实例", async () => {
+        const t = fixture();
+        t.state.targetValid = false;
+        t.state.reloadOldFails = true;
+        const result = await t.transaction.run("migration", t.backup);
+        expect(result).toMatchObject({
+            schemaVersion: 2,
+            phase: "reloading-old",
+            status: "interrupted",
+            recoveryRequired: true,
+            rollbackOrigin: "target-written",
+        });
+        expect(result).not.toHaveProperty("reloadOldReceipt");
+        expect(t.calls).toEqual([
+            "stop-old",
+            "write-target",
+            "start-target",
+            "stop-target",
+            "restore",
+            "reload-old",
+        ]);
+    });
+    it("旧实例启动结果未知时保留reload收据且不伪造start收据", async () => {
+        const t = fixture();
+        t.state.targetValid = false;
+        t.state.startOldFails = true;
+        const result = await t.transaction.run("migration", t.backup);
+        expect(result).toMatchObject({
+            schemaVersion: 2,
+            phase: "starting-old",
+            status: "interrupted",
+            recoveryRequired: true,
+            rollbackOrigin: "target-written",
+        });
+        expect(result).toHaveProperty("reloadOldReceipt");
+        expect(result).not.toHaveProperty("startOldReceipt");
+        expect(t.calls.at(-1)).toBe("start-old");
+    });
+    it("旧实例已启动但start收据落盘失败时保持starting-old封锁", async () => {
+        const t = fixture();
+        t.state.targetValid = false;
+        const transition = t.journal.transition.bind(t.journal);
+        vi.spyOn(t.journal, "transition").mockImplementation((record, command) => {
+            if (record.phase === "starting-old" && !("type" in command))
+                throw new Error("private disk failure");
+            return transition(record, command);
+        });
+        const result = await t.transaction.run("migration", t.backup);
+        expect(result).toMatchObject({
+            phase: "starting-old",
+            status: "interrupted",
+            recoveryRequired: true,
+        });
+        expect(result).toHaveProperty("reloadOldReceipt");
+        expect(result).not.toHaveProperty("startOldReceipt");
+        expect(t.calls.at(-1)).toBe("start-old");
+    });
     it("写目标前日志失败不执行写入或额外补偿", async () => {
         const t = fixture();
         const save = t.journal.save.bind(t.journal);
@@ -213,6 +299,47 @@ describe("持久化服务迁移事务", () => {
             recoveryRequired: true,
         });
         expect(t.calls).toEqual(["stop-old"]);
+    });
+    it("写目标动作报错时保留writing-target封锁且不假定可回退", async () => {
+        const t = fixture();
+        t.state.writeTargetFails = true;
+        expect(await t.transaction.run("migration", t.backup)).toMatchObject({
+            schemaVersion: 1,
+            phase: "writing-target",
+            status: "interrupted",
+            recoveryRequired: true,
+        });
+        expect(t.calls).toEqual(["stop-old", "write-target"]);
+        expect(t.calls).not.toContain("stop-target");
+        expect(t.calls).not.toContain("restore");
+    });
+    it("目标已写但target-written确认未落盘时保持v1封锁且不自动回退", async () => {
+        const t = fixture();
+        const transition = t.journal.transition.bind(t.journal);
+        vi.spyOn(t.journal, "transition").mockImplementation((record, command) => {
+            if (command.type === "target-written") throw new Error("private disk failure");
+            return transition(record, command);
+        });
+        expect(await t.transaction.run("migration", t.backup)).toMatchObject({
+            schemaVersion: 1,
+            phase: "writing-target",
+            status: "interrupted",
+            recoveryRequired: true,
+        });
+        expect(t.calls).toEqual(["stop-old", "write-target"]);
+    });
+    it("目标写入前确认旧服务已停后可升级为v2 pre-target回退", async () => {
+        const t = fixture();
+        t.state.stopOldFails = true;
+        const result = await t.transaction.run("migration", t.backup);
+        expect(result).toMatchObject({
+            schemaVersion: 2,
+            phase: "completed",
+            status: "failed",
+            rolledBack: true,
+            rollbackOrigin: "pre-target",
+        });
+        expect(t.calls).toEqual(["stop-old", "restore", "reload-old", "start-old"]);
     });
     it("旧服务未确认退出绝不启动另一轨", async () => {
         const t = fixture();

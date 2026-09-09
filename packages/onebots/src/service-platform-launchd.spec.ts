@@ -372,6 +372,15 @@ describe("launchd service platform", () => {
         await expect(f.platform.start()).rejects.toThrow("无法安全确认");
         expect(f.calls.filter(call => call[1] === "bootstrap")).toHaveLength(1);
     });
+    it("expected initial state mismatch rejects before bootstrap", async () => {
+        const f = fixture({ freshDefinition: true });
+        Object.assign(f.state, { loaded: false, running: false });
+        const expected = await f.platform.inspect();
+        Object.assign(f.state, { loaded: true, running: true });
+
+        await expect(f.platform.start(expected)).rejects.toThrow("无法安全确认");
+        expect(f.calls.some(call => call[1] === "bootstrap")).toBe(false);
+    });
     it("reload refuses a loaded job before changing its override", async () => {
         const f = fixture();
         await expect(f.platform.reload(false)).rejects.toThrow("无法安全确认");

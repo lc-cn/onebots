@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -10,6 +11,8 @@ import { verifyManagerServiceCandidate } from "./manager-service-upgrade-candida
 import { ServiceMigrationFiles } from "./service-migration-files.js";
 import { createServiceMigrationFilePlan } from "./service-migration-file-plan.js";
 import {
+    createServiceMigrationRollbackContract,
+    digestServiceMigrationReloadOldReceipt,
     retainedRollbackFiles,
     verifyRetainedLegacyRuntime,
 } from "./service-migration-retained-runtime.js";
@@ -20,9 +23,16 @@ import {
     blockServiceMigrationWorkspace,
 } from "./service-migration-workspace.js";
 import { inspectMigrationManager, releaseMigrationManager } from "./service-migration-manager.js";
+import { canonicalServiceJson } from "./service-operation-storage.js";
+import { parseServiceMigrationStartOldReceipt } from "./service-migration-record.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
-import type { ServiceMigrationBackup, ServiceMigrationPort } from "./service-migration-types.js";
+import type {
+    ServiceMigrationBackup,
+    ServiceMigrationPort,
+    ServiceMigrationReloadOldReceipt,
+    ServiceMigrationStartOldReceipt,
+} from "./service-migration-types.js";
 
 /**
  * 热迁移端口，只能由持有服务锁的协调器调用。冷恢复不能重建本对象后重放。
@@ -62,6 +72,9 @@ export function createServiceMigrationPort(options: {
     let startRequested = false;
     let managerId: string | null = null;
     let targetProcess: { pid: number; identity: string } | null = null;
+    let lastReloadOldReceipt: ServiceMigrationReloadOldReceipt | null = null;
+    let reloadOldStartAvailable = false;
+    let lastStartOldReceipt: ServiceMigrationStartOldReceipt | null = null;
     const now = options.now ?? Date.now;
     const sleep =
         options.sleep ??
@@ -157,6 +170,7 @@ export function createServiceMigrationPort(options: {
         async startTarget(input) {
             bound(input);
             targetValid();
+            const stopped = await platform.inspect();
             if (
                 !backup.previousRunning ||
                 !files.matchesTarget() ||
@@ -164,11 +178,19 @@ export function createServiceMigrationPort(options: {
                 !(await quiet())
             )
                 throw fail();
+            const dispatchState = await platform.inspect();
+            if (!isDeepStrictEqual(stopped, dispatchState)) throw fail();
             startRequested = true;
-            await platform.start();
-            const state = await platform.inspect();
-            if (state.processId && state.identity)
-                targetProcess = { pid: state.processId, identity: state.identity };
+            const state = await platform.start(dispatchState);
+            const observed = await platform.inspect();
+            if (
+                !isDeepStrictEqual(state, observed) ||
+                !state.running ||
+                state.processId === null ||
+                state.identity === null
+            )
+                throw fail();
+            targetProcess = { pid: state.processId, identity: state.identity };
         },
         async verifyTarget(input) {
             bound(input);
@@ -264,6 +286,10 @@ export function createServiceMigrationPort(options: {
                 !(await quiet())
             )
                 throw fail();
+            // 新一轮文件效果开始后，旧定义收据无论成功与否都不得再次授权启动。
+            lastReloadOldReceipt = null;
+            reloadOldStartAvailable = false;
+            lastStartOldReceipt = null;
             if (workspacePrepared) {
                 const release = acquireControlWorkspace(workspace);
                 try {
@@ -273,31 +299,190 @@ export function createServiceMigrationPort(options: {
                 }
             }
             files.restore();
-            await platform.reload(backup.previousEnabled);
         },
-        async startOriginal(input) {
+        async reloadOriginal(input, backupDigest) {
             bound(input);
             await retainedValid();
-            if (!backup.previousRunning || !files.matchesRestored() || !(await quiet()))
+            if (
+                typeof backupDigest !== "string" ||
+                !/^[0-9a-f]{64}$/.test(backupDigest) ||
+                backupDigest !==
+                    createHash("sha256").update(canonicalServiceJson(backup)).digest("hex") ||
+                !files.matchesRestored() ||
+                !(await quiet())
+            )
                 throw fail();
-            await platform.start();
+            const rollback = createServiceMigrationRollbackContract(backup, options.host);
+            const definition = rollback.contract.files.find(
+                file => file.state === "file" && file.role === "definition",
+            );
+            if (!definition) throw fail();
+            // reload 的派发结果可能未知；先撤销旧收据，禁止失败后复用它启动。
+            lastReloadOldReceipt = null;
+            reloadOldStartAvailable = false;
+            lastStartOldReceipt = null;
+            const state = await platform.reload(backup.previousEnabled);
+            const observed = await platform.inspect();
+            const loaded = rollback.contract.platform === "linux";
+            if (
+                !isDeepStrictEqual(state, observed) ||
+                state.state !== "stopped" ||
+                state.running ||
+                !state.quiescent ||
+                state.processId !== null ||
+                state.identity !== null ||
+                state.enabled !== backup.previousEnabled ||
+                state.loaded !== loaded ||
+                state.definitionPath !== definition.path ||
+                !files.matchesRestored()
+            )
+                throw fail();
+            const receipt: ServiceMigrationReloadOldReceipt = {
+                schemaVersion: 1,
+                backupDigest,
+                rollbackContractDigest: rollback.digest,
+                enabled: state.enabled,
+                loaded: state.loaded,
+                definitionPath: state.definitionPath,
+            };
+            // 复用严格闭合摘要器校验字段后再保存在本次热事务内存中。
+            digestServiceMigrationReloadOldReceipt(receipt);
+            lastReloadOldReceipt = structuredClone(receipt);
+            reloadOldStartAvailable = true;
+            return structuredClone(receipt);
         },
-        async verifyRestored(input) {
+        async startOriginal(input, reloadReceipt) {
             bound(input);
             await retainedValid();
-            if (!files.matchesRestored()) return false;
-            const state = await platform.inspect();
+            if (!reloadReceipt) throw fail();
+            const reloadReceiptDigest = digestServiceMigrationReloadOldReceipt(reloadReceipt);
+            const rollback = createServiceMigrationRollbackContract(backup, options.host);
+            const expectedLoaded = rollback.contract.platform === "linux";
+            const definition = rollback.contract.files.find(
+                file => file.state === "file" && file.role === "definition",
+            );
+            if (
+                !backup.previousRunning ||
+                !definition ||
+                reloadReceipt.backupDigest !==
+                    createHash("sha256").update(canonicalServiceJson(backup)).digest("hex") ||
+                reloadReceipt.rollbackContractDigest !== rollback.digest ||
+                reloadReceipt.enabled !== backup.previousEnabled ||
+                reloadReceipt.loaded !== expectedLoaded ||
+                reloadReceipt.definitionPath !== definition.path ||
+                !files.matchesRestored()
+            )
+                throw fail();
+            const stopped = await platform.inspect();
+            const matchesReloadReceipt = (state: ServicePlatformState) =>
+                state.state === "stopped" &&
+                !state.running &&
+                state.quiescent &&
+                state.processId === null &&
+                state.identity === null &&
+                state.enabled === reloadReceipt.enabled &&
+                state.loaded === reloadReceipt.loaded &&
+                state.definitionPath === reloadReceipt.definitionPath;
+            if (
+                !lastReloadOldReceipt ||
+                !reloadOldStartAvailable ||
+                !isDeepStrictEqual(reloadReceipt, lastReloadOldReceipt) ||
+                !matchesReloadReceipt(stopped) ||
+                !(await quiet()) ||
+                !files.matchesRestored()
+            )
+                throw fail();
+            const dispatchState = await platform.inspect();
+            if (!matchesReloadReceipt(dispatchState) || !isDeepStrictEqual(stopped, dispatchState))
+                throw fail();
+            // 启动派发后结果即可能未知；收据只能消费一次，禁止热路径盲重试。
+            reloadOldStartAvailable = false;
+            lastStartOldReceipt = null;
+            const state = await platform.start(dispatchState);
+            const observed = await platform.inspect();
+            if (
+                !isDeepStrictEqual(state, observed) ||
+                state.state !== "running" ||
+                !state.running ||
+                !state.loaded ||
+                state.processId === null ||
+                state.identity === null ||
+                state.enabled !== reloadReceipt.enabled ||
+                state.definitionPath !== reloadReceipt.definitionPath ||
+                state.quiescent ||
+                !files.matchesRestored()
+            )
+                throw fail();
+            const receipt = parseServiceMigrationStartOldReceipt({
+                schemaVersion: 1,
+                reloadReceiptDigest,
+                processId: state.processId,
+                identity: state.identity,
+            });
+            lastStartOldReceipt = structuredClone(receipt);
+            return structuredClone(receipt);
+        },
+        async verifyRestored(input, reloadReceipt, startReceipt) {
+            bound(input);
+            await retainedValid();
+            reloadReceipt ??= lastReloadOldReceipt ?? undefined;
+            startReceipt ??= lastStartOldReceipt ?? undefined;
+            if (!files.matchesRestored() || !reloadReceipt) return false;
+            const rollback = createServiceMigrationRollbackContract(backup, options.host);
+            const definition = rollback.contract.files.find(
+                file => file.state === "file" && file.role === "definition",
+            );
+            if (
+                !definition ||
+                reloadReceipt.backupDigest !==
+                    createHash("sha256").update(canonicalServiceJson(backup)).digest("hex") ||
+                reloadReceipt.rollbackContractDigest !== rollback.digest ||
+                reloadReceipt.enabled !== backup.previousEnabled ||
+                reloadReceipt.loaded !== (rollback.contract.platform === "linux") ||
+                reloadReceipt.definitionPath !== definition.path
+            )
+                return false;
+            const first = await platform.inspect();
+            const second = await platform.inspect();
+            if (!isDeepStrictEqual(first, second)) return false;
+            const common =
+                first.enabled === reloadReceipt.enabled &&
+                first.definitionPath === reloadReceipt.definitionPath;
+            if (!common) return false;
+            if (backup.previousRunning) {
+                if (
+                    !startReceipt ||
+                    startReceipt.reloadReceiptDigest !==
+                        digestServiceMigrationReloadOldReceipt(reloadReceipt)
+                )
+                    return false;
+                return (
+                    first.state === "running" &&
+                    first.running &&
+                    first.loaded &&
+                    !first.quiescent &&
+                    first.processId === startReceipt.processId &&
+                    first.identity === startReceipt.identity &&
+                    files.matchesRestored()
+                );
+            }
             return (
-                state.enabled === backup.previousEnabled &&
-                (backup.previousRunning
-                    ? state.state === "running" && state.running && state.processId !== null
-                    : state.state === "stopped" && (await quiet()))
+                !startReceipt &&
+                first.state === "stopped" &&
+                !first.running &&
+                first.quiescent &&
+                first.processId === null &&
+                first.identity === null &&
+                first.loaded === reloadReceipt.loaded &&
+                (await quiet()) &&
+                files.matchesRestored()
             );
         },
     };
     const verifyTarget = port.verifyTarget;
     const verifyRestored = port.verifyRestored;
     port.verifyTarget = input => ready(() => verifyTarget(input));
-    port.verifyRestored = input => ready(() => verifyRestored(input));
+    port.verifyRestored = (input, reloadReceipt, startReceipt) =>
+        ready(() => verifyRestored(input, reloadReceipt, startReceipt));
     return port;
 }

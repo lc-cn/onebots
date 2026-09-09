@@ -370,4 +370,49 @@ describe("systemd服务平台边界", () => {
         await expect(f.platform.start()).rejects.toThrow("无法安全确认");
         expect(f.exec.mock.calls.filter(call => call[1].includes("start"))).toHaveLength(1);
     });
+    it("new start binds an activating instance before it becomes acceptable", async () => {
+        const f = fixture();
+        f.state({
+            ActiveState: "inactive",
+            SubState: "dead",
+            MainPID: "0",
+            ControlGroup: "",
+            InvocationID: "",
+        });
+        f.events("populated 0\n");
+        const original = f.host.exec;
+        let shows = 0;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args.includes("start"))
+                f.state({
+                    ActiveState: "activating",
+                    SubState: "start",
+                    MainPID: "0",
+                    InvocationID: "a".repeat(32),
+                });
+            if (args.includes("show") && ++shows === 3)
+                f.state({ InvocationID: "b".repeat(32), MainPID: "456" });
+            return output;
+        };
+
+        await expect(f.platform.start()).rejects.toThrow("无法安全确认");
+        expect(f.exec.mock.calls.filter(call => call[1].includes("start"))).toHaveLength(1);
+    });
+    it("expected initial state mismatch rejects before start", async () => {
+        const f = fixture();
+        f.state({
+            ActiveState: "inactive",
+            SubState: "dead",
+            MainPID: "0",
+            ControlGroup: "",
+            InvocationID: "",
+        });
+        f.events("populated 0\n");
+        const expected = await f.platform.inspect();
+        f.state({ ActiveState: "active", SubState: "running", MainPID: "123" });
+
+        await expect(f.platform.start(expected)).rejects.toThrow("无法安全确认");
+        expect(f.exec.mock.calls.some(call => call[1].includes("start"))).toBe(false);
+    });
 });
