@@ -24,6 +24,16 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	switch args[0] {
+	case "legacy-scm-inspect":
+		if len(args) != 1 {
+			fmt.Fprintln(stderr, "legacy-scm-inspect accepts no options or service name")
+			return 2
+		}
+		if err := runLegacySCMInspect(stdout); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	case "service-run", "console-run":
 		config, err := parseRunConfig(args[0], args[1:], stderr)
 		if err != nil {
@@ -106,7 +116,7 @@ func parseRunConfig(command string, args []string, output io.Writer) (Config, er
 }
 
 func printUsage(output io.Writer) {
-	fmt.Fprintln(output, "usage: onebots-windows-host <service-run|console-run|status|scm-control> [options]")
+	fmt.Fprintln(output, "usage: onebots-windows-host <service-run|console-run|status|scm-control|legacy-scm-inspect> [options]")
 }
 
 func Main() {

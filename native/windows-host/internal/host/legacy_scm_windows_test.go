@@ -1,0 +1,85 @@
+//go:build windows
+
+package host
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/svc"
+	"golang.org/x/sys/windows/svc/mgr"
+)
+
+type legacyReaderFixture struct {
+	config mgr.Config
+	status svc.Status
+	reads  int
+	change bool
+}
+
+func (f *legacyReaderFixture) Config() (mgr.Config, error) {
+	f.reads++
+	value := f.config
+	if f.change && f.reads > 1 {
+		value.BinaryPathName = `C:\foreign.exe`
+	}
+	return value, nil
+}
+func (f *legacyReaderFixture) Query() (svc.Status, error) { return f.status, nil }
+func legacyFixture() *legacyReaderFixture {
+	return &legacyReaderFixture{config: mgr.Config{ServiceType: windows.SERVICE_WIN32_OWN_PROCESS,
+		BinaryPathName: `"C:\old\daemon\onebotsgateway.exe"`, ServiceStartName: "LocalSystem", Password: "must-never-export"},
+		status: svc.Status{State: svc.Running, ProcessId: 123}}
+}
+func legacySecurity() (string, error) { return "O:SYG:SYD:(A;;GA;;;SY)", nil }
+func legacyProcess(pid uint32) (*legacySCMProcess, error) {
+	return &legacySCMProcess{PID: pid, Created: "123456789", Image: `C:\old\daemon\onebotsgateway.exe`}, nil
+}
+func TestLegacyInspectionStableIdentityWithoutRollbackClaim(t *testing.T) {
+	value, err := stableLegacySCMInspection(legacyFixture(), legacySecurity, legacyProcess)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value.ServiceName != "onebotsgateway.exe" || value.RestorationReady || value.Process.PID != 123 {
+		t.Fatal(value)
+	}
+	bytes, err := json.Marshal(value)
+	if err != nil || strings.Contains(string(bytes), "must-never-export") || strings.Contains(string(bytes), "Password") {
+		t.Fatal("password exposed")
+	}
+}
+func TestLegacyInspectionRejectsChangedConfigOrProcessIdentity(t *testing.T) {
+	f := legacyFixture()
+	f.change = true
+	if _, err := stableLegacySCMInspection(f, legacySecurity, legacyProcess); err == nil {
+		t.Fatal("accepted drift")
+	}
+	count := 0
+	if _, err := stableLegacySCMInspection(legacyFixture(), legacySecurity, func(pid uint32) (*legacySCMProcess, error) {
+		count++
+		p, _ := legacyProcess(pid)
+		if count > 1 {
+			p.Created = "new-process"
+		}
+		return p, nil
+	}); err == nil {
+		t.Fatal("accepted PID reuse")
+	}
+}
+func TestLegacyInspectionRejectsTransientOrUnownedStates(t *testing.T) {
+	for _, status := range []svc.Status{{State: svc.StartPending}, {State: svc.Running}, {State: svc.Stopped, ProcessId: 123}} {
+		f := legacyFixture()
+		f.status = status
+		if _, err := stableLegacySCMInspection(f, legacySecurity, legacyProcess); err == nil {
+			t.Fatal("accepted ambiguous state")
+		}
+	}
+	f := legacyFixture()
+	f.status = svc.Status{State: svc.Stopped}
+	value, err := stableLegacySCMInspection(f, legacySecurity, legacyProcess)
+	if err != nil || value.Process != nil || value.RestorationReady {
+		t.Fatal("stopped is not descendant exit evidence")
+	}
+}

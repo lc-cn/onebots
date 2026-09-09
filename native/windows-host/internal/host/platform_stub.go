@@ -16,3 +16,4 @@ func runConsole(Config) error { return errWindowsOnly }
 
 func queryStatus(string, time.Duration, io.Writer) error { return errWindowsOnly }
 func runSCMControl(string, io.Writer) error              { return errWindowsOnly }
+func runLegacySCMInspect(io.Writer) error                { return errWindowsOnly }
