@@ -160,7 +160,7 @@ export async function verifyFrameworkSend(processHandle, evidence, options) {
         body = {
             message_scene: "friend",
             peer_id: protocolTarget,
-            limit: 1_000,
+            limit: 30,
         };
     }
     assertRunning(processHandle);
