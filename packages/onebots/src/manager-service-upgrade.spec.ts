@@ -8,6 +8,8 @@ import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 import { prepareServiceMigrationWorkspace, releaseServiceMigrationPending } from "./service-migration-workspace.js";
 import { prepareServiceProcessOwnershipSeed } from "./service-migration-processes.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
+import * as workspaceLocks from "./control/workspace.js";
+import * as serviceLocks from "./service-migration-lock.js";
 import { readManagerUpgradePending } from "./service-upgrade-workspace.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
@@ -124,4 +126,42 @@ it("停止结果未知时持久记录中断，释放所有锁且拒绝再次派�
     acquireServiceMigrationLock(f.files.stateDir)();
     await expect(f.run()).rejects.toThrow();
     expect(f.effects).toEqual(["quiesce"]);
+});
+
+it.each([false, true])("释放错误不遗漏锁，并保持事务失败=%s 的语义", async transactionFails => {
+    const f = fixture();
+    const realArtifactLock = workspaceLocks.acquireControlWorkspace;
+    const realServiceLock = serviceLocks.acquireServiceMigrationLock;
+    const released: string[] = [];
+    vi.spyOn(workspaceLocks, "acquireControlWorkspace").mockImplementation(root => {
+        const release = realArtifactLock(root);
+        if (!f.homes.includes(root)) return release;
+        return () => {
+            release();
+            released.push(root);
+            throw new Error("private artifact database path and secret");
+        };
+    });
+    vi.spyOn(serviceLocks, "acquireServiceMigrationLock").mockImplementation(root => {
+        const release = realServiceLock(root);
+        return () => {
+            release();
+            released.push("service");
+            throw new Error("private service database path and secret");
+        };
+    });
+    if (transactionFails) f.platform.quiesce = async () => {
+        f.effects.push("quiesce");
+        throw new Error("private OS error");
+    };
+    await expect(f.run()).rejects.toThrow(transactionFails
+        ? "管理服务升级尚未确认，已停止派发；请对账原操作，禁止重试安装或自动回滚"
+        : "管理服务升级已完成，但锁释放未确认；请核对原操作结果，禁止重复升级");
+    expect(released).toEqual([...f.homes].sort().reverse().concat("service"));
+    expect(f.journal().read("upgrade")).toMatchObject(transactionFails
+        ? { phase: "stopping", status: "interrupted", recoveryRequired: true }
+        : { phase: "completed", status: "succeeded", recoveryRequired: false });
+    // 用真实 SQLite 再次取得所有锁，证明不是仅调用了 mock 回调。
+    for (const home of f.homes) realArtifactLock(home)();
+    realServiceLock(f.files.stateDir)();
 });

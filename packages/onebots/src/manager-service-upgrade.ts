@@ -51,6 +51,7 @@ export async function upgradeManagerService(
     const files = getServiceFiles(scope, host);
     const releaseService = acquireServiceMigrationLock(files.stateDir);
     const releases: (() => void)[] = [];
+    let operationFailed = false;
     try {
         if (inspectServiceMigrationRecovery(files.stateDir)) throw failure();
         const journal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
@@ -105,15 +106,17 @@ export async function upgradeManagerService(
                             processId: initial.processId, identity: initial.identity } } },
             }, journal, createManagerServiceUpgradeNativePort(host, { ...dependencies, platform }));
         } finally { captured.dispose(); }
+    } catch (error) {
+        operationFailed = true;
+        throw error;
     } finally {
-        try {
-            const releaseArtifacts = () => {
-                const release = releases.pop();
-                if (!release) return;
-                try { release(); } finally { releaseArtifacts(); }
-            };
-            releaseArtifacts();
+        let releaseFailed = false;
+        // 单个释放失败不能跳过其余锁，也不能覆盖原事务的中断语义。
+        for (const release of [...releases.reverse(), releaseService]) {
+            try { release(); }
+            catch { releaseFailed = true; /* 统一报告，避免暴露锁数据库路径和底层错误。 */ }
         }
-        finally { releaseService(); }
+        if (releaseFailed && !operationFailed)
+            throw new Error("管理服务升级已完成，但锁释放未确认；请核对原操作结果，禁止重复升级");
     }
 }
