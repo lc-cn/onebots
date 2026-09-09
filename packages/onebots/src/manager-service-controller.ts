@@ -62,7 +62,7 @@ export async function controlManagerService(
     if (!Number.isFinite(timeout) || timeout < 1 || timeout > 120_000)
         throw new Error("管理服务验收期限无效");
     const files = getServiceFiles(scope, host);
-    const release = acquireServiceMigrationLock(files.stateDir);
+    const release = acquireServiceMigrationLock(files.stateDir, host);
     try {
         const metadata = readServiceMetadata(files.metadata);
         if (metadata.kind === "legacy") throw new Error("旧服务须先执行 onebots migrate");

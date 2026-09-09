@@ -24,6 +24,24 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	switch args[0] {
+	case "legacy-reboot-control", "legacy-reboot-receipt":
+		set := flag.NewFlagSet(args[0], flag.ContinueOnError)
+		set.SetOutput(stderr)
+		request := set.String("request", "", "base64url encoded closed legacy reboot request")
+		if err := set.Parse(args[1:]); err != nil || set.NArg() != 0 || *request == "" {
+			return 2
+		}
+		var err error
+		if args[0] == "legacy-reboot-control" {
+			err = runLegacyRebootControl(*request, stdout)
+		} else {
+			err = runLegacyRebootReceipt(*request)
+		}
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	case "legacy-scm-inspect":
 		if len(args) != 1 {
 			fmt.Fprintln(stderr, "legacy-scm-inspect accepts no options or service name")
@@ -116,7 +134,7 @@ func parseRunConfig(command string, args []string, output io.Writer) (Config, er
 }
 
 func printUsage(output io.Writer) {
-	fmt.Fprintln(output, "usage: onebots-windows-host <service-run|console-run|status|scm-control|legacy-scm-inspect> [options]")
+	fmt.Fprintln(output, "usage: onebots-windows-host <service-run|console-run|status|scm-control|legacy-scm-inspect|legacy-reboot-control> [options]")
 }
 
 func Main() {

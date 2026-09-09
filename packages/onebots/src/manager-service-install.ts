@@ -115,7 +115,7 @@ export async function installManagerServiceWhileLocked(
             const created = !exists(path.join(spec.workspace, ".control"));
             if (created) {
                 prepareServiceMigrationWorkspace(spec.workspace, record.id, "running");
-                const unlock = acquireControlWorkspace(spec.workspace);
+                const unlock = acquireControlWorkspace(spec.workspace, host);
                 try {
                     // Windows 的进程树身份由 SCM 宿主 Job Object 与受 ACL 保护的状态管道证明。
                     // 不写 POSIX PID 收据，避免把可复用 PID 当成 Windows 所有权依据。
@@ -133,7 +133,7 @@ export async function installManagerServiceWhileLocked(
             // 放开之后不可盲回退：另一个入口可能已开始使用新工作区。
             phase("releasing");
             if (created) {
-                const unlock = acquireControlWorkspace(spec.workspace);
+                const unlock = acquireControlWorkspace(spec.workspace, host);
                 try {
                     releaseServiceMigrationPending(spec.workspace, record.id);
                 } finally {

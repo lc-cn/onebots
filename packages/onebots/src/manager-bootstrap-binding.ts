@@ -14,7 +14,7 @@ export function managerBootstrapBindingDirectory(home: string, id: string): stri
         if (
             !stat.isDirectory() ||
             stat.isSymbolicLink() ||
-            (stat.mode & 0o7777) !== 0o700 ||
+            (process.platform !== "win32" && (stat.mode & 0o7777) !== 0o700) ||
             (process.getuid && stat.uid !== process.getuid())
         )
             throw new Error("初始安装绑定目录无效");
@@ -57,7 +57,7 @@ function cycleDirectory(home: string, id: string): string {
             !stat.isDirectory() ||
             stat.isSymbolicLink() ||
             fs.realpathSync(cycles) !== cycles ||
-            (stat.mode & 0o7777) !== 0o700 ||
+            (process.platform !== "win32" && (stat.mode & 0o7777) !== 0o700) ||
             (process.getuid && stat.uid !== process.getuid())
         )
             throw new Error("安装周期目录无效");

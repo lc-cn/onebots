@@ -63,6 +63,32 @@ describe("migration CLI command", () => {
             port: 7000,
         });
         expect(vi.mocked(migrateInstalledService).mock.calls[0][0]).not.toHaveProperty("adapters");
+        expect(vi.mocked(migrateInstalledService).mock.calls[0][2]).toEqual({
+            restart: undefined,
+        });
+    });
+    it("makes Windows reboot an explicit final command and forwards only the boolean", async () => {
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue({
+            ...legacy,
+            scope: "system",
+        });
+        vi.mocked(migrateInstalledService).mockResolvedValue({
+            id: "windows-1",
+            phase: "awaiting-restart",
+            status: "running",
+            recoveryRequired: false,
+            restorationReady: false,
+            rolledBack: false,
+        });
+        const prepared = await migrateServiceCommand({ system: true });
+        expect(prepared).toMatchObject({
+            exitCode: 0,
+            output: expect.stringContaining("onebots migrate --system --restart"),
+        });
+        await migrateServiceCommand({ system: true, restart: true });
+        expect(vi.mocked(migrateInstalledService).mock.calls.at(-1)?.[2]).toEqual({
+            restart: true,
+        });
     });
     it("missing/invalid legacy service does not call migration", async () => {
         const read = vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(null);

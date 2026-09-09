@@ -72,6 +72,27 @@ export async function uninstallManagerService(
     scope: ServiceScope,
     host: ServiceHost = createDefaultServiceHost(),
     dependencies: ManagerServiceUninstallDependencies = {},
+) {
+    return uninstallManagerServiceImpl(scope, host, dependencies, false);
+}
+
+/** 迁移回退专用：调用方须持有对应 stateDir 的 service migration lock。 */
+export async function uninstallManagerServiceWhileLocked(
+    scope: ServiceScope,
+    host: ServiceHost,
+    operationId: string,
+    dependencies: ManagerServiceUninstallDependencies = {},
+): Promise<ManagerServiceRecord> {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(operationId)) throw new Error("管理服务卸载操作 ID 无效");
+    return uninstallManagerServiceImpl(scope, host, dependencies, true, operationId);
+}
+
+async function uninstallManagerServiceImpl(
+    scope: ServiceScope,
+    host: ServiceHost,
+    dependencies: ManagerServiceUninstallDependencies,
+    lockHeld: boolean,
+    operationId?: string,
 ): Promise<ManagerServiceRecord> {
     assertManagerServiceTransactionsSupported(host);
     if (
@@ -85,7 +106,7 @@ export async function uninstallManagerService(
     )
         throw new Error("系统级服务需要管理员权限");
     const files = getServiceFiles(scope, host);
-    const release = acquireServiceMigrationLock(files.stateDir);
+    const release = lockHeld ? () => undefined : acquireServiceMigrationLock(files.stateDir, host);
     let removal: ManagerServiceRemoval | undefined;
     let releaseWorkspace: (() => void) | undefined;
     try {
@@ -125,7 +146,7 @@ export async function uninstallManagerService(
         )
             throw new Error("系统服务状态或文件身份未确认，禁止卸载");
         const record = journal.prepare({
-            id: randomUUID(),
+            id: operationId ?? randomUUID(),
             action: "uninstall",
             desiredEnabled: false,
             spec,
@@ -189,7 +210,7 @@ export async function uninstallManagerService(
                 stopped.definitionPath !== files.definition
             )
                 throw new Error("服务停机或自动启动禁用状态未确认");
-            releaseWorkspace = acquireControlWorkspace(spec.workspace);
+            releaseWorkspace = acquireControlWorkspace(spec.workspace, host);
             if (!(await confirmStopped(spec.workspace)))
                 throw new Error("工作区仍存在未确认退出的进程");
             phase("removing-definition");

@@ -55,7 +55,7 @@ export function captureInstalledManagerCandidate(
         spec.workingDirectory,
     ];
     const identities = directories.map(directory => privateDirectory(directory, host));
-    const unlock = acquireControlWorkspace(home);
+    const unlock = acquireControlWorkspace(home, host);
     const held: ReturnType<typeof captureBinding>[] = [];
     let disposed = false;
     const dispose = () => {

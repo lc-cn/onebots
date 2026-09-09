@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { uninstallManagerService } from "./manager-service-uninstall.js";
+import {
+    uninstallManagerService,
+    uninstallManagerServiceWhileLocked,
+} from "./manager-service-uninstall.js";
 import { getServiceFiles } from "./service-files.js";
 import { renderInstalledManagerService } from "./manager-service-definition.js";
 import { FileManagerServiceJournal } from "./manager-service-journal.js";
@@ -15,6 +18,7 @@ import { allocateConfigurationVerification } from "./configuration/configuration
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
+import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 const roots: string[] = [];
 afterEach(() => {
     vi.restoreAllMocks();
@@ -147,6 +151,28 @@ function fixture(running = false) {
     };
 }
 describe("manager uninstall persistent transaction", () => {
+    it("uses the migration caller's existing service lock without releasing it", async () => {
+        const test = fixture();
+        const release = acquireServiceMigrationLock(test.files.stateDir);
+        try {
+            const result = await uninstallManagerServiceWhileLocked(
+                "user",
+                test.host,
+                "migration-rollback",
+                {
+                    platform: test.platform,
+                    unregister: test.unregister,
+                },
+            );
+            expect(result).toMatchObject({ status: "succeeded", recoveryRequired: false });
+            expect(result.id).toBe("migration-rollback");
+        } finally {
+            release();
+        }
+        const reacquired = acquireServiceMigrationLock(test.files.stateDir);
+        reacquired();
+    });
+
     it.each(["failed", "transitioning"] as const)(
         "refuses deletion when quiesce leaves OS state %s despite quiet process flags",
         async state => {

@@ -59,6 +59,24 @@ export async function bootstrapManagerService(
     dependencies: ManagerBootstrapDependencies,
     host: ServiceHost = createDefaultServiceHost(),
 ) {
+    return bootstrapManagerServiceImpl(request, dependencies, host, false);
+}
+
+/** 迁移事务专用：调用方须持有对应 stateDir 的 service migration lock。 */
+export async function bootstrapManagerServiceWhileLocked(
+    request: ManagerBootstrapRequest,
+    dependencies: ManagerBootstrapDependencies,
+    host: ServiceHost,
+) {
+    return bootstrapManagerServiceImpl(request, dependencies, host, true);
+}
+
+async function bootstrapManagerServiceImpl(
+    request: ManagerBootstrapRequest,
+    dependencies: ManagerBootstrapDependencies,
+    host: ServiceHost,
+    lockHeld: boolean,
+) {
     assertManagerServiceTransactionsSupported(host);
     closedServiceObject(request, ["service", ...(Object.hasOwn(request, "id") ? ["id"] : [])]);
     closedServiceObject(request.service, [
@@ -93,7 +111,9 @@ export async function bootstrapManagerService(
         // Windows 空白工作区与服务状态使用同一最小 ACL；已存在但边界不同的目录拒绝接管。
         secureWindowsServiceDirectory(host, template.workspace);
     }
-    const releaseService = acquireServiceMigrationLock(files.stateDir);
+    const releaseService = lockHeld
+        ? () => undefined
+        : acquireServiceMigrationLock(files.stateDir, host);
     let releaseArtifacts: (() => void) | undefined;
     let installer: ManagerCandidateInstaller | undefined;
     let installerAbort: AbortController | undefined;
@@ -102,8 +122,6 @@ export async function bootstrapManagerService(
     let primaryError: unknown;
     try {
         if (inspectServiceMigrationRecovery(files.stateDir)) throw failure();
-        const id = request.id ?? selectManagerBootstrapCycle(template.scope, host);
-        operationId = id;
         const home = path.join(files.stateDir, "manager-artifacts");
         if (
             template.workspace === home ||
@@ -122,9 +140,11 @@ export async function bootstrapManagerService(
             fs.realpathSync(home) !== home
         )
             throw failure();
+        const id = request.id ?? selectManagerBootstrapCycle(template.scope, host);
+        operationId = id;
         if (host.platform === "win32")
             secureWindowsServiceDirectory(host, path.join(home, ".control"));
-        releaseArtifacts = acquireControlWorkspace(home);
+        releaseArtifacts = acquireControlWorkspace(home, host);
         const frozen = await freezeGenerationArtifacts(
             dependencies.artifacts,
             path.join(home, "artifacts"),

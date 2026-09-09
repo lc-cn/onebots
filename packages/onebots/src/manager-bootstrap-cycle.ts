@@ -10,6 +10,7 @@ import { readServiceMetadata } from "./service-metadata.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServiceScope } from "./service-definition.js";
+import { inspectWindowsServiceDirectorySecurity } from "./windows-service-security.js";
 const failure = () => new Error("安装周期历史不完整或有待恢复操作，禁止猜测新的安装周期");
 
 /** 服务锁内沿完整生命周期选择；不用时间戳排序，不因文件缺失独自推断已卸载。 */
@@ -27,10 +28,11 @@ export function selectManagerBootstrapCycle(scope: ServiceScope, host: ServiceHo
             !stat.isDirectory() ||
             stat.isSymbolicLink() ||
             fs.realpathSync(home) !== home ||
-            (stat.mode & 0o7777) !== 0o700 ||
-            (process.getuid && stat.uid !== process.getuid())
+            (host.platform !== "win32" && (stat.mode & 0o7777) !== 0o700) ||
+            (host.platform !== "win32" && process.getuid && stat.uid !== process.getuid())
         )
             throw failure();
+        if (host.platform === "win32") inspectWindowsServiceDirectorySecurity(host, home);
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }

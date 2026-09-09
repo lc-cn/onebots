@@ -5,6 +5,8 @@ import {
 } from "../service-migration-recovery.js";
 import { rollbackManagerServiceUpgrade } from "../manager-service-upgrade-rollback.js";
 import type { CommandResult } from "./command-application.js";
+import { createDefaultServiceHost } from "../service-host.js";
+import { rollbackWindowsServiceMigration } from "../service-migration-windows.js";
 
 export interface ManagerServiceRecoveryOptions {
     operation: string;
@@ -68,6 +70,22 @@ export async function managerServiceRecoveryCommand(
             };
         }
         if (options.rollbackMigration) {
+            const host = createDefaultServiceHost();
+            if (host.platform === "win32") {
+                if (!options.system) throw new Error();
+                const record = await rollbackWindowsServiceMigration(options.operation, host);
+                if (
+                    record.phase !== "rolled-back" ||
+                    record.status !== "failed" ||
+                    record.recoveryRequired ||
+                    !record.rolledBack
+                )
+                    throw new Error();
+                return {
+                    exitCode: 0,
+                    output: `操作 ${record.id}：已恢复并核验 Windows 旧服务。\n重启收据 helper 已删除，旧 SCM 启动类型与原运行意图均已恢复。`,
+                };
+            }
             const record = await rollbackStoppedServiceMigration(
                 options.operation,
                 options.system ? "system" : "user",

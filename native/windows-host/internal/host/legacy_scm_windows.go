@@ -8,57 +8,12 @@ import (
 	"io"
 	"reflect"
 	"strconv"
-	"strings"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-// Historical node-windows/WinSW service ID. Never supplied by a caller.
-const legacySystemServiceName = "onebotsgateway.exe"
-
-// SCM cannot return account passwords. Never treat virtual/domain/gMSA identities
-// as recreatable registrations merely because their current process can be read.
-func restorableLegacyAccount(account string) bool {
-	switch strings.ToLower(account) {
-	case "localsystem", `nt authority\localservice`, `nt authority\networkservice`:
-		return true
-	default:
-		return false
-	}
-}
-
-type legacySCMConfiguration struct {
-	ServiceType      uint32   `json:"serviceType"`
-	StartType        uint32   `json:"startType"`
-	ErrorControl     uint32   `json:"errorControl"`
-	BinaryPath       string   `json:"binaryPath"`
-	LoadOrderGroup   string   `json:"loadOrderGroup"`
-	TagID            uint32   `json:"tagId"`
-	Dependencies     []string `json:"dependencies"`
-	Account          string   `json:"account"`
-	DisplayName      string   `json:"displayName"`
-	Description      string   `json:"description"`
-	SIDType          uint32   `json:"sidType"`
-	DelayedAutoStart bool     `json:"delayedAutoStart"`
-}
-type legacySCMProcess struct {
-	PID     uint32 `json:"pid"`
-	Created string `json:"created"`
-	Image   string `json:"image"`
-}
-type legacySCMInspection struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	ServiceName   string `json:"serviceName"`
-	Loaded        bool   `json:"loaded"`
-	// Inspection never proves all descendants exited or that rollback is ready.
-	RestorationReady bool                    `json:"restorationReady"`
-	State            string                  `json:"state"`
-	Configuration    *legacySCMConfiguration `json:"configuration"`
-	Security         string                  `json:"security"`
-	Process          *legacySCMProcess       `json:"process"`
-}
 type legacySCMReader interface {
 	Config() (mgr.Config, error)
 	Query() (svc.Status, error)

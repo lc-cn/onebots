@@ -15,13 +15,16 @@ import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import type { ServicePlatformState } from "./service-platform.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
+import { migrateInstalledWindowsService } from "./service-migration-windows.js";
 
 /** 实际旧服务迁移入口；保留旧工件、准备独立管理候选后切换，不更换业务工作区。 */
 export async function migrateInstalledService(
     input: ManagerServiceSpec,
     host: ServiceHost = createDefaultServiceHost(),
+    options: { restart?: boolean } = {},
 ) {
     const target = parseManagerServiceSpec(input);
+    if (host.platform === "win32") return migrateInstalledWindowsService(target, host, options);
     if (!["linux", "darwin"].includes(host.platform)) throw new Error("此系统尚未通过服务迁移验收");
     const paths = getServiceFiles(target.scope, host);
     const platform =

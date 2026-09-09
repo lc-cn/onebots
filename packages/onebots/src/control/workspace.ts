@@ -5,6 +5,12 @@ import { acquireExclusiveFileLock } from "../exclusive-file-lock.js";
 import yaml from "js-yaml";
 import { getConfiguredPluginSelection } from "../runtime-plugin-selection.js";
 import packageMetadata from "../../package.json" with { type: "json" };
+import type { ServiceHost } from "../service-host.js";
+import {
+    inspectWindowsServiceDirectorySecurity,
+    inspectWindowsServiceFileSecurity,
+    secureWindowsServiceFile,
+} from "../windows-service-security.js";
 
 export function controlDirectory(root: string): string {
     return path.join(path.resolve(root), ".control");
@@ -25,17 +31,25 @@ export function controlSocket(root: string): string {
  * 只支持提供可靠 SQLite 文件锁的本地卷，不支持 NFS/多主机共享工作区。
  * 专用数据库长期保持写事务，崩溃由 OS 释放锁；不得删除或替换数据库文件。
  */
-export function acquireControlWorkspace(root: string): () => void {
+export function acquireControlWorkspace(root: string, host?: ServiceHost): () => void {
     fs.mkdirSync(path.resolve(root), { recursive: true, mode: 0o700 });
     const directory = controlDirectory(fs.realpathSync(root));
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
     if (fs.lstatSync(directory).isSymbolicLink()) throw new Error("管理服务目录不能是符号链接");
-    fs.chmodSync(directory, 0o700);
+    const windows = host?.platform === "win32";
+    if (windows) inspectWindowsServiceDirectorySecurity(host, directory);
+    else fs.chmodSync(directory, 0o700);
     return acquireExclusiveFileLock(path.join(directory, "manager-lock.sqlite"), {
         busyMessage: "此工作区已有管理服务，禁止重复启动",
         invalidMessage: "管理服务锁数据库必须是独立常规文件",
         unavailableMessage: "管理服务锁数据库无法使用，请检查本地卷与文件状态",
-        repairPermissions: true,
+        repairPermissions: !windows,
+        prepareSecurity: windows
+            ? (filename, created) => {
+                  if (created) secureWindowsServiceFile(host, filename);
+                  else inspectWindowsServiceFileSecurity(host, filename);
+              }
+            : undefined,
     });
 }
 

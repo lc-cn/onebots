@@ -13,7 +13,10 @@ export interface LegacyWindowsSystemFiles {
 }
 
 /** 仅历史证据路径，不创建 runner、安装 node-windows 或注册旧服务。 */
-export function legacyWindowsSystemFiles(spec: ServiceSpec, stateDirectory: string): LegacyWindowsSystemFiles {
+export function legacyWindowsSystemFiles(
+    spec: ServiceSpec,
+    stateDirectory: string,
+): LegacyWindowsSystemFiles {
     validate(spec, stateDirectory);
     const directory = path.win32.join(path.win32.dirname(spec.binPath), "daemon");
     return {
@@ -65,11 +68,28 @@ export function validateLegacyWindowsSystemXml(
             ["name", "onebots-gateway"],
             ["description", "OneBots Bridge Service"],
             ["executable", spec.nodePath],
-            ...["--harmony", wrapperPath, "--file", files.runner, "--scriptoptions=", "--log",
-                "onebots-gateway wrapper", "--grow", "0", "--wait", "5", "--maxrestarts", "-1",
-                "--abortonerror", "n", "--stopparentfirst", "undefined"].map(value =>
-                ["argument", value] as [string, string]),
-            ["logmode", "rotate"], ["logpath", stateDirectory], ["stoptimeout", "30sec"],
+            ...[
+                "--harmony",
+                wrapperPath,
+                "--file",
+                files.runner,
+                "--scriptoptions=",
+                "--log",
+                "onebots-gateway wrapper",
+                "--grow",
+                "0",
+                "--wait",
+                "5",
+                "--maxrestarts",
+                "-1",
+                "--abortonerror",
+                "n",
+                "--stopparentfirst",
+                "undefined",
+            ].map(value => ["argument", value] as [string, string]),
+            ["logmode", "rotate"],
+            ["logpath", stateDirectory],
+            ["stoptimeout", "30sec"],
             ["workingdirectory", spec.workingDirectory],
         ];
         return JSON.stringify(elements) === JSON.stringify(expected);
@@ -78,20 +98,54 @@ export function validateLegacyWindowsSystemXml(
     }
 }
 
+/** 从已知历史 WinSW 定义中提取固定第二个 argument，并再次用完整契约核验。 */
+export function legacyWindowsWrapperPath(
+    xml: string,
+    spec: ServiceSpec,
+    stateDirectory: string,
+): string {
+    const argumentsFound = [...xml.matchAll(/<argument>([^<]*)<\/argument>/gu)].map(match =>
+        decodeXml(match[1]),
+    );
+    const wrapper = argumentsFound[1];
+    if (
+        argumentsFound[0] !== "--harmony" ||
+        wrapper === null ||
+        wrapper === undefined ||
+        !validateLegacyWindowsSystemXml(xml, spec, stateDirectory, wrapper)
+    )
+        throw invalid();
+    return wrapper;
+}
+
 function absolute(value: string): void {
     // 禁止 drive-relative、UNC/设备命名空间、ADS 与含隐含归一化的路径。
-    if (typeof value !== "string" || !/^[A-Za-z]:\\/.test(value) ||
-        /[\u0000-\u001f\u007f]/.test(value) || value.slice(2).includes(":") ||
-        path.win32.normalize(value) !== value || value.split("\\").some(part => /[. ]$/.test(part)))
+    if (
+        typeof value !== "string" ||
+        !/^[A-Za-z]:\\/.test(value) ||
+        /[\u0000-\u001f\u007f]/.test(value) ||
+        value.slice(2).includes(":") ||
+        path.win32.normalize(value) !== value ||
+        value.split("\\").some(part => /[. ]$/.test(part))
+    )
         throw invalid();
 }
 function validate(spec: ServiceSpec, stateDirectory: string): void {
     if (spec.scope !== "system") throw invalid();
-    for (const value of [spec.binPath, spec.nodePath, spec.configPath, spec.workingDirectory, stateDirectory])
+    for (const value of [
+        spec.binPath,
+        spec.nodePath,
+        spec.configPath,
+        spec.workingDirectory,
+        stateDirectory,
+    ])
         absolute(value);
     for (const list of [spec.adapters, spec.protocols, spec.applications ?? []]) {
-        if (!Array.isArray(list) || list.some(value => typeof value !== "string" ||
-            /[\u0000-\u001f\u007f]/.test(value))) throw invalid();
+        if (
+            !Array.isArray(list) ||
+            list.some(value => typeof value !== "string" || /[\u0000-\u001f\u007f]/.test(value))
+        )
+            throw invalid();
     }
 }
 function decodeXml(value: string): string | null {

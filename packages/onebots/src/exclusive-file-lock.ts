@@ -7,15 +7,19 @@ export interface ExclusiveFileLockOptions {
     unavailableMessage: string;
     /** 仅兼容已有工作区锁权限；新服务状态锁应拒绝不安全权限。 */
     repairPermissions?: boolean;
+    /** Windows 由原生 ACL 证明替代无意义的 POSIX mode 位；既有文件只允许只读核验。 */
+    prepareSecurity?: (filename: string, created: boolean) => void;
 }
 /** 单一SQLite写事务持锁；仅用于可靠本地卷。不得删除/替换锁文件解除占用。 */
 export function acquireExclusiveFileLock(
     filename: string,
     options: ExclusiveFileLockOptions,
 ): () => void {
+    let created = false;
     try {
         const descriptor = fs.openSync(filename, "wx", 0o600);
         fs.closeSync(descriptor);
+        created = true;
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
     }
@@ -25,9 +29,10 @@ export function acquireExclusiveFileLock(
         stat.isSymbolicLink() ||
         stat.nlink !== 1 ||
         (process.getuid && stat.uid !== process.getuid()) ||
-        (!options.repairPermissions && (stat.mode & 0o077) !== 0)
+        (!options.prepareSecurity && !options.repairPermissions && (stat.mode & 0o077) !== 0)
     )
         throw new Error(options.invalidMessage);
+    options.prepareSecurity?.(filename, created);
     if (options.repairPermissions) fs.chmodSync(filename, 0o600);
     let database: DatabaseSync | undefined;
     try {

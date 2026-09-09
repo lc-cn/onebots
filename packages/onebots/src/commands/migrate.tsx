@@ -7,6 +7,10 @@ export const description = "将已安装的旧服务迁移到常驻管理服务�
 export const options = z
     .object({
         system: z.boolean().describe(option({ description: "迁移系统级服务（默认用户级）" })),
+        restart: z
+            .boolean()
+            .default(false)
+            .describe(option({ description: "Windows 准备完成后请求一次完整系统重启" })),
         host: z
             .string()
             .default("127.0.0.1")

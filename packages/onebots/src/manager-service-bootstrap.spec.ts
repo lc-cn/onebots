@@ -4,8 +4,10 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     bootstrapManagerService,
+    bootstrapManagerServiceWhileLocked,
     type ManagerBootstrapRequest,
 } from "./manager-service-bootstrap.js";
+import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 import { reconcileManagerServiceOperation } from "./manager-service-recovery.js";
 import { getServiceFiles } from "./service-files.js";
 import { ServiceOperationStorage } from "./service-operation-storage.js";
@@ -22,11 +24,13 @@ const windowsSecurity = vi.hoisted(() => ({
     secureDirectory: vi.fn(),
     secureFile: vi.fn(),
     inspectDirectory: vi.fn(),
+    inspectFile: vi.fn(),
 }));
 vi.mock("./windows-service-security.js", () => ({
     secureWindowsServiceDirectory: windowsSecurity.secureDirectory,
     secureWindowsServiceFile: windowsSecurity.secureFile,
     inspectWindowsServiceDirectorySecurity: windowsSecurity.inspectDirectory,
+    inspectWindowsServiceFileSecurity: windowsSecurity.inspectFile,
 }));
 
 const mock = vi.hoisted(() => ({
@@ -169,6 +173,29 @@ function windowsFixture() {
     return { ...fixtureValue, host, files };
 }
 describe("immutable manager bootstrap binding", () => {
+    it("uses the caller-held service lock for an atomic migration bootstrap", async () => {
+        const f = fixture();
+        const release = acquireServiceMigrationLock(f.files.stateDir);
+        try {
+            const result = await bootstrapManagerServiceWhileLocked(
+                f.request,
+                f.dependencies,
+                f.host,
+            );
+            expect(result).toMatchObject({
+                id: "bootstrap-1",
+                phase: "completed",
+                status: "succeeded",
+            });
+        } finally {
+            release();
+        }
+        // The public entrypoint can immediately reacquire the lock and return the receipt.
+        await expect(
+            bootstrapManagerService(f.request, f.dependencies, f.host),
+        ).resolves.toMatchObject({ id: "bootstrap-1", status: "succeeded" });
+    });
+
     it("preserves the persisted Windows stage error when candidate cleanup also fails", async () => {
         const f = windowsFixture();
         mock.install.mockRejectedValueOnce(new Error("candidate timeout"));

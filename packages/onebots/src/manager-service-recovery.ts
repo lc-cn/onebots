@@ -132,7 +132,7 @@ export async function reconcileManagerServiceOperation(
     )
         throw failure();
     const files = getServiceFiles(scope, host);
-    const release = acquireServiceMigrationLock(files.stateDir);
+    const release = acquireServiceMigrationLock(files.stateDir, host);
     try {
         if (inspectServiceMigrationRecovery(files.stateDir)) throw failure();
         const journal = new FileManagerServiceJournal(
@@ -230,7 +230,7 @@ export async function reconcileManagerServiceOperation(
                 : undefined;
         let releaseWorkspace: (() => void) | undefined;
         try {
-            releaseWorkspace = acquireControlWorkspace(spec.workspace);
+            releaseWorkspace = acquireControlWorkspace(spec.workspace, host);
             const pending = readServiceMigrationPending(spec.workspace);
             const installMayHaveGate =
                 record.action === "install" &&
