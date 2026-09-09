@@ -1,4 +1,3 @@
-import { respondControlLogs } from "./logs-http.js";
 import { createControlLogWriter } from "./gateway-log.js";
 import {
     createManagerUpgradeRelease,
@@ -6,25 +5,20 @@ import {
 } from "./service-upgrade-release.js";
 import { managerUpgradeStatus } from "../service-upgrade-workspace.js";
 import { GenerationConfigurationVerifier } from "./generation-configuration.js";
-import { authorizeControlHttp } from "./auth-check.js";
 import { ControlSendService } from "./send-service.js";
-import { respondControlSend } from "./send-http.js";
 import { createHostVerification } from "./host-verification.js";
 import { ControlMessageDebugService } from "./message-debug-service.js";
 import { ControlMessageDebugHttp } from "./message-debug-http.js";
 import { ControlMcpService } from "./mcp-api.js";
-import { respondControlMcp } from "./mcp-http.js";
-import { serveControlWeb } from "./web-assets.js";
-import { createControlSnapshotResponder, gatewayDiagnosticStatus } from "./diagnostics.js";
+import { createControlSnapshotResponder } from "./diagnostics.js";
 import {
     claimServiceProcessOwnership,
     closeServiceProcessOwnership,
 } from "../service-migration-processes.js";
-import { handleControlAuthRequest } from "./auth-api.js";
-import { handleServiceMigrationRequest, serviceMigrationStatus } from "./service-migration-api.js";
+import { serviceMigrationStatus } from "./service-migration-api.js";
 import fs from "node:fs";
 import path from "node:path";
-import http, { type IncomingMessage, type ServerResponse } from "node:http";
+import http from "node:http";
 import type { Duplex } from "node:stream";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
@@ -36,7 +30,6 @@ import { GenerationActivationController } from "./generation-activation.js";
 import { GenerationStore } from "../installation/generation-store.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
 import { createHostInstallation } from "./host-installation.js";
-import { handleInstallationRequest, isInstallationPath } from "./installation-api.js";
 import { ConfigurationApplication } from "../configuration/configuration-application.js";
 import { ConfigurationRecoveryStore } from "../configuration/configuration-recovery-store.js";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
@@ -47,10 +40,9 @@ import {
     prepareGatewayWorkspace,
     gatewayProcessExists,
 } from "./workspace.js";
-import { proxyGatewayHttp, proxyGatewayUpgrade } from "./proxy.js";
-import { listen, readBody, jsonResponse as json } from "./http-utils.js";
+import { proxyGatewayUpgrade } from "./proxy.js";
+import { listen } from "./http-utils.js";
 import { ControlConfigurationService } from "./configuration-service.js";
-import { handleConfigurationRequest, isConfigurationPath } from "./configuration-api.js";
 import type { ControlHostOptions } from "./host-options.js";
 import packageMetadata from "../../package.json" with { type: "json" };
 import {
@@ -59,6 +51,7 @@ import {
 } from "../windows-manager-status-publisher.js";
 import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
 import { connectWindowsManagerRPC } from "../windows-manager-rpc.js";
+import { createControlRequestHandler } from "./host-http.js";
 export type { ControlHostOptions } from "./host-options.js";
 export async function startControlHost(options: ControlHostOptions) {
     if (
@@ -280,174 +273,38 @@ export async function startControlHost(options: ControlHostOptions) {
         forward: (instanceId, action) => driver.messageDebug(instanceId, action),
     });
     const messageDebugHttp = new ControlMessageDebugHttp(messageDebug, auth);
-    async function handle(request: IncomingMessage, response: ServerResponse, local: boolean) {
-        try {
-            const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
-            if (request.method === "GET" && ["/ready", "/healthz"].includes(pathname)) {
-                json(response, 200, {
-                    application: "onebots",
-                    version: packageMetadata.version,
-                    instance_id: id,
-                    ready: true,
-                });
-                return;
-            }
-            if (pathname.startsWith("/api/")) {
-                if (closed && request.method === "POST") {
-                    json(response, 503, { message: "管理服务正在关闭" });
-                    return;
-                }
-                if (request.method !== "GET" && request.method !== "POST") {
-                    json(response, 405, { message: "不支持此方法" });
-                    return;
-                }
-                if (
-                    !local &&
-                    request.headers.origin &&
-                    new URL(request.headers.origin).host !== request.headers.host
-                ) {
-                    json(response, 403, { message: "控制请求来源无效" });
-                    return;
-                }
-                const authentication = await handleControlAuthRequest(request, local, auth, mcp);
-                if (authentication) {
-                    json(response, authentication.status, authentication.body);
-                    return;
-                }
-                if (!local) {
-                    const checked = authorizeControlHttp(auth, request, response, authAvailable);
-                    if (checked.storageUnavailable) authAvailable = false;
-                    if (!checked.authorized) return;
-                }
-                const migration = await handleServiceMigrationRequest({
-                    workspace,
-                    ownershipAvailable,
-                    pathname,
-                    method: request.method,
-                    local,
-                    body: () => readBody(request),
-                    releaseUpgrade,
-                    upgradeIdentity,
-                });
-                if (migration) {
-                    json(response, migration.status, migration.body);
-                    return;
-                }
-                if (
-                    ["/api/control/status", "/api/control/diagnostics"].includes(pathname) &&
-                    request.method === "GET"
-                ) {
-                    const status = {
-                        schemaVersion: 1,
-                        manager: { id, version: packageMetadata.version, pid: process.pid },
-                        gateway: gatewayDiagnosticStatus(controller.status(), storageError),
-                        authAvailable,
-                        processOwnership: { available: ownershipAvailable },
-                        serviceMigration: serviceMigrationStatus(workspace),
-                        generation: lifecycle.status(),
-                        installationAvailable: Boolean(installation),
-                        configuration: {
-                            recoveryRequired:
-                                configurationStorageUnavailable ||
-                                Boolean(configurationApplication?.health().recoveryRequired),
-                        },
-                    };
-                    respondSnapshot(response, pathname, status, server.address());
-                    return;
-                }
-                if (await respondControlSend(sending, request, response, pathname, local, auth))
-                    return;
-                if (respondControlLogs(workspace, request, response, pathname, local, auth)) return;
-                if (await verification.handle(request, response, pathname, local)) return;
-                if (await messageDebugHttp.handle(request, response, pathname, local)) return;
-                if (await respondControlMcp(mcp, request, response, pathname, local, auth)) return;
-                if (isInstallationPath(pathname)) {
-                    const address = request.socket.remoteAddress;
-                    const result = await handleInstallationRequest({
-                        pathname,
-                        method: request.method,
-                        body: () => readBody(request),
-                        service: installation,
-                        allowCredentials:
-                            local ||
-                            address === "127.0.0.1" ||
-                            address === "::1" ||
-                            address === "::ffff:127.0.0.1",
-                    });
-                    json(response, result.status, result.body);
-                    return;
-                }
-                if (isConfigurationPath(pathname)) {
-                    const address = request.socket.remoteAddress;
-                    const result = await handleConfigurationRequest({
-                        pathname,
-                        method: request.method,
-                        body: () => readBody(request, 1_048_576),
-                        service: configuration,
-                        local,
-                        allowCredentials:
-                            local ||
-                            address === "127.0.0.1" ||
-                            address === "::1" ||
-                            address === "::ffff:127.0.0.1",
-                    });
-                    json(response, result.status, result.body);
-                    return;
-                }
-                const action = /^\/api\/control\/gateway\/(start|stop|restart)$/.exec(
-                    pathname,
-                )?.[1];
-                if (action && request.method === "POST") {
-                    await readBody(request);
-                    if (storageError) {
-                        json(response, 503, { message: "控制状态不可读取，禁止修改" });
-                        return;
-                    }
-                    const operation = await completeWindowsGatewayOperation(
-                        async () => {
-                            if (controller.status().recoveryRequired && !driver.hasLiveChildren()) {
-                                const prior = controller.status().instance;
-                                if (prior?.pid && gatewayProcessExists(prior.pid))
-                                    throw new Error("旧实例仍存在，拒绝重复启动");
-                                if (!prior)
-                                    throw new Error("前次启动结果未知，不能认定旧进程已退出");
-                                if (!prior.pid)
-                                    throw new Error("旧实例身份无法核实，需检查本地运行状态");
-                                await lifecycle.reconcileStopped(state => {
-                                    if (driver.hasLiveChildren()) return false;
-                                    return state.instance?.pid
-                                        ? !gatewayProcessExists(state.instance.pid)
-                                        : false;
-                                });
-                            }
-                            return action === "start"
-                                ? lifecycle.start()
-                                : action === "stop"
-                                  ? lifecycle.stop()
-                                  : lifecycle.restart();
-                        },
-                        () => controller.status(),
-                        publisher,
-                    );
-                    json(response, 200, operation);
-                    return;
-                }
-                json(response, 404, { message: "控制接口不存在" });
-                return;
-            }
-            if (local) {
-                json(response, 404, { message: "本地控制接口不存在" });
-                return;
-            }
-            if (serveControlWeb(request, response, pathname, webRoot)) return;
-            proxyGatewayHttp(request, response, activeAddress());
-        } catch {
-            if (!response.headersSent)
-                json(response, 500, { message: "控制操作失败，请检查本地状态与日志" });
-            else response.destroy();
-        }
-    }
-    const server = http.createServer((req, res) => {
+    let server: http.Server;
+    const handle = createControlRequestHandler({
+        workspace,
+        webRoot,
+        manager: { id, version: packageMetadata.version, pid: process.pid },
+        auth,
+        authAvailable: () => authAvailable,
+        markAuthUnavailable: () => {
+            authAvailable = false;
+        },
+        closed: () => closed,
+        storageError: () => storageError,
+        ownershipAvailable,
+        configurationStorageUnavailable: () => configurationStorageUnavailable,
+        configurationApplication,
+        controller,
+        driver,
+        lifecycle,
+        installation,
+        configuration,
+        sending,
+        verification,
+        messageDebugHttp,
+        mcp,
+        releaseUpgrade,
+        upgradeIdentity,
+        publisher,
+        activeAddress,
+        respondSnapshot,
+        serverAddress: () => server.address(),
+    });
+    server = http.createServer((req, res) => {
         void handle(req, res, false);
     });
     const local = http.createServer((req, res) => {
