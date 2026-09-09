@@ -109,6 +109,40 @@ function cli(bin, args, input = "", env = process.env) {
     return result.stdout.trim();
 }
 
+function installationEvidence() {
+    const operations = directory => {
+        try {
+            return fs
+                .readdirSync(directory)
+                .filter(file => file.endsWith(".json"))
+                .sort()
+                .map(file => {
+                    const value = JSON.parse(fs.readFileSync(path.join(directory, file), "utf8"));
+                    return {
+                        id: typeof value.id === "string" ? value.id : "invalid",
+                        phase: typeof value.phase === "string" ? value.phase : "invalid",
+                        status: typeof value.status === "string" ? value.status : undefined,
+                        error: typeof value.error === "string" ? value.error : undefined,
+                        recoveryRequired:
+                            typeof value.recoveryRequired === "boolean"
+                                ? value.recoveryRequired
+                                : undefined,
+                    };
+                });
+        } catch {
+            return [];
+        }
+    };
+    return JSON.stringify({
+        candidateOperations: operations(
+            path.join(stateDirectory, "manager-artifacts", "operations"),
+        ),
+        managerOperations: operations(path.join(stateDirectory, "manager-operations")),
+        definitionExists: fs.existsSync(definitionPath),
+        metadataExists: fs.existsSync(metadataPath),
+    });
+}
+
 function servicePresence() {
     return powershell(
         `$s=Get-CimInstance Win32_Service -Filter \"Name='${service}'\";if($null -eq $s){'absent'}else{$s|Select-Object Name,State,StartMode,ProcessId,PathName|ConvertTo-Json -Compress}`,
@@ -173,10 +207,18 @@ try {
         ...process.env,
         ONEBOTS_RUNTIME_ARTIFACTS: path.join(artifacts, "manifest.json"),
     };
-    assert.match(
-        cli(bin, ["install", "--system", "--data-dir", workspace, "--port", String(port)], "", env),
-        /succeeded.*completed/s,
-    );
+    let installOutput;
+    try {
+        installOutput = cli(
+            bin,
+            ["install", "--system", "--data-dir", workspace, "--port", String(port)],
+            "",
+            env,
+        );
+    } catch (error) {
+        throw new Error(`${error.message}; evidence=${installationEvidence()}`);
+    }
+    assert.match(installOutput, /succeeded.*completed/s);
     installed = true;
     installedDefinition = fs.readFileSync(definitionPath);
     installedScmPathName = JSON.parse(servicePresence()).PathName;
