@@ -126,7 +126,9 @@ export async function rollbackManagerServiceUpgrade(
             pending(record);
             assertFiles(record.managerSpec, host);
             const before = await driver.inspect();
-            if (before.running) await assertRunning(record, target, dependencies.inspectManager);
+            // 失败候选可能被 OS 自动重启，但在控制 socket 建立前再次退出。服务定义路径、
+            // 候选摘要和回退阶段已共同绑定目标；停机仍由平台驱动核验同一 OS 服务实例，
+            // 不能反过来依赖正是故障点的应用层自报接口。
             if (before.running || before.enabled || before.state === "failed" || !before.quiescent)
                 await driver.quiesce();
             await assertQuiet(driver, false);
@@ -428,23 +430,6 @@ async function assertQuiet(driver: ServicePlatform, enabled: boolean): Promise<v
         first.processId !== null ||
         first.enabled !== enabled ||
         !isDeepStrictEqual(first, second)
-    )
-        throw failure();
-}
-
-async function assertRunning(
-    record: ManagerServiceRecord,
-    target: ReturnType<typeof readRunningManagerCandidate>,
-    inspect: typeof inspectMigrationManager = inspectMigrationManager,
-): Promise<void> {
-    const state = await inspect(record.managerSpec.workspace);
-    const identity = await createLocalControlTransport(record.managerSpec.workspace).request<{
-        managerId: string;
-        candidateDigest: string;
-    }>("GET", "/api/control/service-upgrade/identity");
-    if (
-        state.manager.id !== identity.managerId ||
-        identity.candidateDigest !== managerCandidateDigest(target)
     )
         throw failure();
 }

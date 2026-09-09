@@ -121,13 +121,13 @@ it("verifying 中断回退先静止自动重启服务，再获取 workspace 锁"
         },
     };
     const platformState: ServicePlatformState = {
-        state: "failed",
-        running: false,
+        state: "running",
+        running: true,
         enabled: true,
         loaded: true,
         definitionPath: "/definition",
-        processId: null,
-        identity: null,
+        processId: 456,
+        identity: "auto-restart-generation",
         quiescent: false,
     };
     const platform: ServicePlatform = {
@@ -136,7 +136,10 @@ it("verifying 中断回退先静止自动重启服务，再获取 workspace 锁"
             state.effects.push("quiesce");
             Object.assign(platformState, {
                 state: "stopped",
+                running: false,
                 enabled: false,
+                processId: null,
+                identity: null,
                 quiescent: true,
             });
         },
