@@ -149,7 +149,7 @@ const rejectedRequest = `private-rejected-${randomUUID()}`;
 install(plan.id, rejectedRequest, rejectedToken);
 const rejected = await installation(rejectedRequest);
 assert.equal(rejected.phase, "failed", "错误 Token 必须导致真实私有 peer 下载失败");
-assert.equal(rejected.error, "INSTALL_FAILED");
+assert.equal(rejected.error, "DOWNLOAD_FAILED");
 assertCredentialDirectoriesClean();
 assertSecretAbsent(rejectedToken);
 const afterRejected = control("status");
