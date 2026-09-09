@@ -287,8 +287,8 @@ function readStoreIdentity(input: string): { root: string; id: string } {
         !stat.isDirectory() ||
         stat.isSymbolicLink() ||
         fs.realpathSync(root) !== root ||
-        (stat.mode & 0o077) !== 0 ||
-        (process.getuid && stat.uid !== process.getuid())
+        (process.platform !== "win32" && (stat.mode & 0o077) !== 0) ||
+        (process.platform !== "win32" && process.getuid && stat.uid !== process.getuid())
     )
         throw new Error("版本仓库归属无效");
     const identity = readJson(path.join(root, "store.json"));
