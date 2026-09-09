@@ -180,8 +180,31 @@ export async function bootstrapManagerService(
             ...(dependencies.download ? { download: dependencies.download } : {}),
         });
         const boundCandidate = binding.has("candidate.json");
-        const installed =
-            existing || boundCandidate ? installer.status(id) : await installer.install(id, plan);
+        let installed;
+        try {
+            installed =
+                existing || boundCandidate
+                    ? installer.status(id)
+                    : await installer.install(id, plan);
+        } catch (error) {
+            if (host.platform !== "win32" || typeof installer.installationStatus !== "function")
+                throw error;
+            let evidence;
+            try {
+                evidence = installer.installationStatus(id);
+            } catch {
+                throw error;
+            }
+            if (evidence.error)
+                throw new ManagerBootstrapCandidateError(id, evidence.phase, evidence.error);
+            if (evidence.phase === "verified")
+                throw new ManagerBootstrapCandidateError(
+                    id,
+                    evidence.phase,
+                    "CANDIDATE_READ_FAILED",
+                );
+            throw failure();
+        }
         if (
             installed.phase !== "verified" ||
             installed.planDigest !== plan.digest ||
@@ -191,17 +214,43 @@ export async function bootstrapManagerService(
                 throw new ManagerBootstrapCandidateError(id, installed.phase, installed.error);
             throw failure();
         }
-        const candidate = installer.readCandidate(installed.candidateId);
-        if (host.platform === "win32") {
-            inspectWindowsServiceDirectorySecurity(host, candidate.directory);
+        let candidate;
+        try {
+            candidate = installer.readCandidate(installed.candidateId);
+        } catch (error) {
+            if (host.platform !== "win32") throw error;
+            throw new ManagerBootstrapCandidateError(id, "verified", "CANDIDATE_READ_FAILED");
         }
-        const digest = managerCandidateDigest(candidate);
-        const spec = parseManagerServiceSpec({
-            ...template,
-            workingDirectory: candidate.directory,
-            binPath: path.join(candidate.directory, "node_modules/onebots/lib/bin.js"),
-        });
-        verifyManagerServiceCandidate(spec, digest);
+        if (host.platform === "win32") {
+            try {
+                inspectWindowsServiceDirectorySecurity(host, candidate.directory);
+            } catch (error) {
+                if (host.platform !== "win32") throw error;
+                throw new ManagerBootstrapCandidateError(
+                    id,
+                    "verified",
+                    "CANDIDATE_SECURITY_FAILED",
+                );
+            }
+        }
+        let digest;
+        let spec;
+        try {
+            digest = managerCandidateDigest(candidate);
+            spec = parseManagerServiceSpec({
+                ...template,
+                workingDirectory: candidate.directory,
+                binPath: path.join(candidate.directory, "node_modules/onebots/lib/bin.js"),
+            });
+            verifyManagerServiceCandidate(spec, digest);
+        } catch (error) {
+            if (host.platform !== "win32") throw error;
+            throw new ManagerBootstrapCandidateError(
+                id,
+                "verified",
+                "CANDIDATE_IDENTITY_FAILED",
+            );
+        }
         const receipt = {
             schemaVersion: 1,
             id: id,
@@ -210,13 +259,22 @@ export async function bootstrapManagerService(
             candidateDigest: digest,
             spec,
         };
-        if (binding.has("candidate.json")) {
-            if (!isDeepStrictEqual(binding.read("candidate.json"), receipt)) throw failure();
-        } else {
-            if (existing) throw failure();
-            binding.write("candidate.json", receipt, true);
-            if (host.platform === "win32")
-                secureWindowsServiceFile(host, path.join(bindingDirectory, "candidate.json"));
+        try {
+            if (binding.has("candidate.json")) {
+                if (!isDeepStrictEqual(binding.read("candidate.json"), receipt)) throw failure();
+            } else {
+                if (existing) throw failure();
+                binding.write("candidate.json", receipt, true);
+                if (host.platform === "win32")
+                    secureWindowsServiceFile(host, path.join(bindingDirectory, "candidate.json"));
+            }
+        } catch (error) {
+            if (host.platform !== "win32") throw error;
+            throw new ManagerBootstrapCandidateError(
+                id,
+                "verified",
+                "CANDIDATE_BINDING_FAILED",
+            );
         }
         if (existing) {
             const record = journal.recoverable(id);

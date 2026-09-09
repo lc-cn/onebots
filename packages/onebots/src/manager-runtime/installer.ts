@@ -73,6 +73,11 @@ export class ManagerCandidateInstaller {
         return operation;
     }
 
+    /** 只读安装事实，供上层在候选收据解析失败时输出固定诊断。 */
+    installationStatus(id: string) {
+        return this.installer.status(id);
+    }
+
     readCandidate(id: string): VerifiedManagerCandidate {
         const candidate = this.options.store.readVerified(id);
         return readVerifiedManagerCandidate(path.dirname(candidate.directory), id);

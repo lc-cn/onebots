@@ -24,8 +24,8 @@ export function readVerifiedManagerCandidate(root: string, id: string): Verified
         stat.isSymbolicLink() ||
         stat.nlink !== 1 ||
         stat.size > 4096 ||
-        (stat.mode & 0o077) !== 0 ||
-        (process.getuid && stat.uid !== process.getuid())
+        (process.platform !== "win32" && (stat.mode & 0o077) !== 0) ||
+        (process.platform !== "win32" && process.getuid && stat.uid !== process.getuid())
     )
         throw new Error("管理程序候选启动证明无效");
     const expected: ManagerProof = {
