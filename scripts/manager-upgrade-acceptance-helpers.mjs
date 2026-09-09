@@ -197,12 +197,21 @@ export async function verifyManagerPatchUpgrade(options) {
     fs.rmdirSync(obstacle);
 
     setEffectUnknown(true);
-    const rollbackOutput = invokeCli([
-        "recover",
-        "--operation",
-        interrupted.record.id,
-        "--rollback-upgrade",
-    ]).stdout;
+    let rollbackOutput;
+    try {
+        rollbackOutput = invokeCli([
+            "recover",
+            "--operation",
+            interrupted.record.id,
+            "--rollback-upgrade",
+        ]).stdout;
+    } catch (error) {
+        const record = JSON.parse(fs.readFileSync(interrupted.file, "utf8"));
+        throw new Error(
+            `升级回退失败，持久阶段为 ${String(record.phase)}，状态为 ${String(record.status)}，恢复门禁为 ${String(record.recoveryRequired)}`,
+            { cause: error },
+        );
+    }
     setEffectUnknown(false);
     assert.match(rollbackOutput, new RegExp(`操作 ${interrupted.record.id}：已恢复升级前`, "u"));
     const rolledBack = await eventually(

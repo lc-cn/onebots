@@ -55,6 +55,11 @@ async function fixture() {
     const modules = join(repositoryRoot, "packages/onebots/node_modules/@onebots");
     await mkdir(modules, { recursive: true });
     await symlink(join(repositoryRoot, "packages/core"), join(modules, "core"), "junction");
+    await symlink(
+        join(process.cwd(), "packages/onebots/node_modules/pnpm"),
+        join(repositoryRoot, "packages/onebots/node_modules/pnpm"),
+        "junction",
+    );
     return { repositoryRoot, outputDirectory: join(repositoryRoot, "artifacts") };
 }
 

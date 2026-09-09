@@ -14,6 +14,7 @@ import { getServiceFiles } from "./service-files.js";
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import { inspectMigrationManager } from "./service-migration-manager.js";
 import { acquireServiceMigrationLock } from "./service-migration-lock.js";
+import { verifyServiceMigrationProcessesWhileLocked } from "./service-migration-processes.js";
 import { readServiceMigrationPending } from "./service-migration-workspace.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
@@ -96,7 +97,10 @@ export async function rollbackManagerServiceUpgrade(
             dependencies.platform ??
             (host.platform === "linux"
                 ? new SystemdServicePlatform(host, scope, files.definition)
-                : new LaunchdServicePlatform(host, scope, files.definition));
+                : new LaunchdServicePlatform(host, scope, files.definition, {
+                      confirmUnloadedProcesses: () =>
+                          verifyServiceMigrationProcessesWhileLocked(record.managerSpec.workspace),
+                  }));
         if (
             record.phase === "completed" &&
             record.status === "failed" &&

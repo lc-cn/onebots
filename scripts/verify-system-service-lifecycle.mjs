@@ -1067,13 +1067,22 @@ try {
     fs.rmdirSync(socketObstacle);
 
     effectUnknown = true;
-    const rollbackOutput = invokeCli([
-        "recover",
-        "--operation",
-        failedUpgradeId,
-        "--rollback-upgrade",
-        "--system",
-    ]).stdout;
+    let rollbackOutput;
+    try {
+        rollbackOutput = invokeCli([
+            "recover",
+            "--operation",
+            failedUpgradeId,
+            "--rollback-upgrade",
+            "--system",
+        ]).stdout;
+    } catch (error) {
+        const record = JSON.parse(fs.readFileSync(interruptedUpgrade.file, "utf8"));
+        throw new Error(
+            `升级回退失败，持久阶段为 ${String(record.phase)}，状态为 ${String(record.status)}，恢复门禁为 ${String(record.recoveryRequired)}`,
+            { cause: error },
+        );
+    }
     effectUnknown = false;
     assert.match(rollbackOutput, new RegExp(`操作 ${failedUpgradeId}：已恢复升级前`, "u"));
     const afterRollback = await eventually(

@@ -103,7 +103,9 @@ function cli(bin, args, input = "", env = process.env) {
         maxBuffer: 8 * 1024 * 1024,
     });
     if (result.status !== 0)
-        throw new Error(`onebots ${args.join(" ")} 退出 ${result.status}: ${result.stderr}`);
+        throw new Error(
+            `onebots ${args.join(" ")} 退出 ${result.status}: stdout=${result.stdout.trim()} stderr=${result.stderr.trim()}`,
+        );
     return result.stdout.trim();
 }
 
