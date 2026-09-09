@@ -47,6 +47,8 @@ import {
 import { acquireRuntimeOperation, type RuntimeOperation } from "./runtime-operation.js";
 import { createAccountWithRouteScope } from "./scoped-account.js";
 import { closeAdapterRouteScope } from "./scoped-adapter.js";
+import { listenHttpServer } from "./http-listener.js";
+import { getHostLifecycleState } from "./host-lifecycle-state.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -427,14 +429,15 @@ export class BaseApp extends Koa {
     protected onAdapterCreated(_adapter: Adapter): void {}
 
     protected assertCanStart(): void {
-        if (this.isDisposed) {
+        if (this.isDisposed || getHostLifecycleState(this).stopping) {
             throw new ResourceError("应用资源已释放，不能再次启动；请创建新的 App 实例");
         }
     }
 
-    private async startAdapters(throwOnFailure = false): Promise<void> {
+    private async startAdapters(throwOnFailure = false, signal?: AbortSignal): Promise<void> {
         const failures = new FailureCollector();
         for (const [platform, adapter] of this.adapters) {
+            signal?.throwIfAborted();
             await failures.capture(
                 () => adapter.start(),
                 error => {
@@ -442,6 +445,7 @@ export class BaseApp extends Koa {
                     this.enhancedLogger.error(wrappedError, { platform });
                 },
             );
+            signal?.throwIfAborted();
         }
         if (throwOnFailure) failures.throwIfAny(`${failures.size} 个适配器启动失败`);
     }
@@ -477,28 +481,38 @@ export class BaseApp extends Koa {
     }
 
     /** 宿主可限定传输监听地址；平台与协议仍使用同一个真实 HTTP Server。 */
-    protected async listenHttpServer(): Promise<void> {
-        await new Promise<void>((resolve, reject) => {
-            this.httpServer.once("error", reject);
-            this.httpServer.listen(resolveListenPort(this.config.port, process.env.PORT), () => {
-                this.httpServer.removeListener("error", reject);
-                resolve();
-            });
-        });
+    protected async listenHttpServer(signal?: AbortSignal): Promise<void> {
+        await listenHttpServer(
+            this.httpServer,
+            { port: resolveListenPort(this.config.port, process.env.PORT) },
+            signal,
+        );
     }
 
-    async start() {
-        this.assertCanStart();
-        if (this.isStarted) return;
-        const stopTimer = this.enhancedLogger.start("Application start");
-
+    start(): Promise<void> {
+        const state = getHostLifecycleState(this);
         try {
-            // 执行启动钩子
-            await this.lifecycle.start();
+            this.assertCanStart();
+        } catch (error) {
+            return Promise.reject(error);
+        }
+        if (state.starting) return state.starting;
+        if (this.isStarted) return Promise.resolve();
+        const controller = new AbortController();
+        state.controller = controller;
+        // 先保存共享任务，再运行扩展，防止同步钩子重入启动。
+        state.starting = Promise.resolve().then(() => this.startAttempt(controller.signal));
+        return state.starting;
+    }
 
-            // 启动 HTTP 服务器
-            await this.listenHttpServer();
-
+    private async startAttempt(signal: AbortSignal): Promise<void> {
+        const stopTimer = this.enhancedLogger.start("Application start");
+        try {
+            signal.throwIfAborted();
+            await this.lifecycle.start(signal);
+            signal.throwIfAborted();
+            await this.listenHttpServer(signal);
+            signal.throwIfAborted();
             const address = this.httpServer.address();
             const listeningPort =
                 address && typeof address === "object" ? address.port : this.config.port;
@@ -508,14 +522,15 @@ export class BaseApp extends Koa {
                 `Server listening at http://${listeningHost.includes(":") ? `[${listeningHost}]` : listeningHost}:${listeningPort}${this.config.path || "/"}`,
                 { port: listeningPort, path: this.config.path },
             );
-
-            await this.startAdapters();
-
+            await this.startAdapters(false, signal);
+            signal.throwIfAborted();
             this.isStarted = true;
-            stopTimer();
         } catch (error) {
-            stopTimer();
+            // 停机已取得唯一清理权；迟到启动只报告取消，不重复回滚。
+            signal.throwIfAborted();
             await this.rollbackFailedStart(error);
+        } finally {
+            stopTimer();
         }
     }
     async reload(config: BaseApp.Config) {
@@ -579,8 +594,18 @@ export class BaseApp extends Koa {
             runtimeLease.release();
         }
     }
-    async stop() {
-        if (this.isDisposed) return;
+    stop(): Promise<void> {
+        const state = getHostLifecycleState(this);
+        if (state.stopping) return state.stopping;
+        if (this.isDisposed) return Promise.resolve();
+        this.isStarted = false;
+        // 在任何 await 和扩展清理之前使本轮启动失效。
+        state.stopping = Promise.resolve().then(() => this.stopAttempt());
+        state.controller?.abort(new DOMException("应用启动已被停止操作取消", "AbortError"));
+        return state.stopping;
+    }
+
+    private async stopAttempt(): Promise<void> {
         const stopTimer = this.enhancedLogger.start("Application stop");
         const failures = new FailureCollector();
 

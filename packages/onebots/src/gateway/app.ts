@@ -1,4 +1,4 @@
-import { BaseApp, type Adapter } from "@onebots/core";
+import { BaseApp, listenHttpServer, type Adapter } from "@onebots/core";
 import { GatewayMessageDebugStore } from "./message-debug-store.js";
 import { GatewayVerificationStore } from "./verification-store.js";
 import packageMetadata from "../../package.json" with { type: "json" };
@@ -55,14 +55,8 @@ export class GatewayApp extends BaseApp {
         );
     }
 
-    protected override listenHttpServer(): Promise<void> {
-        return new Promise((resolve, reject) => {
-            this.httpServer.once("error", reject);
-            this.httpServer.listen({ host: "127.0.0.1", port: 0 }, () => {
-                this.httpServer.removeListener("error", reject);
-                resolve();
-            });
-        });
+    protected override listenHttpServer(signal?: AbortSignal): Promise<void> {
+        return listenHttpServer(this.httpServer, { host: "127.0.0.1", port: 0 }, signal);
     }
 
     /** 配置快照属于管理服务，网关不允许通过账号 API 回写。 */
