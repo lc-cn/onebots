@@ -31,6 +31,7 @@
     "interop:kotori": "node scripts/interop-kotori.mjs",
     "interop:control:guard": "node scripts/verify-interop-control-entrypoints.mjs",
     "test:protocols:managed": "node scripts/verify-managed-protocol-transports.mjs",
+    "test:entries:installed": "node scripts/verify-installed-cli-tui.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --check ./**/*.{ts,js}",

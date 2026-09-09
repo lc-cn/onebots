@@ -181,6 +181,8 @@ jobs:
       - run: pnpm build
       - name: Verify managed Mock protocol transports
         run: pnpm test:protocols:managed
+      - name: Verify installed CLI and TUI control entries
+        run: pnpm test:entries:installed
       - run: node scripts/build-windows-host.mjs
       - run: pnpm test
       - run: pnpm packages:pack:check
