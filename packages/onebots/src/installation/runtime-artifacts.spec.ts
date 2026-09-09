@@ -18,6 +18,12 @@ function fixture() {
     fs.writeFileSync(path.join(root, "core.tgz"), "core");
     const manifest = {
         schemaVersion: 1,
+        extensions: [] as Array<{
+            name: string;
+            version: string;
+            file: string;
+            sha256: string;
+        }>,
         host: {
             name: expected.host.name,
             version: expected.host.version,
@@ -41,6 +47,45 @@ it("镜像迁移目录后以manifest相对文件构造候选，保留hash供冻�
     const result = loadRuntimeArtifacts(test.file, expected);
     expect(result.host.spec).toBe(`file:${test.root}/host.tgz`);
     expect(result.core.sha256).toBe("b".repeat(64));
+});
+
+it("为可信宿主附带的扩展提供同版本本地工件", () => {
+    const test = fixture();
+    fs.writeFileSync(path.join(test.root, "adapter-mock.tgz"), "mock");
+    test.manifest.extensions = [
+        {
+            name: "@onebots/adapter-mock",
+            version: "1.0.21",
+            file: "adapter-mock.tgz",
+            sha256: "c".repeat(64),
+        },
+    ];
+    test.save();
+    const result = loadRuntimeArtifacts(test.file, expected);
+    expect(result.artifacts["@onebots/adapter-mock"]).toEqual({
+        name: "@onebots/adapter-mock",
+        version: "1.0.21",
+        spec: `file:${test.root}/adapter-mock.tgz`,
+        sha256: "c".repeat(64),
+    });
+});
+
+it("拒绝重复、宿主覆盖或目录外的附带扩展", () => {
+    const test = fixture();
+    fs.writeFileSync(path.join(test.root, "extension.tgz"), "extension");
+    const entry = {
+        name: "@onebots/adapter-mock",
+        version: "1.0.21",
+        file: "extension.tgz",
+        sha256: "c".repeat(64),
+    };
+    for (const extensions of [[entry, entry], [{ ...entry, name: "onebots" }]]) {
+        test.manifest.extensions = extensions;
+        test.save();
+        expect(() => loadRuntimeArtifacts(test.file, expected)).toThrow(
+            /^随产品提供的运行工件无效/,
+        );
+    }
 });
 
 it("拒绝混用另一版本宿主、目录越界和软链接，错误不泄漏文件内容", () => {

@@ -52,6 +52,7 @@ export interface MockMember {
 export interface MockMessage {
     message_id: string;
     user_id: string;
+    target_id?: string;
     group_id?: string;
     content: string;
     time: number;

@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import {
     allocatePort,
+    startManagedGateway,
     startProcess,
+    stopManagedGateway,
     stopProcess,
     waitForEvidence,
+    verifyFrameworkSend,
     waitForPort,
 } from "./interop-harness.mjs";
 
@@ -18,14 +21,11 @@ const PYTHON =
     path.join(ROOT, "interop/astrbot/.venv/bin/python");
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-astrbot-interop-"));
 const evidencePath = path.join(temporaryDirectory, "evidence.json");
-const configPath = path.join(temporaryDirectory, "config.yaml");
 const children = [];
 
 try {
     await assertPythonDependencies();
-    prepareWorkspacePlugins();
     const [frameworkPort, gatewayPort] = await Promise.all([allocatePort(), allocatePort()]);
-    fs.writeFileSync(configPath, renderConfig(gatewayPort, frameworkPort), "utf8");
     const astrbot = startProcess(
         PYTHON,
         [path.join(ROOT, "interop/astrbot/app.py")],
@@ -41,32 +41,33 @@ try {
     await waitForPort(frameworkPort, astrbot, 20_000);
     await assertWrongTokenRejected(frameworkPort);
 
-    const gateway = startProcess(
-        process.execPath,
-        [
-            path.join(ROOT, "packages/onebots/lib/bin.js"),
-            "--service-runtime",
-            "run",
-            "-c",
-            configPath,
-            "-r",
-            "mock",
-            "-p",
-            "onebot-v11",
-        ],
-        {},
-        "OneBots",
-        temporaryDirectory,
-    );
-    children.push(gateway);
-    await waitForPort(gatewayPort, gateway, 15_000);
+    const gateway = await startManagedGateway({
+        root: ROOT,
+        workspace: temporaryDirectory,
+        gatewayPort,
+        configSource: renderConfig(gatewayPort, frameworkPort),
+        protocolPackage: "onebot-v11",
+        protocolConfig: "onebot.v11",
+        framework: "astrbot",
+        children,
+    });
     const evidence = await waitForEvidence(evidencePath, [astrbot, gateway], 30_000);
     assertEvidence(evidence);
+    await verifyFrameworkSend(gateway, evidence, {
+        gatewayPort,
+        framework: "astrbot",
+        protocol: "onebot.v11",
+        token: TOKEN,
+    });
     process.stdout.write(
         `${JSON.stringify({ ok: true, framework: "astrbot", frameworkVersion: "4.28.0b1", adapterVersion: "1.4.4", protocol: "onebot.v11", transport: "reverse-websocket", checks: ["auth-rejection", "handshake", "private-message", "get_login_info", "send_private_msg"] })}\n`,
     );
 } finally {
-    await Promise.all(children.reverse().map(stopProcess));
+    try {
+        await stopManagedGateway(children.find(item => item.control));
+    } finally {
+        await Promise.all(children.reverse().map(stopProcess));
+    }
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
 
@@ -87,21 +88,6 @@ async function assertPythonDependencies() {
         path.join(ROOT, "interop/astrbot"),
     );
     if ((await probe.exit) !== 0) throw new Error(`AstrBot 互操作依赖版本不符\n${probe.logs()}`);
-}
-
-function prepareWorkspacePlugins() {
-    const scope = path.join(temporaryDirectory, "node_modules", "@onebots");
-    fs.mkdirSync(scope, { recursive: true });
-    fs.symlinkSync(
-        path.join(ROOT, "adapters/adapter-mock"),
-        path.join(scope, "adapter-mock"),
-        "dir",
-    );
-    fs.symlinkSync(
-        path.join(ROOT, "protocols/onebot-v11/protocol"),
-        path.join(scope, "protocol-onebot-v11"),
-        "dir",
-    );
 }
 
 function renderConfig(gatewayPort, frameworkPort) {

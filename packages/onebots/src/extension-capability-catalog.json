@@ -6292,6 +6292,13 @@
               "group"
             ]
           },
+          "get_message_history": {
+            "support": "native",
+            "scenes": [
+              "private",
+              "group"
+            ]
+          },
           "get_login_info": {
             "support": "native"
           },

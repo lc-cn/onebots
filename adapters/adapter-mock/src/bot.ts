@@ -316,6 +316,7 @@ export class MockBot extends EventEmitter<MockBotEvents> {
         const msg: MockMessage = {
             message_id: this.generateMessageId(),
             user_id: this.config.account_id,
+            target_id: targetId,
             group_id: type === "group" ? targetId : undefined,
             content: message,
             time: Math.floor(this.now() / 1000),
@@ -432,6 +433,11 @@ export class MockBot extends EventEmitter<MockBotEvents> {
      */
     getSentMessages(): MockMessage[] {
         return collectMockMessages(this.sentMessageIds, this.messages);
+    }
+
+    /** 获取全局插入顺序的全部消息快照，供会话历史投影后再过滤。 */
+    getMessages(): MockMessage[] {
+        return [...this.messages.values()].map(message => ({ ...message }));
     }
 
     /** 获取自动生成或手动记录的入站消息。 */

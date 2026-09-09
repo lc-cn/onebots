@@ -167,6 +167,42 @@ describe("MockAdapter", () => {
 
             expect(result.message_id.string).toBeTruthy();
             expect(result.message_id.number).toEqual(expect.any(Number));
+            await expect(
+                adapter.getMessage("msg_bot", {
+                    message_id: result.message_id,
+                    scene_type: "private",
+                    scene_id: adapter.createId("10001"),
+                }),
+            ).resolves.toMatchObject({
+                sender: { sender_id: { string: "msg_bot" }, scene_id: { string: "10001" } },
+            });
+            await expect(
+                adapter.getMessageHistory("msg_bot", {
+                    scene_type: "private",
+                    scene_id: adapter.createId("10001"),
+                }),
+            ).resolves.toEqual([
+                expect.objectContaining({
+                    message_id: result.message_id,
+                    sender: expect.objectContaining({
+                        sender_id: expect.anything(),
+                        scene_id: adapter.createId("10001"),
+                    }),
+                }),
+            ]);
+            await expect(
+                adapter.getMessage("msg_bot", {
+                    message_id: result.message_id,
+                    scene_type: "private",
+                    scene_id: adapter.createId("10002"),
+                }),
+            ).rejects.toThrow("不属于指定会话");
+            await expect(
+                adapter.getMessageHistory("msg_bot", {
+                    scene_type: "private",
+                    scene_id: adapter.createId("10002"),
+                }),
+            ).resolves.toEqual([]);
         });
 
         it("should send a text message to group", async () => {
@@ -315,6 +351,7 @@ describe("MockAdapter", () => {
                 expect(f.user_id.string).toBeTruthy();
                 expect(f.user_id.number).toEqual(expect.any(Number));
                 expect(f.user_name).toBeTruthy();
+                expect(f).toMatchObject({ category_id: 0, category_name: "默认分组" });
             }
             expect(friends.some(f => f.user_name === "测试好友1")).toBe(true);
         });
@@ -326,6 +363,14 @@ describe("MockAdapter", () => {
 
             expect(user.user_name).toBe("测试好友1");
             expect(user.avatar).toBe("https://via.placeholder.com/100");
+        });
+
+        it("should provide stable friend category metadata", async () => {
+            const friend = await adapter.getFriendInfo("user_bot", {
+                user_id: adapter.createId("10001"),
+            });
+
+            expect(friend).toMatchObject({ category_id: 0, category_name: "默认分组" });
         });
 
         it("should throw for non-existent user", async () => {

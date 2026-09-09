@@ -29,6 +29,7 @@
     "interop:langbot": "node scripts/interop-langbot.mjs",
     "interop:alicebot": "node scripts/interop-alicebot.mjs",
     "interop:kotori": "node scripts/interop-kotori.mjs",
+    "interop:control:guard": "node scripts/verify-interop-control-entrypoints.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --check ./**/*.{ts,js}",

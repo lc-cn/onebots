@@ -2,7 +2,7 @@ name: Service architecture validation
 
 on:
   push:
-    branches: [codex/service-architecture]
+    branches: [master, codex/service-architecture]
   workflow_dispatch:
 
 permissions:
@@ -13,6 +13,106 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  system-service:
+    name: Real systemd lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:packages
+      - name: Verify public CLI against real systemd
+        run: |
+          sudo env \
+            "PATH=$PATH" \
+            "CI=$CI" \
+            "GITHUB_ACTIONS=$GITHUB_ACTIONS" \
+            "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT" \
+            "NODE_AUTH_TOKEN=$NODE_AUTH_TOKEN" \
+            ONEBOTS_SYSTEMD_ACCEPTANCE=1 \
+            "$(command -v node)" scripts/verify-system-service-lifecycle.mjs
+
+  interop:
+    name: Framework interop (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [node, python-light, python-heavy, native]
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        if: startsWith(matrix.group, 'python')
+        with:
+          python-version: "3.12"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm interop:control:guard
+      - name: Install Node framework fixtures
+        if: matrix.group == 'node'
+        run: |
+          for framework in zhin alemonjs karin koishi kotori; do
+            npm ci --prefix "interop/$framework" --ignore-scripts
+          done
+      - name: Verify Node frameworks
+        if: matrix.group == 'node'
+        run: |
+          for framework in zhin alemonjs karin koishi kotori; do
+            pnpm "interop:$framework"
+          done
+      - name: Install light Python framework fixtures
+        if: matrix.group == 'python-light'
+        run: |
+          python -m pip install -r interop/nonebot/requirements.txt
+          python -m venv interop/melobot/.venv
+          interop/melobot/.venv/bin/pip install -r interop/melobot/requirements.txt
+          python -m venv interop/alicebot/.venv
+          interop/alicebot/.venv/bin/pip install -r interop/alicebot/requirements-source.txt -r interop/alicebot/requirements.txt
+      - name: Verify light Python frameworks
+        if: matrix.group == 'python-light'
+        env:
+          ONEBOTS_INTEROP_PYTHON: python
+        run: |
+          pnpm interop:nonebot
+          pnpm interop:melobot
+          pnpm interop:alicebot
+      - name: Install heavy Python framework fixtures
+        if: matrix.group == 'python-heavy'
+        run: |
+          for framework in astrbot langbot; do
+            python -m venv "interop/$framework/.venv"
+            "interop/$framework/.venv/bin/pip" install -r "interop/$framework/requirements-source.txt" -r "interop/$framework/requirements.txt"
+          done
+      - name: Verify heavy Python frameworks
+        if: matrix.group == 'python-heavy'
+        run: |
+          pnpm interop:astrbot
+          pnpm interop:langbot
+      - name: Verify native frameworks
+        if: matrix.group == 'native'
+        run: |
+          pnpm interop:zerobot
+          pnpm interop:kovi
+
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -34,7 +134,7 @@ jobs:
       - name: Verify installed npm management runtime
         run: node scripts/verify-manager-package.mjs
       - run: docker build -t onebots-control-ci .
-      - name: Verify blank Docker control service
+      - name: Verify blank Docker CLI and HTTP control service
         run: |
           docker run -d --name onebots-control-ci --mount type=volume,source=onebots-control-ci-data,target=/data onebots-control-ci
           docker exec -i --user 1000:1000 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs

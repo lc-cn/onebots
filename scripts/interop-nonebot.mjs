@@ -1,28 +1,32 @@
-import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
+import {
+    allocatePort,
+    startManagedGateway,
+    startProcess,
+    stopManagedGateway,
+    stopProcess,
+    waitForEvidence,
+    verifyFrameworkSend,
+    waitForPort,
+} from "./interop-harness.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PYTHON = process.env.ONEBOTS_INTEROP_PYTHON || "python3";
 const TOKEN = "onebots-nonebot-interop-token";
 const EXPECTED_NONEBOT_VERSION = "2.5.0";
 const EXPECTED_ADAPTER_VERSION = "2.4.6";
-const MAX_LOG_BYTES = 64 * 1024;
 
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-nonebot-interop-"));
 const evidencePath = path.join(temporaryDirectory, "evidence.json");
-const configPath = path.join(temporaryDirectory, "config.yaml");
 const children = [];
 
 try {
     await assertPythonDependencies();
-    prepareWorkspacePlugins();
     const [nonebotPort, gatewayPort] = await Promise.all([allocatePort(), allocatePort()]);
-    fs.writeFileSync(configPath, renderGatewayConfig(gatewayPort, nonebotPort), "utf8");
 
     const nonebot = startProcess(
         PYTHON,
@@ -38,28 +42,25 @@ try {
     await waitForPort(nonebotPort, nonebot, 15_000);
     await assertWrongTokenRejected(nonebotPort);
 
-    const gateway = startProcess(
-        process.execPath,
-        [
-            path.join(ROOT, "packages/onebots/lib/bin.js"),
-            "--service-runtime",
-            "run",
-            "-c",
-            configPath,
-            "-r",
-            "mock",
-            "-p",
-            "onebot-v11",
-        ],
-        {},
-        "OneBots",
-        temporaryDirectory,
-    );
-    children.push(gateway);
-    await waitForPort(gatewayPort, gateway, 15_000);
+    const gateway = await startManagedGateway({
+        root: ROOT,
+        workspace: temporaryDirectory,
+        gatewayPort,
+        configSource: renderGatewayConfig(gatewayPort, nonebotPort),
+        protocolPackage: "onebot-v11",
+        protocolConfig: "onebot.v11",
+        framework: "nonebot",
+        children,
+    });
 
     const evidence = await waitForEvidence(evidencePath, [nonebot, gateway], 20_000);
     assertEvidence(evidence);
+    await verifyFrameworkSend(gateway, evidence, {
+        gatewayPort,
+        framework: "nonebot",
+        protocol: "onebot.v11",
+        token: TOKEN,
+    });
     process.stdout.write(
         `${JSON.stringify({
             ok: true,
@@ -78,7 +79,11 @@ try {
         })}\n`,
     );
 } finally {
-    await Promise.all(children.reverse().map(stopProcess));
+    try {
+        await stopManagedGateway(children.find(item => item.control));
+    } finally {
+        await Promise.all(children.reverse().map(stopProcess));
+    }
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
 
@@ -114,65 +119,6 @@ mock.interop:
     ws_reverse:
       - ws://127.0.0.1:${nonebotPort}/onebot/v11/ws
 `;
-}
-
-function startProcess(command, args, environment, label, workingDirectory = ROOT) {
-    const child = spawn(command, args, {
-        cwd: workingDirectory,
-        env: { ...process.env, ...environment },
-        stdio: ["ignore", "pipe", "pipe"],
-    });
-    let output = "";
-    const append = chunk => {
-        output = `${output}${chunk.toString()}`.slice(-MAX_LOG_BYTES);
-    };
-    child.stdout.on("data", append);
-    child.stderr.on("data", append);
-    const exit = new Promise(resolve => child.once("exit", code => resolve(code ?? 1)));
-    child.once("error", error => append(`${label} spawn error: ${error.message}\n`));
-    return { child, exit, label, logs: () => output };
-}
-
-function prepareWorkspacePlugins() {
-    const scopeDirectory = path.join(temporaryDirectory, "node_modules", "@onebots");
-    fs.mkdirSync(scopeDirectory, { recursive: true });
-    for (const [name, source] of [
-        ["adapter-mock", path.join(ROOT, "adapters/adapter-mock")],
-        ["protocol-onebot-v11", path.join(ROOT, "protocols/onebot-v11/protocol")],
-    ]) {
-        fs.symlinkSync(source, path.join(scopeDirectory, name), "dir");
-    }
-}
-
-async function waitForPort(port, processHandle, timeoutMs) {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        if (processHandle.child.exitCode !== null) {
-            throw new Error(`${processHandle.label} 提前退出\n${processHandle.logs()}`);
-        }
-        if (await canConnect(port)) return;
-        await delay(50);
-    }
-    throw new Error(
-        `${processHandle.label} 未在 ${timeoutMs}ms 内监听端口\n${processHandle.logs()}`,
-    );
-}
-
-function canConnect(port) {
-    return new Promise(resolve => {
-        const socket = net.createConnection({ host: "127.0.0.1", port });
-        socket.setTimeout(250);
-        socket.once("connect", () => {
-            socket.destroy();
-            resolve(true);
-        });
-        const fail = () => {
-            socket.destroy();
-            resolve(false);
-        };
-        socket.once("error", fail);
-        socket.once("timeout", fail);
-    });
 }
 
 function assertWrongTokenRejected(port) {
@@ -211,26 +157,6 @@ function assertWrongTokenRejected(port) {
     });
 }
 
-async function waitForEvidence(evidenceFile, processHandles, timeoutMs) {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        for (const processHandle of processHandles) {
-            if (processHandle.child.exitCode !== null) {
-                throw new Error(`${processHandle.label} 提前退出\n${processHandle.logs()}`);
-            }
-        }
-        if (fs.existsSync(evidenceFile)) {
-            return JSON.parse(fs.readFileSync(evidenceFile, "utf8"));
-        }
-        await delay(50);
-    }
-    throw new Error(
-        `未在 ${timeoutMs}ms 内收到 NoneBot 互操作证据\n${processHandles
-            .map(item => `${item.label}:\n${item.logs()}`)
-            .join("\n")}`,
-    );
-}
-
 function assertEvidence(evidence) {
     const failures = [];
     if (evidence.framework !== "nonebot") failures.push("framework");
@@ -247,34 +173,4 @@ function assertEvidence(evidence) {
             `NoneBot 互操作证据不完整：${failures.join(", ")}\n${JSON.stringify(evidence)}`,
         );
     }
-}
-
-async function stopProcess(processHandle) {
-    if (processHandle.child.exitCode !== null) return;
-    processHandle.child.kill("SIGTERM");
-    const stopped = await Promise.race([processHandle.exit.then(() => true), delay(3_000)]);
-    if (stopped !== true && processHandle.child.exitCode === null) {
-        processHandle.child.kill("SIGKILL");
-        await processHandle.exit;
-    }
-}
-
-function allocatePort() {
-    return new Promise((resolve, reject) => {
-        const server = net.createServer();
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", () => {
-            const address = server.address();
-            if (!address || typeof address === "string") {
-                server.close();
-                reject(new Error("无法分配互操作测试端口"));
-                return;
-            }
-            server.close(error => (error ? reject(error) : resolve(address.port)));
-        });
-    });
-}
-
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
 }

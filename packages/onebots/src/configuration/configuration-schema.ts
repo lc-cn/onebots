@@ -72,6 +72,7 @@ export function normalizeConfigurationSchema(input: {
     const source = clone(input.schemas);
     const metadata = clone(input.protocols);
     if (!record(source) || source.schemaVersion !== 1 || !Array.isArray(metadata)) invalid();
+    normalizeTrustedStringLists(source);
     const adapters = schemaMap(source.adapters);
     const originalProtocols = schemaMap(source.protocols);
     const protocols: Record<string, ConfigurationSchema> = {};
@@ -136,6 +137,24 @@ export function normalizeConfigurationSchema(input: {
         applications,
         unknownFieldPolicy: "withhold",
     };
+}
+
+/** 旧扩展的两个受信 UI 控件已明确只接收字符串；补齐 JSON Schema items 后才能安全编辑。 */
+function normalizeTrustedStringLists(value: unknown): void {
+    if (Array.isArray(value)) {
+        value.forEach(normalizeTrustedStringLists);
+        return;
+    }
+    if (!record(value)) return;
+    if (value.type === "array" && value.items === undefined && record(value.ui)) {
+        const widget = value.ui.widget;
+        if (
+            widget === "choice-list" ||
+            (widget === "endpoint-list" && !Array.isArray(value.ui.fields))
+        )
+            value.items = { type: "string" };
+    }
+    Object.values(value).forEach(normalizeTrustedStringLists);
 }
 
 /** 未声明/形状不匹配的数据整棵隐藏，但调用方必须保存原始私有文档，不能用投影覆盖它。 */

@@ -31,6 +31,20 @@ const schema = () =>
                         },
                     },
                     opaque: { type: "object" },
+                    eventTypes: {
+                        type: "array",
+                        choices: [{ label: "私聊", value: "private_message" }],
+                        ui: { widget: "choice-list" },
+                    },
+                    endpoints: { type: "array", ui: { widget: "endpoint-list" } },
+                    structuredEndpoints: {
+                        type: "array",
+                        ui: {
+                            widget: "endpoint-list",
+                            fields: [{ key: "url", label: "地址" }],
+                        },
+                    },
+                    unknownList: { type: "array" },
                 },
             },
             protocols: { "custom-output": { access_token: { type: "string", sensitive: true } } },
@@ -100,6 +114,22 @@ describe("可信配置 Schema 投影", () => {
         expect(JSON.stringify(projection.document)).not.toContain("secret");
         expect(JSON.stringify(projection.document)).toContain("Alice");
         expect(config["qq.account.with.dots"].password).toBe("secret");
+    });
+    it("只为受信字符串列表控件补 items，其他无约束数组仍按未知字段保护", () => {
+        const normalized = schema();
+        expect(normalized.adapters.qq.eventTypes).toMatchObject({ items: { type: "string" } });
+        expect(normalized.adapters.qq.endpoints).toMatchObject({ items: { type: "string" } });
+        expect(normalized.adapters.qq.structuredEndpoints).not.toHaveProperty("items");
+        expect(normalized.adapters.qq.unknownList).not.toHaveProperty("items");
+        const inspected = inspectConfigurationPaths(normalized, {
+            "qq.a": {
+                eventTypes: ["private_message"],
+                endpoints: ["ws://127.0.0.1:3000/ws"],
+                structuredEndpoints: [{ url: "ws://127.0.0.1:3000/ws" }],
+                unknownList: ["private-value"],
+            },
+        });
+        expect(inspected.unknownPaths).toEqual([["qq.a", "unknownList", "0"]]);
     });
     it("未知字段与无约束对象整棵隐藏，异常形状不泄漏且不更改私有文档", () => {
         const config = {

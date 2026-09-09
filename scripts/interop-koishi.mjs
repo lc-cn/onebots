@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import {
     allocatePort,
+    startManagedGateway,
     startProcess,
+    stopManagedGateway,
     stopProcess,
     waitForEvidence,
+    verifyFrameworkSend,
     waitForPort,
 } from "./interop-harness.mjs";
 
@@ -16,33 +19,21 @@ const RUNTIME = path.resolve(process.env.ONEBOTS_INTEROP_KOISHI_RUNTIME ?? "inte
 const TOKEN = "onebots-koishi-interop-token";
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-koishi-interop-"));
 const evidencePath = path.join(temporaryDirectory, "evidence.json");
-const configPath = path.join(temporaryDirectory, "config.yaml");
 const children = [];
 
 try {
     assertRuntime();
-    prepareWorkspacePlugins();
     const gatewayPort = await allocatePort();
-    fs.writeFileSync(configPath, renderConfig(gatewayPort), "utf8");
-    const gateway = startProcess(
-        process.execPath,
-        [
-            path.join(ROOT, "packages/onebots/lib/bin.js"),
-            "--service-runtime",
-            "run",
-            "-c",
-            configPath,
-            "-r",
-            "mock",
-            "-p",
-            "satori-v1",
-        ],
-        {},
-        "OneBots",
-        temporaryDirectory,
-    );
-    children.push(gateway);
-    await waitForPort(gatewayPort, gateway, 15_000);
+    const gateway = await startManagedGateway({
+        root: ROOT,
+        workspace: temporaryDirectory,
+        gatewayPort,
+        configSource: renderConfig(gatewayPort),
+        protocolPackage: "satori-v1",
+        protocolConfig: "satori.v1",
+        framework: "koishi",
+        children,
+    });
     await assertWrongTokenRejected(gatewayPort);
 
     const koishi = startProcess(
@@ -59,11 +50,21 @@ try {
     children.push(koishi);
     const evidence = await waitForEvidence(evidencePath, [gateway, koishi], 25_000);
     assertEvidence(evidence);
+    await verifyFrameworkSend(gateway, evidence, {
+        gatewayPort,
+        framework: "koishi",
+        protocol: "satori.v1",
+        token: TOKEN,
+    });
     process.stdout.write(
         `${JSON.stringify({ ok: true, framework: "koishi", frameworkVersion: evidence.frameworkVersion, adapterVersion: evidence.adapterVersion, protocol: "satori.v1", transport: "websocket", checks: ["auth-rejection", "handshake", "private-message", "message.create"] })}\n`,
     );
 } finally {
-    await Promise.all(children.reverse().map(stopProcess));
+    try {
+        await stopManagedGateway(children.find(item => item.control));
+    } finally {
+        await Promise.all(children.reverse().map(stopProcess));
+    }
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
 
@@ -75,21 +76,6 @@ function assertRuntime() {
         if (!fs.existsSync(path.join(RUNTIME, file)))
             throw new Error(`Koishi 互操作依赖缺失：${file}`);
     }
-}
-
-function prepareWorkspacePlugins() {
-    const scope = path.join(temporaryDirectory, "node_modules", "@onebots");
-    fs.mkdirSync(scope, { recursive: true });
-    fs.symlinkSync(
-        path.join(ROOT, "adapters/adapter-mock"),
-        path.join(scope, "adapter-mock"),
-        "dir",
-    );
-    fs.symlinkSync(
-        path.join(ROOT, "protocols/satori-v1/protocol"),
-        path.join(scope, "protocol-satori-v1"),
-        "dir",
-    );
 }
 
 function renderConfig(port) {

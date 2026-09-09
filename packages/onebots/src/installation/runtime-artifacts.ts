@@ -14,12 +14,19 @@ export function loadRuntimeArtifacts(
         const record: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
         if (!isObject(record) || record.schemaVersion !== 1) throw new Error();
         const root = fs.realpathSync(path.dirname(file));
-        const artifact = (key: "host" | "core"): GenerationArtifact => {
-            const entry = record[key];
+        const artifact = (
+            entry: unknown,
+            expectedArtifact?: GenerationArtifact,
+        ): GenerationArtifact => {
             if (
                 !isObject(entry) ||
-                entry.name !== expected[key].name ||
-                entry.version !== expected[key].version ||
+                typeof entry.name !== "string" ||
+                !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(entry.name) ||
+                typeof entry.version !== "string" ||
+                !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(entry.version) ||
+                (expectedArtifact !== undefined &&
+                    (entry.name !== expectedArtifact.name ||
+                        entry.version !== expectedArtifact.version)) ||
                 typeof entry.file !== "string" ||
                 !/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.tgz$/.test(entry.file) ||
                 typeof entry.sha256 !== "string" ||
@@ -30,13 +37,24 @@ export function loadRuntimeArtifacts(
             if (fs.realpathSync(source) !== source || !fs.lstatSync(source).isFile())
                 throw new Error();
             return {
-                name: expected[key].name,
-                version: expected[key].version,
+                name: entry.name,
+                version: entry.version,
                 spec: `file:${source}`,
                 sha256: entry.sha256,
             };
         };
-        return { host: artifact("host"), core: artifact("core") };
+        const host = artifact(record.host, expected.host);
+        const core = artifact(record.core, expected.core);
+        const entries = record.extensions ?? [];
+        if (!Array.isArray(entries) || entries.length > 64) throw new Error();
+        const artifacts: Record<string, GenerationArtifact> = {};
+        for (const entry of entries) {
+            const value = artifact(entry);
+            if ([host.name, core.name].includes(value.name) || artifacts[value.name])
+                throw new Error();
+            artifacts[value.name] = value;
+        }
+        return { host, core, artifacts };
     } catch {
         throw new Error("随产品提供的运行工件无效，请检查镜像或重新安装管理服务");
     }

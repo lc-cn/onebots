@@ -6,6 +6,7 @@ export const mockCapabilities: AdapterCapabilityManifest = defineAdapterCapabili
         send_message: { support: "native", scenes: ["private", "group"] },
         delete_message: { support: "native", scenes: ["private", "group"] },
         get_message: { support: "native", scenes: ["private", "group"] },
+        get_message_history: { support: "native", scenes: ["private", "group"] },
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },
         get_friend_list: { support: "native" },

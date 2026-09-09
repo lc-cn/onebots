@@ -17,7 +17,9 @@ import { mockCapabilities } from "./capabilities.js";
 import { MockError } from "./errors.js";
 import { projectMockHeartbeat, projectMockMessage, projectMockRequest } from "./events.js";
 import { compileMockMessage } from "./messages.js";
-import type { MockConfig, MockMember } from "./types.js";
+import type { MockConfig, MockMember, MockMessage } from "./types.js";
+
+const DEFAULT_FRIEND_CATEGORY = { category_id: 0, category_name: "默认分组" } as const;
 
 export class MockAdapter extends Adapter<MockBot, "mock"> {
     constructor(app: BaseApp) {
@@ -63,6 +65,52 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
             throw new MockError(`Mock 消息 ${messageId} 不存在`, {
                 code: "MOCK_MESSAGE_NOT_FOUND",
             });
+        if (params.scene_type !== undefined || params.scene_id !== undefined) {
+            if (!params.scene_type || !params.scene_id || !this.matchesScene(message, params))
+                throw new MockError(`Mock 消息 ${messageId} 不属于指定会话`, {
+                    code: "MOCK_MESSAGE_NOT_FOUND",
+                });
+        }
+        return this.projectMessage(message);
+    }
+
+    async getMessageHistory(
+        uin: string,
+        params: Adapter.GetMessageHistoryParams,
+    ): Promise<Adapter.MessageInfo[]> {
+        const bot = this.requireBot(uin);
+        const limit = params.limit ?? 20;
+        const offset = params.offset ?? 0;
+        if (
+            !Number.isSafeInteger(limit) ||
+            limit < 1 ||
+            !Number.isSafeInteger(offset) ||
+            offset < 0
+        )
+            throw new MockError("Mock 消息历史分页参数无效", { code: "MOCK_INVALID_CONFIG" });
+        let messages = bot.getMessages().filter(message => this.matchesScene(message, params));
+        if (params.start_message_id) {
+            const start = this.coerceId(params.start_message_id).string;
+            const index = messages.findIndex(message => message.message_id === start);
+            messages = index < 0 ? [] : messages.slice(index + 1);
+        }
+        return messages.slice(offset, offset + limit).map(message => this.projectMessage(message));
+    }
+
+    private matchesScene(
+        message: MockMessage,
+        params: Pick<Adapter.GetMessageParams, "scene_type" | "scene_id">,
+    ): boolean {
+        if (!params.scene_type || !params.scene_id) return false;
+        const sceneId = this.coerceId(params.scene_id).string;
+        return params.scene_type === "group"
+            ? message.group_id === sceneId
+            : params.scene_type === "private" &&
+                  (message.target_id ?? (message.group_id ? undefined : message.user_id)) ===
+                      sceneId;
+    }
+
+    private projectMessage(message: MockMessage): Adapter.MessageInfo {
         const isGroup = Boolean(message.group_id);
         return {
             message_id: this.createId(message.message_id),
@@ -70,7 +118,7 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
             sender: {
                 scene_type: isGroup ? "group" : "private",
                 sender_id: this.createId(message.user_id),
-                scene_id: this.createId(message.group_id ?? message.user_id),
+                scene_id: this.createId(message.group_id ?? message.target_id ?? message.user_id),
                 sender_name: "",
                 scene_name: "",
             },
@@ -105,7 +153,7 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
         };
     }
 
-    async getFriendList(uin: string): Promise<Adapter.UserInfo[]> {
+    async getFriendList(uin: string): Promise<Adapter.FriendInfo[]> {
         const bot = this.requireBot(uin);
         const friends = await bot.getFriendList();
 
@@ -113,6 +161,7 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
             user_id: this.createId(friend.user_id),
             user_name: friend.nickname,
             avatar: friend.avatar,
+            ...DEFAULT_FRIEND_CATEGORY,
         }));
     }
 
@@ -129,6 +178,7 @@ export class MockAdapter extends Adapter<MockBot, "mock"> {
             user_id: this.createId(info.user_id),
             user_name: info.nickname,
             remark: info.remark,
+            ...DEFAULT_FRIEND_CATEGORY,
         };
     }
 

@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import {
     allocatePort,
+    startManagedGateway,
     startProcess,
+    stopManagedGateway,
     stopProcess,
     waitForEvidence,
+    verifyFrameworkSend,
     waitForPort,
 } from "./interop-harness.mjs";
 
@@ -16,35 +19,21 @@ const RUNTIME = path.resolve(process.env.ONEBOTS_INTEROP_ZHIN_RUNTIME ?? "intero
 const TOKEN = "onebots-zhin-interop-token";
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-zhin-interop-"));
 const evidencePath = path.join(temporaryDirectory, "evidence.json");
-const configPath = path.join(temporaryDirectory, "config.yaml");
 const children = [];
 
 try {
     assertRuntime();
-    prepareWorkspacePlugins();
     const gatewayPort = await allocatePort();
-    fs.writeFileSync(configPath, renderConfig(gatewayPort), "utf8");
-    const gateway = startProcess(
-        process.execPath,
-        [
-            path.join(ROOT, "packages/onebots/lib/bin.js"),
-            "--service-runtime",
-            "run",
-            "-c",
-            configPath,
-            "-r",
-            "mock",
-            "-p",
-            "onebot-v11",
-            "-t",
-            "zhin",
-        ],
-        {},
-        "OneBots",
-        temporaryDirectory,
-    );
-    children.push(gateway);
-    await waitForPort(gatewayPort, gateway, 15_000);
+    const gateway = await startManagedGateway({
+        root: ROOT,
+        workspace: temporaryDirectory,
+        gatewayPort,
+        configSource: renderConfig(gatewayPort),
+        protocolPackage: "onebot-v11",
+        protocolConfig: "onebot.v11",
+        framework: "zhin",
+        children,
+    });
     await assertWrongTokenRejected(gatewayPort);
 
     const zhin = startProcess(
@@ -62,11 +51,21 @@ try {
     children.push(zhin);
     const evidence = await waitForEvidence(evidencePath, [gateway, zhin], 20_000);
     assertEvidence(evidence);
+    await verifyFrameworkSend(gateway, evidence, {
+        gatewayPort,
+        framework: "zhin",
+        protocol: "onebot.v11",
+        token: TOKEN,
+    });
     process.stdout.write(
         `${JSON.stringify({ ok: true, framework: "zhin", frameworkVersion: evidence.frameworkVersion, adapterVersion: evidence.adapterVersion, protocol: "onebot.v11", transport: "websocket", checks: ["auth-rejection", "handshake", "private-message", "get_login_info", "send_private_msg"] })}\n`,
     );
 } finally {
-    await Promise.all(children.reverse().map(stopProcess));
+    try {
+        await stopManagedGateway(children.find(item => item.control));
+    } finally {
+        await Promise.all(children.reverse().map(stopProcess));
+    }
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
 
@@ -78,21 +77,6 @@ function assertRuntime() {
         if (!fs.existsSync(path.join(RUNTIME, file)))
             throw new Error(`Zhin 互操作依赖缺失：${file}`);
     }
-}
-
-function prepareWorkspacePlugins() {
-    const scope = path.join(temporaryDirectory, "node_modules", "@onebots");
-    fs.mkdirSync(scope, { recursive: true });
-    fs.symlinkSync(
-        path.join(ROOT, "adapters/adapter-mock"),
-        path.join(scope, "adapter-mock"),
-        "dir",
-    );
-    fs.symlinkSync(
-        path.join(ROOT, "protocols/onebot-v11/protocol"),
-        path.join(scope, "protocol-onebot-v11"),
-        "dir",
-    );
 }
 
 function renderConfig(port) {
