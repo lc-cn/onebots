@@ -388,3 +388,22 @@ it("candidate binding replacement during OS inspection preserves recovery and re
     acquireControlWorkspace(home)();
     acquireControlWorkspace(f.workspace)();
 });
+
+it.each(["cycle-symlink", "missing-initial-intent"])("new cycle rejects %s without replacing history", async problem => {
+    const f = fixture();
+    await bootstrapManagerService(f.request, f.dependencies, f.host);
+    const home = path.join(f.files.stateDir, "manager-artifacts");
+    const metadata = fs.readFileSync(f.files.metadata);
+    if (problem === "cycle-symlink") {
+        const outside = path.join(f.root, "outside");
+        fs.mkdirSync(outside, { mode: 0o700 });
+        fs.symlinkSync(outside, path.join(home, "bootstrap-cycles"));
+    } else {
+        fs.unlinkSync(path.join(home, "bootstrap/intent.json"));
+    }
+    await expect(bootstrapManagerService({ ...f.request, id: "next-install" }, f.dependencies, f.host)).rejects.toThrow();
+    expect(mock.install).toHaveBeenCalledTimes(1);
+    expect(f.effects).toEqual(["reload:true"]);
+    expect(fs.readFileSync(f.files.metadata)).toEqual(metadata);
+    if (problem === "cycle-symlink") expect(fs.readdirSync(path.join(f.root, "outside"))).toEqual([]);
+});

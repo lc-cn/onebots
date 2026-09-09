@@ -129,5 +129,23 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     assert.equal(fs.existsSync(files.metadata), false);
     await assert.rejects(bootstrapManagerService(request, dependencies, host));
     assert.deepEqual(effects, effectsAfterRemoval);
-    process.stdout.write("✓ 真实首次安装候选：自带 pnpm 下载、双证明、稳定注册绑定、冷对账、重复只读、另一真实候选升级、卸载保留数据及卸载冷对账通过（OS 驱动注入，未安装原生系统服务）\n");
+    const initialBinding = path.join(files.stateDir, "manager-artifacts/bootstrap");
+    const initialIntent = fs.readFileSync(path.join(initialBinding, "intent.json"));
+    const initialCandidate = fs.readFileSync(path.join(initialBinding, "candidate.json"));
+    const nextRequest = { ...request, id: "reinstalled-manager" };
+    const reinstalled = await bootstrapManagerService(nextRequest, dependencies, host);
+    assert.equal(reinstalled.status, "succeeded");
+    assert.notEqual(reinstalled.managerSpec.workingDirectory, result.managerSpec.workingDirectory);
+    assert.deepEqual(fs.readFileSync(path.join(initialBinding, "intent.json")), initialIntent);
+    assert.deepEqual(fs.readFileSync(path.join(initialBinding, "candidate.json")), initialCandidate);
+    assert.deepEqual(fs.readFileSync(path.join(workspace, ".control/gateway.json")), gateway);
+    const cycleJournal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
+    cycleJournal.save({ ...reinstalled, status: "interrupted", recoveryRequired: true });
+    const newCycle = await reconcileManagerServiceOperation(nextRequest.id, "user", host, { platform });
+    assert.equal(newCycle.status, "succeeded");
+    assert.deepEqual(await bootstrapManagerService(nextRequest, dependencies, host), newCycle);
+    assert.deepEqual(effects, [...effectsAfterRemoval, "reload"]);
+    await assert.rejects(reconcileManagerServiceOperation(request.id, "user", host, { platform }));
+    assert.deepEqual(effects, [...effectsAfterRemoval, "reload"]);
+    process.stdout.write("✓ 真实首次安装候选：自带 pnpm 下载、双证明、稳定注册绑定、冷对账、重复只读、另一真实候选升级、卸载保留数据及卸载冷对账及独立安装周期通过（OS 驱动注入，未安装原生系统服务）\n");
 }

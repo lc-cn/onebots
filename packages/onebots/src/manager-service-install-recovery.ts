@@ -1,3 +1,4 @@
+import { managerBootstrapBindingDirectory } from "./manager-bootstrap-binding.js";
 import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -29,8 +30,9 @@ export function captureInstalledManagerCandidate(
     const home = path.join(files.stateDir, "manager-artifacts");
     if (home === spec.workspace || home.startsWith(spec.workspace + path.sep) ||
         spec.workspace.startsWith(home + path.sep)) throw failure();
+    const bindingDirectory = managerBootstrapBindingDirectory(home, record.id);
     const directories = [files.stateDir, home, path.join(home, ".control"),
-        path.join(home, "bootstrap"), path.join(home, "versions")];
+        path.dirname(bindingDirectory), bindingDirectory, path.join(home, "versions")];
     const identities = directories.map(directory => privateDirectory(directory));
     const unlock = acquireControlWorkspace(home);
     const held: ReturnType<typeof captureBinding>[] = [];
@@ -46,12 +48,12 @@ export function captureInstalledManagerCandidate(
         try { closeFiles(); } finally { unlock(); }
     };
     try {
-        const intentFile = captureBinding(path.join(home, "bootstrap/intent.json"));
+        const intentFile = captureBinding(path.join(bindingDirectory, "intent.json"));
         held.push(intentFile);
-        const candidateFile = captureBinding(path.join(home, "bootstrap/candidate.json"));
+        const candidateFile = captureBinding(path.join(bindingDirectory, "candidate.json"));
         held.push(candidateFile);
         const verify = () => {
-            if (disposed) throw failure();
+            if (disposed || managerBootstrapBindingDirectory(home, record.id) !== bindingDirectory) throw failure();
             directories.forEach((directory, index) => {
                 const current = privateDirectory(directory);
                 if (current.dev !== identities[index].dev || current.ino !== identities[index].ino)

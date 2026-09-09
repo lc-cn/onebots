@@ -1,3 +1,4 @@
+import { managerBootstrapBindingDirectory } from "./manager-bootstrap-binding.js";
 import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -60,7 +61,7 @@ export async function bootstrapManagerService(
         const frozen = await freezeGenerationArtifacts(dependencies.artifacts, path.join(home, "artifacts"));
         const plan = createGenerationPlan({ host: frozen.host, core: frozen.core,
             extensions: [], selection: { adapters: [], protocols: [], applications: [] } });
-        const binding = new ServiceOperationStorage(path.join(home, "bootstrap"));
+        const binding = new ServiceOperationStorage(managerBootstrapBindingDirectory(home, request.id));
         const intent = { schemaVersion: 1, id: request.id, service: template, planDigest: plan.digest };
         if (binding.has("intent.json")) {
             if (!isDeepStrictEqual(binding.read("intent.json"), intent)) throw failure();
