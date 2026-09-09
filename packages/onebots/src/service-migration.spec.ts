@@ -8,6 +8,7 @@ import { getServiceFiles } from "./service-files.js";
 import { renderSystemdUnit, renderLaunchdPlist, type ServiceSpec } from "./service-definition.js";
 import { verifyRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import { cancelUnstartedServiceMigration } from "./service-migration-recovery.js";
+import { rollbackStoppedServiceMigration } from "./service-migration-recovery.js";
 import { inspectServiceMigrationRecovery } from "./service-recovery-inspection.js";
 import { prepareServiceMigrationManagerCandidate } from "./service-migration-manager-candidate.js";
 vi.mock("./service-migration-manager-candidate.js", () => ({
@@ -29,7 +30,7 @@ afterEach(() => {
     vi.mocked(prepareServiceMigrationManagerCandidate).mockReset();
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
-function fixture() {
+function fixture(previousRunning = false, stopInitiallyConfirmed = true) {
     const root = fs.realpathSync(fs.mkdtempSync("/tmp/migration-entry-"));
     roots.push(root);
     const workspace = path.join(root, "workspace");
@@ -129,15 +130,16 @@ function fixture() {
         },
     );
     let state: ServicePlatformState = {
-        state: "stopped",
-        running: false,
+        state: previousRunning ? "running" : "stopped",
+        running: previousRunning,
         enabled: true,
         loaded: true,
         definitionPath: files.definition,
-        processId: null,
-        identity: null,
-        quiescent: true,
+        processId: previousRunning ? 4242 : null,
+        identity: previousRunning ? "synthetic-old-instance" : null,
+        quiescent: !previousRunning,
     };
+    let stopConfirmed = stopInitiallyConfirmed;
     const prototype =
         host.platform === "linux"
             ? SystemdServicePlatform.prototype
@@ -147,7 +149,15 @@ function fixture() {
         .mockImplementation(async () => structuredClone(state));
     vi.spyOn(prototype, "quiesce").mockImplementation(async () => {
         osEffects.push("quiesce");
-        state = { ...state, enabled: false };
+        state = {
+            ...state,
+            state: "stopped",
+            running: false,
+            enabled: false,
+            processId: null,
+            identity: null,
+            quiescent: stopConfirmed,
+        };
     });
     vi.spyOn(prototype, "reload").mockImplementation(async enabled => {
         osEffects.push("reload");
@@ -155,7 +165,15 @@ function fixture() {
     });
     const start = vi.spyOn(prototype, "start").mockImplementation(async () => {
         osEffects.push("start");
-        throw new Error("stopped service must never start");
+        if (!previousRunning) throw new Error("stopped service must never start");
+        state = {
+            ...state,
+            state: "running",
+            running: true,
+            processId: 4343,
+            identity: "synthetic-restored-instance",
+            quiescent: false,
+        };
     });
     return {
         root,
@@ -170,6 +188,13 @@ function fixture() {
         osEffects,
         inspect,
         start,
+        confirmStopped() {
+            stopConfirmed = true;
+            state = { ...state, quiescent: true };
+        },
+        setEnabled(enabled: boolean) {
+            state = { ...state, enabled };
+        },
     };
 }
 describe("installed service migration entry", () => {
@@ -197,6 +222,62 @@ describe("installed service migration entry", () => {
             expect(fs.readFileSync(test.unrelated, "utf8")).toBe("synthetic-unrelated");
             expect(fs.existsSync(path.join(test.target.workspace, ".control"))).toBe(false);
         },
+    );
+    it.skipIf(process.platform === "win32")(
+        "cold rollback restarts the retained legacy runtime after stop completed before target write",
+        async () => {
+            const test = fixture(true, false);
+            const interrupted = await migrateInstalledService(test.target, test.host);
+            expect(interrupted.recoveryRequired).toBe(true);
+            expect(test.osEffects).toEqual(["quiesce"]);
+            test.confirmStopped();
+            const platform =
+                test.host.platform === "linux"
+                    ? new SystemdServicePlatform(test.host, "user", test.files.definition)
+                    : new LaunchdServicePlatform(test.host, "user", test.files.definition);
+
+            test.setEnabled(true);
+            await expect(
+                rollbackStoppedServiceMigration(interrupted.id, "user", test.host, platform),
+            ).rejects.toThrow("目标尚未接管");
+            expect(test.osEffects).toEqual(["quiesce"]);
+            test.setEnabled(false);
+            fs.mkdirSync(path.join(test.target.workspace, ".control"), { mode: 0o700 });
+            await expect(
+                rollbackStoppedServiceMigration(interrupted.id, "user", test.host, platform),
+            ).rejects.toThrow("目标尚未接管");
+            fs.rmdirSync(path.join(test.target.workspace, ".control"));
+
+            fs.writeFileSync(test.legacy.configPath, "external-change\n");
+            await expect(
+                rollbackStoppedServiceMigration(interrupted.id, "user", test.host, platform),
+            ).rejects.toThrow("目标尚未接管");
+            expect(test.osEffects).toEqual(["quiesce"]);
+            fs.writeFileSync(test.legacy.configPath, test.config);
+
+            const restored = await rollbackStoppedServiceMigration(
+                interrupted.id,
+                "user",
+                test.host,
+                platform,
+            );
+            expect(restored).toMatchObject({
+                phase: "completed",
+                status: "failed",
+                recoveryRequired: false,
+                rolledBack: true,
+            });
+            expect(test.osEffects).toEqual(["quiesce", "reload", "start"]);
+            expect(fs.readFileSync(test.legacy.configPath, "utf8")).toBe(test.config);
+            expect(JSON.parse(fs.readFileSync(test.files.metadata, "utf8")).binPath).not.toBe(
+                test.legacy.binPath,
+            );
+            expect(
+                await rollbackStoppedServiceMigration(interrupted.id, "user", test.host, platform),
+            ).toEqual(restored);
+            expect(test.osEffects).toEqual(["quiesce", "reload", "start"]);
+        },
+        120_000,
     );
     it.skipIf(process.platform === "win32")(
         "migrates stopped legacy service through real capture/journal/file/ownership proof without starting it",

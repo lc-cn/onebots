@@ -180,7 +180,9 @@ export async function assertSystemNativeDependencies(file: string): Promise<void
             encoding: "utf8",
             timeout: 15_000,
             maxBuffer: 4 * 1024 * 1024,
-            env: { PATH: "/usr/bin:/bin", LC_ALL: "C", LANG: "C" },
+            // otool 在裁剪环境中缺少 DARWIN_USER_TEMP_DIR 时会向 stderr 写警告；固定系统
+            // 临时目录，既不继承调用者环境，也不把合法二进制误判为工具异常。
+            env: { PATH: "/usr/bin:/bin", LC_ALL: "C", LANG: "C", TMPDIR: "/tmp" },
         });
         if (result.stderr.trim()) throw failure();
         assertDarwinSystemDependencies(result.stdout, file);

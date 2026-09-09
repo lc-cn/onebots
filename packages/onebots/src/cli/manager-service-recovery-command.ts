@@ -1,11 +1,15 @@
 import { reconcileManagerServiceOperation } from "../manager-service-recovery.js";
-import { cancelUnstartedServiceMigration } from "../service-migration-recovery.js";
+import {
+    cancelUnstartedServiceMigration,
+    rollbackStoppedServiceMigration,
+} from "../service-migration-recovery.js";
 import type { CommandResult } from "./command-application.js";
 
 export interface ManagerServiceRecoveryOptions {
     operation: string;
     system?: boolean;
     cancelMigration?: boolean;
+    rollbackMigration?: boolean;
 }
 const pending =
     "未确认已达到安装、停止、卸载或已释放升级的目标；保留操作记录，未重放任何系统动作。这不是完整自动恢复。";
@@ -30,13 +34,34 @@ export async function managerServiceRecoveryCommand(
         typeof options.operation !== "string" ||
         !/^[A-Za-z0-9_-]{1,128}$/.test(options.operation) ||
         (options.system !== undefined && typeof options.system !== "boolean") ||
-        (options.cancelMigration !== undefined && typeof options.cancelMigration !== "boolean")
+        (options.cancelMigration !== undefined && typeof options.cancelMigration !== "boolean") ||
+        (options.rollbackMigration !== undefined &&
+            typeof options.rollbackMigration !== "boolean") ||
+        (options.cancelMigration === true && options.rollbackMigration === true)
     )
         return {
             exitCode: 1,
             output: "必须指定 --operation，值为 1 至 128 位字母、数字、下划线或短横线；未读取或更改服务记录。",
         };
     try {
+        if (options.rollbackMigration) {
+            const record = await rollbackStoppedServiceMigration(
+                options.operation,
+                options.system ? "system" : "user",
+            );
+            if (
+                record.id !== options.operation ||
+                record.phase !== "completed" ||
+                record.status !== "failed" ||
+                record.recoveryRequired ||
+                !record.rolledBack
+            )
+                throw new Error();
+            return {
+                exitCode: 0,
+                output: `操作 ${record.id}：已恢复保留的旧服务。\n若迁移前旧服务处于运行状态，已重新启动并完成稳定性核验；迁移记录和备份仍保留。`,
+            };
+        }
         if (options.cancelMigration) {
             const record = await cancelUnstartedServiceMigration(
                 options.operation,
@@ -80,9 +105,11 @@ export async function managerServiceRecoveryCommand(
     } catch {
         return {
             exitCode: 1,
-            output: options.cancelMigration
-                ? "无法确认迁移尚未切换且旧服务未变，保留恢复记录；未执行系统动作。"
-                : pending,
+            output: options.rollbackMigration
+                ? "无法确认旧服务已停止且目标尚未接管，保留恢复记录；未继续回退。"
+                : options.cancelMigration
+                  ? "无法确认迁移尚未切换且旧服务未变，保留恢复记录；未执行系统动作。"
+                  : pending,
         };
     }
 }
