@@ -1,10 +1,12 @@
 import fs from "node:fs";
+import { acquireControlWorkspace } from "./control/workspace.js";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     bootstrapManagerService,
     type ManagerBootstrapRequest,
 } from "./manager-service-bootstrap.js";
+import { reconcileManagerServiceOperation } from "./manager-service-recovery.js";
 import { getServiceFiles } from "./service-files.js";
 import { ServiceOperationStorage } from "./service-operation-storage.js";
 import { FileManagerServiceJournal } from "./manager-service-journal.js";
@@ -16,6 +18,7 @@ const mock = vi.hoisted(() => ({
     install: vi.fn(),
     status: vi.fn(),
     readCandidate: vi.fn(),
+    readVerified: vi.fn(),
     close: vi.fn(),
     verify: vi.fn(),
     digest: vi.fn(),
@@ -32,6 +35,7 @@ vi.mock("./manager-runtime/identity.js", () => ({ managerCandidateDigest: mock.d
 vi.mock("./manager-service-upgrade-candidate.js", () => ({
     verifyManagerServiceCandidate: mock.verify,
 }));
+vi.mock("./manager-runtime/reader.js", () => ({ readVerifiedManagerCandidate: mock.readVerified }));
 const roots: string[] = [];
 afterEach(() => {
     vi.resetAllMocks();
@@ -60,9 +64,17 @@ function fixture() {
     fs.mkdirSync(workspace, { mode: 0o700 });
     const candidate = {
         id: "10000000-0000-4000-8000-000000000001",
-        directory: path.join(root, "candidate"),
+        directory: path.join(
+            files.stateDir,
+            "manager-artifacts/versions/10000000-0000-4000-8000-000000000001",
+        ),
+        operationId: "bootstrap-1",
+        planDigest: "",
     };
-    fs.mkdirSync(path.join(candidate.directory, "node_modules/onebots/lib"), { recursive: true });
+    fs.mkdirSync(path.join(candidate.directory, "node_modules/onebots/lib"), {
+        recursive: true,
+        mode: 0o700,
+    });
     fs.writeFileSync(
         path.join(candidate.directory, "node_modules/onebots/lib/bin.js"),
         "export {};\n",
@@ -110,11 +122,13 @@ function fixture() {
         },
     };
     mock.install.mockImplementation(async (_id: string, plan: GenerationPlan) => {
+        candidate.planDigest = plan.digest;
         const result = { phase: "verified", planDigest: plan.digest, candidateId: candidate.id };
         mock.status.mockReturnValue(result);
         return result;
     });
     mock.readCandidate.mockReturnValue(candidate);
+    mock.readVerified.mockReturnValue(candidate);
     mock.digest.mockReturnValue("a".repeat(64));
     mock.verify.mockReturnValue(candidate);
     return { root, files, workspace, request, dependencies, host, effects, candidate };
@@ -277,4 +291,100 @@ it("successful bootstrap receipt cannot claim a removed service is installed", a
     const effects = [...f.effects];
     await expect(bootstrapManagerService(f.request, f.dependencies, f.host)).rejects.toThrow();
     expect(f.effects).toEqual(effects);
+});
+
+describe("bootstrap cold installation reconciliation", () => {
+    it("only repairs a lost final acknowledgement after verifying the bound candidate and stopped OS", async () => {
+        const f = fixture();
+        const result = await bootstrapManagerService(f.request, f.dependencies, f.host);
+        const journal = new FileManagerServiceJournal(
+            path.join(f.files.stateDir, "manager-operations"),
+        );
+        journal.save({ ...result, status: "interrupted", recoveryRequired: true });
+        const metadata = fs.readFileSync(f.files.metadata);
+        const definition = fs.readFileSync(f.files.definition);
+        const completed = await reconcileManagerServiceOperation(f.request.id, "user", f.host, {
+            platform: f.dependencies.platform,
+        });
+        expect(completed).toMatchObject({
+            id: f.request.id,
+            phase: "completed",
+            status: "succeeded",
+            recoveryRequired: false,
+        });
+        expect(f.effects).toEqual(["reload:true"]);
+        expect(mock.install).toHaveBeenCalledTimes(1);
+        expect(fs.readFileSync(f.files.metadata)).toEqual(metadata);
+        expect(fs.readFileSync(f.files.definition)).toEqual(definition);
+        expect(journal.read(f.request.id)).toEqual(completed);
+        expect(mock.readVerified).toHaveBeenCalledWith(
+            path.join(f.files.stateDir, "manager-artifacts/versions"),
+            f.candidate.id,
+        );
+    });
+    it.each(["writing", "damaged-candidate"])(
+        "%s evidence cannot clear the recovery gate",
+        async mode => {
+            const f = fixture();
+            const result = await bootstrapManagerService(f.request, f.dependencies, f.host);
+            const journal = new FileManagerServiceJournal(
+                path.join(f.files.stateDir, "manager-operations"),
+            );
+            if (mode === "writing") {
+                const operations = new ServiceOperationStorage(
+                    path.join(f.files.stateDir, "manager-operations"),
+                );
+                operations.write(`${f.request.id}.json`, {
+                    ...result,
+                    phase: "writing",
+                    status: "interrupted",
+                    recoveryRequired: true,
+                });
+            } else {
+                journal.save({ ...result, status: "interrupted", recoveryRequired: true });
+                mock.readVerified.mockImplementation(() => {
+                    throw new Error("damaged candidate");
+                });
+            }
+            await expect(
+                reconcileManagerServiceOperation(f.request.id, "user", f.host, {
+                    platform: f.dependencies.platform,
+                }),
+            ).rejects.toThrow();
+            expect(
+                new FileManagerServiceJournal(
+                    path.join(f.files.stateDir, "manager-operations"),
+                ).health().recoveryRequired,
+            ).toBe(true);
+            expect(f.effects).toEqual(["reload:true"]);
+            expect(mock.install).toHaveBeenCalledTimes(1);
+        },
+    );
+});
+
+it("candidate binding replacement during OS inspection preserves recovery and releases locks", async () => {
+    const f = fixture();
+    const result = await bootstrapManagerService(f.request, f.dependencies, f.host);
+    const journal = new FileManagerServiceJournal(path.join(f.files.stateDir, "manager-operations"));
+    journal.save({ ...result, status: "interrupted", recoveryRequired: true });
+    const home = path.join(f.files.stateDir, "manager-artifacts");
+    const file = path.join(home, "bootstrap/candidate.json");
+    const bytes = fs.readFileSync(file);
+    const inspect = f.dependencies.platform.inspect;
+    let replaced = false;
+    f.dependencies.platform.inspect = async () => {
+        if (!replaced) {
+            replaced = true;
+            fs.unlinkSync(file);
+            fs.writeFileSync(file, bytes, { mode: 0o600 });
+        }
+        return inspect();
+    };
+    await expect(reconcileManagerServiceOperation(f.request.id, "user", f.host, {
+        platform: f.dependencies.platform,
+    })).rejects.toThrow();
+    expect(journal.read(f.request.id).recoveryRequired).toBe(true);
+    expect(f.effects).toEqual(["reload:true"]);
+    acquireControlWorkspace(home)();
+    acquireControlWorkspace(f.workspace)();
 });

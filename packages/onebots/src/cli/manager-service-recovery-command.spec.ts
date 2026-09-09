@@ -57,8 +57,8 @@ describe("显式管理服务对账 CLI", () => {
         });
         expect(result.output).not.toContain(secret);
     });
-    it("已释放升级对账成功时明确只补日志", async () => {
-        vi.mocked(reconcileManagerServiceOperation).mockResolvedValue({ ...record(), action: "upgrade" });
+    it.each(["upgrade", "install"] as const)("%s 对账成功时明确只补日志", async action => {
+        vi.mocked(reconcileManagerServiceOperation).mockResolvedValue({ ...record(), action });
         const result = await managerServiceRecoveryCommand({ operation: "operation_123" });
         expect(result.exitCode).toBe(0);
         expect(result.output).toContain("仅更新对账记录，未重放系统动作");

@@ -1,13 +1,11 @@
 import { assertNoPendingManagerUpgrade } from "./service-upgrade-workspace.js";
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 import { parseManagerServiceSpec, type ManagerServiceSpec } from "./manager-service-spec.js";
-import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
+import { type ServiceHost } from "./service-host.js";
 import { getServiceFiles } from "./service-files.js";
 import { readServiceMetadata } from "./service-metadata.js";
 import { assertManagerServiceRuntime } from "./manager-service-preflight.js";
-import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
 import { FileManagerServiceJournal, type ManagerServicePhase } from "./manager-service-journal.js";
 import {
@@ -32,21 +30,6 @@ import type { ServicePlatform } from "./service-platform.js";
 export interface ManagerServiceInstallDependencies {
     assertAbsent?: typeof assertServiceAbsent;
     platform?: ServicePlatform;
-}
-
-/** 首次系统安装只启用托管定义，不启动 manager，不写业务配置。 */
-export async function installManagerService(
-    input: ManagerServiceSpec,
-    host: ServiceHost = createDefaultServiceHost(),
-    dependencies: ManagerServiceInstallDependencies = {},
-) {
-    const spec = parseManagerServiceSpec(input);
-    if (!["linux", "darwin"].includes(host.platform))
-        throw new Error("此系统尚未通过管理服务安装验收");
-    if (spec.scope === "system" && host.uid !== 0) throw new Error("系统级服务需要管理员权限");
-    const release = acquireServiceMigrationLock(getServiceFiles(spec.scope, host).stateDir);
-    try { return await installManagerServiceWhileLocked(spec, randomUUID(), host, dependencies); }
-    finally { release(); }
 }
 
 /** 内部 bootstrap 调用方须持服务锁；稳定 ID 贯穿候选准备和系统注册，绝不重派已有 ID。 */

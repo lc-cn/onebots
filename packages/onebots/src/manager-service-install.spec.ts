@@ -2,7 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { controlManagerService } from "./manager-service-controller.js";
-import { installManagerService } from "./manager-service-install.js";
+import { installManagerServiceWhileLocked, type ManagerServiceInstallDependencies } from "./manager-service-install.js";
+import { acquireServiceMigrationLock } from "./service-migration-lock.js";
+import { randomUUID } from "node:crypto";
 import { LAUNCHD_LABEL } from "./service-definition.js";
 import { getServiceFiles } from "./service-files.js";
 import { FileManagerServiceJournal } from "./manager-service-journal.js";
@@ -19,6 +21,12 @@ import { acquireControlWorkspace } from "./control/workspace.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform } from "./service-platform.js";
+// 仅测试安装事务；产品入口必须先完成 bootstrap 候选验证。
+async function installManagerService(spec: ManagerServiceSpec, host: ServiceHost, dependencies: ManagerServiceInstallDependencies) {
+    const release = acquireServiceMigrationLock(getServiceFiles(spec.scope, host).stateDir);
+    try { return await installManagerServiceWhileLocked(spec, randomUUID(), host, dependencies); }
+    finally { release(); }
+}
 const roots: string[] = [];
 afterEach(() => {
     vi.restoreAllMocks();

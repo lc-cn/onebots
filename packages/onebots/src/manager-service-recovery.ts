@@ -1,3 +1,4 @@
+import { captureInstalledManagerCandidate } from "./manager-service-install-recovery.js";
 import { verifyReleasedManagerServiceUpgrade } from "./manager-service-upgrade-recovery.js";
 import { assertNoPendingManagerUpgrade } from "./service-upgrade-workspace.js";
 import fs from "node:fs";
@@ -58,7 +59,7 @@ function existingWorkspace(workspace: string): void {
     }
 }
 
-/** 本机显式对账：只确认已完成的 stop/uninstall 或已释放升级，不重启、不删除文件、不重放未知动作。 */
+/** 本机显式对账：只确认已完成的 stop/uninstall、已完成安装或已释放升级，不重启、不删除文件、不重放未知动作。 */
 export async function reconcileManagerServiceOperation(
     id: string,
     scope: ServiceScope,
@@ -90,14 +91,16 @@ export async function reconcileManagerServiceOperation(
             journal.save(completed);
             return journal.read(id);
         }
-        if (record.managerSpec.scope !== scope || !["stop", "uninstall"].includes(record.action))
+        if (record.managerSpec.scope !== scope || !["stop", "uninstall", "install"].includes(record.action))
             throw failure();
         const spec = record.managerSpec;
         existingWorkspace(spec.workspace);
         assertNoPendingManagerUpgrade(spec.workspace);
         if (readServiceMigrationPending(spec.workspace)) throw failure();
-        const releaseWorkspace = acquireControlWorkspace(spec.workspace);
+        const candidate = record.action === "install" ? captureInstalledManagerCandidate(record, host) : undefined;
+        let releaseWorkspace: (() => void) | undefined;
         try {
+            releaseWorkspace = acquireControlWorkspace(spec.workspace);
             const confirm =
                 dependencies.confirmStopped ?? verifyServiceMigrationProcessesWhileLocked;
             if (!(await confirm(spec.workspace))) throw failure();
@@ -145,6 +148,7 @@ export async function reconcileManagerServiceOperation(
             }
             assertNoPendingManagerUpgrade(spec.workspace);
             if (readServiceMigrationPending(spec.workspace)) throw failure();
+            candidate?.verify();
             // 保留原 ID 和意图；完成记录也必须重新核验，不能凭旧成功跳过现场。
             const completed: ManagerServiceRecord = {
                 ...record,
@@ -155,7 +159,7 @@ export async function reconcileManagerServiceOperation(
             journal.save(completed);
             return completed;
         } finally {
-            releaseWorkspace();
+            try { releaseWorkspace?.(); } finally { candidate?.dispose(); }
         }
     } finally {
         release();
