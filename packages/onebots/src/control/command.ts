@@ -1,3 +1,4 @@
+import { runLogsCommand } from "./logs-command.js";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createLocalControlClient } from "../client/local-control.js";
@@ -23,6 +24,10 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
     }
     if (command === "control" && options[0] === "verification") {
         await runVerificationCommand(options.slice(1));
+        return true;
+    }
+    if (command === "control" && options[0] === "logs") {
+        await runLogsCommand(options.slice(1));
         return true;
     }
     function option(name: string, fallback: string): string {

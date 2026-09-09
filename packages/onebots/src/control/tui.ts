@@ -1,3 +1,4 @@
+import { runControlLogs } from "./tui-logs.js";
 import type { ControlClient } from "@onebots/core/control";
 import type { TuiPrompt } from "../tui/prompt.js";
 import { runControlConfiguration } from "./tui-configuration.js";
@@ -22,6 +23,7 @@ export async function runControlTui(
                 title: "OneBots 管理工作台",
                 choices: [
                     { value: "status", label: "查看状态" },
+                    { value: "logs", label: "查看网关日志" },
                     { value: "device", label: "授权新浏览器设备" },
                     { value: "start", label: "启动网关" },
                     { value: "stop", label: "停止网关" },
@@ -56,6 +58,7 @@ export async function runControlTui(
                         : "操作尚未成功，请查询状态。",
                 );
             } else if (action === "install") await runControlInstallation(client, prompt);
+            else if (action === "logs") await runControlLogs(client, prompt);
             else if (action === "verification") await runControlVerification(client, prompt);
             else if (action === "verification-operation")
                 await queryControlVerification(client, prompt);

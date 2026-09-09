@@ -1,3 +1,4 @@
+import { respondControlLogs } from "./logs-http.js";
 import { createManagerUpgradeRelease, createManagerUpgradeIdentity } from "./service-upgrade-release.js";
 import { managerUpgradeStatus } from "../service-upgrade-workspace.js";
 import { GenerationConfigurationVerifier } from "./generation-configuration.js";
@@ -295,6 +296,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 }
                 if (await respondControlSend(sending, request, response, pathname, local, auth))
                     return;
+                if (respondControlLogs(workspace, request, response, pathname, local, auth)) return;
                 if (await verification.handle(request, response, pathname, local)) return;
                 if (await messageDebugHttp.handle(request, response, pathname, local)) return;
                 if (await respondControlMcp(mcp, request, response, pathname, local, auth)) return;

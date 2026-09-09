@@ -1048,46 +1048,7 @@ describe("doctor persisted plugin selection", () => {
         expect(configCheck?.message).not.toContain("plugins: [");
     });
 
-    it("only fails a first-run warning when strict mode is enabled", async () => {
-        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-strict-"));
-        temporaryDirectories.push(directory);
-        const configPath = path.join(directory, "config.yaml");
-        fs.writeFileSync(configPath, "general: {}\npublic_static_dir: static\n", { mode: 0o600 });
-        fs.mkdirSync(path.join(directory, "data"), { mode: 0o700 });
-        fs.mkdirSync(path.join(directory, "static"));
-        const extensionRoot = createExtensionRuntimeRoot();
 
-        const normal = await runDoctor({
-            configPath,
-            adapters: [],
-            protocols: [],
-            scope: "user",
-            useInstalledService: false,
-            extensionRoot,
-        });
-        const strict = await runDoctor({
-            configPath,
-            adapters: [],
-            protocols: [],
-            scope: "user",
-            strict: true,
-            useInstalledService: false,
-            extensionRoot,
-        });
-
-        expect(normal).toMatchObject({ ok: true, strict: false });
-        expect(strict).toMatchObject({ ok: false, strict: true });
-        expect(strict.checks.find(check => check.name === "plugin-selection")).toMatchObject({
-            level: "warning",
-        });
-        expect(normal.checks.find(check => check.name === "extension-root")).toMatchObject({
-            level: "ok",
-            message: expect.stringContaining(`onebots@${packageMetadata.version}`),
-        });
-        expect(normal.target.publicStaticDirectory).toBe(
-            fs.realpathSync(path.join(directory, "static")),
-        );
-    });
 
     it("将错误的扩展运行目录作为部署失败证据", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-extension-"));

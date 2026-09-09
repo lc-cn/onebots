@@ -11,6 +11,7 @@ import ControlInstallationPanel from "./components/ControlInstallationPanel.vue"
 import ControlConfigurationPanel from "./components/ControlConfigurationPanel.vue";
 import ControlMessageDebugPanel from "./components/ControlMessageDebugPanel.vue";
 import ControlVerificationPanel from "./components/ControlVerificationPanel.vue";
+import ControlLogsPanel from "./components/ControlLogsPanel.vue";
 import ControlSessionsPanel from "./components/ControlSessionsPanel.vue";
 
 const token = ref(localStorage.getItem("onebots.control.token") ?? "");
@@ -196,6 +197,7 @@ onUnmounted(() => {
                     :client="client"
                     :gateway-instance-id="state.gateway.actual === 'running' && !state.gateway.recoveryRequired && !error ? state.gateway.instance?.id : undefined" />
                 <ControlVerificationPanel :key="token" :client="client" :gateway-instance-id="state.gateway.actual === 'running' && !state.gateway.recoveryRequired && !error ? state.gateway.instance?.id : undefined" />
+                <ControlLogsPanel :key="token" :client="client" />
                 <ControlSessionsPanel :key="token" :client="client" @revoked-self="reconnect" />
                 <section v-if="state.gateway.operations.length" class="border-t border-border pt-6">
                     <h2 class="text-lg font-medium mb-3">最近操作</h2>

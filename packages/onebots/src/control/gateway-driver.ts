@@ -1,3 +1,4 @@
+import { openGatewayLog, appendGatewayLog } from "./gateway-log.js";
 import { GatewayRequestClient, GatewayRequestError } from "./gateway-request-client.js";
 import { requestGatewayMessageDebug } from "./gateway-message-debug-client.js";
 import {
@@ -21,7 +22,7 @@ import type { GatewayMcpRequest, GatewayMcpResult } from "../gateway/mcp-contrac
 import { waitForProcessGroupExit } from "../process-group-exit.js";
 import { fork, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, open } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
     GATEWAY_PROTOCOL_VERSION,
@@ -90,12 +91,10 @@ export class NodeGatewayDriver implements GatewayDriver {
             const prepared = await this.options.prepare();
             const directory = join(prepared.workspacePath, ".control");
             await mkdir(directory, { recursive: true, mode: 0o700 });
-            const logPath = join(directory, "gateway.log");
-            const log = await open(logPath, "a", 0o600);
+            const log = openGatewayLog(prepared.workspacePath);
             const id = randomUUID();
             let child: ChildProcess;
             try {
-                await log.chmod(0o600);
                 child = fork(prepared.entrypoint, [], {
                     cwd: prepared.runtimeRoot,
                     execArgv: [],
@@ -103,7 +102,7 @@ export class NodeGatewayDriver implements GatewayDriver {
                     env: gatewayEnvironment(),
                     stdio: ["ignore", log.fd, log.fd, "ipc"],
                 });
-                managed = this.track(child, id, logPath);
+                managed = this.track(child, id, prepared.workspacePath);
             } finally {
                 await log.close();
             }
@@ -314,7 +313,7 @@ export class NodeGatewayDriver implements GatewayDriver {
         await this.terminate(managed);
     }
 
-    private track(child: ChildProcess, id: string, logPath: string): ManagedChild {
+    private track(child: ChildProcess, id: string, workspace: string): ManagedChild {
         let finish!: () => void;
         const managed: ManagedChild = {
             child,
@@ -342,9 +341,8 @@ export class NodeGatewayDriver implements GatewayDriver {
                 .then(() => this.terminate(managed))
                 .then(() => this.options.onExit(id, error))
                 .catch(() => {
-                    void appendFile(logPath, "[onebots] 网关退出观察器处理失败\n").catch(() => {
-                        // A broken observer/log sink must not undo confirmed child reaping.
-                    });
+                    try { appendGatewayLog(workspace, "[onebots] 网关退出观察器处理失败\n"); }
+                    catch { /* 日志失败不能撤销已经确认的子进程退出。 */ }
                 });
         });
         return managed;

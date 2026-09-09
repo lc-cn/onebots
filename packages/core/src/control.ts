@@ -1,3 +1,5 @@
+import { ControlLogClient } from "./control-logs.js";
+export * from "./control-logs.js";
 import { ControlVerificationClient } from "./control-verification.js";
 export * from "./control-verification.js";
 export { verificationJson, verificationRequest } from "./control-verification-json.js";
@@ -185,8 +187,10 @@ export interface ControlGenerationActivation {
 }
 
 export class ControlClient {
+    readonly logs: ControlLogClient;
     readonly verification: ControlVerificationClient;
     constructor(private readonly transport: ControlTransport) {
+        this.logs = new ControlLogClient(transport);
         this.verification = new ControlVerificationClient(transport);
     }
 
