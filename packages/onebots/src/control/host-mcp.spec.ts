@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { startControlHost } from "./host.js";
 import { createLocalControlClient } from "../client/local-control.js";
@@ -57,8 +57,30 @@ async function fixture() {
     const { code } = await local.bootstrap();
     const { token } = await anonymous.pair(code);
     const web = new ControlClient(createHttpControlTransport(url, () => token));
+    await waitForMcpProtocolReady(host);
     return { host, local, web, anonymous, workspace };
 }
+/** 管理 IPC 就绪不代表账号协议启动完成；只读观测固定网关，不能重试创建会话。 */
+async function waitForMcpProtocolReady(host: Awaited<ReturnType<typeof startControlHost>>) {
+    const instance = host.controller.status().instance;
+    if (!instance?.address) throw new Error("缺少当前网关监听地址");
+    const url = `http://${instance.address.host}:${instance.address.port}/ready`;
+    await vi.waitFor(
+        async () => {
+            expect(host.controller.status().instance?.id).toBe(instance.id);
+            const response = await fetch(url, { signal: AbortSignal.timeout(1000) });
+            const readiness = await response.json();
+            expect(response.status).toBe(200);
+            expect(readiness).toMatchObject({
+                ready: true,
+                summary: { total_accounts: 1, total_protocols: 1, ready_protocols: 1 },
+                adapters: { mock: { protocols: { ready: 1, unavailable: 0, total: 1 } } },
+            });
+        },
+        { timeout: 5000, interval: 20 },
+    );
+}
+
 async function request(client: ControlClient, id: string, method: string, requestId: number) {
     const response = await client.exchangeMcp(
         id,
@@ -188,6 +210,7 @@ describe("真实管理服务 MCP 会话", () => {
         const message = '{"jsonrpc":"2.0","id":7,"method":"ping"}';
         await expect(f.local.exchangeMcp(old.id, message)).rejects.toThrow();
         expect((await f.local.gateway("restart")).status).toBe("succeeded");
+        await waitForMcpProtocolReady(f.host);
         const next = await f.local.openMcp("mock/bot");
         expect(next.id).not.toBe(old.id);
         expect(next.gatewayInstanceId).not.toBe(old.gatewayInstanceId);
