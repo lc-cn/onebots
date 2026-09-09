@@ -678,14 +678,14 @@ async function verifyLegacyMigration(port, operationIds) {
         },
         {
             id: stopping.id,
-            schemaVersion: 2,
+            schemaVersion: 1,
             phase: "completed",
             status: "failed",
             recoveryRequired: false,
             rolledBack: true,
-            rollbackOrigin: "pre-target",
+            rollbackOrigin: undefined,
         },
-        "恢复后的迁移记录必须是已确认回退终态",
+        "目标写入前的 v1 迁移记录必须保持兼容并进入已确认回退终态",
     );
     const recoveredDefinition = fs.readFileSync(DEFINITION);
     const recoveredMetadata = fs.readFileSync(METADATA);
