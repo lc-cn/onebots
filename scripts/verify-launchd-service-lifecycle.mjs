@@ -605,8 +605,10 @@ try {
     });
     operationIds.push(...upgrade.operationIds);
     const afterUpgrade = upgrade.upgraded;
+    // restart 会追加网关操作记录并更新实例身份，gateway.json 必然发生受控变化；
+    // 配置和认证材料才应保持逐字节不变，网关的持久意图/版本在下方按字段验证。
     const bytesBeforeManagedRestart = new Map(
-        ["config.yaml", ".control/gateway.json", ".control/auth.json"].map(file => [
+        ["config.yaml", ".control/auth.json"].map(file => [
             file,
             fs.existsSync(path.join(dataDirectory, file))
                 ? fs.readFileSync(path.join(dataDirectory, file))
