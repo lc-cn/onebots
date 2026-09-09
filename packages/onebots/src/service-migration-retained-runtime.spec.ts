@@ -1,10 +1,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { parseRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
+import {
+    createServiceMigrationRollbackContract,
+    digestServiceMigrationReloadOldReceipt,
+    parseRetainedLegacyRuntime,
+    retainedRollbackFiles,
+} from "./service-migration-retained-runtime.js";
+import { createServiceMigrationFilePlan } from "./service-migration-file-plan.js";
+import { ServiceMigrationFiles } from "./service-migration-files.js";
 import { createServiceMigrationPort } from "./service-migration-port.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
 import { migrateSystemService } from "./service-migration-coordinator.js";
@@ -14,6 +21,371 @@ import type { ServiceHost } from "./service-host.js";
 import { buildServiceArgs, type ServiceSpec } from "./service-definition.js";
 import type { ServiceMigrationBackup, ServiceMigrationFile } from "./service-migration-types.js";
 import type { ServicePlatformState } from "./service-platform.js";
+
+function rollbackFixture(platform: "darwin" | "linux") {
+    const homedir = platform === "darwin" ? "/Users/fixture" : "/home/fixture";
+    const host: ServiceHost = {
+        platform,
+        homedir,
+        env: {},
+        exec: () => {
+            throw new Error("unexpected OS call");
+        },
+        spawn: async () => {
+            throw new Error("unexpected OS spawn");
+        },
+    };
+    const source = "/opt/onebots-legacy";
+    const original: ServiceSpec = {
+        scope: "user",
+        configPath: path.join(homedir, "onebots", "config.yaml"),
+        adapters: ["mock"],
+        protocols: ["onebot-v11"],
+        applications: ["zhin"],
+        nodePath: "/usr/local/bin/node",
+        binPath: path.join(source, "lib", "bin.js"),
+        workingDirectory: source,
+    };
+    const runtimeRoot = path.join(homedir, "retained", "runtime");
+    const nodeRoot = path.join(homedir, "retained", "node");
+    const rollback: ServiceSpec = {
+        ...original,
+        nodePath: path.join(nodeRoot, "node"),
+        binPath: path.join(runtimeRoot, "lib", "bin.js"),
+        workingDirectory: runtimeRoot,
+    };
+    const retained = parseRetainedLegacyRuntime({
+        schemaVersion: 1,
+        sourceRoot: source,
+        runtime: {
+            schemaVersion: 1,
+            id: "00000000-0000-4000-8000-000000000001",
+            root: runtimeRoot,
+            digest: "1".repeat(64),
+        },
+        node: {
+            schemaVersion: 1,
+            tree: {
+                schemaVersion: 1,
+                id: "00000000-0000-4000-8000-000000000002",
+                root: nodeRoot,
+                digest: "2".repeat(64),
+            },
+            version: "v24.0.0",
+            platform,
+            arch: "x64",
+        },
+        original,
+        rollback,
+    });
+    const paths = getServiceFiles("user", host);
+    const file = (
+        role: ServiceMigrationFile["role"],
+        filePath: string,
+        content: string,
+        mode = 0o600,
+    ): ServiceMigrationFile => ({
+        role,
+        path: filePath,
+        mode,
+        contentBase64: Buffer.from(content).toString("base64"),
+    });
+    const backup: ServiceMigrationBackup = {
+        schemaVersion: 1,
+        target: {
+            schemaVersion: 1,
+            runtimeKind: "control",
+            scope: "user",
+            workspace: path.join(homedir, "onebots"),
+            workingDirectory: path.join(homedir, "onebots"),
+            nodePath: "/usr/local/bin/node",
+            binPath: "/usr/local/lib/onebots/bin.js",
+            host: "127.0.0.1",
+            port: 6727,
+        },
+        previousRunning: true,
+        previousEnabled: true,
+        retainedRuntime: retained,
+        files: [
+            file("runner", path.join(homedir, "onebots", "runner.sh"), "runner", 0o700),
+            file("configuration", rollback.configPath, "general: {}\n"),
+            file("metadata", paths.metadata, JSON.stringify(original)),
+            file("definition", paths.definition, "superseded definition", 0o644),
+        ],
+    };
+    return { backup, host, paths };
+}
+
+describe("旧服务回退摘要契约", () => {
+    it.each(["linux", "darwin"] as const)("%s 固定角色顺序并绑定平台路径", platform => {
+        const { backup, host, paths } = rollbackFixture(platform);
+        const result = createServiceMigrationRollbackContract(backup, host);
+        expect(result.contract).toMatchObject({
+            schemaVersion: 1,
+            platform,
+            scope: "user",
+            previousEnabled: true,
+            rollback: backup.retainedRuntime!.rollback,
+        });
+        expect(result.contract.files.map(file => file.role)).toEqual([
+            "definition",
+            "metadata",
+            "configuration",
+            "runner",
+        ]);
+        expect(result.contract.files.map(file => file.path)).toEqual([
+            paths.definition,
+            paths.metadata,
+            backup.retainedRuntime!.rollback.configPath,
+            path.join(host.homedir, "onebots", "runner.sh"),
+        ]);
+        expect(
+            result.contract.files
+                .slice(0, 2)
+                .map(file => (file.state === "file" ? file.mode : null)),
+        ).toEqual([0o600, 0o600]);
+        const reordered = structuredClone(backup);
+        reordered.files.reverse();
+        expect(createServiceMigrationRollbackContract(reordered, host)).toEqual(result);
+    });
+
+    it.each(["linux", "darwin"] as const)(
+        "%s 对实际文件、模式、回退规格及启用状态变化敏感",
+        platform => {
+            const fixture = rollbackFixture(platform);
+            const digest = createServiceMigrationRollbackContract(
+                fixture.backup,
+                fixture.host,
+            ).digest;
+            const changedConfiguration = structuredClone(fixture.backup);
+            changedConfiguration.files.find(file => file.role === "configuration")!.contentBase64 =
+                Buffer.from("general:\n  host: changed\n").toString("base64");
+            const changedConfigurationMode = structuredClone(fixture.backup);
+            changedConfigurationMode.files.find(file => file.role === "configuration")!.mode =
+                0o400;
+            const changedRunner = structuredClone(fixture.backup);
+            changedRunner.files.find(file => file.role === "runner")!.contentBase64 =
+                Buffer.from("changed runner").toString("base64");
+            const changedRunnerMode = structuredClone(fixture.backup);
+            changedRunnerMode.files.find(file => file.role === "runner")!.mode = 0o500;
+            const changedEnabled = structuredClone(fixture.backup);
+            changedEnabled.previousEnabled = false;
+            const changedSpec = rollbackFixture(platform);
+            changedSpec.backup.retainedRuntime = parseRetainedLegacyRuntime({
+                ...changedSpec.backup.retainedRuntime,
+                original: {
+                    ...changedSpec.backup.retainedRuntime!.original,
+                    adapters: ["mock", "qq"],
+                },
+                rollback: {
+                    ...changedSpec.backup.retainedRuntime!.rollback,
+                    adapters: ["mock", "qq"],
+                },
+            });
+            changedSpec.backup.files.find(file => file.role === "metadata")!.contentBase64 =
+                Buffer.from(JSON.stringify(changedSpec.backup.retainedRuntime.original)).toString(
+                    "base64",
+                );
+            for (const candidate of [
+                changedConfiguration,
+                changedConfigurationMode,
+                changedRunner,
+                changedRunnerMode,
+                changedEnabled,
+                changedSpec.backup,
+            ])
+                expect(
+                    createServiceMigrationRollbackContract(candidate, fixture.host).digest,
+                ).not.toBe(digest);
+        },
+    );
+
+    it.each(["linux", "darwin"] as const)("%s 拒绝未绑定的恢复路径", platform => {
+        const { backup, host } = rollbackFixture(platform);
+        const wrongDefinition = structuredClone(backup);
+        wrongDefinition.files.find(file => file.role === "definition")!.path = "/tmp/service";
+        expect(() => createServiceMigrationRollbackContract(wrongDefinition, host)).toThrow();
+        const wrongConfiguration = structuredClone(backup);
+        wrongConfiguration.files.find(file => file.role === "configuration")!.path =
+            "/tmp/config.yaml";
+        expect(() => createServiceMigrationRollbackContract(wrongConfiguration, host)).toThrow();
+        const noncanonicalRunner = structuredClone(backup);
+        noncanonicalRunner.files.find(file => file.role === "runner")!.path =
+            `${path.join(host.homedir, "onebots")}/nested/../runner.sh`;
+        expect(() => createServiceMigrationRollbackContract(noncanonicalRunner, host)).toThrow();
+    });
+
+    it.each(["linux", "darwin"] as const)("%s 绑定迁移新增配置文件的删除效果", platform => {
+        const { backup, host } = rollbackFixture(platform);
+        const customPath = path.join(backup.target.workspace, "custom.yaml");
+        const retained = backup.retainedRuntime!;
+        backup.retainedRuntime = parseRetainedLegacyRuntime({
+            ...retained,
+            original: { ...retained.original, configPath: customPath },
+            rollback: { ...retained.rollback, configPath: customPath },
+        });
+        backup.files.find(file => file.role === "configuration")!.path = customPath;
+        backup.files.find(file => file.role === "metadata")!.contentBase64 = Buffer.from(
+            JSON.stringify(backup.retainedRuntime.original),
+        ).toString("base64");
+
+        expect(createServiceMigrationRollbackContract(backup, host).contract.files).toContainEqual({
+            state: "absent",
+            role: "target-configuration",
+            path: path.join(backup.target.workspace, "config.yaml"),
+        });
+    });
+
+    it("将 Linux custom.yaml 回退契约与实际恢复终态逐项对账", () => {
+        const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "rollback-contract-")));
+        try {
+            const host: ServiceHost = {
+                platform: "linux",
+                homedir: root,
+                env: {},
+                exec: () => {
+                    throw new Error("unexpected OS call");
+                },
+                spawn: async () => {
+                    throw new Error("unexpected OS spawn");
+                },
+            };
+            const paths = getServiceFiles("user", host);
+            const workspace = path.join(root, "workspace");
+            const source = path.join(root, "legacy");
+            const runtimeRoot = path.join(root, "retained", "runtime");
+            const nodeRoot = path.join(root, "retained", "node");
+            const original: ServiceSpec = {
+                scope: "user",
+                configPath: path.join(workspace, "custom.yaml"),
+                adapters: ["mock"],
+                protocols: ["onebot-v11"],
+                nodePath: "/usr/local/bin/node",
+                binPath: path.join(source, "lib", "bin.js"),
+                workingDirectory: source,
+            };
+            const rollback: ServiceSpec = {
+                ...original,
+                nodePath: path.join(nodeRoot, "node"),
+                binPath: path.join(runtimeRoot, "lib", "bin.js"),
+                workingDirectory: runtimeRoot,
+            };
+            const retained = parseRetainedLegacyRuntime({
+                schemaVersion: 1,
+                sourceRoot: source,
+                runtime: {
+                    schemaVersion: 1,
+                    id: "00000000-0000-4000-8000-000000000011",
+                    root: runtimeRoot,
+                    digest: "1".repeat(64),
+                },
+                node: {
+                    schemaVersion: 1,
+                    tree: {
+                        schemaVersion: 1,
+                        id: "00000000-0000-4000-8000-000000000012",
+                        root: nodeRoot,
+                        digest: "2".repeat(64),
+                    },
+                    version: "v24.0.0",
+                    platform: "linux",
+                    arch: "x64",
+                },
+                original,
+                rollback,
+            });
+            const originals = (
+                [
+                    ["definition", paths.definition, "old definition", 0o644],
+                    ["metadata", paths.metadata, JSON.stringify(original), 0o600],
+                    ["configuration", original.configPath, "general: {}\n", 0o640],
+                ] as const
+            ).map(([role, file, content, mode]): ServiceMigrationFile => {
+                fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+                fs.writeFileSync(file, content, { mode });
+                return {
+                    role,
+                    path: file,
+                    mode,
+                    contentBase64: Buffer.from(content).toString("base64"),
+                };
+            });
+            const backup: ServiceMigrationBackup = {
+                schemaVersion: 1,
+                target: {
+                    schemaVersion: 1,
+                    runtimeKind: "control",
+                    scope: "user",
+                    workspace,
+                    workingDirectory: workspace,
+                    nodePath: "/usr/local/bin/node",
+                    binPath: path.join(root, "manager", "bin.js"),
+                    host: "127.0.0.1",
+                    port: 6727,
+                },
+                previousRunning: true,
+                previousEnabled: true,
+                retainedRuntime: retained,
+                files: originals,
+            };
+            const plan = createServiceMigrationFilePlan(backup, host);
+            const files = new ServiceMigrationFiles(
+                backup,
+                plan.files,
+                retainedRollbackFiles(backup, host),
+            );
+            const contract = createServiceMigrationRollbackContract(backup, host).contract;
+            expect(new Set(contract.files.map(file => file.path))).toEqual(
+                new Set([...backup.files, ...plan.files].map(file => file.path)),
+            );
+
+            files.apply();
+            files.restore();
+
+            expect(files.matchesRestored()).toBe(true);
+            for (const effect of contract.files) {
+                if (effect.state === "absent") {
+                    expect(fs.existsSync(effect.path)).toBe(false);
+                    continue;
+                }
+                const stat = fs.lstatSync(effect.path);
+                expect(stat.isFile()).toBe(true);
+                expect(stat.mode & 0o777).toBe(effect.mode);
+                expect(
+                    createHash("sha256").update(fs.readFileSync(effect.path)).digest("hex"),
+                ).toBe(effect.sha256);
+            }
+        } finally {
+            fs.rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it("对 reload-old 收据做闭合且稳定的摘要", () => {
+        const receipt = {
+            schemaVersion: 1,
+            backupDigest: "a".repeat(64),
+            rollbackContractDigest: "b".repeat(64),
+            enabled: true,
+            loaded: true,
+            definitionPath: "/etc/systemd/system/onebots-gateway.service",
+        } as const;
+        const reordered = {
+            definitionPath: receipt.definitionPath,
+            loaded: receipt.loaded,
+            enabled: receipt.enabled,
+            rollbackContractDigest: receipt.rollbackContractDigest,
+            backupDigest: receipt.backupDigest,
+            schemaVersion: receipt.schemaVersion,
+        };
+        expect(digestServiceMigrationReloadOldReceipt(reordered)).toBe(
+            digestServiceMigrationReloadOldReceipt(receipt),
+        );
+        expect(digestServiceMigrationReloadOldReceipt({ ...receipt, enabled: false })).not.toBe(
+            digestServiceMigrationReloadOldReceipt(receipt),
+        );
+        expect(() => digestServiceMigrationReloadOldReceipt({ ...receipt, extra: true })).toThrow();
+    });
+});
 
 describe.skipIf(process.platform !== "darwin")("旧工件与迁移回退整合", () => {
     it.each(["separate", "mixed", "global"])(

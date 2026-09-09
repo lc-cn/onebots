@@ -16,6 +16,7 @@ function fixture(options: LaunchdServicePlatformOptions = {}) {
         enabled: true,
         pid: 321,
         pgid: 321,
+        started: "Wed Sep  9 12:34:56 2026",
         leader: true,
         members: true,
         path: definition,
@@ -39,7 +40,7 @@ function fixture(options: LaunchdServicePlatformOptions = {}) {
             calls.push([file, ...args]);
             if (file === "/usr/bin/plutil")
                 return JSON.stringify({ Label: LAUNCHD_LABEL, Disabled: state.plistDisabled });
-            if (file === "/bin/ps") return `${state.pid} ${state.pgid}\n`;
+            if (file === "/bin/ps") return `${state.pid} ${state.pgid} ${state.started}\n`;
             if (args[0] === "print-disabled")
                 return `disabled services = {\n "${LAUNCHD_LABEL}" => ${state.override || (state.enabled ? "enabled" : "disabled")}\n}\n`;
             if (args[0] === "print") {
@@ -210,10 +211,21 @@ describe("launchd service platform", () => {
             enabled: true,
             definitionPath: definition,
             processId: 321,
-            identity: `${target}:pgid:321`,
+            identity: `${target}:pgid:321:started:20260909T123456`,
             quiescent: false,
         });
-        expect(f.calls).toContainEqual(["/bin/ps", "-o", "pid=,pgid=", "-p", "321"]);
+        expect(f.calls).toContainEqual(["/bin/ps", "-o", "pid=,pgid=,lstart=", "-p", "321"]);
+    });
+    it("rejects a PID generation change during one inspection", async () => {
+        const f = fixture();
+        const original = f.host.exec;
+        let probes = 0;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (file === "/bin/ps" && ++probes === 1) f.state.started = "Wed Sep  9 12:34:57 2026";
+            return output;
+        };
+        await expect(f.platform.inspect()).rejects.toThrow("无法安全确认");
     });
     it("disables before bootout and waits for helpers after leader exit", async () => {
         const f = fixture();
@@ -287,23 +299,83 @@ describe("launchd service platform", () => {
         const f = fixture({ freshDefinition: true });
         f.state.loaded = false;
         f.state.running = false;
-        await f.platform.reload(false);
-        await f.platform.reload(true);
+        expect(await f.platform.reload(false)).toMatchObject({
+            state: "stopped",
+            loaded: false,
+            running: false,
+            enabled: false,
+            quiescent: true,
+        });
+        expect(await f.platform.reload(true)).toMatchObject({
+            state: "stopped",
+            loaded: false,
+            enabled: true,
+        });
         expect(f.calls.some(call => call[1] === "bootstrap")).toBe(false);
-        await f.platform.start();
+        expect(await f.platform.start()).toMatchObject({
+            state: "running",
+            loaded: true,
+            running: true,
+            processId: 321,
+            identity: `${target}:pgid:321:started:20260909T123456`,
+        });
         expect(f.calls).toContainEqual(["/bin/launchctl", "bootstrap", "gui/501", definition]);
         expect((await f.platform.inspect()).running).toBe(true);
     });
     it("already running disabled job remains unchanged and never uses kickstart -k", async () => {
         const f = fixture();
         f.state.enabled = false;
-        await f.platform.start();
+        expect(await f.platform.start()).toMatchObject({
+            running: true,
+            enabled: false,
+            processId: 321,
+        });
         expect(f.state.enabled).toBe(false);
         expect(
             f.calls.some(
                 call => ["enable", "disable", "bootstrap"].includes(call[1]) || call.includes("-k"),
             ),
         ).toBe(false);
+    });
+    it("already running start rejects an instance replacement instead of adopting it", async () => {
+        const f = fixture();
+        const original = f.host.exec;
+        let prints = 0;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args[0] === "print" && ++prints === 2) {
+                f.state.pid++;
+                f.state.pgid++;
+            }
+            return output;
+        };
+        await expect(f.platform.start()).rejects.toThrow("无法安全确认");
+        expect(f.calls.some(call => ["enable", "bootstrap", "disable"].includes(call[1]))).toBe(
+            false,
+        );
+    });
+    it("new start rejects the first observed instance being replaced", async () => {
+        const f = fixture({ freshDefinition: true });
+        Object.assign(f.state, { loaded: false, running: false });
+        const original = f.host.exec;
+        let bootstrapped = false;
+        let prints = 0;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args[0] === "bootstrap") bootstrapped = true;
+            if (bootstrapped && args[0] === "print" && ++prints === 2) {
+                f.state.pid++;
+                f.state.pgid++;
+            }
+            return output;
+        };
+        await expect(f.platform.start()).rejects.toThrow("无法安全确认");
+        expect(f.calls.filter(call => call[1] === "bootstrap")).toHaveLength(1);
+    });
+    it("reload refuses a loaded job before changing its override", async () => {
+        const f = fixture();
+        await expect(f.platform.reload(false)).rejects.toThrow("无法安全确认");
+        expect(f.calls.some(call => call[1] === "disable")).toBe(false);
     });
     it("explicit start temporarily enables an unloaded job then restores disabled intent on the same instance", async () => {
         const f = fixture({ freshDefinition: true });
@@ -459,7 +531,9 @@ describe("launchd service platform", () => {
                               timeout: options?.timeoutMs,
                           })
                         : mock(file, args, options);
-                expect((await f.platform.inspect()).identity).toBe(`${target}:pgid:${child.pid}`);
+                expect((await f.platform.inspect()).identity).toMatch(
+                    new RegExp(`^${target}:pgid:${child.pid}:started:[0-9]{8}T[0-9]{6}$`),
+                );
             } finally {
                 const exited = once(child, "exit");
                 child.kill("SIGKILL");

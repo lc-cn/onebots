@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { open, realpath, statfs } from "node:fs/promises";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { SERVICE_NAME, type ServiceScope } from "./service-definition.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
@@ -231,6 +232,35 @@ export class SystemdServicePlatform implements ServicePlatform {
             unavailable();
         }
     }
+    private async stable(
+        deadline: number,
+        accepts: (state: ServicePlatformState) => boolean,
+    ): Promise<ServicePlatformState> {
+        for (;;) {
+            const first = await this.inspectWithin(deadline);
+            if (accepts(first)) {
+                const second = await this.inspectWithin(deadline);
+                if (accepts(second) && isDeepStrictEqual(first, second)) return second;
+            }
+            if (this.now() >= deadline) unavailable();
+            await this.sleep(Math.min(100, deadline - this.now()));
+        }
+    }
+    private async stableInstance(
+        deadline: number,
+        accepts: (state: ServicePlatformState) => boolean,
+    ): Promise<ServicePlatformState> {
+        for (;;) {
+            const first = await this.inspectWithin(deadline);
+            if (accepts(first)) {
+                const second = await this.inspectWithin(deadline);
+                if (accepts(second) && isDeepStrictEqual(first, second)) return second;
+                unavailable();
+            }
+            if (this.now() >= deadline) unavailable();
+            await this.sleep(Math.min(100, deadline - this.now()));
+        }
+    }
     async quiesce(): Promise<void> {
         const deadline = this.now() + this.timeout;
         const before = await this.inspectWithin(deadline);
@@ -250,16 +280,43 @@ export class SystemdServicePlatform implements ServicePlatform {
             await this.sleep(Math.min(100, deadline - this.now()));
         }
     }
-    async reload(enabled: boolean): Promise<void> {
+    async reload(enabled: boolean): Promise<ServicePlatformState> {
         if (typeof enabled !== "boolean") unavailable();
-        this.command(["daemon-reload"]);
-        this.command([enabled ? "enable" : "disable", "--", UNIT]);
-        const current = await this.inspect();
-        if (!current.loaded || current.enabled !== enabled) unavailable();
+        const deadline = this.now() + this.timeout;
+        const before = await this.inspectWithin(deadline);
+        if (before.state !== "stopped" || before.running || !before.quiescent) unavailable();
+        this.command(["daemon-reload"], deadline);
+        this.command([enabled ? "enable" : "disable", "--", UNIT], deadline);
+        return this.stable(
+            deadline,
+            state =>
+                state.state === "stopped" &&
+                !state.running &&
+                state.quiescent &&
+                state.enabled === enabled &&
+                state.loaded &&
+                state.definitionPath === this.expectedDefinitionPath,
+        );
     }
-    async start(): Promise<void> {
-        const current = await this.inspect();
+    async start(): Promise<ServicePlatformState> {
+        const deadline = this.now() + this.timeout;
+        const current = await this.inspectWithin(deadline);
         if (!current.loaded || (!current.running && !current.quiescent)) unavailable();
-        if (!current.running) this.command(["start", "--no-block", "--", UNIT]);
+        const enabled = current.enabled;
+        if (!current.running) this.command(["start", "--no-block", "--", UNIT], deadline);
+        const stable = current.running ? this.stable.bind(this) : this.stableInstance.bind(this);
+        return stable(
+            deadline,
+            state =>
+                state.state === "running" &&
+                state.running &&
+                state.loaded &&
+                state.processId !== null &&
+                state.identity !== null &&
+                state.definitionPath === this.expectedDefinitionPath &&
+                state.enabled === enabled &&
+                (!current.running ||
+                    (state.processId === current.processId && state.identity === current.identity)),
+        );
     }
 }

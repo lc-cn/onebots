@@ -3,12 +3,17 @@ import { lstat, realpath, open } from "node:fs/promises";
 import { constants } from "node:fs";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { closedServiceObject } from "./service-operation-storage.js";
+import { canonicalServiceJson, closedServiceObject } from "./service-operation-storage.js";
 import { parseLegacyServiceSpec } from "./service-metadata.js";
 import { renderLaunchdPlist, renderSystemdUnit, type ServiceSpec } from "./service-definition.js";
 import { getServiceFiles } from "./service-files.js";
+import { parseManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServiceHost } from "./service-host.js";
-import type { ServiceMigrationBackup } from "./service-migration-types.js";
+import type {
+    ServiceMigrationBackup,
+    ServiceMigrationFile,
+    ServiceMigrationReloadOldReceipt,
+} from "./service-migration-types.js";
 import { within, hashRuntimeFile, scanRuntimeTree } from "./service-migration-runtime-tree-scan.js";
 import { assertSystemNativeDependencies } from "./service-migration-native-dependencies.js";
 import { scanLegacyRuntimeForest } from "./service-migration-runtime-forest-scan.js";
@@ -29,7 +34,30 @@ interface RetainedRuntimeContract {
 }
 export type RetainedLegacyRuntime = RetainedRuntimeContract &
     ({ schemaVersion: 1; sourceRoot: string } | { schemaVersion: 2; sourceRoots: string[] });
+const rollbackRoles = ["definition", "metadata", "configuration", "runner"] as const;
+export type ServiceMigrationRollbackContractFile =
+    | {
+          state: "file";
+          role: ServiceMigrationFile["role"];
+          path: string;
+          mode: number;
+          sha256: string;
+      }
+    | {
+          state: "absent";
+          role: "target-configuration";
+          path: string;
+      };
+export interface ServiceMigrationRollbackContract {
+    schemaVersion: 1;
+    platform: "darwin" | "linux";
+    scope: ServiceSpec["scope"];
+    previousEnabled: boolean;
+    rollback: ServiceSpec;
+    files: ServiceMigrationRollbackContractFile[];
+}
 const invalid = () => new Error("旧运行工件与服务回退契约不匹配，禁止切换");
+const sha256 = (bytes: string | Buffer) => createHash("sha256").update(bytes).digest("hex");
 /** 仅排除旧内核明确使用的配置与持久数据，不接受客户端任意忽略运行文件。 */
 export function legacyRuntimeExclusions(original: ServiceSpec, sourceRoot: string): string[] {
     return [
@@ -294,6 +322,157 @@ export async function verifyRetainedLegacyRuntime(input: RetainedLegacyRuntime):
     )
         throw invalid();
 }
+
+function strictRollbackBackupFiles(input: unknown): ServiceMigrationFile[] {
+    if (
+        !Array.isArray(input) ||
+        Object.getPrototypeOf(input) !== Array.prototype ||
+        Reflect.ownKeys(input).length !== input.length + 1 ||
+        input.length < 3 ||
+        input.length > 4
+    )
+        throw invalid();
+    const roles = new Set<string>();
+    const paths = new Set<string>();
+    const files: ServiceMigrationFile[] = [];
+    for (let index = 0; index < input.length; index++) {
+        const descriptor = Object.getOwnPropertyDescriptor(input, String(index));
+        if (!descriptor?.enumerable || !("value" in descriptor)) throw invalid();
+        const value = closedServiceObject(descriptor.value, [
+            "role",
+            "path",
+            "mode",
+            "contentBase64",
+        ]);
+        const bytes =
+            typeof value.contentBase64 === "string"
+                ? Buffer.from(value.contentBase64, "base64")
+                : null;
+        if (
+            typeof value.role !== "string" ||
+            !rollbackRoles.includes(value.role as ServiceMigrationFile["role"]) ||
+            roles.has(value.role) ||
+            typeof value.path !== "string" ||
+            value.path.length > 4096 ||
+            !path.isAbsolute(value.path) ||
+            path.normalize(value.path) !== value.path ||
+            /[\u0000\r\n]/u.test(value.path) ||
+            paths.has(path.resolve(value.path)) ||
+            typeof value.mode !== "number" ||
+            !Number.isInteger(value.mode) ||
+            value.mode < 0 ||
+            value.mode > 0o777 ||
+            typeof value.contentBase64 !== "string" ||
+            value.contentBase64.length > 2 * 1024 * 1024 ||
+            !bytes ||
+            bytes.length > 1_048_576 ||
+            bytes.toString("base64") !== value.contentBase64
+        )
+            throw invalid();
+        roles.add(value.role);
+        paths.add(path.resolve(value.path));
+        files.push(value as unknown as ServiceMigrationFile);
+    }
+    if (!rollbackRoles.slice(0, 3).every(role => roles.has(role))) throw invalid();
+    return files;
+}
+
+/**
+ * 固化旧服务回退会实际写入的完整字节契约。definition/metadata 取保留运行时派生值，
+ * configuration/runner 取原始备份；角色顺序不受备份数组顺序影响。
+ */
+export function createServiceMigrationRollbackContract(
+    backup: ServiceMigrationBackup,
+    host: ServiceHost,
+): { contract: ServiceMigrationRollbackContract; digest: string } {
+    if (!backup.retainedRuntime || typeof backup.previousEnabled !== "boolean") throw invalid();
+    const retained = parseRetainedLegacyRuntime(backup.retainedRuntime);
+    const target = parseManagerServiceSpec(backup.target);
+    if (
+        (host.platform !== "darwin" && host.platform !== "linux") ||
+        retained.node.platform !== host.platform ||
+        target.scope !== retained.rollback.scope ||
+        path.dirname(retained.rollback.configPath) !== target.workspace
+    )
+        throw invalid();
+    const paths = getServiceFiles(retained.rollback.scope, host);
+    const expectedPaths: Record<Exclude<ServiceMigrationFile["role"], "runner">, string> = {
+        definition: paths.definition,
+        metadata: paths.metadata,
+        configuration: retained.rollback.configPath,
+    };
+    const files = strictRollbackBackupFiles(backup.files);
+    for (const role of rollbackRoles.slice(0, 3)) {
+        if (files.find(file => file.role === role)?.path !== expectedPaths[role]) throw invalid();
+    }
+    const derived = retainedRollbackFiles(backup, host);
+    const derivedByPath = new Map(derived.map(file => [file.path, file]));
+    const contractFiles: ServiceMigrationRollbackContractFile[] = rollbackRoles.flatMap(role => {
+        const original = files.find(file => file.role === role);
+        if (!original) return [];
+        const replacement =
+            role === "definition" || role === "metadata"
+                ? derivedByPath.get(original.path)
+                : undefined;
+        if ((role === "definition" || role === "metadata") && !replacement) throw invalid();
+        const bytes = replacement?.bytes ?? Buffer.from(original.contentBase64, "base64");
+        return [
+            {
+                state: "file" as const,
+                role,
+                path: original.path,
+                mode: replacement?.mode ?? original.mode,
+                sha256: sha256(bytes),
+            },
+        ];
+    });
+    if (contractFiles.length !== files.length) throw invalid();
+    const targetConfiguration = path.join(target.workspace, "config.yaml");
+    if (!contractFiles.some(file => file.path === targetConfiguration)) {
+        contractFiles.push({
+            state: "absent",
+            role: "target-configuration",
+            path: targetConfiguration,
+        });
+    }
+    const contract: ServiceMigrationRollbackContract = {
+        schemaVersion: 1,
+        platform: host.platform,
+        scope: retained.rollback.scope,
+        previousEnabled: backup.previousEnabled,
+        rollback: retained.rollback,
+        files: contractFiles,
+    };
+    return { contract, digest: sha256(canonicalServiceJson(contract)) };
+}
+
+/** 对严格闭合的 reload-old 收据生成唯一摘要，供 start-old 收据复验。 */
+export function digestServiceMigrationReloadOldReceipt(input: unknown): string {
+    const value = closedServiceObject(input, [
+        "schemaVersion",
+        "backupDigest",
+        "rollbackContractDigest",
+        "enabled",
+        "loaded",
+        "definitionPath",
+    ]);
+    if (
+        value.schemaVersion !== 1 ||
+        typeof value.backupDigest !== "string" ||
+        !/^[0-9a-f]{64}$/.test(value.backupDigest) ||
+        typeof value.rollbackContractDigest !== "string" ||
+        !/^[0-9a-f]{64}$/.test(value.rollbackContractDigest) ||
+        typeof value.enabled !== "boolean" ||
+        typeof value.loaded !== "boolean" ||
+        typeof value.definitionPath !== "string" ||
+        !value.definitionPath.startsWith("/") ||
+        value.definitionPath.length > 4096 ||
+        /[\u0000\r\n]/u.test(value.definitionPath)
+    )
+        throw invalid();
+    return sha256(canonicalServiceJson(value as unknown as ServiceMigrationReloadOldReceipt));
+}
+
 export function retainedRollbackFiles(backup: ServiceMigrationBackup, host: ServiceHost) {
     if (!backup.retainedRuntime) return [];
     const retained = parseRetainedLegacyRuntime(backup.retainedRuntime);

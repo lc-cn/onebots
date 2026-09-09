@@ -32,6 +32,10 @@ function fixture() {
             );
         if (args.includes("disable")) state.UnitFileState = "disabled";
         if (args.includes("enable")) state.UnitFileState = "enabled";
+        if (args.includes("start")) {
+            state = properties({ UnitFileState: state.UnitFileState });
+            events = "populated 1\n";
+        }
         return "";
     });
     const host: ServiceHost = {
@@ -293,11 +297,6 @@ describe("systemd服务平台边界", () => {
     });
     it("reload只重读及恢复启用状态，不隐式start；start固定原位单元", async () => {
         const f = fixture();
-        await f.platform.reload(false);
-        const actions = f.exec.mock.calls.map(call => call[1]);
-        expect(actions[0]).toContain("daemon-reload");
-        expect(actions[1]).toContain("disable");
-        expect(actions.flat()).not.toContain("start");
         f.state({
             ActiveState: "inactive",
             SubState: "dead",
@@ -305,20 +304,70 @@ describe("systemd服务平台边界", () => {
             ControlGroup: "",
             InvocationID: "",
         });
-        await f.platform.start();
-        expect(f.exec.mock.calls.at(-1)?.[1]).toEqual([
-            "--no-pager",
-            "--no-ask-password",
-            "--user",
-            "start",
-            "--no-block",
-            "--",
-            "onebots-gateway.service",
-        ]);
+        f.events("populated 0\n");
+        expect(await f.platform.reload(false)).toMatchObject({
+            state: "stopped",
+            running: false,
+            enabled: false,
+            loaded: true,
+            quiescent: true,
+        });
+        const actions = f.exec.mock.calls
+            .map(call => call[1])
+            .filter(args => !args.includes("show"));
+        expect(actions[0]).toContain("daemon-reload");
+        expect(actions[1]).toContain("disable");
+        expect(actions.flat()).not.toContain("start");
+        expect(await f.platform.start()).toMatchObject({
+            state: "running",
+            running: true,
+            processId: 123,
+            identity: invocation,
+            enabled: false,
+        });
+        expect(
+            f.exec.mock.calls.some(
+                call => call[1].includes("start") && call[1].includes("--no-block"),
+            ),
+        ).toBe(true);
         const system = new SystemdServicePlatform(f.host, "system", definition, {
             readFile: f.readFile,
         });
         await system.inspect();
         expect(f.exec.mock.calls.at(-1)?.[1]).not.toContain("--user");
+    });
+    it("already running start rejects an instance replacement instead of adopting it", async () => {
+        const f = fixture();
+        const original = f.host.exec;
+        let shows = 0;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args.includes("show") && ++shows === 2)
+                f.state({ InvocationID: "b".repeat(32), MainPID: "456" });
+            return output;
+        };
+        await expect(f.platform.start()).rejects.toThrow("无法安全确认");
+        expect(f.exec.mock.calls.some(call => call[1].includes("start"))).toBe(false);
+    });
+    it("new start rejects the first observed instance being replaced", async () => {
+        const f = fixture();
+        f.state({
+            ActiveState: "inactive",
+            SubState: "dead",
+            MainPID: "0",
+            ControlGroup: "",
+            InvocationID: "",
+        });
+        f.events("populated 0\n");
+        const original = f.host.exec;
+        let shows = 0;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args.includes("show") && ++shows === 3)
+                f.state({ InvocationID: "b".repeat(32), MainPID: "456" });
+            return output;
+        };
+        await expect(f.platform.start()).rejects.toThrow("无法安全确认");
+        expect(f.exec.mock.calls.filter(call => call[1].includes("start"))).toHaveLength(1);
     });
 });

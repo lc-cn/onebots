@@ -1,5 +1,6 @@
 import { isLaunchdServiceMissing } from "./service-platform-presence.js";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { LAUNCHD_LABEL, type ServiceScope } from "./service-definition.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
@@ -46,6 +47,56 @@ function fields(output: string, target: string): Map<string, string> {
     }
     if (depth !== 1) unavailable();
     return result;
+}
+
+interface ProcessGeneration {
+    group: number;
+    started: string;
+}
+
+const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+] as const;
+
+function processGeneration(output: string, expectedPid: number): ProcessGeneration | null {
+    if (output.length > 4096 || /[\u0000\r]/.test(output)) unavailable();
+    const match =
+        /^\s*([1-9][0-9]*)\s+([1-9][0-9]*)\s+(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+([1-9]|[12][0-9]|3[01])\s+([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])\s+([0-9]{4})\s*$/.exec(
+            output,
+        );
+    if (!match || Number(match[1]) !== expectedPid) unavailable();
+    const group = Number(match[2]);
+    if (!Number.isSafeInteger(group) || group > 2147483647) unavailable();
+    if (group !== expectedPid || expectedPid <= 1) return null;
+    const month = months.indexOf(match[4] as (typeof months)[number]);
+    const day = Number(match[5]);
+    const year = Number(match[9]);
+    const date = new Date(Date.UTC(year, month, day));
+    if (
+        year < 1970 ||
+        year > 9999 ||
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month ||
+        date.getUTCDate() !== day ||
+        weekdays[date.getUTCDay()] !== match[3]
+    )
+        unavailable();
+    return {
+        group,
+        started: `${match[9]}${String(month + 1).padStart(2, "0")}${match[5].padStart(2, "0")}T${match[6]}${match[7]}${match[8]}`,
+    };
 }
 
 /** 仅控制固定 OneBots 身份；不向历史 PID 发停止信号。旧实例缺少独立组证据时拒绝迁移。 */
@@ -148,11 +199,11 @@ export class LaunchdServicePlatform implements ServicePlatform {
             unavailable();
         return override ?? value.Disabled !== true;
     }
-    private group(pid: number, deadline?: number): number | null {
-        const output = this.exec("/bin/ps", ["-o", "pid=,pgid=", "-p", String(pid)], deadline);
-        const match = /^\s*([1-9][0-9]*)\s+([1-9][0-9]*)\s*$/.exec(output);
-        if (!match || Number(match[1]) !== pid) unavailable();
-        return Number(match[2]) === pid && pid > 1 ? pid : null;
+    private generation(pid: number, deadline?: number): ProcessGeneration | null {
+        return processGeneration(
+            this.exec("/bin/ps", ["-o", "pid=,pgid=,lstart=", "-p", String(pid)], deadline),
+            pid,
+        );
     }
     private groupsGone(): boolean {
         if (this.unprovenGroup) return false;
@@ -224,9 +275,9 @@ export class LaunchdServicePlatform implements ServicePlatform {
             )
                 unavailable();
             if ((state === "running") !== (pid !== null)) unavailable();
-            const group = pid === null ? null : this.group(pid, deadline);
-            if (group) this.groups.add(group);
-            if (pid !== null && !group) this.unprovenGroup = true;
+            const generation = pid === null ? null : this.generation(pid, deadline);
+            if (generation) this.groups.add(generation.group);
+            if (pid !== null && !generation) this.unprovenGroup = true;
             // ps 观察期间服务换代或状态变化，拒绝拼接两份不同实例的证据。
             const after = this.loaded(deadline);
             if (
@@ -236,6 +287,8 @@ export class LaunchdServicePlatform implements ServicePlatform {
                 )
             )
                 unavailable();
+            const confirmedGeneration = pid === null ? null : this.generation(pid, deadline);
+            if (!isDeepStrictEqual(generation, confirmedGeneration)) unavailable();
             return {
                 state: observedState,
                 running: pid !== null,
@@ -243,11 +296,42 @@ export class LaunchdServicePlatform implements ServicePlatform {
                 loaded: true,
                 definitionPath: this.expectedDefinitionPath,
                 processId: pid,
-                identity: group ? `${this.target}:pgid:${group}` : null,
+                identity: generation
+                    ? `${this.target}:pgid:${generation.group}:started:${generation.started}`
+                    : null,
                 quiescent: observedState === "stopped" && pid === null && this.groupsGone(),
             };
         } catch {
             unavailable();
+        }
+    }
+    private async stable(
+        deadline: number,
+        accepts: (state: ServicePlatformState) => boolean,
+    ): Promise<ServicePlatformState> {
+        for (;;) {
+            const first = await this.inspectWithin(deadline);
+            if (accepts(first)) {
+                const second = await this.inspectWithin(deadline);
+                if (accepts(second) && isDeepStrictEqual(first, second)) return second;
+            }
+            if (this.now() >= deadline) unavailable();
+            await this.sleep(Math.min(100, deadline - this.now()));
+        }
+    }
+    private async stableInstance(
+        deadline: number,
+        accepts: (state: ServicePlatformState) => boolean,
+    ): Promise<ServicePlatformState> {
+        for (;;) {
+            const first = await this.inspectWithin(deadline);
+            if (accepts(first)) {
+                const second = await this.inspectWithin(deadline);
+                if (accepts(second) && isDeepStrictEqual(first, second)) return second;
+                unavailable();
+            }
+            if (this.now() >= deadline) unavailable();
+            await this.sleep(Math.min(100, deadline - this.now()));
         }
     }
     async quiesce(): Promise<void> {
@@ -286,22 +370,53 @@ export class LaunchdServicePlatform implements ServicePlatform {
             unavailable();
         }
     }
-    async reload(enabled: boolean): Promise<void> {
+    async reload(enabled: boolean): Promise<ServicePlatformState> {
         try {
             if (typeof enabled !== "boolean") unavailable();
-            this.command([enabled ? "enable" : "disable", this.target]);
-            if ((await this.inspect()).enabled !== enabled) unavailable();
+            const deadline = this.now() + this.timeout;
+            const before = await this.inspectWithin(deadline);
+            if (
+                before.state !== "stopped" ||
+                before.running ||
+                before.loaded ||
+                !before.quiescent ||
+                before.definitionPath !== this.expectedDefinitionPath
+            )
+                unavailable();
+            this.command([enabled ? "enable" : "disable", this.target], deadline);
+            return await this.stable(
+                deadline,
+                state =>
+                    state.state === "stopped" &&
+                    !state.running &&
+                    !state.loaded &&
+                    state.quiescent &&
+                    state.enabled === enabled &&
+                    state.definitionPath === this.expectedDefinitionPath,
+            );
         } catch {
-            unavailable();
+            return unavailable();
         }
     }
-    async start(): Promise<void> {
+    async start(): Promise<ServicePlatformState> {
         try {
             const deadline = this.now() + this.timeout;
             const before = await this.inspectWithin(deadline);
             if (before.running) {
                 if (!before.identity) unavailable();
-                return;
+                return await this.stable(
+                    deadline,
+                    state =>
+                        state.state === "running" &&
+                        state.running &&
+                        state.loaded &&
+                        state.processId !== null &&
+                        state.identity !== null &&
+                        state.definitionPath === this.expectedDefinitionPath &&
+                        state.enabled === before.enabled &&
+                        state.processId === before.processId &&
+                        state.identity === before.identity,
+                );
             }
             if (before.loaded || !before.quiescent) unavailable();
             // launchctl(1): disabled服务不能加载。上层starting-manager意图必须先持久化；
@@ -313,30 +428,33 @@ export class LaunchdServicePlatform implements ServicePlatform {
             }
             this.fresh = false;
             this.command(["bootstrap", this.domain, this.expectedDefinitionPath], deadline);
-            for (;;) {
-                const current = await this.inspectWithin(deadline);
-                if (!current.enabled || !current.loaded) unavailable();
-                if (current.running) {
-                    if (!current.identity) unavailable();
-                    if (!before.enabled) {
-                        this.command(["disable", this.target], deadline);
-                        const restored = await this.inspectWithin(deadline);
-                        if (
-                            restored.enabled ||
-                            !restored.running ||
-                            !restored.loaded ||
-                            restored.identity !== current.identity ||
-                            restored.processId !== current.processId
-                        )
-                            unavailable();
-                    }
-                    return;
-                }
-                if (this.now() >= deadline) unavailable();
-                await this.sleep(Math.min(100, deadline - this.now()));
+            const started = await this.stableInstance(
+                deadline,
+                state =>
+                    state.state === "running" &&
+                    state.running &&
+                    state.loaded &&
+                    state.enabled &&
+                    state.processId !== null &&
+                    state.identity !== null &&
+                    state.definitionPath === this.expectedDefinitionPath,
+            );
+            if (!before.enabled) {
+                this.command(["disable", this.target], deadline);
             }
+            return await this.stable(
+                deadline,
+                state =>
+                    state.state === "running" &&
+                    state.running &&
+                    state.loaded &&
+                    state.enabled === before.enabled &&
+                    state.processId === started.processId &&
+                    state.identity === started.identity &&
+                    state.definitionPath === this.expectedDefinitionPath,
+            );
         } catch {
-            unavailable();
+            return unavailable();
         }
     }
 }

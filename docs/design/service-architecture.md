@@ -538,3 +538,5 @@ Linux 检查已补充 musl 的系统配置与默认搜索顺序。独立、禁�
 旧网关当前进程的 Application 查询与动态加载接口现已退役：`/api/applications`、`/api/applications/load` 及其唯一工厂入口不再形成第二套扩展管理面；框架方案目录、连接计划和动态 provider 入口继续保留。Application 扩展仍由管理服务的安装计划写入不可变运行代，并在网关启动时注册和激活。本次只删除已确认无 Web/文档消费者的闭合切片；其余旧 App/Web 路径、`createOnebots` 与 `--service-runtime` 仍有迁移回退或真实运行时消费者，尚不能整体退役。
 
 迁移日志现预备严格的 schema v2 读取契约，并继续让现有事务写入 v1：v2 封闭 `target-written` 检查点、显式回退来源以及旧服务 reload/start 收据格式，拒绝 v1 混入新字段、缺少回退来源或 reload 收据的后期回退记录、旧 `restarting-old` 阶段、运行中的终态和携带回退证据的成功终态。journal 的普通保存不能把既有 v1 记录改成 v2。测试改为通过真实停服失败到达 `stopping-old`，不再用日志接口伪造阶段。此提交只建立后续冷回退的数据兼容边界；workspace v2 标记、唯一回退契约摘要、平台效果收据生产、journal 专用 CAS、事务写入检查点和 recovery 接线仍未实现，因此尚未开放目标写入后的回退，也没有改变当前 v1 迁移行为。
+
+旧服务回退效果现具备可复用的证明基础：唯一回退契约摘要绑定平台、服务范围、原启用意图、严格解析后的保留运行规格，以及 definition、metadata、configuration 和可选 runner 实际恢复字节、权限与规范路径；reload 收据也使用闭合规范摘要。systemd 与 launchd 的 reload/start 不再只表示命令返回，而是在统一期限内取得两次完全一致的 OS 状态；reload 必须证明固定定义下的静止和启用状态，start 必须证明稳定 PID 与实例身份，已运行实例在观察期间换代会失败关闭，launchd 还会在单次观测前后绑定 PID、进程组和启动世代。真实 macOS `ps` 进程组测试、两平台注入驱动和回退契约测试共 59 项通过，并以真磁盘逐项核对自定义旧配置的写回与目标配置删除。该基础尚未由迁移 Port 生成收据，也未写入 v2 journal；下一步需把返回的 OS 观测转换为受备份摘要约束的 reload/start 收据并持久化，当前仍未开放目标写入后的冷回退。
