@@ -14,6 +14,7 @@ export async function checkServerAvailable(baseUrl) {
     });
     return response.ok || response.status === 404; // 404 also means server is running
   } catch (error) {
+    if (process.env.ONEBOTS_REQUIRE_SERVER === '1') throw error;
     return false;
   }
 }
@@ -46,6 +47,7 @@ export async function callSatoriAPI(config, method, params = {}) {
     const data = await response.json().catch(() => ({}));
     return { status: response.status, data: data && typeof data === 'object' ? data : {} };
   } catch (error) {
+    if (process.env.ONEBOTS_REQUIRE_SERVER === '1') throw error;
     return { status: 0, data: {}, error: error.message };
   }
 }

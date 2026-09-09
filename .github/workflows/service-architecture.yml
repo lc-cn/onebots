@@ -179,6 +179,8 @@ jobs:
           cache-dependency-path: native/windows-host/go.sum
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: Verify managed Mock protocol transports
+        run: pnpm test:protocols:managed
       - run: node scripts/build-windows-host.mjs
       - run: pnpm test
       - run: pnpm packages:pack:check

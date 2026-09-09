@@ -30,6 +30,15 @@ export async function startManagedGateway({
     framework,
     children,
 }) {
+    const protocolPackages = Array.isArray(protocolPackage) ? protocolPackage : [protocolPackage];
+    const protocolConfigs = Array.isArray(protocolConfig) ? protocolConfig : [protocolConfig];
+    if (
+        protocolPackages.length === 0 ||
+        protocolConfigs.length !== protocolPackages.length ||
+        protocolPackages.some(name => typeof name !== "string") ||
+        protocolConfigs.some(name => typeof name !== "string")
+    )
+        throw new Error("互操作协议选择无效");
     const managerPort = gatewayPort;
     const artifacts = path.join(workspace, "runtime-artifacts");
     const managerWorkspace = fs.mkdtempSync(
@@ -38,13 +47,16 @@ export async function startManagedGateway({
     const { packControlRuntime } = await import(
         pathToFileURL(path.join(root, "scripts/pack-control-runtime.mjs")).href
     );
-    const protocolDirectory = LOCAL_PROTOCOL_DIRECTORIES[protocolPackage];
-    if (!protocolDirectory) throw new Error(`互操作协议不受支持：${protocolPackage}`);
+    const protocolDirectories = protocolPackages.map(name => {
+        const directory = LOCAL_PROTOCOL_DIRECTORIES[name];
+        if (!directory) throw new Error(`互操作协议不受支持：${name}`);
+        return directory;
+    });
     await packControlRuntime({
         repositoryRoot: root,
         outputDirectory: artifacts,
         // CI 必须验证同一提交的宿主和协议，不能混用 npm 上一版工件。
-        extensionDirectories: ["adapters/adapter-mock", protocolDirectory],
+        extensionDirectories: ["adapters/adapter-mock", ...protocolDirectories],
     });
     const manager = startProcess(
         process.execPath,
@@ -89,13 +101,13 @@ export async function startManagedGateway({
         local.planInstallation(
             {
                 adapters: ["mock"],
-                protocols: [protocolPackage],
-                applications: [framework],
+                protocols: protocolPackages,
+                applications: framework ? [framework] : [],
             },
             null,
         ),
     );
-    const requestId = `interop-${framework}-${randomUUID()}`;
+    const requestId = `interop-${framework ?? "protocols"}-${randomUUID()}`;
     await installationStep("提交扩展安装计划", () =>
         local.install({ id: requestId, planId: plan.id }),
     );
@@ -107,7 +119,7 @@ export async function startManagedGateway({
     );
     if (activation.status !== "succeeded") throw new Error("运行代际激活失败");
 
-    await applyGatewayConfiguration(local, configSource, protocolConfig);
+    await applyGatewayConfiguration(local, configSource, protocolConfigs);
     const started = await local.gateway("start");
     if (started.status !== "succeeded") throw new Error("网关启动失败");
     await waitForPort(gatewayPort, manager, 20_000);
@@ -123,8 +135,8 @@ export async function startManagedGateway({
         throw new Error(`管理服务未确认网关运行代际：${JSON.stringify(status)}`);
     const expectedSelection = {
         adapters: ["mock"],
-        protocols: [protocolPackage],
-        applications: [framework],
+        protocols: protocolPackages,
+        applications: framework ? [framework] : [],
     };
     if (activeCatalog.activeGenerationId !== installation.candidateId)
         throw new Error(`扩展目录未绑定激活代际：${JSON.stringify(activeCatalog)}`);
@@ -257,7 +269,7 @@ async function waitForInstallation(client, id, manager, timeoutMs) {
     throw new Error(`扩展安装超时\n${manager.logs()}`);
 }
 
-async function applyGatewayConfiguration(client, source, protocol) {
+async function applyGatewayConfiguration(client, source, protocols) {
     const require = createRequire(import.meta.url);
     const yaml = require(
         require.resolve("js-yaml", {
@@ -267,11 +279,32 @@ async function applyGatewayConfiguration(client, source, protocol) {
     const desired = yaml.load(source);
     if (!desired || typeof desired !== "object" || Array.isArray(desired))
         throw new Error("互操作网关配置无效");
-    desired["mock.interop"][protocol].use_http = true;
+    for (const protocol of protocols) {
+        const config = desired["mock.interop"][protocol];
+        if (config && typeof config === "object" && Object.hasOwn(config, "use_http"))
+            config.use_http = true;
+    }
     // 单一固定好友让入站会话和框架回复目标可从协议历史接口精确核验。
     desired["mock.interop"].friends = [
         { user_id: "10001", nickname: "互操作好友", avatar: "https://example.invalid/avatar" },
     ];
+    // endpoint-list 可能包含服务端保留的秘密字段，不能整表 set。逐行创建后再写公开字段。
+    const endpointLists = [];
+    for (const protocol of protocols) {
+        const config = desired["mock.interop"][protocol];
+        if (!config || typeof config !== "object" || Array.isArray(config)) continue;
+        for (const key of ["http_reverse", "ws_reverse", "webhooks"]) {
+            const value = config[key];
+            if (
+                Array.isArray(value) &&
+                value.length > 0 &&
+                value.every(item => item && typeof item === "object" && !Array.isArray(item))
+            ) {
+                endpointLists.push({ path: ["mock.interop", protocol, key], entries: value });
+                delete config[key];
+            }
+        }
+    }
     const snapshot = await client.configurationSnapshot();
     let draft = await configurationStep("创建配置草稿", () =>
         client.createConfigurationDraft(snapshot.base),
@@ -283,14 +316,15 @@ async function applyGatewayConfiguration(client, source, protocol) {
             accountId: "interop",
         }),
     );
-    draft = await configurationStep("启用目标协议", () =>
-        client.setConfigurationProtocol(draft.id, {
-            expectedRevision: draft.revision,
-            accountKey: "mock.interop",
-            protocol,
-            enabled: true,
-        }),
-    );
+    for (const protocol of protocols)
+        draft = await configurationStep(`启用目标协议 ${protocol}`, () =>
+            client.setConfigurationProtocol(draft.id, {
+                expectedRevision: draft.revision,
+                accountKey: "mock.interop",
+                protocol,
+                enabled: true,
+            }),
+        );
     const context = await configurationStep("读取配置 Schema", () =>
         client.configurationDraftContext(draft.id),
     );
@@ -326,6 +360,29 @@ async function applyGatewayConfiguration(client, source, protocol) {
                 secrets: [secret],
             }),
         );
+    for (const list of endpointLists) {
+        for (const [index, entry] of list.entries.entries()) {
+            draft = await configurationStep(`添加配置列表 ${list.path.join(".")}`, () =>
+                client.editConfigurationList(draft.id, {
+                    expectedRevision: draft.revision,
+                    path: list.path,
+                    action: "append",
+                }),
+            );
+            for (const [key, value] of Object.entries(entry))
+                draft = await configurationStep(
+                    `写入配置 ${[...list.path, String(index), key].join(".")}`,
+                    () =>
+                        client.editConfigurationDraft(draft.id, {
+                            expectedRevision: draft.revision,
+                            changes: [
+                                { op: "set", path: [...list.path, String(index), key], value },
+                            ],
+                            secrets: [],
+                        }),
+                );
+        }
+    }
     const validation = await configurationStep("校验互操作配置", () =>
         client.validateConfigurationDraft(draft.id, draft.revision),
     );
@@ -347,11 +404,13 @@ async function configurationStep(name, action) {
 
 function configurationLeaves(value, prefix = []) {
     if (
-        value === null ||
-        typeof value !== "object" ||
-        Array.isArray(value) ||
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
         Object.keys(value).length === 0
     )
+        return [];
+    if (value === null || typeof value !== "object" || Array.isArray(value))
         return [[prefix, value]];
     return Object.entries(value).flatMap(([key, child]) =>
         configurationLeaves(child, [...prefix, key]),
