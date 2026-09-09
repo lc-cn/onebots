@@ -1,3 +1,5 @@
+import { VerificationAbandonmentStore } from "./verification-abandonment.js";
+import type { ControlVerificationAbandonment } from "@onebots/core/control";
 import path from "node:path";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
@@ -23,6 +25,7 @@ export class ControlVerificationStore {
     private keys?: ServiceOperationStorage;
     private operations?: ServiceOperationStorage;
     private key?: Buffer;
+    private abandonments?: VerificationAbandonmentStore;
     private fingerprint?: string;
     private blocked = false;
     private readonly uncertain = new Map<string, VerificationRecord>();
@@ -32,9 +35,16 @@ export class ControlVerificationStore {
             this.root = new ServiceOperationStorage(directory);
             this.keys = new ServiceOperationStorage(path.join(directory, "keys"));
             this.operations = new ServiceOperationStorage(path.join(directory, "operations"));
+            this.abandonments = new VerificationAbandonmentStore(
+                path.join(directory, "abandonments"),
+                () => {
+                    this.verifyKey();
+                    return this.fingerprint!;
+                },
+            );
             const names = this.operations.list();
             const keyNames = this.keys.list();
-            if (!keyNames.length && !names.length) {
+            if (!keyNames.length && !names.length && !this.abandonments.list().length) {
                 const key = randomBytes(32);
                 const fingerprint = createHash("sha256").update(key).digest("hex");
                 this.keys.write(
@@ -122,6 +132,7 @@ export class ControlVerificationStore {
     }
     create(input: VerificationRecord): void {
         this.assertAvailable();
+        this.assertNotAbandoned(parseVerificationRecord(input).id);
         try {
             const record = parseVerificationRecord(input);
             if (record.status !== "running") throw new Error();
@@ -255,6 +266,40 @@ export class ControlVerificationStore {
             throw new ControlVerificationError(503);
         }
     }
+    assertNotAbandoned(id: string): void {
+        this.assertAvailable();
+        try {
+            if (this.abandonments!.has(id)) throw new ControlVerificationError(409);
+        } catch (error) {
+            if (error instanceof ControlVerificationError && error.httpStatus === 409) throw error;
+            this.blocked = true;
+            throw new ControlVerificationError(503);
+        }
+    }
+    abandonment(owner: string, id: string, localRecovery = false): ControlVerificationAbandonment {
+        if (!verificationHash(owner)) throw new ControlVerificationError(400);
+        this.assertAvailable();
+        const record = this.abandonments!.read(id);
+        if (!localRecovery && record.ownerHash !== owner) throw new ControlVerificationError(404);
+        return { id: record.id, abandonedAt: record.abandonedAt };
+    }
+    abandon(owner: string, id: string, localRecovery = false): ControlVerificationAbandonment {
+        this.assertAvailable();
+        if (!verificationId(id) || !verificationHash(owner))
+            throw new ControlVerificationError(400);
+        // 任何设备已有的真实意图都不能改为未受理编号。
+        if (this.operations!.has(`${id}.json`)) throw new ControlVerificationError(409);
+        if (this.abandonments!.has(id)) return this.abandonment(owner, id, localRecovery);
+        if (this.abandonments!.list().length >= 10000) throw new ControlVerificationError(429);
+        try {
+            const record = this.abandonments!.create(id, owner);
+            return { id: record.id, abandonedAt: record.abandonedAt };
+        } catch {
+            // 封存写入未知时不再执行任何验证；重启只读持久事实。
+            this.blocked = true;
+            throw new ControlVerificationError(503);
+        }
+    }
     hasUncertainAccount(accountHash: string): boolean {
         if (!verificationHash(accountHash)) throw new ControlVerificationError(400);
         this.assertAvailable();
@@ -282,6 +327,11 @@ export class ControlVerificationStore {
     private audit(): number {
         if (!this.operations) throw new Error();
         const names = this.operations.list();
+        if (!this.abandonments) throw new Error();
+        for (const name of this.abandonments.list()) {
+            this.abandonments.read(name.slice(0, -5));
+            if (this.operations.has(name)) throw new Error("验证记录与封存编号冲突");
+        }
         for (const name of names) this.read(name.slice(0, -5));
         return names.length;
     }

@@ -44,8 +44,14 @@ export async function queryControlVerification(
         prompt.report("操作 ID 无效。");
         return;
     }
+    let operation: ControlVerificationOperation;
     try {
-        const operation = await client.verification.operation(id);
+        operation = await client.verification.operation(id);
+    } catch {
+        await recoverMissingReceipt(client, prompt, id);
+        return;
+    }
+    try {
         reportOperation(prompt, operation);
         if (operation.status !== "unknown" || operation.resolution || operation.acknowledgement)
             return;
@@ -73,6 +79,47 @@ export async function queryControlVerification(
         }
     } catch {
         prompt.report("原回执暂不可查询。请保留操作 ID，不要重新提交。");
+    }
+}
+async function recoverMissingReceipt(
+    client: ControlClient,
+    prompt: TuiPrompt,
+    id: string,
+): Promise<void> {
+    try {
+        const receipt = await client.verification.abandonment(id);
+        prompt.report(
+            `操作 ${id} 已于 ${receipt.abandonedAt} 封存，迟到请求将被拒绝；不表示平台从未发生过动作。`,
+        );
+        return;
+    } catch {
+        // 查询失败不是不存在的证明，只有服务端封存事务可以决定是否允许恢复。
+    }
+    const [choice] = await prompt.ask({
+        title: "原回执暂不可查询",
+        detail: "查询失败不代表未执行。请保留编号；服务端只有在原操作未受理且网关完全停止时才允许封存。",
+        choices: [
+            { value: "no", label: "返回并保留编号" },
+            { value: "abandon", label: "停止网关后封存未受理编号" },
+        ],
+    });
+    if (choice !== "abandon") return;
+    const [confirmed] = await prompt.ask({
+        title: "确认永久封存这个编号？",
+        detail: "封存后迟到请求永久拒绝，不表示平台从未发生过动作；不会停止网关、重新提交或删除历史编号。",
+        choices: [
+            { value: "no", label: "取消" },
+            { value: "yes", label: "我理解并确认封存" },
+        ],
+    });
+    if (confirmed !== "yes") return;
+    try {
+        const receipt = await client.verification.abandon(id, true);
+        prompt.report(
+            `操作 ${id} 已于 ${receipt.abandonedAt} 封存；请保留编号，不表示平台从未发生过动作。`,
+        );
+    } catch {
+        prompt.report(`封存未确认，请继续查询原编号 ${id}；不要重新提交或清除记录。`);
     }
 }
 export async function runControlVerification(

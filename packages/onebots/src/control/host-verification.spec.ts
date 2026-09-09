@@ -125,10 +125,73 @@ async function fixture(secret: string) {
             ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });
     }
-    return { host, workspace, calls, token, otherToken, request, url };
+    return { host, workspace, runtimeRoot, calls, token, otherToken, request, url };
 }
 
 describe("真实管理服务持久账号验证", () => {
+    it("停机封存未受理编号，管理服务重启后拒绝迟到提交并允许用户新验证", async () => {
+        const f = await fixture("246810");
+        const client = new ControlClient(createHttpControlTransport(f.url, () => f.token));
+        const pending = await client.verification.pending();
+        const id = randomUUID();
+        const command = {
+            operationId: id,
+            challengeId: pending.challenges[0].id,
+            expected: {
+                gatewayInstanceId: pending.gatewayInstanceId,
+                configVersion: pending.configVersion,
+            },
+            action: "submit" as const,
+            data: { code: "246810" },
+        };
+        await expect(client.verification.abandon(id, true)).rejects.toMatchObject({ status: 409 });
+        expect((await f.request("abandon", f.token, { id })).status).toBe(400);
+        expect((await f.request("abandon", "", { id, confirm: true })).status).toBe(401);
+        await client.gateway("stop");
+        const sealed = await client.verification.abandon(id, true);
+        expect(sealed).toEqual({ id, abandonedAt: expect.any(String) });
+        expect(await client.verification.abandonment(id)).toEqual(sealed);
+        const other = new ControlClient(createHttpControlTransport(f.url, () => f.otherToken));
+        await expect(other.verification.abandonment(id)).rejects.toMatchObject({ status: 404 });
+        await expect(other.verification.abandon(id, true)).rejects.toMatchObject({ status: 404 });
+        await f.host.close();
+        const recovered = await startControlHost({
+            workspace: f.workspace,
+            runtimeRoot: f.runtimeRoot,
+            port: 0,
+            gatewayEntrypoint: path.resolve("packages/onebots/lib/gateway/entry.js"),
+        });
+        cleanup.push(() => recovered.close());
+        const address = recovered.server.address();
+        if (!address || typeof address === "string") throw new Error("缺少管理地址");
+        const resumed = new ControlClient(
+            createHttpControlTransport(`http://127.0.0.1:${address.port}`, () => f.token),
+        );
+        expect(await resumed.verification.abandonment(id)).toEqual(sealed);
+        expect(await createLocalControlClient(f.workspace).verification.abandonment(id)).toEqual(
+            sealed,
+        );
+        await resumed.gateway("start");
+        expect(await resumed.verification.abandon(id, true)).toEqual(sealed);
+        await expect(resumed.verification.execute(command)).rejects.toMatchObject({ status: 409 });
+        expect(fs.existsSync(f.calls)).toBe(false);
+        const next = await resumed.verification.pending();
+        const completed = await resumed.verification.execute({
+            ...command,
+            operationId: randomUUID(),
+            challengeId: next.challenges[0].id,
+            expected: {
+                gatewayInstanceId: next.gatewayInstanceId,
+                configVersion: next.configVersion,
+            },
+        });
+        expect(completed.status).toBe("succeeded");
+        await resumed.gateway("stop");
+        await expect(resumed.verification.abandon(completed.id, true)).rejects.toMatchObject({
+            status: 409,
+        });
+        expect(fs.readFileSync(f.calls, "utf8")).toBe("submit\n");
+    });
     it("原进程停止后才能显式接受未知，原回执不变且不重派验证", async () => {
         const original = NodeGatewayDriver.prototype.verification;
         vi.spyOn(NodeGatewayDriver.prototype, "verification").mockImplementation(

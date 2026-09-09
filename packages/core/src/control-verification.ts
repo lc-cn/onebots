@@ -2,6 +2,10 @@ import type { Adapter } from "./adapter.js";
 import type { ControlTransport } from "./control.js";
 import { verificationJson, verificationRequest } from "./control-verification-json.js";
 
+export interface ControlVerificationAbandonment {
+    id: string;
+    abandonedAt: string;
+}
 export interface ControlVerificationCommand {
     operationId: string;
     challengeId: string;
@@ -56,6 +60,22 @@ function date(value: unknown): value is string {
         Number.isFinite(Date.parse(value)) &&
         new Date(value).toISOString() === value
     );
+}
+/** 封存仅阻止这个编号迟到执行，不证明平台从未发生过动作。 */
+export function isControlVerificationAbandonment(
+    input: unknown,
+): input is ControlVerificationAbandonment {
+    try {
+        const value = verificationJson(input, 1024);
+        return (
+            object(value) &&
+            exact(value, ["id", "abandonedAt"]) &&
+            uuid(value.id) &&
+            date(value.abandonedAt)
+        );
+    } catch {
+        return false; // 未经核对的封存回执不能解除客户端阻塞。
+    }
 }
 /** 只校验有界 JSON，不调用输入访问器；网关仍负责最终权限与挑战检查。 */
 export function isControlVerificationCommand(input: unknown): input is ControlVerificationCommand {
@@ -264,6 +284,27 @@ export class ControlVerificationClient {
         );
         if (!isControlVerificationOperation(result) || result.id !== id || !result.acknowledgement)
             throw unconfirmed();
+        return structuredClone(result);
+    }
+
+    async abandon(id: string, confirm: true): Promise<ControlVerificationAbandonment> {
+        if (!uuid(id) || confirm !== true) throw new Error("必须明确确认封存未受理编号");
+        const result: unknown = await this.transport.request(
+            "POST",
+            "/api/control/verification/abandon",
+            { id, confirm: true },
+        );
+        if (!isControlVerificationAbandonment(result) || result.id !== id) throw unconfirmed();
+        return structuredClone(result);
+    }
+
+    async abandonment(id: string): Promise<ControlVerificationAbandonment> {
+        if (!uuid(id)) throw new Error("验证操作标识无效");
+        const result: unknown = await this.transport.request(
+            "GET",
+            `/api/control/verification/abandonments/${id}`,
+        );
+        if (!isControlVerificationAbandonment(result) || result.id !== id) throw unconfirmed();
         return structuredClone(result);
     }
 

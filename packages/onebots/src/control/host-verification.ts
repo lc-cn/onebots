@@ -1,5 +1,4 @@
 import path from "node:path";
-import type { ControlVerificationOperation } from "@onebots/core/control";
 import type { ControlAuth } from "./auth.js";
 import type { NodeGatewayDriver } from "./gateway-driver.js";
 import type { GenerationActivationController } from "./generation-activation.js";
@@ -14,10 +13,10 @@ interface StoppedVerificationOptions {
 }
 
 /** 只接受已停机后的风险确认；复用生命周期队列，不停止网关，也不重发验证。 */
-export function acknowledgeVerificationWhileStopped(
+export function acknowledgeVerificationWhileStopped<T>(
     options: StoppedVerificationOptions,
-    commit: () => ControlVerificationOperation,
-): Promise<ControlVerificationOperation> {
+    commit: () => T,
+): Promise<T> {
     return options.lifecycle.runConfigurationTransaction(async port => {
         const state = options.lifecycle.status();
         if (
@@ -43,6 +42,15 @@ export function createHostVerification(
         currentGateway(): string | undefined;
     },
 ): ControlVerificationHttp {
+    const whileStopped = <T>(commit: () => T) =>
+        acknowledgeVerificationWhileStopped(
+            {
+                lifecycle: options.lifecycle,
+                available: () =>
+                    options.available() && !serviceMigrationStatus(options.workspace).pending,
+            },
+            commit,
+        );
     return new ControlVerificationHttp(
         {
             directory: path.join(controlDirectory(options.workspace), "verification"),
@@ -52,16 +60,8 @@ export function createHostVerification(
             },
             forward: (context, operation) =>
                 options.driver.verification(context.gatewayInstanceId, operation),
-            acknowledgeWhileStopped: commit =>
-                acknowledgeVerificationWhileStopped(
-                    {
-                        lifecycle: options.lifecycle,
-                        available: () =>
-                            options.available() &&
-                            !serviceMigrationStatus(options.workspace).pending,
-                    },
-                    commit,
-                ),
+            acknowledgeWhileStopped: whileStopped,
+            abandonWhileStopped: whileStopped,
         },
         options.auth,
     );

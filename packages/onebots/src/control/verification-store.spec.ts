@@ -305,18 +305,19 @@ describe("验证操作私有持久存储", () => {
     });
     it("回执容量满拒绝新增且不淘汰", () => {
         const f = fixture();
+        f.store.create(f.record);
         const original = ServiceOperationStorage.prototype.list;
         const recordRead = vi.spyOn(f.store, "read").mockReturnValue(f.record);
         vi.spyOn(ServiceOperationStorage.prototype, "list").mockImplementation(function () {
             const names = original.call(this);
-            return names.includes("hmac.json")
-                ? names
-                : Array.from({ length: 10000 }, () => `${f.record.id}.json`);
+            return names.includes(`${f.record.id}.json`)
+                ? Array.from({ length: 10000 }, () => `${f.record.id}.json`)
+                : names;
         });
         expect(() => f.store.create(f.record)).toThrowError(
             expect.objectContaining({ httpStatus: 429 }),
         );
         expect(recordRead).toHaveBeenCalled();
-        expect(readdirSync(path.join(f.directory, "operations"))).toEqual([]);
+        expect(readdirSync(path.join(f.directory, "operations"))).toEqual([`${f.record.id}.json`]);
     });
 });

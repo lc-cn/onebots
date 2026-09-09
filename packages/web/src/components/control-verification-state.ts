@@ -1,6 +1,7 @@
 import { isControlVerificationCommand, controlVerificationOutcome } from "@onebots/core/control";
 import type {
     ControlClient,
+    ControlVerificationAbandonment,
     ControlVerificationOperation,
     ControlVerificationSnapshot,
 } from "@onebots/core/control";
@@ -10,6 +11,7 @@ export interface VerificationView {
     answers: Record<string, Record<string, string>>;
     ids: string[];
     receipts: Record<string, ControlVerificationOperation>;
+    abandonments: Record<string, ControlVerificationAbandonment>;
     busy: boolean;
     ready: boolean;
     error: string;
@@ -18,6 +20,7 @@ export const verificationView = (): VerificationView => ({
     answers: {},
     ids: [],
     receipts: {},
+    abandonments: {},
     busy: false,
     ready: false,
     error: "",
@@ -65,7 +68,13 @@ export class VerificationController {
         private readonly client: {
             verification: Pick<
                 ControlClient["verification"],
-                "pending" | "execute" | "operation" | "reconcile" | "acknowledge"
+                | "pending"
+                | "execute"
+                | "operation"
+                | "reconcile"
+                | "acknowledge"
+                | "abandon"
+                | "abandonment"
             >;
             sessions: ControlClient["sessions"];
         },
@@ -113,10 +122,12 @@ export class VerificationController {
         this.view.answers = {};
     }
     get uncertain(): boolean {
-        return this.view.ids.some(
-            id =>
-                !this.view.receipts[id] ||
-                ["running", "unknown"].includes(controlVerificationOutcome(this.view.receipts[id])),
+        return this.view.ids.some(id =>
+            this.view.receipts[id]
+                ? ["running", "unknown"].includes(
+                      controlVerificationOutcome(this.view.receipts[id]),
+                  )
+                : !this.view.abandonments[id],
         );
     }
     async refresh(): Promise<void> {
@@ -243,8 +254,17 @@ export class VerificationController {
                 this.view.error = "";
             }
         } catch {
-            if (!this.closed && revision === this.revision)
-                this.view.error = "回执仍未确认，请保留原操作编号。查询失败不代表操作未执行。";
+            if (this.closed || revision !== this.revision) return;
+            try {
+                const abandonment = await this.client.verification.abandonment(id);
+                if (!this.closed && revision === this.revision && !this.view.receipts[id]) {
+                    this.view.abandonments[id] = abandonment;
+                    this.view.error = "";
+                }
+            } catch {
+                if (!this.closed && revision === this.revision)
+                    this.view.error = "回执仍未确认，请保留原操作编号。查询失败不代表操作未执行。";
+            }
         } finally {
             this.view.busy = false;
         }
@@ -303,6 +323,33 @@ export class VerificationController {
             if (!this.closed && revision === this.revision)
                 this.view.error =
                     "接受结果未确认，请查询原操作回执。网关必须已停止；不要重新提交。";
+        } finally {
+            this.view.busy = false;
+        }
+    }
+    async abandon(id: string, confirm: boolean): Promise<void> {
+        if (
+            this.closed ||
+            this.view.busy ||
+            this.gateway ||
+            !confirm ||
+            !this.view.ids.includes(id) ||
+            this.view.receipts[id] ||
+            this.view.abandonments[id]
+        )
+            return;
+        this.view.busy = true;
+        const revision = this.revision;
+        try {
+            const receipt = await this.client.verification.abandon(id, true);
+            if (!this.closed && revision === this.revision) {
+                this.view.abandonments[id] = receipt;
+                this.view.error = "";
+            }
+        } catch {
+            if (!this.closed && revision === this.revision)
+                this.view.error =
+                    "封存未确认，请查询原编号；服务端必须确认原操作未受理且网关已停止。不要清除记录或重新提交。";
         } finally {
             this.view.busy = false;
         }

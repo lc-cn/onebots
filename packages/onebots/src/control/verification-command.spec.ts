@@ -25,6 +25,8 @@ function fixture() {
         execute: vi.fn(async () => receipt),
         reconcile: vi.fn(),
         acknowledge: vi.fn(),
+        abandon: vi.fn(),
+        abandonment: vi.fn().mockRejectedValue(new Error("missing")),
         operation: vi.fn(async () => receipt),
     };
     const output = vi.fn();
@@ -96,5 +98,24 @@ it("接受未知结果必须有显式风险参数，丢失确认仅引导查询�
         f.run(["acknowledge", "--request", f.receipt.id, "--accept-unknown"]),
     ).rejects.toThrow(f.receipt.id);
     expect(f.verification.acknowledge).toHaveBeenCalledTimes(2);
+    expect(f.verification.execute).not.toHaveBeenCalled();
+});
+
+it("封存必须显式确认，另次查询保留原 ID 且不自动重试", async () => {
+    const f = fixture();
+    await expect(f.run(["abandon", "--request", f.receipt.id])).rejects.toThrow();
+    expect(f.verification.abandon).not.toHaveBeenCalled();
+    const sealed = { id: f.receipt.id, abandonedAt: new Date(2).toISOString() };
+    f.verification.abandon.mockResolvedValue(sealed);
+    await f.run(["abandon", "--request", f.receipt.id, "--confirm"]);
+    expect(f.verification.abandon).toHaveBeenCalledExactlyOnceWith(f.receipt.id, true);
+    f.verification.abandonment.mockResolvedValue(sealed);
+    await f.run(["abandonment", "--request", f.receipt.id]);
+    expect(f.verification.abandonment).toHaveBeenCalledExactlyOnceWith(f.receipt.id);
+    f.verification.abandon.mockRejectedValue(new Error("private"));
+    await expect(f.run(["abandon", "--request", f.receipt.id, "--confirm"])).rejects.toThrow(
+        "abandonment",
+    );
+    expect(f.verification.abandon).toHaveBeenCalledTimes(2);
     expect(f.verification.execute).not.toHaveBeenCalled();
 });

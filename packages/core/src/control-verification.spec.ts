@@ -272,3 +272,33 @@ it("requires explicit acceptance and validates acknowledgement without convertin
     await expect(client.verification.acknowledge(base.id, true)).rejects.toThrow("lost");
     expect(request).toHaveBeenCalledTimes(4);
 });
+
+it("封存响应严格绑定原编号及闭合结构，写入和查询都不自动重试", async () => {
+    const id = randomUUID();
+    const sealed = { id, abandonedAt: new Date(2).toISOString() };
+    const request = vi.fn().mockResolvedValue(sealed);
+    const client = new ControlClient({ request });
+    expect(await client.verification.abandon(id, true)).toEqual(sealed);
+    expect(await client.verification.abandonment(id)).toEqual(sealed);
+    expect(request.mock.calls).toEqual([
+        ["POST", "/api/control/verification/abandon", { id, confirm: true }],
+        ["GET", `/api/control/verification/abandonments/${id}`],
+    ]);
+    for (const malformed of [
+        { ...sealed, id: randomUUID() },
+        { ...sealed, secret: "x" },
+        { id },
+        { ...sealed, abandonedAt: "yesterday" },
+    ]) {
+        request.mockResolvedValue(malformed);
+        await expect(client.verification.abandon(id, true)).rejects.toThrow();
+        await expect(client.verification.abandonment(id)).rejects.toThrow();
+    }
+    request.mockRejectedValue(new Error("lost"));
+    await expect(client.verification.abandon(id, true)).rejects.toThrow("lost");
+    expect(request).toHaveBeenCalledTimes(11);
+    await expect(client.verification.abandon("invalid", true)).rejects.toThrow();
+    // @ts-expect-error 运行时仍必须拒绝缺少显式确认。
+    await expect(client.verification.abandon(id, false)).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(11);
+});

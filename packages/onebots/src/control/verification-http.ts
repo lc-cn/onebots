@@ -45,7 +45,27 @@ export class ControlVerificationHttp {
             const match = /^\/api\/control\/verification\/operations\/([0-9a-f-]+)$/i.exec(
                 pathname,
             );
-            if (request.method === "GET" && pathname === "/api/control/verification/pending")
+            const abandonment = /^\/api\/control\/verification\/abandonments\/([0-9a-f-]+)$/i.exec(
+                pathname,
+            );
+            if (request.method === "GET" && abandonment)
+                body = this.service.abandonment(owner, abandonment[1], local);
+            else if (
+                request.method === "POST" &&
+                pathname === "/api/control/verification/abandon"
+            ) {
+                const input = await readBody(request, 1024);
+                if (
+                    !input ||
+                    typeof input !== "object" ||
+                    Array.isArray(input) ||
+                    Object.keys(input).length !== 2 ||
+                    typeof input.id !== "string" ||
+                    input.confirm !== true
+                )
+                    throw new ControlVerificationError(400);
+                body = await this.service.abandon(owner, input.id, true, authorized, local);
+            } else if (request.method === "GET" && pathname === "/api/control/verification/pending")
                 body = await this.service.snapshot();
             else if (request.method === "GET" && match)
                 body = this.service.operation(owner, match[1], local);

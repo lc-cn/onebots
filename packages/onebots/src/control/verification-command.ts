@@ -8,17 +8,26 @@ export const VERIFICATION_HELP = `onebots control verification <命令> [--data-
   execute --stdin                 管道 JSON：operationId、challengeId、expected、action、data
   reconcile --request UUID        核对网关原回执，不重新执行验证
   acknowledge --request UUID --accept-unknown  停止网关后明确接受未知结果
+  abandon --request UUID --confirm  停止网关后封存未受理编号
+  abandonment --request UUID      查询封存回执
   operation --request UUID        查询原验证回执（网关离线也可查询）
 验证码只接受非终端 stdin，不接受命令行参数，不保存到配置。
 提交前自行保留 operationId。提交失去确认后只查询原回执，不换 ID 自动重试。
 核对只查询原结果。接受未知风险只解除阻塞，不代表成功，不撤销可能已执行的短信或登录，也不重新提交。
+封存须由服务端确认原操作未受理并永久拒绝迟到请求，不表示平台从未发生过动作。
 succeeded 仅表示验证调用完成，不代表账号已上线。`;
 
 interface Dependencies {
     createClient?(workspace: string): {
         verification: Pick<
             ControlClient["verification"],
-            "pending" | "execute" | "operation" | "reconcile" | "acknowledge"
+            | "pending"
+            | "execute"
+            | "operation"
+            | "reconcile"
+            | "acknowledge"
+            | "abandon"
+            | "abandonment"
         >;
     };
     stdin?: AsyncIterable<Buffer | string> & { isTTY?: boolean };
@@ -36,6 +45,8 @@ export async function runVerificationCommand(
     }
     const [action, ...rest] = args;
     const allowed: Record<string, string[]> = {
+        abandon: ["--request", "--confirm"],
+        abandonment: ["--request"],
         pending: [],
         execute: ["--stdin"],
         operation: ["--request"],
@@ -48,7 +59,8 @@ export async function runVerificationCommand(
     for (let index = 0; index < rest.length; index++) {
         const key = rest[index];
         if (![...allowed[action], "--data-dir"].includes(key) || options.has(key)) throw invalid();
-        if (key === "--stdin" || key === "--accept-unknown") options.set(key, "true");
+        if (key === "--stdin" || key === "--accept-unknown" || key === "--confirm")
+            options.set(key, "true");
         else {
             const value = rest[++index];
             if (!value || value.startsWith("--")) throw invalid();
@@ -57,7 +69,10 @@ export async function runVerificationCommand(
     }
     if (allowed[action].some(key => !options.has(key))) throw invalid();
     const id = options.get("--request");
-    if (["operation", "reconcile", "acknowledge"].includes(action) && (!id || !uuid.test(id)))
+    if (
+        ["operation", "reconcile", "acknowledge", "abandon", "abandonment"].includes(action) &&
+        (!id || !uuid.test(id))
+    )
         throw invalid();
     let operationId = id;
     try {
@@ -69,6 +84,8 @@ export async function runVerificationCommand(
         ).verification;
         let result: unknown;
         if (action === "pending") result = await client.pending();
+        else if (action === "abandon") result = await client.abandon(id!, true);
+        else if (action === "abandonment") result = await client.abandonment(id!);
         else if (action === "acknowledge") result = await client.acknowledge(id!, true);
         else if (action === "reconcile") result = await client.reconcile(id!);
         else if (action === "operation") result = await client.operation(id!);
@@ -98,7 +115,7 @@ export async function runVerificationCommand(
         // 不回显解析或服务错误，其中可能带有验证码；只提供经过格式校验的操作 ID。
         throw new Error(
             operationId
-                ? `验证结果未确认。请查询 onebots control verification operation --request ${operationId}，勿重新提交。`
+                ? `验证结果未确认。请查询 onebots control verification operation --request ${operationId}；封存回执使用 abandonment --request ${operationId}，勿重新提交。`
                 : "账号验证命令失败，请检查参数与管理服务状态；验证码只能从非终端 stdin 输入。",
         );
     }

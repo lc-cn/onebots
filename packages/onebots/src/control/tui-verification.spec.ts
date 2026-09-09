@@ -172,3 +172,33 @@ it.each(["no", "yes"])("接受未知风险另需确认 %s，不停止网关或�
     ]);
     if (accepted === "yes") expect(f.reports.join(" ")).toContain("不代表执行成功");
 });
+
+it.each(["no", "yes"])("原回执不可查后封存仍需单独确认 %s", async confirmed => {
+    const f = fixture([challengeId, "abandon", confirmed]);
+    f.request.mockImplementation(async <T>(method: "GET" | "POST"): Promise<T> => {
+        if (method === "GET") throw new Error("unauthorized or missing or network");
+        return { id: challengeId, abandonedAt: new Date(2).toISOString() } as T;
+    });
+    await queryControlVerification(f.client, f.prompt);
+    expect(f.request.mock.calls).toEqual([
+        ["GET", `/api/control/verification/operations/${challengeId}`],
+        ["GET", `/api/control/verification/abandonments/${challengeId}`],
+        ...(confirmed === "yes"
+            ? [["POST", "/api/control/verification/abandon", { id: challengeId, confirm: true }]]
+            : []),
+    ]);
+    expect(f.asks[1].detail).toContain("查询失败不代表未执行");
+    expect(f.asks[2].detail).toContain("不表示平台从未发生过动作");
+});
+
+it("已封存原编号只读恢复，不再次询问或写入", async () => {
+    const f = fixture([challengeId]);
+    f.request.mockImplementation(async <T>(_method: "GET" | "POST", route: string): Promise<T> => {
+        if (route.includes("/operations/")) throw new Error("missing");
+        return { id: challengeId, abandonedAt: new Date(2).toISOString() } as T;
+    });
+    await queryControlVerification(f.client, f.prompt);
+    expect(f.asks).toHaveLength(1);
+    expect(f.request).toHaveBeenCalledTimes(2);
+    expect(f.reports.join(" ")).toContain("迟到请求将被拒绝");
+});

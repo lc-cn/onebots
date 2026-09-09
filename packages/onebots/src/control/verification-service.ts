@@ -1,3 +1,4 @@
+import type { ControlVerificationAbandonment } from "@onebots/core/control";
 import { parseGatewayVerificationCommand } from "../gateway/verification-command.js";
 import {
     isGatewayVerificationReply,
@@ -26,6 +27,9 @@ export interface ControlVerificationServiceOptions {
     ): Promise<GatewayVerificationReply>;
     timeoutMs?: number;
     acknowledgeWhileStopped?(commit: () => Operation): Promise<Operation>;
+    abandonWhileStopped?(
+        commit: () => ControlVerificationAbandonment,
+    ): Promise<ControlVerificationAbandonment>;
 }
 type Operation = ReturnType<typeof projectVerification>;
 interface Pending {
@@ -154,6 +158,34 @@ export class ControlVerificationService {
             return projectVerification(this.store.acknowledge(record, owner));
         });
     }
+    abandonment(owner: string, id: string, localRecovery = false): ControlVerificationAbandonment {
+        return this.store.abandonment(owner, id, localRecovery);
+    }
+    async abandon(
+        owner: string,
+        id: string,
+        confirm: boolean,
+        authorized: () => boolean = () => true,
+        localRecovery = false,
+    ): Promise<ControlVerificationAbandonment> {
+        const check = () => {
+            if (this.closed || !authorized()) throw new ControlVerificationError(403);
+            if (confirm !== true) throw new ControlVerificationError(400);
+            if (this.pending.has(id)) throw new ControlVerificationError(409);
+        };
+        check();
+        try {
+            return this.store.abandonment(owner, id, localRecovery);
+        } catch (error) {
+            if (!(error instanceof ControlVerificationError) || error.httpStatus !== 404)
+                throw error;
+        }
+        if (!this.options.abandonWhileStopped) throw new ControlVerificationError(503);
+        return this.options.abandonWhileStopped(() => {
+            check();
+            return this.store.abandon(owner, id, localRecovery);
+        });
+    }
     execute(
         owner: string,
         input: unknown,
@@ -164,6 +196,7 @@ export class ControlVerificationService {
             if (!verificationHash(owner)) throw new ControlVerificationError(400);
             const command = parseGatewayVerificationCommand(input);
             if (!command) throw new ControlVerificationError(400);
+            this.store.assertNotAbandoned(command.operationId);
             const digest = this.store.digest(command);
             const pending = this.pending.get(command.operationId);
             if (pending) {

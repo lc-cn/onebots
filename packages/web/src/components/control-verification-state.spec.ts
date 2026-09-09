@@ -44,6 +44,8 @@ function fixture() {
         execute: vi.fn(),
         reconcile: vi.fn(),
         acknowledge: vi.fn(),
+        abandon: vi.fn(),
+        abandonment: vi.fn().mockRejectedValue(new Error("missing")),
         operation: vi.fn(),
     };
     const sessions = vi.fn().mockResolvedValue({ sessions: [session] });
@@ -292,4 +294,74 @@ it("requires stopped gateway and explicit risk acceptance; lost confirmation sta
     expect(f.verification.acknowledge).toHaveBeenCalledTimes(1);
     expect(f.verification.reconcile).not.toHaveBeenCalled();
     expect(f.verification.execute).not.toHaveBeenCalled();
+});
+
+it("封存需停机和显式确认，保留编号并在刷新后只读恢复", async () => {
+    const f = fixture();
+    f.values.set(`onebots.verification.${session.id}`, JSON.stringify([challengeId]));
+    await f.controller.initialize();
+    const sealed = { id: challengeId, abandonedAt: new Date(2).toISOString() };
+    f.verification.operation.mockRejectedValue(new Error("missing or unauthorized"));
+    await f.controller.abandon(challengeId, true);
+    f.controller.setGateway(undefined);
+    await f.controller.abandon(challengeId, false);
+    expect(f.verification.abandon).not.toHaveBeenCalled();
+    await f.controller.query(challengeId);
+    expect(f.controller.uncertain).toBe(true);
+    expect(f.verification.abandonment).toHaveBeenCalledExactlyOnceWith(challengeId);
+    f.verification.abandon.mockRejectedValueOnce(new Error("lost"));
+    await f.controller.abandon(challengeId, true);
+    expect(f.controller.uncertain).toBe(true);
+    expect(f.verification.abandon).toHaveBeenCalledExactlyOnceWith(challengeId, true);
+    f.verification.abandonment.mockResolvedValue(sealed);
+    await f.controller.query(challengeId);
+    expect(f.controller.uncertain).toBe(false);
+    expect(f.view.ids).toEqual([challengeId]);
+    expect(f.view.receipts[challengeId]).toBeUndefined();
+    const restored = new VerificationController(
+        { verification: f.verification, sessions: f.sessions },
+        verificationView(),
+        f.storage,
+    );
+    await restored.initialize();
+    expect(restored.uncertain).toBe(true);
+    await restored.query(challengeId);
+    expect(restored.uncertain).toBe(false);
+    expect(restored.view.abandonments[challengeId]).toEqual(sealed);
+    expect(f.storage.setItem).not.toHaveBeenCalled();
+    expect(f.verification.execute).not.toHaveBeenCalled();
+});
+
+it("封存不会替代已有未知回执；丢弃迟到结果且禁止重叠点击", async () => {
+    const f = fixture();
+    f.controller.setGateway(undefined);
+    f.view.ids = [challengeId];
+    let finish!: (value: { id: string; abandonedAt: string }) => void;
+    f.verification.abandon.mockReturnValue(
+        new Promise(resolve => {
+            finish = resolve;
+        }),
+    );
+    const pending = f.controller.abandon(challengeId, true);
+    await f.controller.abandon(challengeId, true);
+    expect(f.verification.abandon).toHaveBeenCalledOnce();
+    f.controller.setGateway(gateway);
+    finish({ id: challengeId, abandonedAt: new Date(2).toISOString() });
+    await pending;
+    expect(f.controller.uncertain).toBe(true);
+    expect(f.view.abandonments).toEqual({});
+    f.controller.setGateway(undefined);
+    f.view.receipts[challengeId] = {
+        id: challengeId,
+        challengeId,
+        gatewayInstanceId: gateway,
+        configVersion: "v1",
+        action: "submit",
+        status: "unknown",
+        startedAt: new Date(0).toISOString(),
+        finishedAt: new Date(1).toISOString(),
+    };
+    await f.controller.abandon(challengeId, true);
+    expect(f.verification.abandon).toHaveBeenCalledOnce();
+    expect(f.controller.uncertain).toBe(true);
 });

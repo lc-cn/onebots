@@ -11,6 +11,7 @@ import {
 } from "./control-verification-state";
 const props = defineProps<{ client: ControlClient; gatewayInstanceId?: string }>();
 const view = reactive(verificationView());
+const abandoned = reactive<Record<string, boolean>>({});
 const accepted = reactive<Record<string, boolean>>({});
 const controller = new VerificationController(props.client, view, {
     getItem: key => localStorage.getItem(key),
@@ -158,7 +159,9 @@ const labels = {
                     {{
                         view.receipts[id]
                             ? labels[controlVerificationOutcome(view.receipts[id])]
-                            : "尚未查询确认"
+                            : view.abandonments[id]
+                              ? "编号已封存，迟到请求永久拒绝"
+                              : "尚未查询确认"
                     }}
                 </p>
                 <UiButton :disabled="view.busy" @click="controller.query(id)">查询原回执</UiButton>
@@ -198,10 +201,31 @@ const labels = {
                         >停止网关后接受未知结果</UiButton
                     >
                 </div>
+                <div v-if="!view.receipts[id] && !view.abandonments[id]" class="space-y-2">
+                    <p class="text-sm text-danger">
+                        查询失败不代表未执行。请先停止网关；服务端只有确认原操作未受理后才允许封存，迟到请求将永久拒绝。不表示平台从未发生过动作，不会重提或删除历史编号。
+                    </p>
+                    <label class="flex gap-2 text-sm">
+                        <input
+                            v-model="abandoned[id]"
+                            type="checkbox"
+                            :disabled="view.busy || !!gatewayInstanceId" />
+                        我理解并确认永久封存此编号
+                    </label>
+                    <UiButton
+                        :disabled="view.busy || !!gatewayInstanceId || !abandoned[id]"
+                        @click="
+                            controller.abandon(id, abandoned[id]);
+                            abandoned[id] = false;
+                        ">
+                        停止网关后封存未受理编号
+                    </UiButton>
+                </div>
+                <p v-if="view.abandonments[id]" class="text-xs text-fg-muted">
+                    {{ view.abandonments[id].abandonedAt }} 已封存；不表示平台从未发生过动作。
+                </p>
                 <p v-if="view.receipts[id]?.acknowledgement" class="text-xs text-fg-muted">
-                    原结果仍未知；{{
-                        view.receipts[id].acknowledgement?.acceptedAt
-                    }}
+                    原结果仍未知；{{ view.receipts[id].acknowledgement?.acceptedAt }}
                     已明确接受风险。
                 </p>
                 <p v-if="view.receipts[id]?.resolution" class="text-xs text-fg-muted">
