@@ -1,11 +1,14 @@
 # Instagram Messaging configuration
 
-Install and load the adapter:
+## Installation
+
+Open **Extensions** in the Web console and select the adapter, or run:
 
 ```bash
-pnpm add @onebots/adapter-instagram
-onebots ui --data-dir /path/to/onebots-data
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 Create a Meta app with Business Login for Instagram. Request the current `instagram_business_basic` and `instagram_business_manage_messages` scopes. This adapter deliberately does not accept the deprecated pre-2025 `business_*` scopes or require a Facebook Page Access Token.
 

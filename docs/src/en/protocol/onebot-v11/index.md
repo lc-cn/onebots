@@ -22,10 +22,12 @@ OneBot V11 (formerly CQHTTP) is one of the most popular robot protocol standards
 - [Events (Event)](/en/protocol/onebot-v11/event) - Event type documentation
 - [CQ Code (CQ Code)](/en/protocol/onebot-v11/cqcode) - Message segment format documentation
 
-## Installation
+## Enable the protocol
+
+Select OneBot V11 in the Web **Extensions** view or the TUI setup wizard. The manager installs the protocol and its required peers into a new immutable runtime generation, verifies it, and waits for explicit activation:
 
 ```bash
-npm install @onebots/protocol-onebot-v11
+onebots ui --data-dir /path/to/onebots-data --setup
 ```
 
 ## Configuration

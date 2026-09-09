@@ -4,9 +4,13 @@ The email adapter sends through SMTP and receives through IMAP IDLE. It preserve
 
 ## Installation
 
+Open **Extensions** in the Web console and select the adapter, or run:
+
 ```bash
-pnpm add @onebots/adapter-email
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 ## Configuration
 

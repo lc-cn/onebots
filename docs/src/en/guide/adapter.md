@@ -51,11 +51,12 @@ Capability evidence distinguishes `verified`, `unknown`, and `unavailable`. If c
 The CLI can export each selected adapter's registered default manifest without starting an account:
 
 ```bash
-onebots capabilities -c config.yaml
-onebots capabilities -c config.yaml --json
+onebots capabilities
+onebots capabilities --json
+onebots capabilities --register <adapter-name-or-package>
 ```
 
-The command reuses `plugins.adapters`, with `-r` as a category-level override. It loads adapter entries without connecting to a platform or loading protocols. JSON includes package names, versions, real entry paths, `status`, category counts, and complete manifests for selection reviews and CI evidence. Plugin load failures remain in `errors` and return exit code `2`; an adapter without a registered default manifest or with unavailable catalog evidence sets `complete` to `false` and returns exit code `1`. Account permission and subscription overrides remain available after startup through `/api/adapters` and the Web capability panel.
+Without an adapter selection, the command displays the complete catalog snapshot shipped with the current OneBots version. `--register` can temporarily load the authoritative manifest from an installed adapter. It does not connect to a platform or load protocols. JSON includes package names, versions, real entry paths, `status`, category counts, and complete manifests for selection reviews and CI evidence. Plugin load failures remain in `errors` and return exit code `2`; an adapter without a registered default manifest or with unavailable catalog evidence sets `complete` to `false` and returns exit code `1`. Account permission and subscription overrides remain available after startup through `/api/adapters` and the Web capability panel.
 
 ### Native platform actions
 
@@ -76,7 +77,7 @@ async function callQQ(client: QQClient, action: string, params: Record<string, u
 }
 ```
 
-Web configuration forms only list adapters and protocols actually loaded with `-r` / `-p`; capability selection can independently use the catalog snapshots above. A plugin's registered schema is the single source for runtime validation, form sections, sensitive fields, and dynamic lists; the application does not maintain a second field catalog.
+The Web **Extensions** view can browse the complete install catalog. Account and protocol forms use the adapters, protocols, and schemas registered by the active runtime generation. A plugin's registered schema is the single source for runtime validation, form sections, sensitive fields, and dynamic lists; the application does not maintain a second field catalog.
 
 Keep using `choices` for closed enumerations. When an array should provide common suggestions while accepting ecosystem extension values, use `ui.widget: 'choice-list'` and explicitly set `allowCustomValues: true`. In that mode `choices` drives suggestions without rejecting custom strings. The flag is valid only on an array `choice-list`; invalid combinations fail during plugin registration.
 
@@ -86,7 +87,7 @@ Plugin entries are resolved from the startup working directory with support for 
 
 A plugin must declare `onebots`, and `@onebots/core` when it uses core APIs directly, as peer dependencies supplied from the same installation root that starts the gateway. Before executing plugin code, the loader compares the real resolved package paths. Loading fails with both locations when a dependency manager installed a second copy, or when a global CLI attempts to load a plugin bound to a project-local OneBots installation. Run the project-local `onebots` command or install the plugin alongside the global CLI. A factory therefore cannot register into a separate static Registry and surface later as a misleading “initialized but did not register” error.
 
-After initialization, the loader also verifies the plugin contract. `-r <name>` must register an adapter factory and schema under that exact name. `-p <name>-<version>` must register the matching protocol factory and `<name>.<version>` schema. A package that merely exports code, skips registration, or registers the wrong identity now fails immediately with the missing registration in setup, doctor, and service preflight diagnostics.
+After initialization, the loader verifies the installation plan's plugin contract. An adapter must register the factory and schema named by the plan; a protocol must register the matching factory and `<name>.<version>` schema. A package that merely exports code, skips registration, or registers the wrong identity fails during installation verification, doctor, and service preflight diagnostics.
 
 Plugin import and contract verification run as one serialized registry transaction. Each transaction may modify only the factory, metadata, and schema promised by its CLI name. Registering another adapter or protocol, or using another package to claim an identity that existed before import, reports the specific conflict and restores every adapter, protocol, schema, and protocol-version metadata entry to the pre-import state. Initialization errors and missing promised entries receive the same full rollback. Repeated loading of the same package and entry remains idempotent; multiple versions of one protocol may still share protocol metadata while registering their own factories and schemas. A failed plugin therefore cannot leave a partial registration or cause a false name conflict in the next plugin. Restart the process after fixing the package so Node.js imports the module again.
 

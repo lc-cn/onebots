@@ -16,9 +16,13 @@
 
 在[机器人控制台](https://bot.xiaoheihe.cn)创建机器人、注册斜杠命令并邀请机器人进入房间：
 
+在 Web 控制台打开「功能扩展」并选择对应适配器；也可以运行：
+
 ```bash
-pnpm add @onebots/adapter-heychat
+onebots ui --data-dir <workspace> --setup
 ```
+
+管理服务会将适配器及其必需的对等依赖安装到经过验证的不可变运行代。请勿在 OneBots 运行目录中直接执行包管理器安装命令。
 
 ```yaml
 heychat.my_bot:

@@ -19,10 +19,12 @@ Satori protocol provides:
 
 ## Installation
 
-### Server-Side
+### OneBots server
+
+Select Satori V1 in the Web **Extensions** view or the TUI setup wizard. The manager installs the protocol and its required peers into a new immutable runtime generation, verifies it, and waits for explicit activation:
 
 ```bash
-npm install @onebots/protocol-satori-v1
+onebots ui --data-dir /path/to/onebots-data --setup
 ```
 
 ### Client-Side

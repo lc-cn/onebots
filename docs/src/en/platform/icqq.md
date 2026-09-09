@@ -40,33 +40,13 @@ The ICQQ adapter is based on the `@icqqjs/icqq` library, supporting connection t
 
 ## Installation
 
-### 1. Configure GitHub Packages Access
-
-Since `@icqqjs/icqq` is a private package hosted on GitHub Packages, you need to configure access first.
-
-Add to `.npmrc` in your project root:
-
-```
-@icqqjs:registry=https://npm.pkg.github.com
-```
-
-### 2. Login to GitHub Packages
+`@icqqjs/icqq` is hosted on GitHub Packages. Prepare a GitHub token with `read:packages`, then open **Extensions** in the Web console and select ICQQ, or run:
 
 ```bash
-npm login --scope=@icqqjs --auth-type=legacy --registry=https://npm.pkg.github.com
+onebots ui --data-dir <workspace> --setup
 ```
 
-- **UserName**: Your GitHub username
-- **Password**: Get from https://github.com/settings/tokens/new with `read:packages` scope
-- **E-Mail**: Your public email address
-
-### 3. Install Dependencies
-
-```bash
-npm install @onebots/adapter-icqq
-# or
-pnpm add @onebots/adapter-icqq
-```
+The installation flow requests the token only when it downloads the private dependency, then installs the ICQQ adapter and its required peer dependencies into a verified immutable runtime generation. The token is not written to the generation or logs. Do not configure `.npmrc`, run `npm login`, or install packages directly in the OneBots runtime directory.
 
 ## Configuration
 

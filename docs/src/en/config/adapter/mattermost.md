@@ -2,10 +2,13 @@
 
 ## Install
 
+Open **Extensions** in the Web console and select the adapter, or run:
+
 ```bash
-pnpm add @onebots/adapter-mattermost
-onebots ui --data-dir /path/to/onebots-data
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 Create a Mattermost Bot Account or dedicated user, issue an access token, and grant only the permissions needed by the selected actions. The token is sent in the `Authorization: Bearer` header and never placed in a URL.
 

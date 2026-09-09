@@ -3,7 +3,7 @@
 Connects to **WeChat extension / iLink Bot HTTP**. This is **not** the WeChat Official Account adapter (`wechat`), WeCom (`wecom`), or WeCom Customer Service (`wecom-kf`).
 
 - Package: [`@onebots/adapter-wechat-clawbot`](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wechat-clawbot)
-- Platform id / `-r`: **`wechat-clawbot`**
+- Platform id: **`wechat-clawbot`**
 - Product: [WeChat iLink](https://ilinkai.weixin.qq.com)
 
 ## vs. Official Account adapter
@@ -16,16 +16,14 @@ Connects to **WeChat extension / iLink Bot HTTP**. This is **not** the WeChat Of
 
 ## Quick start
 
+Select WeChat ClawBot in the Web **Extensions** view or the TUI setup wizard. The manager installs the adapter and its required peers into a new immutable runtime generation, verifies it, and waits for explicit activation:
+
 ```bash
-pnpm add @onebots/adapter-wechat-clawbot
+onebots ui --data-dir /path/to/onebots-data --setup
 ```
 
 ```yaml
 wechat-clawbot.my_bot: {}
-```
-
-```bash
-onebots ui --data-dir /path/to/onebots-data
 ```
 
 ## Capabilities and limits

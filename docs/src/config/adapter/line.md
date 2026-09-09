@@ -16,34 +16,18 @@ Line 适配器配置说明。
 - **必填**: ✅
 - **说明**: Line Channel Secret，从 [Line Developers Console](https://developers.line.biz/console/) 获取
 
-### webhook_path
+### receive_mode
+
+- **类型**: `webhook | manual`
+- **必填**: ❌
+- **默认值**: `webhook`
+- **说明**: `manual` 不注册接收路由，由已有 Host 或队列调用适配器的 `ingest()`
+
+### destination
 
 - **类型**: `string`
 - **必填**: ❌
-- **默认值**: `/line/{account_id}/webhook`
-- **说明**: 自定义 Webhook 接收路径
-
-### proxy
-
-代理配置（可选）。
-
-#### proxy.url
-
-- **类型**: `string`
-- **必填**: ❌
-- **说明**: 代理服务器地址，支持 HTTP/HTTPS 代理
-
-#### proxy.username
-
-- **类型**: `string`
-- **必填**: ❌
-- **说明**: 代理服务器用户名（如需认证）
-
-#### proxy.password
-
-- **类型**: `string`
-- **必填**: ❌
-- **说明**: 代理服务器密码（如需认证）
+- **说明**: LINE destination user ID；配置后会拒绝投递到其他机器人的事件
 
 ## 配置示例
 
@@ -55,17 +39,14 @@ line.my_bot:
   channel_secret: 'your_channel_secret'
 ```
 
-### 完整配置
+### 手动接入已有 Host
 
 ```yaml
 line.my_bot:
   channel_access_token: 'your_channel_access_token'
   channel_secret: 'your_channel_secret'
-  webhook_path: '/line/my_bot/webhook'
-  proxy:
-    url: 'http://127.0.0.1:7890'
-    username: 'proxy_user'
-    password: 'proxy_pass'
+  receive_mode: manual
+  destination: 'U0123456789abcdef0123456789abcdef'
 ```
 
 ## 获取 Channel Access Token
@@ -104,4 +85,3 @@ line.my_bot:
 
 - [适配器配置指南](/guide/adapter)
 - [Line 平台文档](/platform/line)
-

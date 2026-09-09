@@ -22,11 +22,13 @@ The Feishu adapter is fully implemented and supports connecting to onebots servi
 
 ## Installation
 
+Open **Extensions** in the Web console and select the adapter, or run:
+
 ```bash
-npm install @onebots/adapter-feishu
-# or
-pnpm add @onebots/adapter-feishu
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 ## Configuration
 

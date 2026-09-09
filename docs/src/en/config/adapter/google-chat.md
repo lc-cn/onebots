@@ -1,11 +1,14 @@
 # Google Chat configuration
 
-Install and load the adapter:
+## Installation
+
+Open **Extensions** in the Web console and select the adapter, or run:
 
 ```bash
-pnpm add @onebots/adapter-google-chat
-onebots ui --data-dir /path/to/onebots-data
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 The Web console renders credentials and receive mode as selectors, scopes and event types as add/remove choice lists, and private keys/tokens as sensitive fields. No JSON editing is required.
 

@@ -33,23 +33,16 @@ Line 适配器支持通过 Line Messaging API 接入 onebots 服务。
   - 加入/离开群组事件
   - 成员加入/离开事件
   - Postback 事件
-- ✅ **代理支持**
-  - HTTP/HTTPS 代理
-  - 支持代理认证
 
 ## 安装
 
-```bash
-npm install @onebots/adapter-line
-# 或
-pnpm add @onebots/adapter-line
-```
-
-如果需要代理支持，请安装可选依赖：
+在 Web 控制台打开「功能扩展」并选择对应适配器；也可以运行：
 
 ```bash
-npm install https-proxy-agent
+onebots ui --data-dir <workspace> --setup
 ```
+
+管理服务会将适配器及其必需的对等依赖安装到经过验证的不可变运行代。请勿在 OneBots 运行目录中直接执行包管理器安装命令。
 
 ## 配置
 
@@ -61,15 +54,6 @@ line.your_bot_id:
   # Line 平台配置
   channel_access_token: 'your_channel_access_token'  # Channel Access Token，必填
   channel_secret: 'your_channel_secret'              # Channel Secret，必填
-  
-  # 可选配置
-  webhook_path: '/line/your_bot_id/webhook'  # 自定义 Webhook 路径
-  
-  # 代理配置（可选）
-  proxy:
-    url: 'http://127.0.0.1:7890'  # 代理服务器地址
-    username: 'proxy_user'        # 代理用户名（可选）
-    password: 'proxy_pass'        # 代理密码（可选）
   
   # OneBot V11 协议配置
   onebot.v11:
@@ -86,10 +70,8 @@ line.your_bot_id:
 |--------|------|------|------|
 | `channel_access_token` | string | 是 | Line Channel Access Token |
 | `channel_secret` | string | 是 | Line Channel Secret |
-| `webhook_path` | string | 否 | 自定义 Webhook 路径 |
-| `proxy.url` | string | 否 | 代理服务器地址 |
-| `proxy.username` | string | 否 | 代理用户名 |
-| `proxy.password` | string | 否 | 代理密码 |
+| `receive_mode` | string | 否 | `webhook`（默认）或 `manual` |
+| `destination` | string | 否 | 校验事件属于当前机器人的 LINE destination ID |
 
 ## 获取 Channel Access Token 和 Channel Secret
 

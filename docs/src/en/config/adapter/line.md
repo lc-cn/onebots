@@ -16,34 +16,18 @@ Line adapter configuration reference.
 - **Required**: ✅
 - **Description**: Line Channel Secret, obtained from [Line Developers Console](https://developers.line.biz/console/)
 
-### webhook_path
+### receive_mode
+
+- **Type**: `webhook | manual`
+- **Required**: ❌
+- **Default**: `webhook`
+- **Description**: `manual` leaves route ownership to an existing host or queue that calls the adapter's `ingest()` method
+
+### destination
 
 - **Type**: `string`
 - **Required**: ❌
-- **Default**: `/line/{account_id}/webhook`
-- **Description**: Custom webhook receive path
-
-### proxy
-
-Proxy configuration (optional).
-
-#### proxy.url
-
-- **Type**: `string`
-- **Required**: ❌
-- **Description**: Proxy server address, supports HTTP/HTTPS proxy
-
-#### proxy.username
-
-- **Type**: `string`
-- **Required**: ❌
-- **Description**: Proxy server username (if authentication required)
-
-#### proxy.password
-
-- **Type**: `string`
-- **Required**: ❌
-- **Description**: Proxy server password (if authentication required)
+- **Description**: LINE destination user ID; when set, events addressed to another bot are rejected
 
 ## Configuration Examples
 
@@ -55,17 +39,14 @@ line.my_bot:
   channel_secret: 'your_channel_secret'
 ```
 
-### Full Configuration
+### Existing host integration
 
 ```yaml
 line.my_bot:
   channel_access_token: 'your_channel_access_token'
   channel_secret: 'your_channel_secret'
-  webhook_path: '/line/my_bot/webhook'
-  proxy:
-    url: 'http://127.0.0.1:7890'
-    username: 'proxy_user'
-    password: 'proxy_pass'
+  receive_mode: manual
+  destination: 'U0123456789abcdef0123456789abcdef'
 ```
 
 ## Getting Channel Access Token
@@ -104,4 +85,3 @@ After starting the onebots service, configure the Webhook URL in Line Developers
 
 - [Adapter Configuration Guide](/en/guide/adapter)
 - [Line Platform Documentation](/en/platform/line)
-

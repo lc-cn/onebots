@@ -14,10 +14,12 @@ Satori 协议的特点：
 
 ## 安装
 
-### 服务端
+### OneBots 服务端
+
+在 Web“功能扩展”或 TUI 安装向导中选择 Satori V1。管理服务会把协议及必需 peer 安装到新的不可变运行代，验证后等待用户明确激活：
 
 ```bash
-npm install @onebots/protocol-satori-v1
+onebots ui --data-dir /path/to/onebots-data --setup
 ```
 
 ### 客户端SDK

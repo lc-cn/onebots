@@ -22,10 +22,12 @@ OneBot V11（原 CQHTTP）是目前最流行的机器人协议标准之一，提
 - [事件 (Event)](/protocol/onebot-v11/event) - 事件类型文档
 - [CQ码 (CQ Code)](/protocol/onebot-v11/cqcode) - 消息段格式文档
 
-## 安装
+## 启用
+
+在 Web“功能扩展”或 TUI 安装向导中选择 OneBot V11。管理服务会把协议及必需 peer 安装到新的不可变运行代，验证后等待用户明确激活：
 
 ```bash
-npm install @onebots/protocol-onebot-v11
+onebots ui --data-dir /path/to/onebots-data --setup
 ```
 
 ## 配置

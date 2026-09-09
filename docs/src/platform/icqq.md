@@ -27,16 +27,13 @@ ICQQ 适配器基于 `@icqqjs/icqq`，以 QQ 个人账号会话接入 OneBots。
 
 ## 安装
 
-`@icqqjs/icqq` 来自 GitHub Packages。先配置 registry 并使用具备 `read:packages` 权限的 GitHub token 登录：
-
-```ini
-@icqqjs:registry=https://npm.pkg.github.com
-```
+`@icqqjs/icqq` 来自 GitHub Packages。请准备具备 `read:packages` 权限的 GitHub token，然后在 Web 控制台打开「功能扩展」并选择 ICQQ；也可以运行：
 
 ```bash
-npm login --scope=@icqqjs --auth-type=legacy --registry=https://npm.pkg.github.com
-pnpm add @onebots/adapter-icqq
+onebots ui --data-dir <workspace> --setup
 ```
+
+安装流程会在需要下载私有依赖时安全读取 token，并将 ICQQ 适配器及其必需的对等依赖安装到经过验证的不可变运行代。token 不会写入运行代或日志。请勿在 OneBots 运行目录中配置 `.npmrc`、执行 `npm login` 或直接安装包。
 
 ## 配置
 

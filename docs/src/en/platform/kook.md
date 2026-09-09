@@ -17,11 +17,13 @@ The Kook adapter supports connecting to onebots service through Kook Open Platfo
 
 ## Installation
 
+Open **Extensions** in the Web console and select the adapter, or run:
+
 ```bash
-npm install @onebots/adapter-kook
-# or
-pnpm add @onebots/adapter-kook
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 ## Configuration Example
 

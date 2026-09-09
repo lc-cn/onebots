@@ -8,8 +8,8 @@
 | --- | --- | --- | --- |
 | 1. 控制契约与空白启动 | 已完成 | 空白 Docker 管理端、设备配对、独立网关启停与容器重启意图通过实际容器验收 | 纳入最终整体验收复跑 |
 | 2. 依赖版本与凭据流程 | 主体完成 | 当前源码宿主、Mock、协议工件及真实 ICQQ 私有必需 peer 使用精确版本安装；正确授权、错误授权、凭据清理、候选验证、显式激活和旧代保留均进入 CI | 纳入最终整体验收复跑，并补真实平台账号在线证据 |
-| 3. 配置与客户端统一 | 主体完成，跨入口证据不完整 | Web/TUI/CLI 共用 `ControlClient`；动态 Schema、配置草稿、损坏配置修复和持久操作已有实现与回归；管理、网关和网关生命周期操作使用统一日志查询契约 | 三入口各自完成同一 installed-artifact E2E；把安装、配置和验证操作投影到统一操作日志 |
-| 4. 系统托管与迁移 | Linux/macOS 进入旧服务迁移验收，Windows 基础实施中 | Ubuntu systemd 与 macOS launchd 正向生命周期已通过托管 CI；真实 legacy 服务迁移、管理服务强杀后的 supervisor 冷恢复和数据保留已写入对应平台验收；Windows SCM 原生宿主、严格状态/身份边界及发布工件已实现 | 取得本批 CI 证据；补机器重启、迁移中断回退、Windows 顶层事务/CLI、named pipe/Job Object 和 Windows 实机验收 |
+| 3. 配置与客户端统一 | 主体完成，跨入口证据不完整 | Web/TUI/CLI 共用 `ControlClient`；动态 Schema、配置草稿、损坏配置修复、持久操作及统一操作日志投影已有实现与回归 | 三入口各自完成同一 installed-artifact E2E |
+| 4. 系统托管与迁移 | Linux/macOS 已完成当前原生验收，Windows 基础实施中 | CI `34381055414` 已在真实 Ubuntu systemd 与 macOS launchd 上通过正向生命周期、legacy 迁移、管理服务强杀后的 supervisor 冷恢复和数据保留；Windows SCM 原生宿主、严格状态/身份边界及发布工件已实现 | 补机器重启、迁移中断回退、原生管理程序升级、Windows 顶层事务/CLI、named pipe/Job Object 和 Windows 实机验收 |
 | 5. 产品验收与清理 | 部分完成 | 旧 `App`、旧服务控制器和旧运行入口已删除；构建、单测、41 个 tarball、Docker/HF 及 12 个框架互操作进入 CI | 强制运行全部协议传输、清理全部旧文档、覆盖其余方案的验证等级并完成最终逐项审计 |
 
 ## 1. 目标与明确决策
@@ -110,13 +110,13 @@ systemd、launchd、Windows 托管或 Docker 只负责管理服务的存活和�
 | --- | --- |
 | `onebots install` | 引导安装完整产品和系统托管；允许空白安装，选择扩展时复用统一安装计划 |
 | `onebots uninstall` | 停止进程、移除系统托管，默认保留账号数据和配置；清除数据必须显式选择 |
-| `onebots start / stop / restart` | 改变网关状态；`stop` 不关闭管理服务和 Web |
+| `onebots start / stop / restart` | 通过系统托管启动、停止或重启管理服务；保留网关期望状态 |
 | `onebots status` | 分别显示管理服务、网关期望/实际状态、账号状态和进行中操作 |
 | `onebots ui` | 连接管理服务的 TUI 工作台 |
 | `onebots extensions install / remove` | 安装或移除依赖版本，不隐式连接账号；被引用依赖不可直接删除 |
 | `onebots config validate / apply` | 校验草稿、提交并应用配置，明确是否需要切换网关 |
-| `onebots logs` | 选择管理日志、网关日志或某次操作日志 |
-| `onebots service start / stop / status` | 显式控制管理服务本身，限本地系统权限；区别于网关启停 |
+| `onebots logs` | 读取系统托管的管理服务日志；网关和操作日志由 `onebots control logs` 查询 |
+| `onebots control start / stop / restart` | 连接管理服务并改变网关状态；停止网关不关闭管理服务和 Web |
 | `onebots serve / run` | 前台运行同一管理服务，供 Docker、系统托管和开发使用；非交互无命令启动使用相同入口 |
 
 公开前台入口只接受工作区与管理监听参数，不再用 `-c/-r/-p/-t` 直接启动旧网关。扩展选择与账号配置由管理端保存；旧系统服务先执行 `migrate`。HF 同样启动管理服务，不再运行旧扩展恢复安装器。公开 CLI 已拒绝 `--service-runtime`，`App/createOnebots` 也不再导出；旧参数只保留在历史服务定义解析中，作为迁移和回退证据，不再形成可执行入口。

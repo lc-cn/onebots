@@ -2,10 +2,13 @@
 
 ## Installation
 
+Open **Extensions** in the Web console and select the adapter, or run:
+
 ```bash
-pnpm add @onebots/adapter-ircv3
-onebots ui --data-dir /path/to/onebots-data
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 IRC has no universal bot console. Obtain the server, TLS port, account registration method, SASL mechanism, and channel permissions from your network. Production connections should use TLS; a managed plaintext connection will not send a server or SASL password.
 

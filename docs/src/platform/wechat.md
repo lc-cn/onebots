@@ -4,9 +4,13 @@
 
 ## 安装与配置
 
+在 Web 控制台打开「功能扩展」并选择对应适配器；也可以运行：
+
 ```bash
-pnpm add @onebots/adapter-wechat
+onebots ui --data-dir <workspace> --setup
 ```
+
+管理服务会将适配器及其必需的对等依赖安装到经过验证的不可变运行代。请勿在 OneBots 运行目录中直接执行包管理器安装命令。
 
 ```yaml
 wechat.my_mp:

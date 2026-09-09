@@ -2,10 +2,13 @@
 
 ## 安装
 
+在 Web 控制台打开「功能扩展」并选择对应适配器；也可以运行：
+
 ```bash
-pnpm add @onebots/adapter-mattermost
-onebots ui --data-dir /path/to/onebots-data
+onebots ui --data-dir <workspace> --setup
 ```
+
+管理服务会将适配器及其必需的对等依赖安装到经过验证的不可变运行代。请勿在 OneBots 运行目录中直接执行包管理器安装命令。
 
 创建 Mattermost Bot Account 或专用用户，签发 Access Token，并按实际动作授予最小权限。Token 会作为 `Authorization: Bearer` 发送，不会写入 URL。
 
