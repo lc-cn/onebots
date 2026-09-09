@@ -150,6 +150,28 @@ export class LaunchdServicePlatform implements ServicePlatform {
     private command(args: string[], deadline?: number): string {
         return this.exec("/bin/launchctl", args, deadline);
     }
+    private fixedJobLoaded(deadline: number): boolean {
+        const data = this.loaded(deadline);
+        if (!data) return false;
+        if (data.get("path") !== this.expectedDefinitionPath) unavailable();
+        return true;
+    }
+    private bootout(deadline: number): void {
+        try {
+            this.command(["bootout", this.target], deadline);
+        } catch (error) {
+            // disable 与 bootout 之间 job 可以自行退出。固定 label 已经缺失时无需重派；
+            // 后续仍须以 unloaded 状态和持久进程所有权证明收口。
+            if (
+                !isLaunchdServiceMissing(
+                    error,
+                    this.domain === "system" ? "system" : "user",
+                    this.host.uid,
+                )
+            )
+                throw error;
+        }
+    }
     private loaded(deadline?: number): Map<string, string> | null {
         let output: string;
         try {
@@ -395,11 +417,11 @@ export class LaunchdServicePlatform implements ServicePlatform {
             const deadline = this.now() + this.timeout;
             await this.actionable(deadline);
             this.command(["disable", this.target], deadline);
-            // disable 之后 launchd 可能仍完成已经排队的故障候选换代。重新观察固定 label
-            // 并记录其进程组，然后仅派发一次 bootout；最终以 unloaded 和全部进程证明收口。
-            const disabled = await this.actionable(deadline);
-            if (disabled.enabled) unavailable();
-            if (disabled.loaded) this.command(["bootout", this.target], deadline);
+            // disable 之后 launchd 可能持续完成已经排队的故障候选换代，不能等待某一代
+            // 连续两次稳定。重新核对固定 label 的定义路径后仅派发一次 bootout；最终仍以
+            // unloaded、已记录进程组和持久管理进程所有权证明收口。
+            if (this.enabled(deadline)) unavailable();
+            if (this.fixedJobLoaded(deadline)) this.bootout(deadline);
             for (;;) {
                 let current: ServicePlatformState;
                 try {
