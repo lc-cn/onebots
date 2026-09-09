@@ -1,6 +1,15 @@
 import { useState } from "react";
-import { TERMINAL_PAGES } from "./workspace.js";
 import { Box, Text, useInput } from "ink";
+
+const TERMINAL_PAGES = [
+    { id: "overview", label: "概览" },
+    { id: "extensions", label: "扩展" },
+    { id: "accounts", label: "账号" },
+    { id: "protocols", label: "协议" },
+    { id: "frameworks", label: "框架" },
+    { id: "service", label: "运行" },
+    { id: "settings", label: "设置" },
+] as const;
 
 export interface PromptChoice {
     value: string;
