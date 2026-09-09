@@ -41,7 +41,7 @@ onebots control activate --data-dir <工作区> --generation <candidateId>
 
 ## 升级管理程序
 
-管理程序升级只支持已经由 OneBots 托管的 Linux/macOS 原生服务。先检查版本，不下载或切换：
+管理程序升级入口目前只用于已经由 OneBots 托管的 Linux/macOS 原生服务。Windows 已具备原生生命周期，但管理程序的不可变候选升级尚未完成实机验收；Docker/HF 则通过替换镜像升级。Linux/macOS 先检查版本，不下载或切换：
 
 ```sh
 onebots update --manager --check
@@ -67,7 +67,7 @@ onebots update --manager --operation <原操作ID> --version <精确版本>
 onebots recover --operation <原操作ID>
 ```
 
-系统级服务在以上命令追加 `--system`。Windows、Docker 和 HF 不使用此入口。
+系统级服务在以上命令追加 `--system`。Windows 按后续发布说明替换已安装管理工件，Docker 和 HF 替换镜像；三者都不使用当前 `update --manager` 入口。
 
 ## 失败处理
 

@@ -33,7 +33,7 @@ onebots control activate --data-dir <workspace> --generation <candidateId>
 
 ## Update the manager program
 
-Manager updates apply only to native Linux or macOS services already managed by OneBots. Check first without downloading or switching:
+The manager-update entry currently applies only to native Linux or macOS services already managed by OneBots. Windows has a native lifecycle implementation, but immutable manager-candidate updates have not completed real-machine acceptance there. Docker and HF update by replacing the image. On Linux or macOS, check first without downloading or switching:
 
 ```sh
 onebots update --manager --check
@@ -59,7 +59,7 @@ If the operation already entered the system-service transaction, reconcile that 
 onebots recover --operation <original-operation-id>
 ```
 
-Append `--system` for a system-wide service. Windows, Docker, and HF do not use this command.
+Append `--system` for a system-wide service. Windows replaces its installed manager artifact according to its release instructions; Docker and HF replace the image. None of those three use the current `update --manager` entry.
 
 If a response is lost, query the original operation instead of creating another. Configuration or runtime changes invalidate the confirmation; refresh and review a new plan. Older releases, missing catalogs, or inconsistent package versions are rejected without silently downgrading.
 

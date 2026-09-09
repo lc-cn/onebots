@@ -1,6 +1,6 @@
 # Docker Deployment
 
-You can run the onebots gateway with Docker without installing Node.js on the host. The image is based on Node 24 Alpine for a small footprint.
+Docker hosts the persistent OneBots manager without requiring Node.js on the host. The manager controls a separate gateway process, so Web management remains available when the gateway is stopped or fails. An empty volume starts without preselected adapters, protocols, accounts, or frameworks.
 
 ## Prerequisites
 

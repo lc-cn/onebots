@@ -4,7 +4,7 @@ OneBots 由常驻管理进程、独立网关进程、操作系统服务和管理
 
 ```mermaid
 flowchart LR
-    OS[systemd / launchd] --> Manager[Manager service]
+    OS[systemd / launchd / Windows SCM / Docker] --> Manager[Manager service]
     CLI[CLI / TUI] -->|本机私有控制连接| Manager
     Web[Web console] -->|设备会话| Manager
     Manager -->|安装、配置、启停、恢复| Gateway[Gateway process]
@@ -21,9 +21,7 @@ flowchart LR
 - **网关进程**加载已激活的适配器、协议和框架扩展，连接平台账号并暴露协议接口。TUI 与 Web 的网关启停不会关闭管理进程。
 - **CLI、TUI 与 Web**共享管理服务 API。它们不会各自维护配置副本，也不会绕过管理服务直接替换运行依赖。
 
-前台或容器部署使用 `onebots serve --data-dir <工作区>` 运行管理进程。Linux/macOS 原生系统托管先执行 `onebots install --data-dir <工作区>`，再执行 `onebots start`。这两个平台的已有旧服务必须先执行 `onebots migrate`。
-
-Windows SCM 宿主与命名管道目前只提供受限基础。顶层 `install/start/stop/restart/migrate` 在恢复闭环和 Windows 实机验收完成前保持禁用；Windows 用户使用 Docker Desktop。
+前台或容器部署使用 `onebots serve --data-dir <工作区>` 运行管理进程。Linux/macOS 原生系统托管先执行 `onebots install --data-dir <工作区>`，再执行 `onebots start`；已有旧服务必须先执行 `onebots migrate`。Windows 已实现 SCM 宿主、命名管道、ACL 与原生生命周期命令，但最新实机 CI 尚未通过，PowerShell 首次安装入口在最终验证完成前仍保持写入前退出。当前生产部署请使用 Docker Desktop。
 
 ## 认证与配置
 

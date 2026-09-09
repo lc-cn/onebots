@@ -40,10 +40,10 @@ node packages/onebots/lib/bin.js ui --data-dir ./workspace
 
 重复执行已完成的安装不会更新程序或重启服务。发现旧配置、旧运行目录或未完成安装时不会覆盖，请先核查状态并使用迁移/恢复流程。管理程序升级使用 `onebots update --manager`，不能通过重复执行安装脚本完成；网关运行版本则由管理端统一升级。详见[升级网关与管理程序](/guide/runtime-update)。
 
-Windows 原生托管尚未通过验收，PowerShell 安装入口会在任何修改前退出。Windows 用户请使用 Docker Desktop，按 [Docker 部署](/guide/docker)持久化 `/data`。不要运行旧脚本尝试绕过此限制。
+Windows 已实现 SCM 原生宿主、命名管道、访问控制和服务生命周期命令，但最新 Windows 实机 CI 尚未通过，当前仍处于最终验证阶段。`install.ps1` 在验证完成前仍会在写盘前退出；生产使用请暂用 Docker Desktop，并按 [Docker 部署](/guide/docker)持久化 `/data`。不要运行旧脚本绕过此门禁。
 
 ## 系统托管
 
 从已安装的新架构 CLI 执行 `onebots install --data-dir <工作区>` 安装用户级服务，之后执行 `onebots start`。首次服务安装不会启动网关账号或改写业务配置；已有旧服务应先迁移，不能用首次安装覆盖。
 
-系统托管维护管理服务；TUI/Web 的启停控制的是独立网关。CI 从安装包执行安装、启动、状态、重启、停止和卸载，并检查管理端在线、空白配置、进程实例换代及业务数据保留；发布时必须以对应平台任务的实际结果为准。完整机器重启和真实业务账号恢复仍需部署环境验收。
+系统托管维护管理服务；CLI、TUI 和 Web 通过同一控制接口管理独立网关。Linux systemd 的原生生命周期、故障注入回退和 patch 升级已通过实机 CI；launchd 与 Windows 的最终实机任务仍在验证。发布时必须以对应平台任务的实际结果为准，完整机器重启和真实业务账号恢复仍需部署环境验收。

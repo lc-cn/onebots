@@ -4,7 +4,7 @@ OneBots consists of a persistent manager process, a separate gateway process, an
 
 ```mermaid
 flowchart LR
-    OS[systemd / launchd] --> Manager[Manager service]
+    OS[systemd / launchd / Windows SCM / Docker] --> Manager[Manager service]
     CLI[CLI / TUI] -->|private local control transport| Manager
     Web[Web console] -->|device session| Manager
     Manager -->|install, configure, control, recover| Gateway[Gateway process]
@@ -21,9 +21,7 @@ flowchart LR
 - The **gateway** loads the activated adapters, protocols, and framework extensions, connects platform accounts, and exposes protocol endpoints. Gateway controls in TUI or Web do not stop the manager.
 - **CLI, TUI, and Web** use the same manager API. They do not keep separate configuration copies or replace live dependencies directly.
 
-Foreground and container deployments run `onebots serve --data-dir <workspace>`. Native Linux and macOS service hosting uses `onebots install --data-dir <workspace>` followed by `onebots start`. Migrate an existing legacy service on those platforms with `onebots migrate` before installation.
-
-The Windows SCM host and named-pipe transport are a restricted foundation only. Top-level `install/start/stop/restart/migrate` commands remain disabled until recovery is complete and real Windows acceptance passes. Windows users should use Docker Desktop.
+Foreground and container deployments run `onebots serve --data-dir <workspace>`. Native Linux and macOS service hosting uses `onebots install --data-dir <workspace>` followed by `onebots start`; migrate an existing legacy service with `onebots migrate` first. Windows now implements the SCM host, named-pipe transport, ACLs, and native lifecycle commands. Its latest real CI job is still failing, so the PowerShell bootstrap continues to exit before writing until final verification passes. Use Docker Desktop for current production deployments.
 
 ## Authentication and configuration
 

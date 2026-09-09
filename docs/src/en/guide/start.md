@@ -40,10 +40,10 @@ The branch's `install.sh` handles first-time Linux/macOS bootstrap only: install
 
 Repeating a completed bootstrap does not upgrade packages or restart services. Legacy configuration, existing runtimes, and interrupted installations are preserved for explicit migration or recovery. Re-running the installer is not a manager update; use `onebots update --manager`. Gateway runtime updates use the manager workflow described in [Update the gateway and manager](/en/guide/runtime-update).
 
-Windows native hosting is not yet verified. The PowerShell entry exits before making changes. Use Docker Desktop and persist `/data` as described in [Docker deployment](/en/guide/docker).
+Windows now has an SCM host, named-pipe transport, access controls, and native lifecycle commands. The latest real Windows CI job is still failing, so final verification remains open. Until it passes, `install.ps1` exits before writing and production users should use Docker Desktop with a persistent `/data` volume as described in [Docker deployment](/en/guide/docker).
 
 ## System hosting
 
 With an installed architecture CLI, use `onebots install --data-dir <workspace>` to install a user service, then `onebots start`. Existing legacy services require migration and are never overwritten by first-time installation.
 
-The OS hosts the manager service; TUI/Web lifecycle actions control the separate gateway. CI installs packed artifacts and checks install, start, status, restart, stop, uninstall, management availability, blank configuration, process replacement, and workspace preservation. Release decisions must use the actual result of each platform job. Full machine reboot and recovery of real platform accounts still require deployment-environment acceptance.
+The OS hosts the manager service; CLI, TUI, and Web control the separate gateway through one control API. Native systemd lifecycle, injected-failure rollback, and patch upgrade have passed real CI. Final launchd and Windows jobs remain under verification. Release decisions must use the actual result of each platform job; full machine reboot and recovery of real platform accounts still require deployment-environment acceptance.
