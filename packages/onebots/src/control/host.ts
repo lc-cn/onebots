@@ -4,6 +4,8 @@ import { GenerationConfigurationVerifier } from "./generation-configuration.js";
 import { authorizeControlHttp } from "./auth-check.js";
 import { ControlSendService } from "./send-service.js";
 import { respondControlSend } from "./send-http.js";
+import { ControlMessageDebugService } from "./message-debug-service.js";
+import { ControlMessageDebugHttp } from "./message-debug-http.js";
 import { ControlMcpService } from "./mcp-api.js";
 import { respondControlMcp } from "./mcp-http.js";
 import { serveControlWeb } from "./web-assets.js";
@@ -185,7 +187,6 @@ export async function startControlHost(options: ControlHostOptions) {
             ? state.instance?.address
             : undefined;
     }
-
     const mcp = new ControlMcpService({
         currentGateway: () => {
             if (
@@ -218,7 +219,12 @@ export async function startControlHost(options: ControlHostOptions) {
     } catch {
         process.stderr.write("[onebots] 发送操作记录不可用，管理端保留用于诊断\n");
     }
-
+    const messageDebug = new ControlMessageDebugService({
+        currentInstance: () => !closed && !storageError && activeAddress() &&
+            !serviceMigrationStatus(workspace).pending ? controller.status().instance?.id : undefined,
+        forward: (instanceId, action) => driver.messageDebug(instanceId, action),
+    });
+    const messageDebugHttp = new ControlMessageDebugHttp(messageDebug, auth);
     async function handle(request: IncomingMessage, response: ServerResponse, local: boolean) {
         try {
             const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
@@ -296,6 +302,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 }
                 if (await respondControlSend(sending, request, response, pathname, local, auth))
                     return;
+                if (await messageDebugHttp.handle(request, response, pathname, local)) return;
                 if (await respondControlMcp(mcp, request, response, pathname, local, auth)) return;
                 if (isInstallationPath(pathname)) {
                     const address = request.socket.remoteAddress;
@@ -405,6 +412,8 @@ export async function startControlHost(options: ControlHostOptions) {
     async function close() {
         if (closed) return;
         closed = true;
+        messageDebugHttp.close();
+        messageDebug.close();
         await activationVerification.close();
         await configuration?.close();
         await installation?.close();

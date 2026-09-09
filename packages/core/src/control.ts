@@ -1,3 +1,20 @@
+import {
+    messageDebugHistory,
+    clearMessageDebug,
+    type ControlMessageDebugSnapshot,
+    type ControlMessageDebugClearReceipt,
+} from "./control-message-debug.js";
+export type {
+    ControlMessageDebugJson,
+    ControlMessageDebugEntry,
+    ControlMessageDebugSnapshot,
+    ControlMessageDebugClearReceipt,
+} from "./control-message-debug.js";
+export {
+    isControlMessageDebugEntry,
+    isControlMessageDebugSnapshot,
+    isControlMessageDebugClearReceipt,
+} from "./control-message-debug.js";
 import { revokeControlSession, listControlSessions, type ControlSession } from "./control-sessions.js";
 export type { ControlSession } from "./control-sessions.js";
 import type { ControlSendContext, ControlSendRequest, ControlSendOperation } from "./control-send.js";
@@ -325,6 +342,14 @@ export class ControlClient {
 
     gateway(action: "start" | "stop" | "restart"): Promise<ControlOperation> {
         return this.transport.request("POST", `/api/control/gateway/${action}`, {});
+    }
+
+    messageDebugHistory(): Promise<ControlMessageDebugSnapshot> {
+        return messageDebugHistory(this.transport);
+    }
+
+    clearMessageDebug(expectedGatewayInstanceId: string): Promise<ControlMessageDebugClearReceipt> {
+        return clearMessageDebug(this.transport, expectedGatewayInstanceId);
     }
 
     sendContext(): Promise<ControlSendContext> {

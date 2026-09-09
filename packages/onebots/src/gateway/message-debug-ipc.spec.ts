@@ -130,6 +130,15 @@ describe("gateway message debug IPC", () => {
         expect(clear).toHaveBeenCalledTimes(1);
         expect(send).not.toHaveBeenCalled();
     });
+    it.each([{ clearedCount: 301, clearedThroughSeq: 400 }, { clearedCount: 2, clearedThroughSeq: 1 }])(
+        "invalid clear receipt remains unknown instead of contradicting public contract: %j", receipt => {
+            const store = new GatewayMessageDebugStore();
+            vi.spyOn(store, "clear").mockReturnValue(receipt);
+            const send = vi.fn();
+            handleGatewayMessageDebug(request("clear"), identity, store, send);
+            expect(send).not.toHaveBeenCalled();
+        },
+    );
     it("does not retry a clear when transport delivery fails", () => {
         const store = new GatewayMessageDebugStore();
         const clear = vi.spyOn(store, "clear");

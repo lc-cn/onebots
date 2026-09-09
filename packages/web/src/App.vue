@@ -9,6 +9,7 @@ import {
 import UiButton from "./ui/UiButton.vue";
 import ControlInstallationPanel from "./components/ControlInstallationPanel.vue";
 import ControlConfigurationPanel from "./components/ControlConfigurationPanel.vue";
+import ControlMessageDebugPanel from "./components/ControlMessageDebugPanel.vue";
 import ControlSessionsPanel from "./components/ControlSessionsPanel.vue";
 
 const token = ref(localStorage.getItem("onebots.control.token") ?? "");
@@ -189,6 +190,10 @@ onUnmounted(() => {
                 </p>
                 <ControlInstallationPanel :client="client" @applied="refresh" />
                 <ControlConfigurationPanel :client="client" @applied="refresh" />
+                <ControlMessageDebugPanel
+                    :key="token"
+                    :client="client"
+                    :gateway-instance-id="state.gateway.actual === 'running' && !state.gateway.recoveryRequired && !error ? state.gateway.instance?.id : undefined" />
                 <ControlSessionsPanel :key="token" :client="client" @revoked-self="reconnect" />
                 <section v-if="state.gateway.operations.length" class="border-t border-border pt-6">
                     <h2 class="text-lg font-medium mb-3">最近操作</h2>
