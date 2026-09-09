@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -20,7 +21,6 @@ const children = [];
 const suites = [
     "__tests__/onebot/v11/http/api.spec.js",
     "__tests__/onebot/v11/http/auth.spec.js",
-    "__tests__/onebot/v11/id-resolution.spec.js",
     "__tests__/onebot/v11/websocket/auth.spec.js",
     "__tests__/onebot/v11/websocket/connection.spec.js",
     "__tests__/onebot/v11/webhook/auth.spec.js",
@@ -215,24 +215,17 @@ async function assertManagedMcp(client) {
 }
 
 function discoverProtocolSuites() {
-    return ["onebot", "satori", "milky"]
-        .flatMap(protocol => {
-            const directory = path.join(ROOT, "__tests__", protocol);
-            return discoverSpecFiles(directory).map(name =>
-                path.posix.join("__tests__", protocol, name.split(path.sep).join("/")),
-            );
-        })
+    return execFileSync(
+        "git",
+        [
+            "ls-files",
+            "__tests__/onebot/**/*.spec.js",
+            "__tests__/satori/**/*.spec.js",
+            "__tests__/milky/**/*.spec.js",
+        ],
+        { cwd: ROOT, encoding: "utf8" },
+    )
+        .split("\n")
+        .filter(Boolean)
         .sort();
-}
-
-function discoverSpecFiles(directory, relativeDirectory = "") {
-    return fs
-        .readdirSync(path.join(directory, relativeDirectory), { withFileTypes: true })
-        .flatMap(entry => {
-            const relativePath = path.join(relativeDirectory, entry.name);
-            if (entry.isDirectory()) {
-                return discoverSpecFiles(directory, relativePath);
-            }
-            return entry.isFile() && entry.name.endsWith(".spec.js") ? [relativePath] : [];
-        });
 }
