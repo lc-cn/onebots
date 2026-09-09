@@ -234,7 +234,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
         return {
             time: Math.floor(Date.now() / 1000),
-            self_id: this.adapter.resolveId(this.account.account_id).number,
+            self_id: this.adapter.resolveAccountId(this.account.account_id).number,
             post_type: event,
             ...payload,
         };
@@ -273,7 +273,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
         try {
             const base = {
                 time: Math.floor(event.timestamp / 1000),
-                self_id: this.adapter.resolveId(this.account.account_id).number,
+                self_id: this.adapter.resolveAccountId(this.account.account_id).number,
             };
 
             if (event.type === "message") {

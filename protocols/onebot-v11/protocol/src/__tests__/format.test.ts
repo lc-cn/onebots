@@ -71,6 +71,11 @@ function createProtocol() {
             ...resolvedId,
             number: typeof id === "number" ? id : resolvedId.number,
         })),
+        resolveAccountId: vi.fn(() => ({
+            string: "12345678",
+            number: 12345678,
+            source: 12345678,
+        })),
         inviteGroupMember: vi.fn(),
         handleFriendRequest: vi.fn(),
         handleGroupRequest: vi.fn(),
@@ -138,8 +143,18 @@ function textMsgEvent(overrides: Record<string, unknown> = {}) {
 type V11Result = Record<string, unknown> & { sender: Record<string, unknown>; message: unknown[] };
 
 describe("OneBot V11 message format conversion", () => {
+    test("uses the adapter account identity for get_login_info", async () => {
+        const { adapter, protocol } = createProtocol();
+
+        await expect(protocol.apply("get_login_info")).resolves.toMatchObject({
+            status: "ok",
+            data: { user_id: 12345678, nickname: "bot" },
+        });
+        expect(adapter.resolveAccountId).toHaveBeenCalledWith("bot");
+    });
+
     test("converts a private text message", () => {
-        const { protocol } = createProtocol();
+        const { adapter, protocol } = createProtocol();
         const event = textMsgEvent();
         const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
 
@@ -162,6 +177,7 @@ describe("OneBot V11 message format conversion", () => {
         });
         const r = result as V11Result;
         expect(r.sender.name).toBe("Alice");
+        expect(adapter.resolveAccountId).toHaveBeenCalledWith("bot");
     });
 
     test("converts a group text message with group_id", () => {

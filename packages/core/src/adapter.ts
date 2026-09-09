@@ -62,6 +62,14 @@ export abstract class Adapter<
         return createId(id, this.tableName, this.db, _retries);
     }
 
+    /**
+     * 将配置中的账号标识转换为平台自身 ID。
+     * 默认平台把账号标识视为 string；数字账号平台应覆写并先恢复原始 number 类型。
+     */
+    resolveAccountId(accountId: string): CommonTypes.Id {
+        return this.resolveId(accountId);
+    }
+
     resolveId(id: string | number | CommonTypes.Id): CommonTypes.Id {
         return resolveId(id, this.tableName, this.db);
     }
