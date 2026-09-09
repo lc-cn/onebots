@@ -156,9 +156,21 @@ describe("manager installation transaction", () => {
         expect(
             (await installManagerService(test.spec, test.host, { platform: test.platform })).status,
         ).toBe("succeeded");
-        expect(fs.readdirSync(control).sort()).toEqual(entries);
+        expect(fs.readdirSync(control).sort()).toEqual([...entries, "operation.log"].sort());
         for (const [name, bytes] of Object.entries(content))
             expect(fs.readFileSync(path.join(control, name), "utf8")).toBe(bytes);
+        const operations = fs
+            .readFileSync(path.join(control, "operation.log"), "utf8")
+            .trim()
+            .split("\n")
+            .map(line => JSON.parse(line) as Record<string, unknown>);
+        expect(operations.at(-1)).toMatchObject({
+            id: expect.any(String),
+            action: "manager-service.install",
+            status: "succeeded",
+            phase: "completed",
+        });
+        expect(JSON.stringify(operations)).not.toContain("synthetic-auth");
     });
     it.each(["control", "legacy", "damaged"])(
         "existing %s metadata is not overwritten and causes zero OS effects",

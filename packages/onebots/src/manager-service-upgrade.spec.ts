@@ -22,6 +22,7 @@ import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
+import type { PersistedOperationObserver } from "./persisted-operation-observer.js";
 
 const candidates = vi.hoisted(() => ({ previous: "", target: "", previousDigest: "a".repeat(64) }));
 vi.mock("./manager-runtime/identity.js", () => ({
@@ -126,7 +127,8 @@ function fixture(enabled = true) {
         candidateDirectory: candidates.target,
         candidateDigest: "b".repeat(64),
     };
-    const run = () => upgradeManagerService(request, host, { platform });
+    const run = (onOperation?: PersistedOperationObserver) =>
+        upgradeManagerService(request, host, { platform, ...(onOperation ? { onOperation } : {}) });
     const journal = () =>
         new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
     return {
@@ -146,7 +148,8 @@ function fixture(enabled = true) {
 }
 it.each([true, false])("外部入口完成停止服务升级并保持 enabled=%s，不启动网关", async enabled => {
     const f = fixture(enabled);
-    const result = await f.run();
+    const operations: Parameters<PersistedOperationObserver>[0][] = [];
+    const result = await f.run(operation => operations.push(operation));
     expect(result).toMatchObject({
         status: "succeeded",
         phase: "completed",
@@ -164,6 +167,13 @@ it.each([true, false])("外部入口完成停止服务升级并保持 enabled=%s
     });
     expect(fs.readFileSync(path.join(f.workspace, "config.yaml"), "utf8")).toBe("broken: [\r\n");
     expect(fs.readFileSync(path.join(f.workspace, ".control/gateway.json"))).toEqual(f.gateway);
+    expect(operations.at(-1)).toEqual({
+        id: "upgrade",
+        action: "manager-service.upgrade",
+        status: "succeeded",
+        phase: "completed",
+    });
+    expect(JSON.stringify(operations)).not.toContain(f.workspace);
     for (const home of f.homes) acquireControlWorkspace(home)();
     acquireServiceMigrationLock(f.files.stateDir)();
 });

@@ -13,6 +13,10 @@ import {
     canonicalServiceJson,
     closedServiceObject,
 } from "./service-operation-storage.js";
+import {
+    observeManagerServiceOperation,
+    type PersistedOperationObserver,
+} from "./persisted-operation-observer.js";
 
 export type ManagerServiceAction =
     | "start"
@@ -109,7 +113,10 @@ const failure = () => new Error("管理服务操作记录未确认或已损坏�
 export class FileManagerServiceJournal {
     private readonly storage: ServiceOperationStorage;
     private corrupted = false;
-    constructor(directory: string) {
+    constructor(
+        directory: string,
+        private readonly onOperation?: PersistedOperationObserver,
+    ) {
         this.storage = new ServiceOperationStorage(directory);
         try {
             for (const name of this.storage.list()) {
@@ -180,7 +187,9 @@ export class FileManagerServiceJournal {
             if (this.health().recoveryRequired || this.storage.has(`${record.id}.json`))
                 throw failure();
             this.storage.write(`${record.id}.json`, record, true);
-            return this.read(record.id);
+            const persisted = this.read(record.id);
+            observeManagerServiceOperation(this.onOperation, persisted);
+            return persisted;
         } catch {
             throw failure();
         }
@@ -241,6 +250,7 @@ export class FileManagerServiceJournal {
                 if (!rollbackStart && !rollbackAdvance && !upgradeAdvance) throw failure();
             }
             this.storage.write(`${record.id}.json`, record);
+            observeManagerServiceOperation(this.onOperation, this.read(record.id));
         } catch {
             throw failure();
         }

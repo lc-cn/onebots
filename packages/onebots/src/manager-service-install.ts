@@ -29,10 +29,13 @@ import type { ServicePlatform } from "./service-platform.js";
 import { assertManagerServiceTransactionsSupported } from "./windows-manager-support.js";
 import { WindowsServicePlatform } from "./service-platform-windows.js";
 import { secureWindowsServiceDirectory } from "./windows-service-security.js";
+import { createControlOperationObserver } from "./control/gateway-log.js";
+import type { PersistedOperationObserver } from "./persisted-operation-observer.js";
 
 export interface ManagerServiceInstallDependencies {
     assertAbsent?: typeof assertServiceAbsent;
     platform?: ServicePlatform;
+    onOperation?: PersistedOperationObserver;
 }
 
 /** 内部 bootstrap 调用方须持服务锁；稳定 ID 贯穿候选准备和系统注册，绝不重派已有 ID。 */
@@ -71,6 +74,7 @@ export async function installManagerServiceWhileLocked(
             throw new Error("旧服务迁移尚待对账，禁止新安装");
         const journal = new FileManagerServiceJournal(
             path.join(files.stateDir, "manager-operations"),
+            dependencies.onOperation ?? createControlOperationObserver(spec.workspace),
         );
         if (journal.health().recoveryRequired) throw new Error("前次系统服务操作尚待对账");
         assertNoPendingManagerUpgrade(spec.workspace);

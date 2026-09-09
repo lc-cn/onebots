@@ -33,11 +33,14 @@ import {
     type WindowsServiceDefinition,
 } from "./service-platform-windows.js";
 import { ConfigurationFile } from "./configuration/configuration-file.js";
+import { createControlOperationObserver } from "./control/gateway-log.js";
+import type { PersistedOperationObserver } from "./persisted-operation-observer.js";
 
 export interface ManagerServiceUninstallDependencies {
     platform?: ServicePlatform;
     unregister?(scope: ServiceScope, host: ServiceHost): Promise<void> | void;
     confirmStopped?: typeof verifyServiceMigrationProcessesWhileLocked;
+    onOperation?: PersistedOperationObserver;
 }
 
 /** 定义已删除且完整进程树已退出后使用；不复用要求定义仍loaded的reload。 */
@@ -100,6 +103,7 @@ export async function uninstallManagerService(
             throw new Error("工作区仍在迁移中，禁止卸载");
         const journal = new FileManagerServiceJournal(
             path.join(files.stateDir, "manager-operations"),
+            dependencies.onOperation ?? createControlOperationObserver(spec.workspace),
         );
         if (journal.health().recoveryRequired) throw new Error("前次系统服务操作尚待对账");
         removal = captureManagerServiceRemoval(spec, host);

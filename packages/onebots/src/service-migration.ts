@@ -14,6 +14,7 @@ import { retainServiceMigrationRuntime } from "./service-migration-retention.js"
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import type { ServicePlatformState } from "./service-platform.js";
+import { createControlOperationObserver } from "./control/gateway-log.js";
 
 /** 实际旧服务迁移入口；保留旧工件、准备独立管理候选后切换，不更换业务工作区。 */
 export async function migrateInstalledService(
@@ -34,6 +35,7 @@ export async function migrateInstalledService(
         return await migrateSystemService({
             stateDirectory: paths.stateDir,
             id,
+            onOperation: createControlOperationObserver(target.workspace),
             capture: async () => {
                 // 新运行文件与Node版本先检查，不能等停掉旧服务后才发现缺失。
                 assertManagerServiceRuntime(target, host);

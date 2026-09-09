@@ -26,6 +26,8 @@ import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform } from "./service-platform.js";
 import { assertManagerServiceTransactionsSupported } from "./windows-manager-support.js";
 import { WindowsServicePlatform } from "./service-platform-windows.js";
+import { createControlOperationObserver } from "./control/gateway-log.js";
+import type { PersistedOperationObserver } from "./persisted-operation-observer.js";
 
 export type ManagerControlAction = "start" | "stop" | "restart";
 export interface ManagerControllerDependencies {
@@ -35,6 +37,7 @@ export interface ManagerControllerDependencies {
     now?(): number;
     sleep?(milliseconds: number): Promise<void>;
     readinessTimeoutMs?: number;
+    onOperation?: PersistedOperationObserver;
 }
 
 /** 系统命令只控制manager，绝不修改gateway desired或预检业务配置。 */
@@ -78,6 +81,7 @@ export async function controlManagerService(
             throw new Error("系统服务迁移尚未确认，禁止新的服务操作");
         const journal = new FileManagerServiceJournal(
             path.join(files.stateDir, "manager-operations"),
+            dependencies.onOperation ?? createControlOperationObserver(spec.workspace),
         );
         if (journal.health().recoveryRequired) throw new Error("前次系统服务操作尚待对账");
         const confirmStopped = dependencies.confirmStopped ?? verifyServiceMigrationProcesses;

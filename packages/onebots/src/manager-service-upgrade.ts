@@ -25,6 +25,7 @@ import {
     type ManagerUpgradeNativeDependencies,
 } from "./manager-service-upgrade-native-port.js";
 import { runManagerServiceUpgrade } from "./manager-service-upgrade-transaction.js";
+import { createControlOperationObserver } from "./control/gateway-log.js";
 
 export interface ManagerServiceUpgradeRequest {
     id: string;
@@ -114,14 +115,15 @@ export async function upgradeManagerService(
     let transactionEntered = false;
     try {
         if (inspectServiceMigrationRecovery(files.stateDir)) throw failure("SERVICE_BUSY");
-        const journal = new FileManagerServiceJournal(
-            path.join(files.stateDir, "manager-operations"),
-        );
-        if (journal.health().recoveryRequired) throw failure("SERVICE_BUSY");
         const metadata = readServiceMetadata(files.metadata);
         if (metadata.kind !== "control" || metadata.spec.scope !== scope)
             throw failure("SERVICE_METADATA_INVALID");
         const previousSpec = metadata.spec;
+        const journal = new FileManagerServiceJournal(
+            path.join(files.stateDir, "manager-operations"),
+            dependencies.onOperation ?? createControlOperationObserver(previousSpec.workspace),
+        );
+        if (journal.health().recoveryRequired) throw failure("SERVICE_BUSY");
         try {
             assertNoPendingManagerUpgrade(previousSpec.workspace);
         } catch {

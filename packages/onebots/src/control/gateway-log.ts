@@ -108,19 +108,9 @@ export function appendControlLog(workspace: string, source: ControlLogSource, te
     }
 }
 
-export function createControlLogWriter(workspace: string, managerId: string) {
-    const manager = (event: "started" | "ready" | "stopped") => {
-        try {
-            appendControlLog(
-                workspace,
-                "manager",
-                `${JSON.stringify({ time: new Date().toISOString(), event, managerId })}\n`,
-            );
-        } catch {
-            process.stderr.write("[onebots] 管理服务日志不可写，继续保留控制能力\n");
-        }
-    };
-    const operation: PersistedOperationObserver = (record: PersistedOperationProjection) => {
+/** CLI 与运行中的 manager 共用同一条安全 operation.log 写入边界。 */
+export function createControlOperationObserver(workspace: string): PersistedOperationObserver {
+    return (record: PersistedOperationProjection) => {
         try {
             appendControlLog(
                 workspace,
@@ -137,6 +127,21 @@ export function createControlLogWriter(workspace: string, managerId: string) {
             process.stderr.write("[onebots] 操作日志不可写，持久化状态仍是操作事实来源\n");
         }
     };
+}
+
+export function createControlLogWriter(workspace: string, managerId: string) {
+    const manager = (event: "started" | "ready" | "stopped") => {
+        try {
+            appendControlLog(
+                workspace,
+                "manager",
+                `${JSON.stringify({ time: new Date().toISOString(), event, managerId })}\n`,
+            );
+        } catch {
+            process.stderr.write("[onebots] 管理服务日志不可写，继续保留控制能力\n");
+        }
+    };
+    const operation = createControlOperationObserver(workspace);
     manager("started");
     return { manager, operation };
 }

@@ -33,6 +33,7 @@ import {
     secureWindowsServiceDirectory,
     secureWindowsServiceFile,
 } from "./windows-service-security.js";
+import { createControlOperationObserver } from "./control/gateway-log.js";
 
 export interface ManagerBootstrapRequest {
     id?: string;
@@ -140,6 +141,7 @@ export async function bootstrapManagerService(
         }
         const journal = new FileManagerServiceJournal(
             path.join(files.stateDir, "manager-operations"),
+            dependencies.onOperation ?? createControlOperationObserver(template.workspace),
         );
         const operations = new ServiceOperationStorage(
             path.join(files.stateDir, "manager-operations"),

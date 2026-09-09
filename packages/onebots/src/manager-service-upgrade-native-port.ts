@@ -15,6 +15,7 @@ import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform } from "./service-platform.js";
+import type { PersistedOperationObserver } from "./persisted-operation-observer.js";
 import type { ManagerServiceRemovalSnapshot } from "./manager-service-removal-snapshot.js";
 import type { ManagerServiceUpgradePort } from "./manager-service-upgrade-transaction.js";
 
@@ -23,6 +24,8 @@ export interface ManagerUpgradeNativeDependencies {
     readinessTimeoutMs?: number;
     inspectManager?: typeof inspectMigrationManager;
     confirmStopped?: typeof verifyServiceMigrationProcesses;
+    /** 只观察 journal 已成功持久化的固定操作投影，不参与原生效果。 */
+    onOperation?: PersistedOperationObserver;
 }
 const failure = () => new Error("管理程序升级现场与持久意图不符，禁止继续派发系统动作");
 

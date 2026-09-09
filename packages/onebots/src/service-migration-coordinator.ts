@@ -6,6 +6,7 @@ import type { RetainedLegacyRuntime } from "./service-migration-retained-runtime
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import { verifyManagerServiceCandidate } from "./manager-service-upgrade-candidate.js";
 import type { ServiceMigrationBackup, ServiceMigrationPort } from "./service-migration-types.js";
+import type { PersistedOperationObserver } from "./persisted-operation-observer.js";
 
 /** 所有系统服务迁移入口必须经过这里，锁覆盖快照、日志、外部动作及最终确认。 */
 export async function migrateSystemService(options: {
@@ -19,12 +20,14 @@ export async function migrateSystemService(options: {
         backup: ServiceMigrationBackup,
     ): Promise<{ spec: ManagerServiceSpec; digest: string }>;
     port: ServiceMigrationPort | ((backup: ServiceMigrationBackup) => ServiceMigrationPort);
+    onOperation?: PersistedOperationObserver;
 }) {
     if (options.prepareManager && !options.retain) throw new Error("管理候选准备必须先保留旧工件");
     const release = acquireServiceMigrationLock(options.stateDirectory);
     try {
         const journal = new FileServiceMigrationJournal(
             path.join(options.stateDirectory, "migrations"),
+            options.onOperation,
         );
         const backup = await options.capture();
         if (options.retain) {

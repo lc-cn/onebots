@@ -30,6 +30,10 @@ import type {
     ServiceMigrationRecord,
     ServiceMigrationJournal,
 } from "./service-migration-types.js";
+import {
+    observeServiceMigrationOperation,
+    type PersistedOperationObserver,
+} from "./persisted-operation-observer.js";
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const HASH = /^[a-f0-9]{64}$/;
@@ -42,7 +46,10 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
     private readonly directory: string;
     private readonly identity: { dev: number; ino: number };
     private blocked = false;
-    constructor(directory: string) {
+    constructor(
+        directory: string,
+        private readonly onOperation?: PersistedOperationObserver,
+    ) {
         try {
             fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
             const stat = fs.lstatSync(directory);
@@ -117,7 +124,9 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             };
             this.backup(record);
             atomic(file, canonical(record), 0o600);
-            return this.read(id);
+            const persisted = this.read(id);
+            observeServiceMigrationOperation(this.onOperation, persisted);
+            return persisted;
         } catch {
             throw invalid();
         }
@@ -184,7 +193,9 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             this.backup(next);
             if (canonical(this.read(record.id)) !== canonical(previous)) throw invalid();
             atomic(this.file(record.id), canonical(next), 0o600);
-            return this.read(record.id);
+            const persisted = this.read(record.id);
+            observeServiceMigrationOperation(this.onOperation, persisted);
+            return persisted;
         } catch {
             throw invalid();
         }
@@ -254,7 +265,9 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             this.backup(next);
             if (canonical(this.read(record.id)) !== canonical(previous)) throw invalid();
             atomic(this.file(record.id), canonical(next), 0o600);
-            return this.read(record.id);
+            const persisted = this.read(record.id);
+            observeServiceMigrationOperation(this.onOperation, persisted);
+            return persisted;
         } catch {
             throw invalid();
         }
@@ -293,6 +306,7 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             if (previous.status === "interrupted" && clean.status === "running") throw invalid();
             this.backup(clean);
             atomic(this.file(clean.id), canonical(clean), 0o600);
+            observeServiceMigrationOperation(this.onOperation, this.read(clean.id));
         } catch {
             throw invalid();
         }
@@ -319,7 +333,9 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             this.backup(next);
             if (canonical(this.read(previous.id)) !== canonical(previous)) throw invalid();
             atomic(this.file(previous.id), canonical(next), 0o600);
-            return this.read(previous.id);
+            const persisted = this.read(previous.id);
+            observeServiceMigrationOperation(this.onOperation, persisted);
+            return persisted;
         } catch {
             throw invalid();
         }
