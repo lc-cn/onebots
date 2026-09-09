@@ -99,6 +99,8 @@ function inspect(
             const record = parseServiceMigrationRecord(raw);
             if (record.id !== match[1]) fail();
             referenced.add(record.backupDigest + ".backup.json");
+            for (const digest of record.previousBackupDigests ?? [])
+                referenced.add(digest + ".backup.json");
             const unfinished =
                 record.recoveryRequired ||
                 !["completed", "cancelled"].includes(record.phase) ||

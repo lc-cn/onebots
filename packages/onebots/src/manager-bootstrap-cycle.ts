@@ -1,4 +1,5 @@
 import { managerBootstrapBindingDirectory } from "./manager-bootstrap-binding.js";
+import { readManagerMigrationOrigin } from "./manager-migration-origin.js";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -74,8 +75,11 @@ export function selectManagerBootstrapCycle(scope: ServiceScope, host: ServiceHo
     }
     const initial = path.join(home, "bootstrap");
     let id = "initial-install";
+    let migration: ReturnType<typeof readManagerMigrationOrigin> = null;
+    let initialExists = false;
     try {
         fs.lstatSync(initial);
+        initialExists = true;
         const intent = closedServiceObject(
             new ServiceOperationStorage(initial).read("intent.json"),
             ["schemaVersion", "id", "service", "planDigest"],
@@ -88,20 +92,29 @@ export function selectManagerBootstrapCycle(scope: ServiceScope, host: ServiceHo
             throw failure();
         id = intent.id;
     } catch (error) {
-        if (
-            (error as NodeJS.ErrnoException).code !== "ENOENT" ||
-            records.length ||
-            metadata.kind !== "missing"
-        )
-            throw failure();
-        return id;
+        if (initialExists) throw failure();
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            migration = readManagerMigrationOrigin(files.stateDir);
+            if (migration && migration.spec.scope !== scope) throw failure();
+        }
+        if (migration) id = migration.id;
+        else {
+            if (
+                (error as NodeJS.ErrnoException).code !== "ENOENT" ||
+                records.length ||
+                metadata.kind !== "missing"
+            )
+                throw failure();
+            return id;
+        }
     }
     const visited = new Set<string>();
     for (;;) {
         if (visited.has(id) || visited.size > records.length + 1) throw failure();
         visited.add(id);
         const installation = records.find(record => record.id === id);
-        if (!installation) {
+        const origin = migration?.id === id ? migration : null;
+        if (!installation && !origin) {
             if (
                 metadata.kind !== "missing" ||
                 records.some(record => record.action === "install" && !visited.has(record.id))
@@ -110,13 +123,16 @@ export function selectManagerBootstrapCycle(scope: ServiceScope, host: ServiceHo
             return id;
         }
         if (
-            installation.action !== "install" ||
-            installation.managerSpec.scope !== scope ||
-            installation.status !== "succeeded" ||
-            installation.recoveryRequired
+            !origin &&
+            (!installation ||
+                installation.action !== "install" ||
+                installation.managerSpec.scope !== scope ||
+                installation.status !== "succeeded" ||
+                installation.recoveryRequired)
         )
             throw failure();
-        let spec = installation.managerSpec;
+        if (origin && installation) throw failure();
+        let spec = origin?.spec ?? installation!.managerSpec;
         const upgrades = new Set<string>();
         for (;;) {
             const next = records.filter(

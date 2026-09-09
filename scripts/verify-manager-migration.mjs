@@ -16,7 +16,7 @@ export async function verifyManagerMigration(runtime, archives, temporary) {
     const { verifyManagerServiceCandidate } = await load("manager-service-upgrade-candidate.js");
     const { acquireControlWorkspace } = await load("control/workspace.js");
     const { getServiceFiles } = await load("service-files.js");
-    const { renderSystemdUnit, renderLaunchdPlist } = await load("service-definition.js");
+    const { renderSystemdUnit, renderLaunchdPlist, LAUNCHD_LABEL } = await load("service-definition.js");
     const home = path.join(fs.realpathSync(temporary), "migration-host");
     const workspace = path.join(home, "workspace");
     const source = path.join(home, "old-install");
@@ -33,8 +33,16 @@ export async function verifyManagerMigration(runtime, archives, temporary) {
     const legacy = { scope: "user", configPath: path.join(workspace, "old.yaml"),
         nodePath: node, binPath: path.join(source, "bin.js"), workingDirectory: source,
         adapters: [], protocols: [] };
+    let unregistered = false;
     const host = { platform: process.platform, homedir: home, uid: process.getuid(), env: {},
-        exec() { throw new Error("不得执行真实系统命令"); },
+        exec(command, args) {
+            if (command === process.execPath && args.length === 1 && args[0] === "--version") return process.version;
+            assert.equal(unregistered, true);
+            if (command === "systemctl" && args.includes("show")) return "LoadState=not-found\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\nControlGroup=\nFragmentPath=\n";
+            if (command === "/bin/launchctl" && args[0] === "print") throw Object.assign(new Error("missing"), {
+                status: 113, stderr: `Bad request.\nCould not find service "${LAUNCHD_LABEL}" in domain for user gui: ${process.getuid()}\n` });
+            throw new Error("不得执行真实系统命令");
+        },
         spawn() { throw new Error("不得启动真实系统服务"); } };
     const files = getServiceFiles("user", host);
     for (const directory of [files.stateDir, path.dirname(files.definition)])
@@ -100,4 +108,24 @@ export async function verifyManagerMigration(runtime, archives, temporary) {
     assert.equal(JSON.parse(fs.readFileSync(path.join(workspace, ".control/gateway.json"))).desired, "stopped");
     assert.deepEqual(await prepareServiceMigrationManagerCandidate(candidateInput, files.stateDir, id, dependencies), selected);
     assert.deepEqual(effects, ["quiesce", "reload"]);
+    const { uninstallManagerService } = await load("manager-service-uninstall.js");
+    const { bootstrapManagerService } = await load("manager-service-bootstrap.js");
+    const { readManagerMigrationOrigin } = await load("manager-migration-origin.js");
+    const migrationRecord = fs.readFileSync(path.join(files.stateDir, "migrations", `${id}.journal.json`));
+    const gateway = fs.readFileSync(path.join(workspace, ".control/gateway.json"));
+    const removed = await uninstallManagerService("user", host, { platform, unregister: () => {
+        unregistered = true; effects.push("unregister");
+    } });
+    assert.equal(removed.status, "succeeded");
+    const { binPath: _bin, workingDirectory: _cwd, ...service } = selected.spec;
+    const reinstalled = await bootstrapManagerService({ service }, { ...dependencies, platform,
+        assertAbsent: () => assert.equal(unregistered, true) }, host);
+    assert.equal(reinstalled.status, "succeeded");
+    assert.equal(reinstalled.id, "install-" + createHash("sha256").update(removed.id).digest("hex"));
+    assert.equal(fs.existsSync(path.join(files.stateDir, "manager-artifacts/bootstrap")), false);
+    assert.deepEqual(fs.readFileSync(path.join(files.stateDir, "migrations", `${id}.journal.json`)), migrationRecord);
+    assert.deepEqual(fs.readFileSync(path.join(workspace, ".control/gateway.json")), gateway);
+    assert.equal(fs.readFileSync(path.join(workspace, "data/account.fixture"), "utf8"), "original-account-id");
+    assert.deepEqual(await bootstrapManagerService({ service }, { ...dependencies, platform }, host), reinstalled);
+    assert.equal(readManagerMigrationOrigin(files.stateDir).id, `migration-${id}`);
 }

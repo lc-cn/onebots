@@ -37,6 +37,8 @@ export interface ServiceMigrationRecord {
     schemaVersion: 1;
     id: string;
     backupDigest: string;
+    /** 工件/候选绑定前的不可变备份，仅由绑定事务追加，状态检查不读取其正文。 */
+    previousBackupDigests?: string[];
     phase: ServiceMigrationPhase;
     status: "running" | "succeeded" | "failed" | "interrupted";
     recoveryRequired: boolean;

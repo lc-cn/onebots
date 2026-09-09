@@ -1,3 +1,5 @@
+import { parseServiceMigrationRecord } from "./service-migration-record.js";
+export { parseServiceMigrationRecord } from "./service-migration-record.js";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -15,21 +17,7 @@ import type {
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const HASH = /^[a-f0-9]{64}$/;
 const LIMIT = 8 * 1024 * 1024;
-const phases = [
-    "prepared",
-    "capturing-runtime",
-    "preparing-manager",
-    "stopping-old",
-    "writing-target",
-    "starting-manager",
-    "verifying",
-    "releasing-target",
-    "stopping-target",
-    "restoring",
-    "restarting-old",
-    "cancelled",
-    "completed",
-];
+
 const invalid = () => new Error("服务迁移私有记录无效或需要恢复，禁止继续迁移");
 
 /** 调用方必须持有 service 级协调锁；此模块不以 workspace 锁代替服务互斥。 */
@@ -162,7 +150,15 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             const backupDigest = hash(content);
             const file = this.backupFile(backupDigest);
             if (!exists(file)) atomic(file, content, 0o400);
-            const next: ServiceMigrationRecord = { ...previous, backupDigest, phase: "prepared" };
+            const next: ServiceMigrationRecord = {
+                ...previous,
+                backupDigest,
+                phase: "prepared",
+                previousBackupDigests: [
+                    ...(previous.previousBackupDigests ?? []),
+                    previous.backupDigest,
+                ],
+            };
             this.backup(next);
             if (canonical(this.read(record.id)) !== canonical(previous)) throw invalid();
             atomic(this.file(record.id), canonical(next), 0o600);
@@ -177,6 +173,14 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             const clean = parseServiceMigrationRecord(record);
             const content = readPrivate(this.backupFile(clean.backupDigest), 0o400, LIMIT);
             const backup = parseBackup(JSON.parse(content));
+            for (const digest of clean.previousBackupDigests ?? []) {
+                const historical = readPrivate(this.backupFile(digest), 0o400, LIMIT);
+                if (
+                    hash(historical) !== digest ||
+                    canonical(parseBackup(JSON.parse(historical))) !== historical
+                )
+                    throw invalid();
+            }
             if (hash(canonical(backup)) !== clean.backupDigest || content !== canonical(backup))
                 throw invalid();
             return backup;
@@ -216,7 +220,15 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             const backupDigest = hash(content);
             const file = this.backupFile(backupDigest);
             if (!exists(file)) atomic(file, content, 0o400);
-            const next: ServiceMigrationRecord = { ...previous, backupDigest, phase: "prepared" };
+            const next: ServiceMigrationRecord = {
+                ...previous,
+                backupDigest,
+                phase: "prepared",
+                previousBackupDigests: [
+                    ...(previous.previousBackupDigests ?? []),
+                    previous.backupDigest,
+                ],
+            };
             this.backup(next);
             if (canonical(this.read(record.id)) !== canonical(previous)) throw invalid();
             atomic(this.file(record.id), canonical(next), 0o600);
@@ -231,6 +243,8 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             const clean = parseServiceMigrationRecord(record);
             const previous = this.read(clean.id);
             if (previous.backupDigest !== clean.backupDigest) throw invalid();
+            if (!isDeepStrictEqual(previous.previousBackupDigests, clean.previousBackupDigests))
+                throw invalid();
             if (
                 clean.phase === "cancelled" &&
                 previous.phase !== "cancelled" &&
@@ -379,43 +393,7 @@ function parseBackup(input: unknown): ServiceMigrationBackup {
     if (Buffer.byteLength(canonical(backup)) > LIMIT) throw invalid();
     return backup;
 }
-export function parseServiceMigrationRecord(input: unknown): ServiceMigrationRecord {
-    const value = object(input, [
-        "schemaVersion",
-        "id",
-        "backupDigest",
-        "phase",
-        "status",
-        "recoveryRequired",
-        "rolledBack",
-    ]);
-    if (
-        value.schemaVersion !== 1 ||
-        typeof value.id !== "string" ||
-        !ID.test(value.id) ||
-        typeof value.backupDigest !== "string" ||
-        !HASH.test(value.backupDigest) ||
-        typeof value.phase !== "string" ||
-        !phases.includes(value.phase) ||
-        typeof value.status !== "string" ||
-        !["running", "succeeded", "failed", "interrupted"].includes(value.status) ||
-        typeof value.recoveryRequired !== "boolean" ||
-        typeof value.rolledBack !== "boolean"
-    )
-        throw invalid();
-    if (
-        value.status === "succeeded" &&
-        (value.phase !== "completed" || value.recoveryRequired || value.rolledBack)
-    )
-        throw invalid();
-    if (value.status === "interrupted" && !value.recoveryRequired) throw invalid();
-    if (
-        value.phase === "cancelled" &&
-        (value.status !== "failed" || value.recoveryRequired || value.rolledBack)
-    )
-        throw invalid();
-    return value as unknown as ServiceMigrationRecord;
-}
+
 function finished(record: ServiceMigrationRecord): boolean {
     return (
         !record.recoveryRequired &&

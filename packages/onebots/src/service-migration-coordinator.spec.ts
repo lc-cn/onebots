@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { migrateSystemService, inspectServiceMigration } from "./service-migration-coordinator.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
+import { inspectServiceMigrationRecovery } from "./service-recovery-inspection.js";
 import type { RetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import type { ServiceMigrationBackup, ServiceMigrationPort } from "./service-migration-types.js";
 const roots: string[] = [];
@@ -150,6 +151,12 @@ describe("服务迁移协调器", () => {
         });
         expect(result.status).toBe("succeeded");
         expect(result.backupDigest).not.toBe(originalDigest);
+        expect(result.previousBackupDigests).toEqual([originalDigest]);
+        const canonicalState = fs.realpathSync(t.stateDirectory);
+        expect(inspectServiceMigrationRecovery(canonicalState)).toBe(false);
+        const stray = path.join(canonicalState, "migrations", `${"b".repeat(64)}.backup.json`);
+        fs.writeFileSync(stray, "{}", { mode: 0o400 });
+        expect(inspectServiceMigrationRecovery(canonicalState)).toBe(true);
         const historical = JSON.parse(
             fs.readFileSync(
                 path.join(t.stateDirectory, "migrations", `${originalDigest}.backup.json`),

@@ -38,6 +38,14 @@ function fixture() {
     return { directory, raw, backup, journal: new FileServiceMigrationJournal(directory) };
 }
 describe("service migration private journal", () => {
+    it("普通状态保存不得追加或改写历史备份引用", () => {
+        const test = fixture();
+        const record = test.journal.prepare("history", test.backup);
+        expect(() =>
+            test.journal.save({ ...record, previousBackupDigests: ["b".repeat(64)] }),
+        ).toThrow();
+        expect(test.journal.read(record.id)).toEqual(record);
+    });
     it("preserves exact bytes with closed snapshots and private modes", () => {
         const test = fixture();
         const record = test.journal.prepare("first", test.backup);
