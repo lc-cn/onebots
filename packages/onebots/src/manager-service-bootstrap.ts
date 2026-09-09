@@ -21,6 +21,7 @@ import { bundledPnpmExecutor } from "./installation/bundled-runtime-artifacts.js
 import { freezeGenerationArtifacts } from "./installation/generation-artifacts.js";
 import { managerCandidateDigest } from "./manager-runtime/identity.js";
 import { verifyManagerServiceCandidate } from "./manager-service-upgrade-candidate.js";
+import { assertManagerServiceTransactionsSupported } from "./windows-manager-support.js";
 
 export interface ManagerBootstrapRequest {
     id?: string;
@@ -39,6 +40,7 @@ export async function bootstrapManagerService(
     dependencies: ManagerBootstrapDependencies,
     host: ServiceHost = createDefaultServiceHost(),
 ) {
+    assertManagerServiceTransactionsSupported(host);
     closedServiceObject(request, ["service", ...(Object.hasOwn(request, "id") ? ["id"] : [])]);
     closedServiceObject(request.service, ["schemaVersion", "runtimeKind", "scope", "workspace", "nodePath", "host", "port"]);
     if (Object.hasOwn(request, "id") && (typeof request.id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(request.id))) throw failure();

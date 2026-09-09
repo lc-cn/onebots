@@ -44,6 +44,94 @@ func TestStatusPipeHasVerifiedSecurityAndServesState(t *testing.T) {
 	}
 }
 
+func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
+	state := newStateStore(time.Now())
+	managerPID := windows.GetCurrentProcessId()
+	state.set("running", "running", managerPID)
+	config := withDefaults(Config{
+		ManagerPath: "unused.exe",
+		PipeName:    fmt.Sprintf(`\\.\pipe\onebots-host-control-test-%d`, windows.GetCurrentProcessId()),
+	})
+	server, err := startStatusPipe(config, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	control := protocol.ControlState{
+		Manager: protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: managerPID},
+		Gateway: protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
+	}
+	response := exchangePipeRequest(t, config.PipeName, protocol.Request{
+		Version: protocol.Version, RequestID: "publish:1", Operation: "publish_status", Control: &control,
+	})
+	if !response.OK || response.State == nil || response.State.Control == nil || response.State.Control.Manager.ID != control.Manager.ID {
+		t.Fatalf("publish did not return closed control state: %#v", response)
+	}
+	var output bytes.Buffer
+	if err := queryStatus(config.PipeName, 5*time.Second, &output); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(output.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.State == nil || response.State.Control == nil || response.State.Control.Gateway != control.Gateway {
+		t.Fatalf("status reader did not observe published control state: %#v", response)
+	}
+}
+
+func TestPublishRequiresServiceSIDAndRunningManagerPID(t *testing.T) {
+	if mayPublishControlStatus(pipeClientIdentity{sid: "S-1-5-21-1-2-3-1001", pid: 42}, "S-1-5-21-1-2-3-1000", 42) {
+		t.Fatal("control SID may not publish")
+	}
+	if !mayPublishControlStatus(pipeClientIdentity{sid: "S-1-5-18", pid: 42}, "S-1-5-18", 42) {
+		t.Fatal("exact service SID should publish")
+	}
+	if mayPublishControlStatus(pipeClientIdentity{sid: "S-1-5-18", pid: 41}, "S-1-5-18", 42) {
+		t.Fatal("same SID sibling process may not publish for manager")
+	}
+	state := newStateStore(time.Now())
+	state.set("running", "running", 42)
+	if err := state.publish(protocol.ControlState{
+		Manager: protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 41},
+		Gateway: protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
+	}); err == nil {
+		t.Fatal("mismatched manager pid unexpectedly published")
+	}
+}
+
+func exchangePipeRequest(t *testing.T, pipeName string, request protocol.Request) protocol.Response {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	connection, err := winio.DialPipeAccess(ctx, pipeName, uint32(pipeClientAccess))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connection.Close()
+	if err := connection.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.NewEncoder(connection).Encode(request); err != nil {
+		t.Fatal(err)
+	}
+	closeWriter, ok := connection.(pipeCloseWriter)
+	if !ok {
+		t.Fatal("pipe does not support request EOF")
+	}
+	if err := closeWriter.CloseWrite(); err != nil {
+		t.Fatal(err)
+	}
+	message, err := protocol.ReadSingleMessage(connection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := protocol.DecodeResponse(message, request.RequestID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return response
+}
+
 func TestControlSIDHasClientOnlyRights(t *testing.T) {
 	controlSID := "S-1-5-21-1-2-3-1001"
 	sddl, allowed, err := controlPipeSecurity(controlSID)

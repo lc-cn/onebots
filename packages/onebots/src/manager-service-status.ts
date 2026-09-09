@@ -44,6 +44,7 @@ export interface ManagerServiceStatus {
         | "identity-mismatch"
         | "baseline-changed"
         | "definition-mismatch"
+        | "platform-control-unavailable"
         | null;
 }
 export interface ManagerServiceStatusDependencies {
@@ -100,6 +101,10 @@ async function inspectManagerServiceStatusSnapshot(
     }
     const metadata = readServiceMetadata(files.metadata);
     result.installation = metadata.kind;
+    if (host.platform === "win32") {
+        result.diagnostic = "platform-control-unavailable";
+        return result;
+    }
     if (metadata.kind !== "control") {
         result.diagnostic =
             metadata.kind === "missing"

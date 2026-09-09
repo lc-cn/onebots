@@ -40,6 +40,11 @@ type allowedPipeClients struct {
 	controlSID string
 }
 
+type pipeClientIdentity struct {
+	sid string
+	pid uint32
+}
+
 type statusPipe struct {
 	listener net.Listener
 	state    *stateStore
@@ -269,7 +274,8 @@ func (server *statusPipe) handle(connection net.Conn) {
 	if err := connection.SetDeadline(time.Now().Add(pipeRequestTimeout)); err != nil {
 		return
 	}
-	if err := server.authorize(connection); err != nil {
+	client, err := server.authorize(connection)
+	if err != nil {
 		server.writeFailure(connection, "unauthorized_client", "named pipe client identity is not authorized")
 		return
 	}
@@ -283,48 +289,64 @@ func (server *statusPipe) handle(connection net.Conn) {
 		server.writeFailure(connection, "invalid_request", err.Error())
 		return
 	}
+	if request.Operation == "publish_status" {
+		if request.Control == nil || !mayPublishControlStatus(
+			client, server.allowed.serviceSID, request.Control.Manager.PID,
+		) {
+			server.writeFailure(connection, "forbidden_operation", "only the service identity may publish control status")
+			return
+		}
+		if server.state.publish(*request.Control) != nil {
+			server.writeFailure(connection, "state_mismatch", "published control status does not match the running manager")
+			return
+		}
+	}
 	_ = json.NewEncoder(connection).Encode(protocol.Success(request.RequestID, server.state.snapshot()))
 }
 
-func (server *statusPipe) authorize(connection net.Conn) error {
+func mayPublishControlStatus(client pipeClientIdentity, serviceSID string, managerPID uint32) bool {
+	return client.sid != "" && client.sid == serviceSID && client.pid != 0 && client.pid == managerPID
+}
+
+func (server *statusPipe) authorize(connection net.Conn) (pipeClientIdentity, error) {
 	handled, ok := connection.(pipeConnectionHandle)
 	if !ok {
-		return errors.New("pipe connection does not expose its kernel handle")
+		return pipeClientIdentity{}, errors.New("pipe connection does not expose its kernel handle")
 	}
 	handle := windows.Handle(handled.Fd())
 	var firstPID uint32
 	if err := windows.GetNamedPipeClientProcessId(handle, &firstPID); err != nil {
-		return fmt.Errorf("read pipe client pid: %w", err)
+		return pipeClientIdentity{}, fmt.Errorf("read pipe client pid: %w", err)
 	}
 	if firstPID == 0 {
-		return errors.New("pipe client pid is zero")
+		return pipeClientIdentity{}, errors.New("pipe client pid is zero")
 	}
 	process, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, firstPID)
 	if err != nil {
-		return fmt.Errorf("open pipe client process: %w", err)
+		return pipeClientIdentity{}, fmt.Errorf("open pipe client process: %w", err)
 	}
 	defer windows.CloseHandle(process)
 	var token windows.Token
 	if err := windows.OpenProcessToken(process, windows.TOKEN_QUERY, &token); err != nil {
-		return fmt.Errorf("open pipe client token: %w", err)
+		return pipeClientIdentity{}, fmt.Errorf("open pipe client token: %w", err)
 	}
 	defer token.Close()
 	user, err := token.GetTokenUser()
 	if err != nil {
-		return fmt.Errorf("read pipe client SID: %w", err)
+		return pipeClientIdentity{}, fmt.Errorf("read pipe client SID: %w", err)
 	}
 	var secondPID uint32
 	if err := windows.GetNamedPipeClientProcessId(handle, &secondPID); err != nil {
-		return fmt.Errorf("re-read pipe client pid: %w", err)
+		return pipeClientIdentity{}, fmt.Errorf("re-read pipe client pid: %w", err)
 	}
 	if secondPID != firstPID {
-		return errors.New("pipe client process identity changed during authorization")
+		return pipeClientIdentity{}, errors.New("pipe client process identity changed during authorization")
 	}
 	clientSID := user.User.Sid.String()
 	if clientSID != server.allowed.serviceSID && clientSID != server.allowed.controlSID && clientSID != "S-1-5-18" {
-		return fmt.Errorf("pipe client SID %s is not authorized", clientSID)
+		return pipeClientIdentity{}, fmt.Errorf("pipe client SID %s is not authorized", clientSID)
 	}
-	return nil
+	return pipeClientIdentity{sid: clientSID, pid: firstPID}, nil
 }
 
 func (server *statusPipe) writeFailure(connection io.Writer, code, message string) {

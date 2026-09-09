@@ -26,6 +26,7 @@ import {
 } from "./service-migration-processes.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
 import type { ServicePlatform } from "./service-platform.js";
+import { assertManagerServiceTransactionsSupported } from "./windows-manager-support.js";
 
 export interface ManagerServiceInstallDependencies {
     assertAbsent?: typeof assertServiceAbsent;
@@ -42,6 +43,7 @@ export async function installManagerServiceWhileLocked(
     if (typeof operationId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(operationId))
         throw new Error("管理服务安装操作 ID 无效");
     const spec = parseManagerServiceSpec(input);
+    assertManagerServiceTransactionsSupported(host);
     if (!["linux", "darwin"].includes(host.platform))
         throw new Error("此系统尚未通过管理服务安装验收");
     if (spec.scope === "system" && host.uid !== 0) throw new Error("系统级服务需要管理员权限");

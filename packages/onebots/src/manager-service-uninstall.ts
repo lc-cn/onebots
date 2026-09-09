@@ -26,6 +26,7 @@ import { readServiceMigrationPending } from "./service-migration-workspace.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
 import type { ServiceScope } from "./service-definition.js";
 import type { ServicePlatform } from "./service-platform.js";
+import { assertManagerServiceTransactionsSupported } from "./windows-manager-support.js";
 
 export interface ManagerServiceUninstallDependencies {
     platform?: ServicePlatform;
@@ -56,6 +57,7 @@ export async function uninstallManagerService(
     host: ServiceHost = createDefaultServiceHost(),
     dependencies: ManagerServiceUninstallDependencies = {},
 ): Promise<ManagerServiceRecord> {
+    assertManagerServiceTransactionsSupported(host);
     if (!["user", "system"].includes(scope) || !["linux", "darwin"].includes(host.platform))
         throw new Error("此系统或范围尚未通过管理服务卸载验收");
     if (scope === "system" && host.uid !== 0) throw new Error("系统级服务需要管理员权限");

@@ -22,6 +22,8 @@ const diagnostics: Record<NonNullable<ManagerServiceStatus["diagnostic"]>, strin
     "ipc-unavailable": "管理服务 IPC 不可达，网关状态未知。",
     "identity-mismatch": "OS 与 IPC 实例身份不匹配，网关状态未知。",
     "baseline-changed": "查询期间服务实例或元数据变化，请重新查询。",
+    "platform-control-unavailable":
+        "Windows 管理服务控制面尚未闭环，当前保持禁用；未读取不完整的 SCM 状态。",
 };
 /** status只调用新只读边界；不能回退旧生命周期控制器或业务配置探针。 */
 export async function managerServiceStatusCommand(

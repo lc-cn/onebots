@@ -3,6 +3,7 @@ import { SERVICE_NAME } from "./service-definition.js";
 import type { ServiceHost } from "./service-host.js";
 import {
     renderWindowsManagerServiceDefinition,
+    parseWindowsNativeStatus,
     WindowsServicePlatform,
     type WindowsServiceDefinition,
     unregisterWindowsManagerService,
@@ -31,14 +32,19 @@ function makeHost(outputs: string[]): ServiceHost {
     };
 }
 
-function scm(state: "Running" | "Stopped", mode: "Auto" | "Manual" | "Disabled", pid = 0) {
+function scm(
+    state: "Running" | "Stopped",
+    mode: "Auto" | "Manual" | "Disabled",
+    pid = 0,
+    manager = "C:\\OneBots\\lib\\bin.js",
+) {
     return JSON.stringify({
         Name: SERVICE_NAME,
         State: state,
         StartMode: mode,
         ProcessId: pid,
         PathName:
-            'C:\\OneBots\\lib\\native\\onebots-windows-host.exe service-run --service-name onebots-gateway --manager C:\\Node\\node.exe --manager-arg C:\\OneBots\\lib\\bin.js --manager-arg serve --manager-arg --data-dir --manager-arg "C:\\Data Dir" --working-dir C:\\OneBots --pipe \\\\.\\pipe\\onebots-gateway-control --control-sid ' +
+            `C:\\OneBots\\lib\\native\\onebots-windows-host.exe service-run --service-name onebots-gateway --manager C:\\Node\\node.exe --manager-arg ${manager} --manager-arg serve --manager-arg --data-dir --manager-arg "C:\\Data Dir" --working-dir C:\\OneBots --pipe \\\\.\\pipe\\onebots-gateway-control --control-sid ` +
             sid,
     });
 }
@@ -111,6 +117,33 @@ describe("Windows SCM TypeScript纵切", () => {
         );
     });
 
+    it("严格解析同SID管道发布的manager与gateway只读状态", () => {
+        const value = JSON.parse(native(8765));
+        value.state.control = {
+            manager: {
+                id: "123e4567-e89b-42d3-a456-426614174000",
+                version: "1.2.12",
+                pid: 8765,
+            },
+            gateway: { desired: "running", actual: "stopped" },
+        };
+        expect(parseWindowsNativeStatus(JSON.stringify(value) + "\r\n").state.control).toEqual(
+            value.state.control,
+        );
+        const wrongPid = structuredClone(value);
+        wrongPid.state.control.manager.pid = 9;
+        expect(() => parseWindowsNativeStatus(JSON.stringify(wrongPid))).toThrow();
+        const wrongVersion = structuredClone(value);
+        wrongVersion.state.control.manager.version = "latest";
+        expect(() => parseWindowsNativeStatus(JSON.stringify(wrongVersion))).toThrow();
+        const wrongGateway = structuredClone(value);
+        wrongGateway.state.control.gateway.actual = "unknown";
+        expect(() => parseWindowsNativeStatus(JSON.stringify(wrongGateway))).toThrow();
+        const extra = structuredClone(value);
+        extra.state.control.extra = true;
+        expect(() => parseWindowsNativeStatus(JSON.stringify(extra))).toThrow();
+    });
+
     it("管道PID不匹配时只报告转换态，不伪造已就绪", async () => {
         const host = makeHost([
             scm("Running", "Auto", 4321),
@@ -166,6 +199,48 @@ describe("Windows SCM TypeScript纵切", () => {
             "--control-sid",
         );
         expect((host.exec as ReturnType<typeof vi.fn>).mock.calls[1][1][3]).toContain(sid);
+    });
+
+    it("升级仅在SCM仍绑定旧定义且稳定停止时切到新PathName", async () => {
+        const previous: WindowsServiceDefinition = {
+            ...definition,
+            managerArguments: ["C:\\OneBots\\old\\bin.js", "serve", "--data-dir", "C:\\Data Dir"],
+        };
+        const host = makeHost([
+            scm("Stopped", "Manual", 0, "C:\\OneBots\\old\\bin.js"),
+            scm("Stopped", "Auto"),
+            scm("Stopped", "Auto"),
+        ]);
+        const platform = new WindowsServicePlatform(host, "system", "C:\\state\\service.json", {
+            definition,
+            hostExecutableExists: () => true,
+        });
+        expect(
+            await platform.reloadReplacing(Buffer.from(JSON.stringify(previous)), true),
+        ).toMatchObject({ state: "stopped", enabled: true });
+        expect(host.exec).toHaveBeenCalledWith(
+            "sc.exe",
+            expect.arrayContaining([
+                "config",
+                SERVICE_NAME,
+                "binPath=",
+                expect.stringContaining("C:\\OneBots\\lib\\bin.js"),
+            ]),
+            { timeoutMs: 5000 },
+        );
+        const drifted = makeHost([scm("Stopped", "Manual")]);
+        const rejected = new WindowsServicePlatform(drifted, "system", "C:\\state\\service.json", {
+            definition,
+            hostExecutableExists: () => true,
+        });
+        await expect(
+            rejected.reloadReplacing(Buffer.from(JSON.stringify(previous)), true),
+        ).rejects.toThrow("无法安全确认");
+        expect(drifted.exec).not.toHaveBeenCalledWith(
+            "sc.exe",
+            expect.anything(),
+            expect.anything(),
+        );
     });
 
     it("拒绝非管理员、user范围和不闭合SCM JSON", async () => {

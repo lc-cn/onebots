@@ -24,6 +24,7 @@ import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import type { ServiceScope } from "./service-definition.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform } from "./service-platform.js";
+import { assertManagerServiceTransactionsSupported } from "./windows-manager-support.js";
 
 export type ManagerControlAction = "start" | "stop" | "restart";
 export interface ManagerControllerDependencies {
@@ -42,6 +43,7 @@ export async function controlManagerService(
     host: ServiceHost = createDefaultServiceHost(),
     dependencies: ManagerControllerDependencies = {},
 ): Promise<ManagerServiceRecord> {
+    assertManagerServiceTransactionsSupported(host);
     if (
         !["start", "stop", "restart"].includes(action) ||
         !["linux", "darwin"].includes(host.platform)
