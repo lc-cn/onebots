@@ -19,6 +19,7 @@ export interface StagedCipherPayload {
     slotKey: string;
     remoteHandle: string;
     aesKeyHex: string;
+    plainMd5Hex: string;
     plainBytes: number;
     cipherBudget: number;
     originalName: string;
@@ -128,6 +129,7 @@ export async function stageBinaryForPeer(params: {
         slotKey,
         remoteHandle,
         aesKeyHex: key16.toString("hex"),
+        plainMd5Hex: md5hex,
         plainBytes: plainLen,
         cipherBudget: padded,
         originalName: blob.fileName,
