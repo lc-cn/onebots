@@ -49,7 +49,11 @@ function execute(command, args, options = {}) {
         throw new Error(
             `验收命令失败：${path.basename(command)} ${args[0] ?? ""}（exit ${String(result.status)}）`,
         );
-    return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
+    return {
+        status: result.status,
+        stdout: result.stdout.trim(),
+        stderr: result.stderr,
+    };
 }
 
 function launchdIdentityAbsent(domain, description) {
@@ -59,9 +63,10 @@ function launchdIdentityAbsent(domain, description) {
         env: { ...process.env, LANG: "C" },
     });
     const expectedDomain = domain === "system" ? "system" : `user gui: ${String(UID)}`;
+    const expected = `Bad request.\nCould not find service "${LABEL}" in domain for ${expectedDomain}`;
     assert.equal(
-        result.stderr,
-        `Bad request.\nCould not find service "${LABEL}" in domain for ${expectedDomain}\n`,
+        result.stderr === expected || result.stderr === `${expected}\n`,
+        true,
         `${description}的缺失结果无法确认`,
     );
 }

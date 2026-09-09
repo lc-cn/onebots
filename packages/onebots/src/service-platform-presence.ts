@@ -27,11 +27,8 @@ export function isLaunchdServiceMissing(
         ? failure.stderr.toString("utf8")
         : failure.stderr;
     const domain = scope === "system" ? "system" : `user gui: ${uid}`;
-    return (
-        failure.status === 113 &&
-        stderr ===
-            `Bad request.\nCould not find service "${LAUNCHD_LABEL}" in domain for ${domain}\n`
-    );
+    const expected = `Bad request.\nCould not find service "${LAUNCHD_LABEL}" in domain for ${domain}`;
+    return failure.status === 113 && (stderr === expected || stderr === `${expected}\n`);
 }
 
 /** 首次安装前或卸载验收时在服务锁内调用；不存在只能由固定 OS 身份的明确结果证明。 */

@@ -5,6 +5,7 @@ import {
     LAUNCHD_LABEL,
     SERVICE_NAME,
     renderLaunchdPlist,
+    renderHistoricalSystemdUnit,
     renderSystemdUnit,
     type ServiceScope,
     type ServiceSpec,
@@ -47,7 +48,7 @@ export class LegacyServiceInspection {
         const definition = this.definitionPath(spec);
         const expected =
             this.host.platform === "linux"
-                ? renderSystemdUnit(spec)
+                ? [renderSystemdUnit(spec), renderHistoricalSystemdUnit(spec)]
                 : renderLaunchdPlist(
                       spec,
                       path.join(this.paths().stateDir, "onebots.log"),
@@ -65,7 +66,9 @@ export class LegacyServiceInspection {
             before.size !== after.size
         )
             return false;
-        return actual.equals(Buffer.from(expected));
+        return (Array.isArray(expected) ? expected : [expected]).some(candidate =>
+            actual.equals(Buffer.from(candidate)),
+        );
     }
 
     /** 仅供尚未清理的旧 doctor 使用；不改变平台状态。 */

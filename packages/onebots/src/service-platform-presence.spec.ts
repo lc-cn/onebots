@@ -83,11 +83,25 @@ describe("首次安装 OS 身份缺失证明", () => {
             { timeoutMs: 5000 },
         );
     });
+    it.each(["", "\n"])("Darwin兼容缺失错误末尾可选的单个LF %#", suffix => {
+        const h = host("darwin", () => {
+            throw {
+                status: 113,
+                stderr:
+                    `Bad request.\nCould not find service "${LAUNCHD_LABEL}" in domain for user gui: 501` +
+                    suffix,
+            };
+        });
+        expect(() => assertServiceAbsent("user", h)).not.toThrow();
+    });
     it.each([
         { status: 113, stderr: "not found" },
         { ...missing("user gui: 501"), status: 5 },
         missing("user gui: 502"),
         { status: 113, stderr: missing("user gui: 501").stderr + "extra" },
+        { status: 113, stderr: missing("user gui: 501").stderr + "\n" },
+        { status: 113, stderr: missing("user gui: 501").stderr.replaceAll("\n", "\r\n") },
+        { status: 113, stderr: ` ${missing("user gui: 501").stderr}` },
         { status: 113, stderr: missing("user gui: 501").stderr.replace(LAUNCHD_LABEL, "other") },
         new Error("launchctl timed out synthetic-secret"),
     ])("Darwin错误域、label、状态码和额外输出不当缺失 %#", error => {

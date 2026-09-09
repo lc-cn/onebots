@@ -2,7 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LegacyServiceInspection } from "./legacy-service-inspection.js";
-import { renderLaunchdPlist, renderSystemdUnit, type ServiceSpec } from "./service-definition.js";
+import {
+    renderHistoricalSystemdUnit,
+    renderLaunchdPlist,
+    renderSystemdUnit,
+    type ServiceSpec,
+} from "./service-definition.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 
@@ -53,6 +58,14 @@ describe("legacy service read-only inspection", () => {
         expect(test.inspection.definitionIsCurrent(test.spec)).toBe(true);
         expect(test.host.exec).not.toHaveBeenCalled();
         expect(test.host.spawn).not.toHaveBeenCalled();
+    });
+
+    it("recognizes the historical quoted systemd definition without using it for new output", () => {
+        const test = fixture();
+        const historical = renderHistoricalSystemdUnit(test.spec);
+        expect(historical).not.toBe(renderSystemdUnit(test.spec));
+        fs.writeFileSync(test.files.definition, historical, { mode: 0o644 });
+        expect(test.inspection.definitionIsCurrent(test.spec)).toBe(true);
     });
 
     it("rejects control metadata, scope drift, definition drift and writable definitions", () => {
