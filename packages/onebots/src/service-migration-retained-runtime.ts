@@ -9,11 +9,7 @@ import { renderLaunchdPlist, renderSystemdUnit, type ServiceSpec } from "./servi
 import { getServiceFiles } from "./service-files.js";
 import { parseManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServiceHost } from "./service-host.js";
-import type {
-    ServiceMigrationBackup,
-    ServiceMigrationFile,
-    ServiceMigrationReloadOldReceipt,
-} from "./service-migration-types.js";
+import type { ServiceMigrationBackup, ServiceMigrationFile } from "./service-migration-types.js";
 import { within, hashRuntimeFile, scanRuntimeTree } from "./service-migration-runtime-tree-scan.js";
 import { assertSystemNativeDependencies } from "./service-migration-native-dependencies.js";
 import { scanLegacyRuntimeForest } from "./service-migration-runtime-forest-scan.js";
@@ -25,6 +21,8 @@ import {
     verifyLegacyNodeRuntime,
     type LegacyNodeRuntimeReceipt,
 } from "./service-migration-node-runtime.js";
+
+export { digestServiceMigrationReloadOldReceipt } from "./service-migration-receipt-digest.js";
 
 interface RetainedRuntimeContract {
     runtime: LegacyRuntimeTreeReceipt;
@@ -444,33 +442,6 @@ export function createServiceMigrationRollbackContract(
         files: contractFiles,
     };
     return { contract, digest: sha256(canonicalServiceJson(contract)) };
-}
-
-/** 对严格闭合的 reload-old 收据生成唯一摘要，供 start-old 收据复验。 */
-export function digestServiceMigrationReloadOldReceipt(input: unknown): string {
-    const value = closedServiceObject(input, [
-        "schemaVersion",
-        "backupDigest",
-        "rollbackContractDigest",
-        "enabled",
-        "loaded",
-        "definitionPath",
-    ]);
-    if (
-        value.schemaVersion !== 1 ||
-        typeof value.backupDigest !== "string" ||
-        !/^[0-9a-f]{64}$/.test(value.backupDigest) ||
-        typeof value.rollbackContractDigest !== "string" ||
-        !/^[0-9a-f]{64}$/.test(value.rollbackContractDigest) ||
-        typeof value.enabled !== "boolean" ||
-        typeof value.loaded !== "boolean" ||
-        typeof value.definitionPath !== "string" ||
-        !value.definitionPath.startsWith("/") ||
-        value.definitionPath.length > 4096 ||
-        /[\u0000\r\n]/u.test(value.definitionPath)
-    )
-        throw invalid();
-    return sha256(canonicalServiceJson(value as unknown as ServiceMigrationReloadOldReceipt));
 }
 
 export function retainedRollbackFiles(backup: ServiceMigrationBackup, host: ServiceHost) {
