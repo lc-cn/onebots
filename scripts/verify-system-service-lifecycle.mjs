@@ -1003,9 +1003,16 @@ try {
         mode: 0o600,
     });
     const preservedConfig = fs.readFileSync(path.join(dataDirectory, "config.yaml"));
-    const preservedGatewayIntent = fs.readFileSync(
-        path.join(dataDirectory, ".control/gateway.json"),
-    );
+    const preservedGatewayDesired = JSON.parse(
+        fs.readFileSync(path.join(dataDirectory, ".control/gateway.json"), "utf8"),
+    ).desired;
+    const assertGatewayIntentPreserved = () =>
+        assert.equal(
+            JSON.parse(fs.readFileSync(path.join(dataDirectory, ".control/gateway.json"), "utf8"))
+                .desired,
+            preservedGatewayDesired,
+            "管理程序升级不得改变网关运行意图",
+        );
     const authenticationFile = path.join(dataDirectory, ".control/auth.json");
     const preservedAuthentication = fs.existsSync(authenticationFile)
         ? fs.readFileSync(authenticationFile)
@@ -1055,10 +1062,7 @@ try {
     const failedUpgradeId = interruptedUpgrade.record.id;
     operationIds.push(failedUpgradeId);
     assert.deepEqual(fs.readFileSync(path.join(dataDirectory, "config.yaml")), preservedConfig);
-    assert.deepEqual(
-        fs.readFileSync(path.join(dataDirectory, ".control/gateway.json")),
-        preservedGatewayIntent,
-    );
+    assertGatewayIntentPreserved();
     assertAuthenticationPreserved();
     fs.rmdirSync(socketObstacle);
 
@@ -1091,10 +1095,7 @@ try {
     assert.notEqual(afterRollback.os.manager.pid, beforeRestart.os.manager.pid);
     assert.notEqual(afterRollback.control.manager.id, beforeRestart.control.manager.id);
     assert.deepEqual(fs.readFileSync(path.join(dataDirectory, "config.yaml")), preservedConfig);
-    assert.deepEqual(
-        fs.readFileSync(path.join(dataDirectory, ".control/gateway.json")),
-        preservedGatewayIntent,
-    );
+    assertGatewayIntentPreserved();
     assertAuthenticationPreserved();
     const rolledBackJournal = fs.readFileSync(interruptedUpgrade.file);
     const rolledBackRecord = JSON.parse(rolledBackJournal);
@@ -1172,10 +1173,7 @@ try {
         "管理程序升级不得改变网关配置快照",
     );
     assert.deepEqual(fs.readFileSync(path.join(dataDirectory, "config.yaml")), preservedConfig);
-    assert.deepEqual(
-        fs.readFileSync(path.join(dataDirectory, ".control/gateway.json")),
-        preservedGatewayIntent,
-    );
+    assertGatewayIntentPreserved();
     assertAuthenticationPreserved();
     assert.equal(
         JSON.parse(

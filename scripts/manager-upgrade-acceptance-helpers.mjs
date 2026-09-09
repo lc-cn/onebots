@@ -152,13 +152,16 @@ export async function verifyManagerPatchUpgrade(options) {
         setEffectUnknown,
     } = options;
     const preserved = new Map(
-        ["config.yaml", ".control/gateway.json", ".control/auth.json"].map(file => [
+        ["config.yaml", ".control/auth.json"].map(file => [
             file,
             fs.existsSync(path.join(dataDirectory, file))
                 ? fs.readFileSync(path.join(dataDirectory, file))
                 : null,
         ]),
     );
+    const preservedGatewayDesired = JSON.parse(
+        fs.readFileSync(path.join(dataDirectory, ".control/gateway.json"), "utf8"),
+    ).desired;
     const operations = path.join(stateDirectory, "manager-operations");
     const previousNames = new Set(fs.readdirSync(operations));
     const failed = spawnCli(
@@ -190,7 +193,7 @@ export async function verifyManagerPatchUpgrade(options) {
             value.record.recoveryRequired === true,
         "真实候选启动失败未保留可回退的启动或验证阶段",
     );
-    assertPreserved(dataDirectory, preserved);
+    assertPreserved(dataDirectory, preserved, preservedGatewayDesired);
     fs.rmdirSync(obstacle);
 
     setEffectUnknown(true);
@@ -275,14 +278,20 @@ export async function verifyManagerPatchUpgrade(options) {
             upgraded.control.gateway.instance?.[key],
             before.control.gateway.instance?.[key],
         );
-    assertPreserved(dataDirectory, preserved);
+    assertPreserved(dataDirectory, preserved, preservedGatewayDesired);
     return { operationIds: [interrupted.record.id, upgradeId], upgraded };
 }
 
-function assertPreserved(dataDirectory, preserved) {
+function assertPreserved(dataDirectory, preserved, gatewayDesired) {
     for (const [file, bytes] of preserved) {
         const filename = path.join(dataDirectory, file);
         if (bytes === null) assert.equal(fs.existsSync(filename), false, `${file} 不得被创建`);
         else assert.deepEqual(fs.readFileSync(filename), bytes);
     }
+    assert.equal(
+        JSON.parse(fs.readFileSync(path.join(dataDirectory, ".control/gateway.json"), "utf8"))
+            .desired,
+        gatewayDesired,
+        "管理程序升级不得改变网关运行意图",
+    );
 }

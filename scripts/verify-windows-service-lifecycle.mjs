@@ -38,6 +38,12 @@ let installed = false;
 let installedDefinition;
 let installedScmPathName;
 
+const npmCli = [
+    process.env.npm_execpath,
+    path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+].find(candidate => candidate && fs.existsSync(candidate));
+if (!npmCli) throw new Error("无法定位 npm CLI JavaScript 入口");
+
 function run(file, args, options = {}) {
     return execFileSync(file, args, {
         cwd: options.cwd ?? runtime,
@@ -137,8 +143,9 @@ try {
     fs.writeFileSync(path.join(runtime, "package.json"), JSON.stringify({ private: true }));
     const manifest = JSON.parse(fs.readFileSync(path.join(artifacts, "manifest.json"), "utf8"));
     run(
-        "npm.cmd",
+        process.execPath,
         [
+            npmCli,
             "install",
             "--ignore-scripts",
             "--omit=dev",
