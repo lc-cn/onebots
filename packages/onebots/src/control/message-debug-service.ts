@@ -4,7 +4,7 @@ import {
 } from "../gateway/message-debug-contracts.js";
 import { GatewayRequestError } from "./gateway-request-client.js";
 import { closedServiceObject } from "../service-operation-storage.js";
-import type { MessageDebugEntry, MessageDebugClearReceipt } from "../message-debug.js";
+import type { MessageDebugEntry, MessageDebugClearReceipt } from "../gateway/message-debug-types.js";
 
 export class ControlMessageDebugError extends Error {
     constructor(

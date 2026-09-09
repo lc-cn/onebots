@@ -1,5 +1,7 @@
 # 生产就绪功能
 
+> 当前架构正在迁移：常驻管理服务仅使用设备码授权和设备会话。下文涉及用户名密码、根管理 WebSocket、旧 doctor 探针的说明属于尚未退役的旧 App，不适用于新管理控制台；消息调试已使用新管理接口。
+
 OneBots 提供了完整的生产级功能，包括安全性、稳定性和可观测性，确保系统可以在生产环境中稳定运行。
 
 ## 安全性功能
@@ -49,15 +51,15 @@ doctor 的受保护管理响应统一限制为 4 MiB，覆盖用户名密码登�
 
 `onebots doctor` 不会因为配置端口可连接就立即发送管理凭据。它先用禁止缓存且禁止重定向的公开 `/health` 证明应用名、当前 CLI 版本与健康语义，再要求 `/health`、`/ready` 的应用、版本和 `instance_id` 一致；托管服务还必须匹配本地 `service.json` 计算出的 `runtime_contract_id`。任一证据缺失、冲突或来自重定向后的响应时，报告新增 `management-identity` 错误并跳过登录、Bearer 请求与带 token 的 WebSocket 握手，避免把配置中的 token、用户名或密码误发给占用端口的其他服务。身份成立后，doctor 还会从不含 Router 前缀的 Web origin 验证有界 HTML、`no-store`、`no-referrer` 和当前前缀元数据，并把结果记录为 `management-page`；通用 HTTP 200 页面或旧前缀不能充当管理页证据。所有管理检查和临时会话注销完成后，doctor 会再次执行无凭据 `/health`，并逐项核对应用、版本、`instance_id` 与 `runtime_contract_id`；诊断期间发生进程重启、端口接管或最终探针不可达时，`management-instance` 会拒绝接受跨实例拼接的管理页、配置、扩展、能力和运行态证据。readiness 因账号或协议故障返回 503 时，只要身份链仍完整，管理诊断会继续定位具体出口。服务启动、重启和更新后的上线门禁复用同一探针函数，因此也不会用其他地址的健康响应证明目标端口已经接管。公开身份不是针对恶意同机进程的密码学证明，生产主机仍应使用独立服务用户和操作系统权限隔离。
 
-`/api/*`、根管理 WebSocket `/` 与终端 WebSocket `/api/terminal` 使用同一组动态认证材料。普通管理 HTTP 只从 `Authorization: Bearer <token>` 读取凭据；`/api/auth/login` 可以在 JSON body 中提交顶层 `access_token`，也可以用用户名密码换取会话 token。日志、账号验证和消息调试 SSE 使用带 Authorization header 的 Fetch 流，不会把长期 token 写进 URL，并由同一客户端统一处理分帧、取消与有界重连。客户端按解码前字节将每个 SSE 事件限制为 1 MiB；连接总流量不受影响，但单个事件超限会取消正文、报告明确错误并停止自动重连，避免持续连接反复接收畸形大事件。只有浏览器 WebSocket 握手可通过 `Authorization` 或 `?access_token=<token>` 传递，因为原生 WebSocket API 无法设置请求头。未授权 WebSocket 会在协议升级前返回 HTTP 401，不会先建立连接再关闭，因此无法收到包含完整配置的 `system.sync`。
+`/api/*`、根管理 WebSocket `/` 与终端 WebSocket `/api/terminal` 使用同一组动态认证材料。普通管理 HTTP 只从 `Authorization: Bearer <token>` 读取凭据；`/api/auth/login` 可以在 JSON body 中提交顶层 `access_token`，也可以用用户名密码换取会话 token。日志和账号验证 SSE 使用带 Authorization header 的 Fetch 流，不会把长期 token 写进 URL，并由同一客户端统一处理分帧、取消与有界重连。客户端按解码前字节将每个 SSE 事件限制为 1 MiB；连接总流量不受影响，但单个事件超限会取消正文、报告明确错误并停止自动重连，避免持续连接反复接收畸形大事件。只有浏览器 WebSocket 握手可通过 `Authorization` 或 `?access_token=<token>` 传递，因为原生 WebSocket API 无法设置请求头。未授权 WebSocket 会在协议升级前返回 HTTP 401，不会先建立连接再关闭，因此无法收到包含完整配置的 `system.sync`。
 
 Web 的手动鉴权码、用户名密码、`?access_token=` 引导登录和 refresh token 续期在发送任何凭据前，都会先以 2 秒无凭据、禁缓存且禁止重定向的 `/health` 请求验证应用、版本、`instance_id` 与 `runtime_contract_id`。证据无效或不可达时只显示诊断，不会发出包含秘密的认证 POST。身份成立后，请求携带预期实例；登录与刷新端点在凭据校验或续签前拒绝已经切换的实例，并让全部成功或失败回执携带不可缓存的完整实例身份。浏览器仅在回执仍与前置探针完全一致时提交新会话，认证 POST 本身也禁止重定向。因此错误端口、通用成功页、跨实例反向代理或切换后的旧页面不能获得可被 Web 接受的认证结果。公开身份不是密码学证明，恶意同源服务仍需由 TLS、独立服务用户与操作系统权限隔离。
 
 无效链接不会覆盖已有 token；已有会话会继续使用，尚未登录时则回到登录页说明凭据无效。每次认证交换和主动登出拥有独立的 5 秒请求边界，超时、网络不可达、主动取消与凭据拒绝使用不同语义；慢代理不能让路由守卫、登录按钮或退出操作永久挂起。登出即使无法联系服务端也会清理浏览器本地凭据，服务端会话则在自然过期后失效。无论链接验证结果如何，下一次导航都会先从地址栏移除鉴权码。管理 HTML 还会同时通过 `Referrer-Policy: no-referrer` 响应头和前置的 referrer meta 禁止发送来源地址，因此脚本与样式在前端执行之前加载时，也不会把含 token 的入口 URL 复制到 `Referer` 请求头。建议人工集成优先在登录页输入鉴权码；根管理 WebSocket 的查询参数只用于无法设置 `Authorization` 请求头的客户端。
 
-通过“保存并应用”轮换 `username`、`password` 或 `access_token` 后，HTTP 登录和 WebSocket upgrade 会立即使用新值。已有访问与刷新令牌会全部撤销，已连接的根管理与终端 WebSocket 会以策略违规状态关闭；日志、账号验证和消息调试 SSE 也会同步停止心跳并结束响应，旧会话无法在撤销后继续接收敏感事件。Web 会用当前本地凭据尝试重连，旧凭据被明确拒绝后回到登录页。只修改账号、协议或日志级别不会中断管理会话。正常停机与启动失败回滚复用同一管理流注册表，逐个释放定时器和响应；单个连接清理失败不会阻止其他连接关闭，最终错误会聚合保留失败证据。
+通过“保存并应用”轮换 `username`、`password` 或 `access_token` 后，HTTP 登录和 WebSocket upgrade 会立即使用新值。已有访问与刷新令牌会全部撤销，已连接的根管理与终端 WebSocket 会以策略违规状态关闭；日志和账号验证 SSE 也会同步停止心跳并结束响应，旧会话无法在撤销后继续接收敏感事件。Web 会用当前本地凭据尝试重连，旧凭据被明确拒绝后回到登录页。只修改账号、协议或日志级别不会中断管理会话。正常停机与启动失败回滚复用同一管理流注册表，逐个释放定时器和响应；单个连接清理失败不会阻止其他连接关闭，最终错误会聚合保留失败证据。
 
-用户名密码签发的会话 token 自然过期后，已建立的根管理与终端 WebSocket、日志、账号验证和消息调试 SSE 也不能继续被动接收数据。服务端每 30 秒重验一次长连接凭据，最迟在下一次检查时停止心跳并关闭连接。配置文件或 `ONEBOTS_ACCESS_TOKEN` 提供的部署级 token 没有会话过期时间，因此会保持连接，直到凭据轮换、服务停止或网络断开。
+用户名密码签发的会话 token 自然过期后，已建立的根管理与终端 WebSocket、日志和账号验证 SSE 也不能继续被动接收数据。服务端每 30 秒重验一次长连接凭据，最迟在下一次检查时停止心跳并关闭连接。配置文件或 `ONEBOTS_ACCESS_TOKEN` 提供的部署级 token 没有会话过期时间，因此会保持连接，直到凭据轮换、服务停止或网络断开。
 
 旧版客户端仍可通过根管理 WebSocket 的 `system.input` 动作向进程 stdin 提交一行字符串。服务端会返回可关联的 `system.input.result` 回执，拒绝非字符串载荷，并且不会为单条消息伪造 stdin 的全局 `end` 事件；同一连接可以连续提交输入，进程内其他 stdin 消费者也不会因首条远程输入被提前关闭。新版 Web 控制台使用隔离的 `/api/terminal` PTY，不依赖这条兼容路径。
 
@@ -69,11 +71,15 @@ Web 控制台的终端连接还使用单一代次与单一重连定时器。手�
 
 Web 控制台建立终端前会先从受保护的系统端点采用应用、版本、`instance_id` 与运行契约，再要求终端 WebSocket 首帧声明同一身份。实例匹配前页面保持未连接状态，不发送键盘输入、尺寸或重启命令；HTTP 与 WebSocket 被反向代理分配到不同实例时会立即断开并显示两端实例，不会重启错误进程。自动重连仍只接受原实例；服务重启产生新实例后，用户手动重连会重新探测并明确采用新目标。
 
-日志、账号验证与消息调试使用的鉴权 SSE 也区分最终拒绝和暂时故障。`authFetch` 完成一次令牌刷新后仍收到 HTTP 401 或 403 时，事件流会取消响应正文、报告一次错误并停止重试；网络异常和 HTTP 5xx 仍按配置间隔恢复。即使浏览器跳转被嵌入容器延迟或阻止，失效管理凭据也不会形成后台请求循环。
+日志和账号验证使用的鉴权 SSE 也区分最终拒绝和暂时故障。`authFetch` 完成一次令牌刷新后仍收到 HTTP 401 或 403 时，事件流会取消响应正文、报告一次错误并停止重试；网络异常和 HTTP 5xx 仍按配置间隔恢复。即使浏览器跳转被嵌入容器延迟或阻止，失效管理凭据也不会形成后台请求循环。
 
-消息调试页会把历史快照、实时 SSE 和清空操作绑定到同一个 OneBots 进程身份。每次 SSE 连接必须先声明实例身份，Web 才接受后续调试记录；历史与实时流来自不同实例时不会混合展示。清空请求携带页面已采用的实例前置条件，服务端回执同时给出实际清除数量和 `cleared_through_seq` 序号边界。Web 只移除该边界及以前的记录，因此网络中迟到的旧事件不会重新出现，清空完成后新产生的消息也不会被误删。
+消息调试已迁到常驻管理服务。新控制台在设备码授权后，通过共享客户端读取 `/api/control/message-debug/history`；默认不读取消息，用户可手动刷新或开启串行自动刷新，并按方向、平台、账号和协议筛选。网关停止或实例变化时清除旧视图，不把上一实例的数据当作当前状态。每个实例最多保留 300 条记录、每条 16 KiB；不可序列化或超过结构限制的内容显示占位，不影响平台和协议分发。
 
-这三类受保护 SSE 共用同一响应契约：`Cache-Control: no-store, no-transform` 禁止浏览器和中间层存储或改写日志、登录验证与消息载荷，`X-Accel-Buffering: no` 提示兼容的反向代理立即转发事件而不是攒批。连接级 keep-alive 与心跳保持不变，因此安全缓存策略不会牺牲实时性。
+清空通过 `POST /api/control/message-debug/clear` 提交 `{ "expectedGatewayInstanceId": "当前网关实例 UUID" }`，回执包含 `gatewayInstanceId`、`clearedCount` 和 `clearedThroughSeq`。实例不匹配会拒绝；请求失去确认时不会自动重试，应先刷新核验。新控制台成功清空后按水位移除旧记录，未确认时暂停自动刷新并明确标记旧记录。
+
+需要流式读取时可请求 `GET /api/control/message-debug/stream`，通过 Authorization header 发送设备会话凭据，不支持 URL token 或旧管理登录凭据。每秒发送 `event: snapshot` 及完整 `{ gatewayInstanceId, entries }` 快照；最多 16 个连接，设备撤销、网关不可用、关闭或写背压都会终止连接。当前 Web 面板使用历史轮询，尚未使用这个 SSE 接口。旧 `/api/message-debug/*` 路由与旧页面已删除；平台账号和协议 token 不受影响。
+
+日志和账号验证的受保护 SSE 共用同一响应契约：`Cache-Control: no-store, no-transform` 禁止浏览器和中间层存储或改写日志与登录验证载荷，`X-Accel-Buffering: no` 提示兼容的反向代理立即转发事件而不是攒批。连接级 keep-alive 与心跳保持不变，因此安全缓存策略不会牺牲实时性。
 
 日志 SSE 在缓存与实时内容之前先发送应用、版本、`instance_id` 和运行契约身份。Web 只有完成身份握手后才接受日志消息，并在每次成功重连时重置视图后采用该实例重放的完整缓存，因此自动重连不会重复叠加缓存；服务重启或反向代理切换实例时，旧进程日志也不会与新进程输出拼成一段看似连续的证据。
 
@@ -238,7 +244,7 @@ scrape_configs:
 
 宿主配置 `path: gateway` 时，所有 Router HTTP 路由统一挂载到规范前缀 `/gateway`，因此探针地址是 `/gateway/health` 与 `/gateway/ready`，管理 API 也位于 `/gateway/api/*`；根路径不再暴露这些 HTTP 路由。前缀可写成 `gateway` 或 `/gateway/`，启动时都会规范化为 `/gateway`。包含 authority、路径穿越、编码分隔符、查询串或 fragment 的值会被配置校验拒绝。WebSocket 使用独立的绝对 pathname，不继承 HTTP 前缀；管理 WebSocket 仍位于 `/`。`onebots status`、`doctor` 与服务上线验证会读取同一配置并自动使用规范后的 HTTP 地址。随主程序发布的 Web HTML 会在每次页面请求中注入当前进程的非敏感前缀元数据，并禁止缓存这份入口；登录、配置、扩展、探针和协议出口链接会自动使用它，无需用 `VITE_API_BASE` 重新构建 Web 包。构建期显式配置仍拥有最高优先级，畸形运行时元数据则退回同源根路径，避免把 Bearer 请求导向其他 origin。
 
-普通管理 API 响应统一声明 `Cache-Control: no-store`，包括登录、令牌刷新、鉴权失败、账号与适配器清单、系统信息、配置正文和扩展状态。Web 管理端也为这些请求主动设置 `cache: no-store`，避免浏览器或错误配置的中间缓存复用旧运行态、旧配置或包含凭据的响应。日志、账号验证和消息调试 SSE 使用 `no-store, no-transform` 并关闭兼容反向代理的响应缓冲，避免敏感事件被存储、改写或延迟攒批。
+普通管理 API 响应统一声明 `Cache-Control: no-store`，包括登录、令牌刷新、鉴权失败、账号与适配器清单、系统信息、配置正文和扩展状态。Web 管理端也为这些请求主动设置 `cache: no-store`，避免浏览器或错误配置的中间缓存复用旧运行态、旧配置或包含凭据的响应。日志和账号验证 SSE 使用 `no-store, no-transform` 并关闭兼容反向代理的响应缓冲，避免敏感事件被存储、改写或延迟攒批。
 
 公开 `/health`、`/ready` 与 `/metrics` 同样声明 `no-store, no-transform` 和 `X-Content-Type-Options: nosniff`，使探针与采集器读取当前进程的原始证据，而不是缓存或中间层改写后的响应。`/metrics` 还固定使用 Prometheus 文本格式的 `text/plain; version=0.0.4; charset=utf-8`，部署验证不再依赖 Web 框架对字符串正文的 MIME 推断。
 

@@ -23,6 +23,9 @@ it("实际管理HTTP和本地客户端共用调试，设备撤销关闭流，停
         const { token } = await anonymous.pair((await local.bootstrap()).code);
         const web = new ControlClient(createHttpControlTransport(url, () => token));
         const snapshot = await web.messageDebugHistory();
+        expect((await fetch(`${url}/api/message-debug/history`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })).status).toBe(404);
         expect(snapshot.entries).toEqual([]);
         expect(await local.messageDebugHistory()).toEqual(snapshot);
         expect(await web.clearMessageDebug(snapshot.gatewayInstanceId)).toEqual({

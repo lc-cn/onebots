@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import type { MessageDebugClearReceipt, MessageDebugEntry } from "../message-debug.js";
+import type { MessageDebugClearReceipt, MessageDebugEntry } from "./message-debug-types.js";
 import { isGatewayMessageDebugEntry } from "./message-debug-contracts.js";
 
 const MAX_ENTRIES = 300;

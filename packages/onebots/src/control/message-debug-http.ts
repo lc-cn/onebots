@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import type { MessageDebugEntry } from "../message-debug.js";
+import type { MessageDebugEntry } from "../gateway/message-debug-types.js";
 import type { ControlAuth } from "./auth.js";
 import { jsonResponse, readBody } from "./http-utils.js";
 

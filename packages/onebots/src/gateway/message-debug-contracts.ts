@@ -1,5 +1,5 @@
 import { isControlMessageDebugEntry, isControlMessageDebugClearReceipt } from "@onebots/core/control";
-import type { MessageDebugEntry, MessageDebugClearReceipt } from "../message-debug.js";
+import type { MessageDebugEntry, MessageDebugClearReceipt } from "./message-debug-types.js";
 import type { GatewayIdentity } from "./contracts.js";
 
 export interface GatewayMessageDebugRequest extends GatewayIdentity {

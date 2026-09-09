@@ -25,13 +25,11 @@ import { registerAdapterRoutes } from "./routes/adapter-api.js";
 import { registerVerificationRoutes } from "./routes/verification.js";
 import { registerTerminalRoutes } from "./routes/terminal.js";
 import { registerPublicStaticRoutes } from "./routes/public-static.js";
-import { registerMessageDebugRoutes } from "./routes/message-debug.js";
 import { registerExtensionRoutes } from "./routes/extensions.js";
 import { registerFrameworkRoutes } from "./routes/frameworks.js";
 import { LogCacheManager } from "./log-cache.js";
 import { VerificationManager } from "./verification-manager.js";
 import { HfBackupService } from "./hf-backup.js";
-import { MessageDebugManager } from "./message-debug.js";
 import * as path from "path";
 import * as fs from "fs";
 import { createRequire } from "module";
@@ -118,7 +116,6 @@ export class App extends BaseApp {
     private _logCache: LogCacheManager;
     private _verification: VerificationManager;
     private _hfBackup: HfBackupService;
-    private _messageDebug: MessageDebugManager;
     public ptyTerminal: ReturnType<typeof import("@karinjs/node-pty").spawn> | null = null;
     public terminalClients: Set<WebSocket> = new Set();
     private readonly runtimeConfigStateTracker: RuntimeConfigStateTracker;
@@ -156,9 +153,6 @@ export class App extends BaseApp {
     }
     get pendingVerifications() {
         return this._verification.pending;
-    }
-    get messageDebug() {
-        return this._messageDebug;
     }
     get webSocketCapacity() {
         return getPublishedManagementWebSocketCapacity(this.router);
@@ -264,7 +258,6 @@ export class App extends BaseApp {
         this._logCache.interceptStdio();
         this._verification = new VerificationManager();
         this._hfBackup = new HfBackupService(this.logger, this.configDir, this.configPath);
-        this._messageDebug = new MessageDebugManager();
         this.ws = this.router.ws("/", {
             authorize: request => authorizeManagementUpgrade(this, request),
             maxPayloadBytes: MANAGEMENT_WEBSOCKET_MAX_PAYLOAD_BYTES,
@@ -307,34 +300,6 @@ export class App extends BaseApp {
         adapter.on("verification:clear", (payload: Record<string, unknown>) => {
             this._verification.clearAndBroadcast(payload);
         });
-        adapter.on(
-            "message:dispatch",
-            (payload: { platform: string; account_id: string; event: unknown }) => {
-                this._messageDebug.recordInbound(
-                    payload.platform,
-                    payload.account_id,
-                    payload.event,
-                );
-            },
-        );
-        adapter.on(
-            "message:protocol-dispatch",
-            (payload: {
-                platform: string;
-                account_id: string;
-                protocol: string;
-                version: string;
-                data: unknown;
-            }) => {
-                this._messageDebug.recordOutbound(
-                    payload.platform,
-                    payload.account_id,
-                    payload.protocol,
-                    payload.version,
-                    payload.data,
-                );
-            },
-        );
     }
 
     /** 为 REST 与 WebSocket 提供同一份带注册元数据的适配器摘要。 */
@@ -463,7 +428,6 @@ export class App extends BaseApp {
         registerVerificationRoutes(this, this.router);
         registerTerminalRoutes(this, this.router);
         registerPublicStaticRoutes(this, this.router);
-        registerMessageDebugRoutes(this, this.router);
         registerExtensionRoutes(this, this.router);
         registerFrameworkRoutes(this, this.router);
 
@@ -646,7 +610,6 @@ export class App extends BaseApp {
         return [
             ...this._logCache.disconnectClients(),
             ...this._verification.disconnectClients(),
-            ...this._messageDebug.disconnectClients(),
         ];
     }
 }
