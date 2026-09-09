@@ -12,7 +12,7 @@ assert.equal(initial.gateway.desired, 'stopped');
 assert.equal(initial.gateway.actual, 'stopped');
 let token = '';
 const web = new ControlClient(createHttpControlTransport('http://127.0.0.1:6727', () => token));
-token = (await web.pair((await local.recoverAuthentication()).code)).token;
+token = (await web.pair((await local.bootstrap()).code)).token;
 for (const desired of ['stopped', 'running']) {
     const original = Buffer.from('secret: "修复验收原始内容\r\nbroken: [\r\n');
     fs.writeFileSync('/data/config.yaml', original, { mode: 0o600 });
