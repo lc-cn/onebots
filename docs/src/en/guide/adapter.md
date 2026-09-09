@@ -116,46 +116,17 @@ Plugin import and contract verification run as one serialized registry transacti
 - [Twitch Adapter Documentation](/en/platform/twitch)
 - [IRCv3 Adapter Documentation](/en/platform/ircv3)
 
-## Installation
+## Install adapters
 
-Install adapters based on the platforms you want to use:
+Do not run `npm install` directly in the OneBots runtime directory. The management service resolves the selected adapter together with its protocols, framework extensions and required peers, installs them into a new immutable generation, and verifies the complete runtime before activation. Modifying the active directory bypasses those checks and the recovery boundary.
+
+The simplest path is the **Install dependencies** page in the Web console. Select platforms, protocols and frameworks, review the complete plan, then confirm it. The interactive terminal uses the same management API:
 
 ```bash
-# QQ Official Bot
-npm install @onebots/adapter-qq
-
-# Kook
-npm install @onebots/adapter-kook
-
-# WeChat
-npm install @onebots/adapter-wechat
-
-# WeChat iLink
-npm install @onebots/adapter-wechat-clawbot
-
-# Discord
-npm install @onebots/adapter-discord discord.js
-
-# Telegram
-npm install @onebots/adapter-telegram grammy
-
-# Feishu
-npm install @onebots/adapter-feishu
-
-# DingTalk
-npm install @onebots/adapter-dingtalk
-
-# Slack
-npm install @onebots/adapter-slack @slack/web-api
-
-# WeCom
-npm install @onebots/adapter-wecom
-
-# Microsoft Teams
-npm install @onebots/adapter-teams botbuilder botframework-connector
+onebots ui --data-dir <workspace> --setup
 ```
 
-For detailed instructions, see [Quick Start](/en/guide/start#installation).
+Private registry authorization is scoped to one installation and is never written to `config.yaml`. Headless deployments can use `onebots control plan/install/installation/activate`; pass authorization only through standard input with `install --auth-stdin`. See [Quick start](/en/guide/start) and [Runtime updates](/en/guide/runtime-update) for the complete flow and recovery rules.
 
 ## Configuration
 

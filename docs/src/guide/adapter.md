@@ -127,46 +127,17 @@ Schema 中的封闭枚举继续使用 `choices`。若数组字段只想提供常
 - [Twitch 适配器文档](/platform/twitch)
 - [IRCv3 适配器文档](/platform/ircv3)
 
-## 1. 安装依赖 
+## 1. 安装适配器
 
-根据你要接入的平台安装对应适配器：
+不要在 OneBots 的运行目录直接执行 `npm install`。管理服务需要同时解析适配器、输出协议、框架扩展及必需 peer，安装到新的不可变运行代，完成完整性和启动验证后再单独激活；直接修改当前目录会绕过这些验证和恢复边界。
+
+最简单的方式是在 Web 控制台的“安装依赖”页面选择平台、协议和框架，核对清单后确认。也可以从交互终端进入同一套向导：
 
 ```bash
-# QQ官方机器人
-npm install @onebots/adapter-qq
-
-# Kook
-npm install @onebots/adapter-kook
-
-# 微信
-npm install @onebots/adapter-wechat
-
-# iLink 微信扩展
-npm install @onebots/adapter-wechat-clawbot
-
-# Discord
-npm install @onebots/adapter-discord discord.js
-
-# Telegram
-npm install @onebots/adapter-telegram grammy
-
-# 飞书
-npm install @onebots/adapter-feishu
-
-# 钉钉
-npm install @onebots/adapter-dingtalk
-
-# Slack
-npm install @onebots/adapter-slack @slack/web-api
-
-# 企业微信
-npm install @onebots/adapter-wecom
-
-# Microsoft Teams
-npm install @onebots/adapter-teams botbuilder botframework-connector
+onebots ui --data-dir <工作区> --setup
 ```
 
-详细说明请参考 [快速开始](./start.md#安装插件)
+私有适配器的下载授权只用于本次安装，不写入 `config.yaml`。非交互环境可使用 `onebots control plan/install/installation/activate`，其中授权仅通过 `install --auth-stdin` 的标准输入传入。完整流程和恢复规则见[快速开始](./start.md)及[运行版本升级](./runtime-update.md)。
 
 ## 2. 配置说明
 

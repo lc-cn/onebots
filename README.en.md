@@ -4,13 +4,9 @@
 
 **A multi-platform, multi-protocol IM bot gateway and framework (TypeScript / Node.js)**
 
-*One `CommonEvent` abstraction, many platform adapters, many wire protocols (OneBot / Satori / Milky).*
+_One `CommonEvent` abstraction, many platform adapters, many wire protocols (OneBot / Satori / Milky)._
 
-[![Build](https://github.com/lc-cn/onebots/actions/workflows/release.yml/badge.svg?branch=master&event=push)](https://github.com/lc-cn/onebots/actions/workflows/release.yml)
-[![License](https://img.shields.io/github/license/lc-cn/onebots?color=blue)](https://github.com/lc-cn/onebots/blob/master/LICENSE)
-[![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots)
-[![Node](https://img.shields.io/node/v/onebots?color=339933&logo=Node.js)](https://nodejs.org)
-[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Flc--cn%2Fonebots-blue?logo=docker)](https://github.com/lc-cn/onebots/pkgs/container/onebots)
+[![Build](https://github.com/lc-cn/onebots/actions/workflows/release.yml/badge.svg?branch=master&event=push)](https://github.com/lc-cn/onebots/actions/workflows/release.yml) [![License](https://img.shields.io/github/license/lc-cn/onebots?color=blue)](https://github.com/lc-cn/onebots/blob/master/LICENSE) [![npm](https://img.shields.io/npm/v/onebots)](https://www.npmjs.com/package/onebots) [![Node](https://img.shields.io/node/v/onebots?color=339933&logo=Node.js)](https://nodejs.org) [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Flc--cn%2Fonebots-blue?logo=docker)](https://github.com/lc-cn/onebots/pkgs/container/onebots)
 
 **[Docs](https://onebots.pages.dev)** · **[中文 README](./README.md)** · **[Issues](https://github.com/lc-cn/onebots/issues)**
 
@@ -26,12 +22,12 @@ You often want:
 
 OneBots provides:
 
-| Layer | Role |
-|--------|------|
-| **Adapter** | Maps each platform’s events & APIs to **`CommonEvent` + shared Adapter APIs** |
-| **Protocol** | Turns `CommonEvent` into **OneBot v11/v12, Satori, Milky** wire formats and handles inbound API calls |
-| **`@onebots/core`** | Accounts, ID map (`createId` / `resolveId`), routing, protocol registry |
-| **`onebots` app** | Config, plugin loading, HTTP/WS gateway, optional **Web UI** |
+| Layer               | Role                                                                                                  |
+| ------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Adapter**         | Maps each platform’s events & APIs to **`CommonEvent` + shared Adapter APIs**                         |
+| **Protocol**        | Turns `CommonEvent` into **OneBot v11/v12, Satori, Milky** wire formats and handles inbound API calls |
+| **`@onebots/core`** | Accounts, ID map (`createId` / `resolveId`), routing, protocol registry                               |
+| **`onebots` app**   | Config, plugin loading, HTTP/WS gateway, optional **Web UI**                                          |
 
 ### Architecture (high level)
 
@@ -75,22 +71,22 @@ flowchart LR
 
 ## Comparison (neutral)
 
-| Aspect | Raw platform SDKs | Other bot frameworks | **OneBots** |
-|--------|--------------------|----------------------|------------|
-| Multi-platform abstraction | DIY | Often yes | `CommonEvent` + adapters |
-| Multi-protocol export | DIY | Varies | Same account, multiple protocols |
-| Stack | Any | Often Python/TS | **TS / ESM / pnpm monorepo** |
-| Ecosystem size | — | Some larger | **Infrastructure-style**; grows with contributors |
+| Aspect                     | Raw platform SDKs | Other bot frameworks | **OneBots**                                       |
+| -------------------------- | ----------------- | -------------------- | ------------------------------------------------- |
+| Multi-platform abstraction | DIY               | Often yes            | `CommonEvent` + adapters                          |
+| Multi-protocol export      | DIY               | Varies               | Same account, multiple protocols                  |
+| Stack                      | Any               | Often Python/TS      | **TS / ESM / pnpm monorepo**                      |
+| Ecosystem size             | —                 | Some larger          | **Infrastructure-style**; grows with contributors |
 
 ---
 
 ## Features (summary)
 
 - **20+ adapters**: QQ official, ICQQ, WeChat OA, DingTalk, Feishu, WeCom, Telegram, Slack, Discord, Kook, Teams, Line, Email, WhatsApp, Zulip, Matrix, Google Chat, Facebook Messenger, Mock, …
-- **Protocols**: OneBot v11/v12, Satori v1, Milky v1  
-- **Monorepo**: `pnpm workspace` (`packages/*`, `adapters/*`, `protocols/*`)  
-- **Optional Web UI**: `@onebots/web`  
-- **Client SDKs**: `imhelper` + `@imhelper/*`  
+- **Protocols**: OneBot v11/v12, Satori v1, Milky v1
+- **Monorepo**: `pnpm workspace` (`packages/*`, `adapters/*`, `protocols/*`)
+- **Optional Web UI**: `@onebots/web`
+- **Client SDKs**: `imhelper` + `@imhelper/*`
 - **Event flow**: `account.dispatch(commonEvent)` → each `protocol.dispatch`
 
 ---
@@ -107,53 +103,30 @@ docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots ghcr.io/lc-cn/one
 
 See **[Docker guide](https://onebots.pages.dev/guide/docker)**.
 
-### B) npm + Mock (no real IM)
+### B) npm installation
 
-`config.yaml` in the working directory (minimal example):
-
-```yaml
-port: 6727
-log_level: info
-
-general:
-  onebot.v11:
-    use_http: true
-    use_ws: true
-
-mock.demo:
-  onebot.v11:
-    use_http: true
-    use_ws: true
-```
+Install the management program, register its user-level OS service, then start it:
 
 ```bash
-pnpm add onebots @onebots/adapter-mock @onebots/protocol-onebot-v11
-npx onebots -r mock -p onebot-v11 -c config.yaml
-```
-
-With an explicit command, use `run`; `-r` / `-p` / `-c` may appear before or after it:
-
-```bash
-npx onebots run -r mock -p onebot-v11 -c config.yaml
-```
-
-Invoking `npx onebots` **with no subcommand** starts the bridge in the foreground. To install the user-level supervised service:
-
-```bash
-npx onebots install -r mock -p onebot-v11 -c config.yaml
+pnpm add onebots
+npx onebots install --data-dir ./data
 npx onebots start
 npx onebots status
-npx onebots logs --follow
 ```
 
-Add `--system` to the same lifecycle commands for the system-level service. `setup`, `ui`, `doctor`, and `update` provide configuration, terminal/Web management, diagnostics, and coordinated package updates. A generated first-run configuration contains no placeholder platform accounts, so the gateway does not attempt external connections with empty credentials.
+The empty installation exposes the management console without creating a platform account or enabling a protocol. Generate a one-time device code and pair the browser:
 
-**CLI flags** (see `App.loadAdapterFactory` / `App.loadProtocolFactory` in source):
+```bash
+npx onebots auth bootstrap --data-dir ./data
+```
 
-| Flag | Meaning | Examples | Resolved package |
-|------|---------|----------|------------------|
-| `-r <name>` | Adapter short name (`AdapterRegistry`) | `mock`, `kook`, `wechat` | `@onebots/adapter-<name>` → fallbacks |
-| `-p <name>` | Protocol suffix | `onebot-v11`, `onebot-v12`, `satori-v1`, `milky-v1` | `@onebots/protocol-<name>` → fallbacks |
+Use the Web **Install dependencies** page to select adapters, output protocols and framework integrations. OneBots installs required peers into an immutable runtime generation, verifies it, and activates it only after confirmation. The terminal uses the same control API:
+
+```bash
+npx onebots ui --data-dir ./data --setup
+```
+
+Use `--system` with lifecycle commands for a system-level service. `doctor` diagnoses the installed manager and gateway; `update` plans or installs gateway runtime updates. The gateway can stop or fail while the management console remains available.
 
 ### C) From source
 
@@ -171,17 +144,7 @@ pnpm build && pnpm test
 
 ## Production usage
 
-```bash
-pnpm add onebots @onebots/adapter-<platform> @onebots/protocol-<protocol>
-```
-
-Configure **`{platform}.{account_id}`** in `general` + per-account blocks. Full reference: **[documentation](https://onebots.pages.dev)**.
-
-Start:
-
-```bash
-npx onebots -r kook -p onebot-v11 -c config.yaml
-```
+Persist the management workspace, install extensions through the Web/TUI installation plan, then create and validate account and protocol configuration in the management console. Do not add packages directly to the active runtime or pass the removed `-r`, `-p` and `-c` flags. Full reference: **[documentation](https://onebots.pages.dev)**.
 
 Downstream **imhelper** clients: **[Client SDK guide](https://onebots.pages.dev/guide/client-sdk)**.
 
@@ -189,13 +152,13 @@ Downstream **imhelper** clients: **[Client SDK guide](https://onebots.pages.dev/
 
 ## Repo layout
 
-- `packages/core` — `@onebots/core`  
-- `packages/onebots` — CLI & gateway  
-- `packages/web` — Web admin  
-- `packages/imhelper` — client SDK core  
-- `adapters/*` — `@onebots/adapter-*`  
-- `protocols/*` — `@onebots/protocol-*` + `@imhelper/*` SDKs  
-- `docs/` — VitePress source  
+- `packages/core` — `@onebots/core`
+- `packages/onebots` — CLI & gateway
+- `packages/web` — Web admin
+- `packages/imhelper` — client SDK core
+- `adapters/*` — `@onebots/adapter-*`
+- `protocols/*` — `@onebots/protocol-*` + `@imhelper/*` SDKs
+- `docs/` — VitePress source
 
 More: [packages/core/ARCHITECTURE.md](./packages/core/ARCHITECTURE.md)
 
@@ -221,10 +184,10 @@ pnpm changeset
 
 ## Acknowledgements
 
-- [icqqjs/icqq](https://github.com/icqqjs/icqq)  
-- [takayama-lily/node-onebot](https://github.com/takayama-lily/node-onebot)  
-- [zhinjs/kook-client](https://github.com/zhinjs/kook-client)  
-- [zhinjs/qq-official-bot](https://github.com/zhinjs/qq-official-bot)  
+- [icqqjs/icqq](https://github.com/icqqjs/icqq)
+- [takayama-lily/node-onebot](https://github.com/takayama-lily/node-onebot)
+- [zhinjs/kook-client](https://github.com/zhinjs/kook-client)
+- [zhinjs/qq-official-bot](https://github.com/zhinjs/qq-official-bot)
 
 ---
 
