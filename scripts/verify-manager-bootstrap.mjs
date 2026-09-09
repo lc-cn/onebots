@@ -51,7 +51,7 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     const dependencies = { platform, assertAbsent: () => {}, artifacts: {
         host: artifact("onebots", "onebots"), core: artifact("@onebots/core", "onebots-core"),
     } };
-    const result = await bootstrapManagerService(request, dependencies, host);
+    const result = await bootstrapManagerService({ service: request.service }, dependencies, host);
     assert.equal(result.status, "succeeded");
     assert.equal(result.id, request.id);
     assert.ok(result.managerSpec.workingDirectory.startsWith(path.join(files.stateDir, "manager-artifacts/versions") + path.sep));
@@ -132,7 +132,7 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     const initialBinding = path.join(files.stateDir, "manager-artifacts/bootstrap");
     const initialIntent = fs.readFileSync(path.join(initialBinding, "intent.json"));
     const initialCandidate = fs.readFileSync(path.join(initialBinding, "candidate.json"));
-    const nextRequest = { ...request, id: "reinstalled-manager" };
+    const nextRequest = { service: request.service };
     const reinstalled = await bootstrapManagerService(nextRequest, dependencies, host);
     assert.equal(reinstalled.status, "succeeded");
     assert.notEqual(reinstalled.managerSpec.workingDirectory, result.managerSpec.workingDirectory);
@@ -141,7 +141,7 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     assert.deepEqual(fs.readFileSync(path.join(workspace, ".control/gateway.json")), gateway);
     const cycleJournal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
     cycleJournal.save({ ...reinstalled, status: "interrupted", recoveryRequired: true });
-    const newCycle = await reconcileManagerServiceOperation(nextRequest.id, "user", host, { platform });
+    const newCycle = await reconcileManagerServiceOperation(reinstalled.id, "user", host, { platform });
     assert.equal(newCycle.status, "succeeded");
     assert.deepEqual(await bootstrapManagerService(nextRequest, dependencies, host), newCycle);
     assert.deepEqual(effects, [...effectsAfterRemoval, "reload"]);

@@ -77,7 +77,7 @@ export async function installManagerServiceCommand(
     try {
         const { binPath: _binPath, workingDirectory: _workingDirectory, ...service } = spec;
         const operation = await bootstrapManagerService(
-            { id: "initial-install", service },
+            { service },
             { artifacts: bundledRuntimeArtifacts() },
         );
         const label =

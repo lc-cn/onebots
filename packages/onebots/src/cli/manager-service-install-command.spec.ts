@@ -35,7 +35,7 @@ function fixture() {
     roots.push(root);
     vi.mocked(bundledRuntimeArtifacts).mockReturnValue(artifacts);
     vi.mocked(bootstrapManagerService).mockImplementation(async request =>
-        record(candidateSpec(request), { id: request.id }),
+        record(candidateSpec(request), { id: request.id ?? "initial-install" }),
     );
     return root;
 }
@@ -101,7 +101,6 @@ describe("首次管理服务安装CLI", () => {
         const workspace = path.join(root, "not-created", "工作 区");
         expect(vi.mocked(bootstrapManagerService).mock.calls[0]).toEqual([
             {
-                id: "initial-install",
                 service: {
                     schemaVersion: 1,
                     runtimeKind: "control",
@@ -128,8 +127,8 @@ describe("首次管理服务安装CLI", () => {
         await installManagerServiceCommand({ dataDir: root });
         await installManagerServiceCommand({ dataDir: root });
         expect(vi.mocked(bootstrapManagerService).mock.calls.map(call => call[0].id)).toEqual([
-            "initial-install",
-            "initial-install",
+            undefined,
+            undefined,
         ]);
         expect(vi.mocked(bootstrapManagerService).mock.calls[0]).toEqual(
             vi.mocked(bootstrapManagerService).mock.calls[1],
@@ -193,7 +192,7 @@ describe("首次管理服务安装CLI", () => {
         expect(bootstrapManagerService).not.toHaveBeenCalled();
         vi.mocked(bootstrapManagerService).mockImplementation(async request =>
             record(candidateSpec(request), {
-                id: request.id,
+                id: request.id ?? "initial-install",
                 status: "interrupted",
                 phase: "writing",
                 recoveryRequired: true,

@@ -407,3 +407,20 @@ it.each(["cycle-symlink", "missing-initial-intent"])("new cycle rejects %s witho
     expect(fs.readFileSync(f.files.metadata)).toEqual(metadata);
     if (problem === "cycle-symlink") expect(fs.readdirSync(path.join(f.root, "outside"))).toEqual([]);
 });
+
+it("automatic cycle selection reuses installed identity instead of creating a new operation", async () => {
+    const f = fixture();
+    const installed = await bootstrapManagerService(f.request, f.dependencies, f.host);
+    const repeated = await bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host);
+    expect(repeated).toEqual(installed);
+    expect(mock.install).toHaveBeenCalledTimes(1);
+    expect(f.effects).toEqual(["reload:true"]);
+});
+it("automatic cycle selection does not infer uninstall from missing metadata", async () => {
+    const f = fixture();
+    await bootstrapManagerService(f.request, f.dependencies, f.host);
+    fs.unlinkSync(f.files.metadata);
+    await expect(bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host)).rejects.toThrow();
+    expect(mock.install).toHaveBeenCalledTimes(1);
+    expect(f.effects).toEqual(["reload:true"]);
+});
