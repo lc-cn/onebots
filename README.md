@@ -2,7 +2,7 @@
 
 # OneBots
 
-**多平台、多协议的即时通讯机器人网关与框架（TypeScript / Node.js）**
+**多平台、多协议的即时通讯机器人中台网关（TypeScript / Node.js）**
 
 _One multi-platform bot gateway: one `CommonEvent` model, many adapters, many wire protocols (OneBot / Satori / Milky)._
 
