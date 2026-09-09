@@ -128,7 +128,7 @@ Line 适配器使用 Webhook 模式接收消息。启动服务后，需要在 Li
 
 ```bash
 # 注册 Line 适配器和 OneBot V11 协议
-onebots -r line -p onebot.v11
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 ### 客户端 SDK 使用

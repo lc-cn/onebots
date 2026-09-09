@@ -2,14 +2,15 @@
 
 OneBots 的 Milky v1 服务端协议包。它把统一 `CommonEvent` 投影为 canonical Milky 事件，并把 Milky 动作严格翻译到 Adapter 能力层。
 
-## 安装与注册
+## 安装与启用
 
 ```bash
-pnpm add @onebots/protocol-milky-v1
-onebots -r icqq -p milky-v1 -c config.yaml
+onebots serve --data-dir ./onebots-data
+onebots auth bootstrap --data-dir ./onebots-data
+onebots ui --data-dir ./onebots-data
 ```
 
-协议只有在应用注册后才会启动。CLI 会依次解析官方包、社区命名包和直接包名。
+在 Web 控制台或 TUI 中选择 Milky v1 协议和所需平台适配器，确认安装计划。管理服务安装并校验完整依赖后，由你显式激活候选运行版本。随后填写账号配置、校验并应用，再启动网关。协议未安装或未激活时，仅填写配置不会加载协议。
 
 ## 配置
 

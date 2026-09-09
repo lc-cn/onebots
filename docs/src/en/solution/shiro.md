@@ -5,7 +5,7 @@
 - Protocol: `onebot.v11`
 - Transport: `websocket` (the framework connects to OneBots)
 - The Application does not invent framework-specific actions. Standard actions stay in the protocol; platform-specific actions are forwarded only when the selected Adapter exposes them.
-- `-t shiro` loads compatibility behavior only. It does not enable a transport or edit account configuration.
+- The `shiro` extension adds framework compatibility only. It does not enable a transport or edit account configuration.
 
 ## Generate both configurations
 
@@ -33,7 +33,7 @@ plugins:
 ```
 
 ```bash
-onebots -r <adapter> -p onebot-v11 -t shiro -c config.yaml
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 Copy the generated “Shiro configuration” into the framework project. Keep the protocol, endpoint, and token identical on both sides. In containers, use a reachable service name instead of `127.0.0.1` for another container.
@@ -41,13 +41,13 @@ Copy the generated “Shiro configuration” into the framework project. Keep th
 ## Verify and repair
 
 ```bash
-onebots doctor -c config.yaml
+onebots doctor --data-dir /path/to/onebots-data
 onebots frameworks --framework shiro --account <platform.account_id>
 ```
 
 | Symptom | Fix |
 | --- | --- |
-| plugin load failure | Install the named package and check the `-r/-p/-t` names |
+| plugin load failure | Select the named extension in the installation plan, then verify and activate the candidate runtime |
 | refused connection / 404 | Fix host, port, account path; for forward WS explicitly set `use_ws: true` |
 | reverse WS absent | Start the framework listener first and correct `ws_reverse_url` |
 | 401 | Make both tokens identical and remove stale environment overrides |

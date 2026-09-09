@@ -25,7 +25,7 @@ wechat-clawbot.my_bot: {}
 ```
 
 ```bash
-onebots -r wechat-clawbot -c config.yaml
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 ## Capabilities and limits

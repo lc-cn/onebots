@@ -848,9 +848,6 @@ importers:
       js-yaml:
         specifier: ^4.3.1
         version: 4.3.1
-      koa-static:
-        specifier: ^5.0.0
-        version: 5.0.0
       pastel:
         specifier: ^4.0.1
         version: 4.0.1(ink@6.8.0(@types/react@19.2.17)(react@19.2.8))(react@19.2.8)(zod@4.3.6)
@@ -866,20 +863,10 @@ importers:
       zod:
         specifier: ^4.1.12
         version: 4.3.6
-    optionalDependencies:
-      '@karinjs/node-pty':
-        specifier: ^1.1.3
-        version: 1.1.3
-      node-windows:
-        specifier: ^1.0.0-beta.8
-        version: 1.0.0-beta.8
     devDependencies:
       '@types/koa':
         specifier: ^3.0.1
         version: 3.0.2
-      '@types/koa-static':
-        specifier: ^4.0.4
-        version: 4.0.4
       '@types/node':
         specifier: ^24.0.0
         version: 24.12.0

@@ -16,7 +16,6 @@ const RUNTIME_OPTIONS = new Set([
 
 export type CliInvocation =
     | { kind: "cli"; argv: string[] }
-    | { kind: "service-runtime"; argv: string[] }
     | { kind: "unknown"; command: string }
     | { kind: "invalid"; message: string };
 
@@ -27,14 +26,6 @@ export type CliInvocation =
 export function prepareCliInvocation(argv: string[], interactive = false): CliInvocation {
     const invalidOption = findInvalidRuntimeOption(argv.slice(2));
     if (invalidOption) return { kind: "invalid", message: invalidOption };
-
-    const serviceRuntimeIndex = argv.indexOf("--service-runtime", 2);
-    if (serviceRuntimeIndex >= 0) {
-        return {
-            kind: "service-runtime",
-            argv: argv.filter((_, index) => index !== serviceRuntimeIndex),
-        };
-    }
 
     const firstPositional = findFirstPositional(argv);
     if (!firstPositional) {
@@ -73,6 +64,8 @@ export function prepareCliInvocation(argv: string[], interactive = false): CliIn
 function findInvalidRuntimeOption(tokens: string[]): string | undefined {
     for (let index = 0; index < tokens.length; index++) {
         const token = tokens[index];
+        if (token === "--service-runtime")
+            return "--service-runtime 已移除；旧服务请先执行 onebots migrate";
         if (RUNTIME_OPTIONS.has(token)) {
             const value = tokens[++index];
             if (value === undefined || value.startsWith("-")) return `${token} 缺少参数`;

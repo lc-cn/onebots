@@ -1,110 +1,112 @@
 # 全局配置
 
-onebots 使用 YAML 格式的配置文件，默认读取运行目录下的 `config.yaml`。
+OneBots 管理服务把业务配置保存在指定工作区。Web、TUI 和配置命令共用同一份草稿、校验与应用流程；不要绕过管理服务直接驱动网关进程。
 
-## 配置说明
+## 工作区
 
-配置文件包含以下内容：
+所有管理命令都应指向同一个持久目录：
 
-- **服务配置**：HTTP 端口、日志级别、超时时间等
-- **协议默认值**：各协议的通用配置（general 部分）
-- **账号配置**：各平台机器人的认证信息和个性化设置
+```bash
+onebots serve --data-dir /path/to/onebots-data
+onebots auth bootstrap --data-dir /path/to/onebots-data
+onebots ui --data-dir /path/to/onebots-data
+```
 
-## 配置文件结构
+系统服务安装时也要保存这个路径：
+
+```bash
+onebots install --data-dir /path/to/onebots-data
+onebots start
+```
+
+## 配置结构
+
+空白安装不会预填平台账号、协议或框架扩展：
 
 ```yaml
-# 全局配置
-port: 6727              # HTTP 服务器端口
-log_level: info         # 日志级别
-timeout: 30             # 账号与协议出口启动超时(秒)
-access_token: "replace-with-a-long-random-token" # 管理端鉴权码（敏感）
+port: 6727
+log_level: info
+timeout: 30
+database: onebots.db
 
-# 未传入 -r / -p 时加载的插件
+plugins:
+  adapters: []
+  protocols: []
+  applications: []
+
+general: {}
+```
+
+通过 Web 或 TUI 创建安装计划，安装、验证并激活扩展后，再添加账号配置：
+
+```yaml
 plugins:
   adapters: [qq]
   protocols: [onebot-v11]
-  applications: [zhin]
+  applications: []
 
-# 通用配置（协议默认配置）
 general:
-  {protocol}.{version}:
-    # 协议配置项...
+  onebot.v11:
+    use_http: true
+    access_token: replace-with-a-protocol-token
 
-# 账号配置
-{platform}.{account_id}:
-  # 协议配置（可配置多个）
-  {protocol}.{version}:
-    # 协议配置项（覆盖 general）
-  
-  # 平台配置
-  # 平台特定的配置项...
+qq.my_bot:
+  appid: replace-with-app-id
+  secret: replace-with-app-secret
+  onebot.v11:
+    use_ws: true
 ```
 
-## 全局配置项
+账号使用 `{platform}.{account_id}` 作为键。账号下的协议配置覆盖 `general` 中相同协议的默认值。
 
-### port
+## 全局字段
 
-- **类型**: `number`
-- **默认值**: `6727`
-- **说明**: HTTP 服务器监听端口
+| 字段 | 类型 | 默认值 | 说明 |
+| ---- | ---- | ------ | ---- |
+| `port` | `number` | `6727` | 网关协议传输监听端口 |
+| `log_level` | `string` | `info` | `trace`、`debug`、`info`、`warn` 或 `error` |
+| `timeout` | `number` | `30` | 账号与协议出口启动保护窗口，单位为秒 |
+| `database` | 非空 `string` | `onebots.db` | SQLite 文件；相对路径按工作区解析 |
+| `plugins.adapters` | `string[]` | `[]` | 活动运行版本中的平台适配器 |
+| `plugins.protocols` | `string[]` | `[]` | 活动运行版本中的输出协议 |
+| `plugins.applications` | `string[]` | `[]` | 活动运行版本中的框架扩展 |
 
-### log_level
+`timeout` 到期时，OneBots 会中止传给扩展的 `AbortSignal`，把仍在启动的出口标记为失败，并继续处理其他账号。需要扫码等长登录流程的适配器可以声明更长窗口。
 
-- **类型**: `string`
-- **可选值**: `trace` | `debug` | `info` | `warn` | `error`
-- **默认值**: `info`
-- **说明**: 日志输出级别
+`database` 修改后需要重启。`onebots doctor` 会检查解析后的文件和 SQLite 写入日志所需的父目录权限。
 
-### timeout
+## 管理认证与协议认证
 
-- **类型**: `number`
-- **默认值**: `30`
-- **单位**: 秒
-- **说明**: 等待账号登录监听器与协议出口完成启动的全局保护窗口。超时会中止传给扩展的 `AbortSignal`、将正在启动的协议标记为失败，并继续尝试其他账号。需要扫码等合法长登录流程的适配器可以抬高单个账号的窗口，但不能缩短该全局值；例如微信 ClawBot 默认使用 480 秒。适配器与协议应监听该信号，及时取消仍在进行的网络连接或登录流程。
-
-管理 API 返回的账号摘要和 Web 管理端机器人卡片会显示最终生效的 `startupTimeoutSeconds`，便于在启动前确认实际保护边界。
-
-### database
-
-- **类型**: 非空 `string`
-- **默认值**: `onebots.db`
-- **说明**: SQLite 数据库文件。相对路径以配置文件同级的 `data` 目录为根，绝对路径保持不变；未以 `.db` 结尾时会自动补充扩展名，修改后需要重启。`onebots doctor` 会验证解析后的实际文件及其父目录是否可读写，而不只检查默认数据目录。
-
-### access_token / username / password
-
-- **类型**: `string`
-- **说明**: Web 管理端与 `/api`、根管理 WebSocket 的认证材料。推荐使用高熵 `access_token`；也可以配置完整的 `username` 与 `password`。
-- **部署覆盖**: `ONEBOTS_ACCESS_TOKEN` 环境变量优先于配置文件中的 `access_token`，适合无法直接读取配置文件的容器与托管平台。环境变量生效时不会生成新的配置鉴权码，也不会把环境值写入文件或日志；轮换后需要重启进程。
-- **首次启动**: 没有环境变量且三项均未形成有效凭据时，setup 或运行时会生成 256 位随机 `access_token` 并写入权限受限的配置文件，鉴权码不会输出到服务日志。
-
-## 配置优先级
-
-```
-账号协议配置 > general 默认配置
-ONEBOTS_ACCESS_TOKEN > config.yaml 的 access_token
-已确认的管理端配置草稿 > 当前活动配置
-```
-
-`plugins.adapters`、`plugins.protocols` 与 `plugins.applications` 记录网关活动版本选择的扩展。空白安装不会预填这些数组；请在管理服务启动后运行 `onebots setup --data-dir <工作区>` 选择并安装扩展，或使用 Web 扩展中心提交同一安装计划。旧配置应先通过 `onebots migrate` 纳入工作区，不能再用 `-r` / `-p` 临时覆盖活动版本。
-
-Web 管理端会把当前进程已完成入口加载和注册契约校验的插件显示为可添加建议，并同时保留自定义输入，用于第三方插件短名或完整包名。建议清单只代表当前运行时证据，不会被当作封闭白名单；自定义值仍会在下次启动或 doctor 中经过正常的包解析与注册校验。
-
-Web 与 TUI 共用不可变运行版本和持久化安装操作。扩展计划验证并安装成功后才会切换活动版本；需要重启网关的变更由管理服务统一执行，不需要重新安装系统服务。系统托管只维护管理服务，网关停止或启动失败时管理端仍保持可用。
-
-## 启动前校验
-
-OneBots 在连接平台或启动协议传输之前，会使用当前活动版本中已经验证的插件 Schema 校验完整配置。校验范围包括平台必填凭据、字段类型与取值、账号引用的适配器和协议、每个账号至少具备一个已加载协议出口，以及账号协议配置与 `general` 默认值合并后的结果。
-
-错误消息会包含完整路径，例如 `qq.my_bot.appid`、`qq.my_bot.onebot.v11.use_http` 或 `qq.my_bot: 账号至少需要配置一个已加载的协议出口`。配置了未安装或未进入活动版本的适配器、协议或框架也会直接阻止网关启动，避免账号被静默忽略。Web、TUI 配置草稿、doctor 和网关切换使用同一验证器；无效草稿不会替换活动配置。
-
-Web 管理端的“保存并应用”会先原子保存，再热重载账号与协议。运行态应用失败时，磁盘配置和运行态都会恢复上一版本；端口、路径、数据库等宿主参数会保留到文件，并明确列出需要重启后生效的字段。另一项保存或重载进行中时返回 HTTP 409，不会覆盖正在应用的配置。
-
-仍使用根管理 WebSocket 的集成必须在握手时通过 `Authorization: Bearer <token>` 或 `?access_token=<token>` 鉴权，未授权请求会在升级前返回 HTTP 401。连接后可以发送 `{ "action": "system.saveConfig", "data": "...", "echo": "request-id" }` 或 `system.reload`。两者使用同一事务与并发锁，并返回 `{ "event": "system.config.result", "echo": "request-id", "data": ... }`；失败回执的 `code` 为 `CONFIG_INVALID`、`CONFIG_CONFLICT` 或 `CONFIG_APPLY_FAILED`。`system.reload` 只重新读取磁盘配置，不重写文件或创建备份。
-
-部署前可使用与服务相同的插件参数执行：
+管理端只使用一次性设备码配对和可撤销的设备会话：
 
 ```bash
-onebots doctor -c config.yaml --json --strict
+onebots auth bootstrap --data-dir /path/to/onebots-data
+onebots auth device --data-dir /path/to/onebots-data
+onebots auth recover --data-dir /path/to/onebots-data
 ```
 
-默认模式允许首次配置流程继续，并把未配置账号、服务未安装或已停止、无法完成合法管理凭据探测等状态保留为警告。生产部署使用 `--strict` 时，任一警告都会令 JSON 中的 `ok` 为 `false` 并返回退出码 `1`。配置未包含 `plugins` 时仍可传入 `-r` / `-p`。未指定 `-c`，或显式路径就是已安装服务使用的配置时，doctor 会优先读取服务定义中保存的插件列表。显式传入另一份 `-c` 时则执行独立诊断：使用该文件的 `plugins`，不读取、判旧或通过 `--fix` 修改另一份服务定义。输出中的 `plugin-selection` 会逐类别列出最终插件、来源与解析目录，JSON 模式保留同一证据。只有适配器与协议两类都已选择时该检查才通过；只选择平台入口会提示缺少对外协议，只选择协议则提示尚无可创建账号的平台入口，严格门禁会拒绝这两种半完成部署。
+根级 `username`、`password` 或 `access_token` 不再是管理端登录配置。迁移旧配置时，管理服务不会把这些字段带入网关配置快照。
+
+协议内部的 `access_token`、`token` 和签名密钥属于业务连接配置，必须保留。例如 `general.onebot.v11.access_token` 只保护 OneBot v11 API 与传输，不可用于登录 Web 管理端。
+
+## 安装与应用边界
+
+`plugins` 记录活动运行版本的扩展选择。安装计划必须先解析主包和 peer 依赖，验证候选工件，再由操作者显式激活。安装扩展不会自动连接平台或启用协议。
+
+Web 与 TUI 使用同一事务应用配置。无效草稿不能替换活动配置；配置运行态应用失败时，文件和运行态都恢复到上一版本。端口、数据库等宿主字段会明确提示需要重启后生效。
+
+完整配置在连接平台前按活动扩展注册的 Schema 校验，包括平台必填凭据、字段类型、适配器和协议引用、账号协议出口，以及账号与 `general` 合并后的结果。错误会返回完整路径，例如 `qq.my_bot.appid`。
+
+## 部署前检查
+
+```bash
+onebots doctor --data-dir /path/to/onebots-data --json --strict
+```
+
+默认模式把首次配置中可恢复的状态记录为警告。`--strict` 会令任一警告返回失败退出码，适合作为部署门禁。旧安装应先执行 `onebots migrate`，不要继续使用旧运行参数临时覆盖活动版本。
+
+## 相关文档
+
+- [协议配置](/config/protocol)
+- [平台配置](/config/platform)
+- [生产部署](/guide/production)

@@ -4,7 +4,7 @@
 
 ```bash
 pnpm add @onebots/adapter-google-chat
-onebots -r google-chat
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 Web 配置页会直接生成分区表单：身份和接收方式使用选择器，OAuth scopes 与事件类型使用可动态增减的选择列表，私钥/token 标记为敏感字段；不需要手填 JSON。

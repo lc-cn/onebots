@@ -4,7 +4,7 @@ Install and load the adapter:
 
 ```bash
 pnpm add @onebots/adapter-instagram
-onebots -r instagram
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 Create a Meta app with Business Login for Instagram. Request the current `instagram_business_basic` and `instagram_business_manage_messages` scopes. This adapter deliberately does not accept the deprecated pre-2025 `business_*` scopes or require a Facebook Page Access Token.

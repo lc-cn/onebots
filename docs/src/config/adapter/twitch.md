@@ -4,7 +4,7 @@
 
 ```bash
 pnpm add @onebots/adapter-twitch
-onebots -r twitch
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 先在 Twitch Developer Console 创建应用并取得 Client ID。OneBots 启动时会调用官方 OAuth validation endpoint，令牌所属 Client ID 不一致会直接失败。

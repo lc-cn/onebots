@@ -5,10 +5,10 @@ Each framework page provides an API compatibility boundary, generated configurat
 ```bash
 onebots frameworks
 onebots frameworks --framework <framework> --account <platform.account_id>
-onebots -r <adapter> -p <protocol> -t <framework> -c config.yaml
-onebots doctor -c config.yaml
+onebots ui --data-dir /path/to/onebots-data
+onebots doctor --data-dir /path/to/onebots-data
 ```
 
-`-t` only loads compatibility behavior. Protocol configuration remains the sole authority that enables transports.
+Select the framework extension, platform adapter, and output protocol in the Web or TUI installation plan. Account protocol configuration remains the sole authority that enables transports.
 
 Use the [framework matrix](/en/solution/frameworks) and [troubleshooting guide](/en/solution/troubleshooting).

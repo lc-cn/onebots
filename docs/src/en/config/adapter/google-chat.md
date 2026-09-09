@@ -4,7 +4,7 @@ Install and load the adapter:
 
 ```bash
 pnpm add @onebots/adapter-google-chat
-onebots -r google-chat
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 The Web console renders credentials and receive mode as selectors, scopes and event types as add/remove choice lists, and private keys/tokens as sensitive fields. No JSON editing is required.

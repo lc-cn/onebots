@@ -4,7 +4,7 @@
 
 ```bash
 pnpm add @onebots/adapter-ircv3
-onebots -r ircv3
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 IRC 没有统一的机器人应用后台。请向所用网络确认 server、TLS 端口、账号注册方式、SASL 机制和 channel 权限。生产环境应使用 TLS；主动明文连接不会发送 server password 或 SASL password。

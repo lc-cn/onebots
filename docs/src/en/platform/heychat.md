@@ -41,7 +41,7 @@ heychat.my_bot:
 ## Start
 
 ```bash
-onebots -r heychat -p onebot-v11 -c config.yaml
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 ## Limitations

@@ -4,7 +4,7 @@
 
 ```bash
 pnpm add @onebots/adapter-instagram
-onebots -r instagram
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 本适配器只采用当前 Instagram Login 模型。创建 Meta App，启用 Business Login for Instagram，并申请当前权限 `instagram_business_basic` 与 `instagram_business_manage_messages`。不要填写 2025 年已弃用的 `business_*` 旧 scope，也不需要 Facebook Page Access Token。

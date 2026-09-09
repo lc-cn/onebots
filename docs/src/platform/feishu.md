@@ -127,7 +127,7 @@ import { FeishuEndpoint } from '@onebots/adapter-feishu';
 
 ```bash
 # 注册飞书适配器和 OneBot V11 协议
-onebots -r feishu -p onebot.v11
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 ### 客户端 SDK 使用

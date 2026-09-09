@@ -4,7 +4,7 @@
 
 ```bash
 pnpm add @onebots/adapter-facebook-messenger
-onebots -r facebook-messenger
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 Web 配置页按凭据、接收、过滤、发送和高级选项分区。Webhook fields、canonical 事件和 permissions 都是可动态增减的选择列表，无需手写 JSON；敏感令牌不会作为普通文本展示。

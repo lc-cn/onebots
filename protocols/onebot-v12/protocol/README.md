@@ -23,32 +23,19 @@ npm install @onebots/protocol-onebot-v12
 pnpm add @onebots/protocol-onebot-v12
 ```
 
-## 使用方法
+## 在 OneBots 中启用
 
-> **重要：** 协议必须先注册才能使用。即使在配置文件中配置了 `onebot.v12` 协议，如果没有注册该协议，配置也不会生效。
-
-### 1. 命令行注册（推荐）
-
-使用 `onebots` 命令行工具时，通过 `-p` 参数注册协议：
+启动管理服务并完成设备配对后，在 Web 控制台或 TUI 中选择 OneBot v12 协议和所需平台适配器。确认安装计划，等待依赖安装和校验完成，再显式激活候选运行版本。
 
 ```bash
-# 注册 OneBot V12 协议
-onebots -p onebot-v12
-
-# 同时注册多个协议
-onebots -p onebot-v11 -p onebot-v12
-
-# 注册协议并指定适配器和配置
-onebots -r wechat -p onebot-v12 -c config.yaml
+onebots serve --data-dir ./onebots-data
+onebots auth bootstrap --data-dir ./onebots-data
+onebots ui --data-dir ./onebots-data
 ```
 
-协议会自动从以下位置加载：
+协议扩展激活后，为账号填写 `onebot.v12` 配置并应用，再通过管理服务启动网关。协议未安装或未激活时，仅填写配置不会加载协议。
 
-- `@onebots/protocol-onebot-v12` (官方包)
-- `onebots-protocol-onebot-v12` (社区包)
-- `onebot-v12` (直接包名)
-
-### 2. 配置文件方式
+### 账号配置
 
 ```yaml
 accounts:
@@ -71,20 +58,6 @@ accounts:
     # WebSocket Reverse
     ws_reverse:
       - ws://localhost:6701/onebot/v12
-```
-
-### 3. 代码方式
-
-```typescript
-import { App } from "onebots";
-import { OneBotV12Protocol } from "@onebots/protocol-onebot-v12";
-
-// 注册协议
-await App.registerProtocol("onebot", OneBotV12Protocol, "v12");
-
-// 创建应用
-const app = new App();
-await app.start();
 ```
 
 ## 配置参数

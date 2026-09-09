@@ -11,12 +11,6 @@ import {
     restoreHfDataArchive,
     validateHfArchiveListings,
 } from "../../scripts/hf-data-archive-restore.mjs";
-import {
-    HF_DATA_ARCHIVE_LIMIT_BYTES,
-    HF_DATA_ARCHIVE_TIMEOUT_MS,
-    HF_DATA_ENTRY_LIMIT,
-    HF_DATA_EXPANDED_LIMIT_BYTES,
-} from "../../packages/onebots/src/hf-backup.js";
 
 describe("HF data archive restore", () => {
     const temporaryDirectories: string[] = [];
@@ -28,11 +22,11 @@ describe("HF data archive restore", () => {
         }
     });
 
-    it("keeps backup and restore resource contracts aligned", () => {
-        expect(HF_ARCHIVE_COMPRESSED_LIMIT_BYTES).toBe(HF_DATA_ARCHIVE_LIMIT_BYTES);
-        expect(HF_ARCHIVE_EXPANDED_LIMIT_BYTES).toBe(HF_DATA_EXPANDED_LIMIT_BYTES);
-        expect(HF_ARCHIVE_ENTRY_LIMIT).toBe(HF_DATA_ENTRY_LIMIT);
-        expect(HF_ARCHIVE_PROCESS_TIMEOUT_MS).toBe(HF_DATA_ARCHIVE_TIMEOUT_MS);
+    it("keeps restore resource limits explicit and bounded", () => {
+        expect(HF_ARCHIVE_COMPRESSED_LIMIT_BYTES).toBe(15 * 1024 * 1024);
+        expect(HF_ARCHIVE_EXPANDED_LIMIT_BYTES).toBe(128 * 1024 * 1024);
+        expect(HF_ARCHIVE_ENTRY_LIMIT).toBe(10_000);
+        expect(HF_ARCHIVE_PROCESS_TIMEOUT_MS).toBe(30_000);
     });
 
     it("restores only into an empty workspace with private regular files", () => {

@@ -1,93 +1,112 @@
-# Global Configuration
+# Global configuration
 
-Global configuration is the top-level configuration in `config.yaml`, which applies to the entire onebots service.
+The OneBots manager stores business configuration in a selected workspace. Web, TUI, and configuration commands share the same draft, validation, and apply flow. Do not bypass the manager to drive the gateway process directly.
 
-## Configuration Structure
+## Workspace
+
+Point every management command at the same persistent directory:
+
+```bash
+onebots serve --data-dir /path/to/onebots-data
+onebots auth bootstrap --data-dir /path/to/onebots-data
+onebots ui --data-dir /path/to/onebots-data
+```
+
+Persist the same directory when installing an operating-system service:
+
+```bash
+onebots install --data-dir /path/to/onebots-data
+onebots start
+```
+
+## Configuration shape
+
+A blank installation does not preselect accounts, protocols, or framework extensions:
 
 ```yaml
-# Global configuration
-port: 6727              # HTTP server port
-log_level: info         # Log level: trace, debug, info, warn, error
-timeout: 30             # Account and protocol startup timeout (seconds)
-access_token: "replace-with-a-long-random-token" # Management token (sensitive)
+port: 6727
+log_level: info
+timeout: 30
+database: onebots.db
 
-# Plugins loaded when -r / -p are omitted
+plugins:
+  adapters: []
+  protocols: []
+  applications: []
+
+general: {}
+```
+
+Use Web or TUI to create an installation plan. After the extensions are installed, verified, and explicitly activated, add account settings:
+
+```yaml
 plugins:
   adapters: [qq]
   protocols: [onebot-v11]
-  applications: [zhin]
+  applications: []
 
-# General configuration (protocol default configuration)
 general:
   onebot.v11:
-    # OneBot V11 default configuration
-  onebot.v12:
-    # OneBot V12 default configuration
-  satori.v1:
-    # Satori default configuration
-  milky.v1:
-    # Milky default configuration
+    use_http: true
+    access_token: replace-with-a-protocol-token
 
-# Account configuration
-{platform}.{account_id}:
-  # Account-specific configuration
+qq.my_bot:
+  appid: replace-with-app-id
+  secret: replace-with-app-secret
+  onebot.v11:
+    use_ws: true
 ```
 
-## Global Configuration Fields
+Accounts use `{platform}.{account_id}` keys. Protocol fields on an account override defaults for the same protocol below `general`.
 
-| Field | Type | Description | Default |
-|-------|------|-------------|---------|
-| `port` | number | HTTP server port | `6727` |
-| `log_level` | string | Log level: `trace`, `debug`, `info`, `warn`, `error` | `info` |
-| `timeout` | number | Global protection window for account login listeners and protocol outlets. An adapter may raise the window for a legitimate long login flow, but cannot shorten this value; WeChat ClawBot defaults to 480 seconds. On timeout OneBots aborts the signal passed to extensions, marks a starting protocol as failed, and continues with other accounts. | `30` |
-| `database` | non-empty string | SQLite file; relative paths resolve below the `data` directory, absolute paths remain unchanged, and a missing `.db` suffix is appended; requires restart | `onebots.db` |
-| `access_token` | string | Bearer token for the Web console, management API, and root management WebSocket | generated when no complete credentials exist |
-| `username` / `password` | string | Alternative Web console credentials; both fields must be configured together | none |
+## Global fields
 
-`ONEBOTS_ACCESS_TOKEN` is a deployment-level override for the file-based `access_token`. It is intended for containers and hosted platforms where the configuration file cannot be read directly. While it is set, setup and the runtime do not generate a competing file token, and the environment value is never written to the configuration or logs. Restart the process after rotating it. Without this override, setup and the runtime generate a random 256-bit `access_token` when neither a token nor a complete username/password pair exists; that token is stored in the restricted configuration file and never printed to service logs.
+| Field | Type | Default | Description |
+| ----- | ---- | ------- | ----------- |
+| `port` | `number` | `6727` | Gateway protocol transport port |
+| `log_level` | `string` | `info` | `trace`, `debug`, `info`, `warn`, or `error` |
+| `timeout` | `number` | `30` | Account and protocol startup protection window in seconds |
+| `database` | non-empty `string` | `onebots.db` | SQLite file; relative paths resolve from the workspace |
+| `plugins.adapters` | `string[]` | `[]` | Platform adapters in the active runtime version |
+| `plugins.protocols` | `string[]` | `[]` | Output protocols in the active runtime version |
+| `plugins.applications` | `string[]` | `[]` | Framework extensions in the active runtime version |
 
-`onebots doctor` validates the resolved database file and the directory SQLite needs for journal or WAL files. This covers absolute and escaping relative paths instead of assuming every database remains below the default data directory.
+When `timeout` expires, OneBots aborts the signal passed to extensions, marks transports that are still starting as failed, and continues with other accounts. An adapter may declare a longer window for a legitimate long-running login flow.
 
-Account summaries returned by the management API and bot cards in the Web console expose the effective `startupTimeoutSeconds`, so operators can verify the actual boundary before startup.
+Changing `database` requires a restart. `onebots doctor` checks the resolved file and the parent directory SQLite needs for journals or WAL files.
 
-## General Configuration
+## Manager and protocol authentication
 
-The `general` section defines default configurations for all protocols. These defaults can be overridden at the account level.
-
-See [General Configuration](/en/config/general) for details.
-
-## Account Configuration
-
-Account configuration follows the format: `{platform}.{account_id}`.
-
-See [Platform Configuration](/en/config/platform) for platform-specific configuration.
-
-## Related Links
-
-- [General Configuration](/en/config/general)
-- [Platform Configuration](/en/config/platform)
-- [Protocol Configuration](/en/config/protocol)
-
-## Preflight validation
-
-`plugins.adapters`, `plugins.protocols`, and `plugins.applications` record the extensions selected by the active gateway runtime version. A blank installation does not prefill these arrays. After starting the manager, use `onebots setup --data-dir <workspace>` or the Web extension center to submit the same installation plan. Import an old configuration with `onebots migrate`; removed `-r` and `-p` runtime overrides no longer select the active version.
-
-The Web console presents plugins that completed entry loading and registration contract validation in the current process as addable suggestions. A free-form input remains available for third-party short names or full package names. Suggestions are runtime evidence rather than a closed allowlist; custom entries still go through normal package resolution and registration checks on the next startup or doctor run.
-
-Web and TUI share immutable runtime versions and persistent installation operations. An extension plan switches the active version only after installation and validation succeed. The manager performs any required gateway restart; the operating-system service does not need to be reinstalled.
-
-Before connecting to a platform or starting protocol transports, OneBots validates the complete configuration against the schemas registered in the active runtime version. This covers required platform credentials, field types and choices, adapter and protocol references, at least one loaded protocol outlet per account, and the effective protocol configuration after account values inherit from `general`.
-
-Errors identify the complete path, such as `qq.my_bot.appid` or `qq.my_bot.onebot.v11.use_http`; a missing outlet identifies the account path itself, such as `qq.my_bot`. Referencing an extension that is not installed in the active runtime version stops gateway startup instead of silently omitting the account. Web, TUI drafts, doctor, and runtime switching use the same validator, so an invalid draft cannot replace the active configuration.
-
-**Save and apply** in the Web console atomically saves the file and then hot reloads accounts and protocols. If runtime application fails, both the file and runtime return to the previous configuration. Host settings such as the port, path, and database remain saved and the response lists which fields require a restart. A concurrent save or reload returns HTTP 409 without overwriting the configuration being applied.
-
-Integrations that still use the root management WebSocket must authenticate the handshake with `Authorization: Bearer <token>` or `?access_token=<token>`; unauthorized requests receive HTTP 401 before upgrade. After connecting, they may send `{ "action": "system.saveConfig", "data": "...", "echo": "request-id" }` or `system.reload`. Both actions use the same transaction and concurrency lock and return `{ "event": "system.config.result", "echo": "request-id", "data": ... }`. Failure codes are `CONFIG_INVALID`, `CONFIG_CONFLICT`, and `CONFIG_APPLY_FAILED`. `system.reload` only reapplies the file from disk; it neither rewrites the file nor creates a backup.
-
-Run the same check before deployment with the service's plugin selection:
+The manager only uses one-time pairing codes and revocable device sessions:
 
 ```bash
-onebots doctor -c config.yaml --json --strict
+onebots auth bootstrap --data-dir /path/to/onebots-data
+onebots auth device --data-dir /path/to/onebots-data
+onebots auth recover --data-dir /path/to/onebots-data
 ```
 
-Default mode keeps recoverable first-run states, such as no configured account, no installed or running service, or an unavailable authenticated management probe, as warnings. With `--strict`, any warning sets JSON `ok` to `false` and returns exit code `1`, which is suitable for a production deployment gate. For a legacy configuration without `plugins`, pass `-r` and `-p` as before. Doctor prefers the saved service definition when `-c` is omitted or resolves to that service's configuration. Passing a different `-c` creates a standalone diagnostic scope: doctor uses that file's `plugins` and does not read, mark stale, or repair the unrelated service definition with `--fix`. The `plugin-selection` check reports the final plugins, source, and resolution directory for each category, with the same evidence preserved in JSON output. It passes only when both an adapter and a protocol have been selected. An adapter-only deployment warns that accounts have no outward protocol, while a protocol-only deployment warns that no platform account can be created; strict mode rejects either incomplete selection.
+Root `username`, `password`, and `access_token` values are no longer manager login settings. During migration, the manager excludes those fields from the gateway configuration snapshot.
+
+Protocol `access_token`, `token`, and signing-secret fields remain business connection settings. For example, `general.onebot.v11.access_token` protects OneBot v11 APIs and transports and cannot log in to the Web console.
+
+## Installation and apply boundaries
+
+`plugins` records the extensions in the active runtime version. An installation plan resolves the package and peer dependencies, verifies the candidate artifacts, and waits for explicit activation. Installing an extension does not connect a platform or enable a protocol automatically.
+
+Web and TUI apply configuration through the same transaction. An invalid draft cannot replace active configuration. If runtime application fails, both the file and the runtime return to the previous revision. Host fields such as the port and database explicitly report that a restart is required.
+
+Before any platform connection, OneBots validates the complete configuration against schemas registered by the active extensions. Validation covers required platform credentials, field types, adapter and protocol references, account protocol outlets, and merged account and `general` values. Errors include the full path, such as `qq.my_bot.appid`.
+
+## Pre-deployment check
+
+```bash
+onebots doctor --data-dir /path/to/onebots-data --json --strict
+```
+
+Default mode reports recoverable first-run states as warnings. With `--strict`, any warning produces a failing exit code for use as a deployment gate. Run `onebots migrate` for an old installation instead of using retired runtime flags to override the active version.
+
+## Related documentation
+
+- [Protocol configuration](/en/config/protocol)
+- [Platform configuration](/en/config/platform)
+- [Production deployment](/en/guide/production)

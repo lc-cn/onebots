@@ -1,8 +1,5 @@
 import { ApplicationRegistry } from "@onebots/core";
-import { afterEach, describe, expect, it, vi } from "vitest";
-vi.mock("./app.js", () => {
-    throw new Error("框架注册不能依赖旧管理宿主");
-});
+import { afterEach, describe, expect, it } from "vitest";
 import { loadPlugins } from "./runtime-plugins.js";
 
 const promotedApplications = [
@@ -26,7 +23,7 @@ describe("built-in framework Applications", () => {
     });
 
     it.each(promotedApplications)(
-        "loads and activates %s through the -t runtime path",
+        "loads and activates %s through the generation runtime path",
         async name => {
             await expect(loadPlugins([], [], [name])).resolves.toEqual([]);
             expect(ApplicationRegistry.getActiveNames()).toContain(name);

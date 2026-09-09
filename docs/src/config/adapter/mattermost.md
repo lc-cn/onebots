@@ -4,7 +4,7 @@
 
 ```bash
 pnpm add @onebots/adapter-mattermost
-onebots -r mattermost
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 创建 Mattermost Bot Account 或专用用户，签发 Access Token，并按实际动作授予最小权限。Token 会作为 `Authorization: Bearer` 发送，不会写入 URL。

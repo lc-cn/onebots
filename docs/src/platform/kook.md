@@ -91,7 +91,7 @@ kook.zhin:
 
 ```bash
 # 启动 onebots 服务，加载 Kook 适配器
-onebots -r kook -p onebot-v11 -p onebot-v12 -p satori-v1 -c config.yaml
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 ## 使用客户端SDK连接

@@ -9,10 +9,10 @@
 ```bash
 onebots frameworks
 onebots frameworks --framework <framework> --account <platform.account_id>
-onebots -r <adapter> -p <protocol> -t <framework> -c config.yaml
-onebots doctor -c config.yaml
+onebots ui --data-dir /path/to/onebots-data
+onebots doctor --data-dir /path/to/onebots-data
 ```
 
-`-t` 只注册框架兼容扩展。是否启用 HTTP、正向 WebSocket、反向 WebSocket、SSE 或 Webhook，始终由 `config.yaml` 中的协议配置决定。
+在 Web 或 TUI 的安装计划中选择框架兼容扩展、平台适配器和输出协议。是否启用 HTTP、正向 WebSocket、反向 WebSocket、SSE 或 Webhook，始终由账号的协议配置决定。
 
 完整清单见[框架接入表](/solution/frameworks)。连接不通或动作缺失时查[排查手册](/solution/troubleshooting)。

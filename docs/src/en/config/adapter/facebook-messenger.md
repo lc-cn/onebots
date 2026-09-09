@@ -4,7 +4,7 @@ Install and load the adapter:
 
 ```bash
 pnpm add @onebots/adapter-facebook-messenger
-onebots -r facebook-messenger
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 The Web configuration page renders credentials, transport, filters, delivery, and advanced settings as separate sections. Webhook fields, canonical event types, and permissions are dynamic choice lists rather than hand-written JSON.

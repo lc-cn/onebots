@@ -34,10 +34,13 @@ describe("public foreground manager entry", () => {
             argv: ["node", "onebots", "run"],
         });
     });
-    it("retains explicit legacy service runtime for migration without converting it to manager", () => {
+    it("rejects the removed legacy service runtime entry", () => {
         expect(
             prepareCliInvocation(["node", "onebots", "--service-runtime", "-c", "/tmp/old"], false),
-        ).toEqual({ kind: "service-runtime", argv: ["node", "onebots", "-c", "/tmp/old"] });
+        ).toEqual({
+            kind: "invalid",
+            message: "--service-runtime 已移除；旧服务请先执行 onebots migrate",
+        });
     });
     it("delegates help without interpreting it as startup configuration", async () => {
         await runManagerForeground(["--help"]);

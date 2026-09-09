@@ -5,7 +5,7 @@
 - 协议：`onebot.v11`
 - 连接：`reverse-websocket`（OneBots 主动连接框架的 WebSocket 服务）
 - 已审计的 59 个直接动作中有 28 个 QQ 私有动作尚无通用实现。启用前先核对输出中的 `unsupportedActions`，涉及文件、群公告、频道或 QQ 资料的插件可能不可用。
-- `-t yunzai` 只加载兼容扩展；它不会开启协议传输，也不会修改账号配置。
+- `yunzai` 兼容扩展只补充框架兼容能力；它不会开启协议传输，也不会修改账号配置。
 
 ## 生成两端配置
 
@@ -47,7 +47,7 @@ plugins:
 也可在本次启动时显式注册：
 
 ```bash
-onebots -r <adapter> -p onebot-v11 -t yunzai -c config.yaml
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 账号字段按对应[平台文档](/platform/)填写。上面的传输开关必须由用户配置；Application 不会补开。
@@ -65,7 +65,7 @@ onebots -r <adapter> -p onebot-v11 -t yunzai -c config.yaml
 ## 验证
 
 ```bash
-onebots doctor -c config.yaml
+onebots doctor --data-dir /path/to/onebots-data
 onebots frameworks --framework yunzai --account <platform.account_id>
 ```
 
@@ -75,7 +75,7 @@ onebots frameworks --framework yunzai --account <platform.account_id>
 
 | 现象 | 检查 | 修复 |
 | --- | --- | --- |
-| Application 或协议加载失败 | 查看启动日志中的包名 | 安装对应 npm 包，或用上面的 `-r/-p/-t` 名称重新启动 |
+| Application 或协议加载失败 | 查看安装操作与活动版本中的包名 | 在安装计划中选择对应扩展，验证并激活候选版本 |
 | 连接被拒绝 / 404 | 对照生成的 endpoint 与账号键 | 修正 host、端口、协议路径；正向连接确认 `use_ws: true` |
 | 反向连接没有建立 | 检查框架是否先监听及 `ws_reverse_url` | 先启动框架，并把容器地址改为可达服务名 |
 | 401 / 鉴权失败 | 比较两端 token | 统一 token，清除旧环境变量后重启两端 |

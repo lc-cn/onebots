@@ -90,7 +90,7 @@ slack.your_bot_id:
 
 ```bash
 # 注册 Slack 适配器和 OneBot V11 协议
-onebots -r slack -p onebot.v11
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 ### 客户端 SDK 使用

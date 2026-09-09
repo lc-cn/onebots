@@ -4,7 +4,7 @@
 
 ```bash
 pnpm add @onebots/adapter-twitch
-onebots -r twitch
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 Create an application in the Twitch Developer Console and obtain its Client ID. Startup validates the token through Twitch's OAuth validation endpoint and rejects a token issued to another Client ID.

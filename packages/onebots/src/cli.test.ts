@@ -98,7 +98,7 @@ describe("OneBots CLI v2", () => {
         });
     });
 
-    it("separates the non-interactive system-service runtime", () => {
+    it("rejects the removed non-interactive system-service runtime", () => {
         expect(
             prepareCliInvocation([
                 "node",
@@ -109,8 +109,8 @@ describe("OneBots CLI v2", () => {
                 "config.yaml",
             ]),
         ).toEqual({
-            kind: "service-runtime",
-            argv: ["node", "onebots", "run", "-c", "config.yaml"],
+            kind: "invalid",
+            message: "--service-runtime 已移除；旧服务请先执行 onebots migrate",
         });
     });
 
