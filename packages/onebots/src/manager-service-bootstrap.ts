@@ -73,7 +73,15 @@ export async function bootstrapManagerService(
         const existing = operations.has(`${request.id}.json`);
         if (!existing && (journal.health().recoveryRequired || readServiceMetadata(files.metadata).kind !== "missing")) throw failure();
         installer = new ManagerCandidateInstaller({ operationsDirectory: path.join(home, "operations"),
-            store: new GenerationStore({ root: path.join(home, "versions"), isActive: () => true }),
+            store: new GenerationStore({ root: path.join(home, "versions"), isActive: id => {
+                // 新候选必须允许提交收据；只有持久绑定的候选受活动版本保护。
+                // 已验证版本另由 GenerationStore.discard 的收据门禁保护，不在此回收。
+                if (!binding.has("candidate.json")) return false;
+                const bound = closedServiceObject(binding.read("candidate.json"), ["schemaVersion", "id",
+                    "planDigest", "candidateId", "candidateDigest", "spec"]);
+                if (typeof bound.candidateId !== "string") throw failure();
+                return bound.candidateId === id;
+            } }),
             ...bundledPnpmExecutor(),
             ...(dependencies.download ? { download: dependencies.download } : {}) });
         const boundCandidate = binding.has("candidate.json");
