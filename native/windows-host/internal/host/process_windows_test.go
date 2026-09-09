@@ -199,5 +199,5 @@ func assertProcessExited(t *testing.T, handle windows.Handle, label string) {
 
 func Example_replaceEnvironment() {
 	fmt.Println(replaceEnvironment([]string{"A=1", "B=2"}, "a", "3"))
-	// Output: [B=2 A=3]
+	// Output: [B=2 a=3]
 }
