@@ -7,9 +7,9 @@
 | 阶段 | 当前状态 | 已有权威证据 | 收口前仍需完成 |
 | --- | --- | --- | --- |
 | 1. 控制契约与空白启动 | 已完成 | 空白 Docker 管理端、设备配对、独立网关启停与容器重启意图通过实际容器验收 | 纳入最终整体验收复跑 |
-| 2. 依赖版本与凭据流程 | 公开依赖闭环完成，私有依赖实装待验 | 当前源码宿主、Mock 与已验协议工件使用精确版本安装；必需 peer、候选验证、显式激活和旧代保留进入 CI | 使用真实 ICQQ 私有 peer 验证正确及错误授权、凭据清理和旧代不受损 |
-| 3. 配置与客户端统一 | 核心能力完成，跨入口证据不完整 | Web/TUI/CLI 共用 `ControlClient`；动态 Schema、配置草稿、损坏配置修复和持久操作已有实现与回归 | 三入口各自完成同一 installed-artifact E2E；统一管理、网关和操作日志 |
-| 4. 系统托管与迁移 | Linux/macOS 正向生命周期完成，其余未完成 | GitHub 托管 Ubuntu systemd 与 macOS launchd 从当前 npm 工件经公开 CLI 完成安装、启停、重启、卸载和数据保留 | 真实旧服务迁移及中断恢复、管理程序原生升级、机器重启、Windows SCM/named pipe/Job Object |
+| 2. 依赖版本与凭据流程 | 主体完成 | 当前源码宿主、Mock、协议工件及真实 ICQQ 私有必需 peer 使用精确版本安装；正确授权、错误授权、凭据清理、候选验证、显式激活和旧代保留均进入 CI | 纳入最终整体验收复跑，并补真实平台账号在线证据 |
+| 3. 配置与客户端统一 | 主体完成，跨入口证据不完整 | Web/TUI/CLI 共用 `ControlClient`；动态 Schema、配置草稿、损坏配置修复和持久操作已有实现与回归；管理、网关和网关生命周期操作使用统一日志查询契约 | 三入口各自完成同一 installed-artifact E2E；把安装、配置和验证操作投影到统一操作日志 |
+| 4. 系统托管与迁移 | Linux/macOS 进入旧服务迁移验收，Windows 基础实施中 | Ubuntu systemd 与 macOS launchd 正向生命周期已通过托管 CI；真实 legacy 服务迁移、管理服务强杀后的 supervisor 冷恢复和数据保留已写入对应平台验收；Windows SCM 原生宿主、严格状态/身份边界及发布工件已实现 | 取得本批 CI 证据；补机器重启、迁移中断回退、Windows 顶层事务/CLI、named pipe/Job Object 和 Windows 实机验收 |
 | 5. 产品验收与清理 | 部分完成 | 旧 `App`、旧服务控制器和旧运行入口已删除；构建、单测、41 个 tarball、Docker/HF 及 12 个框架互操作进入 CI | 强制运行全部协议传输、清理全部旧文档、覆盖其余方案的验证等级并完成最终逐项审计 |
 
 ## 1. 目标与明确决策
@@ -560,3 +560,7 @@ schema v2 冷恢复现与热回退共用效果协调器。确认目标从未启�
 旧 `ServiceController` 及其安装、启停、日志、卸载事务和 Windows 旧托管实现已退役。迁移、定义预检和遗留诊断只依赖 `LegacyServiceInspection`：它严格读取 legacy metadata、复验 systemd/launchd 定义字节与文件身份，并只查询状态，不暴露任何生命周期写操作；launchd 未加载任务继续归类为正常停止，其他命令错误固定脱敏。`service-definition.ts` 仍保留旧启动参数及各平台定义渲染，用作已安装旧版本和回退工件的历史证据。`App/createOnebots` 与 `--service-runtime` 执行入口已经删除；互操作和回退均不再依赖当前包启动旧 App。
 
 当前源码打包工件已在 GitHub 托管 runner 上完成真实系统服务正向生命周期验收：Ubuntu 使用系统级 systemd，macOS 使用用户级 launchd，均只经公开 CLI 执行 `install/start/status/restart/stop/uninstall`。验收确认安装后管理服务尚未启动、启动后管理 IPC/网关/Web 同时在线、重启更换管理与网关实例、停止保留网关运行意图、卸载删除系统服务身份并保留配置和用户数据；macOS 还精确验证空白配置只有三类空插件选择且匿名管理 API 返回 401。脚本在修改前证明固定服务、定义、元数据和状态目录均不存在，未知外部效果不重派或强制删除。机器重启、真实旧版本服务迁移故障注入、管理程序原生升级和 Windows 托管仍没有对应实际平台证据，不能由这项正向验收外推。
+
+控制日志现统一为固定的 `manager`、`gateway` 和 `operation` 三类来源，CLI、TUI、Web 使用同一查询契约和不透明游标；每次最多读取 64 KiB，轮换或删除后明确返回 reset，不接受任意路径。管理服务写入启动、就绪、停止记录，网关生命周期操作只在最终持久状态确定后写入操作记录，日志观察失败与控制结果隔离。当前 operation 只覆盖网关启停、重启、关闭、对账和挂起；安装、配置与验证 journal 尚未投影，不能把它描述为全部操作已经统一。相关全量回归为 748 个测试文件、5,468 项通过、3 项按平台跳过。
+
+真实 legacy 服务验收已扩展到 Ubuntu systemd 和 macOS launchd：先启动固定旧服务，通过公开 CLI 识别 `migration-required` 并仅执行一次迁移，再强杀 manager/服务进程树；后续只读轮询必须由 supervisor 拉起新 manager 与 gateway，保持 running 意图、用户数据、迁移 operation ID 和 journal 原字节。Windows 同批建立 SCM 底层边界和 x64/arm64 原生宿主：严格解析单行 JSON/CRLF，分离原生宿主与 Node manager PID，绑定 SCM `PathName`，提供注册、状态、启停和安全注销，并把两个 `.exe` 纳入 npm 工件及 CI 构建。现有顶层安装、工作区和恢复事务仍依赖 POSIX 所有权语义，因此 Windows CLI 尚未开放；本批平台验收和发布 CI 尚待提交后取得远端结果。
