@@ -63,6 +63,24 @@ jobs:
             ONEBOTS_SYSTEMD_ACCEPTANCE=1 \
             "$(command -v node)" scripts/verify-system-service-lifecycle.mjs
 
+  windows-host:
+    name: Windows native host foundation
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: native/windows-host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache-dependency-path: native/windows-host/go.sum
+      - name: Test Windows host, pipe ACL, and remote rejection
+        run: go test ./...
+      - name: Build Windows host executable
+        run: go build ./cmd/onebots-windows-host
+
   interop:
     name: Framework interop (${{ matrix.group }})
     runs-on: ubuntu-latest
