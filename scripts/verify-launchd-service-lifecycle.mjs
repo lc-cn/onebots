@@ -12,6 +12,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import {
+    installedManagerVersion,
     preparePreviousPatchArtifacts,
     verifyManagerPatchUpgrade,
 } from "./manager-upgrade-acceptance-helpers.mjs";
@@ -557,10 +558,11 @@ try {
         () => ({
             os: cliJson(["status", "--json"]),
             control: cliJson(["control", "status", "--data-dir", dataDirectory]),
+            metadata: JSON.parse(fs.readFileSync(METADATA, "utf8")),
         }),
         value =>
             value.os.manager.state === "running" &&
-            value.os.manager.version === previous.previousVersion &&
+            installedManagerVersion(value.metadata) === previous.previousVersion &&
             value.os.manager.ipc === "available" &&
             value.os.gateway.actual === "running" &&
             value.os.gateway.desired === "running" &&
@@ -636,7 +638,10 @@ try {
         afterRestart.control.gateway.instance?.id,
         afterUpgrade.control.gateway.instance?.id,
     );
-    assert.equal(afterRestart.os.manager.version, manifest.host.version);
+    assert.equal(
+        installedManagerVersion(JSON.parse(fs.readFileSync(METADATA, "utf8"))),
+        manifest.host.version,
+    );
     assert.equal(
         JSON.parse(fs.readFileSync(METADATA, "utf8")).workingDirectory,
         afterUpgrade.metadata.workingDirectory,

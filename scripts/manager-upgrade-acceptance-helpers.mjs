@@ -83,8 +83,16 @@ export async function obstructControlSocketWhenReleased(workspace, childResult) 
                 childResult.then(result => ({ result })),
                 new Promise(resolve => setTimeout(() => resolve(null), 5)),
             ]);
-            if (exited)
-                throw new Error(`升级 CLI 在旧控制 socket 释放前退出：${exited.result.status}`);
+            if (exited) {
+                const diagnostic = [exited.result.stdout, exited.result.stderr]
+                    .filter(Boolean)
+                    .join("\n")
+                    .replace(/[\u0000-\u001f\u007f]+/gu, " ")
+                    .slice(0, 1024);
+                throw new Error(
+                    `升级 CLI 在旧控制 socket 释放前退出：${exited.result.status}；${diagnostic || "无输出"}`,
+                );
+            }
         }
     }
 }
@@ -106,6 +114,22 @@ export function managerUpgradeOperation(output, version) {
     assert.ok(match, "公开 update --manager 未返回持久升级操作 ID");
     assert.match(output, new RegExp(`管理程序已切换到 ${version}`, "u"));
     return match[1];
+}
+
+export function installedManagerVersion(metadata) {
+    assert.equal(metadata?.runtimeKind, "control", "管理服务元数据类型无效");
+    assert.equal(typeof metadata.workingDirectory, "string", "管理候选目录无效");
+    assert.equal(typeof metadata.binPath, "string", "管理候选入口无效");
+    const packageFile = path.resolve(path.dirname(metadata.binPath), "../package.json");
+    assert.equal(
+        packageFile.startsWith(`${path.resolve(metadata.workingDirectory)}${path.sep}`),
+        true,
+        "管理候选 package.json 越出不可变目录",
+    );
+    const manifest = JSON.parse(fs.readFileSync(packageFile, "utf8"));
+    assert.equal(manifest.name, "onebots");
+    assert.match(manifest.version, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u);
+    return manifest.version;
 }
 
 export async function verifyManagerPatchUpgrade(options) {
@@ -186,7 +210,7 @@ export async function verifyManagerPatchUpgrade(options) {
         }),
         value =>
             value.os.manager.state === "running" &&
-            value.os.manager.version === previousVersion &&
+            installedManagerVersion(value.metadata) === previousVersion &&
             value.os.manager.enabled === true &&
             value.os.manager.ipc === "available" &&
             value.control.gateway.desired === "running" &&
@@ -237,7 +261,7 @@ export async function verifyManagerPatchUpgrade(options) {
         value =>
             value.os.manager.state === "running" &&
             value.os.manager.ipc === "available" &&
-            value.os.manager.version === manifest.host.version &&
+            installedManagerVersion(value.metadata) === manifest.host.version &&
             value.os.manager.enabled === true &&
             value.control.gateway.actual === "running" &&
             value.control.gateway.desired === "running" &&

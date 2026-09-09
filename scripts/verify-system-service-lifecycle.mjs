@@ -10,6 +10,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import { installedManagerVersion } from "./manager-upgrade-acceptance-helpers.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SERVICE = "onebots-gateway.service";
@@ -463,8 +464,16 @@ async function obstructControlSocketWhenReleased(workspace, childResult) {
                 childResult.then(result => ({ result })),
                 new Promise(resolve => setTimeout(() => resolve(null), 5)),
             ]);
-            if (exited)
-                throw new Error(`升级 CLI 在旧控制 socket 释放前退出：${exited.result.status}`);
+            if (exited) {
+                const diagnostic = [exited.result.stdout, exited.result.stderr]
+                    .filter(Boolean)
+                    .join("\n")
+                    .replace(/[\u0000-\u001f\u007f]+/gu, " ")
+                    .slice(0, 1024);
+                throw new Error(
+                    `升级 CLI 在旧控制 socket 释放前退出：${exited.result.status}；${diagnostic || "无输出"}`,
+                );
+            }
         }
     }
 }
@@ -1071,7 +1080,7 @@ try {
         }),
         value =>
             value.os.manager.state === "running" &&
-            value.os.manager.version === previousVersion &&
+            installedManagerVersion(value.metadata) === previousVersion &&
             value.os.manager.ipc === "available" &&
             value.control.gateway.desired === "running" &&
             value.control.gateway.actual === "running" &&
@@ -1139,7 +1148,7 @@ try {
         value =>
             value.os.manager.state === "running" &&
             value.os.manager.ipc === "available" &&
-            value.os.manager.version === manifest.host.version &&
+            installedManagerVersion(value.metadata) === manifest.host.version &&
             value.control.gateway.actual === "running" &&
             value.control.gateway.desired === "running" &&
             value.metadata.workingDirectory !== installedMetadata.workingDirectory,
@@ -1233,7 +1242,10 @@ try {
         afterRestart.control.gateway.instance?.id,
         afterUpgrade.control.gateway.instance?.id,
     );
-    assert.equal(afterRestart.os.manager.version, manifest.host.version);
+    assert.equal(
+        installedManagerVersion(JSON.parse(fs.readFileSync(METADATA, "utf8"))),
+        manifest.host.version,
+    );
     assert.equal(
         JSON.parse(fs.readFileSync(METADATA, "utf8")).workingDirectory,
         afterUpgrade.metadata.workingDirectory,
