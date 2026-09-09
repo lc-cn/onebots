@@ -185,6 +185,7 @@ function fixture(action: ManagerServiceAction = "stop") {
             serviceMigration: { pending: false, recoveryRequired: false },
             knownConfigurationFailure: false,
         }),
+        inspectRuntime: (_spec: ManagerServiceSpec, version: string) => `runtime:${version}`,
     };
 }
 describe("manager service explicit target-state reconciliation", () => {
@@ -201,6 +202,7 @@ describe("manager service explicit target-state reconciliation", () => {
         const result = await reconcileManagerServiceOperation("operation", "user", f.host, {
             platform: f.platform,
             inspectManager: f.inspectManager,
+            inspectRuntime: f.inspectRuntime,
         });
         expect(result).toMatchObject({
             action: "start",
@@ -228,9 +230,31 @@ describe("manager service explicit target-state reconciliation", () => {
                     ...(await f.inspectManager()),
                     manager: { ...(await f.inspectManager()).manager, pid: 999 },
                 }),
+                inspectRuntime: f.inspectRuntime,
             }),
         ).rejects.toThrow();
         expect(f.journal.read("operation")).toEqual(before);
+        expect(f.effects).toEqual([]);
+    });
+    it("keeps start blocked when the verified runtime changes across reconciliation", async () => {
+        const f = fixture("start");
+        Object.assign(f.state, {
+            state: "running",
+            running: true,
+            loaded: true,
+            processId: 321,
+            identity: "manager-instance",
+            quiescent: false,
+        });
+        let checks = 0;
+        await expect(
+            reconcileManagerServiceOperation("operation", "user", f.host, {
+                platform: f.platform,
+                inspectManager: f.inspectManager,
+                inspectRuntime: () => `runtime-${++checks}`,
+            }),
+        ).rejects.toThrow("未重放系统动作");
+        expect(f.journal.read("operation").recoveryRequired).toBe(true);
         expect(f.effects).toEqual([]);
     });
     it("升级操作不能通过普通停止对账误标完成，保留文件及恢复门禁", async () => {

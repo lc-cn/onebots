@@ -17,6 +17,9 @@ import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import { verifyServiceMigrationProcessesWhileLocked } from "./service-migration-processes.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
+import { readRunningManagerCandidate, managerCandidateDigest } from "./manager-runtime/identity.js";
+import { verifyManagerServiceCandidate } from "./manager-service-upgrade-candidate.js";
+import { pathToFileURL } from "node:url";
 import type { ServicePlatform } from "./service-platform.js";
 import type { ServiceScope } from "./service-definition.js";
 
@@ -24,8 +27,24 @@ export interface ManagerServiceRecoveryDependencies {
     platform?: ServicePlatform;
     confirmStopped?: typeof verifyServiceMigrationProcessesWhileLocked;
     inspectManager?: typeof inspectMigrationManager;
+    inspectRuntime?: typeof inspectManagerRuntime;
 }
 const failure = () => new Error("尚不能证明原操作已完成，保留恢复记录；未重放系统动作");
+
+/** 把在线自报版本绑定到服务定义指向的已验证不可变候选。 */
+function inspectManagerRuntime(spec: ManagerServiceRecord["managerSpec"], version: string): string {
+    try {
+        const candidate = readRunningManagerCandidate(
+            pathToFileURL(path.join(path.dirname(spec.binPath), "control/host.js")).href,
+        );
+        const digest = managerCandidateDigest(candidate);
+        const verified = verifyManagerServiceCandidate(spec, digest);
+        if (verified.receipt.hostVersion !== version) throw failure();
+        return digest;
+    } catch {
+        throw failure();
+    }
+}
 
 function absent(file: string): void {
     for (let current = path.dirname(file); ; current = path.dirname(current)) {
@@ -128,10 +147,13 @@ export async function reconcileManagerServiceOperation(
                 const manager = await (dependencies.inspectManager ?? inspectMigrationManager)(
                     spec.workspace,
                 );
+                const inspectRuntime = dependencies.inspectRuntime ?? inspectManagerRuntime;
+                const runtime = inspectRuntime(spec, manager.manager.version);
                 const after = await platform.inspect();
                 if (
                     manager.manager.pid !== before.processId ||
                     !isDeepStrictEqual(before, after) ||
+                    inspectRuntime(spec, manager.manager.version) !== runtime ||
                     !captured.verifyRemaining()
                 )
                     throw failure();

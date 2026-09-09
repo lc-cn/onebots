@@ -226,7 +226,11 @@ export class LaunchdServicePlatform implements ServicePlatform {
         return !this.unprovenGroup && (this.groups.size === 0 || this.groupsGone());
     }
     async inspect(): Promise<ServicePlatformState> {
-        return this.inspectWithin();
+        try {
+            return await this.inspectWithin();
+        } catch {
+            return unavailable();
+        }
     }
     private async inspectWithin(deadline?: number): Promise<ServicePlatformState> {
         try {

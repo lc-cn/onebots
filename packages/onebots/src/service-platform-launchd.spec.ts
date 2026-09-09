@@ -102,6 +102,14 @@ describe("launchd service platform", () => {
         });
         await expect(stopped.platform.inspect()).rejects.toThrow("无法安全确认");
     });
+    it("normalizes a public inspection during launchd transition", async () => {
+        const f = fixture();
+        f.state.rawState = "xpcproxy";
+        f.state.lastExitCode = "(never exited)";
+        await expect(f.platform.inspect()).rejects.toThrow(
+            /^无法安全确认 launchd 服务及其进程组状态$/,
+        );
+    });
     it.each(["not running", "crashed"])(
         "unloads a stable cold %s job before consulting durable process proof",
         async rawState => {
@@ -431,6 +439,44 @@ describe("launchd service platform", () => {
             state: "running",
             processId: 321,
         });
+        expect(f.calls.filter(call => call[1] === "bootstrap")).toHaveLength(1);
+    });
+    it("accepts the running instance created after an xpcproxy PID is replaced", async () => {
+        const f = fixture({ freshDefinition: true });
+        Object.assign(f.state, { loaded: false, running: false });
+        const original = f.host.exec;
+        let bootstrapped = false;
+        let transient = true;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args[0] === "bootstrap") bootstrapped = true;
+            if (bootstrapped && transient && args[0] === "print") {
+                transient = false;
+                Object.assign(f.state, { pid: 322, pgid: 322 });
+                return `${target} = {\n path = ${definition}\n state = xpcproxy\n pid = 321\n last exit code = (never exited)\n}\n`;
+            }
+            return output;
+        };
+        expect(await f.platform.start()).toMatchObject({
+            state: "running",
+            processId: 322,
+            identity: `${target}:pgid:322:started:20260909T123456`,
+        });
+        expect(f.calls.filter(call => call[1] === "bootstrap")).toHaveLength(1);
+    });
+    it("fails closed when the bootstrap transition lasts until the deadline", async () => {
+        const f = fixture({ freshDefinition: true });
+        Object.assign(f.state, { loaded: false, running: false });
+        const original = f.host.exec;
+        let bootstrapped = false;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args[0] === "bootstrap") bootstrapped = true;
+            if (bootstrapped && args[0] === "print")
+                return `${target} = {\n path = ${definition}\n state = xpcproxy\n pid = 321\n last exit code = (never exited)\n}\n`;
+            return output;
+        };
+        await expect(f.platform.start()).rejects.toThrow("无法安全确认");
         expect(f.calls.filter(call => call[1] === "bootstrap")).toHaveLength(1);
     });
     it("expected initial state mismatch rejects before bootstrap", async () => {
