@@ -4,6 +4,15 @@ import { isDeepStrictEqual } from "node:util";
 import { LAUNCHD_LABEL, type ServiceScope } from "./service-definition.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
+import {
+    LaunchdObservationChangedError,
+    type LaunchdProcessGeneration,
+    LaunchdTransitionError,
+    launchdProcessExists,
+    parseLaunchdFields,
+    parseLaunchdProcessGeneration,
+    rejectUnsafeLaunchdObservation as unavailable,
+} from "./service-platform-launchd-observation.js";
 
 export interface LaunchdServicePlatformOptions {
     /** 仅上层持锁确认从未启动的新定义可提供；不能从 print 的缺失推断。 */
@@ -16,91 +25,6 @@ export interface LaunchdServicePlatformOptions {
     sleep?(milliseconds: number): Promise<void>;
     stopTimeoutMs?: number;
 }
-function unavailable(): never {
-    throw new Error("无法安全确认 launchd 服务及其进程组状态");
-}
-class LaunchdTransitionError extends Error {}
-class LaunchdObservationChangedError extends Error {}
-function processExists(pid: number): boolean {
-    try {
-        process.kill(pid, 0);
-        return true;
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ESRCH") return false;
-        return unavailable();
-    }
-}
-function fields(output: string, target: string): Map<string, string> {
-    if (output.length > 262144 || /[\u0000\r]/.test(output)) unavailable();
-    const lines = output.trimEnd().split("\n");
-    if (lines.shift() !== `${target} = {` || lines.pop() !== "}") unavailable();
-    const result = new Map<string, string>();
-    // launchctl print 的嵌套环境/端点不能伪装成顶层状态。
-    let depth = 1;
-    for (const line of lines) {
-        const match = /^\s*([a-z ]+) = (.*)$/.exec(line);
-        if (depth === 1 && match && ["path", "state", "pid", "last exit code"].includes(match[1])) {
-            if (result.has(match[1])) unavailable();
-            result.set(match[1], match[2]);
-        }
-        if (line.trimEnd().endsWith("{")) depth++;
-        if (line.trim() === "}") depth--;
-        if (depth < 1) unavailable();
-    }
-    if (depth !== 1) unavailable();
-    return result;
-}
-
-interface ProcessGeneration {
-    group: number;
-    started: string;
-}
-
-const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-] as const;
-
-function processGeneration(output: string, expectedPid: number): ProcessGeneration | null {
-    if (output.length > 4096 || /[\u0000\r]/.test(output)) unavailable();
-    const match =
-        /^\s*([1-9][0-9]*)\s+([1-9][0-9]*)\s+(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+([1-9]|[12][0-9]|3[01])\s+([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])\s+([0-9]{4})\s*$/.exec(
-            output,
-        );
-    if (!match || Number(match[1]) !== expectedPid) unavailable();
-    const group = Number(match[2]);
-    if (!Number.isSafeInteger(group) || group > 2147483647) unavailable();
-    if (group !== expectedPid || expectedPid <= 1) return null;
-    const month = months.indexOf(match[4] as (typeof months)[number]);
-    const day = Number(match[5]);
-    const year = Number(match[9]);
-    const date = new Date(Date.UTC(year, month, day));
-    if (
-        year < 1970 ||
-        year > 9999 ||
-        date.getUTCFullYear() !== year ||
-        date.getUTCMonth() !== month ||
-        date.getUTCDate() !== day ||
-        weekdays[date.getUTCDay()] !== match[3]
-    )
-        unavailable();
-    return {
-        group,
-        started: `${match[9]}${String(month + 1).padStart(2, "0")}${match[5].padStart(2, "0")}T${match[6]}${match[7]}${match[8]}`,
-    };
-}
-
 /** 仅控制固定 OneBots 身份；不向历史 PID 发停止信号。旧实例缺少独立组证据时拒绝迁移。 */
 export class LaunchdServicePlatform implements ServicePlatform {
     private readonly domain: string;
@@ -132,7 +56,7 @@ export class LaunchdServicePlatform implements ServicePlatform {
         this.fresh = options.freshDefinition === true;
         this.domain = scope === "system" ? "system" : `gui/${host.uid}`;
         this.target = `${this.domain}/${LAUNCHD_LABEL}`;
-        this.exists = options.processExists ?? processExists;
+        this.exists = options.processExists ?? launchdProcessExists;
         this.confirmUnloadedProcesses = options.confirmUnloadedProcesses;
         this.now = options.now ?? Date.now;
         this.sleep =
@@ -187,7 +111,7 @@ export class LaunchdServicePlatform implements ServicePlatform {
                 return null;
             unavailable();
         }
-        return fields(output, this.target);
+        return parseLaunchdFields(output, this.target);
     }
     private enabled(deadline?: number): boolean {
         const output = this.command(["print-disabled", this.domain], deadline);
@@ -223,8 +147,8 @@ export class LaunchdServicePlatform implements ServicePlatform {
             unavailable();
         return override ?? value.Disabled !== true;
     }
-    private generation(pid: number, deadline?: number): ProcessGeneration | null {
-        return processGeneration(
+    private generation(pid: number, deadline?: number): LaunchdProcessGeneration | null {
+        return parseLaunchdProcessGeneration(
             this.exec("/bin/ps", ["-o", "pid=,pgid=,lstart=", "-p", String(pid)], deadline),
             pid,
         );
