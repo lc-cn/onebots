@@ -36,7 +36,7 @@ The management service stays online when the gateway stops or fails. Inspect the
 
 The branch's `install.sh` handles first-time Linux/macOS bootstrap only: install the management program and matching Web assets, then delegate user service installation, startup and status checks to the CLI. It does not select a default protocol or print permanent credentials.
 
-**The script downloads from public npm and requires a published package containing the new architecture.** Missing management artifacts cause a clear failure while preserving the candidate directory; the legacy CLI is not executed. Source builds remain this branch's validation path. Script tests do not prove real systemd/launchd installation acceptance.
+**The script downloads from public npm and requires a published package containing the new architecture.** Missing management artifacts cause a clear failure while preserving the candidate directory; the legacy CLI is not executed. Packages built from the current source now pass real system-level systemd and user-level launchd lifecycle acceptance on GitHub-hosted Ubuntu and macOS runners. This does not mean that the new architecture has already been published to npm.
 
 Repeating a completed bootstrap does not upgrade packages or restart services. Legacy configuration, existing runtimes or interrupted installations are preserved for explicit migration or recovery. Re-running the installer is not a management binary upgrade. [Gateway updates](/en/guide/runtime-update) use the management service instead.
 
@@ -46,4 +46,4 @@ Windows native hosting is not yet verified. The PowerShell entry exits before ma
 
 With an installed architecture CLI, use `onebots install --data-dir <workspace>` to install a user service, then `onebots start`. Existing legacy services require migration and are never overwritten by first-time installation.
 
-The OS hosts the management service; TUI/Web lifecycle actions control the separate gateway. Native installation, reboot recovery and management program upgrades still require platform acceptance.
+The OS hosts the management service; TUI/Web lifecycle actions control the separate gateway. CI now verifies install, start, status, restart, stop and uninstall from packed artifacts, including management availability, blank configuration, process replacement and preservation of workspace data. Machine reboot, interrupted legacy migration recovery and native management-program upgrades still require separate platform acceptance.

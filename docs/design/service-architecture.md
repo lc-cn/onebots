@@ -548,3 +548,5 @@ schema v2 冷恢复现与热回退共用效果协调器。确认目标从未启�
 当前设备码控制台入口不可达的旧 Web 页面、用户名密码客户端、网关管理快照和浏览器终端链已删除；旧 TUI 工作区容器也已退役。Web 剩余生产源码全部位于 `main.ts` 到 `App.vue` 的静态导入闭包，不存在动态导入或源码导出旁路；Xterm、Vue Router、Day.js 和 Web 专用 YAML 依赖随之从包清单及锁文件移除。设备会话、安装计划、配置、验证、日志、调试与会话管理面保持可达，网关停止时仍由管理服务提供。
 
 旧 `ServiceController` 及其安装、启停、日志、卸载事务和 Windows 旧托管实现已退役。迁移、定义预检和遗留诊断只依赖 `LegacyServiceInspection`：它严格读取 legacy metadata、复验 systemd/launchd 定义字节与文件身份，并只查询状态，不暴露任何生命周期写操作；launchd 未加载任务继续归类为正常停止，其他命令错误固定脱敏。`service-definition.ts` 仍保留旧启动参数及各平台定义渲染，用作已安装旧版本和回退工件的历史证据。`App/createOnebots` 与 `--service-runtime` 执行入口已经删除；互操作和回退均不再依赖当前包启动旧 App。
+
+当前源码打包工件已在 GitHub 托管 runner 上完成真实系统服务正向生命周期验收：Ubuntu 使用系统级 systemd，macOS 使用用户级 launchd，均只经公开 CLI 执行 `install/start/status/restart/stop/uninstall`。验收确认安装后管理服务尚未启动、启动后管理 IPC/网关/Web 同时在线、重启更换管理与网关实例、停止保留网关运行意图、卸载删除系统服务身份并保留配置和用户数据；macOS 还精确验证空白配置只有三类空插件选择且匿名管理 API 返回 401。脚本在修改前证明固定服务、定义、元数据和状态目录均不存在，未知外部效果不重派或强制删除。机器重启、真实旧版本服务迁移故障注入、管理程序原生升级和 Windows 托管仍没有对应实际平台证据，不能由这项正向验收外推。
