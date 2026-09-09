@@ -11,6 +11,10 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import {
+    preparePreviousPatchArtifacts,
+    verifyManagerPatchUpgrade,
+} from "./manager-upgrade-acceptance-helpers.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const LABEL = "com.onebots.onebots-gateway";
@@ -131,6 +135,7 @@ const tarballs = fs
     .map(name => path.join(artifacts, name));
 assert.equal(tarballs.length, 3, "必须安装当前 core、web 和 onebots 三个打包工件");
 const manifest = JSON.parse(fs.readFileSync(path.join(artifacts, "manifest.json"), "utf8"));
+const previous = preparePreviousPatchArtifacts({ temporary, artifacts, manifest, execute });
 fs.writeFileSync(
     path.join(runtime, "package.json"),
     JSON.stringify({ name: "onebots-launchd-acceptance", private: true, version: "1.0.0" }),
@@ -146,7 +151,7 @@ execute(
         "--no-fund",
         "--save-exact",
         "--registry=https://registry.npmjs.org",
-        ...tarballs,
+        ...previous.installTarballs,
     ],
     { cwd: runtime, env: npmEnvironment },
 );
@@ -157,7 +162,7 @@ assert.equal(cliStat.isFile() || cliStat.isSymbolicLink(), true);
 assert.equal(
     JSON.parse(fs.readFileSync(path.join(runtime, "node_modules/onebots/package.json"), "utf8"))
         .version,
-    manifest.host.version,
+    previous.previousVersion,
 );
 assert.equal(
     JSON.parse(
@@ -175,7 +180,7 @@ const cliEnvironment = {
     ...npmEnvironment,
     LANG: "C",
     NO_COLOR: "1",
-    ONEBOTS_RUNTIME_ARTIFACTS: path.join(artifacts, "manifest.json"),
+    ONEBOTS_RUNTIME_ARTIFACTS: previous.manifestFile,
 };
 
 const { renderLaunchdPlist } = await import(
@@ -250,6 +255,17 @@ function launchdState() {
               }).stdout
             : null;
     return { state: field("state"), pid, lastExitCode: field("last exit code"), process };
+}
+
+function launchdStrongIdentity() {
+    const state = launchdState();
+    assert.match(state.pid ?? "", /^[1-9][0-9]*$/u, "launchd 缺少稳定 PID");
+    return {
+        pid: state.pid,
+        process: execute("/bin/ps", ["-o", "pid=,pgid=,lstart=", "-p", state.pid], {
+            statuses: [0],
+        }).stdout,
+    };
 }
 
 function assertLaunchdIndependentProcessGroup() {
@@ -513,7 +529,7 @@ try {
                 "utf8",
             ),
         ).version,
-        manifest.host.version,
+        previous.previousVersion,
     );
     assert.equal(
         JSON.parse(
@@ -544,6 +560,7 @@ try {
         }),
         value =>
             value.os.manager.state === "running" &&
+            value.os.manager.version === previous.previousVersion &&
             value.os.manager.ipc === "available" &&
             value.os.gateway.actual === "running" &&
             value.os.gateway.desired === "running" &&
@@ -564,6 +581,36 @@ try {
     fs.writeFileSync(path.join(dataDirectory, "acceptance-user-data.txt"), "preserve-me\n", {
         mode: 0o600,
     });
+    const upgrade = await verifyManagerPatchUpgrade({
+        cli,
+        cliEnvironment,
+        runtime,
+        dataDirectory,
+        stateDirectory: STATE_DIRECTORY,
+        metadataFile: METADATA,
+        manifest,
+        artifacts,
+        previousVersion: previous.previousVersion,
+        installedMetadata,
+        before: beforeRestart,
+        invokeCli,
+        cliJson,
+        eventually,
+        strongOsIdentity: launchdStrongIdentity,
+        setEffectUnknown: value => {
+            effectUnknown = value;
+        },
+    });
+    operationIds.push(...upgrade.operationIds);
+    const afterUpgrade = upgrade.upgraded;
+    const bytesBeforeManagedRestart = new Map(
+        ["config.yaml", ".control/gateway.json", ".control/auth.json"].map(file => [
+            file,
+            fs.existsSync(path.join(dataDirectory, file))
+                ? fs.readFileSync(path.join(dataDirectory, file))
+                : null,
+        ]),
+    );
 
     effectUnknown = true;
     const restartedOutput = invokeCli(["restart"]).stdout;
@@ -576,18 +623,38 @@ try {
         }),
         value =>
             value.os.manager.state === "running" &&
+            value.os.manager.enabled === true &&
             value.os.manager.ipc === "available" &&
             value.os.gateway.actual === "running" &&
             value.os.gateway.desired === "running" &&
             value.control.gateway.actual === "running",
         "重启后用户级管理服务或网关未稳定运行",
     );
-    assert.notEqual(afterRestart.os.manager.pid, beforeRestart.os.manager.pid);
-    assert.notEqual(afterRestart.control.manager.id, beforeRestart.control.manager.id);
+    assert.notEqual(afterRestart.os.manager.pid, afterUpgrade.os.manager.pid);
+    assert.notEqual(afterRestart.control.manager.id, afterUpgrade.control.manager.id);
     assert.notEqual(
         afterRestart.control.gateway.instance?.id,
-        beforeRestart.control.gateway.instance?.id,
+        afterUpgrade.control.gateway.instance?.id,
     );
+    assert.equal(afterRestart.os.manager.version, manifest.host.version);
+    assert.equal(
+        JSON.parse(fs.readFileSync(METADATA, "utf8")).workingDirectory,
+        afterUpgrade.metadata.workingDirectory,
+        "launchd 重启必须继续使用升级后的不可变候选",
+    );
+    assert.equal(
+        afterRestart.control.gateway.instance?.generationId,
+        afterUpgrade.control.gateway.instance?.generationId,
+    );
+    assert.equal(
+        afterRestart.control.gateway.instance?.configRevision,
+        afterUpgrade.control.gateway.instance?.configRevision,
+    );
+    for (const [file, bytes] of bytesBeforeManagedRestart) {
+        const filename = path.join(dataDirectory, file);
+        if (bytes === null) assert.equal(fs.existsSync(filename), false, `${file} 不得被创建`);
+        else assert.deepEqual(fs.readFileSync(filename), bytes);
+    }
     await assertManagementOnline(port);
 
     effectUnknown = true;
@@ -627,7 +694,7 @@ try {
     assert.equal(new Set(operationIds).size, operationIds.length, "生命周期操作 ID 必须互不相同");
     completed = true;
     process.stdout.write(
-        "✓ 真实 launchd 用户级验收：旧服务迁移、异常退出冷启动、operation 持久性、空白新安装生命周期及卸载保留数据均通过\n",
+        "✓ 真实 launchd 用户级验收：旧服务迁移、异常退出冷启动、旧 patch 升级故障回退与重启恢复、operation 幂等、空白新安装生命周期及卸载保留数据均通过\n",
     );
 } finally {
     // 仅在最近一次外部效果结果已知且元数据仍绑定本次临时工作区时尝试公开卸载。

@@ -1,10 +1,12 @@
 /**
  * Pack and production-install the published management runtime, then drive its actual Web UI
- * through a real Chromium browser. The browser performs pairing and a gateway restart; the
- * installed CLI independently verifies that the manager survived and the gateway instance changed.
+ * through a real Chromium browser. The browser performs pairing, extension installation and
+ * activation, account/protocol configuration, and a real protocol request. The installed CLI only
+ * observes the same manager workspace; it never performs a product mutation for this fixture.
  */
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -22,6 +24,8 @@ const packageSources = new Map([
     ["@onebots/core", path.join(root, "packages/core")],
     ["@onebots/web", path.join(root, "packages/web")],
     ["onebots", path.join(root, "packages/onebots")],
+    ["@onebots/adapter-mock", path.join(root, "adapters/adapter-mock")],
+    ["@onebots/protocol-onebot-v11", path.join(root, "protocols/onebot-v11/protocol")],
 ]);
 const environment = {
     ...process.env,
@@ -134,7 +138,7 @@ class DevToolsSession {
 }
 
 async function stopBrowser(child) {
-    if (child.exitCode !== null) return;
+    if (child.exitCode !== null || child.signalCode !== null) return;
     let closed = false;
     const exited = new Promise(resolve =>
         child.once("close", () => {
@@ -169,7 +173,17 @@ try {
             .filter(file => file.endsWith(".tgz") && !packedFiles.has(file));
         assert.equal(candidates.length, 1, `无法唯一确认 ${name} 的打包工件`);
         packedFiles.add(candidates[0]);
-        artifacts.set(name, path.join(archives, candidates[0]));
+        const file = path.join(archives, candidates[0]);
+        const manifest = JSON.parse(execFileSync("tar", ["-xOf", file, "package/package.json"]));
+        assert.equal(manifest.name, name);
+        artifacts.set(name, {
+            name,
+            version: manifest.version,
+            spec: `file:${file}`,
+            sha256: createHash("sha256").update(fs.readFileSync(file)).digest("hex"),
+            file: candidates[0],
+            manifest,
+        });
     }
 
     fs.writeFileSync(
@@ -185,7 +199,7 @@ try {
             "--no-audit",
             "--no-fund",
             "--save-exact",
-            ...[...artifacts.values()].map(file => `file:${file}`),
+            ...["@onebots/core", "@onebots/web", "onebots"].map(name => artifacts.get(name).spec),
         ],
         {
             cwd: runtime,
@@ -200,6 +214,16 @@ try {
     const { startControlHost } = await import(
         pathToFileURL(path.join(packageRoot, "lib/control/host.js")).href
     );
+    const resolverArtifacts = Object.fromEntries(
+        ["@onebots/adapter-mock", "@onebots/protocol-onebot-v11"].map(name => {
+            const { file: _file, manifest: _manifest, ...artifact } = artifacts.get(name);
+            return [name, artifact];
+        }),
+    );
+    const publicArtifact = name => {
+        const { file: _file, manifest: _manifest, ...artifact } = artifacts.get(name);
+        return artifact;
+    };
     safeToRemove = false;
     host = await startControlHost({
         workspace,
@@ -207,6 +231,24 @@ try {
         port: 0,
         runtimeRoot: runtime,
         gatewayEntrypoint: path.join(packageRoot, "lib/gateway/entry.js"),
+        installation: {
+            resolver: {
+                host: publicArtifact("onebots"),
+                core: publicArtifact("@onebots/core"),
+                extensionVersions: Object.fromEntries(
+                    Object.entries(resolverArtifacts).map(([name, artifact]) => [
+                        name,
+                        artifact.version,
+                    ]),
+                ),
+                artifacts: resolverArtifacts,
+                fetchMetadata: async (name, version) => {
+                    const artifact = artifacts.get(name);
+                    assert.equal(artifact?.version, version);
+                    return structuredClone(artifact.manifest);
+                },
+            },
+        },
     });
     const address = host.server.address();
     assert.ok(address && typeof address === "object");
@@ -314,32 +356,153 @@ try {
         true,
     );
 
+    const clickButton = text =>
+        devtools.evaluate(`(() => {
+            const expected = ${JSON.stringify(text)};
+            const button = [...document.querySelectorAll("button")].find(value =>
+                value.textContent?.trim() === expected,
+            );
+            if (!(button instanceof HTMLButtonElement) || button.disabled)
+                throw new Error(expected + "按钮不可用");
+            button.click();
+            return true;
+        })()`);
+    const setSelect = (label, value) =>
+        devtools.evaluate(`(() => {
+            const select = document.querySelector(
+                "select[aria-label=" + JSON.stringify(${JSON.stringify(label)}) + "]",
+            );
+            if (!(select instanceof HTMLSelectElement)) throw new Error("找不到选择框");
+            select.value = ${JSON.stringify(value)};
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+            return select.value;
+        })()`);
+    const setInput = (label, value) =>
+        devtools.evaluate(`(() => {
+            const input = document.querySelector(
+                "input[aria-label=" + JSON.stringify(${JSON.stringify(label)}) + "]",
+            );
+            if (!(input instanceof HTMLInputElement)) throw new Error("找不到输入框");
+            input.value = ${JSON.stringify(value)};
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            return input.value;
+        })()`);
+
+    await waitFor(
+        () =>
+            devtools.evaluate(`Boolean(
+                document.querySelector('input[type="checkbox"][value="mock"]') &&
+                document.querySelector('input[type="checkbox"][value="onebot-v11"]')
+            )`),
+        "Web 扩展目录加载",
+    );
     await devtools.evaluate(`(() => {
-        const button = [...document.querySelectorAll("button")].find(value =>
-            value.textContent?.includes("重启网关"),
-        );
-        if (!(button instanceof HTMLButtonElement) || button.disabled)
-            throw new Error("网关重启按钮不可用");
-        button.click();
+        for (const name of ["mock", "onebot-v11"]) {
+            const input = document.querySelector('input[type="checkbox"][value="' + name + '"]');
+            if (!(input instanceof HTMLInputElement)) throw new Error("找不到扩展 " + name);
+            if (!input.checked) input.click();
+        }
+        return true;
     })()`);
-    const after = await waitFor(
+    await clickButton("查看安装计划");
+    await waitFor(
+        () =>
+            devtools.evaluate(`Boolean([...document.querySelectorAll("button")].find(value =>
+                value.textContent?.trim() === "确认并安装" && !value.disabled,
+            ))`),
+        "Web 安装计划确认",
+    );
+    await clickButton("确认并安装");
+    await waitFor(
+        async () => /验证通过，尚未应用/.test(await devtools.evaluate("document.body.innerText")),
+        "Web 扩展安装与验证",
+        10 * 60_000,
+    );
+    await clickButton("应用此运行版本");
+    await waitFor(
+        async () => /运行版本已应用/.test(await devtools.evaluate("document.body.innerText")),
+        "Web 运行版本应用",
+        60_000,
+    );
+
+    const installed = await waitFor(
         async () => {
             const current = JSON.parse(await cli(["control", "status"]));
             return current.gateway.actual === "running" &&
                 current.gateway.instance?.id &&
-                current.gateway.instance.id !== originalInstanceId
+                current.gateway.instance.id !== originalInstanceId &&
+                current.generation.active?.id
                 ? current
                 : undefined;
         },
-        "Web 触发的网关重启",
+        "Web 应用运行版本后的网关切换",
         60_000,
     );
-    assert.equal(after.manager.id, before.manager.id);
-    assert.equal(after.gateway.desired, "running");
-    await waitFor(async () => {
-        const text = await devtools.evaluate("document.body.innerText");
-        return /重启\s*已完成/.test(text) && /网关\s*运行中/.test(text) ? text : undefined;
-    }, "Web 操作结果展示");
+    assert.equal(installed.manager.id, before.manager.id);
+    assert.equal(installed.gateway.desired, "running");
+
+    await clickButton("重新读取配置");
+    await waitFor(
+        () =>
+            devtools.evaluate(`Boolean([...document.querySelectorAll("button")].find(value =>
+                value.textContent?.trim() === "创建配置草稿" && !value.disabled,
+            ))`),
+        "Web 配置快照读取",
+    );
+    await clickButton("创建配置草稿");
+    await waitFor(
+        () =>
+            devtools.evaluate(`Boolean(
+                [...document.querySelectorAll('select[aria-label="平台适配器"] option')]
+                    .find(value => value.value === "mock")
+            )`),
+        "Web 配置 Schema 加载",
+    );
+    assert.equal(await setSelect("平台适配器", "mock"), "mock");
+    assert.equal(await setInput("账号标识", "installed-web"), "installed-web");
+    await clickButton("添加空账号");
+    await waitFor(
+        async () => /mock\.installed-web/.test(await devtools.evaluate("document.body.innerText")),
+        "Web 添加 Mock 账号",
+    );
+    assert.equal(await setSelect("协议配置位置", "mock.installed-web"), "mock.installed-web");
+    assert.equal(await setSelect("输出协议", "onebot.v11"), "onebot.v11");
+    await clickButton("添加配置");
+    await waitFor(
+        async () =>
+            /mock\.installed-web \/ onebot\.v11/.test(
+                await devtools.evaluate("document.body.innerText"),
+            ),
+        "Web 添加 OneBot v11 配置",
+    );
+    await clickButton("校验配置");
+    await waitFor(
+        async () => /校验通过，尚未应用/.test(await devtools.evaluate("document.body.innerText")),
+        "Web 配置校验",
+    );
+    await clickButton("应用已校验配置");
+    await waitFor(
+        async () => /应用成功/.test(await devtools.evaluate("document.body.innerText")),
+        "Web 配置应用",
+        60_000,
+    );
+    await waitFor(
+        async () => /网关\s*运行中/.test(await devtools.evaluate("document.body.innerText")),
+        "Web 配置应用后的网关状态",
+        60_000,
+    );
+
+    const protocolResult = await devtools.evaluate(`(async () => {
+        const response = await fetch("/mock/installed-web/onebot/v11/get_login_info", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: "{}",
+        });
+        return { status: response.status, body: await response.json() };
+    })()`);
+    assert.equal(protocolResult.status, 200);
+    assert.equal(protocolResult.body.status, "ok");
+    assert.ok(Number.isSafeInteger(protocolResult.body.data.user_id));
 
     devtools.close();
     devtools = undefined;
@@ -349,7 +512,7 @@ try {
     host = undefined;
     safeToRemove = true;
     process.stdout.write(
-        "✓ 已安装 npm 产物的 Web UI 在真实浏览器中完成设备码配对与网关重启；管理服务保持在线且网关实例已替换\n",
+        "✓ 已安装 npm 产物的 Web UI 在真实浏览器中完成设备码配对、扩展安装与激活、Mock 账号和 OneBot v11 配置应用，并由浏览器取得实际协议成功响应\n",
     );
 } finally {
     devtools?.close();
