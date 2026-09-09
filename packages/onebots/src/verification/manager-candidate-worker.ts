@@ -52,9 +52,6 @@ process.once(
             const { startControlHost: start } = await import(
                 pathToFileURL(path.join(lib, "control/host.js")).href
             );
-            const { createLocalControlClient } = await import(
-                pathToFileURL(path.join(lib, "client/local-control.js")).href
-            );
             host = await start({
                 workspace: input.workspace,
                 runtimeRoot: input.root,
@@ -64,12 +61,8 @@ process.once(
                 gatewayEntrypoint: path.join(input.workspace, "forbidden-gateway.js"),
             });
             if (!host) throw new Error();
-            const state = await createLocalControlClient(input.workspace).status();
-            if (
-                state.gateway.actual !== "stopped" ||
-                state.gateway.desired !== "stopped" ||
-                state.gateway.instance
-            )
+            const state = host.controller.status();
+            if (state.actual !== "stopped" || state.desired !== "stopped" || state.instance)
                 throw new Error();
             const address = host.server.address();
             if (!address || typeof address === "string") throw new Error();
@@ -86,12 +79,15 @@ process.once(
                 throw new Error();
             await authentication.verify(origin);
             // 维护期不能通过本地请求启动网关或开放配置写入。
-            let rejected = false;
-            try {
-                await createLocalControlClient(input.workspace).gateway("start");
-            } catch {
-                rejected = true;
-            }
+            const rejected = await fetch(`${origin}/api/control/gateway/start`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: "{}",
+                signal: AbortSignal.timeout(5000),
+            }).then(
+                response => response.status >= 400,
+                () => true,
+            );
             if (!rejected || host.controller.status().actual !== "stopped") throw new Error();
             await host.close();
             host = undefined;
