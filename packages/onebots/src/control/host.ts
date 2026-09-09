@@ -1,6 +1,9 @@
 import { respondControlLogs } from "./logs-http.js";
 import { createControlLogWriter } from "./gateway-log.js";
-import { createManagerUpgradeRelease, createManagerUpgradeIdentity } from "./service-upgrade-release.js";
+import {
+    createManagerUpgradeRelease,
+    createManagerUpgradeIdentity,
+} from "./service-upgrade-release.js";
 import { managerUpgradeStatus } from "../service-upgrade-workspace.js";
 import { GenerationConfigurationVerifier } from "./generation-configuration.js";
 import { authorizeControlHttp } from "./auth-check.js";
@@ -50,12 +53,23 @@ import { ControlConfigurationService } from "./configuration-service.js";
 import { handleConfigurationRequest, isConfigurationPath } from "./configuration-api.js";
 import type { ControlHostOptions } from "./host-options.js";
 import packageMetadata from "../../package.json" with { type: "json" };
+import {
+    completeWindowsGatewayOperation,
+    WindowsManagerStatusPublisher,
+} from "../windows-manager-status-publisher.js";
+import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
 export type { ControlHostOptions } from "./host-options.js";
 export async function startControlHost(options: ControlHostOptions) {
+    if (
+        options.windowsHostPipe &&
+        (process.platform !== "win32" || options.windowsHostPipe !== WINDOWS_HOST_PIPE_NAME)
+    )
+        throw new Error("Windows 原生宿主管道无效");
     const installDeploymentAuth = consumeDeploymentAuthenticationEnvironment();
     fs.mkdirSync(options.workspace, { recursive: true });
     const workspace = fs.realpathSync(options.workspace);
-    const socketPath = controlSocket(workspace);
+    const windowsNativeMode = options.windowsHostPipe !== undefined;
+    const socketPath = options.windowsHostPipe ?? controlSocket(workspace);
     const webRoot =
         options.webRoot ??
         path.join(
@@ -107,17 +121,39 @@ export async function startControlHost(options: ControlHostOptions) {
             };
         },
         onExit: (instanceId, error) => {
-            void controller.observeExit(instanceId, error).catch(() => {
-                process.stderr.write("[onebots] 网关退出状态无法持久化，请检查工作区存储\n");
-            });
+            void controller
+                .observeExit(instanceId, error)
+                .then(() => publishWindowsStatus())
+                .catch(() => {
+                    process.stderr.write(
+                        "[onebots] 网关退出状态无法持久化或发布，请检查工作区存储\n",
+                    );
+                });
         },
     });
+    let publisher: WindowsManagerStatusPublisher | undefined;
+    let windowsStatusHeartbeat: NodeJS.Timeout | undefined;
+    function publishWindowsStatus(): Promise<void> {
+        if (!publisher) return Promise.resolve();
+        return publisher.publish(controller.status()).catch(() => {
+            process.stderr.write("[onebots] Windows 原生宿主状态发布失败\n");
+        });
+    }
     const controller = new GatewayController({
         statePath: path.join(controlDirectory(workspace), "gateway.json"),
         driver,
-        onOperation: controlLogs.operation,
+        onOperation: operation => {
+            controlLogs.operation(operation);
+            void publishWindowsStatus();
+        },
         initialDesired: serviceMigrationStatus(workspace).pending ? "stopped" : "running",
     });
+    if (options.windowsHostPipe)
+        publisher = new WindowsManagerStatusPublisher(options.windowsHostPipe, {
+            id,
+            version: packageMetadata.version,
+            pid: process.pid,
+        });
     const readVerified = (id: string) => {
         if (!generations) throw new Error("运行版本仓库不可用");
         return generations.readVerified(id);
@@ -171,7 +207,8 @@ export async function startControlHost(options: ControlHostOptions) {
         workspace,
         generations,
         lifecycle,
-        ownershipAvailable, controlLogs.operation,
+        ownershipAvailable,
+        controlLogs.operation,
     );
     const sockets = new Set<Duplex>();
     let closed = false;
@@ -188,7 +225,8 @@ export async function startControlHost(options: ControlHostOptions) {
     }
     const currentGateway = () =>
         !closed && !storageError && activeAddress() && !serviceMigrationStatus(workspace).pending
-            ? controller.status().instance?.id : undefined;
+            ? controller.status().instance?.id
+            : undefined;
     const mcp = new ControlMcpService({
         currentGateway,
         forward: (instanceId, request) => driver.mcp(instanceId, request),
@@ -202,12 +240,17 @@ export async function startControlHost(options: ControlHostOptions) {
                 return instanceId ? driver.sendContext(instanceId) : undefined;
             },
             forward: request => driver.send(request.expected.gatewayInstanceId, request),
+            onOperation: controlLogs.operation,
         });
     } catch {
         process.stderr.write("[onebots] 发送操作记录不可用，管理端保留用于诊断\n");
     }
     const verification = createHostVerification({
-        workspace, auth, driver, lifecycle, currentGateway,
+        workspace,
+        auth,
+        driver,
+        lifecycle,
+        currentGateway,
         onOperation: controlLogs.operation,
         available: () =>
             !closed &&
@@ -344,25 +387,32 @@ export async function startControlHost(options: ControlHostOptions) {
                         json(response, 503, { message: "控制状态不可读取，禁止修改" });
                         return;
                     }
-                    if (controller.status().recoveryRequired && !driver.hasLiveChildren()) {
-                        const prior = controller.status().instance;
-                        if (prior?.pid && gatewayProcessExists(prior.pid))
-                            throw new Error("旧实例仍存在，拒绝重复启动");
-                        if (!prior) throw new Error("前次启动结果未知，不能认定旧进程已退出");
-                        if (prior && !prior.pid)
-                            throw new Error("旧实例身份无法核实，需检查本地运行状态");
-                        await lifecycle.reconcileStopped(state => {
-                            if (driver.hasLiveChildren()) return false;
-                            return state.instance?.pid
-                                ? !gatewayProcessExists(state.instance.pid)
-                                : false;
-                        });
-                    }
-                    const operation = await (action === "start"
-                        ? lifecycle.start()
-                        : action === "stop"
-                          ? lifecycle.stop()
-                          : lifecycle.restart());
+                    const operation = await completeWindowsGatewayOperation(
+                        async () => {
+                            if (controller.status().recoveryRequired && !driver.hasLiveChildren()) {
+                                const prior = controller.status().instance;
+                                if (prior?.pid && gatewayProcessExists(prior.pid))
+                                    throw new Error("旧实例仍存在，拒绝重复启动");
+                                if (!prior)
+                                    throw new Error("前次启动结果未知，不能认定旧进程已退出");
+                                if (!prior.pid)
+                                    throw new Error("旧实例身份无法核实，需检查本地运行状态");
+                                await lifecycle.reconcileStopped(state => {
+                                    if (driver.hasLiveChildren()) return false;
+                                    return state.instance?.pid
+                                        ? !gatewayProcessExists(state.instance.pid)
+                                        : false;
+                                });
+                            }
+                            return action === "start"
+                                ? lifecycle.start()
+                                : action === "stop"
+                                  ? lifecycle.stop()
+                                  : lifecycle.restart();
+                        },
+                        () => controller.status(),
+                        publisher,
+                    );
                     json(response, 200, operation);
                     return;
                 }
@@ -387,7 +437,7 @@ export async function startControlHost(options: ControlHostOptions) {
     const local = http.createServer((req, res) => {
         void handle(req, res, true);
     });
-    for (const listener of [server, local]) {
+    for (const listener of windowsNativeMode ? [server] : [server, local]) {
         listener.on("connection", socket => {
             sockets.add(socket);
             socket.once("close", () => sockets.delete(socket));
@@ -409,6 +459,7 @@ export async function startControlHost(options: ControlHostOptions) {
     async function close() {
         if (closed) return;
         closed = true;
+        if (windowsStatusHeartbeat) clearInterval(windowsStatusHeartbeat);
         messageDebugHttp.close();
         const verificationClosed = verification.close();
         messageDebug.close();
@@ -416,7 +467,12 @@ export async function startControlHost(options: ControlHostOptions) {
         await configuration?.close();
         await installation?.close();
         try {
-            if (!storageError || driver.hasLiveChildren()) await lifecycle.shutdown();
+            if (!storageError || driver.hasLiveChildren())
+                await completeWindowsGatewayOperation(
+                    () => lifecycle.shutdown(),
+                    () => controller.status(),
+                    publisher,
+                );
         } catch {
             if (driver.hasLiveChildren()) {
                 closed = false;
@@ -427,6 +483,7 @@ export async function startControlHost(options: ControlHostOptions) {
             closed = false;
             throw new Error("网关尚未确认退出，保留管理锁");
         }
+        await publisher?.flush();
         await sending?.close();
         await verificationClosed;
         for (const socket of sockets) socket.destroy();
@@ -436,7 +493,7 @@ export async function startControlHost(options: ControlHostOptions) {
             ),
         );
         try {
-            if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
+            if (!windowsNativeMode && fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
             if (ownershipAvailable) await closeServiceProcessOwnership(workspace, id);
         } finally {
             controlLogs.manager("stopped");
@@ -452,9 +509,11 @@ export async function startControlHost(options: ControlHostOptions) {
             storageError = true;
             process.stderr.write("[onebots] 控制状态不可读取，保持管理端用于诊断\n");
         }
-        if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
-        await listen(local, socketPath);
-        fs.chmodSync(socketPath, 0o600);
+        if (!windowsNativeMode) {
+            if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
+            await listen(local, socketPath);
+            fs.chmodSync(socketPath, 0o600);
+        }
         await listen(server, options.port ?? 6727, options.host ?? "127.0.0.1");
         try {
             if (
@@ -490,6 +549,22 @@ export async function startControlHost(options: ControlHostOptions) {
         } catch {
             storageError = true;
             process.stderr.write("[onebots] 网关启动或恢复状态无法持久化，管理端保留用于诊断\n");
+        }
+        if (publisher) {
+            let published = false;
+            for (let attempt = 0; attempt < 50 && !published; attempt++) {
+                try {
+                    await publisher.publish(controller.status());
+                    published = true;
+                } catch {
+                    if (attempt === 49) throw new Error("Windows 原生宿主状态发布失败");
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+            windowsStatusHeartbeat = setInterval(() => {
+                void publishWindowsStatus();
+            }, 10_000);
+            windowsStatusHeartbeat.unref();
         }
         controlLogs.manager("ready");
         return { id, controller: { status: () => controller.status() }, server, socketPath, close };

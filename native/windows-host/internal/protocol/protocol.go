@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const Version = 1
+const Version = 2
 
 const MaxMessageBytes = 64 * 1024
 
@@ -33,10 +33,12 @@ var managerIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][
 var versionPattern = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$`)
 
 type Request struct {
-	Version   int           `json:"version"`
-	RequestID string        `json:"requestId"`
-	Operation string        `json:"operation"`
-	Control   *ControlState `json:"control,omitempty"`
+	Version   int                  `json:"version"`
+	RequestID string               `json:"requestId"`
+	Operation string               `json:"operation"`
+	Control   *ControlState        `json:"control,omitempty"`
+	Manager   *ControlManagerState `json:"manager,omitempty"`
+	Revision  uint64               `json:"revision,omitempty"`
 }
 
 type ControlManagerState struct {
@@ -51,8 +53,10 @@ type ControlGatewayState struct {
 }
 
 type ControlState struct {
-	Manager ControlManagerState `json:"manager"`
-	Gateway ControlGatewayState `json:"gateway"`
+	Revision    uint64              `json:"revision"`
+	PublishedAt time.Time           `json:"publishedAt,omitempty"`
+	Manager     ControlManagerState `json:"manager"`
+	Gateway     ControlGatewayState `json:"gateway"`
 }
 
 type ManagerState struct {
@@ -102,17 +106,28 @@ func DecodeRequest(data []byte) (Request, error) {
 	if !requestIDPattern.MatchString(request.RequestID) {
 		return Request{}, errors.New("requestId must contain 1-64 safe ASCII characters")
 	}
-	if request.Operation != "status" && request.Operation != "publish_status" {
+	if request.Operation != "status" && request.Operation != "publish_status" && request.Operation != "invalidate_status" {
 		return Request{}, fmt.Errorf("unsupported operation %q", request.Operation)
 	}
-	if request.Operation == "status" && request.Control != nil {
+	if request.Operation == "status" && (request.Control != nil || request.Manager != nil || request.Revision != 0) {
 		return Request{}, errors.New("status request must not contain control state")
 	}
 	if request.Operation == "publish_status" {
-		if request.Control == nil {
+		if request.Control == nil || request.Manager != nil || request.Revision != 0 {
 			return Request{}, errors.New("publish_status request is missing control state")
 		}
 		if err := ValidateControlState(*request.Control); err != nil {
+			return Request{}, err
+		}
+		if !request.Control.PublishedAt.IsZero() {
+			return Request{}, errors.New("publish_status publishedAt is assigned by the host")
+		}
+	}
+	if request.Operation == "invalidate_status" {
+		if request.Control != nil || request.Manager == nil || request.Revision == 0 {
+			return Request{}, errors.New("invalidate_status request is incomplete")
+		}
+		if err := ValidateControlManagerState(*request.Manager); err != nil {
 			return Request{}, err
 		}
 	}
@@ -120,20 +135,30 @@ func DecodeRequest(data []byte) (Request, error) {
 }
 
 func ValidateControlState(state ControlState) error {
-	if !managerIDPattern.MatchString(state.Manager.ID) {
-		return errors.New("control manager id is invalid")
+	if state.Revision == 0 {
+		return errors.New("control revision is invalid")
 	}
-	if !versionPattern.MatchString(state.Manager.Version) || len(state.Manager.Version) > 128 {
-		return errors.New("control manager version is invalid")
-	}
-	if state.Manager.PID == 0 {
-		return errors.New("control manager pid is invalid")
+	if err := ValidateControlManagerState(state.Manager); err != nil {
+		return err
 	}
 	if _, ok := validGatewayDesiredStates[state.Gateway.Desired]; !ok {
 		return errors.New("control gateway desired state is invalid")
 	}
 	if _, ok := validGatewayActualStates[state.Gateway.Actual]; !ok {
 		return errors.New("control gateway actual state is invalid")
+	}
+	return nil
+}
+
+func ValidateControlManagerState(state ControlManagerState) error {
+	if !managerIDPattern.MatchString(state.ID) {
+		return errors.New("control manager id is invalid")
+	}
+	if !versionPattern.MatchString(state.Version) || len(state.Version) > 128 {
+		return errors.New("control manager version is invalid")
+	}
+	if state.PID == 0 {
+		return errors.New("control manager pid is invalid")
 	}
 	return nil
 }
@@ -197,6 +222,9 @@ func DecodeResponse(data []byte, expectedRequestID string) (Response, error) {
 		}
 		if response.State.Manager.State != "running" || response.State.Control.Manager.PID != response.State.Manager.PID {
 			return Response{}, errors.New("control manager pid does not match host manager")
+		}
+		if response.State.Control.PublishedAt.IsZero() {
+			return Response{}, errors.New("control state is missing host publication time")
 		}
 	}
 	return response, nil

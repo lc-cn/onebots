@@ -300,6 +300,17 @@ func (server *statusPipe) handle(connection net.Conn) {
 			server.writeFailure(connection, "state_mismatch", "published control status does not match the running manager")
 			return
 		}
+	} else if request.Operation == "invalidate_status" {
+		if request.Manager == nil || !mayPublishControlStatus(
+			client, server.allowed.serviceSID, request.Manager.PID,
+		) {
+			server.writeFailure(connection, "forbidden_operation", "only the service identity may invalidate control status")
+			return
+		}
+		if server.state.invalidate(*request.Manager, request.Revision) != nil {
+			server.writeFailure(connection, "state_mismatch", "control invalidation does not match the running manager")
+			return
+		}
 	}
 	_ = json.NewEncoder(connection).Encode(protocol.Success(request.RequestID, server.state.snapshot()))
 }

@@ -252,6 +252,27 @@ try {
     assert.equal(afterCli.gateway.desired, "running");
     const cliInstanceId = afterCli.gateway.instance?.id;
     assert.ok(cliInstanceId);
+    const sendId = randomUUID();
+    const sent = await json([
+        "send",
+        ...data,
+        "--account",
+        "mock/installed-entry",
+        "--target-type",
+        "private",
+        "--target-id-type",
+        "number",
+        "--operation-id",
+        sendId,
+        "--json",
+        "123",
+        "installed-entry-message",
+    ]);
+    assert.equal(sent.status, "succeeded");
+    assert.equal(
+        (await json(["send", ...data, "--operation-id", sendId, "--json"])).status,
+        "succeeded",
+    );
 
     const reports = [];
     const mainActions = [["status"], ["restart"], ["status"], ["track"], ["configure"], ["quit"]];
@@ -284,12 +305,14 @@ try {
     const operationLog = await cli(["control", "logs", ...data, "--source", "operation"]);
     assert.match(operationLog, new RegExp(installId));
     assert.match(operationLog, new RegExp(applyId));
+    assert.match(operationLog, new RegExp(sendId));
+    assert.doesNotMatch(operationLog, /installed-entry-message/);
 
     await host.close();
     host = undefined;
     safeToRemove = true;
     process.stdout.write(
-        "✓ 已安装产物的 CLI 完成计划、安装、激活、配置与启停；TUI 命令入口重启同一网关并读取安装任务、配置任务及统一操作日志\n",
+        "✓ 已安装产物的 CLI 完成计划、安装、激活、配置、发送与启停；TUI 命令入口重启同一网关并读取安装任务、配置任务及统一操作日志\n",
     );
 } finally {
     if (host) {

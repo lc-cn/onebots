@@ -15,12 +15,12 @@ afterEach(() => {
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 const owner = "a".repeat(64);
-function fixture() {
+function fixture(onOperation = vi.fn()) {
     const directory = fs.mkdtempSync("/tmp/control-send-");
     roots.push(directory);
     const context = { gatewayInstanceId: randomUUID(), configVersion: "b".repeat(64) };
     const forward = vi.fn(async (_request: ControlSendRequest) => ({ messageId: "platform-id" }));
-    const options = { directory, currentContext: () => context, forward };
+    const options = { directory, currentContext: () => context, forward, onOperation };
     const service = new ControlSendService(options);
     const request = () => ({
         id: randomUUID(),
@@ -30,9 +30,31 @@ function fixture() {
         targetId: 123,
         message: "synthetic-secret-message",
     });
-    return { directory, context, forward, options, service, request };
+    return { directory, context, forward, onOperation, options, service, request };
 }
 describe("persistent control send", () => {
+    it("projects persisted intent and terminal state without message contents", async () => {
+        const f = fixture(),
+            request = f.request();
+        await f.service.send(owner, request);
+        expect(f.onOperation).toHaveBeenNthCalledWith(1, {
+            id: request.id,
+            action: "message.send",
+            status: "running",
+        });
+        expect(f.onOperation).toHaveBeenNthCalledWith(
+            2,
+            expect.objectContaining({
+                id: request.id,
+                action: "message.send",
+                status: "succeeded",
+                finishedAt: expect.any(String),
+            }),
+        );
+        expect(JSON.stringify(f.onOperation.mock.calls)).not.toContain(request.message);
+        expect(JSON.stringify(f.onOperation.mock.calls)).not.toContain(request.account);
+    });
+
     it("permits explicit local recovery queries without changing owner or dispatching", async () => {
         const f = fixture(),
             request = f.request();
@@ -136,8 +158,17 @@ describe("persistent control send", () => {
             status: "running",
             startedAt: new Date().toISOString(),
         });
+        f.onOperation.mockClear();
         const restarted = new ControlSendService(f.options);
         expect(restarted.operation(owner, request.id).status).toBe("unknown");
+        expect(f.onOperation).toHaveBeenCalledWith(
+            expect.objectContaining({
+                id: request.id,
+                action: "message.send",
+                status: "unknown",
+                finishedAt: expect.any(String),
+            }),
+        );
         expect(f.forward).not.toHaveBeenCalled();
     });
     it("failed intent write gates new sends without dispatch", async () => {

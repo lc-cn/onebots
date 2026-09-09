@@ -6,6 +6,7 @@ const MAX_MESSAGE_BYTES = 64 * 1024;
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/;
 
 export interface WindowsPublishedControlStatus {
+    revision: number;
     manager: { id: string; version: string; pid: number };
     gateway: {
         desired: "running" | "stopped";
@@ -14,10 +15,12 @@ export interface WindowsPublishedControlStatus {
 }
 
 interface PipeRequest {
-    version: 1;
+    version: 2;
     requestId: string;
-    operation: "status" | "publish_status";
+    operation: "status" | "publish_status" | "invalidate_status";
     control?: WindowsPublishedControlStatus;
+    manager?: WindowsPublishedControlStatus["manager"];
+    revision?: number;
 }
 
 export type WindowsPipeExchange = (
@@ -79,15 +82,28 @@ export class WindowsHostControlClient {
     }
 
     async status(): Promise<WindowsNativeStatus> {
-        return this.send({ version: 1, requestId: this.id("status"), operation: "status" });
+        return this.send({ version: 2, requestId: this.id("status"), operation: "status" });
     }
 
     async publish(control: WindowsPublishedControlStatus): Promise<WindowsNativeStatus> {
         return this.send({
-            version: 1,
+            version: 2,
             requestId: this.id("publish"),
             operation: "publish_status",
             control: structuredClone(control),
+        });
+    }
+
+    async invalidate(
+        manager: WindowsPublishedControlStatus["manager"],
+        revision: number,
+    ): Promise<WindowsNativeStatus> {
+        return this.send({
+            version: 2,
+            requestId: this.id("invalidate"),
+            operation: "invalidate_status",
+            manager: structuredClone(manager),
+            revision,
         });
     }
 

@@ -1,11 +1,18 @@
 import { ServiceOperationStorage, canonicalServiceJson } from "../service-operation-storage.js";
+import {
+    observeNamedPersistedOperation,
+    type PersistedOperationObserver,
+} from "../persisted-operation-observer.js";
 import { ControlSendError, parseSendRecord, sendId, type SendRecord } from "./send-contracts.js";
 /** 唯一持有工作区锁的manager使用；任何存储失败仅封锁发送域，不阻止管理端启动。 */
 export class ControlSendStore {
     private storage?: ServiceOperationStorage;
     private blocked = false;
     private readonly uncertain = new Map<string, SendRecord>();
-    constructor(directory: string) {
+    constructor(
+        directory: string,
+        private readonly onOperation?: PersistedOperationObserver,
+    ) {
         try {
             this.storage = new ServiceOperationStorage(directory);
             for (const name of this.storage.list()) {
@@ -19,6 +26,7 @@ export class ControlSendStore {
                     this.uncertain.set(record.id, unknown);
                     this.storage.write(name, unknown);
                     this.uncertain.delete(record.id);
+                    this.observe(unknown);
                 }
             }
         } catch {
@@ -49,6 +57,7 @@ export class ControlSendStore {
             for (const name of names) this.read(name.slice(0, -5));
             if (names.length >= 10000) throw new ControlSendError(429);
             this.storage.write(`${record.id}.json`, parseSendRecord(record), true);
+            this.observe(record);
         } catch (error) {
             if (error instanceof ControlSendError && error.httpStatus === 429) throw error;
             this.blocked = true;
@@ -75,6 +84,7 @@ export class ControlSendStore {
             )
                 throw new Error();
             this.storage.write(`${value.id}.json`, value);
+            this.observe(value);
         } catch {
             this.blocked = true;
             const { messageId: _messageId, ...safe } = value;
@@ -85,5 +95,12 @@ export class ControlSendStore {
             });
             throw new ControlSendError(503);
         }
+    }
+    private observe(record: SendRecord): void {
+        observeNamedPersistedOperation(this.onOperation, "message.send", {
+            id: record.id,
+            status: record.status,
+            ...(record.finishedAt ? { finishedAt: record.finishedAt } : {}),
+        });
     }
 }

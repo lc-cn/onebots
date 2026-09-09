@@ -7,6 +7,11 @@ import { getServiceFiles } from "./service-files.js";
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
+import {
+    WindowsServicePlatform,
+    WINDOWS_CONTROL_FRESHNESS_MS,
+    type WindowsServiceObservation,
+} from "./service-platform-windows.js";
 import { inspectMigrationManager } from "./service-migration-manager.js";
 import {
     inspectServiceRecoveryDetails,
@@ -49,7 +54,12 @@ export interface ManagerServiceStatus {
 }
 export interface ManagerServiceStatusDependencies {
     platform?(spec: ManagerServiceSpec, definitionPath: string): Pick<ServicePlatform, "inspect">;
+    windowsPlatform?(
+        spec: ManagerServiceSpec,
+        definitionPath: string,
+    ): Pick<WindowsServicePlatform, "inspectNative">;
     inspectManager?: typeof inspectMigrationManager;
+    now?(): number;
 }
 
 /** 纯观测：不读业务配置，不初始化操作日志/工作区，不调用服务控制或冷恢复。 */
@@ -101,10 +111,6 @@ async function inspectManagerServiceStatusSnapshot(
     }
     const metadata = readServiceMetadata(files.metadata);
     result.installation = metadata.kind;
-    if (host.platform === "win32") {
-        result.diagnostic = "platform-control-unavailable";
-        return result;
-    }
     if (metadata.kind !== "control") {
         result.diagnostic =
             metadata.kind === "missing"
@@ -134,6 +140,91 @@ async function inspectManagerServiceStatusSnapshot(
     }
     if (!definitionCurrent()) {
         result.diagnostic = "definition-mismatch";
+        return result;
+    }
+    if (host.platform === "win32") {
+        let platform: Pick<WindowsServicePlatform, "inspectNative">;
+        let before: WindowsServiceObservation;
+        try {
+            platform =
+                dependencies.windowsPlatform?.(spec, files.definition) ??
+                new WindowsServicePlatform(host, scope, files.definition);
+            before = await platform.inspectNative();
+            if (before.service.definitionPath !== files.definition) throw new Error();
+            result.manager = {
+                state: before.service.state,
+                enabled: before.service.enabled,
+                loaded: before.service.loaded,
+                pid: before.service.processId,
+                ipc: "not-queried",
+            };
+            result.diagnostic = null;
+        } catch {
+            result.diagnostic = "os-unavailable";
+            return result;
+        }
+        const current = readServiceMetadata(files.metadata);
+        let stable = false;
+        try {
+            stable = isDeepStrictEqual(before, await platform.inspectNative());
+        } catch {
+            // 二次原生观测失败时不能复用第一次状态。
+        }
+        if (
+            !stable ||
+            !definitionCurrent() ||
+            current.kind !== "control" ||
+            !isDeepStrictEqual(current.spec, spec)
+        ) {
+            result.diagnostic = "baseline-changed";
+            result.manager = {
+                state: "unknown",
+                enabled: null,
+                loaded: null,
+                pid: null,
+                ipc: before.service.running ? "mismatch" : "not-queried",
+            };
+            return result;
+        }
+        if (!before.service.running || before.service.state !== "running") return result;
+        if (!before.control) {
+            result.manager.ipc = "unavailable";
+            result.diagnostic = "ipc-unavailable";
+            return result;
+        }
+        const controlAge =
+            (dependencies.now ?? Date.now)() - Date.parse(before.control.publishedAt);
+        if (
+            !Number.isSafeInteger(before.control.revision) ||
+            before.control.revision < 1 ||
+            !Number.isFinite(controlAge) ||
+            controlAge < 0 ||
+            controlAge > WINDOWS_CONTROL_FRESHNESS_MS
+        ) {
+            result.manager.ipc = "unavailable";
+            result.diagnostic = "ipc-unavailable";
+            return result;
+        }
+        if (
+            before.control.manager.pid !== before.service.processId ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                before.control.manager.id,
+            ) ||
+            !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(
+                before.control.manager.version,
+            )
+        ) {
+            result.manager.ipc = "mismatch";
+            result.diagnostic = "identity-mismatch";
+            return result;
+        }
+        result.manager.ipc = "available";
+        result.gateway = {
+            actual: before.control.gateway.actual,
+            desired: before.control.gateway.desired,
+            recoveryRequired: null,
+            knownConfigurationFailure: null,
+        };
         return result;
     }
     let platform: Pick<ServicePlatform, "inspect">;

@@ -8,7 +8,7 @@ import (
 )
 
 func TestDecodeStatusRequest(t *testing.T) {
-	request, err := DecodeRequest([]byte(`{"version":1,"requestId":"doctor:1","operation":"status"}`))
+	request, err := DecodeRequest([]byte(`{"version":2,"requestId":"doctor:1","operation":"status"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,8 +19,30 @@ func TestDecodeStatusRequest(t *testing.T) {
 
 func controlState() ControlState {
 	return ControlState{
-		Manager: ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 42},
-		Gateway: ControlGatewayState{Desired: "running", Actual: "stopped"},
+		Revision: 1,
+		Manager:  ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 42},
+		Gateway:  ControlGatewayState{Desired: "running", Actual: "stopped"},
+	}
+}
+
+func TestDecodeInvalidateStatusRequest(t *testing.T) {
+	manager := controlState().Manager
+	request := Request{Version: Version, RequestID: "invalidate:2", Operation: "invalidate_status", Manager: &manager, Revision: 2}
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecodeRequest(encoded); err != nil {
+		t.Fatal(err)
+	}
+	invalid := []string{
+		`{"version":2,"requestId":"invalidate:2","operation":"invalidate_status","revision":2}`,
+		`{"version":2,"requestId":"invalidate:2","operation":"invalidate_status","manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}}`,
+	}
+	for _, input := range invalid {
+		if _, err := DecodeRequest([]byte(input)); err == nil {
+			t.Fatalf("expected invalidation rejection: %s", input)
+		}
 	}
 }
 
@@ -39,8 +61,8 @@ func TestDecodePublishStatusRequest(t *testing.T) {
 	}
 
 	invalid := []string{
-		`{"version":1,"requestId":"publish:1","operation":"publish_status"}`,
-		`{"version":1,"requestId":"status:1","operation":"status","control":{"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42},"gateway":{"desired":"running","actual":"stopped"}}}`,
+		`{"version":2,"requestId":"publish:1","operation":"publish_status"}`,
+		`{"version":2,"requestId":"status:1","operation":"status","control":{"revision":1,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42},"gateway":{"desired":"running","actual":"stopped"}}}`,
 		strings.Replace(string(encoded), `"pid":42`, `"pid":0`, 1),
 		strings.Replace(string(encoded), `"version":"1.2.12"`, `"version":"latest"`, 1),
 		strings.Replace(string(encoded), `"actual":"stopped"`, `"actual":"unknown"`, 1),
@@ -58,6 +80,7 @@ func TestDecodeResponseRequiresExactContract(t *testing.T) {
 	state := HostState{
 		Service: "running", Manager: ManagerState{State: "running", PID: 42}, StartedAt: time.Now(), Control: ptr(controlState()),
 	}
+	state.Control.PublishedAt = time.Now().UTC()
 	encoded, err := json.Marshal(Success("status:1", state))
 	if err != nil {
 		t.Fatal(err)
@@ -80,11 +103,11 @@ func TestDecodeResponseRequiresExactContract(t *testing.T) {
 
 func TestDecodeRequestRejectsUnknownContract(t *testing.T) {
 	tests := []string{
-		`{"version":2,"requestId":"a","operation":"status"}`,
-		`{"version":1,"requestId":"../unsafe","operation":"status"}`,
-		`{"version":1,"requestId":"a","operation":"stop"}`,
-		`{"version":1,"requestId":"a","operation":"status","unknown":true}`,
-		`{"version":1,"requestId":"a","operation":"status"}{}`,
+		`{"version":1,"requestId":"a","operation":"status"}`,
+		`{"version":2,"requestId":"../unsafe","operation":"status"}`,
+		`{"version":2,"requestId":"a","operation":"stop"}`,
+		`{"version":2,"requestId":"a","operation":"status","unknown":true}`,
+		`{"version":2,"requestId":"a","operation":"status"}{}`,
 	}
 	for _, input := range tests {
 		if _, err := DecodeRequest([]byte(input)); err == nil {

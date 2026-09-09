@@ -58,8 +58,9 @@ func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
 	}
 	defer server.Close()
 	control := protocol.ControlState{
-		Manager: protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: managerPID},
-		Gateway: protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
+		Revision: 1,
+		Manager:  protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: managerPID},
+		Gateway:  protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
 	}
 	response := exchangePipeRequest(t, config.PipeName, protocol.Request{
 		Version: protocol.Version, RequestID: "publish:1", Operation: "publish_status", Control: &control,
@@ -77,6 +78,19 @@ func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
 	if response.State == nil || response.State.Control == nil || response.State.Control.Gateway != control.Gateway {
 		t.Fatalf("status reader did not observe published control state: %#v", response)
 	}
+	invalidate := exchangePipeRequest(t, config.PipeName, protocol.Request{
+		Version: protocol.Version, RequestID: "invalidate:2", Operation: "invalidate_status", Manager: &control.Manager, Revision: 2,
+	})
+	if !invalidate.OK || invalidate.State == nil || invalidate.State.Control != nil {
+		t.Fatalf("invalidation did not clear control state: %#v", invalidate)
+	}
+	control.Revision = 3
+	republished := exchangePipeRequest(t, config.PipeName, protocol.Request{
+		Version: protocol.Version, RequestID: "publish:3", Operation: "publish_status", Control: &control,
+	})
+	if !republished.OK || republished.State == nil || republished.State.Control == nil || republished.State.Control.Revision != 3 {
+		t.Fatalf("higher revision was not published: %#v", republished)
+	}
 }
 
 func TestPublishRequiresServiceSIDAndRunningManagerPID(t *testing.T) {
@@ -92,8 +106,9 @@ func TestPublishRequiresServiceSIDAndRunningManagerPID(t *testing.T) {
 	state := newStateStore(time.Now())
 	state.set("running", "running", 42)
 	if err := state.publish(protocol.ControlState{
-		Manager: protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 41},
-		Gateway: protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
+		Revision: 1,
+		Manager:  protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 41},
+		Gateway:  protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
 	}); err == nil {
 		t.Fatal("mismatched manager pid unexpectedly published")
 	}

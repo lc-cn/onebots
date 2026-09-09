@@ -15,11 +15,13 @@ import {
 import { closedServiceObject } from "../service-operation-storage.js";
 import { ControlSendStore } from "./send-store.js";
 import { GatewayRequestError } from "./gateway-request-client.js";
+import type { PersistedOperationObserver } from "../persisted-operation-observer.js";
 export { ControlSendError } from "./send-contracts.js";
 export interface ControlSendServiceOptions {
     directory: string;
     currentContext(): ControlSendContext | undefined;
     forward(request: ControlSendRequest): Promise<{ messageId: string | null }>;
+    onOperation?: PersistedOperationObserver;
 }
 export class ControlSendService {
     private readonly store: ControlSendStore;
@@ -27,7 +29,7 @@ export class ControlSendService {
     private closed = false;
     private readonly pending = new Set<Promise<ControlSendOperation>>();
     constructor(private readonly options: ControlSendServiceOptions) {
-        this.store = new ControlSendStore(options.directory);
+        this.store = new ControlSendStore(options.directory, options.onOperation);
     }
     health() {
         return this.store.health();

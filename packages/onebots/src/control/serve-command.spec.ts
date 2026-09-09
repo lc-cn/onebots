@@ -4,6 +4,7 @@ vi.mock("./host.js", () => ({ startControlHost: mocks.start }));
 vi.mock("../cli-output.js", () => ({ writeCliOutput: mocks.output }));
 import { runControlCommand } from "./command.js";
 import { parseServeOptions } from "./serve-options.js";
+import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
 afterEach(() => vi.clearAllMocks());
 describe("管理服务命令边界", () => {
     it.each(["--help", "-h"])("%s 不启动管理服务或创建工作区", async flag => {
@@ -29,5 +30,13 @@ describe("管理服务命令边界", () => {
                 PORT: "9000",
             }),
         ).toEqual({ workspace: "/tmp/onebots test", host: "127.0.0.1", port: 8080 });
+    });
+    it("只接受固定的Windows原生宿主管道", () => {
+        expect(parseServeOptions(["--windows-host-pipe", WINDOWS_HOST_PIPE_NAME])).toMatchObject({
+            windowsHostPipe: WINDOWS_HOST_PIPE_NAME,
+        });
+        expect(() =>
+            parseServeOptions(["--windows-host-pipe", "\\\\server\\pipe\\onebots"]),
+        ).toThrow("Windows 原生宿主管道无效");
     });
 });

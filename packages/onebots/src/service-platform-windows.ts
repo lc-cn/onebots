@@ -26,7 +26,7 @@ interface WindowsScmState {
 }
 
 export interface WindowsNativeStatus {
-    version: 1;
+    version: 2;
     requestId: string;
     ok: true;
     state: {
@@ -34,6 +34,8 @@ export interface WindowsNativeStatus {
         manager: { state: "running" | "stopping" | "stopped" | "exited"; pid?: number };
         startedAt: string;
         control?: {
+            revision: number;
+            publishedAt: string;
             manager: { id: string; version: string; pid: number };
             gateway: {
                 desired: "running" | "stopped";
@@ -43,7 +45,8 @@ export interface WindowsNativeStatus {
     };
 }
 
-const PIPE_NAME = `\\\\.\\pipe\\${SERVICE_NAME}-control`;
+export const WINDOWS_HOST_PIPE_NAME = `\\\\.\\pipe\\${SERVICE_NAME}-control`;
+export const WINDOWS_CONTROL_FRESHNESS_MS = 30_000;
 const POWERSHELL_QUERY =
     `$service=Get-CimInstance Win32_Service -Filter \"Name='${SERVICE_NAME}'\";` +
     "if($null -ne $service){$service|Select-Object Name,State,StartMode,ProcessId,PathName|ConvertTo-Json -Compress}";
@@ -130,7 +133,7 @@ function parseDefinitionBytes(bytes: Buffer): WindowsServiceDefinition {
     if (
         value.schemaVersion !== 1 ||
         value.serviceName !== SERVICE_NAME ||
-        value.pipeName !== PIPE_NAME ||
+        value.pipeName !== WINDOWS_HOST_PIPE_NAME ||
         ![value.hostExecutable, value.managerExecutable, value.workingDirectory].every(
             item =>
                 typeof item === "string" &&
@@ -176,7 +179,10 @@ function serviceCommand(definition: WindowsServiceDefinition, controlSid: string
     return args.map(quoteWindows).join(" ");
 }
 
-export function parseWindowsNativeStatus(output: string): WindowsNativeStatus {
+export function parseWindowsNativeStatus(
+    output: string,
+    now: number = Date.now(),
+): WindowsNativeStatus {
     const text = singleJsonLine(output, 65_536);
     let value: unknown;
     try {
@@ -187,7 +193,7 @@ export function parseWindowsNativeStatus(output: string): WindowsNativeStatus {
     if (!plainObject(value) || !exactKeys(value, ["version", "requestId", "ok", "state"]))
         unavailable();
     if (
-        value.version !== 1 ||
+        value.version !== 2 ||
         value.ok !== true ||
         typeof value.requestId !== "string" ||
         !/^[A-Za-z0-9._:-]{1,64}$/.test(value.requestId)
@@ -225,10 +231,22 @@ export function parseWindowsNativeStatus(output: string): WindowsNativeStatus {
         unavailable();
     if (state.control !== undefined) {
         const control = state.control;
-        if (!plainObject(control) || !exactKeys(control, ["manager", "gateway"])) unavailable();
+        if (
+            !plainObject(control) ||
+            !exactKeys(control, ["revision", "publishedAt", "manager", "gateway"])
+        )
+            unavailable();
         const controlManager = control.manager;
         const gateway = control.gateway;
         if (
+            typeof control.revision !== "number" ||
+            !Number.isSafeInteger(control.revision) ||
+            control.revision < 1 ||
+            typeof control.publishedAt !== "string" ||
+            !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(control.publishedAt) ||
+            !Number.isFinite(Date.parse(control.publishedAt)) ||
+            now - Date.parse(control.publishedAt) < 0 ||
+            now - Date.parse(control.publishedAt) > WINDOWS_CONTROL_FRESHNESS_MS ||
             !plainObject(controlManager) ||
             !exactKeys(controlManager, ["id", "version", "pid"]) ||
             typeof controlManager.id !== "string" ||
@@ -270,9 +288,13 @@ export function renderWindowsManagerServiceDefinition(input: unknown): string {
                 serviceName: SERVICE_NAME,
                 hostExecutable,
                 managerExecutable: spec.nodePath,
-                managerArguments: buildManagerServiceArgs(spec),
+                managerArguments: [
+                    ...buildManagerServiceArgs(spec),
+                    "--windows-host-pipe",
+                    WINDOWS_HOST_PIPE_NAME,
+                ],
                 workingDirectory: spec.workingDirectory,
-                pipeName: PIPE_NAME,
+                pipeName: WINDOWS_HOST_PIPE_NAME,
             } satisfies WindowsServiceDefinition,
             null,
             2,
@@ -287,6 +309,11 @@ export interface WindowsServicePlatformOptions {
     /** 测试边界；生产始终从受身份校验的定义文件读取。 */
     definition?: WindowsServiceDefinition;
     hostExecutableExists?(file: string): boolean;
+}
+
+export interface WindowsServiceObservation {
+    service: ServicePlatformState;
+    control?: NonNullable<WindowsNativeStatus["state"]["control"]>;
 }
 
 /** Windows SCM系统服务驱动；真实生命周期仍须由Windows验收作业证明。 */
@@ -334,23 +361,29 @@ export class WindowsServicePlatform implements ServicePlatform {
         );
     }
     async inspect(): Promise<ServicePlatformState> {
+        return (await this.inspectNative()).service;
+    }
+    async inspectNative(): Promise<WindowsServiceObservation> {
         const scm = this.scm();
         if (!scm)
             return {
-                state: "stopped",
-                running: false,
-                enabled: false,
-                loaded: false,
-                definitionPath: this.expectedDefinitionPath,
-                processId: null,
-                identity: null,
-                quiescent: true,
+                service: {
+                    state: "stopped",
+                    running: false,
+                    enabled: false,
+                    loaded: false,
+                    definitionPath: this.expectedDefinitionPath,
+                    processId: null,
+                    identity: null,
+                    quiescent: true,
+                },
             };
         const definition = this.definition();
         if (scm.PathName !== serviceCommand(definition, this.host.windowsSid!)) unavailable();
         const running = scm.State !== "Stopped";
         let identity: string | null = null;
         let managerPid: number | null = null;
+        let control: WindowsServiceObservation["control"];
         if (scm.State === "Running" && scm.ProcessId > 0) {
             try {
                 const status = parseWindowsNativeStatus(
@@ -362,24 +395,28 @@ export class WindowsServicePlatform implements ServicePlatform {
                 );
                 managerPid = status.state.manager.pid!;
                 identity = `${status.state.startedAt}/host:${scm.ProcessId}/manager:${managerPid}`;
+                control = status.state.control;
             } catch {
                 // SCM已运行但宿主管道尚未就绪时只能报告转换态，不能拼出实例身份。
             }
         }
         return {
-            state:
-                scm.State === "Running" && identity
-                    ? "running"
-                    : scm.State === "Stopped"
-                      ? "stopped"
-                      : "transitioning",
-            running,
-            enabled: scm.StartMode === "Auto",
-            loaded: true,
-            definitionPath: this.expectedDefinitionPath,
-            processId: (managerPid ?? scm.ProcessId) || null,
-            identity,
-            quiescent: scm.State === "Stopped" && scm.ProcessId === 0,
+            service: {
+                state:
+                    scm.State === "Running" && identity
+                        ? "running"
+                        : scm.State === "Stopped"
+                          ? "stopped"
+                          : "transitioning",
+                running,
+                enabled: scm.StartMode === "Auto",
+                loaded: true,
+                definitionPath: this.expectedDefinitionPath,
+                processId: (managerPid ?? scm.ProcessId) || null,
+                identity,
+                quiescent: scm.State === "Stopped" && scm.ProcessId === 0,
+            },
+            ...(control ? { control } : {}),
         };
     }
     private async stable(

@@ -15,7 +15,14 @@ const definition: WindowsServiceDefinition = {
     serviceName: SERVICE_NAME,
     hostExecutable: "C:\\OneBots\\lib\\native\\onebots-windows-host.exe",
     managerExecutable: "C:\\Node\\node.exe",
-    managerArguments: ["C:\\OneBots\\lib\\bin.js", "serve", "--data-dir", "C:\\Data Dir"],
+    managerArguments: [
+        "C:\\OneBots\\lib\\bin.js",
+        "serve",
+        "--data-dir",
+        "C:\\Data Dir",
+        "--windows-host-pipe",
+        `\\\\.\\pipe\\${SERVICE_NAME}-control`,
+    ],
     workingDirectory: "C:\\OneBots",
     pipeName: `\\\\.\\pipe\\${SERVICE_NAME}-control`,
 };
@@ -44,20 +51,34 @@ function scm(
         StartMode: mode,
         ProcessId: pid,
         PathName:
-            `C:\\OneBots\\lib\\native\\onebots-windows-host.exe service-run --service-name onebots-gateway --manager C:\\Node\\node.exe --manager-arg ${manager} --manager-arg serve --manager-arg --data-dir --manager-arg "C:\\Data Dir" --working-dir C:\\OneBots --pipe \\\\.\\pipe\\onebots-gateway-control --control-sid ` +
+            `C:\\OneBots\\lib\\native\\onebots-windows-host.exe service-run --service-name onebots-gateway --manager C:\\Node\\node.exe --manager-arg ${manager} --manager-arg serve --manager-arg --data-dir --manager-arg "C:\\Data Dir" --manager-arg --windows-host-pipe --manager-arg \\\\.\\pipe\\onebots-gateway-control --working-dir C:\\OneBots --pipe \\\\.\\pipe\\onebots-gateway-control --control-sid ` +
             sid,
     });
 }
 
-function native(pid: number) {
+function native(pid: number, control = false) {
     return JSON.stringify({
-        version: 1,
+        version: 2,
         requestId: "status-test",
         ok: true,
         state: {
             service: "running",
             manager: { state: "running", pid },
             startedAt: "2026-09-09T01:02:03Z",
+            ...(control
+                ? {
+                      control: {
+                          revision: 1,
+                          publishedAt: new Date().toISOString(),
+                          manager: {
+                              id: "123e4567-e89b-42d3-a456-426614174000",
+                              version: "1.2.12",
+                              pid,
+                          },
+                          gateway: { desired: "running", actual: "stopped" },
+                      },
+                  }
+                : {}),
         },
     });
 }
@@ -91,6 +112,8 @@ describe("Windows SCM TypeScript纵切", () => {
                 "127.0.0.1",
                 "--port",
                 "6727",
+                "--windows-host-pipe",
+                `\\\\.\\pipe\\${SERVICE_NAME}-control`,
             ],
             workingDirectory: "/runtime",
             pipeName: `\\\\.\\pipe\\${SERVICE_NAME}-control`,
@@ -98,16 +121,22 @@ describe("Windows SCM TypeScript纵切", () => {
     });
 
     it("将SCM运行态与受保护管道的manager PID绑定为实例身份", async () => {
-        const host = makeHost([scm("Running", "Auto", 4321) + "\r\n", native(8765) + "\r\n"]);
+        const host = makeHost([scm("Running", "Auto", 4321) + "\r\n", native(8765, true) + "\r\n"]);
         const platform = new WindowsServicePlatform(host, "system", "C:\\state\\service.json", {
             definition,
         });
-        expect(await platform.inspect()).toMatchObject({
-            state: "running",
-            running: true,
-            enabled: true,
-            processId: 8765,
-            identity: "2026-09-09T01:02:03Z/host:4321/manager:8765",
+        expect(await platform.inspectNative()).toMatchObject({
+            service: {
+                state: "running",
+                running: true,
+                enabled: true,
+                processId: 8765,
+                identity: "2026-09-09T01:02:03Z/host:4321/manager:8765",
+            },
+            control: {
+                manager: { pid: 8765 },
+                gateway: { desired: "running", actual: "stopped" },
+            },
         });
         expect(host.exec).toHaveBeenNthCalledWith(
             2,
@@ -120,6 +149,8 @@ describe("Windows SCM TypeScript纵切", () => {
     it("严格解析同SID管道发布的manager与gateway只读状态", () => {
         const value = JSON.parse(native(8765));
         value.state.control = {
+            revision: 1,
+            publishedAt: new Date().toISOString(),
             manager: {
                 id: "123e4567-e89b-42d3-a456-426614174000",
                 version: "1.2.12",
@@ -139,6 +170,12 @@ describe("Windows SCM TypeScript纵切", () => {
         const wrongGateway = structuredClone(value);
         wrongGateway.state.control.gateway.actual = "unknown";
         expect(() => parseWindowsNativeStatus(JSON.stringify(wrongGateway))).toThrow();
+        const stale = structuredClone(value);
+        stale.state.control.publishedAt = "2026-01-01T00:00:00Z";
+        expect(() => parseWindowsNativeStatus(JSON.stringify(stale))).toThrow();
+        const invalidRevision = structuredClone(value);
+        invalidRevision.state.control.revision = 0;
+        expect(() => parseWindowsNativeStatus(JSON.stringify(invalidRevision))).toThrow();
         const extra = structuredClone(value);
         extra.state.control.extra = true;
         expect(() => parseWindowsNativeStatus(JSON.stringify(extra))).toThrow();
@@ -148,7 +185,7 @@ describe("Windows SCM TypeScript纵切", () => {
         const host = makeHost([
             scm("Running", "Auto", 4321),
             JSON.stringify({
-                version: 1,
+                version: 2,
                 requestId: "status-test",
                 ok: true,
                 state: {
@@ -204,7 +241,14 @@ describe("Windows SCM TypeScript纵切", () => {
     it("升级仅在SCM仍绑定旧定义且稳定停止时切到新PathName", async () => {
         const previous: WindowsServiceDefinition = {
             ...definition,
-            managerArguments: ["C:\\OneBots\\old\\bin.js", "serve", "--data-dir", "C:\\Data Dir"],
+            managerArguments: [
+                "C:\\OneBots\\old\\bin.js",
+                "serve",
+                "--data-dir",
+                "C:\\Data Dir",
+                "--windows-host-pipe",
+                `\\\\.\\pipe\\${SERVICE_NAME}-control`,
+            ],
         };
         const host = makeHost([
             scm("Stopped", "Manual", 0, "C:\\OneBots\\old\\bin.js"),
