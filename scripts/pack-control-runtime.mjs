@@ -32,9 +32,22 @@ export async function packControlRuntime({
     } catch (error) {
         if (error.code !== "ENOENT") throw error;
     }
-    const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+    // 直接运行仓库锁定的 pnpm 入口；Windows .cmd 不能由 execFile 执行，
+    // 使用 shell 又会把包路径变成命令字符串的一部分。
+    const pnpmCli = path.join(
+        repositoryRoot,
+        "packages",
+        "onebots",
+        "node_modules",
+        "pnpm",
+        "bin",
+        "pnpm.cjs",
+    );
+    await access(pnpmCli);
+    const command = process.execPath;
+    const commandPrefix = [pnpmCli];
     const environment = packageEnvironment();
-    const { stdout: version } = await execute(command, ["--version"], {
+    const { stdout: version } = await execute(command, [...commandPrefix, "--version"], {
         cwd: repositoryRoot,
         env: environment,
     });
@@ -52,6 +65,7 @@ export async function packControlRuntime({
                 expectedName,
                 staging,
                 command,
+                commandPrefix,
                 environment,
             );
         }
@@ -75,7 +89,14 @@ export async function packControlRuntime({
                 throw new Error("附带扩展的包名或版本无效");
             names.add(source.name);
             manifest.extensions.push(
-                await packPackage(directory, source.name, staging, command, environment),
+                await packPackage(
+                    directory,
+                    source.name,
+                    staging,
+                    command,
+                    commandPrefix,
+                    environment,
+                ),
             );
         }
         // The manifest contains only relocatable filenames, never build machine paths or authorization.
@@ -91,7 +112,14 @@ export async function packControlRuntime({
     }
 }
 
-async function packPackage(directory, expectedName, staging, command, environment) {
+async function packPackage(
+    directory,
+    expectedName,
+    staging,
+    command,
+    commandPrefix,
+    environment,
+) {
     const source = JSON.parse(await readFile(path.join(directory, "package.json"), "utf8"));
     if (
         source.name !== expectedName ||
@@ -101,7 +129,7 @@ async function packPackage(directory, expectedName, staging, command, environmen
     await access(path.join(directory, "lib/index.js"));
     if (source.name === "onebots") await access(path.join(directory, "lib/gateway/entry.js"));
     const before = new Set(await readdir(staging));
-    await execute(command, ["pack", "--pack-destination", staging], {
+    await execute(command, [...commandPrefix, "pack", "--pack-destination", staging], {
         cwd: directory,
         env: environment,
         maxBuffer: 4 * 1024 * 1024,

@@ -192,6 +192,29 @@ it("摘要必须匹配实际宿主和core归档字节，失配时不安装", asy
     }
 });
 
+it("活动候选与新候选入口失败使用不同闭合诊断码", async () => {
+    const active = fixture();
+    mock.verify.mockImplementationOnce(() => {
+        throw new Error("private active path");
+    });
+    await expect(prepareManagerUpgradeCandidate(active.request, active.host)).rejects.toMatchObject({
+        code: "ACTIVE_CANDIDATE_INVALID",
+    });
+    expect(mock.install).not.toHaveBeenCalled();
+
+    fs.rmSync(active.root, { recursive: true, force: true });
+    roots.splice(roots.indexOf(active.root), 1);
+    vi.resetAllMocks();
+    const target = fixture();
+    mock.verify.mockImplementationOnce(() => undefined).mockImplementationOnce(() => {
+        throw new Error("private target path");
+    });
+    await expect(prepareManagerUpgradeCandidate(target.request, target.host)).rejects.toMatchObject({
+        code: "CANDIDATE_ENTRY_INVALID",
+    });
+    expect(mock.install).toHaveBeenCalledOnce();
+});
+
 it("安装器明确失败可与中断状态区分，且仍不由原操作重派", async () => {
     const f = fixture();
     mock.install.mockImplementation(async (_id: string, plan: GenerationPlan) => {
@@ -254,8 +277,8 @@ it.each([
 it("损坏管理服务metadata在安装派发前明确拒绝", async () => {
     const f = fixture();
     fs.writeFileSync(path.join(f.state, "service.json"), "{", { mode: 0o600 });
-    await expect(prepareManagerUpgradeCandidate(f.request, f.host)).rejects.toBeInstanceOf(
-        ManagerUpgradeCandidateRejectedError,
-    );
+    await expect(prepareManagerUpgradeCandidate(f.request, f.host)).rejects.toMatchObject({
+        code: "SERVICE_METADATA_INVALID",
+    });
     expect(mock.install).not.toHaveBeenCalled();
 });

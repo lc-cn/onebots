@@ -45,13 +45,29 @@ export interface PreparedManagerUpgradeCandidate {
 }
 
 export type ManagerUpgradeCandidateRejectionCode =
+    | "INVALID_REQUEST"
+    | "SERVICE_METADATA_INVALID"
+    | "ACTIVE_CANDIDATE_INVALID"
+    | "ARTIFACT_INPUT_INVALID"
+    | "CANDIDATE_STORE_INVALID"
+    | "OPERATION_CONFLICT"
     | "DOWNLOAD_FAILED"
     | "VERIFICATION_FAILED"
+    | "CANDIDATE_RECEIPT_INVALID"
+    | "CANDIDATE_ENTRY_INVALID"
     | "CANDIDATE_INVALID"
     | "PREFLIGHT_FAILED";
 const candidateRejectionCodes = new Set<ManagerUpgradeCandidateRejectionCode>([
+    "INVALID_REQUEST",
+    "SERVICE_METADATA_INVALID",
+    "ACTIVE_CANDIDATE_INVALID",
+    "ARTIFACT_INPUT_INVALID",
+    "CANDIDATE_STORE_INVALID",
+    "OPERATION_CONFLICT",
     "DOWNLOAD_FAILED",
     "VERIFICATION_FAILED",
+    "CANDIDATE_RECEIPT_INVALID",
+    "CANDIDATE_ENTRY_INVALID",
     "CANDIDATE_INVALID",
     "PREFLIGHT_FAILED",
 ]);
@@ -109,7 +125,7 @@ export async function prepareManagerUpgradeCandidate(
                 (host.platform !== "linux" && host.platform !== "darwin") ||
                 (parsed.scope === "system" && host.uid !== 0)
             )
-                throw failure();
+                throw failure("INVALID_REQUEST");
             return {
                 id: parsed.id,
                 scope: parsed.scope,
@@ -120,16 +136,22 @@ export async function prepareManagerUpgradeCandidate(
             };
         } catch (error) {
             if (error instanceof ManagerUpgradeCandidateRejectedError) throw error;
-            throw failure();
+            throw failure("INVALID_REQUEST");
         }
     })();
     const files = getServiceFiles(value.scope, host);
-    const metadata = readServiceMetadata(files.metadata);
-    if (metadata.kind !== "control" || metadata.spec.scope !== value.scope) throw failure();
+    let metadata: ReturnType<typeof readServiceMetadata>;
+    try {
+        metadata = readServiceMetadata(files.metadata);
+    } catch {
+        throw failure("SERVICE_METADATA_INVALID");
+    }
+    if (metadata.kind !== "control" || metadata.spec.scope !== value.scope)
+        throw failure("SERVICE_METADATA_INVALID");
     try {
         verifyManagerServiceCandidate(metadata.spec, value.expectedPreviousDigest);
     } catch {
-        throw failure();
+        throw failure("ACTIVE_CANDIDATE_INVALID");
     }
     let artifacts: Record<string, unknown>;
     let archives: Record<string, unknown>;
@@ -137,12 +159,12 @@ export async function prepareManagerUpgradeCandidate(
         artifacts = closedServiceObject(value.artifacts, ["host", "core"]);
         archives = closedServiceObject(value.archives, ["host", "core"]);
     } catch {
-        throw failure();
+        throw failure("ARTIFACT_INPUT_INVALID");
     }
     const artifact = (input: unknown, name: "onebots" | "@onebots/core") => {
         const item = closedServiceObject(input, ["name", "version", "spec"]);
         if (item.name !== name || typeof item.version !== "string" || typeof item.spec !== "string")
-            throw failure();
+            throw failure("ARTIFACT_INPUT_INVALID");
         return { name, version: item.version, spec: item.spec };
     };
     const home = path.join(files.stateDir, "manager-artifacts");
@@ -152,10 +174,11 @@ export async function prepareManagerUpgradeCandidate(
         privateDirectory(home);
         release = acquireControlWorkspace(home);
     } catch {
-        throw failure();
+        throw failure("CANDIDATE_STORE_INVALID");
     }
     let installer: ManagerCandidateInstaller | undefined;
     let installationOutcomeUncertain = false;
+    let rejectionCode: ManagerUpgradeCandidateRejectionCode = "CANDIDATE_STORE_INVALID";
     try {
         const upgrades = path.join(home, "upgrades");
         privateDirectory(upgrades);
@@ -164,9 +187,11 @@ export async function prepareManagerUpgradeCandidate(
         const binding = new ServiceOperationStorage(directory);
         const resolvedArtifacts = path.join(home, "resolved-artifacts");
         privateDirectory(resolvedArtifacts);
+        rejectionCode = "ARTIFACT_INPUT_INVALID";
         const hostArchive = materializeArchive(archives.host, resolvedArtifacts);
         const coreArchive = materializeArchive(archives.core, resolvedArtifacts);
-        if (hostArchive.sha256 !== value.archiveSha256) throw failure();
+        if (hostArchive.sha256 !== value.archiveSha256)
+            throw failure("ARTIFACT_INPUT_INVALID");
         const hostArtifact = artifact(artifacts.host, "onebots");
         const coreArtifact = artifact(artifacts.core, "@onebots/core");
         const frozen = await freezeGenerationArtifacts(
@@ -203,14 +228,16 @@ export async function prepareManagerUpgradeCandidate(
             targetVersion: plan.host.version,
         };
         const existing = binding.has("intent.json");
+        rejectionCode = "OPERATION_CONFLICT";
         if (existing) {
-            if (!isDeepStrictEqual(binding.read("intent.json"), intent)) throw failure();
+            if (!isDeepStrictEqual(binding.read("intent.json"), intent))
+                throw failure("OPERATION_CONFLICT");
         } else {
             if (
                 binding.has("candidate.json") ||
                 fs.existsSync(path.join(home, "operations", `${installationId}.json`))
             )
-                throw failure();
+                throw failure("OPERATION_CONFLICT");
             binding.write("intent.json", intent, true);
         }
         installer = new ManagerCandidateInstaller({
@@ -253,20 +280,26 @@ export async function prepareManagerUpgradeCandidate(
             installed.planDigest !== plan.digest ||
             !installed.candidateId
         )
-            throw failure();
+            throw failure("CANDIDATE_RECEIPT_INVALID");
+        rejectionCode = "CANDIDATE_RECEIPT_INVALID";
         const candidate = installer.readCandidate(installed.candidateId);
         if (candidate.operationId !== installationId || candidate.planDigest !== plan.digest)
-            throw failure();
+            throw failure("CANDIDATE_RECEIPT_INVALID");
         const candidateDigest = managerCandidateDigest(candidate);
         const binPath = path.join(candidate.directory, "node_modules/onebots/lib/bin.js");
-        verifyManagerServiceCandidate(
-            {
-                ...metadata.spec,
-                workingDirectory: candidate.directory,
-                binPath,
-            },
-            candidateDigest,
-        );
+        rejectionCode = "CANDIDATE_ENTRY_INVALID";
+        try {
+            verifyManagerServiceCandidate(
+                {
+                    ...metadata.spec,
+                    workingDirectory: candidate.directory,
+                    binPath,
+                },
+                candidateDigest,
+            );
+        } catch {
+            throw failure("CANDIDATE_ENTRY_INVALID");
+        }
         const receipt = {
             schemaVersion: 1,
             id: value.id,
@@ -275,8 +308,10 @@ export async function prepareManagerUpgradeCandidate(
             candidateDigest,
             targetVersion: plan.host.version,
         };
+        rejectionCode = "OPERATION_CONFLICT";
         if (binding.has("candidate.json")) {
-            if (!isDeepStrictEqual(binding.read("candidate.json"), receipt)) throw failure();
+            if (!isDeepStrictEqual(binding.read("candidate.json"), receipt))
+                throw failure("OPERATION_CONFLICT");
         } else binding.write("candidate.json", receipt, true);
         return {
             operationId: value.id,
@@ -291,7 +326,7 @@ export async function prepareManagerUpgradeCandidate(
         )
             throw error;
         if (installationOutcomeUncertain) throw unknown();
-        throw failure();
+        throw failure(rejectionCode);
     } finally {
         try {
             await installer?.close();
