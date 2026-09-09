@@ -132,12 +132,11 @@ export async function rollbackManagerServiceUpgrade(
         if (record.phase === "rollback-stopping") {
             pending(record);
             assertFiles(record.managerSpec, host);
-            const before = await driver.inspect();
             // 失败候选可能被 OS 自动重启，但在控制 socket 建立前再次退出。服务定义路径、
             // 候选摘要和回退阶段已共同绑定目标；停机仍由平台驱动核验同一 OS 服务实例，
-            // 不能反过来依赖正是故障点的应用层自报接口。
-            if (before.running || before.enabled || before.state === "failed" || !before.quiescent)
-                await driver.quiesce();
+            // 不能反过来依赖正是故障点的应用层自报接口。两个平台的 quiesce 都以禁用、
+            // 静止为幂等目标，并自行容忍派发前的服务换代；外层不能先做一次脆弱快照。
+            await driver.quiesce();
             await assertQuiet(driver, false);
             releaseWorkspace = acquireControlWorkspace(record.managerSpec.workspace);
             record = advance(journal, record, "rollback-writing");

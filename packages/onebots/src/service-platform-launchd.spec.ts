@@ -149,20 +149,59 @@ describe("launchd service platform", () => {
         expect(proof).toHaveBeenCalled();
         expect((await f.platform.inspect()).quiescent).toBe(false);
     });
-    it.each(["pid", "path"])("rejects cold job %s changes before bootout", async change => {
+    it("rejects cold job path changes before bootout", async () => {
         const f = fixture({ confirmUnloadedProcesses: async () => true });
         Object.assign(f.state, { running: false, rawState: "crashed" });
         const original = f.host.exec;
         f.host.exec = (file, args, options) => {
             const output = original(file, args, options);
             if (args[0] === "disable") {
-                if (change === "path") f.state.path = "/other.plist";
-                else Object.assign(f.state, { running: true, rawState: "running" });
+                f.state.path = "/other.plist";
             }
             return output;
         };
         await expect(f.platform.quiesce()).rejects.toThrow("无法安全确认");
         expect(f.calls.some(call => call[1] === "bootout")).toBe(false);
+    });
+    it("quiesces the current fixed job when a failing candidate changes generation after disable", async () => {
+        const f = fixture({ confirmUnloadedProcesses: async () => true });
+        const original = f.host.exec;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args[0] === "disable") {
+                f.state.pid = 654;
+                f.state.pgid = 654;
+                f.state.started = "Wed Sep  9 12:35:56 2026";
+            }
+            return output;
+        };
+        await f.platform.quiesce();
+        expect(f.calls.filter(call => call[1] === "bootout")).toHaveLength(1);
+        expect(await f.platform.inspect()).toMatchObject({
+            state: "stopped",
+            loaded: false,
+            enabled: false,
+            quiescent: true,
+        });
+    });
+    it("waits for a pre-effect launchd transition before disabling the fixed job", async () => {
+        let transition = true;
+        const f = fixture({
+            sleep: async ms => {
+                transition = false;
+                f.state.members = false;
+                void ms;
+            },
+        });
+        const original = f.host.exec;
+        f.host.exec = (file, args, options) => {
+            if (args[0] === "print" && transition) f.state.rawState = "xpcproxy";
+            else f.state.rawState = "";
+            return original(file, args, options);
+        };
+        await f.platform.quiesce();
+        expect(f.calls.filter(call => call[1] === "disable")).toHaveLength(1);
+        expect(f.calls.filter(call => call[1] === "bootout")).toHaveLength(1);
     });
     it("uses durable manager ownership proof only for an explicitly unloaded cold instance", async () => {
         const proof = vi.fn(async () => true);

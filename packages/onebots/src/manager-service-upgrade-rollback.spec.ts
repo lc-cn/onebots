@@ -216,10 +216,15 @@ it("verifying 中断回退先静止自动重启服务，再获取 workspace 锁"
         identity: "auto-restart-generation",
         quiescent: false,
     };
+    let quiesced = false;
     const platform: ServicePlatform = {
-        inspect: async () => structuredClone(platformState),
+        inspect: async () => {
+            if (!quiesced) throw new Error("candidate changed during first observation");
+            return structuredClone(platformState);
+        },
         quiesce: async () => {
             state.effects.push("quiesce");
+            quiesced = true;
             Object.assign(platformState, {
                 state: "stopped",
                 running: false,

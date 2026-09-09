@@ -20,6 +20,7 @@ function unavailable(): never {
     throw new Error("无法安全确认 launchd 服务及其进程组状态");
 }
 class LaunchdTransitionError extends Error {}
+class LaunchdObservationChangedError extends Error {}
 function processExists(pid: number): boolean {
     try {
         process.kill(pid, 0);
@@ -298,9 +299,10 @@ export class LaunchdServicePlatform implements ServicePlatform {
                     key => after.get(key) !== data.get(key),
                 )
             )
-                unavailable();
+                throw new LaunchdObservationChangedError();
             const confirmedGeneration = pid === null ? null : this.generation(pid, deadline);
-            if (!isDeepStrictEqual(generation, confirmedGeneration)) unavailable();
+            if (!isDeepStrictEqual(generation, confirmedGeneration))
+                throw new LaunchdObservationChangedError();
             return {
                 state: observedState,
                 running: pid !== null,
@@ -314,8 +316,38 @@ export class LaunchdServicePlatform implements ServicePlatform {
                 quiescent: observedState === "stopped" && pid === null && this.groupsGone(),
             };
         } catch (error) {
-            if (error instanceof LaunchdTransitionError) throw error;
+            if (
+                error instanceof LaunchdTransitionError ||
+                error instanceof LaunchdObservationChangedError
+            )
+                throw error;
             unavailable();
+        }
+    }
+    private async actionable(deadline: number): Promise<ServicePlatformState> {
+        for (;;) {
+            try {
+                const state = await this.inspectWithin(deadline);
+                const coldLoaded =
+                    state.loaded &&
+                    !state.running &&
+                    state.processId === null &&
+                    !this.unprovenGroup &&
+                    Boolean(this.confirmUnloadedProcesses);
+                if (
+                    ["running", "stopped", "failed"].includes(state.state) &&
+                    (state.running ? Boolean(state.identity) : state.quiescent || coldLoaded)
+                )
+                    return state;
+            } catch (error) {
+                if (
+                    !(error instanceof LaunchdTransitionError) &&
+                    !(error instanceof LaunchdObservationChangedError)
+                )
+                    throw error;
+            }
+            if (this.now() >= deadline) unavailable();
+            await this.sleep(Math.min(100, deadline - this.now()));
         }
     }
     private async stable(
@@ -361,27 +393,12 @@ export class LaunchdServicePlatform implements ServicePlatform {
     async quiesce(): Promise<void> {
         try {
             const deadline = this.now() + this.timeout;
-            const before = await this.inspectWithin(deadline);
-            if (!["running", "stopped", "failed"].includes(before.state)) unavailable();
-            // 冷启动看到已退出但仍 loaded 的 job，并不代表后代全部退出。
-            // 可以注销已稳定确认的固定 job，但只有 bootout 后的完整持久证据才能确认停机。
-            const coldLoaded =
-                before.loaded &&
-                !before.running &&
-                before.processId === null &&
-                !this.unprovenGroup &&
-                Boolean(this.confirmUnloadedProcesses);
-            if (before.running ? !before.identity : !before.quiescent && !coldLoaded) unavailable();
+            await this.actionable(deadline);
             this.command(["disable", this.target], deadline);
-            const disabled = await this.inspectWithin(deadline);
-            if (
-                disabled.enabled ||
-                disabled.identity !== before.identity ||
-                disabled.processId !== before.processId ||
-                disabled.state !== before.state ||
-                disabled.loaded !== before.loaded
-            )
-                unavailable();
+            // disable 之后 launchd 可能仍完成已经排队的故障候选换代。重新观察固定 label
+            // 并记录其进程组，然后仅派发一次 bootout；最终以 unloaded 和全部进程证明收口。
+            const disabled = await this.actionable(deadline);
+            if (disabled.enabled) unavailable();
             if (disabled.loaded) this.command(["bootout", this.target], deadline);
             for (;;) {
                 let current: ServicePlatformState;
