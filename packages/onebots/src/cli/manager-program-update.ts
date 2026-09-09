@@ -198,7 +198,18 @@ export async function runManagerProgramUpdate(
                 scope,
                 expectedPreviousDigest: current.digest,
                 archiveSha256: release.archiveSha256,
-                artifacts: { host: release.host, core: release.core },
+                artifacts: {
+                    host: {
+                        name: release.host.name,
+                        version: release.host.version,
+                        spec: release.host.spec,
+                    },
+                    core: {
+                        name: release.core.name,
+                        version: release.core.version,
+                        spec: release.core.spec,
+                    },
+                },
                 archives: release.archives,
             },
             host,

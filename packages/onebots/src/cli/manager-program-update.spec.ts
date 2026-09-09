@@ -10,8 +10,18 @@ function fixture() {
     const coreArchive = Buffer.from("core archive");
     const output = vi.fn();
     const resolve = vi.fn(async () => ({
-        host: { name: "onebots", version: "1.2.13", spec: "1.2.13" },
-        core: { name: "@onebots/core", version: "1.2.13", spec: "1.2.13" },
+        host: {
+            name: "onebots",
+            version: "1.2.13",
+            spec: "file:/verified/onebots.tgz",
+            sha256: archiveSha256,
+        },
+        core: {
+            name: "@onebots/core",
+            version: "1.2.13",
+            spec: "file:/verified/core.tgz",
+            sha256: "d".repeat(64),
+        },
         extensionVersions: {},
         archiveSha256,
         archives: {
@@ -98,9 +108,18 @@ it("非交互必须显式确认，确认后以同一操作ID准备候选并执�
             scope: "user",
             expectedPreviousDigest: digest,
             archiveSha256,
-            artifacts: expect.objectContaining({
-                host: expect.objectContaining({ version: "1.2.13" }),
-            }),
+            artifacts: {
+                host: {
+                    name: "onebots",
+                    version: "1.2.13",
+                    spec: "file:/verified/onebots.tgz",
+                },
+                core: {
+                    name: "@onebots/core",
+                    version: "1.2.13",
+                    spec: "file:/verified/core.tgz",
+                },
+            },
             archives: expect.objectContaining({
                 host: expect.any(Object),
                 core: expect.any(Object),
