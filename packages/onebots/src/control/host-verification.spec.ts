@@ -2,12 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { startControlHost } from "./host.js";
-import { createLocalControlClient, createLocalControlTransport } from "../client/local-control.js";
-import type { VerificationOperation } from "./verification-record.js";
-import type { GatewayVerificationChallenge } from "../gateway/verification-store.js";
+import { createLocalControlClient } from "../client/local-control.js";
 
 const roots: string[] = [];
 const cleanup: Array<() => Promise<void>> = [];
@@ -130,13 +130,8 @@ describe("真实管理服务持久账号验证", () => {
         const secret = "verification-secret-" + randomUUID();
         const f = await fixture(secret);
         expect((await f.request("pending", "")).status).toBe(401);
-        const pendingResponse = await f.request("pending");
-        expect(pendingResponse.status).toBe(200);
-        const pending = (await pendingResponse.json()) as {
-            gatewayInstanceId: string;
-            configVersion: string;
-            challenges: GatewayVerificationChallenge[];
-        };
+        const web = new ControlClient(createHttpControlTransport(f.url, () => f.token));
+        const pending = await web.verification.pending();
         expect(pending.challenges).toHaveLength(1);
         expect(pending.challenges[0].request).toMatchObject({
             platform: "confirm",
@@ -151,14 +146,12 @@ describe("真实管理服务持久账号验证", () => {
                 gatewayInstanceId: pending.gatewayInstanceId,
                 configVersion: pending.configVersion,
             },
-            action: "submit",
+            action: "submit" as const,
             data: { code: secret },
         };
         expect((await f.request("execute", "", command)).status).toBe(401);
         expect(fs.existsSync(f.calls)).toBe(false);
-        const submitted = await f.request("execute", f.token, command);
-        expect(submitted.status).toBe(200);
-        const receipt = (await submitted.json()) as VerificationOperation;
+        const receipt = await web.verification.execute(command);
         expect(receipt).toMatchObject({
             id: command.operationId,
             status: "succeeded",
@@ -186,11 +179,23 @@ describe("真实管理服务持久账号验证", () => {
         expect((await f.request("execute", f.otherToken, command)).status).toBe(404);
         expect(await (await f.request(route)).json()).toEqual(receipt);
         expect(
-            await createLocalControlTransport(f.workspace).request(
-                "GET",
-                "/api/control/verification/" + route,
-            ),
+            await createLocalControlClient(f.workspace).verification.operation(command.operationId),
         ).toEqual(receipt);
+        const cli = await promisify(execFile)(
+            process.execPath,
+            [
+                path.resolve("packages/onebots/lib/bin.js"),
+                "control",
+                "verification",
+                "operation",
+                "--request",
+                command.operationId,
+                "--data-dir",
+                f.workspace,
+            ],
+            { timeout: 10000 },
+        );
+        expect(JSON.parse(cli.stdout)).toEqual(receipt);
         expect(fs.readFileSync(f.calls, "utf8")).toBe("submit\n");
         const records = path.join(f.workspace, ".control", "verification", "operations");
         const names = fs.readdirSync(records);

@@ -1,28 +1,18 @@
 import { types } from "node:util";
+import type { ControlVerificationOperation } from "@onebots/core/control";
 import { closedServiceObject } from "../service-operation-storage.js";
 export class ControlVerificationError extends Error {
     constructor(public readonly httpStatus: number) {
         super("验证操作或私有存储不可用；请查询原操作，禁止自动重试");
     }
 }
-export interface VerificationRecord {
+export interface VerificationRecord extends ControlVerificationOperation {
     schemaVersion: 1;
-    id: string;
     ownerHash: string;
     requestDigest: string;
     accountHash: string;
-    challengeId: string;
-    gatewayInstanceId: string;
-    configVersion: string;
-    action: "submit" | "request-sms";
-    status: "running" | "succeeded" | "rejected" | "unknown";
-    startedAt: string;
-    finishedAt?: string;
 }
-export type VerificationOperation = Omit<
-    VerificationRecord,
-    "schemaVersion" | "ownerHash" | "requestDigest" | "accountHash"
->;
+export type VerificationOperation = ControlVerificationOperation;
 export const verificationHash = (value: unknown): value is string =>
     typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
 export const verificationId = (value: unknown): value is string =>

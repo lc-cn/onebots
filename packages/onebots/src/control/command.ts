@@ -4,6 +4,7 @@ import { createLocalControlClient } from "../client/local-control.js";
 import { startControlHost } from "./host.js";
 import { writeCliOutput } from "../cli-output.js";
 import { runConfigurationCommand } from "./configuration-command.js";
+import { runVerificationCommand } from "./verification-command.js";
 import { parseServeOptions, SERVE_HELP } from "./serve-options.js";
 
 /** 新控制入口只在独立架构分支启用，所有启停调用同一客户端。 */
@@ -18,6 +19,10 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
     }
     if (command === "control" && options[0] === "config") {
         await runConfigurationCommand(options.slice(1));
+        return true;
+    }
+    if (command === "control" && options[0] === "verification") {
+        await runVerificationCommand(options.slice(1));
         return true;
     }
     function option(name: string, fallback: string): string {

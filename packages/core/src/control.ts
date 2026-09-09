@@ -1,3 +1,6 @@
+import { ControlVerificationClient } from "./control-verification.js";
+export * from "./control-verification.js";
+export { verificationJson, verificationRequest } from "./control-verification-json.js";
 import {
     messageDebugHistory,
     clearMessageDebug,
@@ -182,7 +185,10 @@ export interface ControlGenerationActivation {
 }
 
 export class ControlClient {
-    constructor(private readonly transport: ControlTransport) {}
+    readonly verification: ControlVerificationClient;
+    constructor(private readonly transport: ControlTransport) {
+        this.verification = new ControlVerificationClient(transport);
+    }
 
     openMcp(account?: string): Promise<{ id: string; gatewayInstanceId: string }> {
         return this.transport.request("POST", "/api/control/mcp/open", { account });

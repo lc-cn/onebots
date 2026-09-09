@@ -144,6 +144,7 @@ const baseConfig = defineConfig({
                         { text: `快速开始`, link: "/guide/start" },
                         { text: `OneBots 工作台`, link: "/guide/tui" },
                         { text: `管理端登录与恢复`, link: "/guide/management-login" },
+                        { text: `账号登录验证`, link: "/guide/account-verification" },
                         { text: `升级网关运行版本`, link: "/guide/runtime-update" },
                         { text: `Docker 私有扩展`, link: "/guide/docker-private-extensions" },
                         { text: `Docker 部署`, link: "/guide/docker" },

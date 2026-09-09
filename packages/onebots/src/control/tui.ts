@@ -4,6 +4,7 @@ import { runControlConfiguration } from "./tui-configuration.js";
 import { createControlTerminalPrompt } from "./tui-terminal.js";
 import { runControlInstallation, trackControlInstallation } from "./tui-installation.js";
 import { runControlUpdate } from "./tui-update.js";
+import { runControlVerification, queryControlVerification } from "./tui-verification.js";
 
 export interface ControlTuiOptions {
     prompt?: TuiPrompt;
@@ -29,6 +30,8 @@ export async function runControlTui(
                     { value: "update", label: "升级网关运行版本" },
                     { value: "track", label: "查询已有安装任务" },
                     { value: "configure", label: "配置账号与协议" },
+                    { value: "verification", label: "账号登录验证" },
+                    { value: "verification-operation", label: "查询验证回执" },
                     { value: "quit", label: "退出工作台" },
                 ],
             });
@@ -53,6 +56,9 @@ export async function runControlTui(
                         : "操作尚未成功，请查询状态。",
                 );
             } else if (action === "install") await runControlInstallation(client, prompt);
+            else if (action === "verification") await runControlVerification(client, prompt);
+            else if (action === "verification-operation")
+                await queryControlVerification(client, prompt);
             else if (action === "update") await runControlUpdate(client, prompt);
             else if (action === "track") {
                 const [id] = await prompt.ask({ title: "输入已有安装任务 ID" });

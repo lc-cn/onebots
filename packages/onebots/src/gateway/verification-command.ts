@@ -1,13 +1,8 @@
 import { types } from "node:util";
 import type { Adapter } from "@onebots/core";
 
-export interface GatewayVerificationCommand {
-    operationId: string;
-    challengeId: string;
-    expected: { gatewayInstanceId: string; configVersion: string };
-    action: "submit" | "request-sms";
-    data?: Record<string, string>;
-}
+import type { ControlVerificationCommand } from "@onebots/core/control";
+export type GatewayVerificationCommand = ControlVerificationCommand;
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function record(input: unknown): Record<string, unknown> | undefined {
     if (!input || typeof input !== "object" || types.isProxy(input)) return;

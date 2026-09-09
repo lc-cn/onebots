@@ -1,6 +1,6 @@
 import type { Adapter } from "@onebots/core";
 import { describe, expect, it, vi } from "vitest";
-import { GatewayVerificationStore } from "./verification-store.js";
+import { GatewayVerificationStore, isGatewayVerificationChallenge } from "./verification-store.js";
 
 const request = (
     overrides: Partial<Adapter.VerificationRequest> = {},
@@ -16,6 +16,17 @@ const recordUnknown = (store: GatewayVerificationStore, value: unknown): void =>
 };
 
 describe("GatewayVerificationStore", () => {
+    it("挑战 ID 与共享客户端一致，拒绝无有效版本或 variant 的 UUID", () => {
+        const store = new GatewayVerificationStore(() => 100);
+        store.record(request());
+        const challenge = store.list()[0];
+        expect(isGatewayVerificationChallenge(challenge)).toBe(true);
+        for (const id of [
+            "00000000-0000-0000-0000-000000000000",
+            "11111111-1111-4111-1111-111111111111",
+        ])
+            expect(isGatewayVerificationChallenge({ ...challenge, id })).toBe(false);
+    });
     it("同一挑战重新出现时替换 UUID，旧完成回执不能清理新挑战", () => {
         const store = new GatewayVerificationStore(() => 100);
         store.record(request());
