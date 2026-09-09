@@ -193,6 +193,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     try {
         await packControlRuntime({
             outputDirectory: process.argv[2] ?? path.join(repository, "runtime-artifacts"),
+            extensionDirectories: process.argv.slice(3),
         });
         process.stdout.write("[onebots] 已生成 core 和 onebots 运行工件\n");
     } catch {

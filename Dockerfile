@@ -27,9 +27,10 @@ RUN pnpm install --no-frozen-lockfile --ignore-scripts
 # 仅构建网关所需包（跳过 docs：VitePress 需 git，Alpine 镜像未安装且运行时不需要文档）
 RUN pnpm build:packages && pnpm --filter='./protocols/*/*' --filter='./adapters/*' build
 
-# 对两个已构建宿主做 pnpm pack，让 workspace/catalog 依赖转换成发布版声明。
+# 对宿主及本次源码中的公开扩展做 pnpm pack，让镜像内安装始终使用同一提交的兼容工件。
+# adapter-icqq 已由 .dockerignore 排除；glob 只展开实际存在的公开目录。
 COPY scripts/pack-control-runtime.mjs ./scripts/pack-control-runtime.mjs
-RUN node scripts/pack-control-runtime.mjs /app/runtime-artifacts
+RUN node scripts/pack-control-runtime.mjs /app/runtime-artifacts adapters/* protocols/*/protocol
 
 # 生产依赖（去掉 devDependencies 以减小镜像）
 RUN pnpm prune --prod --ignore-scripts

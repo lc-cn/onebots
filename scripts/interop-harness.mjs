@@ -8,6 +8,13 @@ import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 
 const MAX_LOG_BYTES = 64 * 1024;
+const LOCAL_PROTOCOL_DIRECTORIES = Object.freeze({
+    "mcp-v1": "protocols/mcp-v1/protocol",
+    "milky-v1": "protocols/milky-v1/protocol",
+    "onebot-v11": "protocols/onebot-v11/protocol",
+    "onebot-v12": "protocols/onebot-v12/protocol",
+    "satori-v1": "protocols/satori-v1/protocol",
+});
 
 /**
  * 从空白工作区走完整产品链准备网关：manager -> 设备码 -> 安装代际 -> 配置 -> gateway。
@@ -31,10 +38,13 @@ export async function startManagedGateway({
     const { packControlRuntime } = await import(
         pathToFileURL(path.join(root, "scripts/pack-control-runtime.mjs")).href
     );
+    const protocolDirectory = LOCAL_PROTOCOL_DIRECTORIES[protocolPackage];
+    if (!protocolDirectory) throw new Error(`互操作协议不受支持：${protocolPackage}`);
     await packControlRuntime({
         repositoryRoot: root,
         outputDirectory: artifacts,
-        extensionDirectories: ["adapters/adapter-mock"],
+        // CI 必须验证同一提交的宿主和协议，不能混用 npm 上一版工件。
+        extensionDirectories: ["adapters/adapter-mock", protocolDirectory],
     });
     const manager = startProcess(
         process.execPath,
@@ -91,7 +101,7 @@ export async function startManagedGateway({
     );
     const installation = await waitForInstallation(local, requestId, manager, 10 * 60_000);
     if (installation.phase !== "verified" || !installation.candidateId)
-        throw new Error(`扩展安装失败：${installation.phase}\n${manager.logs()}`);
+        throw new Error(`扩展安装失败：${JSON.stringify(installation)}\n${manager.logs()}`);
     const activation = await installationStep("激活运行代际", () =>
         local.activateGeneration(installation.candidateId),
     );
