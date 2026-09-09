@@ -212,6 +212,27 @@ describe("launchd service platform", () => {
             quiescent: true,
         });
     });
+    it("uses durable ownership proof without waiting for a pre-disable stable generation", async () => {
+        const proof = vi.fn(async () => true);
+        const f = fixture({ confirmUnloadedProcesses: proof });
+        const original = f.host.exec;
+        let observation = 0;
+        f.host.exec = (file, args, options) => {
+            if (args[0] === "print" && f.state.loaded) {
+                observation++;
+                f.state.pid = observation % 2 ? 654 : 655;
+                f.state.pgid = f.state.pid;
+                f.state.started =
+                    observation % 2 ? "Wed Sep  9 12:35:56 2026" : "Wed Sep  9 12:35:57 2026";
+                f.state.rawState = observation % 2 ? "xpcproxy" : "running";
+            }
+            return original(file, args, options);
+        };
+        await f.platform.quiesce();
+        expect(f.calls.filter(call => call[1] === "disable")).toHaveLength(1);
+        expect(f.calls.filter(call => call[1] === "bootout")).toHaveLength(1);
+        expect(proof).toHaveBeenCalled();
+    });
     it("waits for a pre-effect launchd transition before disabling the fixed job", async () => {
         let transition = true;
         const f = fixture({

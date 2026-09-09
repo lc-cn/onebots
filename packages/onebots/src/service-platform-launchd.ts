@@ -415,7 +415,10 @@ export class LaunchdServicePlatform implements ServicePlatform {
     async quiesce(): Promise<void> {
         try {
             const deadline = this.now() + this.timeout;
-            await this.actionable(deadline);
+            // 管理升级/卸载已有独立的持久进程所有权证明，可以在故障候选持续换代时
+            // 直接控制固定 label；没有该证明的旧迁移仍须先绑定稳定进程代。
+            if (this.confirmUnloadedProcesses) this.fixedJobLoaded(deadline);
+            else await this.actionable(deadline);
             this.command(["disable", this.target], deadline);
             // disable 之后 launchd 可能持续完成已经排队的故障候选换代，不能等待某一代
             // 连续两次稳定。重新核对固定 label 的定义路径后仅派发一次 bootout；最终仍以
