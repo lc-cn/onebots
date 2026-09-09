@@ -122,12 +122,14 @@ BaseApp 自动提供以下端点：
 - `/ready` - 就绪检查（就绪探针）
 - `/metrics` - Prometheus 格式指标
 
-## 使用示例
+## 嵌入式使用示例
+
+下面的 `BaseApp` 只用于把 OneBots 核心嵌入其他 Node.js 应用。完整 OneBots 产品由常驻管理服务启动并托管独立网关进程；安装、配置和启停应通过 CLI、TUI 或 Web 管理端完成，不应在业务代码里另建第二个生命周期控制者。
 
 ```typescript
-import { App } from 'onebots';
+import { BaseApp } from '@onebots/core';
 
-const app = new App({
+const app = new BaseApp({
     port: 6727,
     log_level: 'info',
 });
