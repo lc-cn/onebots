@@ -8,7 +8,8 @@
 2. 使用设备码登录 Web，打开依赖安装页；也可以运行：
 
    ```bash
-   docker exec -it --user 1000:1000 onebots      onebots ui --data-dir /data --setup
+   docker exec -it --user 1000:1000 onebots \
+     onebots ui --data-dir /data --setup
    ```
 
 3. 选择 ICQQ 适配器、所需输出协议和下游框架。安装计划会同时列出适配器的必需 peer。
@@ -24,7 +25,9 @@
 
 ```bash
 onebots control plan --data-dir /data --adapters icqq --protocols onebot-v11
-printf '%s' "$GITHUB_PACKAGES_TOKEN" |   onebots control install --data-dir /data     --plan <计划ID> --request <唯一任务ID> --auth-stdin
+printf '%s' "$GITHUB_PACKAGES_TOKEN" | \
+  onebots control install --data-dir /data \
+    --plan <计划ID> --request <唯一任务ID> --auth-stdin
 onebots control installation --data-dir /data --request <同一任务ID>
 onebots control activate --data-dir /data --generation <候选ID>
 ```
