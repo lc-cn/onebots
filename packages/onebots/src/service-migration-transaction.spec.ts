@@ -85,6 +85,19 @@ function fixture(previousRunning = true) {
     };
 }
 describe("持久化服务迁移事务", () => {
+    it("冷启动后的prepared记录不能作为热捕获结果重放", async () => {
+        const t = fixture();
+        const record = t.journal.prepare("migration", t.backup);
+        const reopened = new FileServiceMigrationJournal(t.root);
+        await expect(
+            new ServiceMigrationTransaction(reopened, t.port).runPrepared(record),
+        ).rejects.toThrow("禁止重放");
+        expect(t.calls).toEqual([]);
+        expect(reopened.read("migration")).toMatchObject({
+            status: "interrupted",
+            recoveryRequired: true,
+        });
+    });
     it("释放意图落盘失败不开放管理操作，也不回退已验收的目标", async () => {
         const t = fixture();
         const save = t.journal.save.bind(t.journal);

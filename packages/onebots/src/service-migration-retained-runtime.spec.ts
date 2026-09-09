@@ -4,15 +4,11 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { captureLegacyRuntimeTree } from "./service-migration-runtime-tree.js";
-import { captureLegacyNodeRuntime } from "./service-migration-node-runtime.js";
-import {
-    bindRetainedLegacyRuntime,
-    parseRetainedLegacyRuntime,
-} from "./service-migration-retained-runtime.js";
+import { parseRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import { createServiceMigrationPort } from "./service-migration-port.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
-import { ServiceMigrationTransaction } from "./service-migration-transaction.js";
+import { migrateSystemService } from "./service-migration-coordinator.js";
+import { retainServiceMigrationRuntime } from "./service-migration-retention.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServiceSpec } from "./service-definition.js";
@@ -39,24 +35,6 @@ describe.skipIf(process.platform !== "darwin")("旧工件与迁移回退整合",
                 adapters: [],
                 protocols: [],
             };
-            const runtime = await captureLegacyRuntimeTree(
-                source,
-                path.join(root, "runtimes"),
-                randomUUID(),
-            );
-            const node = await captureLegacyNodeRuntime(
-                process.execPath,
-                path.join(root, "nodes"),
-                randomUUID(),
-            );
-            const retained = await bindRetainedLegacyRuntime(original, source, runtime, node);
-            expect(retained.rollback.configPath).toBe(original.configPath);
-            expect(() =>
-                parseRetainedLegacyRuntime({
-                    ...retained,
-                    rollback: { ...retained.rollback, configPath: "/other/config.yaml" },
-                }),
-            ).toThrow();
             const host: ServiceHost = {
                 platform: "darwin",
                 homedir: root,
@@ -88,7 +66,6 @@ describe.skipIf(process.platform !== "darwin")("旧工件与迁移回退整合",
             const backup: ServiceMigrationBackup = {
                 schemaVersion: 1,
                 files,
-                retainedRuntime: retained,
                 previousRunning: true,
                 previousEnabled: true,
                 target: {
@@ -114,59 +91,78 @@ describe.skipIf(process.platform !== "darwin")("旧工件与迁移回退整合",
                 quiescent: false,
             };
             let executed = "";
-            const port = createServiceMigrationPort({
-                backup,
-                host,
-                operationId: "retained-test",
-                originalState: structuredClone(state),
-                readinessTimeoutMs: 1,
-                confirmStopped: async () => true,
-                platform: {
-                    inspect: async () => structuredClone(state),
-                    quiesce: async () => {
-                        state = {
-                            ...state,
-                            state: "stopped",
-                            running: false,
-                            quiescent: true,
-                            processId: null,
-                            identity: null,
-                        };
+            const operationId = randomUUID();
+            const makePort = (bound: ServiceMigrationBackup) =>
+                createServiceMigrationPort({
+                    backup: bound,
+                    host,
+                    operationId,
+                    originalState: structuredClone(state),
+                    readinessTimeoutMs: 1,
+                    confirmStopped: async () => true,
+                    platform: {
+                        inspect: async () => structuredClone(state),
+                        quiesce: async () => {
+                            state = {
+                                ...state,
+                                state: "stopped",
+                                running: false,
+                                quiescent: true,
+                                processId: null,
+                                identity: null,
+                            };
+                        },
+                        reload: async () => {},
+                        start: async () => {
+                            const spec = JSON.parse(fs.readFileSync(paths.metadata, "utf8"));
+                            if (spec.runtimeKind === "control")
+                                fs.rmSync(source, { recursive: true });
+                            else
+                                executed = execFileSync(spec.nodePath, [spec.binPath], {
+                                    cwd: spec.workingDirectory,
+                                    env: { PATH: "/usr/bin:/bin" },
+                                    encoding: "utf8",
+                                });
+                            state = {
+                                ...state,
+                                state: "running",
+                                running: true,
+                                quiescent: false,
+                                processId: 200,
+                                identity: "new-instance",
+                            };
+                        },
                     },
-                    reload: async () => {},
-                    start: async () => {
-                        const spec = JSON.parse(fs.readFileSync(paths.metadata, "utf8"));
-                        if (spec.runtimeKind === "control") fs.rmSync(source, { recursive: true });
-                        else
-                            executed = execFileSync(spec.nodePath, [spec.binPath], {
-                                cwd: spec.workingDirectory,
-                                env: { PATH: "/usr/bin:/bin" },
-                                encoding: "utf8",
-                            });
-                        state = {
-                            ...state,
-                            state: "running",
-                            running: true,
-                            quiescent: false,
-                            processId: 200,
-                            identity: "new-instance",
-                        };
+                    manager: {
+                        inspect: async () => {
+                            throw new Error("candidate failed");
+                        },
+                        release: async () => {
+                            throw new Error("must not release");
+                        },
                     },
+                });
+            const result = await migrateSystemService({
+                stateDirectory: paths.stateDir,
+                id: operationId,
+                capture: async () => backup,
+                retain: async input => {
+                    const intent = JSON.parse(
+                        fs.readFileSync(
+                            path.join(paths.stateDir, "migrations", `${operationId}.journal.json`),
+                            "utf8",
+                        ),
+                    );
+                    expect(intent.phase).toBe("capturing-runtime");
+                    return retainServiceMigrationRuntime(input, paths.stateDir, operationId);
                 },
-                manager: {
-                    inspect: async () => {
-                        throw new Error("candidate failed");
-                    },
-                    release: async () => {
-                        throw new Error("must not release");
-                    },
-                },
+                port: makePort,
             });
-            const journal = new FileServiceMigrationJournal(path.join(root, "journal"));
-            const result = await new ServiceMigrationTransaction(journal, port).run(
-                "retained-test",
-                backup,
+            const journal = new FileServiceMigrationJournal(
+                path.join(paths.stateDir, "migrations"),
             );
+            const bound = journal.backup(journal.read(operationId));
+            const retained = bound.retainedRuntime!;
             expect(result).toMatchObject({
                 status: "failed",
                 rolledBack: true,
@@ -176,9 +172,15 @@ describe.skipIf(process.platform !== "darwin")("旧工件与迁移回退整合",
             expect(fs.existsSync(source)).toBe(false);
             expect(fs.readFileSync(original.configPath, "utf8")).toBe("general: {}\n");
             expect(JSON.parse(fs.readFileSync(paths.metadata, "utf8"))).toEqual(retained.rollback);
-            expect(journal.backup(journal.read("retained-test")).retainedRuntime).toEqual(retained);
+            expect(retained.rollback.configPath).toBe(original.configPath);
+            expect(() =>
+                parseRetainedLegacyRuntime({
+                    ...retained,
+                    rollback: { ...retained.rollback, configPath: "/other/config.yaml" },
+                }),
+            ).toThrow();
             fs.writeFileSync(retained.rollback.binPath, "throw new Error('tampered');");
-            await expect(port.startOriginal(backup)).rejects.toThrow();
+            await expect(makePort(bound).startOriginal(bound)).rejects.toThrow();
         } finally {
             fs.rmSync(root, { recursive: true, force: true });
         }

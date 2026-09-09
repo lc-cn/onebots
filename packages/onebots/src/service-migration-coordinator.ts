@@ -2,6 +2,7 @@ import path from "node:path";
 import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
 import { ServiceMigrationTransaction } from "./service-migration-transaction.js";
+import type { RetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import type { ServiceMigrationBackup, ServiceMigrationPort } from "./service-migration-types.js";
 
 /** 所有系统服务迁移入口必须经过这里，锁覆盖快照、日志、外部动作及最终确认。 */
@@ -10,6 +11,8 @@ export async function migrateSystemService(options: {
     id: string;
     /** 只读获取真实旧定义与状态，不能执行停机、写盘或安装。 */
     capture(): Promise<ServiceMigrationBackup>;
+    /** 意图落盘后捕获；只允许创建私有旧工件，不得改变系统服务或业务工作区。 */
+    retain?(backup: ServiceMigrationBackup): Promise<RetainedLegacyRuntime>;
     port: ServiceMigrationPort | ((backup: ServiceMigrationBackup) => ServiceMigrationPort);
 }) {
     const release = acquireServiceMigrationLock(options.stateDirectory);
@@ -18,6 +21,26 @@ export async function migrateSystemService(options: {
             path.join(options.stateDirectory, "migrations"),
         );
         const backup = await options.capture();
+        if (options.retain) {
+            let record = journal.prepare(options.id, backup);
+            let port: ServiceMigrationPort;
+            try {
+                record.phase = "capturing-runtime";
+                journal.save(record);
+                const retained = await options.retain(journal.backup(record));
+                record = journal.bindRuntime(record, retained);
+                const bound = journal.backup(record);
+                port = typeof options.port === "function" ? options.port(bound) : options.port;
+            } catch {
+                // 捕获或绑定结果未知时不派发OS动作；重读可能已经落盘的新摘要。
+                record = journal.read(options.id);
+                record.status = "interrupted";
+                record.recoveryRequired = true;
+                journal.save(record);
+                return record;
+            }
+            return await new ServiceMigrationTransaction(journal, port).runPrepared(record);
+        }
         const port = typeof options.port === "function" ? options.port(backup) : options.port;
         return await new ServiceMigrationTransaction(journal, port).run(options.id, backup);
     } finally {

@@ -27,12 +27,32 @@ export class ServiceMigrationTransaction {
         );
         return task;
     }
+    /** 只接受当前进程刚完成捕获绑定的prepared记录；冷恢复不能调用此方法重放。 */
+    runPrepared(record: ServiceMigrationRecord): Promise<ServiceMigrationRecord> {
+        const task = this.queue.then(() => this.executePrepared(record));
+        this.queue = task.then(
+            () => undefined,
+            () => undefined,
+        );
+        return task;
+    }
 
     private async execute(
         id: string,
         input: ServiceMigrationBackup,
     ): Promise<ServiceMigrationRecord> {
-        const operation = this.journal.prepare(id, input);
+        return this.executePrepared(this.journal.prepare(id, input));
+    }
+
+    private async executePrepared(record: ServiceMigrationRecord): Promise<ServiceMigrationRecord> {
+        const operation = this.journal.read(record.id);
+        if (
+            JSON.stringify(operation) !== JSON.stringify(record) ||
+            operation.phase !== "prepared" ||
+            operation.status !== "running" ||
+            operation.recoveryRequired
+        )
+            throw new Error("迁移准备记录已变化，禁止重放");
         const backup = this.journal.backup(operation);
         try {
             if (!(await this.port.verifyOriginal(backup))) throw new Error("旧服务基线已变化");

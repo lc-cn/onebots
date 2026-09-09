@@ -4,6 +4,8 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
     inspectLinuxElf,
+    parseMuslSearchPath,
+    parseLinuxLoaderCache,
     assertLinuxSystemDependencies,
 } from "./service-migration-native-linux.js";
 
@@ -56,6 +58,40 @@ async function fixture(bytes: Buffer) {
     return file;
 }
 describe("Linux static native dependencies", () => {
+    it("keeps unrelated external cache entries without treating them as dependencies", () => {
+        const cache = parseLinuxLoaderCache(
+            "2 libs found in cache `/etc/ld.so.cache'\n\tlibunrelated.so (libc6,x86-64) => /opt/unrelated/libunrelated.so\n\tlibc.so.6 (libc6,x86-64) => /lib/libc.so.6\n",
+            62,
+        );
+        expect(cache.get("libc.so.6")).toEqual(["/lib/libc.so.6"]);
+        expect(cache.get("libunrelated.so")).toEqual(["/opt/unrelated/libunrelated.so"]);
+    });
+    it("retains every matching dependency cache candidate for later trust checks", () => {
+        const cache = parseLinuxLoaderCache(
+            "2 libs found in cache `/etc/ld.so.cache'\n\tlibc.so.6 (libc6,x86-64) => /opt/unsafe/libc.so.6\n\tlibc.so.6 (libc6,x86-64) => /lib/libc.so.6\n",
+            62,
+        );
+        expect(cache.get("libc.so.6")).toEqual(["/opt/unsafe/libc.so.6", "/lib/libc.so.6"]);
+    });
+    it("preserves musl system search order", () => {
+        expect(parseMuslSearchPath("/lib:/usr/local/lib:/usr/lib\n")).toEqual([
+            "/lib",
+            "/usr/local/lib",
+            "/usr/lib",
+        ]);
+        expect(parseMuslSearchPath("/lib\n/usr/lib\n")).toEqual(["/lib", "/usr/lib"]);
+    });
+    it.each([
+        "",
+        "/tmp:/lib",
+        "/lib:",
+        "/lib/../tmp",
+        "$ORIGIN:/lib",
+        "/lib::/usr/lib",
+        "/lib\r\n/usr/lib",
+    ])("rejects unsafe musl path %s", content => {
+        expect(() => parseMuslSearchPath(content)).toThrow();
+    });
     it("reads dynamic dependencies without running the binary", async () => {
         expect(await inspectLinuxElf(await fixture(elf()))).toEqual({
             machine: 62,

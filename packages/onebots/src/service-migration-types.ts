@@ -3,6 +3,7 @@ import type { RetainedLegacyRuntime } from "./service-migration-retained-runtime
 
 export type ServiceMigrationPhase =
     | "prepared"
+    | "capturing-runtime"
     | "stopping-old"
     | "writing-target"
     | "starting-manager"

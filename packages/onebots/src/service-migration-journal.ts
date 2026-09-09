@@ -1,8 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
+import { parseLegacyServiceSpec } from "./service-metadata.js";
 import { parseManagerServiceSpec } from "./manager-service-spec.js";
 import { parseRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
+import type { RetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import type {
     ServiceMigrationBackup,
     ServiceMigrationRecord,
@@ -14,6 +17,7 @@ const HASH = /^[a-f0-9]{64}$/;
 const LIMIT = 8 * 1024 * 1024;
 const phases = [
     "prepared",
+    "capturing-runtime",
     "stopping-old",
     "writing-target",
     "starting-manager",
@@ -115,6 +119,52 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             if (record.id !== id) throw invalid();
             this.backup(record);
             return record;
+        } catch {
+            throw invalid();
+        }
+    }
+    /** 捕获意图已落盘后，只绑定工件，不修改原始文件备份；未知写入禁止继续停机。 */
+    bindRuntime(
+        record: ServiceMigrationRecord,
+        retained: RetainedLegacyRuntime,
+    ): ServiceMigrationRecord {
+        try {
+            this.checkDirectory();
+            const previous = this.read(record.id);
+            if (
+                canonical(previous) !== canonical(record) ||
+                previous.phase !== "capturing-runtime" ||
+                previous.status !== "running" ||
+                previous.recoveryRequired
+            )
+                throw invalid();
+            const original = this.backup(previous);
+            if (original.retainedRuntime) throw invalid();
+            const metadata = original.files.find(file => file.role === "metadata");
+            const retainedRuntime = parseRetainedLegacyRuntime(retained);
+            if (
+                !metadata ||
+                !isDeepStrictEqual(
+                    parseLegacyServiceSpec(
+                        JSON.parse(Buffer.from(metadata.contentBase64, "base64").toString("utf8")),
+                    ),
+                    retainedRuntime.original,
+                )
+            )
+                throw invalid();
+            const backup = parseBackup({
+                ...original,
+                retainedRuntime,
+            });
+            const content = canonical(backup);
+            const backupDigest = hash(content);
+            const file = this.backupFile(backupDigest);
+            if (!exists(file)) atomic(file, content, 0o400);
+            const next: ServiceMigrationRecord = { ...previous, backupDigest, phase: "prepared" };
+            this.backup(next);
+            if (canonical(this.read(record.id)) !== canonical(previous)) throw invalid();
+            atomic(this.file(record.id), canonical(next), 0o600);
+            return this.read(record.id);
         } catch {
             throw invalid();
         }
