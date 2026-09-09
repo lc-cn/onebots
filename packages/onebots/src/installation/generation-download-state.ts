@@ -2,6 +2,7 @@ import { lstat, mkdir, open, readFile, readdir, rename, rm } from "node:fs/promi
 import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
+import { waitForProcessGroupExit } from "../process-group-exit.js";
 import { GenerationDownloadError } from "./generation-download-types.js";
 
 export interface DownloadOwner {
@@ -20,6 +21,7 @@ export interface DownloadCredentialRecovery {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const RECOVERY_GROUP_EXIT_TIMEOUT_MS = 10_000;
 const validPid = (value: unknown): value is number =>
     Number.isInteger(value) && Number(value) > 0 && Number(value) <= 0x7fffffff;
 
@@ -161,6 +163,18 @@ export async function recoverDownloadCredentials(
             if (!UUID.test(id)) throw new Error();
             const owner = await readDownloadOwner(directory);
             if (!absent(owner.parentPid)) throw new Error();
+            // 组长可先于最后一个组成员消失；仅在这个退出过渡态有界等待组级 ESRCH。
+            if (
+                process.platform !== "win32" &&
+                owner.downloaderPid !== null &&
+                absent(owner.downloaderPid) &&
+                !absent(owner.downloaderPid, true) &&
+                (await waitForProcessGroupExit(
+                    owner.downloaderPid,
+                    RECOVERY_GROUP_EXIT_TIMEOUT_MS,
+                )) !== "exited"
+            )
+                throw new Error();
             await cleanupDownloadCredentials(directory, id);
             result.removed.push(id);
         } catch (error) {

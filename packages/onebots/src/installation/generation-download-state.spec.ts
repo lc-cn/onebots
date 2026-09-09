@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -13,6 +13,7 @@ import {
 
 const roots: string[] = [];
 afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 async function root() {
@@ -61,6 +62,43 @@ describe("下载授权冷恢复", () => {
             removed: [candidate.owner.id],
             blocked: [],
         });
+        await expect(readFile(path.join(candidate.directory, "npmrc"))).rejects.toMatchObject({
+            code: "ENOENT",
+        });
+    });
+
+    it("下载组长已退出时等待整个进程组的ESRCH证据后再冷恢复", async () => {
+        if (process.platform === "win32") return;
+        const directory = await root();
+        const candidate = await allocateDownloadCredentials(directory);
+        const downloaderPid = 2003;
+        candidate.owner.parentPid = 2001;
+        candidate.owner.workerPid = 2002;
+        candidate.owner.downloaderPid = downloaderPid;
+        candidate.owner.phase = "downloading";
+        await writeFile(
+            path.join(candidate.directory, "owner.json"),
+            JSON.stringify(candidate.owner),
+        );
+        await writeFile(path.join(candidate.directory, "npmrc"), "temporary-authorization", {
+            mode: 0o600,
+        });
+        let groupChecks = 0;
+        const spy = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+            expect(signal).toBe(0);
+            if (pid === -downloaderPid) {
+                groupChecks++;
+                if (groupChecks === 1) return true;
+            }
+            throw Object.assign(new Error(), { code: "ESRCH" });
+        });
+
+        expect(await recoverDownloadCredentials(directory)).toEqual({
+            removed: [candidate.owner.id],
+            blocked: [],
+        });
+        expect(spy.mock.calls).toContainEqual([-downloaderPid, 0]);
+        expect(groupChecks).toBeGreaterThan(1);
         await expect(readFile(path.join(candidate.directory, "npmrc"))).rejects.toMatchObject({
             code: "ENOENT",
         });
