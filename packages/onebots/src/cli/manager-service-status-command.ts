@@ -23,7 +23,7 @@ const diagnostics: Record<NonNullable<ManagerServiceStatus["diagnostic"]>, strin
     "identity-mismatch": "OS 与 IPC 实例身份不匹配，网关状态未知。",
     "baseline-changed": "查询期间服务实例或元数据变化，请重新查询。",
 };
-/** status只调用新只读边界；不能回退旧ServiceController或业务配置探针。 */
+/** status只调用新只读边界；不能回退旧生命周期控制器或业务配置探针。 */
 export async function managerServiceStatusCommand(
     options: ScopeOptions & { json?: boolean },
 ): Promise<CommandResult> {

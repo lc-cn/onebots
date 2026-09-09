@@ -3,7 +3,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { inspectServiceControlPlanePermissions } from "./service-control-plane-permissions.js";
-import type { ServiceController, ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
+import type { LegacyServiceInspection } from "./legacy-service-inspection.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -33,7 +34,7 @@ describe.skipIf(process.platform === "win32")("service control-plane permissions
         const controller = {
             paths: () => ({ stateDir, metadata, definition }),
             definitionPath: () => definition,
-        } satisfies Pick<ServiceController, "definitionPath" | "paths">;
+        } satisfies Pick<LegacyServiceInspection, "definitionPath" | "paths">;
         const checks = inspectServiceControlPlanePermissions(controller, {} as ServiceSpec);
 
         expect(checks.filter(check => check.level === "error").map(check => check.name)).toEqual([

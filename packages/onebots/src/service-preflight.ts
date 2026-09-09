@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
 import { promisify } from "node:util";
-import type { ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
 import {
     inspectServiceNodeRuntime,
     type DoctorServiceRuntimeInspection,

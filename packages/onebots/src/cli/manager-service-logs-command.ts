@@ -13,7 +13,7 @@ export interface ManagerServiceLogsOptions extends ScopeOptions {
     follow?: boolean;
     lines?: number;
 }
-/** 只读系统托管日志；不加载旧 ServiceController 或业务配置，不创建任何目录。 */
+/** 只读系统托管日志；不加载旧生命周期控制器或业务配置，不创建任何目录。 */
 export async function managerServiceLogsCommand(
     options: ManagerServiceLogsOptions,
     host: ServiceHost = createDefaultServiceHost(),

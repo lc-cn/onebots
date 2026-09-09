@@ -7,7 +7,8 @@ import {
     inspectDoctorServiceDefinitionPermissions,
     inspectServiceDefinitionDirectoryPermissions,
 } from "./doctor-service-definition.js";
-import type { ServiceController, ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
+import type { ServiceDefinitionController } from "./doctor-service-definition.js";
 
 const spec: ServiceSpec = {
     scope: "user",
@@ -95,5 +96,5 @@ function controllerFixture(definitionIsCurrent: (spec: ServiceSpec) => boolean) 
     return {
         definitionIsCurrent: vi.fn(definitionIsCurrent),
         definitionPath: vi.fn(() => "/state/onebots/onebots.service"),
-    } satisfies Pick<ServiceController, "definitionIsCurrent" | "definitionPath">;
+    } satisfies ServiceDefinitionController;
 }

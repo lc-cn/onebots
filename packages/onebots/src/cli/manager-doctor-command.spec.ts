@@ -2,9 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { runManagerDoctor } from "../manager-doctor.js";
 import { managerDoctorCommand } from "./manager-doctor-command.js";
 vi.mock("../manager-doctor.js", () => ({ runManagerDoctor: vi.fn() }));
-vi.mock("../service-manager.js", () => {
-    throw new Error("禁止旧 doctor 服务实现");
-});
 vi.mock("./command-runner.js", () => ({ CommandRunner: () => null }));
 afterEach(() => vi.mocked(runManagerDoctor).mockReset());
 describe("新 doctor CLI", () => {

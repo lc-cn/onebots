@@ -9,7 +9,7 @@ import {
     preflightServiceRuntime,
     preflightServiceRuntimeIsolated,
 } from "./service-preflight.js";
-import type { ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
 
 const temporaryDirectories: string[] = [];
 

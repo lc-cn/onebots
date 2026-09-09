@@ -5,9 +5,13 @@ import {
 } from "./doctor-service-definition.js";
 import { inspectSensitiveFilePermissions } from "./doctor-permissions.js";
 import { inspectDoctorServiceStateDirectory } from "./doctor-service-state.js";
-import type { ServiceController, ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
+import type { ServiceFiles } from "./service-files.js";
 
-type ServiceControlPlaneController = Pick<ServiceController, "definitionPath" | "paths">;
+interface ServiceControlPlaneController {
+    definitionPath(spec: ServiceSpec): string;
+    paths(): ServiceFiles;
+}
 
 /** 汇总服务生命周期与状态报告共用的控制面权限证据。 */
 export function inspectServiceControlPlanePermissions(

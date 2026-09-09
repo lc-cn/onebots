@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { inspectDoctorServiceMetadata } from "./doctor-service-metadata.js";
-import type { ServiceController, ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
+import type { LegacyServiceInspection } from "./legacy-service-inspection.js";
 
 describe("doctor service metadata", () => {
     it("保留有效服务定义", () => {
@@ -41,5 +42,5 @@ function controllerFixture(readSpec: () => ServiceSpec | null) {
             definition: "/state/onebots/service.plist",
             metadata: "/state/onebots/service.json",
         })),
-    } satisfies Pick<ServiceController, "paths" | "readSpec">;
+    } satisfies Pick<LegacyServiceInspection, "paths" | "readSpec">;
 }

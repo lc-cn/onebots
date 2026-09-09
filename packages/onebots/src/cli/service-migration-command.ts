@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ServiceController } from "../service-manager.js";
+import { LegacyServiceInspection } from "../legacy-service-inspection.js";
 import { createDefaultServiceHost } from "../service-host.js";
 import { migrateInstalledService } from "../service-migration.js";
 import { parseManagerServiceSpec } from "../manager-service-spec.js";
@@ -20,7 +20,7 @@ export async function migrateServiceCommand(
     const scope = options.system ? "system" : "user";
     let target;
     try {
-        const spec = new ServiceController(scope, host).readSpec();
+        const spec = new LegacyServiceInspection(scope, host).readSpec();
         if (!spec) return { output: "未找到已安装的旧服务，未执行迁移。", exitCode: 1 };
         target = parseManagerServiceSpec({
             schemaVersion: 1,

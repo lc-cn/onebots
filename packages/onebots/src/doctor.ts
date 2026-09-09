@@ -3,7 +3,8 @@ import * as path from "node:path";
 import * as net from "node:net";
 import { createRequire } from "node:module";
 import { inspectPublicStaticRoot } from "@onebots/core";
-import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
+import { LegacyServiceInspection } from "./legacy-service-inspection.js";
+import type { ServiceScope, ServiceSpec } from "./service-definition.js";
 import { pluginCandidates, tryLoadRegisteredPlugin } from "./plugin-loader.js";
 import {
     formatRuntimeConfigDiagnostic,
@@ -44,7 +45,6 @@ import {
     inspectDoctorServiceDefinition,
     inspectDoctorServiceDefinitionPermissions,
     inspectServiceDefinitionDirectoryPermissions,
-    repairDoctorUserService,
     type DoctorServiceDefinitionInspection,
 } from "./doctor-service-definition.js";
 import { inspectDoctorServiceStateDirectory } from "./doctor-service-state.js";
@@ -128,7 +128,7 @@ export interface DoctorOptions {
     serviceEntryInspector?: (binPath: string) => DoctorServiceEntryInspection;
     /** 测试或嵌入场景可替换平台服务定义探测。 */
     serviceDefinitionInspector?: (
-        controller: ServiceController,
+        controller: LegacyServiceInspection,
         spec: ServiceSpec,
     ) => DoctorServiceDefinitionInspection;
     /** 测试或嵌入场景可替换实际包管理器版本探测。 */
@@ -226,7 +226,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checks.push(...database.checks);
 
     const useInstalledService = options.useInstalledService !== false;
-    const controller = new ServiceController(options.scope);
+    const controller = new LegacyServiceInspection(options.scope);
     const serviceMetadata = useInstalledService
         ? (options.serviceMetadata ?? inspectDoctorServiceMetadata(controller))
         : { spec: null, error: null };
@@ -393,38 +393,17 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
             spec.scope !== options.scope ||
             requestedPluginsDiffer ||
             !serviceDefinition.current;
-        if (stale && options.fix && options.scope === "user") {
-            const repairedSpec = {
-                ...spec,
-                configPath: options.configPath,
-                nodePath: process.execPath,
-                binPath: path.resolve(process.argv[1]),
-            };
-            checks.push(
-                ...(await repairDoctorUserService({
-                    controller,
-                    previousSpec: spec,
-                    repairedSpec,
-                    previousRuntime: serviceRuntime,
-                    previousEntry: serviceEntry,
-                    runtimeInspector: inspectServiceRuntime,
-                    entryInspector: inspectEntry,
-                    definitionInspector: inspectDefinition,
-                })),
-            );
-        } else {
-            checks.push(serviceRuntime.check);
-            checks.push(serviceEntry.check);
-            checks.push({
-                name: "service-definition",
-                level: stale ? "error" : "ok",
-                message:
-                    serviceDefinition.error ??
-                    (stale
-                        ? `服务定义中的运行路径已失效${options.scope === "system" ? "；请使用管理员权限重新执行 onebots install --system" : "，--fix 可修复"}`
-                        : "服务运行路径有效"),
-            });
-        }
+        checks.push(serviceRuntime.check);
+        checks.push(serviceEntry.check);
+        checks.push({
+            name: "service-definition",
+            level: stale ? "error" : "ok",
+            message:
+                serviceDefinition.error ??
+                (stale
+                    ? "旧服务定义中的运行路径已失效；请先执行 onebots migrate，旧 doctor 不再改写系统服务"
+                    : "服务运行路径有效"),
+        });
     }
 
     let baseUrl: string | null = null;

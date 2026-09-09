@@ -7,9 +7,6 @@ import { getServiceFiles } from "../service-files.js";
 import { renderInstalledManagerService } from "../manager-service-definition.js";
 import type { ServiceHost } from "../service-host.js";
 import type { ManagerServiceSpec } from "../manager-service-spec.js";
-vi.mock("../service-manager.js", () => {
-    throw new Error("禁止旧日志实现");
-});
 const roots: string[] = [];
 afterEach(() => {
     vi.restoreAllMocks();

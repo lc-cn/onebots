@@ -3,7 +3,7 @@ import {
     assertInstalledServiceDefinitionCurrent,
     assertManagedRuntimeDefinitionsCurrent,
 } from "./service-definition-preflight.js";
-import type { ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
 
 const spec: ServiceSpec = {
     scope: "user",

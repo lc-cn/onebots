@@ -17,7 +17,8 @@ import {
     resolveDoctorPluginSelection,
     runDoctor,
 } from "./doctor.js";
-import { ServiceController, type ServiceSpec } from "./service-manager.js";
+import { LegacyServiceInspection } from "./legacy-service-inspection.js";
+import type { ServiceSpec } from "./service-definition.js";
 import packageMetadata from "../package.json" with { type: "json" };
 import {
     DOCTOR_ENDPOINT_BODY_LIMIT_BYTES,
@@ -1141,7 +1142,7 @@ describe("doctor persisted plugin selection", () => {
         });
     });
 
-    it("拒绝服务定义中的旧 Node，并用 --fix 切换到当前运行时", async () => {
+    it("拒绝服务定义中的旧 Node，--fix 也不再改写系统服务", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-service-node-"));
         temporaryDirectories.push(directory);
         const configPath = path.join(directory, "config.yaml");
@@ -1157,14 +1158,14 @@ describe("doctor persisted plugin selection", () => {
             binPath: process.argv[1],
             workingDirectory: process.cwd(),
         };
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
-        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(LegacyServiceInspection.prototype, "status").mockReturnValue({
             installed: true,
             running: false,
             scope: "user",
             detail: "inactive",
         });
-        vi.spyOn(ServiceController.prototype, "paths").mockReturnValue({
+        vi.spyOn(LegacyServiceInspection.prototype, "paths").mockReturnValue({
             stateDir: directory,
             definition: path.join(directory, "service.plist"),
             metadata: path.join(directory, "service.json"),
@@ -1176,8 +1177,7 @@ describe("doctor persisted plugin selection", () => {
             fs.writeFileSync(definitionPath, "service definition", { mode: 0o666 });
             fs.chmodSync(definitionPath, 0o666);
         }
-        vi.spyOn(ServiceController.prototype, "definitionIsCurrent").mockReturnValue(true);
-        const install = vi.spyOn(ServiceController.prototype, "install").mockResolvedValue();
+        vi.spyOn(LegacyServiceInspection.prototype, "definitionIsCurrent").mockReturnValue(true);
         const serviceRuntimeInspector = vi.fn((nodePath: string) =>
             nodePath === spec.nodePath
                 ? {
@@ -1238,7 +1238,6 @@ describe("doctor persisted plugin selection", () => {
             expect(fs.statSync(metadataPath).mode & 0o777).toBe(0o644);
             expect(fs.statSync(definitionPath).mode & 0o777).toBe(0o666);
         }
-        expect(install).not.toHaveBeenCalled();
 
         if (process.platform !== "win32") {
             const systemReport = await runDoctor({ ...options, scope: "system", fix: true });
@@ -1256,19 +1255,17 @@ describe("doctor persisted plugin selection", () => {
             ).not.toHaveProperty("fixed");
             expect(fs.statSync(metadataPath).mode & 0o777).toBe(0o644);
             expect(fs.statSync(definitionPath).mode & 0o777).toBe(0o666);
-            expect(install).not.toHaveBeenCalled();
         }
 
         const repaired = await runDoctor({ ...options, fix: true });
-        expect(repaired.checks.find(check => check.name === "service-node")).toEqual({
-            name: "service-node",
-            level: "ok",
-            message: `服务 Node.js ${process.version}`,
-            fixed: true,
+        expect(repaired.checks.find(check => check.name === "service-node")).toMatchObject({
+            level: "error",
         });
-        expect(repaired.checks.find(check => check.name === "service-definition")).toMatchObject({
-            level: "ok",
-            fixed: true,
+        expect(repaired.checks.find(check => check.name === "service-definition")).toEqual({
+            name: "service-definition",
+            level: "error",
+            message:
+                "旧服务定义中的运行路径已失效；请先执行 onebots migrate，旧 doctor 不再改写系统服务",
         });
         if (process.platform !== "win32") {
             expect(
@@ -1280,27 +1277,7 @@ describe("doctor persisted plugin selection", () => {
             expect(fs.statSync(metadataPath).mode & 0o777).toBe(0o600);
             expect(fs.statSync(definitionPath).mode & 0o777).toBe(0o644);
         }
-        expect(install).toHaveBeenCalledWith({
-            ...spec,
-            configPath,
-            nodePath: process.execPath,
-            binPath: path.resolve(process.argv[1]),
-        });
-
-        install.mockRejectedValueOnce(
-            new Error("systemctl failed with ONEBOTS_ACCESS_TOKEN=secret-token"),
-        );
-        const failedRepair = await runDoctor({ ...options, fix: true });
-        expect(failedRepair.ok).toBe(false);
-        const failedRuntimeCheck = failedRepair.checks.find(check => check.name === "service-node");
-        expect(failedRuntimeCheck).toMatchObject({ level: "error" });
-        expect(failedRuntimeCheck).not.toHaveProperty("fixed");
-        expect(failedRepair.checks.find(check => check.name === "service-definition")).toEqual({
-            name: "service-definition",
-            level: "error",
-            message: `用户级服务定义修复失败: ${path.join(directory, "service.plist")}`,
-        });
-        expect(JSON.stringify(failedRepair)).not.toContain("secret-token");
+        expect(repaired.ok).toBe(false);
     });
 
     it("不把临时环境 Secret 作为已安装服务的凭据证据", async () => {
@@ -1319,8 +1296,8 @@ describe("doctor persisted plugin selection", () => {
             binPath: process.argv[1],
             workingDirectory: process.cwd(),
         };
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(spec);
-        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(spec);
+        vi.spyOn(LegacyServiceInspection.prototype, "status").mockReturnValue({
             installed: true,
             running: false,
             scope: "user",
@@ -1391,8 +1368,8 @@ describe("doctor persisted plugin selection", () => {
     });
 
     it("reports an installed but stopped managed service as a warning", async () => {
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
-        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(null);
+        vi.spyOn(LegacyServiceInspection.prototype, "status").mockReturnValue({
             installed: true,
             running: false,
             scope: "user",
@@ -1421,8 +1398,8 @@ describe("doctor persisted plugin selection", () => {
     });
 
     it("fails diagnosis when the process manager cannot prove service state", async () => {
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
-        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(null);
+        vi.spyOn(LegacyServiceInspection.prototype, "status").mockReturnValue({
             installed: true,
             running: false,
             scope: "user",
@@ -1451,8 +1428,8 @@ describe("doctor persisted plugin selection", () => {
     });
 
     it("uses config defaults when no service or explicit plugin flags exist", async () => {
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
-        vi.spyOn(ServiceController.prototype, "status").mockReturnValue({
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(null);
+        vi.spyOn(LegacyServiceInspection.prototype, "status").mockReturnValue({
             installed: false,
             running: false,
             scope: "user",

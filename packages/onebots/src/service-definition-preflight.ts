@@ -1,9 +1,10 @@
 import * as path from "node:path";
 import { inspectDoctorServiceDefinition } from "./doctor-service-definition.js";
-import { ServiceController, type ServiceScope, type ServiceSpec } from "./service-manager.js";
+import { LegacyServiceInspection } from "./legacy-service-inspection.js";
+import type { ServiceScope, ServiceSpec } from "./service-definition.js";
 
 type ServiceDefinitionController = Pick<
-    ServiceController,
+    LegacyServiceInspection,
     "readSpec" | "definitionIsCurrent" | "definitionPath"
 >;
 
@@ -34,8 +35,8 @@ export function assertInstalledServiceDefinitionCurrent(
 export function assertManagedRuntimeDefinitionsCurrent(
     identity: ManagedRuntimeIdentity,
     controllers: ReadonlyArray<readonly [ServiceScope, ServiceDefinitionController]> = [
-        ["user", new ServiceController("user")],
-        ["system", new ServiceController("system")],
+        ["user", new LegacyServiceInspection("user")],
+        ["system", new LegacyServiceInspection("system")],
     ],
 ): void {
     const matches: Array<readonly [ServiceScope, ServiceDefinitionController, ServiceSpec]> = [];

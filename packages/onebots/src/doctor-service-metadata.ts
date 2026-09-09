@@ -1,4 +1,10 @@
-import type { ServiceController, ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
+import type { ServiceFiles } from "./service-files.js";
+
+interface ServiceMetadataController {
+    paths(): ServiceFiles;
+    readSpec(): ServiceSpec | null;
+}
 
 export interface DoctorServiceMetadataInspection {
     spec: ServiceSpec | null;
@@ -9,7 +15,7 @@ export interface DoctorServiceMetadataInspection {
  * doctor 必须能诊断损坏的服务元数据；解析器原始异常可能带 JSON 片段，因此公开结果只返回路径。
  */
 export function inspectDoctorServiceMetadata(
-    controller: Pick<ServiceController, "paths" | "readSpec">,
+    controller: ServiceMetadataController,
 ): DoctorServiceMetadataInspection {
     try {
         return { spec: controller.readSpec(), error: null };

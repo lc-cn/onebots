@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { ConfigurationFile } from "./configuration/configuration-file.js";
-import { ServiceController } from "./service-manager.js";
+import { LegacyServiceInspection } from "./legacy-service-inspection.js";
+import { parseLegacyServiceSpec } from "./service-metadata.js";
 import { getServiceFiles } from "./service-files.js";
 import { parseManagerServiceSpec, type ManagerServiceSpec } from "./manager-service-spec.js";
 import { prepareServiceMigration } from "./service-migration-preparation.js";
@@ -24,13 +25,15 @@ export async function captureServiceMigration(
             snapshot("definition", paths.definition),
             snapshot("metadata", paths.metadata),
         ];
-        const controller = new ServiceController(target.scope, host);
+        const controller = new LegacyServiceInspection(target.scope, host);
         const legacy = controller.readSpec();
         if (!legacy || !controller.definitionIsCurrent(legacy)) throw new Error();
         if (
             JSON.stringify(legacy) !==
             JSON.stringify(
-                JSON.parse(Buffer.from(baseline[1].contentBase64, "base64").toString("utf8")),
+                parseLegacyServiceSpec(
+                    JSON.parse(Buffer.from(baseline[1].contentBase64, "base64").toString("utf8")),
+                ),
             )
         )
             throw new Error();

@@ -12,9 +12,6 @@ vi.mock("../service-migration-recovery.js", () => ({
     rollbackStoppedServiceMigration: vi.fn(),
 }));
 vi.mock("./command-runner.js", () => ({ CommandRunner: () => null }));
-vi.mock("../service-manager.js", () => {
-    throw new Error("禁止旧恢复旁路");
-});
 afterEach(() => vi.mocked(reconcileManagerServiceOperation).mockReset());
 afterEach(() => vi.mocked(cancelUnstartedServiceMigration).mockReset());
 afterEach(() => vi.mocked(rollbackStoppedServiceMigration).mockReset());

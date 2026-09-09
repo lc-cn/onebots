@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ServiceController } from "../service-manager.js";
+import { LegacyServiceInspection } from "../legacy-service-inspection.js";
 import { migrateInstalledService } from "../service-migration.js";
 import { migrateServiceCommand } from "./service-migration-command.js";
 import type { ServiceMigrationRecord } from "../service-migration-types.js";
@@ -33,7 +33,7 @@ function result(overrides: Partial<ServiceMigrationRecord> = {}): ServiceMigrati
 }
 describe("migration CLI command", () => {
     it("derives workspace from installed legacy config and uses current packaged runtime", async () => {
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(legacy);
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(legacy);
         vi.mocked(migrateInstalledService).mockResolvedValue(result());
         const output = await migrateServiceCommand({ system: false });
         expect(vi.mocked(migrateInstalledService).mock.calls[0][0]).toEqual({
@@ -51,7 +51,7 @@ describe("migration CLI command", () => {
         expect(output.output).toContain("onebots auth bootstrap --data-dir '/tmp/old workspace'");
     });
     it("passes explicit scope/listen values without accepting account/protocol overrides", async () => {
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue({
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue({
             ...legacy,
             scope: "system",
         });
@@ -65,7 +65,7 @@ describe("migration CLI command", () => {
         expect(vi.mocked(migrateInstalledService).mock.calls[0][0]).not.toHaveProperty("adapters");
     });
     it("missing/invalid legacy service does not call migration", async () => {
-        const read = vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(null);
+        const read = vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(null);
         expect(await migrateServiceCommand({ system: false })).toMatchObject({
             exitCode: 1,
             output: expect.stringContaining("未找到"),
@@ -80,7 +80,7 @@ describe("migration CLI command", () => {
         expect(migrateInstalledService).not.toHaveBeenCalled();
     });
     it("unknown result reports its id and never claims successful rollback", async () => {
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(legacy);
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(legacy);
         vi.mocked(migrateInstalledService).mockResolvedValue(
             result({ status: "interrupted", recoveryRequired: true, rolledBack: true }),
         );
@@ -91,7 +91,7 @@ describe("migration CLI command", () => {
         expect(output.output).not.toContain("已确认恢复旧服务");
     });
     it("confirmed rollback is distinct from an exception with unknown operation id", async () => {
-        vi.spyOn(ServiceController.prototype, "readSpec").mockReturnValue(legacy);
+        vi.spyOn(LegacyServiceInspection.prototype, "readSpec").mockReturnValue(legacy);
         vi.mocked(migrateInstalledService).mockResolvedValue(
             result({ status: "failed", rolledBack: true }),
         );

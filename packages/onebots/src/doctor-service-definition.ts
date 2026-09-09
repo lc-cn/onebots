@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ServiceController, ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
 import type { DoctorCheck } from "./doctor-endpoint.js";
 import type { DoctorServiceEntryInspection } from "./doctor-service-entry.js";
 import type { DoctorServiceRuntimeInspection } from "./doctor-service-runtime.js";
@@ -12,7 +12,7 @@ export interface DoctorServiceDefinitionInspection {
 }
 
 export interface DoctorServiceRepairOptions {
-    controller: ServiceController;
+    controller: ServiceDefinitionRepairController;
     previousSpec: ServiceSpec;
     repairedSpec: ServiceSpec;
     previousRuntime: DoctorServiceRuntimeInspection;
@@ -20,14 +20,23 @@ export interface DoctorServiceRepairOptions {
     runtimeInspector: (nodePath: string) => DoctorServiceRuntimeInspection;
     entryInspector: (binPath: string) => DoctorServiceEntryInspection;
     definitionInspector: (
-        controller: ServiceController,
+        controller: ServiceDefinitionController,
         spec: ServiceSpec,
     ) => DoctorServiceDefinitionInspection;
 }
 
+export interface ServiceDefinitionController {
+    definitionIsCurrent(spec: ServiceSpec): boolean;
+    definitionPath(spec: ServiceSpec): string;
+}
+
+export interface ServiceDefinitionRepairController extends ServiceDefinitionController {
+    install(spec: ServiceSpec): Promise<void>;
+}
+
 /** 将平台服务定义的读取或比对异常收敛为 doctor 可持久化的脱敏证据。 */
 export function inspectDoctorServiceDefinition(
-    controller: Pick<ServiceController, "definitionIsCurrent" | "definitionPath">,
+    controller: ServiceDefinitionController,
     spec: ServiceSpec,
 ): DoctorServiceDefinitionInspection {
     try {

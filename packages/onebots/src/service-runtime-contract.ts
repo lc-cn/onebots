@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
 import { getRuntimePluginSelection } from "./runtime-plugin-selection.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 

@@ -29,12 +29,12 @@ OneBots 是完整的自托管产品。安装、配置、平台接入、协议输
 | --- | --- | --- |
 | `packages/onebots/src/app.ts` | `App.start()` 同时注册鉴权、配置、扩展、账号、终端等管理路由并启动网关 | 拆出独立管理宿主，网关不承载控制台 |
 | `runtime.ts`、`runtime-shutdown.ts` | 直接启动应用并处理进程信号 | 保留网关启动/停机能力，纳入管理服务的子进程契约 |
-| `service-manager.ts`、`service-definition.ts` | 系统服务定义直接携带网关插件选择和配置 | 系统服务只指向管理服务和工作区，不固化平台/协议选择 |
+| `legacy-service-inspection.ts`、`service-definition.ts` | 旧定义只用于迁移取证；不再提供第二套安装、启停或卸载控制 | 系统服务只指向管理服务和工作区，不固化平台/协议选择 |
 | `cli/command-application.ts` | 同时处理系统服务、运行时预检、管理请求和本地状态 | 保留命令交互，业务控制收敛到统一客户端 |
 | `routes/extensions.ts`、`extension-manager.ts` | 在线包变更直接作用于运行目录 | 替换成候选版本安装和激活事务 |
 | `installation-local.ts`、`scripts/docker-extension-*.mjs` | 本机与容器有不同下载、验证、切换路径 | 统一安装模型，宿主差异放在执行实现中 |
 | `routes/config.ts`、`process-restart.ts` | Web 重启依靠当前网关退出，再由外部机制拉起 | 管理服务接收重启操作，网关不决定自己的重生 |
-| `packages/web/src/views/extension-*` | 依赖网关管理接口和实例快照 | 接到独立管理服务，网关离线时仍可编辑与管理 |
+| `packages/web/src/App.vue` | 设备会话客户端直接连接独立管理服务；旧网关管理页面已删除 | 网关离线时仍可安装扩展、编辑配置和管理运行状态 |
 
 本轮实验已确认：
 
@@ -544,3 +544,7 @@ Linux 检查已补充 musl 的系统配置与默认搜索顺序。独立、禁�
 热迁移现已切换到受限的 schema v2 状态机：目标文件写入成功后才持久化 `target-written`，普通 journal `save()` 不能写入或改造 v2；后续目标启动、验收、开放管理和两类回退只能通过闭合命令及磁盘当前值复验前进。旧文件恢复、系统定义 reload 和旧实例 start 已拆为三个外部效果，每个效果前先持久化意图，reload 收据绑定备份摘要与完整回退契约，start 收据绑定 reload 摘要、PID 和实例身份；原停止服务只生成 reload 收据，不会启动。持久化收据只作为审计和冷恢复预期，不能直接授权 journal 前进；真正的提交权限由进程内一次性效果证明提供，并绑定 journal 实例、完整记录摘要、备份和阶段，普通对象、跨 journal 或重复消费均被拒绝。Port 会在签发及最终验收时再次观测平台状态，systemd/launchd 的 start 还必须核对调用方给出的精确停态，拒绝最后检查后被外部抢先启动的实例。目标写入、reload、start 或证明落盘结果未知时记录保持封锁，不推断完成并盲目覆盖。
 
 schema v2 冷恢复现与热回退共用效果协调器。确认目标从未启动时，`target-written`/`stopping-target` 会在同一工作区锁内完成 never-started 复验、封锁、平台静止和禁用、再次复验及文件恢复；`starting-old` 只接受已经存在且 PID/实例身份完全匹配的旧实例，`verifying-restored` 重新双观测后完成记录。跨进程停在 `reloading-old` 时，现有 systemd/launchd 状态无法证明系统已消费恢复后的定义，因此明确封锁且不重发 reload；目标实例已运行但缺少持久归属证明时也不自动停止。历史 v1 早期事务及停服前回退继续可读。主包构建以及全部迁移、systemd、launchd 测试在允许 Unix socket 和特殊权限位的宿主环境通过，2 项按宿主跳过；真实系统安装后的故障注入和 launchd 冷进程组证明仍需部署验收。
+
+当前设备码控制台入口不可达的旧 Web 页面、用户名密码客户端、网关管理快照和浏览器终端链已删除；旧 TUI 工作区容器也已退役。Web 剩余生产源码全部位于 `main.ts` 到 `App.vue` 的静态导入闭包，不存在动态导入或源码导出旁路；Xterm、Vue Router、Day.js 和 Web 专用 YAML 依赖随之从包清单及锁文件移除。设备会话、安装计划、配置、验证、日志、调试与会话管理面保持可达，网关停止时仍由管理服务提供。
+
+旧 `ServiceController` 及其安装、启停、日志、卸载事务和 Windows 旧托管实现已退役。迁移、定义预检和遗留诊断只依赖 `LegacyServiceInspection`：它严格读取 legacy metadata、复验 systemd/launchd 定义字节与文件身份，并只查询状态，不暴露任何生命周期写操作；launchd 未加载任务继续归类为正常停止，其他命令错误固定脱敏。`service-definition.ts` 仍保留旧启动参数及各平台定义渲染，用作已安装旧版本和回退工件的历史证据。`App/createOnebots/--service-runtime` 暂时保留，直到迁移后的互操作脚本和旧工件回退均不再依赖当前包提供该入口。

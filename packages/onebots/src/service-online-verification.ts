@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import type { ServiceSpec } from "./service-manager.js";
+import type { ServiceSpec } from "./service-definition.js";
 import { parseRuntimeConfig } from "./runtime-config-validator.js";
 import {
     compareDoctorEndpointIdentities,
