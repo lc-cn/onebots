@@ -5,7 +5,7 @@
  * 和显式 ONEBOTS_SYSTEMD_ACCEPTANCE=1 同时成立时才允许执行；任何未知结果都保留现场，不重派动作。
  */
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -334,6 +334,33 @@ async function invokeMigration(args) {
     );
 }
 
+function spawnMigration(args) {
+    const child = spawn(cli, args, {
+        cwd: runtime,
+        env: cliEnvironment,
+        stdio: "ignore",
+    });
+    const closed = new Promise((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", (status, signal) => resolve({ status, signal }));
+    });
+    return { child, closed };
+}
+
+function singleMigrationJournal() {
+    const directory = path.join(STATE_DIRECTORY, "migrations");
+    if (!fs.existsSync(directory)) return null;
+    const names = fs.readdirSync(directory).filter(name => name.endsWith(".journal.json"));
+    if (names.length !== 1) return null;
+    const name = names[0];
+    const id = name.slice(0, -".journal.json".length);
+    return {
+        id,
+        file: path.join(directory, name),
+        record: JSON.parse(fs.readFileSync(path.join(directory, name), "utf8")),
+    };
+}
+
 function systemdState() {
     return execute(
         "systemctl",
@@ -367,9 +394,9 @@ async function freePort() {
     return address.port;
 }
 
-async function eventually(read, accept, message) {
+async function eventually(read, accept, message, attempts = 100) {
     let last;
-    for (let attempt = 0; attempt < 100; attempt++) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
         try {
             last = await read();
             if (await accept(last)) return last;
@@ -417,9 +444,10 @@ async function verifyLegacyMigration(port, operationIds) {
     );
     let legacyBin = path.join(legacyRuntime, "bin.js");
     const readyMarker = path.join(legacyData, "legacy-ready");
+    const stoppingMarker = path.join(legacyData, "legacy-stopping");
     fs.writeFileSync(
         legacyBin,
-        `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(readyMarker)}, "ready\\n", { mode: 0o600 }); process.on("SIGTERM", () => process.exit(0)); setInterval(() => {}, 60_000);\n`,
+        `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(readyMarker)}, "ready\\n", { mode: 0o600 }); process.on("SIGTERM", () => { fs.writeFileSync(${JSON.stringify(stoppingMarker)}, "stopping\\n", { mode: 0o600 }); setTimeout(() => process.exit(0), 15_000); }); setInterval(() => {}, 60_000);\n`,
         { mode: 0o600 },
     );
     legacyBin = fs.realpathSync(legacyBin);
@@ -472,6 +500,225 @@ async function verifyLegacyMigration(port, operationIds) {
     const legacyStatus = cliJson(["status", "--system", "--json"], [1]);
     assert.equal(legacyStatus.installation, "legacy");
     assert.equal(legacyStatus.diagnostic, "migration-required");
+
+    const originalDefinition = fs.readFileSync(DEFINITION);
+    const originalMetadata = fs.readFileSync(METADATA);
+    const originalConfiguration = fs.readFileSync(legacyConfig);
+    const originalService = execute("systemctl", [
+        "show",
+        SERVICE,
+        "--property=MainPID",
+        "--property=InvocationID",
+    ]).stdout;
+    const originalProcessId = Number(/^MainPID=(\d+)$/mu.exec(originalService)?.[1]);
+    const originalIdentity = /^InvocationID=([0-9a-f]{32})$/mu.exec(originalService)?.[1];
+    assert.ok(Number.isInteger(originalProcessId) && originalProcessId > 0);
+    assert.ok(originalIdentity);
+    const interrupted = spawnMigration([
+        "migrate",
+        "--system",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        String(port),
+    ]);
+    const stopping = await Promise.race([
+        eventually(
+            () => singleMigrationJournal(),
+            value =>
+                value?.record.phase === "stopping-old" &&
+                value.record.status === "running" &&
+                fs.existsSync(stoppingMarker),
+            "未能在真实 systemd 停服窗口稳定观察到 stopping-old",
+            2400,
+        ),
+        interrupted.closed.then(result => {
+            throw new Error(
+                `迁移 CLI 在故障注入窗口前退出（exit ${String(result.status)}，signal ${String(result.signal)}）`,
+            );
+        }),
+    ]);
+    assert.ok(stopping);
+    const stoppingJournal = fs.readFileSync(stopping.file);
+    assert.equal(interrupted.child.kill("SIGKILL"), true, "无法中断迁移 CLI");
+    assert.deepEqual(await interrupted.closed, { status: null, signal: "SIGKILL" });
+    operationIds.push(stopping.id);
+    assert.deepEqual(
+        fs.readFileSync(stopping.file),
+        stoppingJournal,
+        "迁移 CLI 的 SIGKILL 不得伪造中断终态",
+    );
+    const stoppedState = await eventually(
+        () =>
+            execute("systemctl", [
+                "show",
+                SERVICE,
+                "--property=ActiveState",
+                "--property=SubState",
+                "--property=UnitFileState",
+                "--property=MainPID",
+            ]).stdout,
+        value =>
+            value.includes("ActiveState=inactive") &&
+            value.includes("SubState=dead") &&
+            value.includes("UnitFileState=disabled") &&
+            value.includes("MainPID=0"),
+        "迁移 CLI 中断后旧 systemd 服务未完成已提交的停止动作",
+        400,
+    );
+    assert.deepEqual(fs.readFileSync(DEFINITION), originalDefinition);
+    assert.deepEqual(fs.readFileSync(METADATA), originalMetadata);
+    assert.deepEqual(fs.readFileSync(legacyConfig), originalConfiguration);
+
+    const journalsBeforeGateChecks = fs.readdirSync(path.join(STATE_DIRECTORY, "migrations"));
+    assert.equal(
+        invokeCli(["migrate", "--system", "--host", "127.0.0.1", "--port", String(port)], [1])
+            .status,
+        1,
+        "未恢复的迁移不得再次派发",
+    );
+    assert.equal(
+        invokeCli(
+            [
+                "install",
+                "--system",
+                "--data-dir",
+                legacyData,
+                "--host",
+                "127.0.0.1",
+                "--port",
+                String(port),
+            ],
+            [1],
+        ).status,
+        1,
+        "未恢复的迁移不得被新安装绕过",
+    );
+    assert.deepEqual(
+        fs.readdirSync(path.join(STATE_DIRECTORY, "migrations")),
+        journalsBeforeGateChecks,
+        "恢复门禁检查不得创建新的迁移 operation",
+    );
+    assert.deepEqual(fs.readFileSync(DEFINITION), originalDefinition);
+    assert.deepEqual(fs.readFileSync(METADATA), originalMetadata);
+    assert.deepEqual(fs.readFileSync(legacyConfig), originalConfiguration);
+    assert.equal(
+        execute("systemctl", [
+            "show",
+            SERVICE,
+            "--property=ActiveState",
+            "--property=SubState",
+            "--property=UnitFileState",
+            "--property=MainPID",
+        ]).stdout,
+        stoppedState,
+        "恢复门禁检查不得重派 systemd 动作",
+    );
+    const interruptedRecord = JSON.parse(fs.readFileSync(stopping.file, "utf8"));
+    assert.deepEqual(
+        {
+            phase: interruptedRecord.phase,
+            status: interruptedRecord.status,
+            recoveryRequired: interruptedRecord.recoveryRequired,
+        },
+        { phase: "stopping-old", status: "interrupted", recoveryRequired: true },
+    );
+
+    fs.rmSync(readyMarker);
+    const recoveredOutput = invokeCli([
+        "recover",
+        "--operation",
+        stopping.id,
+        "--rollback-migration",
+        "--system",
+    ]).stdout;
+    assert.match(recoveredOutput, new RegExp(`操作 ${stopping.id}：已恢复保留的旧服务`, "u"));
+    const recoveredState = await eventually(
+        () =>
+            execute("systemctl", [
+                "show",
+                SERVICE,
+                "--property=ActiveState",
+                "--property=SubState",
+                "--property=UnitFileState",
+                "--property=MainPID",
+                "--property=InvocationID",
+            ]).stdout,
+        value => {
+            const processId = Number(/^MainPID=(\d+)$/mu.exec(value)?.[1]);
+            const identity = /^InvocationID=([0-9a-f]{32})$/mu.exec(value)?.[1];
+            return (
+                value.includes("ActiveState=active") &&
+                value.includes("SubState=running") &&
+                value.includes("UnitFileState=enabled") &&
+                processId > 0 &&
+                processId !== originalProcessId &&
+                identity !== undefined &&
+                identity !== originalIdentity &&
+                fs.existsSync(readyMarker)
+            );
+        },
+        "公开恢复命令未通过真实 systemd 恢复旧服务",
+    );
+    const recoveredProcessId = Number(/^MainPID=(\d+)$/mu.exec(recoveredState)?.[1]);
+    const recoveredIdentity = /^InvocationID=([0-9a-f]{32})$/mu.exec(recoveredState)?.[1];
+    assert.ok(Number.isInteger(recoveredProcessId) && recoveredProcessId > 0);
+    assert.ok(recoveredIdentity);
+    const recoveredJournal = fs.readFileSync(stopping.file);
+    const recoveredRecord = JSON.parse(recoveredJournal);
+    assert.deepEqual(
+        {
+            id: recoveredRecord.id,
+            schemaVersion: recoveredRecord.schemaVersion,
+            phase: recoveredRecord.phase,
+            status: recoveredRecord.status,
+            recoveryRequired: recoveredRecord.recoveryRequired,
+            rolledBack: recoveredRecord.rolledBack,
+            rollbackOrigin: recoveredRecord.rollbackOrigin,
+        },
+        {
+            id: stopping.id,
+            schemaVersion: 2,
+            phase: "completed",
+            status: "failed",
+            recoveryRequired: false,
+            rolledBack: true,
+            rollbackOrigin: "pre-target",
+        },
+        "恢复后的迁移记录必须是已确认回退终态",
+    );
+    const recoveredDefinition = fs.readFileSync(DEFINITION);
+    const recoveredMetadata = fs.readFileSync(METADATA);
+    const repeatedRecovery = invokeCli([
+        "recover",
+        "--operation",
+        stopping.id,
+        "--rollback-migration",
+        "--system",
+    ]).stdout;
+    assert.match(repeatedRecovery, new RegExp(`操作 ${stopping.id}：已恢复保留的旧服务`, "u"));
+    assert.deepEqual(fs.readFileSync(stopping.file), recoveredJournal);
+    assert.deepEqual(fs.readFileSync(DEFINITION), recoveredDefinition);
+    assert.deepEqual(fs.readFileSync(METADATA), recoveredMetadata);
+    const repeatedState = execute("systemctl", [
+        "show",
+        SERVICE,
+        "--property=MainPID",
+        "--property=InvocationID",
+    ]).stdout;
+    assert.deepEqual(
+        {
+            processId: Number(/^MainPID=(\d+)$/mu.exec(repeatedState)?.[1]),
+            identity: /^InvocationID=([0-9a-f]{32})$/mu.exec(repeatedState)?.[1],
+        },
+        { processId: recoveredProcessId, identity: recoveredIdentity },
+        "重复 recover 不得重载或重启旧服务",
+    );
+    assert.equal(
+        fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
+        "legacy-preserve-me\n",
+    );
+    assert.deepEqual(fs.readFileSync(legacyConfig), originalConfiguration);
 
     const migrationOutput = await invokeMigration([
         "migrate",
@@ -698,7 +945,7 @@ try {
     assert.equal(new Set(operationIds).size, operationIds.length, "生命周期操作 ID 必须互不相同");
     completed = true;
     process.stdout.write(
-        "✓ 真实 systemd 系统级验收：旧服务迁移、异常退出冷启动、operation 持久性、新安装生命周期及卸载保留数据均通过\n",
+        "✓ 真实 systemd 系统级验收：旧服务迁移中断冷回退、完成迁移后的异常退出冷启动、operation 持久性、新安装生命周期及卸载保留数据均通过\n",
     );
 } finally {
     if (completed) fs.rmSync(temporary, { recursive: true, force: true });
