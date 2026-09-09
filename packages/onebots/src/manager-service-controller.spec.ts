@@ -5,6 +5,7 @@ import { controlManagerService } from "./manager-service-controller.js";
 import { getServiceFiles } from "./service-files.js";
 import { renderManagerSystemdUnit } from "./manager-service-definition.js";
 import { FileManagerServiceJournal } from "./manager-service-journal.js";
+import { captureManagerServiceRemoval } from "./manager-service-removal.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
 import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
@@ -236,6 +237,55 @@ describe("ordinary manager lifecycle through persistent journal", () => {
             controlManagerService("start", "user", test.host, test.dependencies),
         ).rejects.toThrow("迁移尚待对账");
         expect(test.events).toEqual([]);
+    });
+    it("released upgrade marker cannot bypass a pending rollback journal", async () => {
+        const test = fixture();
+        const captured = captureManagerServiceRemoval(test.spec, test.host);
+        const snapshot = structuredClone(captured.snapshot);
+        captured.dispose();
+        const operationId = "pending-rollback";
+        const journalDirectory = path.join(test.files.stateDir, "manager-operations");
+        const journal = new FileManagerServiceJournal(journalDirectory);
+        const record = journal.prepare({
+            id: operationId,
+            action: "upgrade",
+            desiredEnabled: true,
+            spec: test.spec,
+            upgrade: {
+                previousSpec: {
+                    ...test.spec,
+                    workingDirectory: path.join(test.root, "previous"),
+                    binPath: path.join(test.root, "previous/bin.js"),
+                },
+                previousCandidateDigest: "a".repeat(64),
+                candidateDigest: "b".repeat(64),
+                snapshot: {
+                    platform: "linux",
+                    files: snapshot,
+                    initial: { enabled: true, processId: null, identity: null },
+                },
+            },
+        });
+        journal.save({ ...record, phase: "stopping" });
+        journal.save({ ...record, phase: "writing" });
+        journal.save({ ...record, phase: "restoring-enablement" });
+        new FileManagerServiceJournal(journalDirectory);
+        fs.writeFileSync(
+            path.join(test.workspace, ".control/manager-upgrade-pending.json"),
+            JSON.stringify({
+                schemaVersion: 1,
+                operationId,
+                candidateDigest: "b".repeat(64),
+                phase: "released",
+                completion: "rollback",
+            }),
+            { mode: 0o600 },
+        );
+        await expect(
+            controlManagerService("start", "user", test.host, test.dependencies),
+        ).rejects.toThrow("前次系统服务操作尚待对账");
+        expect(test.events).toEqual([]);
+        expect(test.platform.inspect).not.toHaveBeenCalled();
     });
     it.each(["legacy", "invalid"])("%s metadata causes zero OS changes", async kind => {
         const test = fixture();
