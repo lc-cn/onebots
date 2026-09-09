@@ -4,11 +4,11 @@ import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { createGenerationPlan } from "../installation/generation-plan.js";
 import { GenerationStore } from "../installation/generation-store.js";
-import { verifyGeneration } from "../installation/generation-verify.js";
-import { verifyManagerCandidate } from "../verification/manager-candidate.js";
+import { verifyManagerCandidateInstallation } from "../verification/manager-candidate.js";
 import { ManagerCandidateInstaller } from "./installer.js";
-vi.mock("../installation/generation-verify.js", () => ({ verifyGeneration: vi.fn() }));
-vi.mock("../verification/manager-candidate.js", () => ({ verifyManagerCandidate: vi.fn() }));
+vi.mock("../verification/manager-candidate.js", () => ({
+    verifyManagerCandidateInstallation: vi.fn(),
+}));
 const roots: string[] = [];
 afterEach(() => {
     vi.resetAllMocks();
@@ -42,30 +42,32 @@ function fixture() {
         }
         fs.writeFileSync(path.join(directory, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
     });
-    vi.mocked(verifyGeneration).mockImplementation(async directory => {
+    vi.mocked(verifyManagerCandidateInstallation).mockImplementation(async directory => {
         fs.writeFileSync(path.join(directory, "schemas.json"), "{}");
         return {
-            ...identity,
-            checks: {
-                packageIdentity: true,
-                peerDependencies: true,
-                singleHost: true,
-                loadRegistration: true,
-                schemas: true,
+            dependencies: {
+                ...identity,
+                checks: {
+                    packageIdentity: true,
+                    peerDependencies: true,
+                    singleHost: true,
+                    loadRegistration: true,
+                    schemas: true,
+                },
+            },
+            management: {
+                schemaVersion: 1,
+                ...identity,
+                checks: {
+                    managementStartup: true,
+                    webAssets: true,
+                    anonymousDenied: true,
+                    authenticationV2: true,
+                    maintenance: true,
+                    closed: true,
+                },
             },
         };
-    });
-    vi.mocked(verifyManagerCandidate).mockResolvedValue({
-        schemaVersion: 1,
-        ...identity,
-        checks: {
-            managementStartup: true,
-            webAssets: true,
-            anonymousDenied: true,
-            authenticationV2: true,
-            maintenance: true,
-            closed: true,
-        },
     });
     const store = new GenerationStore({
         root: path.join(root, "candidates"),
@@ -81,13 +83,11 @@ function fixture() {
         installer: new ManagerCandidateInstaller(options),
     };
 }
-it("依赖验证和维护启动同时通过才提交，重开和重复请求不重派", async () => {
+it("统一验证同时通过依赖和维护启动才提交，重开和重复请求不重派", async () => {
     const f = fixture();
     const result = await f.installer.install("prepare", f.plan);
     expect(result.phase).toBe("verified");
-    expect(vi.mocked(verifyGeneration).mock.invocationCallOrder[0]).toBeLessThan(
-        vi.mocked(verifyManagerCandidate).mock.invocationCallOrder[0],
-    );
+    expect(verifyManagerCandidateInstallation).toHaveBeenCalledTimes(1);
     expect(f.installer.readCandidate(result.candidateId!).management.checks.closed).toBe(true);
     await f.installer.close();
     const reopened = new ManagerCandidateInstaller(f.options);
@@ -95,18 +95,17 @@ it("依赖验证和维护启动同时通过才提交，重开和重复请求不�
     expect(f.download).toHaveBeenCalledTimes(1);
     await reopened.close();
 });
-it.each(["dependencies", "management"])("%s失败无成功收据，重复请求仍返回失败", async phase => {
+it("统一验证失败无成功收据，重复请求仍返回失败", async () => {
     const f = fixture();
-    vi.mocked(
-        phase === "dependencies" ? verifyGeneration : verifyManagerCandidate,
-    ).mockRejectedValue(new Error("private diagnostic"));
+    vi.mocked(verifyManagerCandidateInstallation).mockRejectedValue(
+        new Error("private diagnostic"),
+    );
     const result = await f.installer.install("failure", f.plan);
     expect(result.phase).toBe("failed");
     expect(JSON.stringify(result)).not.toContain("private diagnostic");
     expect(() => f.store.readVerified(result.candidateId!)).toThrow();
     expect((await f.installer.install("failure", f.plan)).phase).toBe("failed");
     expect(f.download).toHaveBeenCalledTimes(1);
-    if (phase === "dependencies") expect(verifyManagerCandidate).not.toHaveBeenCalled();
     await f.installer.close();
 });
 it.each(["missing", "mismatch", "symlink", "public"])(

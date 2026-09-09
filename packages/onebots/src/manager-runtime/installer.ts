@@ -7,9 +7,8 @@ import {
 import { type GenerationPlan } from "../installation/generation-plan.js";
 import { readVerifiedManagerCandidate, type VerifiedManagerCandidate } from "./reader.js";
 export type { VerifiedManagerCandidate } from "./reader.js";
-import { verifyGeneration } from "../installation/generation-verify.js";
 import {
-    verifyManagerCandidate,
+    verifyManagerCandidateInstallation,
     type ManagerCandidateVerification,
 } from "../verification/manager-candidate.js";
 
@@ -33,8 +32,7 @@ export class ManagerCandidateInstaller {
             ...options,
             verify: async (directory, plan, verificationOptions) => {
                 assertManagerPlan(plan);
-                const dependencies = await verifyGeneration(directory, plan, verificationOptions);
-                const management = await verifyManagerCandidate(
+                const { dependencies, management } = await verifyManagerCandidateInstallation(
                     directory,
                     plan,
                     verificationOptions,

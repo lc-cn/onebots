@@ -8,10 +8,12 @@ import { prepareServiceProcessOwnershipSeed } from "../service-migration-process
 import type { ManagerCandidateVerification } from "./manager-candidate.js";
 import type { startControlHost } from "../control/host.js";
 import { prepareManagerAuthenticationProbe } from "./manager-authentication.js";
+import type { GenerationPlan } from "../installation/generation-plan.js";
 
 interface Request {
     root: string;
     workspace: string;
+    plan?: GenerationPlan;
     expected: ManagerCandidateVerification;
 }
 
@@ -23,9 +25,24 @@ const stop = () => {
     }
 };
 
-async function verify(input: Request): Promise<ManagerCandidateVerification> {
+async function verify(
+    input: Request,
+): Promise<
+    ManagerCandidateVerification | { schemas: string; verification: ManagerCandidateVerification }
+> {
     let host: Awaited<ReturnType<typeof startControlHost>> | undefined;
     try {
+        let schemas: string | undefined;
+        if (input.plan) {
+            const extension = import.meta.url.endsWith(".ts") ? "ts" : "js";
+            const { verifyGenerationRuntime } = await import(
+                new URL(
+                    `../installation/generation-verification-runtime.${extension}`,
+                    import.meta.url,
+                ).href
+            );
+            schemas = await verifyGenerationRuntime(input.root, input.plan);
+        }
         const require = createRequire(path.join(input.root, "package.json"));
         const entry = fs.realpathSync(require.resolve("onebots"));
         if (!entry.startsWith(`${input.root}${path.sep}`)) throw new Error();
@@ -91,7 +108,7 @@ async function verify(input: Request): Promise<ManagerCandidateVerification> {
         await host.close();
         host = undefined;
         authentication.assertPreserved();
-        return input.expected;
+        return schemas === undefined ? input.expected : { schemas, verification: input.expected };
     } catch {
         if (host) {
             try {

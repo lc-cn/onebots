@@ -8,6 +8,8 @@ import { allocateConfigurationVerification } from "../configuration/configuratio
 import { runOwnedWorker } from "./owned-worker.js";
 import { createDefaultServiceHost } from "../service-host.js";
 import { secureWindowsServiceDirectory } from "../windows-service-security.js";
+import { verifyGeneration } from "../installation/generation-verify.js";
+import type { GenerationVerification } from "../installation/generation-store.js";
 
 export interface ManagerCandidateVerification {
     schemaVersion: 1;
@@ -26,6 +28,29 @@ export interface ManagerCandidateVerification {
         closed: true;
     };
 }
+
+export interface ManagerCandidateInstallationVerification {
+    dependencies: GenerationVerification;
+    management: ManagerCandidateVerification;
+}
+
+/** POSIX 保持两段既有验证；Windows 在同一个 native Job Object worker 内完成全部门槛。 */
+export async function verifyManagerCandidateInstallation(
+    directory: string,
+    plan: GenerationPlan,
+    options: {
+        privateRoot: string;
+        signal?: AbortSignal;
+        timeoutMs?: number;
+    },
+): Promise<ManagerCandidateInstallationVerification> {
+    if (process.platform === "win32")
+        return verifyWindowsManagerCandidate(directory, plan, options);
+    const dependencies = await verifyGeneration(directory, plan, options);
+    const management = await verifyManagerCandidate(directory, plan, options);
+    return { dependencies, management };
+}
+
 /** 仅验证独立管理程序候选；不接收业务配置、平台选择或下载凭据。 */
 export async function verifyManagerCandidate(
     directory: string,
@@ -76,7 +101,7 @@ export async function verifyManagerCandidate(
         },
     };
     if (process.platform === "win32")
-        return verifyWindowsManagerCandidate(root, options.privateRoot, expected, timeoutMs);
+        return (await verifyWindowsManagerCandidate(directory, plan, options)).management;
     const allocation = allocateConfigurationVerification(options.privateRoot);
     const lifecycle = { cleanupAllowed: true };
     try {
@@ -110,14 +135,49 @@ export async function verifyManagerCandidate(
 
 /** Windows 验证 worker 始终由当前可信 native host 的 Job Object 承载。 */
 function verifyWindowsManagerCandidate(
-    root: string,
-    privateRoot: string,
-    expected: ManagerCandidateVerification,
-    timeoutMs: number,
-): ManagerCandidateVerification {
+    directory: string,
+    plan: GenerationPlan,
+    options: { privateRoot: string; signal?: AbortSignal; timeoutMs?: number },
+): ManagerCandidateInstallationVerification {
+    const timeoutMs = options.timeoutMs ?? 60_000;
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 300_000)
+        throw new Error("管理程序候选计划或验证环境无效");
+    options.signal?.throwIfAborted();
+    if (fs.lstatSync(directory).isSymbolicLink()) throw new Error("管理程序候选目录无效");
+    const root = fs.realpathSync(directory);
+    if (fs.existsSync(path.join(root, "receipt.json")))
+        throw new Error("不能重新验证已提交运行版本");
+    const canonical = createGenerationPlan({
+        ...plan,
+        target: { platform: plan.platform, arch: plan.arch, nodeAbi: plan.nodeAbi },
+    });
+    if (
+        canonical.digest !== plan.digest ||
+        plan.platform !== process.platform ||
+        plan.arch !== process.arch ||
+        plan.nodeAbi !== process.versions.modules
+    )
+        throw new Error("管理程序候选计划或验证环境无效");
+    const expected: ManagerCandidateVerification = {
+        schemaVersion: 1,
+        planDigest: plan.digest,
+        hostVersion: plan.host.version,
+        coreVersion: plan.core.version,
+        nodeAbi: plan.nodeAbi,
+        platform: plan.platform,
+        arch: plan.arch,
+        checks: {
+            managementStartup: true,
+            webAssets: true,
+            anonymousDenied: true,
+            authenticationV2: true,
+            maintenance: true,
+            closed: true,
+        },
+    };
     const host = createDefaultServiceHost();
     const id = randomUUID();
-    const allocation = path.join(path.resolve(privateRoot), `windows-${id}`);
+    const allocation = path.join(path.resolve(options.privateRoot), `windows-${id}`);
     const worker = fileURLToPath(new URL("./manager-candidate-worker.js", import.meta.url));
     const nativeHost = path.resolve(
         import.meta.dirname,
@@ -133,7 +193,7 @@ function verifyWindowsManagerCandidate(
         secureWindowsServiceDirectory(host, allocation);
         fs.writeFileSync(
             request,
-            JSON.stringify({ root, workspace: path.join(allocation, "workspace"), expected }),
+            JSON.stringify({ root, workspace: path.join(allocation, "workspace"), plan, expected }),
             { flag: "wx", mode: 0o600 },
         );
         if (!fs.statSync(nativeHost).isFile() || fs.statSync(nativeHost).size < 100_000)
@@ -152,16 +212,82 @@ function verifyWindowsManagerCandidate(
         );
         // console-run 将候选 worker 的正常退出视为 manager 离开并返回 1；此时 Job 已关闭。
         if (execution.error || execution.signal || execution.status !== 1) throw new Error();
+        const resultStat = fs.statSync(result);
+        if (!resultStat.isFile() || resultStat.size > 2 * 1024 * 1024) throw new Error();
         const value: unknown = JSON.parse(fs.readFileSync(result, "utf8"));
-        if (JSON.stringify(value) !== JSON.stringify(expected)) throw new Error();
+        if (!isWindowsVerificationResult(value, expected)) throw new Error();
         cleanup = true;
-        return expected;
+        const schemaFile = path.join(root, "schemas.json");
+        const temporary = `${schemaFile}.${randomUUID()}.tmp`;
+        try {
+            fs.writeFileSync(temporary, value.schemas, { flag: "wx", mode: 0o600 });
+            fs.renameSync(temporary, schemaFile);
+        } finally {
+            fs.rmSync(temporary, { force: true });
+        }
+        return {
+            dependencies: generationVerification(plan),
+            management: expected,
+        };
     } catch {
         throw new Error("Windows 管理程序候选未通过 Job Object 隔离验证");
     } finally {
         // 只有 native host 已返回、Job 已关闭时才清理；超时/派发错误保留证据并 fail-close。
         if (cleanup) fs.rmSync(allocation, { recursive: true, force: true });
     }
+}
+
+function isWindowsVerificationResult(
+    value: unknown,
+    expected: ManagerCandidateVerification,
+): value is { schemas: string; verification: ManagerCandidateVerification } {
+    if (
+        !value ||
+        typeof value !== "object" ||
+        !("schemas" in value) ||
+        typeof value.schemas !== "string" ||
+        Buffer.byteLength(value.schemas) > 1024 * 1024 ||
+        !("verification" in value) ||
+        JSON.stringify(value.verification) !== JSON.stringify(expected)
+    )
+        return false;
+    try {
+        const parsed: unknown = JSON.parse(value.schemas);
+        return Boolean(
+            parsed &&
+            typeof parsed === "object" &&
+            "schemaVersion" in parsed &&
+            parsed.schemaVersion === 1 &&
+            "adapters" in parsed &&
+            parsed.adapters &&
+            "protocols" in parsed &&
+            parsed.protocols &&
+            "applications" in parsed &&
+            parsed.applications &&
+            "runtimeOnly" in parsed &&
+            Array.isArray(parsed.runtimeOnly),
+        );
+    } catch {
+        return false;
+    }
+}
+
+function generationVerification(plan: GenerationPlan): GenerationVerification {
+    return {
+        planDigest: plan.digest,
+        hostVersion: plan.host.version,
+        coreVersion: plan.core.version,
+        nodeAbi: plan.nodeAbi,
+        platform: plan.platform,
+        arch: plan.arch,
+        checks: {
+            packageIdentity: true,
+            peerDependencies: true,
+            singleHost: true,
+            loadRegistration: true,
+            schemas: true,
+        },
+    };
 }
 
 /** 受限 console worker 不实现 manager HTTP RPC；生产 service-run 不使用此参数。 */
