@@ -424,3 +424,30 @@ it("automatic cycle selection does not infer uninstall from missing metadata", a
     expect(mock.install).toHaveBeenCalledTimes(1);
     expect(f.effects).toEqual(["reload:true"]);
 });
+
+it("automatic install returns the bound interrupted operation without replay", async () => {
+    const f = fixture();
+    const installed = await bootstrapManagerService(f.request, f.dependencies, f.host);
+    const journal = new FileManagerServiceJournal(path.join(f.files.stateDir, "manager-operations"));
+    const interrupted = { ...installed, status: "interrupted" as const, recoveryRequired: true };
+    journal.save(interrupted);
+    expect(await bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host)).toEqual(interrupted);
+    expect(mock.install).toHaveBeenCalledTimes(1);
+    expect(f.effects).toEqual(["reload:true"]);
+    expect(journal.read(installed.id).recoveryRequired).toBe(true);
+});
+
+it.each(["intent.json", "candidate.json"])("automatic interrupted install refuses missing %s without rebuilding history", async name => {
+    const f = fixture();
+    const installed = await bootstrapManagerService(f.request, f.dependencies, f.host);
+    const journal = new FileManagerServiceJournal(path.join(f.files.stateDir, "manager-operations"));
+    const interrupted = { ...installed, status: "interrupted" as const, recoveryRequired: true };
+    journal.save(interrupted);
+    const file = path.join(f.files.stateDir, "manager-artifacts/bootstrap", name);
+    fs.unlinkSync(file);
+    await expect(bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host)).rejects.toThrow();
+    expect(fs.existsSync(file)).toBe(false);
+    expect(mock.install).toHaveBeenCalledTimes(1);
+    expect(f.effects).toEqual(["reload:true"]);
+    expect(journal.read(installed.id)).toEqual(interrupted);
+});

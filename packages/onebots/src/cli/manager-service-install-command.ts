@@ -97,7 +97,12 @@ export async function installManagerServiceCommand(
                 exitCode: 0,
             };
         return {
-            output: label + "\n安装结果尚未确认，已保留操作记录；请在本机对账，勿重复安装。",
+            output:
+                label +
+                "\n安装结果尚未确认，未重派注册；可核验已完成的安装效果：\nonebots recover --operation " +
+                operation.id +
+                (spec.scope === "system" ? " --system" : "") +
+                "\n该命令只对账，不重装或启动；中途失败仍会保留恢复门禁。",
             exitCode: 1,
         };
     } catch {

@@ -62,6 +62,11 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     assert.deepEqual(effects, ["reload"]);
     const journal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
     journal.save({ ...result, status: "interrupted", recoveryRequired: true });
+    const pending = await bootstrapManagerService({ service: request.service }, dependencies, host);
+    assert.equal(pending.id, result.id);
+    assert.equal(pending.status, "interrupted");
+    assert.equal(pending.recoveryRequired, true);
+    assert.deepEqual(effects, ["reload"]);
     const recovered = await reconcileManagerServiceOperation(request.id, "user", host, { platform });
     assert.equal(recovered.status, "succeeded");
     assert.equal(recovered.recoveryRequired, false);

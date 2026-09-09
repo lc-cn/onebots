@@ -201,6 +201,7 @@ describe("首次管理服务安装CLI", () => {
         const unknown = await installManagerServiceCommand({ dataDir: root });
         expect(unknown.exitCode).toBe(1);
         expect(unknown.output).toContain("操作 initial-install：interrupted（writing）");
+        expect(unknown.output).toContain("onebots recover --operation initial-install");
         expect(unknown.output).not.toContain(root);
         expect(unknown.output).not.toContain("已安装");
         vi.mocked(bootstrapManagerService).mockRejectedValue(new Error("private-secret raw spec"));
