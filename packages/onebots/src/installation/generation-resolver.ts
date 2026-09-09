@@ -67,7 +67,8 @@ export async function resolveGenerationPlan(
                 item => item.type === type && item.name === name,
             );
             const version =
-                entry && (config.extensionVersions
+                entry &&
+                (config.extensionVersions
                     ? config.extensionVersions[entry.packageName]
                     : getExtensionPackageCatalogEntry(entry.packageName)?.packageVersion);
             if (!entry || !version || !semver.valid(version))
@@ -110,7 +111,12 @@ export async function resolveGenerationPlan(
         } catch {
             throw new Error(METADATA_FAILURE);
         }
-        const peerDependencies = requiredPeers(metadata, entry.packageName, entry.version);
+        const peerDependencies = requiredPeers(
+            metadata,
+            entry.packageName,
+            entry.version,
+            getExtensionPackageCatalogEntry(entry.packageName)?.peerDependencies,
+        );
         extensions.push({
             ...entry,
             version: artifact.version,
@@ -193,6 +199,7 @@ function requiredPeers(
     value: unknown,
     packageName: string,
     version: string,
+    requiredByHost: Readonly<Record<string, string>> = {},
 ): Record<string, string> {
     if (
         !record(value) ||
@@ -216,7 +223,22 @@ function requiredPeers(
         )
             throw new Error(METADATA_FAILURE);
         if (record(declaration) && declaration.optional === true) continue;
-        Object.defineProperty(result, name, { value: range, enumerable: true });
+        if (!Object.hasOwn(result, name))
+            Object.defineProperty(result, name, { value: range, enumerable: true });
+    }
+    // The adapter package may keep an SDK optional for direct embedding, while choosing that
+    // adapter in OneBots makes the same peer mandatory. The signed host catalog is allowed to
+    // promote only an identically declared registry peer; it cannot invent a package or range.
+    for (const [name, range] of Object.entries(requiredByHost)) {
+        if (
+            !PACKAGE_NAME.test(name) ||
+            typeof range !== "string" ||
+            !semver.validRange(range) ||
+            peers[name] !== range
+        )
+            throw new Error(METADATA_FAILURE);
+        if (!Object.hasOwn(result, name))
+            Object.defineProperty(result, name, { value: range, enumerable: true });
     }
     return result;
 }

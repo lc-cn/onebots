@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import semver from "semver";
 import { getExtensionPackageCatalogEntry } from "../extension-capability-catalog.js";
 import {
     fetchRegistryMetadata,
@@ -28,6 +29,8 @@ afterEach(() => {
 
 const matrix = "@onebots/adapter-matrix";
 const matrixVersion = getExtensionPackageCatalogEntry(matrix)!.packageVersion;
+const icqq = "@onebots/adapter-icqq";
+const icqqVersion = getExtensionPackageCatalogEntry(icqq)!.packageVersion;
 const selected = { adapters: ["matrix"], protocols: [], applications: [] };
 function config(): GenerationResolverConfig {
     return {
@@ -68,6 +71,46 @@ describe("generation resolver", () => {
         });
         expect(result.plan.dependencies).not.toHaveProperty("optional-sdk");
         expect(JSON.stringify(result.plan)).not.toContain("latest");
+    });
+
+    it("选择ICQQ时将宿主目录声明的私有SDK提升为必需peer", async () => {
+        const result = await resolveGenerationPlan(
+            { adapters: ["icqq"], protocols: [], applications: [] },
+            {
+                ...config(),
+                fetchMetadata: async () => ({
+                    name: icqq,
+                    version: icqqVersion,
+                    peerDependencies: {
+                        onebots: "1.2.12",
+                        "@icqqjs/icqq": "^1.10.18",
+                    },
+                    peerDependenciesMeta: { "@icqqjs/icqq": { optional: true } },
+                }),
+            },
+        );
+        expect(result.plan.peerRequirements).toContainEqual({
+            requestedBy: icqq,
+            packageName: "@icqqjs/icqq",
+            range: "^1.10.18",
+        });
+        expect(semver.satisfies("1.10.18", result.plan.dependencies["@icqqjs/icqq"])).toBe(true);
+    });
+
+    it("宿主目录不能把registry未声明或范围不同的peer注入安装计划", async () => {
+        await expect(
+            resolveGenerationPlan(
+                { adapters: ["icqq"], protocols: [], applications: [] },
+                {
+                    ...config(),
+                    fetchMetadata: async () => ({
+                        name: icqq,
+                        version: icqqVersion,
+                        peerDependencies: { "@icqqjs/icqq": "^1.9.0" },
+                    }),
+                },
+            ),
+        ).rejects.toThrow("元数据不可用");
     });
 
     it("框架仅注册扩展，未选择文档协议时给建议但不添加协议", async () => {
