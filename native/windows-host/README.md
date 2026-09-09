@@ -7,7 +7,7 @@ The host owns exactly one manager process tree:
 1. Windows SCM starts `onebots-windows-host service-run`.
 2. The host creates a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
 3. It creates the manager suspended, assigns it to the job, and only then resumes its primary thread.
-4. SCM `STOP` and `SHUTDOWN` attach to the manager's private console, send `CTRL_C` (Node's `SIGINT`), and wait for the configured bound. The host closes the job only after that deadline, terminating every remaining descendant.
+4. SCM `STOP` and `SHUTDOWN` attach to the manager's private console, install an ignore handler in the host, send `CTRL_C` (Node's `SIGINT`), and retain that attachment and handler until the manager exits or the configured deadline expires. Only then does it detach and restore its handler. On timeout the host performs that cleanup before closing the job, terminating every remaining descendant.
 
 `console-run` executes the same lifecycle outside SCM and exists for Windows acceptance tests. It is not a second production hosting mode.
 

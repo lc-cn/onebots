@@ -18,7 +18,12 @@ var (
 	procAttachConsole         = kernel32.NewProc("AttachConsole")
 	procFreeConsole           = kernel32.NewProc("FreeConsole")
 	procSetConsoleCtrlHandler = kernel32.NewProc("SetConsoleCtrlHandler")
+	consoleControlMu          sync.Mutex
 )
+
+type consoleControlSession struct {
+	once sync.Once
+}
 
 type managedProcess struct {
 	job     windows.Handle
@@ -134,14 +139,16 @@ func (process *managedProcess) gracefulStop(timeout time.Duration) error {
 	default:
 	}
 
-	signalErr := sendGracefulInterrupt(process.pid)
+	session, signalErr := beginGracefulInterrupt(process.pid)
 	if signalErr == nil {
 		timer := time.NewTimer(timeout)
 		defer timer.Stop()
 		select {
 		case <-process.done:
+			session.Close()
 			return process.closeHandles()
 		case <-timer.C:
+			session.Close()
 		}
 	}
 
@@ -169,29 +176,49 @@ func (process *managedProcess) closeHandles() error {
 	return errors.Join(process.closeJob(), windows.CloseHandle(process.process), process.waitErr)
 }
 
-func sendGracefulInterrupt(pid uint32) error {
+func beginGracefulInterrupt(pid uint32) (*consoleControlSession, error) {
+	consoleControlMu.Lock()
+	session := &consoleControlSession{}
+	failed := true
+	defer func() {
+		if failed {
+			session.Close()
+		}
+	}()
 	// The child owns a fresh hidden console. An interactive acceptance host may
 	// already have another console, while an SCM service normally has none.
 	// Detach first so both modes follow the same control-event path.
 	procFreeConsole.Call()
 	if result, _, callErr := procAttachConsole.Call(uintptr(pid)); result == 0 {
-		return fmt.Errorf("attach manager console: %w", callErr)
+		return nil, fmt.Errorf("attach manager console: %w", callErr)
 	}
 	// A nil handler makes the host ignore control events while it is temporarily
 	// attached to the manager console.
 	if result, _, callErr := procSetConsoleCtrlHandler.Call(0, 1); result == 0 {
-		procFreeConsole.Call()
-		return fmt.Errorf("ignore host console events: %w", callErr)
+		return nil, fmt.Errorf("ignore host console events: %w", callErr)
 	}
 	// The child has its own console, so CTRL_C reaches only this job's console
 	// processes. Node translates it to SIGINT, which is the manager's existing
 	// graceful shutdown contract. CREATE_NEW_PROCESS_GROUP is intentionally not
 	// used because Windows disables CTRL_C delivery to such groups.
 	err := windows.GenerateConsoleCtrlEvent(windows.CTRL_C_EVENT, 0)
-	procSetConsoleCtrlHandler.Call(0, 0)
-	procFreeConsole.Call()
 	if err != nil {
-		return fmt.Errorf("send manager CTRL_C: %w", err)
+		return nil, fmt.Errorf("send manager CTRL_C: %w", err)
 	}
-	return nil
+	// GenerateConsoleCtrlEvent queues delivery asynchronously. Keep both the
+	// ignore handler and console attachment until the caller has observed child
+	// exit or the graceful deadline. Restoring the default handler here can kill
+	// this host with the still-pending CTRL_C event.
+	failed = false
+	return session, nil
+}
+
+func (session *consoleControlSession) Close() {
+	session.once.Do(func() {
+		// Detach while the ignore handler is still installed, then restore the
+		// process default only after this console can no longer deliver events.
+		procFreeConsole.Call()
+		procSetConsoleCtrlHandler.Call(0, 0)
+		consoleControlMu.Unlock()
+	})
 }
