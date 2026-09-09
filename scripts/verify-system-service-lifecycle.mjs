@@ -205,12 +205,41 @@ function migrationJournalStates() {
         });
 }
 
+function migrationCaptureState() {
+    const migrations = path.join(STATE_DIRECTORY, "migrations");
+    if (!fs.existsSync(migrations)) return { operation: false };
+    const ids = fs
+        .readdirSync(migrations)
+        .map(name => /^([0-9a-f-]{36})\.journal\.json$/iu.exec(name)?.[1])
+        .filter(Boolean);
+    if (ids.length !== 1) return { operation: ids.length === 1 };
+    const id = ids[0];
+    const inspect = kind => {
+        const directory = path.join(STATE_DIRECTORY, "legacy-runtime-artifacts", kind);
+        try {
+            const stat = fs.lstatSync(directory);
+            if (!stat.isDirectory() || stat.isSymbolicLink()) return { store: "invalid" };
+            const names = fs.readdirSync(directory);
+            return {
+                store: "directory",
+                finalized: names.includes(id),
+                candidates: names.filter(name => name.startsWith(`.${id}-`)).length,
+            };
+        } catch (error) {
+            return {
+                store: error?.code === "ENOENT" ? "missing" : "unreadable",
+            };
+        }
+    };
+    return { operation: true, programs: inspect("programs"), nodes: inspect("nodes") };
+}
+
 function invokeMigration(args) {
     const result = invokeCli(args, [0, 1]);
     if (result.status === 0) return result.stdout;
     const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
     throw new Error(
-        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}`,
+        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；捕获阶段=${JSON.stringify(migrationCaptureState())}`,
     );
 }
 
@@ -347,7 +376,7 @@ async function verifyLegacyMigration(port, operationIds) {
         "127.0.0.1",
         "--port",
         String(port),
-    ]).stdout;
+    ]);
     const migrationId = operation(migrationOutput, "migrate");
     operationIds.push(migrationId);
     const migrationJournal = path.join(

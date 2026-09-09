@@ -378,7 +378,7 @@ async function verifyLegacyMigration(port, operationIds) {
         "127.0.0.1",
         "--port",
         String(port),
-    ]).stdout;
+    ]);
     const migrationId = operation(migrationOutput, "migrate");
     operationIds.push(migrationId);
     const migrationJournal = path.join(
