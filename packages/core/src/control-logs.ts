@@ -7,6 +7,63 @@ export interface ControlLogSnapshot {
     exists: boolean;
 }
 
+export const controlLogSources = ["manager", "gateway", "operation"] as const;
+export type ControlLogSource = (typeof controlLogSources)[number];
+
+export interface ControlLogQuery {
+    source: ControlLogSource;
+    /** Opaque cursor returned by a prior query. Omit it to read the latest bounded window. */
+    cursor?: string;
+}
+
+export interface ControlLogBatch {
+    schemaVersion: 1;
+    source: ControlLogSource;
+    text: string;
+    cursor: string;
+    truncated: boolean;
+    exists: boolean;
+    /** The file was replaced or shortened since cursor was issued. */
+    reset: boolean;
+}
+
+function isControlLogCursor(value: unknown): value is string {
+    if (typeof value !== "string") return false;
+    const match = /^[a-f0-9]{16}\.([0-9]{1,16})$/u.exec(value);
+    return Boolean(match && Number.isSafeInteger(Number(match[1])));
+}
+
+export function isControlLogBatch(value: unknown): value is ControlLogBatch {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    try {
+        const fields = Object.getOwnPropertyDescriptors(value);
+        if (
+            Reflect.ownKeys(fields).length !== 7 ||
+            !["schemaVersion", "source", "text", "cursor", "truncated", "exists", "reset"].every(
+                key => fields[key] && "value" in fields[key],
+            )
+        )
+            return false;
+        const source: unknown = fields.source.value;
+        const text: unknown = fields.text.value;
+        const cursor: unknown = fields.cursor.value;
+        return (
+            fields.schemaVersion.value === 1 &&
+            controlLogSources.includes(source as ControlLogSource) &&
+            typeof text === "string" &&
+            text.length <= 65536 &&
+            new TextEncoder().encode(text).byteLength <= 65536 &&
+            isControlLogCursor(cursor) &&
+            typeof fields.truncated.value === "boolean" &&
+            typeof fields.exists.value === "boolean" &&
+            typeof fields.reset.value === "boolean" &&
+            (fields.exists.value || (text === "" && !fields.truncated.value))
+        );
+    } catch {
+        return false;
+    }
+}
+
 export function isControlLogSnapshot(value: unknown): value is ControlLogSnapshot {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false;
     try {
@@ -49,6 +106,26 @@ export function sanitizeLogText(text: string): string {
 
 export class ControlLogClient {
     constructor(private readonly transport: ControlTransport) {}
+    async query(query: ControlLogQuery): Promise<ControlLogBatch> {
+        if (
+            !controlLogSources.includes(query.source) ||
+            (query.cursor !== undefined && !isControlLogCursor(query.cursor))
+        )
+            throw new Error("日志查询参数无效。");
+        try {
+            const parameters = new URLSearchParams({ source: query.source });
+            if (query.cursor) parameters.set("cursor", query.cursor);
+            const result: unknown = await this.transport.request(
+                "GET",
+                `/api/control/logs?${parameters.toString()}`,
+            );
+            if (!isControlLogBatch(result) || result.source !== query.source)
+                throw new Error("invalid");
+            return { ...result, text: sanitizeLogText(result.text) };
+        } catch {
+            throw new Error("无法读取服务日志，请检查管理会话和服务状态。");
+        }
+    }
     async gateway(): Promise<ControlLogSnapshot> {
         try {
             const result: unknown = await this.transport.request(

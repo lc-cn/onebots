@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, expect, it } from "vitest";
-import { openGatewayLog, readGatewayLog } from "./gateway-log.js";
+import { appendControlLog, openGatewayLog, readControlLog, readGatewayLog } from "./gateway-log.js";
 const roots: string[] = [];
 afterEach(() => {
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
@@ -42,6 +42,37 @@ it("大日志仅取末尾64KiB，不从UTF8续字节开始", () => {
     expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(65536);
     expect(result.text.endsWith("末尾\n")).toBe(true);
     expect(result.text).not.toContain("�");
+});
+it("三类固定来源共享有界游标，轮换后显式重置", () => {
+    const f = fixture();
+    appendControlLog(f.workspace, "manager", "ready\n");
+    appendControlLog(f.workspace, "operation", '{"action":"start"}\n');
+    const first = readControlLog(f.workspace, "operation");
+    expect(first).toMatchObject({
+        source: "operation",
+        text: '{"action":"start"}\n',
+        exists: true,
+        reset: false,
+    });
+    appendControlLog(f.workspace, "operation", '{"action":"stop"}\n');
+    expect(readControlLog(f.workspace, "operation", first.cursor)).toMatchObject({
+        text: '{"action":"stop"}\n',
+        truncated: false,
+        reset: false,
+    });
+    fs.unlinkSync(path.join(f.control, "operation.log"));
+    appendControlLog(f.workspace, "operation", "new\n");
+    expect(readControlLog(f.workspace, "operation", first.cursor)).toMatchObject({
+        text: "new\n",
+        reset: true,
+    });
+    fs.unlinkSync(path.join(f.control, "operation.log"));
+    expect(readControlLog(f.workspace, "operation", first.cursor)).toMatchObject({
+        exists: false,
+        text: "",
+        reset: true,
+    });
+    expect(readControlLog(f.workspace, "manager").text).toBe("ready\n");
 });
 it("拒绝符号链接和硬链接日志，不修改其指向的文件", () => {
     const f = fixture();

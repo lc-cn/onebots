@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { ControlLogClient, isControlLogSnapshot, sanitizeLogText } from "./control-logs.js";
+import {
+    ControlLogClient,
+    isControlLogBatch,
+    isControlLogSnapshot,
+    sanitizeLogText,
+} from "./control-logs.js";
 const snapshot = { source: "gateway", text: "hello", truncated: false, exists: true };
 describe("control logs", () => {
     it("accepts only the fixed bounded snapshot without getters or extra keys", () => {
@@ -42,6 +47,42 @@ describe("control logs", () => {
         expect(request).not.toHaveBeenCalled();
         expect((await client.gateway()).text).toBe("hello");
         expect(request.mock.calls).toEqual([["GET", "/api/control/logs/gateway"]]);
+    });
+    it("queries all fixed sources with an opaque follow cursor", async () => {
+        const batch = {
+            schemaVersion: 1 as const,
+            source: "operation" as const,
+            text: "\x1b[2Jdone",
+            cursor: "0123456789abcdef.42",
+            truncated: false,
+            exists: true,
+            reset: false,
+        };
+        const request = vi.fn().mockResolvedValue(batch);
+        const client = new ControlLogClient({ request });
+        expect(await client.query({ source: "operation" })).toEqual({ ...batch, text: "done" });
+        await client.query({ source: "operation", cursor: batch.cursor });
+        expect(request.mock.calls).toEqual([
+            ["GET", "/api/control/logs?source=operation"],
+            ["GET", "/api/control/logs?source=operation&cursor=0123456789abcdef.42"],
+        ]);
+        expect(isControlLogBatch(batch)).toBe(true);
+        expect(isControlLogBatch({ ...batch, source: "secret" })).toBe(false);
+        expect(isControlLogBatch({ ...batch, path: "/tmp/secret" })).toBe(false);
+        expect(isControlLogBatch({ ...batch, text: "中".repeat(22_000) })).toBe(false);
+        expect(isControlLogBatch({ ...batch, cursor: "0123456789abcdef.9007199254740991" })).toBe(
+            true,
+        );
+        expect(isControlLogBatch({ ...batch, cursor: "0123456789abcdef.9999999999999999" })).toBe(
+            false,
+        );
+        await expect(
+            client.query({ source: "operation", cursor: "0123456789abcdef.10000000000000000" }),
+        ).rejects.toThrow("查询参数无效");
+        await expect(client.query({ source: "secret" as "gateway" })).rejects.toThrow(
+            "查询参数无效",
+        );
+        expect(request).toHaveBeenCalledTimes(2);
     });
     it("does not leak transport or malformed response details", async () => {
         const request = vi.fn().mockRejectedValue(new Error("secret"));

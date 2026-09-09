@@ -32,13 +32,38 @@ it("已停止网关仍可通过HTTP和本机读取日志，匿名与撤销设备
     const result = await client.logs.gateway();
     expect(result.text).toContain("test-log-after-stop");
     expect(result).toEqual(await local.logs.gateway());
+    const manager = await client.logs.query({ source: "manager" });
+    expect(manager.text).toContain('"event":"ready"');
+    const operations = await client.logs.query({ source: "operation" });
+    expect(operations.text).toContain('"action":"stop"');
+    expect(await local.logs.query({ source: "operation" })).toEqual(operations);
+    fs.appendFileSync(path.join(workspace, ".control", "operation.log"), "next\n");
+    expect(
+        await client.logs.query({ source: "operation", cursor: operations.cursor }),
+    ).toMatchObject({ text: "next\n", reset: false, truncated: false });
     await expect(anonymous.logs.gateway()).rejects.toThrow("无法读取网关日志");
+    await expect(anonymous.logs.query({ source: "manager" })).rejects.toThrow("无法读取服务日志");
     expect((await fetch(url + "/api/control/logs/gateway")).status).toBe(401);
     const invalid = await fetch(url + "/api/control/logs/gateway", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
     });
     expect(invalid.status).toBe(405);
+    expect(
+        (
+            await fetch(url + "/api/control/logs?source=manager&path=/secret", {
+                headers: { Authorization: `Bearer ${token}` },
+            })
+        ).status,
+    ).toBe(400);
+    expect(
+        (
+            await fetch(
+                url + "/api/control/logs?source=manager&cursor=0123456789abcdef.9999999999999999",
+                { headers: { Authorization: `Bearer ${token}` } },
+            )
+        ).status,
+    ).toBe(400);
     await client.logout();
     await expect(client.logs.gateway()).rejects.toThrow("无法读取网关日志");
     expect(

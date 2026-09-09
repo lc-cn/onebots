@@ -42,6 +42,8 @@ export interface GatewayControllerOptions {
     statePath: string;
     driver: GatewayDriver;
     initialDesired?: GatewayDesiredState;
+    /** Called only after the final operation state is durable; failures must remain isolated. */
+    onOperation?(operation: GatewayOperation): void;
 }
 
 /** One workspace lock must be held by the host throughout this controller's lifetime. */
@@ -209,6 +211,11 @@ export class GatewayController {
                 await this.persist();
             } catch (error) {
                 throw this.markUnknown(error, operation);
+            }
+            try {
+                this.options.onOperation?.(structuredClone(operation));
+            } catch {
+                // 可观察性失败不能改变已经持久化完成的生命周期结果。
             }
             if (
                 operation.status === "succeeded" &&

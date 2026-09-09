@@ -29,6 +29,28 @@ async function fixture(driver?: GatewayDriver) {
 }
 
 describe("GatewayController", () => {
+    it("observes a cloned operation only after its final state is durable", async () => {
+        const folder = await mkdtemp(join(tmpdir(), "onebots-lifecycle-log-"));
+        folders.push(folder);
+        const statePath = join(folder, "state.json");
+        const observed = vi.fn();
+        const controller = new GatewayController({
+            statePath,
+            driver: { start: async () => ({ id: "instance" }), stop: async () => undefined },
+            onOperation: operation => {
+                observed(operation);
+                operation.status = "failed";
+                throw new Error("logging unavailable");
+            },
+        });
+        await controller.initialize();
+        expect(await controller.start()).toMatchObject({ status: "succeeded" });
+        expect(observed).toHaveBeenCalledOnce();
+        expect(JSON.parse(await readFile(statePath, "utf8")).operations.at(-1)).toMatchObject({
+            status: "succeeded",
+        });
+        expect(controller.status().operations.at(-1)?.status).toBe("succeeded");
+    });
     it("只信任专门启动回收错误，普通错误即使伪造字段仍保持unknown门禁", async () => {
         for (const trusted of [false, true]) {
             const error = trusted

@@ -1,4 +1,5 @@
 import { respondControlLogs } from "./logs-http.js";
+import { createControlLogWriter } from "./gateway-log.js";
 import { createManagerUpgradeRelease, createManagerUpgradeIdentity } from "./service-upgrade-release.js";
 import { managerUpgradeStatus } from "../service-upgrade-workspace.js";
 import { GenerationConfigurationVerifier } from "./generation-configuration.js";
@@ -73,6 +74,7 @@ export async function startControlHost(options: ControlHostOptions) {
     const release = acquireControlWorkspace(workspace);
     const id = randomUUID();
     const ownershipAvailable = await claimServiceProcessOwnership(workspace, id, freshWorkspace);
+    const controlLogs = createControlLogWriter(workspace, id);
     let auth: ControlAuth | undefined;
     let authAvailable = true;
     let storageError = !ownershipAvailable || serviceMigrationStatus(workspace).recoveryRequired;
@@ -121,6 +123,7 @@ export async function startControlHost(options: ControlHostOptions) {
     const controller = new GatewayController({
         statePath: path.join(controlDirectory(workspace), "gateway.json"),
         driver,
+        onOperation: controlLogs.operation,
         initialDesired: serviceMigrationStatus(workspace).pending ? "stopped" : "running",
     });
     const readVerified = (id: string) => {
@@ -379,7 +382,6 @@ export async function startControlHost(options: ControlHostOptions) {
             else response.destroy();
         }
     }
-
     const server = http.createServer((req, res) => {
         void handle(req, res, false);
     });
@@ -438,6 +440,7 @@ export async function startControlHost(options: ControlHostOptions) {
             if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
             if (ownershipAvailable) await closeServiceProcessOwnership(workspace, id);
         } finally {
+            controlLogs.manager("stopped");
             release();
         }
     }
@@ -489,6 +492,7 @@ export async function startControlHost(options: ControlHostOptions) {
             storageError = true;
             process.stderr.write("[onebots] 网关启动或恢复状态无法持久化，管理端保留用于诊断\n");
         }
+        controlLogs.manager("ready");
         return { id, controller: { status: () => controller.status() }, server, socketPath, close };
     } catch (error) {
         await close();

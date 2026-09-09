@@ -23,7 +23,7 @@ export async function runControlTui(
                 title: "OneBots 管理工作台",
                 choices: [
                     { value: "status", label: "查看状态" },
-                    { value: "logs", label: "查看网关日志" },
+                    { value: "logs", label: "查看服务日志" },
                     { value: "device", label: "授权新浏览器设备" },
                     { value: "start", label: "启动网关" },
                     { value: "stop", label: "停止网关" },
