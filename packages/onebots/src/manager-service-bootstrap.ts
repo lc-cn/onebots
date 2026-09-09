@@ -97,6 +97,7 @@ export async function bootstrapManagerService(
     let installer: ManagerCandidateInstaller | undefined;
     let operationId: string | undefined;
     let bootstrapPhase: ManagerBootstrapPhase = "candidate-preparation";
+    let primaryError: unknown;
     try {
         if (inspectServiceMigrationRecovery(files.stateDir)) throw failure();
         const id = request.id ?? selectManagerBootstrapCycle(template.scope, host);
@@ -305,18 +306,39 @@ export async function bootstrapManagerService(
             host.platform === "win32" &&
             operationId &&
             !(error instanceof ManagerBootstrapCandidateError)
-        )
-            throw deriveManagerBootstrapStageError(files.stateDir, operationId, bootstrapPhase);
-        throw error;
+        ) {
+            primaryError = deriveManagerBootstrapStageError(
+                files.stateDir,
+                operationId,
+                bootstrapPhase,
+            );
+        } else primaryError = error;
+        throw primaryError;
     } finally {
+        const cleanupErrors: unknown[] = [];
         try {
             await installer?.close();
-        } finally {
-            try {
-                releaseArtifacts?.();
-            } finally {
-                releaseService();
-            }
+        } catch (error) {
+            cleanupErrors.push(error);
+        }
+        try {
+            releaseArtifacts?.();
+        } catch (error) {
+            cleanupErrors.push(error);
+        }
+        try {
+            releaseService();
+        } catch (error) {
+            cleanupErrors.push(error);
+        }
+        if (cleanupErrors.length > 0) {
+            if (primaryError instanceof Error)
+                Object.defineProperty(primaryError, "cleanupErrors", {
+                    value: cleanupErrors,
+                    enumerable: false,
+                });
+            else if (primaryError === undefined)
+                throw new AggregateError(cleanupErrors, "管理服务首次安装清理未完成");
         }
     }
 }

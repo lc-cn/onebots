@@ -169,6 +169,23 @@ function windowsFixture() {
     return { ...fixtureValue, host, files };
 }
 describe("immutable manager bootstrap binding", () => {
+    it("preserves the persisted Windows stage error when candidate cleanup also fails", async () => {
+        const f = windowsFixture();
+        mock.install.mockRejectedValueOnce(new Error("candidate timeout"));
+        mock.close.mockRejectedValueOnce(new Error("worker close timeout"));
+        const run = bootstrapManagerService(f.request, f.dependencies, f.host);
+        const error = await run.catch(value => value);
+        expect(error).toBeInstanceOf(ManagerBootstrapStageError);
+        expect(error).toMatchObject({
+            operationId: "bootstrap-1",
+            bootstrapPhase: "candidate-queued",
+            code: "CANDIDATE_PREPARATION_FAILED",
+        });
+        expect(
+            (error as ManagerBootstrapStageError & { cleanupErrors?: unknown[] }).cleanupErrors,
+        ).toHaveLength(1);
+    });
+
     it("binds the same stable id to candidate and real installation; retry only returns its receipt", async () => {
         const f = fixture();
         const result = await bootstrapManagerService(f.request, f.dependencies, f.host);
