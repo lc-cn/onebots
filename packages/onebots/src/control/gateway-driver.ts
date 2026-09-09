@@ -246,6 +246,15 @@ export class NodeGatewayDriver implements GatewayDriver {
         );
     }
 
+    verificationContext(
+        instanceId: string,
+    ): { gatewayInstanceId: string; configVersion: string } | undefined {
+        const managed = this.children.get(instanceId);
+        return managed && !managed.stopping && !managed.exited && managed.verificationConfig
+            ? { gatewayInstanceId: instanceId, configVersion: managed.verificationConfig }
+            : undefined;
+    }
+
     verification(
         instanceId: string,
         operation: GatewayVerificationOperation,

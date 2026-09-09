@@ -4,6 +4,7 @@ import { GenerationConfigurationVerifier } from "./generation-configuration.js";
 import { authorizeControlHttp } from "./auth-check.js";
 import { ControlSendService } from "./send-service.js";
 import { respondControlSend } from "./send-http.js";
+import { ControlVerificationHttp } from "./verification-http.js";
 import { ControlMessageDebugService } from "./message-debug-service.js";
 import { ControlMessageDebugHttp } from "./message-debug-http.js";
 import { ControlMcpService } from "./mcp-api.js";
@@ -187,17 +188,11 @@ export async function startControlHost(options: ControlHostOptions) {
             ? state.instance?.address
             : undefined;
     }
+    const currentGateway = () =>
+        !closed && !storageError && activeAddress() && !serviceMigrationStatus(workspace).pending
+            ? controller.status().instance?.id : undefined;
     const mcp = new ControlMcpService({
-        currentGateway: () => {
-            if (
-                closed ||
-                storageError ||
-                !activeAddress() ||
-                serviceMigrationStatus(workspace).pending
-            )
-                return undefined;
-            return controller.status().instance?.id;
-        },
+        currentGateway,
         forward: (instanceId, request) => driver.mcp(instanceId, request),
     });
     let sending: ControlSendService | undefined;
@@ -205,13 +200,7 @@ export async function startControlHost(options: ControlHostOptions) {
         sending = new ControlSendService({
             directory: path.join(controlDirectory(workspace), "messages"),
             currentContext: () => {
-                const instanceId =
-                    !closed &&
-                    !storageError &&
-                    activeAddress() &&
-                    !serviceMigrationStatus(workspace).pending
-                        ? controller.status().instance?.id
-                        : undefined;
+                const instanceId = currentGateway();
                 return instanceId ? driver.sendContext(instanceId) : undefined;
             },
             forward: request => driver.send(request.expected.gatewayInstanceId, request),
@@ -219,9 +208,16 @@ export async function startControlHost(options: ControlHostOptions) {
     } catch {
         process.stderr.write("[onebots] 发送操作记录不可用，管理端保留用于诊断\n");
     }
+    const verification = new ControlVerificationHttp({
+        directory: path.join(controlDirectory(workspace), "verification"),
+        currentContext: () => {
+            const id = currentGateway();
+            return id ? driver.verificationContext(id) : undefined;
+        },
+        forward: (context, operation) => driver.verification(context.gatewayInstanceId, operation),
+    }, auth);
     const messageDebug = new ControlMessageDebugService({
-        currentInstance: () => !closed && !storageError && activeAddress() &&
-            !serviceMigrationStatus(workspace).pending ? controller.status().instance?.id : undefined,
+        currentInstance: currentGateway,
         forward: (instanceId, action) => driver.messageDebug(instanceId, action),
     });
     const messageDebugHttp = new ControlMessageDebugHttp(messageDebug, auth);
@@ -302,6 +298,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 }
                 if (await respondControlSend(sending, request, response, pathname, local, auth))
                     return;
+                if (await verification.handle(request, response, pathname, local)) return;
                 if (await messageDebugHttp.handle(request, response, pathname, local)) return;
                 if (await respondControlMcp(mcp, request, response, pathname, local, auth)) return;
                 if (isInstallationPath(pathname)) {
@@ -413,6 +410,7 @@ export async function startControlHost(options: ControlHostOptions) {
         if (closed) return;
         closed = true;
         messageDebugHttp.close();
+        const verificationClosed = verification.close();
         messageDebug.close();
         await activationVerification.close();
         await configuration?.close();
@@ -430,6 +428,7 @@ export async function startControlHost(options: ControlHostOptions) {
             throw new Error("网关尚未确认退出，保留管理锁");
         }
         await sending?.close();
+        await verificationClosed;
         for (const socket of sockets) socket.destroy();
         await Promise.all(
             [server, local].map(

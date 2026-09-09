@@ -134,10 +134,12 @@ describe("配置隔离验证", () => {
             for (let attempt = 0; attempt < 100; attempt++) {
                 try {
                     workerPid = Number(await fs.readFile(path.join(root, "ready"), "utf8"));
-                    break;
+                    // 文件创建先于内容写完；空文件不是 worker 就绪证明。
+                    if (Number.isSafeInteger(workerPid) && workerPid > 0) break;
                 } catch {
-                    await new Promise(resolve => setTimeout(resolve, 20));
+                    // 启动中的 worker 尚未发布就绪文件。
                 }
+                await new Promise(resolve => setTimeout(resolve, 20));
             }
             expect(workerPid).toBeGreaterThan(0);
             parent.kill("SIGKILL");
