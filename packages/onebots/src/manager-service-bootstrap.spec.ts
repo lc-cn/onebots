@@ -13,6 +13,21 @@ import { FileManagerServiceJournal } from "./manager-service-journal.js";
 import type { GenerationPlan } from "./installation/generation-plan.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform } from "./service-platform.js";
+import {
+    ManagerBootstrapCandidateError,
+    ManagerBootstrapStageError,
+} from "./manager-bootstrap-error.js";
+
+const windowsSecurity = vi.hoisted(() => ({
+    secureDirectory: vi.fn(),
+    secureFile: vi.fn(),
+    inspectDirectory: vi.fn(),
+}));
+vi.mock("./windows-service-security.js", () => ({
+    secureWindowsServiceDirectory: windowsSecurity.secureDirectory,
+    secureWindowsServiceFile: windowsSecurity.secureFile,
+    inspectWindowsServiceDirectorySecurity: windowsSecurity.inspectDirectory,
+}));
 
 const mock = vi.hoisted(() => ({
     install: vi.fn(),
@@ -132,6 +147,26 @@ function fixture() {
     mock.digest.mockReturnValue("a".repeat(64));
     mock.verify.mockReturnValue(candidate);
     return { root, files, workspace, request, dependencies, host, effects, candidate };
+}
+
+function windowsFixture() {
+    const fixtureValue = fixture();
+    const host: ServiceHost = {
+        ...fixtureValue.host,
+        platform: "win32",
+        isElevated: true,
+        windowsSid: "S-1-5-21-1000",
+        env: { ProgramData: path.join(fixtureValue.root, "program-data") },
+    };
+    const files = getServiceFiles("system", host);
+    fixtureValue.request.service.scope = "system";
+    windowsSecurity.secureDirectory.mockImplementation((_host, directory: string) => {
+        fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+        return "acl-proof";
+    });
+    windowsSecurity.secureFile.mockReturnValue("acl-proof");
+    windowsSecurity.inspectDirectory.mockReturnValue("acl-proof");
+    return { ...fixtureValue, host, files };
 }
 describe("immutable manager bootstrap binding", () => {
     it("binds the same stable id to candidate and real installation; retry only returns its receipt", async () => {
@@ -284,6 +319,65 @@ describe("immutable manager bootstrap binding", () => {
     });
 });
 
+describe("Windows bootstrap stable diagnostics", () => {
+    it("classifies a failure before candidate verification without exposing the original error", async () => {
+        const f = windowsFixture();
+        mock.install.mockRejectedValue(new Error("private installer path"));
+        await expect(
+            bootstrapManagerService(f.request, f.dependencies, f.host),
+        ).rejects.toMatchObject({
+            operationId: f.request.id,
+            bootstrapPhase: "candidate-queued",
+            code: "CANDIDATE_PREPARATION_FAILED",
+        });
+    });
+
+    it("preserves the fixed candidate classification after verification", async () => {
+        const f = windowsFixture();
+        mock.readCandidate.mockImplementation(() => {
+            throw new Error("private candidate path");
+        });
+        const run = bootstrapManagerService(f.request, f.dependencies, f.host);
+        await expect(run).rejects.toMatchObject({
+            operationId: f.request.id,
+            phase: "verified",
+            code: "CANDIDATE_READ_FAILED",
+        });
+        await expect(run).rejects.toBeInstanceOf(ManagerBootstrapCandidateError);
+    });
+
+    it("classifies failure before manager journal creation from the bound candidate stage", async () => {
+        const f = windowsFixture();
+        f.dependencies.assertAbsent = vi.fn(async () => {
+            throw new Error("private SCM preflight");
+        });
+        await expect(
+            bootstrapManagerService(f.request, f.dependencies, f.host),
+        ).rejects.toMatchObject({
+            operationId: f.request.id,
+            bootstrapPhase: "manager-preflight",
+            code: "MANAGER_PREFLIGHT_FAILED",
+        });
+    });
+
+    it("derives the persisted manager phase when journal acknowledgement fails", async () => {
+        const f = windowsFixture();
+        f.dependencies.assertAbsent = vi.fn(async () => undefined);
+        const read = ServiceOperationStorage.prototype.read;
+        vi.spyOn(ServiceOperationStorage.prototype, "read").mockImplementation(function (name) {
+            if (name === `${f.request.id}.json`) throw new Error("private journal read");
+            return read.call(this, name);
+        });
+        const run = bootstrapManagerService(f.request, f.dependencies, f.host);
+        await expect(run).rejects.toMatchObject({
+            operationId: f.request.id,
+            bootstrapPhase: "manager-prepared",
+            code: "MANAGER_JOURNAL_FAILED",
+        });
+        await expect(run).rejects.toBeInstanceOf(ManagerBootstrapStageError);
+    });
+});
+
 it("successful bootstrap receipt cannot claim a removed service is installed", async () => {
     const f = fixture();
     await bootstrapManagerService(f.request, f.dependencies, f.host);
@@ -365,7 +459,9 @@ describe("bootstrap cold installation reconciliation", () => {
 it("candidate binding replacement during OS inspection preserves recovery and releases locks", async () => {
     const f = fixture();
     const result = await bootstrapManagerService(f.request, f.dependencies, f.host);
-    const journal = new FileManagerServiceJournal(path.join(f.files.stateDir, "manager-operations"));
+    const journal = new FileManagerServiceJournal(
+        path.join(f.files.stateDir, "manager-operations"),
+    );
     journal.save({ ...result, status: "interrupted", recoveryRequired: true });
     const home = path.join(f.files.stateDir, "manager-artifacts");
     const file = path.join(home, "bootstrap/candidate.json");
@@ -380,38 +476,50 @@ it("candidate binding replacement during OS inspection preserves recovery and re
         }
         return inspect();
     };
-    await expect(reconcileManagerServiceOperation(f.request.id, "user", f.host, {
-        platform: f.dependencies.platform,
-    })).rejects.toThrow();
+    await expect(
+        reconcileManagerServiceOperation(f.request.id, "user", f.host, {
+            platform: f.dependencies.platform,
+        }),
+    ).rejects.toThrow();
     expect(journal.read(f.request.id).recoveryRequired).toBe(true);
     expect(f.effects).toEqual(["reload:true"]);
     acquireControlWorkspace(home)();
     acquireControlWorkspace(f.workspace)();
 });
 
-it.each(["cycle-symlink", "missing-initial-intent"])("new cycle rejects %s without replacing history", async problem => {
-    const f = fixture();
-    await bootstrapManagerService(f.request, f.dependencies, f.host);
-    const home = path.join(f.files.stateDir, "manager-artifacts");
-    const metadata = fs.readFileSync(f.files.metadata);
-    if (problem === "cycle-symlink") {
-        const outside = path.join(f.root, "outside");
-        fs.mkdirSync(outside, { mode: 0o700 });
-        fs.symlinkSync(outside, path.join(home, "bootstrap-cycles"));
-    } else {
-        fs.unlinkSync(path.join(home, "bootstrap/intent.json"));
-    }
-    await expect(bootstrapManagerService({ ...f.request, id: "next-install" }, f.dependencies, f.host)).rejects.toThrow();
-    expect(mock.install).toHaveBeenCalledTimes(1);
-    expect(f.effects).toEqual(["reload:true"]);
-    expect(fs.readFileSync(f.files.metadata)).toEqual(metadata);
-    if (problem === "cycle-symlink") expect(fs.readdirSync(path.join(f.root, "outside"))).toEqual([]);
-});
+it.each(["cycle-symlink", "missing-initial-intent"])(
+    "new cycle rejects %s without replacing history",
+    async problem => {
+        const f = fixture();
+        await bootstrapManagerService(f.request, f.dependencies, f.host);
+        const home = path.join(f.files.stateDir, "manager-artifacts");
+        const metadata = fs.readFileSync(f.files.metadata);
+        if (problem === "cycle-symlink") {
+            const outside = path.join(f.root, "outside");
+            fs.mkdirSync(outside, { mode: 0o700 });
+            fs.symlinkSync(outside, path.join(home, "bootstrap-cycles"));
+        } else {
+            fs.unlinkSync(path.join(home, "bootstrap/intent.json"));
+        }
+        await expect(
+            bootstrapManagerService({ ...f.request, id: "next-install" }, f.dependencies, f.host),
+        ).rejects.toThrow();
+        expect(mock.install).toHaveBeenCalledTimes(1);
+        expect(f.effects).toEqual(["reload:true"]);
+        expect(fs.readFileSync(f.files.metadata)).toEqual(metadata);
+        if (problem === "cycle-symlink")
+            expect(fs.readdirSync(path.join(f.root, "outside"))).toEqual([]);
+    },
+);
 
 it("automatic cycle selection reuses installed identity instead of creating a new operation", async () => {
     const f = fixture();
     const installed = await bootstrapManagerService(f.request, f.dependencies, f.host);
-    const repeated = await bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host);
+    const repeated = await bootstrapManagerService(
+        { service: f.request.service },
+        f.dependencies,
+        f.host,
+    );
     expect(repeated).toEqual(installed);
     expect(mock.install).toHaveBeenCalledTimes(1);
     expect(f.effects).toEqual(["reload:true"]);
@@ -420,7 +528,9 @@ it("automatic cycle selection does not infer uninstall from missing metadata", a
     const f = fixture();
     await bootstrapManagerService(f.request, f.dependencies, f.host);
     fs.unlinkSync(f.files.metadata);
-    await expect(bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host)).rejects.toThrow();
+    await expect(
+        bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host),
+    ).rejects.toThrow();
     expect(mock.install).toHaveBeenCalledTimes(1);
     expect(f.effects).toEqual(["reload:true"]);
 });
@@ -428,26 +538,41 @@ it("automatic cycle selection does not infer uninstall from missing metadata", a
 it("automatic install returns the bound interrupted operation without replay", async () => {
     const f = fixture();
     const installed = await bootstrapManagerService(f.request, f.dependencies, f.host);
-    const journal = new FileManagerServiceJournal(path.join(f.files.stateDir, "manager-operations"));
+    const journal = new FileManagerServiceJournal(
+        path.join(f.files.stateDir, "manager-operations"),
+    );
     const interrupted = { ...installed, status: "interrupted" as const, recoveryRequired: true };
     journal.save(interrupted);
-    expect(await bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host)).toEqual(interrupted);
+    expect(
+        await bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host),
+    ).toEqual(interrupted);
     expect(mock.install).toHaveBeenCalledTimes(1);
     expect(f.effects).toEqual(["reload:true"]);
     expect(journal.read(installed.id).recoveryRequired).toBe(true);
 });
 
-it.each(["intent.json", "candidate.json"])("automatic interrupted install refuses missing %s without rebuilding history", async name => {
-    const f = fixture();
-    const installed = await bootstrapManagerService(f.request, f.dependencies, f.host);
-    const journal = new FileManagerServiceJournal(path.join(f.files.stateDir, "manager-operations"));
-    const interrupted = { ...installed, status: "interrupted" as const, recoveryRequired: true };
-    journal.save(interrupted);
-    const file = path.join(f.files.stateDir, "manager-artifacts/bootstrap", name);
-    fs.unlinkSync(file);
-    await expect(bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host)).rejects.toThrow();
-    expect(fs.existsSync(file)).toBe(false);
-    expect(mock.install).toHaveBeenCalledTimes(1);
-    expect(f.effects).toEqual(["reload:true"]);
-    expect(journal.read(installed.id)).toEqual(interrupted);
-});
+it.each(["intent.json", "candidate.json"])(
+    "automatic interrupted install refuses missing %s without rebuilding history",
+    async name => {
+        const f = fixture();
+        const installed = await bootstrapManagerService(f.request, f.dependencies, f.host);
+        const journal = new FileManagerServiceJournal(
+            path.join(f.files.stateDir, "manager-operations"),
+        );
+        const interrupted = {
+            ...installed,
+            status: "interrupted" as const,
+            recoveryRequired: true,
+        };
+        journal.save(interrupted);
+        const file = path.join(f.files.stateDir, "manager-artifacts/bootstrap", name);
+        fs.unlinkSync(file);
+        await expect(
+            bootstrapManagerService({ service: f.request.service }, f.dependencies, f.host),
+        ).rejects.toThrow();
+        expect(fs.existsSync(file)).toBe(false);
+        expect(mock.install).toHaveBeenCalledTimes(1);
+        expect(f.effects).toEqual(["reload:true"]);
+        expect(journal.read(installed.id)).toEqual(interrupted);
+    },
+);

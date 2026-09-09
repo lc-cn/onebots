@@ -34,7 +34,11 @@ import {
     secureWindowsServiceFile,
 } from "./windows-service-security.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
-import { ManagerBootstrapCandidateError } from "./manager-bootstrap-error.js";
+import {
+    deriveManagerBootstrapStageError,
+    ManagerBootstrapCandidateError,
+    type ManagerBootstrapPhase,
+} from "./manager-bootstrap-error.js";
 
 export interface ManagerBootstrapRequest {
     id?: string;
@@ -91,9 +95,12 @@ export async function bootstrapManagerService(
     const releaseService = acquireServiceMigrationLock(files.stateDir);
     let releaseArtifacts: (() => void) | undefined;
     let installer: ManagerCandidateInstaller | undefined;
+    let operationId: string | undefined;
+    let bootstrapPhase: ManagerBootstrapPhase = "candidate-preparation";
     try {
         if (inspectServiceMigrationRecovery(files.stateDir)) throw failure();
         const id = request.id ?? selectManagerBootstrapCycle(template.scope, host);
+        operationId = id;
         const home = path.join(files.stateDir, "manager-artifacts");
         if (
             template.workspace === home ||
@@ -181,6 +188,7 @@ export async function bootstrapManagerService(
         });
         const boundCandidate = binding.has("candidate.json");
         let installed;
+        bootstrapPhase = "candidate-queued";
         try {
             installed =
                 existing || boundCandidate
@@ -214,7 +222,9 @@ export async function bootstrapManagerService(
                 throw new ManagerBootstrapCandidateError(id, installed.phase, installed.error);
             throw failure();
         }
+        bootstrapPhase = "candidate-verified";
         let candidate;
+        bootstrapPhase = "candidate-read";
         try {
             candidate = installer.readCandidate(installed.candidateId);
         } catch (error) {
@@ -222,6 +232,7 @@ export async function bootstrapManagerService(
             throw new ManagerBootstrapCandidateError(id, "verified", "CANDIDATE_READ_FAILED");
         }
         if (host.platform === "win32") {
+            bootstrapPhase = "candidate-security";
             try {
                 inspectWindowsServiceDirectorySecurity(host, candidate.directory);
             } catch (error) {
@@ -235,6 +246,7 @@ export async function bootstrapManagerService(
         }
         let digest;
         let spec;
+        bootstrapPhase = "candidate-identity";
         try {
             digest = managerCandidateDigest(candidate);
             spec = parseManagerServiceSpec({
@@ -245,11 +257,7 @@ export async function bootstrapManagerService(
             verifyManagerServiceCandidate(spec, digest);
         } catch (error) {
             if (host.platform !== "win32") throw error;
-            throw new ManagerBootstrapCandidateError(
-                id,
-                "verified",
-                "CANDIDATE_IDENTITY_FAILED",
-            );
+            throw new ManagerBootstrapCandidateError(id, "verified", "CANDIDATE_IDENTITY_FAILED");
         }
         const receipt = {
             schemaVersion: 1,
@@ -259,6 +267,7 @@ export async function bootstrapManagerService(
             candidateDigest: digest,
             spec,
         };
+        bootstrapPhase = "candidate-binding";
         try {
             if (binding.has("candidate.json")) {
                 if (!isDeepStrictEqual(binding.read("candidate.json"), receipt)) throw failure();
@@ -270,12 +279,9 @@ export async function bootstrapManagerService(
             }
         } catch (error) {
             if (host.platform !== "win32") throw error;
-            throw new ManagerBootstrapCandidateError(
-                id,
-                "verified",
-                "CANDIDATE_BINDING_FAILED",
-            );
+            throw new ManagerBootstrapCandidateError(id, "verified", "CANDIDATE_BINDING_FAILED");
         }
+        bootstrapPhase = "manager-preflight";
         if (existing) {
             const record = journal.recoverable(id);
             if (record.action !== "install" || !isDeepStrictEqual(record.managerSpec, spec))
@@ -294,6 +300,14 @@ export async function bootstrapManagerService(
             return record; // 返回原操作事实，不重新写定义、reload 或释放维护门禁。
         }
         return await installManagerServiceWhileLocked(spec, id, host, dependencies);
+    } catch (error) {
+        if (
+            host.platform === "win32" &&
+            operationId &&
+            !(error instanceof ManagerBootstrapCandidateError)
+        )
+            throw deriveManagerBootstrapStageError(files.stateDir, operationId, bootstrapPhase);
+        throw error;
     } finally {
         try {
             await installer?.close();

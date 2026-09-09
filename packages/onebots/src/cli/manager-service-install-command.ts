@@ -4,7 +4,10 @@ import { bootstrapManagerService } from "../manager-service-bootstrap.js";
 import { bundledRuntimeArtifacts } from "../installation/bundled-runtime-artifacts.js";
 import { parseManagerServiceSpec } from "../manager-service-spec.js";
 import type { CommandResult } from "./command-application.js";
-import { ManagerBootstrapCandidateError } from "../manager-bootstrap-error.js";
+import {
+    ManagerBootstrapCandidateError,
+    ManagerBootstrapStageError,
+} from "../manager-bootstrap-error.js";
 
 export interface ManagerServiceInstallCommandOptions {
     dataDir?: string;
@@ -115,11 +118,19 @@ export async function installManagerServiceCommand(
             exitCode: 1,
         };
     } catch (error) {
-        if (error instanceof ManagerBootstrapCandidateError)
+        if (error instanceof ManagerBootstrapCandidateError) {
             return {
                 output:
-                    `管理服务候选准备失败：操作 ${error.operationId}，阶段 ${error.phase}，原因 ${error.code}。` +
+                    `管理服务首次安装失败：operationId=${error.operationId}，bootstrapPhase=candidate-${error.phase}，code=${error.code}。` +
                     "\n尚未派发系统服务注册；请保留 manager-artifacts 中的原操作和候选证据。",
+                exitCode: 1,
+            };
+        }
+        if (error instanceof ManagerBootstrapStageError)
+            return {
+                output:
+                    `管理服务首次安装失败：operationId=${error.operationId}，bootstrapPhase=${error.bootstrapPhase}，code=${error.code}。` +
+                    "\n未重派下载或系统动作；请保留原操作和本机持久证据。",
                 exitCode: 1,
             };
         return {
