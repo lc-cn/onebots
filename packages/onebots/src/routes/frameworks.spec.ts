@@ -21,22 +21,14 @@ function setup() {
 }
 
 describe("framework management routes", () => {
-    it("公开 available、experimental 与 legacy Application 注册状态", () => {
-        const { gets } = setup();
-        const ctx = { set: vi.fn() } as unknown as RouterContext;
+    it("退役当前进程应用管理接口并保留框架方案接口", () => {
+        const { gets, posts } = setup();
 
-        gets.get("/api/applications")!(ctx);
-
-        expect(ctx.body).toMatchObject({
-            schemaVersion: 1,
-            registered: expect.arrayContaining([
-                expect.objectContaining({ name: "koishi", stage: "available", active: false }),
-                expect.objectContaining({ name: "avilla", stage: "experimental", active: false }),
-                expect.objectContaining({ name: "nonebot1", stage: "legacy", active: false }),
-            ]),
-            active: [],
-            protocols: [],
-        });
+        expect(gets.has("/api/applications")).toBe(false);
+        expect(posts.has("/api/applications/load")).toBe(false);
+        expect(gets.has("/api/frameworks")).toBe(true);
+        expect(posts.has("/api/frameworks/plan")).toBe(true);
+        expect(posts.has("/api/frameworks/load")).toBe(true);
     });
 
     it("lists all profiles even when no bot account is configured", () => {

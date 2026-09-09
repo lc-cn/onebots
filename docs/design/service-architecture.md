@@ -534,3 +534,5 @@ Linux 检查已补充 musl 的系统配置与默认搜索顺序。独立、禁�
 旧 CLI 服务 application 包装现已退役：install/start/stop/restart/status/logs/uninstall/doctor 均只保留 manager/control 实现，setup 只进入统一控制 TUI，不再保留第二套配置写入器。旧包装及专用测试、旧 setup 模块一并删除，command-application 只保留运行参数、能力目录和配置读写的共享边界；相关文档与诊断提示改为当前工作区和管理服务命令。实际原生系统托管、后续冷恢复阶段和剩余旧 App/Web 路径仍未完成。
 
 目标定义写入后的冷恢复先补充失败关闭的只读基础证据，尚未开放新阶段：never-started 证明要求进程收据从未被 manager 认领、gateway 保持精确初始状态，并将 `.control` 顶层限制为锁文件和迁移种子/封锁文件的稳定清单，任何认证、socket、运行版本、worker 或未知痕迹都拒绝。回退工作区检查严格读取私有 pending/blocked 标记并复验文件身份，但 schema v1 blocked 仍只绑定操作 ID，不能作为恢复或重启授权；目标文件、备份、候选、回退来源、reload 与旧实例收据尚未形成完整闭包前，`starting-manager` 继续只读封锁。
+
+旧网关当前进程的 Application 查询与动态加载接口现已退役：`/api/applications`、`/api/applications/load` 及其唯一工厂入口不再形成第二套扩展管理面；框架方案目录、连接计划和动态 provider 入口继续保留。Application 扩展仍由管理服务的安装计划写入不可变运行代，并在网关启动时注册和激活。本次只删除已确认无 Web/文档消费者的闭合切片；其余旧 App/Web 路径、`createOnebots` 与 `--service-runtime` 仍有迁移回退或真实运行时消费者，尚不能整体退役。

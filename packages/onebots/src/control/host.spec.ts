@@ -122,13 +122,20 @@ describe("control host integration", () => {
         expect((await client.applyConfiguration("account-api", validation.receiptId!)).status).toBe(
             "succeeded",
         );
-        const response = await fetch(`${running.url}/mock/003.with.dot/onebot/v11/get_login_info`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: "{}",
-        });
-        expect(response.status).toBe(200);
-        expect((await response.json()).status).toBe("ok");
+        // gateway.ready 只证明私有管理通道可用；协议在账号任务完成后才注册路由。
+        await expect
+            .poll(async () => {
+                const response = await fetch(
+                    `${running.url}/mock/003.with.dot/onebot/v11/get_login_info`,
+                    {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: "{}",
+                    },
+                );
+                return response.status === 200 ? response.json() : { httpStatus: response.status };
+            })
+            .toMatchObject({ status: "ok" });
     });
     it("空白工作区通过统一HTTP客户端完成草稿校验应用，保持停止意图", async () => {
         const root = workspace();
