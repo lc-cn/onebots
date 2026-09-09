@@ -12,6 +12,7 @@ export type ServiceMigrationPhase =
     | "stopping-target"
     | "restoring"
     | "restarting-old"
+    | "cancelled"
     | "completed";
 export interface ServiceMigrationFile {
     role: "definition" | "metadata" | "configuration" | "runner";

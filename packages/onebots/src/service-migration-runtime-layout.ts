@@ -41,8 +41,17 @@ async function manifest(directory: string): Promise<Manifest> {
 }
 async function resolvePackage(name: string, from: string): Promise<string | undefined> {
     if (!packageName(name)) throw invalid();
+    // 旧服务契约不包含当前 CLI 的 NODE_PATH；pnpm 的命令 shim 会注入自身依赖目录。
+    // 只保留由旧包物理位置派生的本地/父级搜索路径，不能把管理工具的依赖当作旧运行依赖。
+    const localPaths = new Set<string>();
+    for (let parent = from; ; parent = path.dirname(parent)) {
+        if (path.basename(parent) !== "node_modules")
+            localPaths.add(path.join(parent, "node_modules"));
+        if (parent === path.dirname(parent)) break;
+    }
     for (const directory of createRequire(path.join(from, "package.json")).resolve.paths(name) ??
         []) {
+        if (!localPaths.has(directory)) continue;
         const candidate = path.join(directory, name);
         try {
             await lstat(path.join(candidate, "package.json"));

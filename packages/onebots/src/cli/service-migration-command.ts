@@ -52,6 +52,11 @@ export async function migrateServiceCommand(
                     : operation.rolledBack
                       ? "迁移失败，已确认恢复旧服务。"
                       : "迁移失败，未确认恢复旧服务；请检查迁移记录。"
+            }${
+                operation.recoveryRequired &&
+                ["prepared", "capturing-runtime"].includes(operation.phase)
+                    ? `\n可核验并取消尚未切换的迁移：onebots recover --operation ${operation.id} --cancel-migration${options.system ? " --system" : ""}。此操作保留备份，不会自动重试迁移。`
+                    : ""
             }`,
             exitCode: 1,
         };

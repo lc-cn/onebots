@@ -101,10 +101,11 @@ function inspect(
             referenced.add(record.backupDigest + ".backup.json");
             const unfinished =
                 record.recoveryRequired ||
-                record.phase !== "completed" ||
+                !["completed", "cancelled"].includes(record.phase) ||
                 !(
                     record.status === "succeeded" ||
-                    (record.status === "failed" && record.rolledBack)
+                    (record.status === "failed" &&
+                        (record.rolledBack || record.phase === "cancelled"))
                 );
             pending ||= unfinished;
             if (unfinished)

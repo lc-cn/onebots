@@ -7,6 +7,8 @@ import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import { getServiceFiles } from "./service-files.js";
 import { renderSystemdUnit, renderLaunchdPlist, type ServiceSpec } from "./service-definition.js";
 import { verifyRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
+import { cancelUnstartedServiceMigration } from "./service-migration-recovery.js";
+import { inspectServiceMigrationRecovery } from "./service-recovery-inspection.js";
 import { readServiceMigrationPending } from "./service-migration-workspace.js";
 import { verifyServiceMigrationProcesses } from "./service-migration-processes.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
@@ -219,7 +221,44 @@ describe("installed service migration entry", () => {
         expect(journal.backup(result).retainedRuntime).toBeUndefined();
         await expect(migrateInstalledService(test.target, test.host)).rejects.toThrow();
         expect(test.osEffects).toEqual([]);
+        expect(inspectServiceMigrationRecovery(test.files.stateDir)).toBe(true);
+        const cancelled = await cancelUnstartedServiceMigration(result.id, "user", test.host);
+        expect(cancelled).toMatchObject({
+            phase: "cancelled",
+            status: "failed",
+            recoveryRequired: false,
+            rolledBack: false,
+        });
+        expect(inspectServiceMigrationRecovery(test.files.stateDir)).toBe(false);
+        expect(await cancelUnstartedServiceMigration(result.id, "user", test.host)).toEqual(
+            cancelled,
+        );
+        expect(test.osEffects).toEqual([]);
+        const next = await migrateInstalledService(test.target, test.host);
+        expect(next.id).not.toBe(result.id);
+        expect(next.phase).toBe("capturing-runtime");
+        expect(journal.backup(cancelled)).toEqual(journal.backup(result));
     });
+    it.each(["stopping-old", "configuration-drift"])(
+        "rejects early cancellation after %s",
+        async scenario => {
+            const test = fixture();
+            fs.rmSync(path.join(path.dirname(test.legacy.binPath), "node_modules"), {
+                recursive: true,
+            });
+            const record = await migrateInstalledService(test.target, test.host);
+            const journal = new FileServiceMigrationJournal(
+                path.join(test.files.stateDir, "migrations"),
+            );
+            if (scenario === "stopping-old") journal.save({ ...record, phase: "stopping-old" });
+            else fs.appendFileSync(test.legacy.configPath, "# external edit\n");
+            await expect(
+                cancelUnstartedServiceMigration(record.id, "user", test.host),
+            ).rejects.toThrow();
+            expect(journal.read(record.id).recoveryRequired).toBe(true);
+            expect(test.osEffects).toEqual([]);
+        },
+    );
     it("invalid existing definition refuses capture and leaves every non-target file unchanged", async () => {
         const test = fixture();
         fs.writeFileSync(test.files.definition, "foreign-service");

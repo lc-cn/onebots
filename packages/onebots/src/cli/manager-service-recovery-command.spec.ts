@@ -1,13 +1,43 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { reconcileManagerServiceOperation } from "../manager-service-recovery.js";
+import { cancelUnstartedServiceMigration } from "../service-migration-recovery.js";
 import { managerServiceRecoveryCommand } from "./manager-service-recovery-command.js";
 import type { ManagerServiceRecord } from "../manager-service-journal.js";
 vi.mock("../manager-service-recovery.js", () => ({ reconcileManagerServiceOperation: vi.fn() }));
+vi.mock("../service-migration-recovery.js", () => ({ cancelUnstartedServiceMigration: vi.fn() }));
 vi.mock("./command-runner.js", () => ({ CommandRunner: () => null }));
 vi.mock("../service-manager.js", () => {
     throw new Error("禁止旧恢复旁路");
 });
 afterEach(() => vi.mocked(reconcileManagerServiceOperation).mockReset());
+afterEach(() => vi.mocked(cancelUnstartedServiceMigration).mockReset());
+it("only explicit migration cancellation dispatches to the early migration recovery path", async () => {
+    vi.mocked(cancelUnstartedServiceMigration).mockResolvedValue({
+        schemaVersion: 1,
+        id: "migration_123",
+        backupDigest: "a".repeat(64),
+        phase: "cancelled",
+        status: "failed",
+        recoveryRequired: false,
+        rolledBack: false,
+    });
+    const result = await managerServiceRecoveryCommand({
+        operation: "migration_123",
+        cancelMigration: true,
+        system: true,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain("尚未切换");
+    expect(cancelUnstartedServiceMigration).toHaveBeenCalledWith("migration_123", "system");
+    expect(reconcileManagerServiceOperation).not.toHaveBeenCalled();
+    vi.mocked(cancelUnstartedServiceMigration).mockRejectedValue(new Error("synthetic-secret"));
+    const failed = await managerServiceRecoveryCommand({
+        operation: "migration_123",
+        cancelMigration: true,
+    });
+    expect(failed.exitCode).toBe(1);
+    expect(failed.output).not.toContain("synthetic-secret");
+});
 const secret = "synthetic-secret-no-output";
 function record(): ManagerServiceRecord {
     return {

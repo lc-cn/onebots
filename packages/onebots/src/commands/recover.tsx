@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CommandRunner } from "../cli/command-runner.js";
 import { managerServiceRecoveryCommand } from "../cli/manager-service-recovery-command.js";
 
-export const description = "对账已达到目标的安装、停止、卸载或已释放升级操作（不重放系统动作）";
+export const description = "对账服务操作，或显式取消尚未切换的旧服务迁移（不重放系统动作）";
 export const options = z
     .object({
         operation: z
@@ -11,6 +11,10 @@ export const options = z
             .regex(/^[A-Za-z0-9_-]{1,128}$/)
             .describe(option({ description: "待对账操作 ID（必填）", valueDescription: "id" })),
         system: z.boolean().describe(option({ description: "对账系统级服务（默认用户级）" })),
+        cancelMigration: z
+            .boolean()
+            .default(false)
+            .describe(option({ description: "仅取消尚未停服且旧基线未变的迁移，保留备份与工件" })),
     })
     .strict();
 export default function RecoverCommand({ options: input }: { options: z.infer<typeof options> }) {

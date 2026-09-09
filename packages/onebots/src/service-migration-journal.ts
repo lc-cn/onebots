@@ -26,6 +26,7 @@ const phases = [
     "stopping-target",
     "restoring",
     "restarting-old",
+    "cancelled",
     "completed",
 ];
 const invalid = () => new Error("服务迁移私有记录无效或需要恢复，禁止继续迁移");
@@ -189,6 +190,14 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             const previous = this.read(clean.id);
             if (previous.backupDigest !== clean.backupDigest) throw invalid();
             if (
+                clean.phase === "cancelled" &&
+                previous.phase !== "cancelled" &&
+                (previous.status !== "interrupted" ||
+                    !previous.recoveryRequired ||
+                    !["prepared", "capturing-runtime"].includes(previous.phase))
+            )
+                throw invalid();
+            if (
                 finished(previous) &&
                 canonical(previous) !== canonical(clean) &&
                 !(
@@ -343,12 +352,18 @@ export function parseServiceMigrationRecord(input: unknown): ServiceMigrationRec
     )
         throw invalid();
     if (value.status === "interrupted" && !value.recoveryRequired) throw invalid();
+    if (
+        value.phase === "cancelled" &&
+        (value.status !== "failed" || value.recoveryRequired || value.rolledBack)
+    )
+        throw invalid();
     return value as unknown as ServiceMigrationRecord;
 }
 function finished(record: ServiceMigrationRecord): boolean {
     return (
         !record.recoveryRequired &&
-        (record.status === "succeeded" || (record.status === "failed" && record.rolledBack))
+        (record.status === "succeeded" ||
+            (record.status === "failed" && (record.rolledBack || record.phase === "cancelled")))
     );
 }
 function canonical(value: unknown): string {
