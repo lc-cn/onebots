@@ -230,7 +230,7 @@ function managerUpdateFailure(
 ): Error {
     if (error instanceof ManagerUpgradeCandidateRejectedError)
         return new Error(
-            `操作 ${id} 的候选安装在系统效果派发前被明确拒绝。可修复依赖或候选工件后查询原操作，或创建新的升级操作。`,
+            `操作 ${id} 的候选安装在系统效果派发前被明确拒绝（${error.code}）。可修复依赖或候选工件后查询原操作，或创建新的升级操作。`,
         );
     if (error instanceof ManagerServiceUpgradeRejectedError)
         return new Error(

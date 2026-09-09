@@ -17,7 +17,7 @@ export interface GenerationInstallOperation {
     candidateId?: string;
     createdAt: string;
     finishedAt?: string;
-    error?: "INSTALL_FAILED" | "INTERRUPTED";
+    error?: "DOWNLOAD_FAILED" | "VERIFICATION_FAILED" | "INTERRUPTED";
 }
 
 export interface GenerationInstallerOptions {
@@ -132,6 +132,7 @@ export class GenerationInstaller {
         options: { token?: string; signal?: AbortSignal },
     ): Promise<GenerationInstallOperation> {
         let current = operation;
+        let failureCode: "DOWNLOAD_FAILED" | "VERIFICATION_FAILED" = "DOWNLOAD_FAILED";
         try {
             options.signal?.throwIfAborted();
             verifyLocalArtifacts(plan);
@@ -167,6 +168,7 @@ export class GenerationInstaller {
             }
             current = { ...current, phase: "verifying" };
             this.save(current);
+            failureCode = "VERIFICATION_FAILED";
             const evidence = await this.options.verify(candidate.directory, plan, {
                 privateRoot: path.join(path.dirname(this.directory), "generation-verifications"),
                 signal: options.signal,
@@ -195,7 +197,7 @@ export class GenerationInstaller {
             const failed: GenerationInstallOperation = {
                 ...current,
                 phase: receiptExists ? "interrupted" : "failed",
-                error: receiptExists ? "INTERRUPTED" : "INSTALL_FAILED",
+                error: receiptExists ? "INTERRUPTED" : failureCode,
                 finishedAt: new Date().toISOString(),
             };
             this.save(failed);
@@ -283,7 +285,8 @@ function isOperation(value: unknown): value is GenerationInstallOperation {
             (typeof item.finishedAt === "string" &&
                 Number.isFinite(Date.parse(item.finishedAt)))) &&
         (item.error === undefined ||
-            item.error === "INSTALL_FAILED" ||
+            item.error === "DOWNLOAD_FAILED" ||
+            item.error === "VERIFICATION_FAILED" ||
             item.error === "INTERRUPTED")
     );
 }

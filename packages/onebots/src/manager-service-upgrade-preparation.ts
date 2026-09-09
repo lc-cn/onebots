@@ -44,10 +44,29 @@ export interface PreparedManagerUpgradeCandidate {
     coreArchiveSha256?: string;
 }
 
-export class ManagerUpgradeCandidateRejectedError extends Error {}
+export type ManagerUpgradeCandidateRejectionCode =
+    | "DOWNLOAD_FAILED"
+    | "VERIFICATION_FAILED"
+    | "CANDIDATE_INVALID"
+    | "PREFLIGHT_FAILED";
+const candidateRejectionCodes = new Set<ManagerUpgradeCandidateRejectionCode>([
+    "DOWNLOAD_FAILED",
+    "VERIFICATION_FAILED",
+    "CANDIDATE_INVALID",
+    "PREFLIGHT_FAILED",
+]);
+export class ManagerUpgradeCandidateRejectedError extends Error {
+    readonly code: ManagerUpgradeCandidateRejectionCode;
+    constructor(code: unknown = "PREFLIGHT_FAILED") {
+        super("管理程序升级候选被拒绝，未修改系统服务");
+        this.code = candidateRejectionCodes.has(code as ManagerUpgradeCandidateRejectionCode)
+            ? (code as ManagerUpgradeCandidateRejectionCode)
+            : "PREFLIGHT_FAILED";
+    }
+}
 export class ManagerUpgradeCandidateUnknownError extends Error {}
-const failure = () =>
-    new ManagerUpgradeCandidateRejectedError("管理程序升级候选被拒绝，未修改系统服务");
+const failure = (code: ManagerUpgradeCandidateRejectionCode = "PREFLIGHT_FAILED") =>
+    new ManagerUpgradeCandidateRejectedError(code);
 const unknown = () =>
     new ManagerUpgradeCandidateUnknownError(
         "管理程序候选安装结果尚未确认；保留操作 ID 和工件，禁止重派安装",
@@ -221,7 +240,14 @@ export async function prepareManagerUpgradeCandidate(
             : await installer.install(installationId, plan);
         installationOutcomeUncertain = false;
         if (["interrupted", "downloading", "verifying"].includes(installed.phase)) throw unknown();
-        if (installed.phase === "failed") throw failure();
+        if (installed.phase === "failed")
+            throw failure(
+                installed.error === "DOWNLOAD_FAILED"
+                    ? "DOWNLOAD_FAILED"
+                    : installed.error === "VERIFICATION_FAILED"
+                      ? "VERIFICATION_FAILED"
+                      : "CANDIDATE_INVALID",
+            );
         if (
             installed.phase !== "verified" ||
             installed.planDigest !== plan.digest ||

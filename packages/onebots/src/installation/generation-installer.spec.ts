@@ -62,6 +62,21 @@ function fixture() {
 }
 
 describe("GenerationInstaller", () => {
+    it.each([
+        ["download", "DOWNLOAD_FAILED"],
+        ["verify", "VERIFICATION_FAILED"],
+    ] as const)("将%s失败持久化为固定阶段码", async (stage, code) => {
+        const { plan, options, download, verify } = fixture();
+        (stage === "download" ? download : verify).mockRejectedValue(
+            new Error("private diagnostic"),
+        );
+        const installer = new GenerationInstaller(options);
+        await expect(installer.install(`failed-${stage}`, plan)).resolves.toMatchObject({
+            phase: "failed",
+            error: code,
+        });
+    });
+
     it("最终持久状态投影不含安装计划或凭据，观察失败不改变结果", async () => {
         const { plan, options } = fixture();
         const onOperation = vi.fn(() => {
