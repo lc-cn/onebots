@@ -183,7 +183,11 @@ function cliJson(args, statuses = [0]) {
 
 function operation(output, action) {
     const match = output.match(/操作 ([A-Za-z0-9_-]{1,128})：succeeded（completed）/u);
-    assert.ok(match, `公开 CLI ${action} 未返回已完成操作 ID`);
+    const firstLine = output.split(/\r?\n/u, 1)[0];
+    assert.ok(
+        match,
+        `公开 CLI ${action} 未返回已完成操作 ID；首行=${JSON.stringify(firstLine.slice(0, 256))}`,
+    );
     return match[1];
 }
 
@@ -244,12 +248,49 @@ async function linuxNodeCaptureState() {
         if (error?.code !== "ENOENT") preload = "unreadable";
     }
     let nativeValidation = "failed";
+    let copiedHash = "unavailable";
+    let copiedNativeValidation = "unavailable";
+    let copiedExecution = "unavailable";
     try {
         const { assertSystemNativeDependencies } = await import(
             path.join(runtime, "node_modules/onebots/lib/service-migration-native-dependencies.js")
         );
-        await assertSystemNativeDependencies(fs.realpathSync(process.execPath));
+        const { hashRuntimeFile } = await import(
+            path.join(runtime, "node_modules/onebots/lib/service-migration-runtime-tree-scan.js")
+        );
+        const source = fs.realpathSync(process.execPath);
+        await assertSystemNativeDependencies(source);
         nativeValidation = "passed";
+        const copied = path.join(temporary, "node-capture-diagnostic");
+        fs.copyFileSync(source, copied, fs.constants.COPYFILE_EXCL);
+        fs.chmodSync(copied, fs.statSync(source).mode & 0o777);
+        copiedHash =
+            JSON.stringify(await hashRuntimeFile(source)) ===
+            JSON.stringify(await hashRuntimeFile(copied))
+                ? "passed"
+                : "failed";
+        try {
+            await assertSystemNativeDependencies(copied);
+            copiedNativeValidation = "passed";
+        } catch {
+            copiedNativeValidation = "failed";
+        }
+        const probe = execute(
+            copied,
+            [
+                "--no-addons",
+                "-e",
+                "const crypto=require('node:crypto');require('node:tls').createSecureContext();if(crypto.createHash('sha256').update('onebots').digest('hex').length!==64)process.exit(1);process.stdout.write(JSON.stringify({version:process.version,platform:process.platform,arch:process.arch}))",
+            ],
+            { statuses: [0], env: { PATH: "/usr/bin:/bin" }, cwd: path.dirname(copied) },
+        );
+        const identity = JSON.parse(probe.stdout);
+        copiedExecution =
+            /^v\d+\.\d+\.\d+$/u.test(identity.version) &&
+            identity.platform === process.platform &&
+            identity.arch === process.arch
+                ? "passed"
+                : "failed";
     } catch {
         // 诊断只暴露固定分类，不透传 ELF、loader 输出或路径。
     }
@@ -273,7 +314,15 @@ async function linuxNodeCaptureState() {
     } catch {
         // 工具缺失同样只记固定分类。
     }
-    return { preload, nativeValidation, needed, nonSystemCacheTargets };
+    return {
+        preload,
+        nativeValidation,
+        copiedHash,
+        copiedNativeValidation,
+        copiedExecution,
+        needed,
+        nonSystemCacheTargets,
+    };
 }
 
 async function invokeMigration(args) {

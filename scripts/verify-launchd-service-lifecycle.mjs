@@ -202,7 +202,11 @@ function cliJson(args, statuses = [0]) {
 
 function operation(output, action) {
     const match = output.match(/操作 ([A-Za-z0-9_-]{1,128})：succeeded（completed）/u);
-    assert.ok(match, `公开 CLI ${action} 未返回已完成操作 ID`);
+    const firstLine = output.split(/\r?\n/u, 1)[0];
+    assert.ok(
+        match,
+        `公开 CLI ${action} 未返回已完成操作 ID；首行=${JSON.stringify(firstLine.slice(0, 256))}`,
+    );
     return match[1];
 }
 
