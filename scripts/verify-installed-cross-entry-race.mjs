@@ -398,11 +398,42 @@ try {
         "error",
     );
 
+    const webOperationLog = await webRequest("GET", "/api/control/logs?source=operation");
+    assert.equal(webOperationLog.status, 200);
+    const cliOperationLog = await runCli(bin, [
+        "control",
+        "logs",
+        ...data,
+        "--source",
+        "operation",
+    ]);
+    assert.equal(cliOperationLog.code, 0, cliOperationLog.stderr);
+    assert.equal(
+        cliOperationLog.stdout,
+        webOperationLog.body.text.trim(),
+        "CLI 与 Web 必须读取同一份 manager 操作日志",
+    );
+    for (const id of [sharedOperationId, lostOperationId]) {
+        const records = webOperationLog.body.text
+            .trim()
+            .split("\n")
+            .map(line => JSON.parse(line))
+            .filter(record => record.id === id);
+        assert.equal(records.length, 1, `配置操作 ${id} 只能生成一个终态投影`);
+        assert.deepEqual(records[0], {
+            time: records[0].time,
+            id,
+            action: "configuration.apply",
+            status: "succeeded",
+            phase: "completed",
+        });
+    }
+
     await stop(manager);
     manager = undefined;
     safeToRemove = true;
     process.stdout.write(
-        "✓ 安装产物的 CLI 与已配对 Web HTTP 会话通过同一 manager 验证了陈旧 revision CAS、跨入口并发 apply、同键同载荷重试、同键异载荷冲突，以及丢响应后按原 operation 查询\n",
+        "✓ 安装产物的 CLI 与已配对 Web HTTP 会话通过同一 manager 验证了陈旧 revision CAS、跨入口并发 apply、同键同载荷重试、同键异载荷冲突、丢响应后按原 operation 查询，以及两入口的单一终态操作日志\n",
     );
 } finally {
     if (manager) {

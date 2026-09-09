@@ -306,6 +306,16 @@ try {
     assert.match(operationLog, new RegExp(installId));
     assert.match(operationLog, new RegExp(applyId));
     assert.match(operationLog, new RegExp(sendId));
+    for (const action of [
+        "installation.install",
+        "generation.activate",
+        "configuration.apply",
+        "message.send",
+        "stop",
+        "start",
+        "restart",
+    ])
+        assert.match(operationLog, new RegExp(`\\"action\\":\\"${action}\\"`));
     assert.doesNotMatch(operationLog, /installed-entry-message/);
 
     await host.close();
