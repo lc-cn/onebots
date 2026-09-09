@@ -997,7 +997,16 @@ try {
     const preservedGatewayIntent = fs.readFileSync(
         path.join(dataDirectory, ".control/gateway.json"),
     );
-    const preservedAuthentication = fs.readFileSync(path.join(dataDirectory, ".control/auth.json"));
+    const authenticationFile = path.join(dataDirectory, ".control/auth.json");
+    const preservedAuthentication = fs.existsSync(authenticationFile)
+        ? fs.readFileSync(authenticationFile)
+        : null;
+    const assertAuthenticationPreserved = () =>
+        assert.deepEqual(
+            fs.existsSync(authenticationFile) ? fs.readFileSync(authenticationFile) : null,
+            preservedAuthentication,
+            "管理程序升级不得创建、删除或修改认证状态",
+        );
 
     const managerOperationsDirectory = path.join(STATE_DIRECTORY, "manager-operations");
     const operationsBeforeFailedUpgrade = new Set(fs.readdirSync(managerOperationsDirectory));
@@ -1041,10 +1050,7 @@ try {
         fs.readFileSync(path.join(dataDirectory, ".control/gateway.json")),
         preservedGatewayIntent,
     );
-    assert.deepEqual(
-        fs.readFileSync(path.join(dataDirectory, ".control/auth.json")),
-        preservedAuthentication,
-    );
+    assertAuthenticationPreserved();
     fs.rmdirSync(socketObstacle);
 
     effectUnknown = true;
@@ -1080,10 +1086,7 @@ try {
         fs.readFileSync(path.join(dataDirectory, ".control/gateway.json")),
         preservedGatewayIntent,
     );
-    assert.deepEqual(
-        fs.readFileSync(path.join(dataDirectory, ".control/auth.json")),
-        preservedAuthentication,
-    );
+    assertAuthenticationPreserved();
     const rolledBackJournal = fs.readFileSync(interruptedUpgrade.file);
     const rolledBackRecord = JSON.parse(rolledBackJournal);
     assert.deepEqual(
@@ -1164,10 +1167,7 @@ try {
         fs.readFileSync(path.join(dataDirectory, ".control/gateway.json")),
         preservedGatewayIntent,
     );
-    assert.deepEqual(
-        fs.readFileSync(path.join(dataDirectory, ".control/auth.json")),
-        preservedAuthentication,
-    );
+    assertAuthenticationPreserved();
     assert.equal(
         JSON.parse(
             fs.readFileSync(
