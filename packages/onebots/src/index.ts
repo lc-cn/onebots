@@ -172,10 +172,3 @@ export {
     // Config
     ConfigValidator,
 } from "@onebots/core";
-
-export * from "./installation.js";
-export {
-    createDockerRequestBackend,
-    readInstallationRequest,
-    writeInstallationRequest,
-} from "./installation-request.js";
