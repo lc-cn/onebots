@@ -1,7 +1,7 @@
 # Quick start
 
 ::: warning Unreleased architecture
-This guide describes `codex/service-architecture`. Do not update this branch with the current stable npm package or legacy installer. Management binary upgrades, migration work and native platform acceptance remain unfinished; the branch is not released to master.
+This guide describes `codex/service-architecture`. Do not update this branch with the current stable npm package or legacy installer. Native service migration and cold-start acceptance must pass before release.
 :::
 
 ## Start from source
@@ -36,9 +36,9 @@ The management service stays online when the gateway stops or fails. Inspect the
 
 The branch's `install.sh` handles first-time Linux/macOS bootstrap only: install the management program and matching Web assets, then delegate user service installation, startup and status checks to the CLI. It does not select a default protocol or print permanent credentials.
 
-**The script downloads from public npm and requires a published package containing the new architecture.** Missing management artifacts cause a clear failure while preserving the candidate directory; the legacy CLI is not executed. Packages built from the current source now pass real system-level systemd and user-level launchd lifecycle acceptance on GitHub-hosted Ubuntu and macOS runners. This does not mean that the new architecture has already been published to npm.
+**The script downloads from public npm and requires a published package containing the new architecture.** Missing management artifacts cause a clear failure while preserving the candidate directory; the legacy CLI is not executed. The workflow uses packages built from source to exercise real system-level systemd and user-level launchd lifecycle, legacy migration, and manager crash recovery on GitHub-hosted Ubuntu and macOS runners. Only a passing platform job is acceptance evidence. This does not mean that the architecture has been published to npm.
 
-Repeating a completed bootstrap does not upgrade packages or restart services. Legacy configuration, existing runtimes or interrupted installations are preserved for explicit migration or recovery. Re-running the installer is not a management binary upgrade. [Gateway updates](/en/guide/runtime-update) use the management service instead.
+Repeating a completed bootstrap does not upgrade packages or restart services. Legacy configuration, existing runtimes, and interrupted installations are preserved for explicit migration or recovery. Re-running the installer is not a manager update; use `onebots update --manager`. Gateway runtime updates use the manager workflow described in [Update the gateway and manager](/en/guide/runtime-update).
 
 Windows native hosting is not yet verified. The PowerShell entry exits before making changes. Use Docker Desktop and persist `/data` as described in [Docker deployment](/en/guide/docker).
 
@@ -46,4 +46,4 @@ Windows native hosting is not yet verified. The PowerShell entry exits before ma
 
 With an installed architecture CLI, use `onebots install --data-dir <workspace>` to install a user service, then `onebots start`. Existing legacy services require migration and are never overwritten by first-time installation.
 
-The OS hosts the management service; TUI/Web lifecycle actions control the separate gateway. CI now verifies install, start, status, restart, stop and uninstall from packed artifacts, including management availability, blank configuration, process replacement and preservation of workspace data. Machine reboot, interrupted legacy migration recovery and native management-program upgrades still require separate platform acceptance.
+The OS hosts the manager service; TUI/Web lifecycle actions control the separate gateway. CI installs packed artifacts and checks install, start, status, restart, stop, uninstall, management availability, blank configuration, process replacement, and workspace preservation. Release decisions must use the actual result of each platform job. Full machine reboot and recovery of real platform accounts still require deployment-environment acceptance.
