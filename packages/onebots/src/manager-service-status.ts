@@ -49,7 +49,6 @@ export interface ManagerServiceStatus {
         | "identity-mismatch"
         | "baseline-changed"
         | "definition-mismatch"
-        | "platform-control-unavailable"
         | null;
 }
 export interface ManagerServiceStatusDependencies {
