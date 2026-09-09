@@ -1048,8 +1048,6 @@ describe("doctor persisted plugin selection", () => {
         expect(configCheck?.message).not.toContain("plugins: [");
     });
 
-
-
     it("将错误的扩展运行目录作为部署失败证据", async () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-doctor-extension-"));
         temporaryDirectories.push(directory);
@@ -1222,7 +1220,7 @@ describe("doctor persisted plugin selection", () => {
             name: "service-credentials",
             level: "error",
             message:
-                "服务配置缺少持久化管理凭据；当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入服务定义，请将凭据写入配置或取消该环境变量后执行 onebots setup --force",
+                "业务配置缺少持久化协议鉴权；当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入工作区。请启动管理服务后运行 onebots ui --data-dir <工作区> --configure，通过配置草稿保存所需鉴权",
         });
         expect(invalid.checks.find(check => check.name === "service-node")).toMatchObject({
             level: "error",
@@ -1348,7 +1346,7 @@ describe("doctor persisted plugin selection", () => {
 
         expect(report.checks.find(check => check.name === "service-credentials")).toMatchObject({
             level: "error",
-            message: expect.stringContaining("当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入服务定义"),
+            message: expect.stringContaining("当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入工作区"),
         });
         expect(JSON.stringify(report)).not.toContain("transient-shell-token");
     });

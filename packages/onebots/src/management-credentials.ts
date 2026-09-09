@@ -29,7 +29,7 @@ export function inspectPersistedManagementCredentials(
         level: persisted ? "ok" : "error",
         message: persisted
             ? "服务配置包含持久化管理凭据"
-            : "服务配置缺少持久化管理凭据；当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入服务定义，请将凭据写入配置或取消该环境变量后执行 onebots setup --force",
+            : "业务配置缺少持久化协议鉴权；当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入工作区。请启动管理服务后运行 onebots ui --data-dir <工作区> --configure，通过配置草稿保存所需鉴权",
     };
 }
 

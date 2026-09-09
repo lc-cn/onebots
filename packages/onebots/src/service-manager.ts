@@ -488,7 +488,7 @@ export class ServiceController {
         const spec = this.readSpec();
         if (!spec)
             throw new Error(
-                `服务未安装。请先运行 onebots install${this.scope === "system" ? " --system" : ""} -r <adapter> -p <protocol> -c <config>`,
+                `服务未安装。请先运行 onebots install${this.scope === "system" ? " --system" : ""}；安装后执行 onebots start，再通过 onebots setup --data-dir <工作区> 选择扩展`,
             );
         return spec;
     }

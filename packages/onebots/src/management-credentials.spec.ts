@@ -82,7 +82,8 @@ describe("management credential bootstrap", () => {
         expect(inspectPersistedManagementCredentials({})).toEqual({
             name: "service-credentials",
             level: "error",
-            message: expect.stringContaining("服务配置缺少持久化管理凭据"),
+            message:
+                "业务配置缺少持久化协议鉴权；当前 shell 的 ONEBOTS_ACCESS_TOKEN 不会写入工作区。请启动管理服务后运行 onebots ui --data-dir <工作区> --configure，通过配置草稿保存所需鉴权",
         });
         expect(inspectPersistedManagementCredentials({ access_token: "saved-secret" })).toEqual({
             name: "service-credentials",
