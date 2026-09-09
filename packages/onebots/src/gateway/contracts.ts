@@ -24,7 +24,7 @@ export interface GatewayStopMessage extends GatewayIdentity {
 export interface GatewayReadyMessage extends GatewayIdentity {
     /** 私有管理传输已可用；不代表全部账号在线或协议已完成启动。 */
     type: "gateway.ready";
-    capabilities?: Array<"mcp" | "send" | "message-debug">;
+    capabilities?: Array<"mcp" | "send" | "message-debug" | "verification">;
     configVersion: string;
     dependencyVersion: string;
     address: { host: "127.0.0.1"; port: number };

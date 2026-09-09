@@ -1,4 +1,7 @@
 import { GatewaySendExecutor } from "./send-executor.js";
+import { GatewayVerificationExecutor } from "./verification-executor.js";
+import { handleGatewayVerification } from "./verification-ipc.js";
+import type { GatewayVerificationReply } from "./verification-contracts.js";
 import { handleGatewayMessageDebug } from "./message-debug-ipc.js";
 import type { GatewayMessageDebugReply } from "./message-debug-contracts.js";
 import { handleGatewaySendMessage } from "./send-ipc.js";
@@ -24,9 +27,15 @@ let app: GatewayApp | undefined;
 let stopping = false;
 let mcpSessions: GatewayMcpSessions | undefined;
 let sendExecutor: GatewaySendExecutor | undefined;
+let verificationExecutor: GatewayVerificationExecutor | undefined;
 
 function send(
-    message: GatewayChildMessage | GatewayMcpReply | GatewaySendReply | GatewayMessageDebugReply,
+    message:
+        | GatewayChildMessage
+        | GatewayMcpReply
+        | GatewaySendReply
+        | GatewayMessageDebugReply
+        | GatewayVerificationReply,
 ): void {
     if (process.connected) process.send?.(message);
 }
@@ -46,6 +55,7 @@ function failure(code: GatewayFailedMessage["code"], message: string): void {
 async function stop(timeoutMs = 15_000): Promise<void> {
     if (stopping) return;
     stopping = true;
+    verificationExecutor?.close();
     sendExecutor?.close();
     sendExecutor = undefined;
     mcpSessions?.close();
@@ -95,9 +105,13 @@ async function start(message: GatewayStartMessage): Promise<void> {
             gatewayInstanceId: message.gatewayInstanceId,
             configVersion: message.configVersion,
         });
+        verificationExecutor = new GatewayVerificationExecutor(app, app.verification, {
+            gatewayInstanceId: message.gatewayInstanceId,
+            configVersion: message.configVersion,
+        });
         send({
             type: "gateway.ready",
-            capabilities: ["mcp", "send", "message-debug"],
+            capabilities: ["mcp", "send", "message-debug", "verification"],
             protocolVersion: 1,
             controlInstanceId: message.controlInstanceId,
             gatewayInstanceId: message.gatewayInstanceId,
@@ -111,6 +125,7 @@ async function start(message: GatewayStartMessage): Promise<void> {
         // 已由停止路径接管时，不重复报告启动失败或重新清理。
         if (stopping) return;
         stopping = true;
+        verificationExecutor?.close();
         sendExecutor?.close();
         mcpSessions?.close();
         failure("START_FAILED", "网关启动失败，请检查配置与依赖版本");
@@ -141,6 +156,16 @@ for (const name of Object.keys(process.env)) {
 }
 const handshakeTimer = setTimeout(() => process.exit(1), 30_000);
 process.on("message", value => {
+    if (
+        handleGatewayVerification(
+            value,
+            startMessage,
+            stopping ? undefined : app?.verification,
+            stopping ? undefined : verificationExecutor,
+            send,
+        )
+    )
+        return;
     if (
         handleGatewayMessageDebug(
             value,

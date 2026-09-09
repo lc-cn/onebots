@@ -8,6 +8,7 @@ import { once } from "node:events";
 import { randomUUID } from "node:crypto";
 import { GatewayRequestClient } from "../control/gateway-request-client.js";
 import { requestGatewayMessageDebug } from "../control/gateway-message-debug-client.js";
+import { requestGatewayVerification } from "../control/gateway-verification-client.js";
 import type { GatewayStartMessage } from "./contracts.js";
 
 const directories: string[] = [];
@@ -44,6 +45,10 @@ function spawnGatedGateway(holdProtocol = false) {
         import { existsSync, writeFileSync } from "node:fs";
         class GatedAdapter extends Adapter {
             constructor(app) { super(app, "gated"); }
+            submitVerification(id, type, data) {
+                if (data.code !== "123456") throw new Error("测试验证码错误");
+                writeFileSync("release-account", "release");
+            }
             createAccount(config) {
                 const account = new Account(this, {}, config);
                 this.app.router.get(account.path + "/callback", ctx => {
@@ -51,6 +56,10 @@ function spawnGatedGateway(holdProtocol = false) {
                 });
                 account.on("start", signal => new Promise((resolve, reject) => {
                     writeFileSync("account-started", "pending");
+                    this.emit("verification:request", {
+                        platform: "gated", account_id: config.account_id, type: "pair_code", hint: "测试验证码",
+                        options: { blocks: [{ type: "input", key: "code", secret: true, maxLength: 8 }] },
+                    });
                     let timer;
                     const abort = () => {
                         clearInterval(timer);
@@ -151,6 +160,59 @@ function spawnGatedGateway(holdProtocol = false) {
 }
 
 describe("实际构建网关分阶段就绪", () => {
+    it("通过私有验证IPC提交原挑战后，等待中的账号与协议继续启动", async () => {
+        const { child, message, identity, workspace } = spawnGatedGateway();
+        const readyPromise = once(child, "message");
+        child.send(message);
+        const [ready] = await readyPromise;
+        expect(ready.type).toBe("gateway.ready");
+        const requests = new GatewayRequestClient(child, 3000);
+        const context = { ...identity, configVersion: message.configVersion };
+        try {
+            const snapshot = await requestGatewayVerification(requests, context, {
+                action: "list",
+            });
+            if (snapshot.action !== "list" || snapshot.outcome !== "succeeded")
+                throw new Error("缺少验证挑战");
+            expect(snapshot.challenges).toHaveLength(1);
+            const operation = {
+                action: "execute" as const,
+                command: {
+                    operationId: randomUUID(),
+                    challengeId: snapshot.challenges[0].id,
+                    expected: {
+                        gatewayInstanceId: identity.gatewayInstanceId,
+                        configVersion: message.configVersion,
+                    },
+                    action: "submit" as const,
+                    data: { code: "123456" },
+                },
+            };
+            expect(await requestGatewayVerification(requests, context, operation)).toMatchObject({
+                outcome: "succeeded",
+            });
+            expect(await requestGatewayVerification(requests, context, operation)).toMatchObject({
+                outcome: "succeeded",
+            });
+            await expect
+                .poll(async () => {
+                    const response = await fetch(
+                        `http://127.0.0.1:${ready.address.port}/gated/bot/gated/v1/status`,
+                    );
+                    return response.status === 200 ? response.json() : null;
+                })
+                .toEqual({ lifecycleStatus: "ready" });
+            expect(
+                await requestGatewayVerification(requests, context, { action: "list" }),
+            ).toMatchObject({ challenges: [] });
+            expect(readFileSync(path.join(workspace, "release-account"), "utf8")).toBe("release");
+        } finally {
+            requests.close();
+            const exited = once(child, "exit");
+            child.send({ type: "gateway.stop", ...identity, timeoutMs: 3000 });
+            expect((await exited)[0]).toBe(0);
+        }
+    });
     it("账号等待交互时管理 IPC 已可用，释放后才启动协议", async () => {
         const { workspace, child, message, identity, messages, output } = spawnGatedGateway();
         const readyPromise = once(child, "message");

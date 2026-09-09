@@ -17,6 +17,41 @@ export interface GatewayVerificationChallenge {
     request: Adapter.VerificationRequest;
 }
 
+/** IPC 收据复用挑战存储的字段规则，不执行来自 SDK 的访问器。 */
+export function isGatewayVerificationChallenge(
+    value: unknown,
+): value is GatewayVerificationChallenge {
+    try {
+        if (!value || typeof value !== "object" || types.isProxy(value)) return false;
+        if (![Object.prototype, null].includes(Object.getPrototypeOf(value))) return false;
+        const fields = ["id", "createdAt", "expiresAt", "request"];
+        const descriptors = Object.getOwnPropertyDescriptors(value);
+        if (
+            Reflect.ownKeys(descriptors).length !== fields.length ||
+            fields.some(key => !descriptors[key]?.enumerable || !("value" in descriptors[key]))
+        )
+            return false;
+        const id: unknown = descriptors.id.value;
+        const created: unknown = descriptors.createdAt.value;
+        const expires: unknown = descriptors.expiresAt.value;
+        return (
+            typeof id === "string" &&
+            /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(id) &&
+            typeof created === "number" &&
+            Number.isSafeInteger(created) &&
+            created >= 0 &&
+            typeof expires === "number" &&
+            Number.isSafeInteger(expires) &&
+            expires > created &&
+            expires - created <= TTL_MS &&
+            request(snapshot(descriptors.request.value))
+        );
+    } catch {
+        // 不可信帧只拒绝，不读取或输出其异常对象。
+        return false;
+    }
+}
+
 /** 只复制普通 JSON 数据；不调用访问器、代理 trap 或业务对象的 toJSON。 */
 function snapshot(input: unknown): Json {
     const ancestors = new Set<object>();
