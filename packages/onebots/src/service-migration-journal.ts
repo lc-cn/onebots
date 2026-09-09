@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { parseManagerServiceSpec } from "./manager-service-spec.js";
+import { parseRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import type {
     ServiceMigrationBackup,
     ServiceMigrationRecord,
@@ -204,6 +205,9 @@ function parseBackup(input: unknown): ServiceMigrationBackup {
         "previousRunning",
         "previousEnabled",
         "files",
+        ...(input && typeof input === "object" && Object.hasOwn(input, "retainedRuntime")
+            ? ["retainedRuntime"]
+            : []),
     ]);
     if (
         value.schemaVersion !== 1 ||
@@ -252,6 +256,9 @@ function parseBackup(input: unknown): ServiceMigrationBackup {
         previousRunning: value.previousRunning,
         previousEnabled: value.previousEnabled,
         files,
+        ...(Object.hasOwn(value, "retainedRuntime")
+            ? { retainedRuntime: parseRetainedLegacyRuntime(value.retainedRuntime) }
+            : {}),
     };
     if (Buffer.byteLength(canonical(backup)) > LIMIT) throw invalid();
     return backup;

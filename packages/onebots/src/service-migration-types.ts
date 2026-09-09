@@ -1,4 +1,5 @@
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
+import type { RetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 
 export type ServiceMigrationPhase =
     | "prepared"
@@ -24,6 +25,8 @@ export interface ServiceMigrationBackup {
     previousRunning: boolean;
     previousEnabled: boolean;
     files: ServiceMigrationFile[];
+    /** 新捕获的旧工件；历史记录缺失时仍可只读，但不能据此宣称旧运行闭包已保留。 */
+    retainedRuntime?: RetainedLegacyRuntime;
 }
 export interface ServiceMigrationRecord {
     schemaVersion: 1;

@@ -4,6 +4,8 @@ import { constants } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { assertLinuxSystemDependencies } from "./service-migration-native-linux.js";
+
 const runFile = promisify(execFile);
 const failure = () => new Error("无法确认旧运行文件仅依赖系统原生库，已拒绝迁移");
 const ordinaryCommands = new Set([
@@ -138,6 +140,13 @@ export function assertDarwinSystemDependencies(output: string, file: string): vo
 
 /** Does not execute the input file. Caller must bind this inspection to a stable file identity. */
 export async function assertSystemNativeDependencies(file: string): Promise<void> {
+    if (process.platform === "linux") {
+        try {
+            return await assertLinuxSystemDependencies(file);
+        } catch {
+            throw failure();
+        }
+    }
     if (process.platform !== "darwin" || !path.isAbsolute(file) || /[\r\n\x00]/u.test(file)) {
         throw failure();
     }

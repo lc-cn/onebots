@@ -117,7 +117,10 @@ describe("原生库只读检查", () => {
             error,
         );
     });
-    it.skipIf(process.platform === "darwin")("未实现的宿主平台明确拒绝", async () => {
-        await expect(assertSystemNativeDependencies(process.execPath)).rejects.toThrow(error);
-    });
+    it.skipIf(["darwin", "linux"].includes(process.platform))(
+        "未实现的宿主平台明确拒绝",
+        async () => {
+            await expect(assertSystemNativeDependencies(process.execPath)).rejects.toThrow(error);
+        },
+    );
 });

@@ -44,6 +44,7 @@ export class ServiceMigrationFiles {
                 "previousRunning",
                 "previousEnabled",
                 "files",
+                ...(Object.hasOwn(backup, "retainedRuntime") ? ["retainedRuntime"] : []),
             ]);
             parseManagerServiceSpec(value.target);
             if (

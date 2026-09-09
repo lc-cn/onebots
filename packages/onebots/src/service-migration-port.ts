@@ -9,6 +9,10 @@ import { acquireControlWorkspace } from "./control/workspace.js";
 import { ServiceMigrationFiles } from "./service-migration-files.js";
 import { createServiceMigrationFilePlan } from "./service-migration-file-plan.js";
 import {
+    retainedRollbackFiles,
+    verifyRetainedLegacyRuntime,
+} from "./service-migration-retained-runtime.js";
+import {
     prepareServiceMigrationWorkspace,
     readServiceMigrationPending,
     releaseServiceMigrationPending,
@@ -41,7 +45,11 @@ export function createServiceMigrationPort(options: {
     const backup = structuredClone(options.backup);
     const original = structuredClone(options.originalState);
     const plan = createServiceMigrationFilePlan(backup, options.host);
-    const files = new ServiceMigrationFiles(backup, plan.files);
+    const files = new ServiceMigrationFiles(
+        backup,
+        plan.files,
+        retainedRollbackFiles(backup, options.host),
+    );
     const workspace = backup.target.workspace;
     const platform = options.platform;
     const manager = options.manager ?? {
@@ -86,6 +94,9 @@ export function createServiceMigrationPort(options: {
         const state = await platform.inspect();
         return files.matchesOriginal() && isDeepStrictEqual(state, original);
     }
+    async function retainedValid() {
+        if (backup.retainedRuntime) await verifyRetainedLegacyRuntime(backup.retainedRuntime);
+    }
     async function ready(check: () => Promise<boolean>) {
         const deadline = now() + timeout;
         do {
@@ -102,6 +113,7 @@ export function createServiceMigrationPort(options: {
     const port: ServiceMigrationPort = {
         async verifyOriginal(input) {
             bound(input);
+            await retainedValid();
             return (
                 original.state === (backup.previousRunning ? "running" : "stopped") &&
                 original.enabled === backup.previousEnabled &&
@@ -110,6 +122,7 @@ export function createServiceMigrationPort(options: {
         },
         async stopOriginal(input) {
             bound(input);
+            await retainedValid();
             if (!(await originalMatches())) throw fail();
             await platform.quiesce();
         },
@@ -224,6 +237,7 @@ export function createServiceMigrationPort(options: {
         },
         async canRestore(input) {
             bound(input);
+            await retainedValid();
             return (
                 files.canRestore() &&
                 (!workspacePrepared || (workspaceConfirmed && ownsWorkspace())) &&
@@ -232,6 +246,7 @@ export function createServiceMigrationPort(options: {
         },
         async restoreOriginal(input) {
             bound(input);
+            await retainedValid();
             if (
                 !files.canRestore() ||
                 (workspacePrepared && !workspaceConfirmed) ||
@@ -251,13 +266,15 @@ export function createServiceMigrationPort(options: {
         },
         async startOriginal(input) {
             bound(input);
-            if (!backup.previousRunning || !files.matchesOriginal() || !(await quiet()))
+            await retainedValid();
+            if (!backup.previousRunning || !files.matchesRestored() || !(await quiet()))
                 throw fail();
             await platform.start();
         },
         async verifyRestored(input) {
             bound(input);
-            if (!files.matchesOriginal()) return false;
+            await retainedValid();
+            if (!files.matchesRestored()) return false;
             const state = await platform.inspect();
             return (
                 state.enabled === backup.previousEnabled &&
