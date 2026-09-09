@@ -62,6 +62,39 @@ func TestControlSIDHasClientOnlyRights(t *testing.T) {
 	}
 }
 
+func TestVerifyPipeDACLUsesEffectiveMasks(t *testing.T) {
+	allowed := allowedPipeClients{
+		serviceSID: "S-1-5-21-1-2-3-1000",
+		controlSID: "S-1-5-21-1-2-3-1001",
+	}
+	valid := "D:P" +
+		"(A;;FA;;;SY)" +
+		"(A;;FA;;;S-1-5-21-1-2-3-1000)" +
+		fmt.Sprintf("(A;;0x%08x;;;S-1-5-21-1-2-3-1001)", uint32(pipeClientAccess))
+	tests := []struct {
+		name    string
+		sddl    string
+		wantErr bool
+	}{
+		{name: "canonical file access", sddl: valid},
+		{name: "extra identity", sddl: valid + "(A;;FR;;;BA)", wantErr: true},
+		{name: "control all access", sddl: strings.Replace(valid, fmt.Sprintf("0x%08x", uint32(pipeClientAccess)), "FA", 1), wantErr: true},
+		{name: "unprotected", sddl: strings.Replace(valid, "D:P", "D:", 1), wantErr: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			descriptor, err := windows.SecurityDescriptorFromString(test.sddl)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = verifyPipeDACL(descriptor, allowed)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("verifyPipeDACL() error = %v, wantErr %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
 func TestStatusPipeClosesStalledAuthorizedClient(t *testing.T) {
 	state := newStateStore(time.Now())
 	config := withDefaults(Config{

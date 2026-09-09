@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/Microsoft/go-winio"
 	"github.com/lc-cn/onebots/native/windows-host/internal/protocol"
@@ -20,6 +21,7 @@ import (
 
 const (
 	pipeClientAccess    = windows.FILE_READ_DATA | windows.FILE_WRITE_DATA | windows.FILE_READ_ATTRIBUTES | windows.FILE_WRITE_ATTRIBUTES | windows.SYNCHRONIZE
+	pipeServerAccess    = windows.STANDARD_RIGHTS_REQUIRED | windows.SYNCHRONIZE | 0x1ff
 	pipeConnectionLimit = 16
 	pipeRequestTimeout  = 5 * time.Second
 )
@@ -78,7 +80,7 @@ func startStatusPipe(config Config, state *stateStore) (*statusPipe, error) {
 		_ = duplicate.Close()
 		return nil, errors.New("control pipe did not enforce a unique first instance")
 	}
-	if err := verifyPipeAfterCreation(listener, config.PipeName, sddl); err != nil {
+	if err := verifyPipeAfterCreation(listener, config.PipeName, allowed); err != nil {
 		return nil, err
 	}
 
@@ -125,7 +127,7 @@ func controlPipeSecurity(controlSID string) (string, allowedPipeClients, error) 
 	return descriptor.String(), allowedPipeClients{serviceSID: serviceSID, controlSID: controlSID}, nil
 }
 
-func verifyPipeAfterCreation(listener net.Listener, pipeName, expectedSDDL string) error {
+func verifyPipeAfterCreation(listener net.Listener, pipeName string, allowed allowedPipeClients) error {
 	accepted := make(chan net.Conn, 1)
 	acceptError := make(chan error, 1)
 	go func() {
@@ -161,12 +163,58 @@ func verifyPipeAfterCreation(listener net.Listener, pipeName, expectedSDDL strin
 	if err != nil {
 		return fmt.Errorf("read created pipe DACL: %w", err)
 	}
-	expected, err := windows.SecurityDescriptorFromString(expectedSDDL)
-	if err != nil {
-		return fmt.Errorf("parse expected pipe DACL: %w", err)
+	if err := verifyPipeDACL(actual, allowed); err != nil {
+		return fmt.Errorf("created pipe DACL mismatch: %w", err)
 	}
-	if actual.String() != expected.String() {
-		return fmt.Errorf("created pipe DACL mismatch: got %q, expected %q", actual.String(), expected.String())
+	return nil
+}
+
+func verifyPipeDACL(descriptor *windows.SECURITY_DESCRIPTOR, allowed allowedPipeClients) error {
+	control, _, err := descriptor.Control()
+	if err != nil {
+		return fmt.Errorf("read security descriptor control: %w", err)
+	}
+	if control&windows.SE_DACL_PROTECTED == 0 {
+		return errors.New("DACL is not protected")
+	}
+	dacl, defaulted, err := descriptor.DACL()
+	if err != nil {
+		return fmt.Errorf("read DACL: %w", err)
+	}
+	if dacl == nil || defaulted {
+		return errors.New("DACL is absent or defaulted")
+	}
+	expected := map[string]windows.ACCESS_MASK{"S-1-5-18": windows.ACCESS_MASK(pipeServerAccess)}
+	if allowed.serviceSID != "S-1-5-18" {
+		expected[allowed.serviceSID] = windows.ACCESS_MASK(pipeServerAccess)
+	}
+	if allowed.controlSID != allowed.serviceSID && allowed.controlSID != "S-1-5-18" {
+		expected[allowed.controlSID] = windows.ACCESS_MASK(pipeClientAccess)
+	}
+	if int(dacl.AceCount) != len(expected) {
+		return fmt.Errorf("got %d ACEs, expected %d", dacl.AceCount, len(expected))
+	}
+	seen := make(map[string]struct{}, len(expected))
+	for index := uint32(0); index < uint32(dacl.AceCount); index++ {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(dacl, index, &ace); err != nil {
+			return fmt.Errorf("read ACE %d: %w", index, err)
+		}
+		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || ace.Header.AceFlags != 0 {
+			return fmt.Errorf("ACE %d has type %d or flags 0x%x", index, ace.Header.AceType, ace.Header.AceFlags)
+		}
+		sid := (*windows.SID)(unsafe.Pointer(&ace.SidStart)).String()
+		mask, exists := expected[sid]
+		if !exists {
+			return fmt.Errorf("ACE %d grants unexpected SID %s", index, sid)
+		}
+		if _, duplicate := seen[sid]; duplicate {
+			return fmt.Errorf("SID %s has duplicate ACEs", sid)
+		}
+		if ace.Mask != mask {
+			return fmt.Errorf("SID %s has mask 0x%x, expected 0x%x", sid, ace.Mask, mask)
+		}
+		seen[sid] = struct{}{}
 	}
 	return nil
 }
