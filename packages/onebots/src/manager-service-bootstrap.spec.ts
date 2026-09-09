@@ -186,6 +186,34 @@ describe("immutable manager bootstrap binding", () => {
         ).toHaveLength(1);
     });
 
+    it("reports the stable operation and completed manager phase when Windows cleanup fails", async () => {
+        const f = windowsFixture();
+        f.dependencies.assertAbsent = vi.fn(async () => undefined);
+        f.dependencies.platform.inspect = async () => ({
+            state: "stopped",
+            running: false,
+            enabled: true,
+            loaded: true,
+            definitionPath: f.files.definition,
+            processId: null,
+            identity: null,
+            quiescent: true,
+        });
+        mock.close.mockRejectedValueOnce(new Error("worker close timeout"));
+        const error = await bootstrapManagerService(f.request, f.dependencies, f.host).catch(
+            value => value,
+        );
+        expect(error).toBeInstanceOf(ManagerBootstrapStageError);
+        expect(error).toMatchObject({
+            operationId: "bootstrap-1",
+            bootstrapPhase: "manager-completed",
+            code: "MANAGER_CLEANUP_FAILED",
+        });
+        expect(
+            (error as ManagerBootstrapStageError & { cleanupErrors?: unknown[] }).cleanupErrors,
+        ).toHaveLength(1);
+    });
+
     it("binds the same stable id to candidate and real installation; retry only returns its receipt", async () => {
         const f = fixture();
         const result = await bootstrapManagerService(f.request, f.dependencies, f.host);

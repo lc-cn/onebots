@@ -37,6 +37,7 @@ import { createControlOperationObserver } from "./control/gateway-log.js";
 import {
     deriveManagerBootstrapStageError,
     ManagerBootstrapCandidateError,
+    ManagerBootstrapStageError,
     type ManagerBootstrapPhase,
 } from "./manager-bootstrap-error.js";
 
@@ -95,6 +96,7 @@ export async function bootstrapManagerService(
     const releaseService = acquireServiceMigrationLock(files.stateDir);
     let releaseArtifacts: (() => void) | undefined;
     let installer: ManagerCandidateInstaller | undefined;
+    let installerAbort: AbortController | undefined;
     let operationId: string | undefined;
     let bootstrapPhase: ManagerBootstrapPhase = "candidate-preparation";
     let primaryError: unknown;
@@ -187,6 +189,7 @@ export async function bootstrapManagerService(
             ...bundledPnpmExecutor(),
             ...(dependencies.download ? { download: dependencies.download } : {}),
         });
+        installerAbort = new AbortController();
         const boundCandidate = binding.has("candidate.json");
         let installed;
         bootstrapPhase = "candidate-queued";
@@ -194,7 +197,7 @@ export async function bootstrapManagerService(
             installed =
                 existing || boundCandidate
                     ? installer.status(id)
-                    : await installer.install(id, plan);
+                    : await installer.install(id, plan, { signal: installerAbort.signal });
         } catch (error) {
             if (host.platform !== "win32" || typeof installer.installationStatus !== "function")
                 throw error;
@@ -300,7 +303,9 @@ export async function bootstrapManagerService(
             }
             return record; // 返回原操作事实，不重新写定义、reload 或释放维护门禁。
         }
-        return await installManagerServiceWhileLocked(spec, id, host, dependencies);
+        const result = await installManagerServiceWhileLocked(spec, id, host, dependencies);
+        bootstrapPhase = `manager-${result.phase}`;
+        return result;
     } catch (error) {
         if (
             host.platform === "win32" &&
@@ -316,6 +321,7 @@ export async function bootstrapManagerService(
         throw primaryError;
     } finally {
         const cleanupErrors: unknown[] = [];
+        installerAbort?.abort();
         try {
             await installer?.close();
         } catch (error) {
@@ -337,8 +343,21 @@ export async function bootstrapManagerService(
                     value: cleanupErrors,
                     enumerable: false,
                 });
-            else if (primaryError === undefined)
+            else if (primaryError === undefined) {
+                if (host.platform === "win32" && operationId) {
+                    const cleanupError = new ManagerBootstrapStageError(
+                        operationId,
+                        bootstrapPhase,
+                        "MANAGER_CLEANUP_FAILED",
+                    );
+                    Object.defineProperty(cleanupError, "cleanupErrors", {
+                        value: cleanupErrors,
+                        enumerable: false,
+                    });
+                    throw cleanupError;
+                }
                 throw new AggregateError(cleanupErrors, "管理服务首次安装清理未完成");
+            }
         }
     }
 }

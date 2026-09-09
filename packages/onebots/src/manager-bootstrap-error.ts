@@ -25,7 +25,8 @@ export type ManagerBootstrapErrorCode =
     | ManagerBootstrapCandidateErrorCode
     | "CANDIDATE_PREPARATION_FAILED"
     | "MANAGER_PREFLIGHT_FAILED"
-    | "MANAGER_JOURNAL_FAILED";
+    | "MANAGER_JOURNAL_FAILED"
+    | "MANAGER_CLEANUP_FAILED";
 
 export class ManagerBootstrapStageError extends Error {
     constructor(
