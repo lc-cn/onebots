@@ -31,6 +31,7 @@ export abstract class Adapter<
 > extends AdapterActionDefaults {
     accounts: Map<string, Account<T, C>> = new Map<string, Account<T, C>>();
     #logger: Logger;
+    readonly #startupBatches = new Set<{ accountIds: Set<string>; cancelled: boolean }>();
     readonly #capabilityManifest: AdapterCapabilityManifest;
     icon: string;
 
@@ -227,27 +228,49 @@ export abstract class Adapter<
         const startAccounts = [...this.accounts.values()].filter(account => {
             return account_id ? account.account_id === account_id : true;
         });
+        const batch = {
+            accountIds: new Set(startAccounts.map(account => String(account.account_id))),
+            cancelled: false,
+        };
+        this.#startupBatches.add(batch);
+        const assertCurrent = () => {
+            if (batch.cancelled) {
+                throw new DOMException(`${this.platform} 账号启动批次已停止`, "AbortError");
+            }
+        };
         const failures = new FailureCollector();
-        for (const account of startAccounts) {
-            await failures.capture(
-                () => account.start(),
-                error => {
-                    const wrappedError = ErrorHandler.wrap(error, {
-                        platform: String(this.platform),
-                        account_id: String(account.account_id),
-                    });
-                    this.logger.error(
-                        `账号 ${this.platform}/${account.account_id} 启动失败`,
-                        wrappedError,
-                    );
-                },
-            );
+        try {
+            for (const account of startAccounts) {
+                assertCurrent();
+                await failures.capture(
+                    () => account.start(),
+                    error => {
+                        const wrappedError = ErrorHandler.wrap(error, {
+                            platform: String(this.platform),
+                            account_id: String(account.account_id),
+                        });
+                        this.logger.error(
+                            `账号 ${this.platform}/${account.account_id} 启动失败`,
+                            wrappedError,
+                        );
+                    },
+                );
+                // 在收集器之外检查，避免 stop 导致的取消被当作普通账号失败后继续启动。
+                assertCurrent();
+            }
+            failures.throwIfAny(`${failures.size} 个 ${this.platform} 账号启动失败`);
+            this.logger.info(`Adapter for platform ${this.platform} started`);
+        } finally {
+            this.#startupBatches.delete(batch);
         }
-        failures.throwIfAny(`${failures.size} 个 ${this.platform} 账号启动失败`);
-        this.logger.info(`Adapter for platform ${this.platform} started`);
     }
 
     async stop(account_id?: string): Promise<void> {
+        // 先同步取消相关批次，再等待账号停止；未结束的第三方 start 仍由其自身负责退出。
+        // 单账号 stop 仅取消包含它的批次，不影响其他独立账号的启动。
+        for (const batch of this.#startupBatches) {
+            if (!account_id || batch.accountIds.has(account_id)) batch.cancelled = true;
+        }
         const stopAccounts = [...this.accounts.values()].filter(account => {
             return account_id ? account.account_id === account_id : true;
         });

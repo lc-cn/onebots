@@ -36,6 +36,31 @@ function protocol(overrides: Partial<Protocol> = {}): Protocol {
 }
 
 describe("Account lifecycle", () => {
+    it("停止后不执行已快照但尚未开始的启动监听器", async () => {
+        const account = createAccount();
+        let release!: () => void;
+        account.on("start", () => new Promise<void>(resolve => { release = resolve; }));
+        const next = vi.fn();
+        account.on("start", next);
+        account.protocols = [protocol()];
+        const starting = account.start();
+        await account.stop();
+        release();
+        await expect(starting).rejects.toThrow("启动任务已失效");
+        expect(next).not.toHaveBeenCalled();
+        expect(account.protocols[0].start).not.toHaveBeenCalled();
+    });
+
+    it("普通启动监听器失败仍尝试其他监听器，once 语义保持不变", async () => {
+        const account = createAccount();
+        account.on("start", () => { throw new Error("first failed"); });
+        const next = vi.fn(function (this: Account) { expect(this).toBe(account); });
+        account.once("start", next);
+        await expect(account.start()).rejects.toThrow("first failed");
+        expect(next).toHaveBeenCalledOnce();
+        expect(account.listenerCount("start")).toBe(1);
+        await account.stop();
+    });
     it("公开适配器声明的有效启动窗口且不允许缩短全局边界", () => {
         const account = createAccount();
         account.adapter.resolveAccountStartupTimeoutSeconds = vi.fn(() => 480);
@@ -145,6 +170,8 @@ describe("Account lifecycle", () => {
             });
         });
         const startProtocol = vi.fn(async () => undefined);
+        const secondListener = vi.fn();
+        account.on("start", secondListener);
         account.protocols = [protocol({ start: startProtocol })];
 
         const starting = account.start();
@@ -158,6 +185,7 @@ describe("Account lifecycle", () => {
 
         releaseLogin?.();
         await vi.runAllTimersAsync();
+        expect(secondListener).not.toHaveBeenCalled();
         expect(startProtocol).not.toHaveBeenCalled();
         expect(account.protocols[0].lifecycleStatus).toBe("pending");
         vi.useRealTimers();

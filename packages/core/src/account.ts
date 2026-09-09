@@ -202,7 +202,7 @@ export class Account<
 
     async #startAttempt(signal: AbortSignal, generation: number): Promise<void> {
         this.logger.info(`Starting account ${this.account_id}`);
-        await emitAllAwaited(this, "start", signal);
+        await this.#startListeners(signal, generation);
         this.#assertStartCurrent(generation);
         for (const protocol of this.protocols) {
             protocol.lifecycleStatus = "starting";
@@ -215,6 +215,17 @@ export class Account<
                 throw error;
             }
         }
+    }
+
+    async #startListeners(signal: AbortSignal, generation: number): Promise<void> {
+        const failures = new FailureCollector();
+        // 启动有取消边界；不能复用必须尝试全部清理监听器的通用广播。
+        for (const listener of this.rawListeners("start")) {
+            this.#assertStartCurrent(generation);
+            await failures.capture(() => Reflect.apply(listener, this, [signal]));
+            this.#assertStartCurrent(generation);
+        }
+        failures.throwIfAny("账号启动监听器失败");
     }
 
     #assertStartCurrent(generation: number): void {
