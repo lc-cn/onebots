@@ -100,7 +100,7 @@ describe("管理端账号验证 TUI", () => {
         const cancelled = fixture([challengeId, "submit", "code", "no"]);
         await runControlVerification(cancelled.client, cancelled.prompt);
         expect(cancelled.request).toHaveBeenCalledTimes(1);
-        const f = fixture([challengeId]);
+        const f = fixture([challengeId, "no"]);
         await queryControlVerification(f.client, f.prompt);
         expect(f.request).toHaveBeenCalledExactlyOnceWith(
             "GET",
@@ -113,4 +113,31 @@ describe("管理端账号验证 TUI", () => {
             "ared   ",
         );
     });
+});
+
+it("查询未知回执后明确确认才对账，不重新收集答案", async () => {
+    const f = fixture([challengeId, "yes"]);
+    f.request.mockImplementation(
+        async <T>(_method: "GET" | "POST", route: string): Promise<T> =>
+            ({
+                ...receipt,
+                id: challengeId,
+                status: "unknown",
+                ...(route.endsWith("reconcile")
+                    ? {
+                          resolution: {
+                              outcome: "succeeded",
+                              confirmedAt: "2026-09-09T00:00:02.000Z",
+                          },
+                      }
+                    : {}),
+            }) as T,
+    );
+    await queryControlVerification(f.client, f.prompt);
+    expect(f.request.mock.calls).toEqual([
+        ["GET", `/api/control/verification/operations/${challengeId}`],
+        ["POST", "/api/control/verification/reconcile", { id: challengeId }],
+    ]);
+    expect(f.asks).toHaveLength(2);
+    expect(f.reports.join(" ")).toContain("不代表账号已登录");
 });

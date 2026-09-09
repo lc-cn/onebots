@@ -1,5 +1,8 @@
 import type { GatewayIdentity } from "../gateway/contracts.js";
-import type { GatewayVerificationCommand } from "../gateway/verification-executor.js";
+import type {
+    GatewayVerificationCommand,
+    GatewayVerificationQuery,
+} from "../gateway/verification-executor.js";
 import {
     isGatewayVerificationRequest,
     isGatewayVerificationReply,
@@ -9,7 +12,8 @@ import { GatewayRequestClient, GatewayRequestError } from "./gateway-request-cli
 
 export type GatewayVerificationOperation =
     | { action: "list" }
-    | { action: "execute"; command: GatewayVerificationCommand };
+    | { action: "execute"; command: GatewayVerificationCommand }
+    | ({ action: "query" } & GatewayVerificationQuery);
 /** 一次派发，严格关联实例/配置/操作；未知结果不得自动重发。 */
 export function requestGatewayVerification(
     requests: GatewayRequestClient,
@@ -32,7 +36,12 @@ export function requestGatewayVerification(
                 value.action !== operation.action ||
                 (value.action === "execute" &&
                     operation.action === "execute" &&
-                    value.operationId !== operation.command.operationId)
+                    value.operationId !== operation.command.operationId) ||
+                (value.action === "query" &&
+                    operation.action === "query" &&
+                    (value.operationId !== operation.operationId ||
+                        value.challengeId !== operation.challengeId ||
+                        value.verificationAction !== operation.verificationAction))
             )
                 return;
             return value.outcome === "succeeded"

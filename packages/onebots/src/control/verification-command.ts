@@ -6,14 +6,19 @@ import { writeCliOutput } from "../cli-output.js";
 export const VERIFICATION_HELP = `onebots control verification <命令> [--data-dir 工作区]
   pending                         查询当前账号验证挑战
   execute --stdin                 管道 JSON：operationId、challengeId、expected、action、data
+  reconcile --request UUID        核对网关原回执，不重新执行验证
   operation --request UUID        查询原验证回执（网关离线也可查询）
 验证码只接受非终端 stdin，不接受命令行参数，不保存到配置。
 提交前自行保留 operationId。提交失去确认后只查询原回执，不换 ID 自动重试。
+仅原网关仍存活且保留确定结果时可解除未知；退出或结果缺失时仍保留未知。
 succeeded 仅表示验证调用完成，不代表账号已上线。`;
 
 interface Dependencies {
     createClient?(workspace: string): {
-        verification: Pick<ControlClient["verification"], "pending" | "execute" | "operation">;
+        verification: Pick<
+            ControlClient["verification"],
+            "pending" | "execute" | "operation" | "reconcile"
+        >;
     };
     stdin?: AsyncIterable<Buffer | string> & { isTTY?: boolean };
     output?(message: string): void;
@@ -33,6 +38,7 @@ export async function runVerificationCommand(
         pending: [],
         execute: ["--stdin"],
         operation: ["--request"],
+        reconcile: ["--request"],
     };
     const invalid = () => new Error(`账号验证命令参数无效。\n${VERIFICATION_HELP}`);
     if (!Object.hasOwn(allowed, action)) throw invalid();
@@ -49,7 +55,7 @@ export async function runVerificationCommand(
     }
     if (allowed[action].some(key => !options.has(key))) throw invalid();
     const id = options.get("--request");
-    if (action === "operation" && (!id || !uuid.test(id))) throw invalid();
+    if (["operation", "reconcile"].includes(action) && (!id || !uuid.test(id))) throw invalid();
     let operationId = id;
     try {
         const workspace = path.resolve(
@@ -60,6 +66,7 @@ export async function runVerificationCommand(
         ).verification;
         let result: unknown;
         if (action === "pending") result = await client.pending();
+        else if (action === "reconcile") result = await client.reconcile(id!);
         else if (action === "operation") result = await client.operation(id!);
         else {
             const input = dependencies.stdin ?? process.stdin;

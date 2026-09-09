@@ -11,7 +11,16 @@ export {
     type GatewayVerificationCommand,
 } from "./verification-command.js";
 export type GatewayVerificationOutcome = { outcome: "succeeded" | "rejected" | "unknown" };
+export interface GatewayVerificationQuery {
+    operationId: string;
+    challengeId: string;
+    verificationAction: "submit" | "request-sms";
+}
+export type GatewayVerificationState = "missing" | "running" | "succeeded" | "rejected" | "unknown";
 interface Receipt {
+    challengeId: string;
+    verificationAction: GatewayVerificationQuery["verificationAction"];
+    state: GatewayVerificationState;
     digest: string;
     result: Promise<GatewayVerificationOutcome>;
 }
@@ -74,8 +83,30 @@ export class GatewayVerificationExecutor {
                 this.busy.delete(accountKey);
             }
         });
-        this.receipts.set(command.operationId, { digest, result });
+        const receipt: Receipt = {
+            digest,
+            result,
+            challengeId: command.challengeId,
+            verificationAction: command.action,
+            state: "running",
+        };
+        this.receipts.set(command.operationId, receipt);
+        void result.then(value => {
+            receipt.state = value.outcome;
+        });
         return result.then(value => ({ ...value }));
+    }
+    /** missing 仅表示无匹配的本进程证据，绝不证明操作未执行。 */
+    query(input: GatewayVerificationQuery): { state: GatewayVerificationState } {
+        const receipt = this.receipts.get(input.operationId);
+        return {
+            state:
+                receipt &&
+                receipt.challengeId === input.challengeId &&
+                receipt.verificationAction === input.verificationAction
+                    ? receipt.state
+                    : "missing",
+        };
     }
     close(): void {
         this.closed = true;

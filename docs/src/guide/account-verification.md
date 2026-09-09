@@ -16,6 +16,7 @@ Web 登录后，在“账号登录验证”中刷新请求，按平台提示扫�
 onebots control verification pending --data-dir /path/to/data
 onebots control verification execute --stdin --data-dir /path/to/data
 onebots control verification operation --request <操作UUID> --data-dir /path/to/data
+onebots control verification reconcile --request <操作UUID> --data-dir /path/to/data
 ```
 
 `execute --stdin` 只接受非终端管道 JSON，字段如下。`challengeId`、`expected` 必须来自当前 `pending` 结果，`operationId` 由调用方生成并在提交前保存。
@@ -44,4 +45,8 @@ onebots control verification operation --request <操作UUID> --data-dir /path/t
 
 回执查询不要求网关在线。Web 只能查询当前设备的回执，本机 CLI 可协助查询其他设备的原操作。更换浏览器不会绕过服务端的账号保护。
 
-当前架构分支尚未完成未知结果的显式恢复：未知回执会保留并阻止该账号的新验证，浏览器有未确认记录时也会保守禁止新提交。删除浏览器数据、认证文件或操作文件不是恢复办法。旧管理验证入口的退役也仍在进行中，暂不将此分支作为完整架构发布。
+查询到 `unknown` 后，可在 Web 点击“核对网关原回执”，或在 TUI 查询后确认核对，也可使用 CLI 的 `reconcile`。这一步只读取原网关已保留的结果，不重新调用平台 SDK，不需要重新输入验证码。
+
+若原网关有确定结果，管理端追加 `resolution`，保留原 `unknown` 和时间；界面显示核对后的结果，解除该记录造成的账号保护。查不到、仍在执行、结果仍未知或原网关已退出，都不能证明操作未执行，因此不会解锁。
+
+原网关已退出且结果无法确定时的显式风险确认恢复尚未完成。未知回执仍会阻止该账号的新验证，浏览器有未确认记录时也会保守禁止新提交。删除浏览器数据、认证文件或操作文件不是恢复办法。旧管理验证入口的退役也仍在进行中，暂不将此分支作为完整架构发布。

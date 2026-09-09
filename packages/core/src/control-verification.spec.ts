@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
     ControlClient,
+    controlVerificationOutcome,
     isControlVerificationCommand,
     isControlVerificationOperation,
     isControlVerificationSnapshot,
@@ -200,4 +201,41 @@ describe("shared account verification client", () => {
         await expect(new ControlClient({ request }).verification.pending()).rejects.toThrow("无效");
         expect(request).toHaveBeenCalledTimes(1);
     });
+});
+
+it("reconciles only the original ID once and retains the unknown fact", async () => {
+    const input = command();
+    const result: ControlVerificationOperation = {
+        ...receipt(input),
+        status: "unknown",
+        resolution: { outcome: "succeeded", confirmedAt: "2026-09-09T00:00:02.000Z" },
+    };
+    const request = vi.fn<ControlTransport["request"]>().mockResolvedValue(result);
+    const client = new ControlClient({ request });
+    expect(await client.verification.reconcile(input.operationId)).toEqual(result);
+    expect(controlVerificationOutcome(result)).toBe("succeeded");
+    expect(result.status).toBe("unknown");
+    expect(request).toHaveBeenCalledExactlyOnceWith("POST", "/api/control/verification/reconcile", {
+        id: input.operationId,
+    });
+    request.mockResolvedValue({ ...result, id: randomUUID() });
+    await expect(client.verification.reconcile(input.operationId)).rejects.toThrow("未确认");
+    request.mockRejectedValue(new Error("lost"));
+    await expect(client.verification.reconcile(input.operationId)).rejects.toThrow("lost");
+    expect(request).toHaveBeenCalledTimes(3);
+    await expect(client.verification.reconcile("bad-id")).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(3);
+});
+it("rejects malformed or retroactive reconciliation evidence", () => {
+    const base = { ...receipt(command()), status: "unknown" };
+    const resolution = { outcome: "rejected", confirmedAt: "2026-09-09T00:00:02.000Z" };
+    expect(isControlVerificationOperation({ ...base, resolution })).toBe(true);
+    for (const invalid of [
+        { ...base, status: "succeeded", resolution },
+        { ...base, resolution: { ...resolution, outcome: "unknown" } },
+        { ...base, resolution: { ...resolution, confirmedAt: base.startedAt } },
+        { ...base, resolution: { ...resolution, secret: "answer" } },
+        { ...base, resolution: { outcome: "rejected" } },
+    ])
+        expect(isControlVerificationOperation(invalid)).toBe(false);
 });

@@ -285,3 +285,65 @@ describe("网关验证执行器", () => {
         expect(f.sms).toHaveBeenCalledTimes(1024);
     });
 });
+
+it("查询只读原回执，运行中不等待，晚到成功可查询且身份不可替换", async () => {
+    const f = fixture(),
+        pending = deferred(),
+        command = f.command();
+    f.submit.mockImplementation(() => pending.promise);
+    const query = {
+        operationId: command.operationId,
+        challengeId: command.challengeId,
+        verificationAction: command.action,
+    };
+    expect(f.executor.query(query)).toEqual({ state: "missing" });
+    const result = f.executor.execute(command);
+    expect(f.executor.query(query)).toEqual({ state: "running" });
+    await Promise.resolve();
+    expect(f.executor.query({ ...query, challengeId: randomUUID() })).toEqual({ state: "missing" });
+    expect(f.executor.query({ ...query, verificationAction: "request-sms" })).toEqual({
+        state: "missing",
+    });
+    expect(f.submit).toHaveBeenCalledOnce();
+    pending.resolve();
+    await result;
+    expect(f.executor.query(query)).toEqual({ state: "succeeded" });
+    f.executor.close();
+    expect(f.executor.query(query)).toEqual({ state: "succeeded" });
+    expect(f.submit).toHaveBeenCalledOnce();
+    expect(f.sms).not.toHaveBeenCalled();
+});
+it("关闭不伪造运行中回执的终态，晚到 SDK 结果保留 unknown", async () => {
+    const f = fixture(),
+        pending = deferred(),
+        command = f.command();
+    f.submit.mockImplementation(() => pending.promise);
+    const query = {
+        operationId: command.operationId,
+        challengeId: command.challengeId,
+        verificationAction: command.action,
+    };
+    const result = f.executor.execute(command);
+    await Promise.resolve();
+    f.executor.close();
+    expect(f.executor.query(query)).toEqual({ state: "running" });
+    pending.resolve();
+    await result;
+    expect(f.executor.query(query)).toEqual({ state: "unknown" });
+    expect(f.submit).toHaveBeenCalledOnce();
+});
+it("派发前关闭产生可查询 rejected 回执", async () => {
+    const f = fixture(),
+        command = f.command();
+    const result = f.executor.execute(command);
+    f.executor.close();
+    await result;
+    expect(
+        f.executor.query({
+            operationId: command.operationId,
+            challengeId: command.challengeId,
+            verificationAction: command.action,
+        }),
+    ).toEqual({ state: "rejected" });
+    expect(f.submit).not.toHaveBeenCalled();
+});

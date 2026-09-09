@@ -4,16 +4,19 @@ import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { startControlHost } from "./host.js";
 import { createLocalControlClient } from "../client/local-control.js";
+import { NodeGatewayDriver } from "./gateway-driver.js";
+import { GatewayRequestError } from "./gateway-request-client.js";
 
 const roots: string[] = [];
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => {
     for (const close of cleanup.splice(0).reverse()) await close();
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+    vi.restoreAllMocks();
 });
 function directory() {
     const root = fs.realpathSync(fs.mkdtempSync("/tmp/ob-verification-host-"));
@@ -126,6 +129,43 @@ async function fixture(secret: string) {
 }
 
 describe("真实管理服务持久账号验证", () => {
+    it("提交响应丢失后通过原网关回执对账，不再次执行SDK", async () => {
+        const original = NodeGatewayDriver.prototype.verification;
+        vi.spyOn(NodeGatewayDriver.prototype, "verification").mockImplementation(
+            async function (id, operation) {
+                const result = await original.call(this, id, operation);
+                if (operation.action === "execute")
+                    throw new GatewayRequestError("unknown", "模拟IPC回执丢失");
+                return result;
+            },
+        );
+        const f = await fixture("246810");
+        const client = new ControlClient(createHttpControlTransport(f.url, () => f.token));
+        const pending = await client.verification.pending();
+        const command = {
+            operationId: randomUUID(),
+            challengeId: pending.challenges[0].id,
+            expected: {
+                gatewayInstanceId: pending.gatewayInstanceId,
+                configVersion: pending.configVersion,
+            },
+            action: "submit" as const,
+            data: { code: "246810" },
+        };
+        const unknown = await client.verification.execute(command);
+        expect(unknown.status).toBe("unknown");
+        const other = new ControlClient(createHttpControlTransport(f.url, () => f.otherToken));
+        await expect(other.verification.reconcile(command.operationId)).rejects.toMatchObject({
+            status: 404,
+        });
+        const resolved = await client.verification.reconcile(command.operationId);
+        expect(resolved).toMatchObject({ ...unknown, resolution: { outcome: "succeeded" } });
+        expect(await client.verification.reconcile(command.operationId)).toEqual(resolved);
+        expect(
+            await createLocalControlClient(f.workspace).verification.operation(command.operationId),
+        ).toEqual(resolved);
+        expect(fs.readFileSync(f.calls, "utf8")).toBe("submit\n");
+    });
     it("Web 配对完成等待中的账号验证，按 owner 隔离回执且不泄露或重放答案", async () => {
         const secret = "verification-secret-" + randomUUID();
         const f = await fixture(secret);

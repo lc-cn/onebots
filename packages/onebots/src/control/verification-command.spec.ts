@@ -23,6 +23,7 @@ function fixture() {
     const verification = {
         pending: vi.fn(async () => ({ ...command.expected, challenges: [] })),
         execute: vi.fn(async () => receipt),
+        reconcile: vi.fn(),
         operation: vi.fn(async () => receipt),
     };
     const output = vi.fn();
@@ -65,4 +66,16 @@ it("禁止终端明文、超限正文、非法JSON及命令行验证码", async 
     await expect(f.run(["execute", "--stdin", "--stdin"])).rejects.toThrow();
     await expect(f.run(["operation", "--request", "../../secret"])).rejects.toThrow();
     expect(f.verification.execute).not.toHaveBeenCalled();
+});
+
+it("显式对账只传原 ID，失败不重发或执行验证", async () => {
+    const f = fixture();
+    f.verification.reconcile.mockResolvedValue(f.receipt);
+    await f.run(["reconcile", "--request", f.receipt.id]);
+    expect(f.verification.reconcile).toHaveBeenCalledExactlyOnceWith(f.receipt.id);
+    expect(f.verification.execute).not.toHaveBeenCalled();
+    f.verification.reconcile.mockRejectedValue(new Error("private"));
+    await expect(f.run(["reconcile", "--request", f.receipt.id])).rejects.toThrow(f.receipt.id);
+    expect(f.verification.reconcile).toHaveBeenCalledTimes(2);
+    expect(f.verification.operation).not.toHaveBeenCalled();
 });

@@ -42,6 +42,7 @@ function fixture() {
     const verification = {
         pending: vi.fn().mockResolvedValue(snapshot),
         execute: vi.fn(),
+        reconcile: vi.fn(),
         operation: vi.fn(),
     };
     const sessions = vi.fn().mockResolvedValue({ sessions: [session] });
@@ -177,4 +178,80 @@ describe("control verification browser workflow", () => {
         expect(safeVerificationImage("https://example.com/a.png")).toBeUndefined();
         expect(safeVerificationImage("data:image/png;base64,YQ==")).toBeDefined();
     });
+});
+
+it("explicit reconciliation unlocks only confirmed evidence without re-executing", async () => {
+    const f = fixture();
+    const operation: ControlVerificationOperation = {
+        id: challengeId,
+        challengeId,
+        gatewayInstanceId: gateway,
+        configVersion: "v1",
+        action: "submit",
+        status: "unknown",
+        startedAt: "2026-09-09T00:00:00.000Z",
+        finishedAt: "2026-09-09T00:00:01.000Z",
+    };
+    f.view.ids = [challengeId];
+    f.view.receipts[challengeId] = operation;
+    expect(f.controller.uncertain).toBe(true);
+    f.verification.reconcile.mockRejectedValueOnce(new Error("lost"));
+    await f.controller.reconcile(challengeId);
+    expect(f.controller.uncertain).toBe(true);
+    f.verification.reconcile.mockResolvedValueOnce(operation);
+    await f.controller.reconcile(challengeId);
+    expect(f.controller.uncertain).toBe(true);
+    f.verification.reconcile.mockResolvedValueOnce({
+        ...operation,
+        resolution: { outcome: "succeeded", confirmedAt: "2026-09-09T00:00:02.000Z" },
+    });
+    await f.controller.reconcile(challengeId);
+    expect(f.controller.uncertain).toBe(false);
+    expect(f.view.receipts[challengeId].status).toBe("unknown");
+    await f.controller.reconcile(challengeId);
+    expect(f.verification.reconcile).toHaveBeenCalledTimes(3);
+    expect(f.verification.reconcile).toHaveBeenCalledWith(challengeId);
+    expect(f.verification.execute).not.toHaveBeenCalled();
+    expect(f.verification.pending).not.toHaveBeenCalled();
+});
+
+it("reconciliation ignores late gateway responses and prevents duplicate clicks", async () => {
+    const f = fixture();
+    const operation: ControlVerificationOperation = {
+        id: challengeId,
+        challengeId,
+        gatewayInstanceId: gateway,
+        configVersion: "v1",
+        action: "submit",
+        status: "unknown",
+        startedAt: "2026-09-09T00:00:00.000Z",
+        finishedAt: "2026-09-09T00:00:01.000Z",
+    };
+    f.view.ids = [challengeId];
+    f.view.receipts[challengeId] = operation;
+    let finish!: (receipt: ControlVerificationOperation) => void;
+    f.verification.reconcile.mockReturnValue(
+        new Promise<ControlVerificationOperation>(resolve => {
+            finish = resolve;
+        }),
+    );
+    const pending = f.controller.reconcile(challengeId);
+    await f.controller.reconcile(challengeId);
+    expect(f.verification.reconcile).toHaveBeenCalledTimes(1);
+    f.controller.setGateway(undefined);
+    finish({
+        ...operation,
+        resolution: { outcome: "rejected", confirmedAt: "2026-09-09T00:00:02.000Z" },
+    });
+    await pending;
+    expect(f.controller.uncertain).toBe(true);
+    expect(f.view.receipts[challengeId]).toEqual(operation);
+    expect(f.view.busy).toBe(false);
+    f.verification.operation.mockResolvedValue({
+        ...operation,
+        resolution: { outcome: "rejected", confirmedAt: "2026-09-09T00:00:02.000Z" },
+    });
+    await f.controller.query(challengeId);
+    expect(f.controller.uncertain).toBe(false);
+    expect(f.verification.execute).not.toHaveBeenCalled();
 });

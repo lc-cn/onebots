@@ -7,13 +7,19 @@ import {
 import {
     isGatewayVerificationCommand,
     type GatewayVerificationCommand,
+    type GatewayVerificationQuery,
+    type GatewayVerificationState,
 } from "./verification-executor.js";
 
 export type GatewayVerificationRequest = GatewayIdentity & {
     type: "gateway.verification";
     requestId: string;
     configVersion: string;
-} & ({ action: "list" } | { action: "execute"; command: GatewayVerificationCommand });
+} & (
+        | { action: "list" }
+        | { action: "execute"; command: GatewayVerificationCommand }
+        | ({ action: "query" } & GatewayVerificationQuery)
+    );
 export type GatewayVerificationReply = GatewayIdentity & {
     type: "gateway.verification.result";
     requestId: string;
@@ -21,6 +27,11 @@ export type GatewayVerificationReply = GatewayIdentity & {
 } & (
         | { action: "list"; outcome: "succeeded"; challenges: GatewayVerificationChallenge[] }
         | { action: "list"; outcome: "rejected" }
+        | ({
+              action: "query";
+              outcome: "succeeded";
+              state: GatewayVerificationState;
+          } & GatewayVerificationQuery)
         | { action: "execute"; operationId: string; outcome: "succeeded" | "rejected" | "unknown" }
     );
 const base = [
@@ -64,10 +75,22 @@ function identity(v: Record<string, unknown>): boolean {
         v.configVersion.length <= 256
     );
 }
+function queryIdentity(v: Record<string, unknown>): boolean {
+    return (
+        uuid(v.operationId) &&
+        uuid(v.challengeId) &&
+        (v.verificationAction === "submit" || v.verificationAction === "request-sms")
+    );
+}
 export function isGatewayVerificationRequest(v: unknown): v is GatewayVerificationRequest {
     try {
         if (!object(v) || !identity(v) || v.type !== "gateway.verification") return false;
         if (v.action === "list") return exact(v, base);
+        if (v.action === "query")
+            return (
+                exact(v, [...base, "operationId", "challengeId", "verificationAction"]) &&
+                queryIdentity(v)
+            );
         return (
             v.action === "execute" &&
             exact(v, [...base, "command"]) &&
@@ -82,6 +105,21 @@ export function isGatewayVerificationRequest(v: unknown): v is GatewayVerificati
 export function isGatewayVerificationReply(v: unknown): v is GatewayVerificationReply {
     try {
         if (!object(v) || !identity(v) || v.type !== "gateway.verification.result") return false;
+        if (v.action === "query")
+            return (
+                exact(v, [
+                    ...base,
+                    "operationId",
+                    "challengeId",
+                    "verificationAction",
+                    "outcome",
+                    "state",
+                ]) &&
+                queryIdentity(v) &&
+                v.outcome === "succeeded" &&
+                typeof v.state === "string" &&
+                ["missing", "running", "succeeded", "rejected", "unknown"].includes(v.state)
+            );
         if (v.action === "execute")
             return (
                 exact(v, [...base, "operationId", "outcome"]) &&

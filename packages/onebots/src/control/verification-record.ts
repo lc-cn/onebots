@@ -41,6 +41,7 @@ export function parseVerificationRecord(input: unknown): VerificationRecord {
             "status",
             "startedAt",
             ...(Object.hasOwn(input, "finishedAt") ? ["finishedAt"] : []),
+            ...(Object.hasOwn(input, "resolution") ? ["resolution"] : []),
         ]);
         if (
             value.schemaVersion !== 1 ||
@@ -68,6 +69,17 @@ export function parseVerificationRecord(input: unknown): VerificationRecord {
                   Date.parse(value.finishedAt) < Date.parse(value.startedAt)
         )
             throw new Error();
+        if (Object.hasOwn(value, "resolution")) {
+            const resolution = closedServiceObject(value.resolution, ["outcome", "confirmedAt"]);
+            if (
+                value.status !== "unknown" ||
+                (resolution.outcome !== "succeeded" && resolution.outcome !== "rejected") ||
+                !date(resolution.confirmedAt) ||
+                !date(value.finishedAt) ||
+                Date.parse(resolution.confirmedAt) < Date.parse(value.finishedAt)
+            )
+                throw new Error();
+        }
         return value as unknown as VerificationRecord;
     } catch {
         throw new ControlVerificationError(503);

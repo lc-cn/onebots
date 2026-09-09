@@ -103,3 +103,30 @@ it("停止或执行器缺失时明确拒绝，断连发送异常不会重发", (
     ).not.toThrow();
     expect(disconnected).toHaveBeenCalledOnce();
 });
+it("查询帧不携带答案，缺少执行器只返回 unknown 而非未执行", () => {
+    const { identity, value, store } = fixture();
+    const query = {
+        ...value,
+        action: "query",
+        operationId: randomUUID(),
+        challengeId: randomUUID(),
+        verificationAction: "submit",
+    };
+    expect(isGatewayVerificationRequest(query)).toBe(true);
+    expect(isGatewayVerificationRequest({ ...query, data: { code: "secret" } })).toBe(false);
+    expect(isGatewayVerificationRequest({ ...query, verificationAction: "delete" })).toBe(false);
+    const send = vi.fn();
+    handleGatewayVerification(query, identity, store, undefined, send);
+    const reply = send.mock.calls[0][0];
+    expect(reply).toMatchObject({
+        action: "query",
+        outcome: "succeeded",
+        state: "unknown",
+        operationId: query.operationId,
+        challengeId: query.challengeId,
+        verificationAction: "submit",
+    });
+    expect(isGatewayVerificationReply(reply)).toBe(true);
+    expect(isGatewayVerificationReply({ ...reply, state: "not-executed" })).toBe(false);
+    expect(isGatewayVerificationReply({ ...reply, challengeId: "invalid" })).toBe(false);
+});

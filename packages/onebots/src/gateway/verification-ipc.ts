@@ -54,6 +54,16 @@ export function handleGatewayVerification(
         } catch {
             deliver({ ...base, action: "list", outcome: "rejected" });
         }
+    } else if (value.action === "query") {
+        deliver({
+            ...base,
+            action: "query",
+            operationId: value.operationId,
+            challengeId: value.challengeId,
+            verificationAction: value.verificationAction,
+            outcome: "succeeded",
+            state: executor ? executor.query(value).state : "unknown",
+        });
     } else {
         const reply = {
             ...base,

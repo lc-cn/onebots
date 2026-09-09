@@ -84,6 +84,50 @@ export class ControlVerificationService {
         if (!localRecovery && record.ownerHash !== owner) throw new ControlVerificationError(404);
         return projectVerification(record);
     }
+    async reconcile(
+        owner: string,
+        id: string,
+        authorized: () => boolean = () => true,
+        localRecovery = false,
+    ): Promise<Operation> {
+        if (this.closed || !authorized()) throw new ControlVerificationError(403);
+        this.operation(owner, id, localRecovery);
+        const record = this.store.read(id);
+        if (record.status !== "unknown" || record.resolution) return projectVerification(record);
+        if (!this.store.health().available) throw new ControlVerificationError(503);
+        const context = {
+            gatewayInstanceId: record.gatewayInstanceId,
+            configVersion: record.configVersion,
+        };
+        // 另一个进程无法证明原SDK调用结果；不把不存在的回执当作未执行。
+        if (!this.current(context)) return projectVerification(record);
+        const reply = await this.forward(
+            context,
+            {
+                action: "query",
+                operationId: id,
+                challengeId: record.challengeId,
+                verificationAction: record.action,
+            },
+            authorized,
+        );
+        if (!authorized()) throw new ControlVerificationError(403);
+        if (!this.current(context)) return projectVerification(record);
+        if (
+            !isGatewayVerificationReply(reply) ||
+            reply.action !== "query" ||
+            reply.outcome !== "succeeded" ||
+            reply.operationId !== id ||
+            reply.challengeId !== record.challengeId ||
+            reply.verificationAction !== record.action ||
+            reply.gatewayInstanceId !== context.gatewayInstanceId ||
+            reply.configVersion !== context.configVersion
+        )
+            throw new ControlVerificationError(503);
+        return reply.state === "succeeded" || reply.state === "rejected"
+            ? projectVerification(this.store.resolve(record, reply.state))
+            : projectVerification(record);
+    }
     execute(
         owner: string,
         input: unknown,

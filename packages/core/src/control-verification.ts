@@ -29,6 +29,7 @@ export interface ControlVerificationOperation {
     status: "running" | "succeeded" | "rejected" | "unknown";
     startedAt: string;
     finishedAt?: string;
+    resolution?: { outcome: "succeeded" | "rejected"; confirmedAt: string };
 }
 const uuid = (value: unknown): value is string =>
     typeof value === "string" &&
@@ -111,6 +112,7 @@ export function isControlVerificationOperation(
                     "status",
                     "startedAt",
                     "finishedAt",
+                    "resolution",
                 ],
                 [
                     "id",
@@ -132,6 +134,19 @@ export function isControlVerificationOperation(
             !date(value.startedAt)
         )
             return false;
+        if (Object.hasOwn(value, "resolution")) {
+            const resolution = value.resolution;
+            if (
+                value.status !== "unknown" ||
+                !date(value.finishedAt) ||
+                !object(resolution) ||
+                !exact(resolution, ["outcome", "confirmedAt"]) ||
+                (resolution.outcome !== "succeeded" && resolution.outcome !== "rejected") ||
+                !date(resolution.confirmedAt) ||
+                Date.parse(resolution.confirmedAt) < Date.parse(value.finishedAt)
+            )
+                return false;
+        }
         return value.status === "running"
             ? !Object.hasOwn(value, "finishedAt")
             : date(value.finishedAt) && Date.parse(value.finishedAt) >= Date.parse(value.startedAt);
@@ -180,6 +195,11 @@ export function isControlVerificationSnapshot(
         return false; // 不可信挑战不交给客户端展示或执行。
     }
 }
+export function controlVerificationOutcome(
+    operation: ControlVerificationOperation,
+): ControlVerificationOperation["status"] {
+    return operation.resolution?.outcome ?? operation.status;
+}
 const unconfirmed = (): Error =>
     new Error("验证结果未确认，请查询原操作回执，不要自动重新提交或发短信");
 /** 所有请求只发一次；答案只在当前调用内存在，不保存或自动重放。 */
@@ -200,6 +220,17 @@ export class ControlVerificationClient {
         const result: unknown = await this.transport.request(
             "GET",
             `/api/control/verification/operations/${id}`,
+        );
+        if (!isControlVerificationOperation(result) || result.id !== id) throw unconfirmed();
+        return structuredClone(result);
+    }
+
+    async reconcile(id: string): Promise<ControlVerificationOperation> {
+        if (!uuid(id)) throw new Error("验证操作标识无效");
+        const result: unknown = await this.transport.request(
+            "POST",
+            "/api/control/verification/reconcile",
+            { id },
         );
         if (!isControlVerificationOperation(result) || result.id !== id) throw unconfirmed();
         return structuredClone(result);

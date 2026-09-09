@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onUnmounted, reactive, watch } from "vue";
-import type { ControlClient } from "@onebots/core/control";
+import { controlVerificationOutcome, type ControlClient } from "@onebots/core/control";
 import ControlVerificationCode from "./ControlVerificationCode.vue";
 import UiButton from "../ui/UiButton.vue";
 import {
@@ -26,7 +26,7 @@ const labels = {
     running: "处理中，只查询回执",
     succeeded: "验证调用已完成（不代表账号已上线）",
     rejected: "请求被拒绝",
-    unknown: "执行结果未知，恢复功能尚未完成，不可重新提交",
+    unknown: "执行结果未知，可核对网关原回执，不可重新提交",
 };
 </script>
 
@@ -147,12 +147,28 @@ const labels = {
         </article>
         <div v-if="view.ids.length" class="border-t border-border pt-4 space-y-3">
             <h3 class="font-medium">验证操作回执</h3>
+            <p class="text-sm text-fg-secondary">
+                核对只读取原网关结果，不会重新验证。仅原网关存活且有确定结果才能解锁；网关退出或结果缺失仍保留未知，暂不支持手工接受风险解锁。
+            </p>
             <div v-for="id in [...view.ids].reverse()" :key="id" class="space-y-1">
                 <code class="text-xs break-all">{{ id }}</code>
                 <p class="text-sm">
-                    {{ view.receipts[id] ? labels[view.receipts[id].status] : "尚未查询确认" }}
+                    {{
+                        view.receipts[id]
+                            ? labels[controlVerificationOutcome(view.receipts[id])]
+                            : "尚未查询确认"
+                    }}
                 </p>
                 <UiButton :disabled="view.busy" @click="controller.query(id)">查询原回执</UiButton>
+                <UiButton
+                    v-if="view.receipts[id]?.status === 'unknown' && !view.receipts[id]?.resolution"
+                    :disabled="view.busy"
+                    @click="controller.reconcile(id)"
+                    >核对网关原回执</UiButton
+                >
+                <p v-if="view.receipts[id]?.resolution" class="text-xs text-fg-muted">
+                    原回执为未知；{{ view.receipts[id].resolution?.confirmedAt }} 已核对网关结果。
+                </p>
             </div>
         </div>
     </section>

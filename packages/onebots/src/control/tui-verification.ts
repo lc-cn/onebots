@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { controlVerificationOutcome } from "@onebots/core/control";
 import type {
     ControlClient,
     ControlVerificationCommand,
@@ -31,7 +32,7 @@ function reportOperation(prompt: TuiPrompt, operation: ControlVerificationOperat
         rejected: "操作被拒绝",
         unknown: "结果未确认，请勿重新提交或重复发送短信",
     };
-    prompt.report(`操作 ${operation.id}：${labels[operation.status]}`);
+    prompt.report(`操作 ${operation.id}：${labels[controlVerificationOutcome(operation)]}`);
 }
 export async function queryControlVerification(
     client: ControlClient,
@@ -43,7 +44,18 @@ export async function queryControlVerification(
         return;
     }
     try {
-        reportOperation(prompt, await client.verification.operation(id));
+        const operation = await client.verification.operation(id);
+        reportOperation(prompt, operation);
+        if (operation.status !== "unknown" || operation.resolution) return;
+        const [confirm] = await prompt.ask({
+            title: "核对网关原回执？",
+            detail: "只查询原网关，不重新执行验证。仅原网关存活且有确定结果才能解锁；退出或结果缺失仍保留未知，暂不支持手工接受风险解锁。",
+            choices: [
+                { value: "no", label: "返回" },
+                { value: "yes", label: "核对网关原回执" },
+            ],
+        });
+        if (confirm === "yes") reportOperation(prompt, await client.verification.reconcile(id));
     } catch {
         prompt.report("原回执暂不可查询。请保留操作 ID，不要重新提交。");
     }

@@ -1,4 +1,4 @@
-import { isControlVerificationCommand } from "@onebots/core/control";
+import { isControlVerificationCommand, controlVerificationOutcome } from "@onebots/core/control";
 import type {
     ControlClient,
     ControlVerificationOperation,
@@ -63,7 +63,10 @@ export class VerificationController {
     private key?: string;
     constructor(
         private readonly client: {
-            verification: Pick<ControlClient["verification"], "pending" | "execute" | "operation">;
+            verification: Pick<
+                ControlClient["verification"],
+                "pending" | "execute" | "operation" | "reconcile"
+            >;
             sessions: ControlClient["sessions"];
         },
         readonly view: VerificationView,
@@ -113,7 +116,7 @@ export class VerificationController {
         return this.view.ids.some(
             id =>
                 !this.view.receipts[id] ||
-                ["running", "unknown"].includes(this.view.receipts[id].status),
+                ["running", "unknown"].includes(controlVerificationOutcome(this.view.receipts[id])),
         );
     }
     async refresh(): Promise<void> {
@@ -242,6 +245,34 @@ export class VerificationController {
         } catch {
             if (!this.closed && revision === this.revision)
                 this.view.error = "回执仍未确认，请保留原操作编号。查询失败不代表操作未执行。";
+        } finally {
+            this.view.busy = false;
+        }
+    }
+    async reconcile(id: string): Promise<void> {
+        const operation = this.view.receipts[id];
+        if (
+            this.closed ||
+            this.view.busy ||
+            !this.view.ids.includes(id) ||
+            operation?.status !== "unknown" ||
+            operation.resolution
+        )
+            return;
+        this.view.busy = true;
+        const revision = this.revision;
+        try {
+            const receipt = await this.client.verification.reconcile(id);
+            if (!this.closed && revision === this.revision) {
+                this.view.receipts[id] = receipt;
+                this.view.error =
+                    controlVerificationOutcome(receipt) === "unknown"
+                        ? "原网关尚无确定结果，继续保留未知；不要重新提交。"
+                        : "";
+            }
+        } catch {
+            if (!this.closed && revision === this.revision)
+                this.view.error = "核对结果未确认，请查询原操作回执，不要重新提交。";
         } finally {
             this.view.busy = false;
         }

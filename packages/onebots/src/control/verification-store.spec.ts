@@ -48,6 +48,70 @@ function fixture() {
     };
 }
 describe("验证操作私有持久存储", () => {
+    it("确定性对账追加证明并保留unknown历史，重启仍可读取且解除账号保护", () => {
+        const f = fixture();
+        f.store.create(f.record);
+        const unknown = {
+            ...f.record,
+            status: "unknown" as const,
+            finishedAt: new Date().toISOString(),
+        };
+        f.store.finish(unknown);
+        expect(f.store.hasUncertainAccount(f.record.accountHash)).toBe(true);
+        const result = f.store.resolve(unknown, "succeeded");
+        expect(result).toMatchObject({ ...unknown, resolution: { outcome: "succeeded" } });
+        expect(f.store.resolve(unknown, "succeeded")).toEqual(result);
+        expect(() =>
+            f.store.resolve({ ...unknown, ownerHash: "b".repeat(64) }, "succeeded"),
+        ).toThrow();
+        expect(() => f.store.resolve(unknown, "rejected")).toThrow();
+        const reopened = new ControlVerificationStore(f.directory);
+        expect(reopened.read(f.record.id)).toEqual(result);
+        expect(reopened.hasUncertainAccount(f.record.accountHash)).toBe(false);
+        expect(readFileSync(f.operationPath, "utf8")).not.toContain(f.command.data.code);
+    });
+    it("对账写入失败维持未知与封锁，不从内存声称已确认", () => {
+        const f = fixture();
+        f.store.create(f.record);
+        const unknown = {
+            ...f.record,
+            status: "unknown" as const,
+            finishedAt: new Date().toISOString(),
+        };
+        f.store.finish(unknown);
+        const write = vi
+            .spyOn(ServiceOperationStorage.prototype, "write")
+            .mockImplementation(() => {
+                throw new Error("disk");
+            });
+        expect(() => f.store.resolve(unknown, "succeeded")).toThrow();
+        expect(f.store.read(f.record.id)).toEqual(unknown);
+        expect(f.store.health().available).toBe(false);
+        write.mockRestore();
+        expect(new ControlVerificationStore(f.directory).read(f.record.id)).toEqual(unknown);
+    });
+    it("拒绝伪造提前确认时间或给正常终态附加unknown对账", () => {
+        const f = fixture();
+        for (const value of [
+            {
+                ...f.record,
+                resolution: { outcome: "succeeded", confirmedAt: new Date().toISOString() },
+            },
+            {
+                ...f.record,
+                status: "succeeded",
+                finishedAt: new Date().toISOString(),
+                resolution: { outcome: "succeeded", confirmedAt: new Date().toISOString() },
+            },
+            {
+                ...f.record,
+                status: "unknown",
+                finishedAt: new Date().toISOString(),
+                resolution: { outcome: "succeeded", confirmedAt: new Date(0).toISOString() },
+            },
+        ])
+            expect(() => parseVerificationRecord(value)).toThrow();
+    });
     it("摘要稳定跨重启、与字段顺序无关、不同密钥隔离且不保存验证码", () => {
         const f = fixture(),
             other = fixture();

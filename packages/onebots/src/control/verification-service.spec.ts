@@ -100,6 +100,108 @@ it("意图先落盘；并发同操作和重启后的重放均不重新调用SDK"
         /Hash|Digest|secret/,
     );
 });
+it("超时后只读核对原实例回执，追加确认而不重新提交验证码", async () => {
+    const f = fixture();
+    f.forward.mockImplementation(async (_context, operation) => {
+        if (operation.action === "list") return f.list;
+        if (operation.action === "execute") return new Promise(() => {});
+        return {
+            ...f.command.expected,
+            type: "gateway.verification.result",
+            protocolVersion: 1,
+            controlInstanceId: randomUUID(),
+            requestId: randomUUID(),
+            action: "query",
+            operationId: operation.operationId,
+            challengeId: operation.challengeId,
+            verificationAction: operation.verificationAction,
+            outcome: "succeeded",
+            state: "succeeded",
+        };
+    });
+    expect(await f.service.execute(f.owner, f.command)).toMatchObject({ status: "unknown" });
+    await expect(f.service.reconcile("b".repeat(64), f.command.operationId)).rejects.toMatchObject({
+        httpStatus: 404,
+    });
+    const result = await f.service.reconcile(f.owner, f.command.operationId);
+    expect(result).toMatchObject({ status: "unknown", resolution: { outcome: "succeeded" } });
+    expect(await f.service.reconcile(f.owner, f.command.operationId)).toEqual(result);
+    expect(f.forward.mock.calls.map(([, operation]) => operation.action)).toEqual([
+        "list",
+        "execute",
+        "query",
+    ]);
+    expect(JSON.stringify(f.forward.mock.calls[2])).not.toContain(f.command.data.code);
+});
+it("原网关已切换时不询问新实例，也不解除未知结果", async () => {
+    const f = fixture();
+    f.forward.mockImplementation(async (_context, operation) =>
+        operation.action === "list" ? f.list : new Promise(() => {}),
+    );
+    await f.service.execute(f.owner, f.command);
+    f.options.currentContext = () => ({ gatewayInstanceId: randomUUID(), configVersion: "new" });
+    expect(await f.service.reconcile(f.owner, f.command.operationId)).toMatchObject({
+        status: "unknown",
+    });
+    expect(f.forward.mock.calls.map(([, operation]) => operation.action)).toEqual([
+        "list",
+        "execute",
+    ]);
+});
+it.each(["missing", "running", "unknown"] as const)(
+    "查询原回执为%s不解除保护或重派",
+    async state => {
+        const f = fixture();
+        f.forward.mockImplementation(async (_context, operation) => {
+            if (operation.action === "list") return f.list;
+            if (operation.action === "execute") return new Promise(() => {});
+            return {
+                ...f.command.expected,
+                type: "gateway.verification.result",
+                protocolVersion: 1,
+                controlInstanceId: randomUUID(),
+                requestId: randomUUID(),
+                ...operation,
+                outcome: "succeeded",
+                state,
+            };
+        });
+        await f.service.execute(f.owner, f.command);
+        const result = await f.service.reconcile(f.owner, f.command.operationId);
+        expect(result.status).toBe("unknown");
+        expect(result.resolution).toBeUndefined();
+        await expect(
+            f.service.execute(f.owner, { ...f.command, operationId: randomUUID() }),
+        ).rejects.toMatchObject({ httpStatus: 409 });
+        expect(
+            f.forward.mock.calls.filter(([, operation]) => operation.action === "execute"),
+        ).toHaveLength(1);
+    },
+);
+it("查询期间设备撤销，不持久化迟到的确认结果", async () => {
+    const f = fixture();
+    let authorized = true;
+    f.forward.mockImplementation(async (_context, operation) => {
+        if (operation.action === "list") return f.list;
+        if (operation.action === "execute") return new Promise(() => {});
+        authorized = false;
+        return {
+            ...f.command.expected,
+            type: "gateway.verification.result",
+            protocolVersion: 1,
+            controlInstanceId: randomUUID(),
+            requestId: randomUUID(),
+            ...operation,
+            outcome: "succeeded",
+            state: "succeeded",
+        };
+    });
+    await f.service.execute(f.owner, f.command);
+    await expect(
+        f.service.reconcile(f.owner, f.command.operationId, () => authorized),
+    ).rejects.toMatchObject({ httpStatus: 403 });
+    expect(f.service.operation(f.owner, f.command.operationId).resolution).toBeUndefined();
+});
 it("超时保存unknown且禁止换操作ID再次提交；迟到成功不能覆盖回执", async () => {
     const f = fixture();
     const pending = Promise.withResolvers<GatewayVerificationReply>();

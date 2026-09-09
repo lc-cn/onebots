@@ -178,6 +178,44 @@ export class ControlVerificationStore {
             throw new ControlVerificationError(503);
         }
     }
+    /** 仅追加来自原实例的确定性证明，保留原 unknown 状态与时间。 */
+    resolve(expected: VerificationRecord, outcome: "succeeded" | "rejected"): VerificationRecord {
+        this.assertAvailable();
+        const previous = this.read(expected.id);
+        const { resolution: _previousResolution, ...previousIdentity } = previous;
+        const { resolution: _expectedResolution, ...expectedIdentity } =
+            parseVerificationRecord(expected);
+        if (canonicalServiceJson(previousIdentity) !== canonicalServiceJson(expectedIdentity))
+            throw new ControlVerificationError(409);
+        if (previous.resolution) {
+            if (previous.resolution.outcome !== outcome) throw new ControlVerificationError(409);
+            return previous;
+        }
+        if (
+            previous.status !== "unknown" ||
+            canonicalServiceJson(previous) !== canonicalServiceJson(expected)
+        )
+            throw new ControlVerificationError(409);
+        const resolved = parseVerificationRecord({
+            ...previous,
+            resolution: {
+                outcome,
+                confirmedAt: new Date(
+                    Math.max(Date.now(), Date.parse(previous.finishedAt!)),
+                ).toISOString(),
+            },
+        });
+        try {
+            this.write(resolved);
+            this.observed.set(resolved.id, structuredClone(resolved));
+            return structuredClone(resolved);
+        } catch {
+            // 写盘是否成功未知时不能允许新验证；重启后重新读取唯一持久事实。
+            this.blocked = true;
+            this.uncertain.set(previous.id, structuredClone(previous));
+            throw new ControlVerificationError(503);
+        }
+    }
     hasUncertainAccount(accountHash: string): boolean {
         if (!verificationHash(accountHash)) throw new ControlVerificationError(400);
         this.assertAvailable();
@@ -186,7 +224,8 @@ export class ControlVerificationStore {
                 const record = this.read(name.slice(0, -5));
                 if (
                     record.accountHash === accountHash &&
-                    (record.status === "running" || record.status === "unknown")
+                    (record.status === "running" ||
+                        (record.status === "unknown" && !record.resolution))
                 )
                     return true;
             }
