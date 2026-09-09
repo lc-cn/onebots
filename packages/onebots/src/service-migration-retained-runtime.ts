@@ -11,6 +11,7 @@ import type { ServiceHost } from "./service-host.js";
 import type { ServiceMigrationBackup } from "./service-migration-types.js";
 import { within, hashRuntimeFile, scanRuntimeTree } from "./service-migration-runtime-tree-scan.js";
 import { assertSystemNativeDependencies } from "./service-migration-native-dependencies.js";
+import { scanLegacyRuntimeForest } from "./service-migration-runtime-forest-scan.js";
 import {
     verifyLegacyRuntimeTree,
     type LegacyRuntimeTreeReceipt,
@@ -20,14 +21,14 @@ import {
     type LegacyNodeRuntimeReceipt,
 } from "./service-migration-node-runtime.js";
 
-export interface RetainedLegacyRuntime {
-    schemaVersion: 1;
-    sourceRoot: string;
+interface RetainedRuntimeContract {
     runtime: LegacyRuntimeTreeReceipt;
     node: LegacyNodeRuntimeReceipt;
     original: ServiceSpec;
     rollback: ServiceSpec;
 }
+export type RetainedLegacyRuntime = RetainedRuntimeContract &
+    ({ schemaVersion: 1; sourceRoot: string } | { schemaVersion: 2; sourceRoots: string[] });
 const invalid = () => new Error("旧运行工件与服务回退契约不匹配，禁止切换");
 /** 仅排除旧内核明确使用的配置与持久数据，不接受客户端任意忽略运行文件。 */
 export function legacyRuntimeExclusions(original: ServiceSpec, sourceRoot: string): string[] {
@@ -70,21 +71,69 @@ function mapped(
         nodePath: path.join(node.tree.root, "node"),
     };
 }
+function mappedForest(
+    spec: ServiceSpec,
+    sources: string[],
+    runtime: LegacyRuntimeTreeReceipt,
+    node: LegacyNodeRuntimeReceipt,
+): ServiceSpec {
+    const project = (file: string) => {
+        if (
+            !sources.some(source => within(source, file)) ||
+            sources.some(source =>
+                legacyRuntimeExclusions(spec, source).some(excluded =>
+                    within(path.join(source, excluded), file),
+                ),
+            )
+        )
+            throw invalid();
+        return path.join(runtime.root, "fs", file.slice(1));
+    };
+    return {
+        ...spec,
+        binPath: project(spec.binPath),
+        workingDirectory: project(spec.workingDirectory),
+        nodePath: path.join(node.tree.root, "node"),
+    };
+}
 /** 纯解析；磁盘内容须由异步verify在停机及回退前核实。 */
 export function parseRetainedLegacyRuntime(input: unknown): RetainedLegacyRuntime {
+    const forest =
+        typeof input === "object" &&
+        input !== null &&
+        Object.getOwnPropertyDescriptor(input, "schemaVersion")?.value === 2;
     const value = closedServiceObject(input, [
         "schemaVersion",
-        "sourceRoot",
+        forest ? "sourceRoots" : "sourceRoot",
         "runtime",
         "node",
         "original",
         "rollback",
     ]);
+    if (value.schemaVersion !== (forest ? 2 : 1)) throw invalid();
+    const rawRoots = forest ? value.sourceRoots : [value.sourceRoot];
     if (
-        value.schemaVersion !== 1 ||
-        typeof value.sourceRoot !== "string" ||
-        !path.isAbsolute(value.sourceRoot) ||
-        path.normalize(value.sourceRoot) !== value.sourceRoot
+        !Array.isArray(rawRoots) ||
+        !rawRoots.length ||
+        rawRoots.length > 128 ||
+        rawRoots.some(
+            source =>
+                typeof source !== "string" ||
+                !path.isAbsolute(source) ||
+                path.normalize(source) !== source ||
+                (forest &&
+                    (source === path.parse(source).root ||
+                        !source.startsWith("/") ||
+                        /[\u0000-\u001f\u007f\\]/u.test(source))),
+        )
+    )
+        throw invalid();
+    const sources: string[] = rawRoots.map(source => String(source));
+    if (
+        forest &&
+        sources.some((source, index) =>
+            sources.some((other, otherIndex) => index !== otherIndex && within(source, other)),
+        )
     )
         throw invalid();
     const runtime = tree(value.runtime);
@@ -114,15 +163,56 @@ export function parseRetainedLegacyRuntime(input: unknown): RetainedLegacyRuntim
     if (
         within(runtime.root, node.tree.root) ||
         within(node.tree.root, runtime.root) ||
-        within(value.sourceRoot, runtime.root) ||
-        within(value.sourceRoot, node.tree.root)
+        sources.some(source => within(source, runtime.root) || within(source, node.tree.root))
     )
         throw invalid();
     const original = parseLegacyServiceSpec(value.original);
     const rollback = parseLegacyServiceSpec(value.rollback);
-    if (!isDeepStrictEqual(rollback, mapped(original, value.sourceRoot, runtime, node)))
+    if (
+        !isDeepStrictEqual(
+            rollback,
+            forest
+                ? mappedForest(original, sources, runtime, node)
+                : mapped(original, sources[0]!, runtime, node),
+        )
+    )
         throw invalid();
-    return { schemaVersion: 1, sourceRoot: value.sourceRoot, runtime, node, original, rollback };
+    return forest
+        ? { schemaVersion: 2, sourceRoots: sources, runtime, node, original, rollback }
+        : { schemaVersion: 1, sourceRoot: sources[0]!, runtime, node, original, rollback };
+}
+export async function bindRetainedLegacyRuntimeForest(
+    original: ServiceSpec,
+    sourceRoots: string[],
+    runtime: LegacyRuntimeTreeReceipt,
+    node: LegacyNodeRuntimeReceipt,
+): Promise<RetainedLegacyRuntime> {
+    const result = parseRetainedLegacyRuntime({
+        schemaVersion: 2,
+        sourceRoots,
+        runtime,
+        node,
+        original,
+        rollback: mappedForest(original, sourceRoots, runtime, node),
+    });
+    if (result.schemaVersion !== 2) throw invalid();
+    const snapshot = await scanLegacyRuntimeForest(
+        result.sourceRoots.map(source => ({
+            source,
+            excludedPaths: legacyRuntimeExclusions(result.original, source),
+        })),
+    );
+    if (
+        createHash("sha256").update(JSON.stringify(snapshot.entries)).digest("hex") !==
+            result.runtime.digest ||
+        !isDeepStrictEqual(
+            await hashRuntimeFile(await realpath(result.original.nodePath)),
+            await hashRuntimeFile(result.rollback.nodePath),
+        )
+    )
+        throw invalid();
+    await verifyRetainedLegacyRuntime(result);
+    return result;
 }
 export async function bindRetainedLegacyRuntime(
     original: ServiceSpec,

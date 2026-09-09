@@ -16,7 +16,7 @@ import type { ServiceMigrationBackup, ServiceMigrationFile } from "./service-mig
 import type { ServicePlatformState } from "./service-platform.js";
 
 describe.skipIf(process.platform !== "darwin")("旧工件与迁移回退整合", () => {
-    it.each(["separate", "mixed"])(
+    it.each(["separate", "mixed", "global"])(
         "%s 布局下新实例失败后执行保留程序并保留配置与账号数据",
         async layout => {
             const root = fs.realpathSync(
@@ -33,9 +33,20 @@ describe.skipIf(process.platform !== "darwin")("旧工件与迁移回退整合",
                     "stable-account-id",
                     { mode: 0o600 },
                 );
-                fs.writeFileSync(path.join(source, "package.json"), '{"type":"module"}', {
-                    mode: 0o600,
-                });
+                fs.writeFileSync(
+                    path.join(source, "package.json"),
+                    '{"type":"module","name":"onebots","dependencies":{"@onebots/core":"1.0.0"}}',
+                    {
+                        mode: 0o600,
+                    },
+                );
+                const core = path.join(source, "node_modules", "@onebots", "core");
+                fs.mkdirSync(core, { recursive: true, mode: 0o700 });
+                fs.writeFileSync(
+                    path.join(core, "package.json"),
+                    '{"name":"@onebots/core","type":"module"}',
+                    { mode: 0o600 },
+                );
                 fs.writeFileSync(
                     path.join(source, "bin.js"),
                     `
@@ -50,12 +61,33 @@ process.stdout.write("old-behavior");
                         mode: 0o600,
                     },
                 );
+                if (layout === "global") {
+                    fs.mkdirSync(path.join(workspace, "node_modules"), { mode: 0o700 });
+                    fs.writeFileSync(
+                        path.join(source, "shared.mjs"),
+                        "export const identity = {};",
+                        { mode: 0o600 },
+                    );
+                    fs.symlinkSync(
+                        path.join(source, "shared.mjs"),
+                        path.join(workspace, "node_modules", "shared.mjs"),
+                    );
+                    fs.appendFileSync(
+                        path.join(source, "bin.js"),
+                        `
+import { identity } from './shared.mjs';
+import { pathToFileURL } from 'node:url';
+const plugin = await import(pathToFileURL(path.join(process.cwd(), 'node_modules/shared.mjs')).href);
+if (plugin.identity !== identity) throw new Error('split module');
+`,
+                    );
+                }
                 const original: ServiceSpec = {
                     scope: "user",
                     configPath: path.join(workspace, "old.yaml"),
                     nodePath: process.execPath,
                     binPath: path.join(source, "bin.js"),
-                    workingDirectory: source,
+                    workingDirectory: layout === "global" ? workspace : source,
                     adapters: [],
                     protocols: [],
                 };
@@ -97,7 +129,7 @@ process.stdout.write("old-behavior");
                         runtimeKind: "control",
                         scope: "user",
                         workspace,
-                        workingDirectory: source,
+                        workingDirectory: original.workingDirectory,
                         nodePath: process.execPath,
                         binPath: "/new/bin.js",
                         host: "127.0.0.1",
@@ -142,6 +174,10 @@ process.stdout.write("old-behavior");
                                 if (spec.runtimeKind === "control") {
                                     if (layout === "mixed") fs.unlinkSync(original.binPath);
                                     else fs.rmSync(source, { recursive: true });
+                                    if (layout === "global")
+                                        fs.rmSync(path.join(workspace, "node_modules"), {
+                                            recursive: true,
+                                        });
                                 } else
                                     executed = execFileSync(spec.nodePath, buildServiceArgs(spec), {
                                         cwd: spec.workingDirectory,
@@ -210,6 +246,22 @@ process.stdout.write("old-behavior");
                     retained.rollback,
                 );
                 expect(retained.rollback.configPath).toBe(original.configPath);
+                if (layout === "global") {
+                    expect(retained.schemaVersion).toBe(2);
+                    expect(() =>
+                        parseRetainedLegacyRuntime({ ...retained, sourceRoots: [workspace] }),
+                    ).toThrow();
+                    expect(() =>
+                        parseRetainedLegacyRuntime({ ...retained, sourceRoots: [root, workspace] }),
+                    ).toThrow();
+                    expect(() =>
+                        parseRetainedLegacyRuntime({ ...retained, sourceRoots: ["/"] }),
+                    ).toThrow();
+                    for (const name of ["old.yaml", "data", ".control"])
+                        expect(
+                            fs.existsSync(path.join(retained.rollback.workingDirectory, name)),
+                        ).toBe(false);
+                }
                 expect(() =>
                     parseRetainedLegacyRuntime({
                         ...retained,
