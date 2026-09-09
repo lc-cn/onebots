@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { acquireControlWorkspace } from "./control/workspace.js";
 import { bundledPnpmExecutor } from "./installation/bundled-runtime-artifacts.js";
@@ -13,6 +12,11 @@ import {
     type ManagerCandidateInstallerOptions,
 } from "./manager-runtime/installer.js";
 import { verifyManagerServiceCandidate } from "./manager-service-upgrade-candidate.js";
+import {
+    ensurePrivateManagerUpgradeDirectory,
+    ManagerUpgradeArtifactStoreError,
+    materializeManagerUpgradeArchive,
+} from "./manager-service-upgrade-artifact-store.js";
 import type { ServiceScope } from "./service-definition.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
@@ -170,8 +174,8 @@ export async function prepareManagerUpgradeCandidate(
     const home = path.join(files.stateDir, "manager-artifacts");
     let release: () => void;
     try {
-        privateDirectory(files.stateDir, false);
-        privateDirectory(home);
+        ensurePrivateManagerUpgradeDirectory(files.stateDir, false);
+        ensurePrivateManagerUpgradeDirectory(home);
         release = acquireControlWorkspace(home);
     } catch {
         throw failure("CANDIDATE_STORE_INVALID");
@@ -181,17 +185,16 @@ export async function prepareManagerUpgradeCandidate(
     let rejectionCode: ManagerUpgradeCandidateRejectionCode = "CANDIDATE_STORE_INVALID";
     try {
         const upgrades = path.join(home, "upgrades");
-        privateDirectory(upgrades);
+        ensurePrivateManagerUpgradeDirectory(upgrades);
         const directory = path.join(upgrades, value.id);
-        privateDirectory(directory);
+        ensurePrivateManagerUpgradeDirectory(directory);
         const binding = new ServiceOperationStorage(directory);
         const resolvedArtifacts = path.join(home, "resolved-artifacts");
-        privateDirectory(resolvedArtifacts);
+        ensurePrivateManagerUpgradeDirectory(resolvedArtifacts);
         rejectionCode = "ARTIFACT_INPUT_INVALID";
-        const hostArchive = materializeArchive(archives.host, resolvedArtifacts);
-        const coreArchive = materializeArchive(archives.core, resolvedArtifacts);
-        if (hostArchive.sha256 !== value.archiveSha256)
-            throw failure("ARTIFACT_INPUT_INVALID");
+        const hostArchive = materializeManagerUpgradeArchive(archives.host, resolvedArtifacts);
+        const coreArchive = materializeManagerUpgradeArchive(archives.core, resolvedArtifacts);
+        if (hostArchive.sha256 !== value.archiveSha256) throw failure("ARTIFACT_INPUT_INVALID");
         const hostArtifact = artifact(artifacts.host, "onebots");
         const coreArtifact = artifact(artifacts.core, "@onebots/core");
         const frozen = await freezeGenerationArtifacts(
@@ -320,6 +323,7 @@ export async function prepareManagerUpgradeCandidate(
             targetVersion: plan.host.version,
         };
     } catch (error) {
+        if (error instanceof ManagerUpgradeArtifactStoreError) throw failure();
         if (
             error instanceof ManagerUpgradeCandidateRejectedError ||
             error instanceof ManagerUpgradeCandidateUnknownError
@@ -363,8 +367,8 @@ export async function resumeManagerUpgradeCandidate(
     const home = path.join(files.stateDir, "manager-artifacts");
     let release: () => void;
     try {
-        privateDirectory(files.stateDir, false);
-        privateDirectory(home, false);
+        ensurePrivateManagerUpgradeDirectory(files.stateDir, false);
+        ensurePrivateManagerUpgradeDirectory(home, false);
         release = acquireControlWorkspace(home);
     } catch {
         throw failure();
@@ -474,67 +478,4 @@ export async function resumeManagerUpgradeCandidate(
             release();
         }
     }
-}
-
-function materializeArchive(input: unknown, directory: string): { file: string; sha256: string } {
-    const value = closedServiceObject(input, ["bytes", "sha256"]);
-    if (
-        !Buffer.isBuffer(value.bytes) ||
-        value.bytes.length === 0 ||
-        value.bytes.length > 32 * 1024 * 1024 ||
-        typeof value.sha256 !== "string" ||
-        !/^[a-f0-9]{64}$/.test(value.sha256) ||
-        createHash("sha256").update(value.bytes).digest("hex") !== value.sha256
-    )
-        throw failure();
-    const file = path.join(directory, `${value.sha256}.tgz`);
-    if (fs.existsSync(file)) {
-        const stat = fs.lstatSync(file);
-        if (
-            !stat.isFile() ||
-            stat.isSymbolicLink() ||
-            stat.nlink !== 1 ||
-            stat.size === 0 ||
-            stat.size > 32 * 1024 * 1024 ||
-            (stat.mode & 0o7777) !== 0o400 ||
-            (process.getuid && stat.uid !== process.getuid()) ||
-            createHash("sha256").update(fs.readFileSync(file)).digest("hex") !== value.sha256
-        )
-            throw failure();
-        return { file: fs.realpathSync(file), sha256: value.sha256 };
-    }
-    const temporary = path.join(directory, `.${value.sha256}.${randomUUID()}.tmp`);
-    try {
-        const descriptor = fs.openSync(temporary, "wx", 0o600);
-        try {
-            fs.writeFileSync(descriptor, value.bytes);
-            fs.fchmodSync(descriptor, 0o400);
-            fs.fsyncSync(descriptor);
-        } finally {
-            fs.closeSync(descriptor);
-        }
-        fs.renameSync(temporary, file);
-        const folder = fs.openSync(directory, "r");
-        try {
-            fs.fsyncSync(folder);
-        } finally {
-            fs.closeSync(folder);
-        }
-        return { file: fs.realpathSync(file), sha256: value.sha256 };
-    } finally {
-        if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
-    }
-}
-
-function privateDirectory(directory: string, create = true): void {
-    if (create && !fs.existsSync(directory)) fs.mkdirSync(directory, { mode: 0o700 });
-    const stat = fs.lstatSync(directory);
-    if (
-        !stat.isDirectory() ||
-        stat.isSymbolicLink() ||
-        fs.realpathSync(directory) !== directory ||
-        (process.getuid && stat.uid !== process.getuid()) ||
-        (process.platform !== "win32" && (stat.mode & 0o7777) !== 0o700)
-    )
-        throw failure();
 }
