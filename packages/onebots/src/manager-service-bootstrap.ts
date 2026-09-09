@@ -34,6 +34,7 @@ import {
     secureWindowsServiceFile,
 } from "./windows-service-security.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
+import { ManagerBootstrapCandidateError } from "./manager-bootstrap-error.js";
 
 export interface ManagerBootstrapRequest {
     id?: string;
@@ -185,8 +186,11 @@ export async function bootstrapManagerService(
             installed.phase !== "verified" ||
             installed.planDigest !== plan.digest ||
             !installed.candidateId
-        )
+        ) {
+            if (installed.error)
+                throw new ManagerBootstrapCandidateError(id, installed.phase, installed.error);
             throw failure();
+        }
         const candidate = installer.readCandidate(installed.candidateId);
         if (host.platform === "win32") {
             inspectWindowsServiceDirectorySecurity(host, candidate.directory);

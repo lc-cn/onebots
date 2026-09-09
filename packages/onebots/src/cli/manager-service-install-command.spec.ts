@@ -10,6 +10,7 @@ import { installManagerServiceCommand } from "./manager-service-install-command.
 import { options as installOptions } from "../commands/install.js";
 import type { ManagerServiceSpec } from "../manager-service-spec.js";
 import type { ManagerServiceRecord } from "../manager-service-journal.js";
+import { ManagerBootstrapCandidateError } from "../manager-bootstrap-error.js";
 
 vi.mock("../manager-service-install.js", () => {
     throw new Error("旧 installManagerService 旁路不可由 CLI 导入");
@@ -208,5 +209,20 @@ describe("首次管理服务安装CLI", () => {
         const failed = await installManagerServiceCommand({ dataDir: root });
         expect(failed.exitCode).toBe(1);
         expect(failed.output).not.toContain("private-secret");
+
+        vi.mocked(bootstrapManagerService).mockRejectedValue(
+            new ManagerBootstrapCandidateError(
+                "candidate-install",
+                "failed",
+                "VERIFICATION_FAILED",
+            ),
+        );
+        const candidate = await installManagerServiceCommand({ dataDir: root });
+        expect(candidate).toEqual({
+            exitCode: 1,
+            output:
+                "管理服务候选准备失败：操作 candidate-install，阶段 failed，原因 VERIFICATION_FAILED。\n" +
+                "尚未派发系统服务注册；请保留 manager-artifacts 中的原操作和候选证据。",
+        });
     });
 });

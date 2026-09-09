@@ -4,6 +4,7 @@ import { bootstrapManagerService } from "../manager-service-bootstrap.js";
 import { bundledRuntimeArtifacts } from "../installation/bundled-runtime-artifacts.js";
 import { parseManagerServiceSpec } from "../manager-service-spec.js";
 import type { CommandResult } from "./command-application.js";
+import { ManagerBootstrapCandidateError } from "../manager-bootstrap-error.js";
 
 export interface ManagerServiceInstallCommandOptions {
     dataDir?: string;
@@ -75,7 +76,15 @@ export async function installManagerServiceCommand(
         return { output: "管理服务安装选项或目录无法确认，未执行安装。", exitCode: 2 };
     }
     try {
-        const { binPath: _binPath, workingDirectory: _workingDirectory, ...service } = spec;
+        const service = {
+            schemaVersion: spec.schemaVersion,
+            runtimeKind: spec.runtimeKind,
+            scope: spec.scope,
+            workspace: spec.workspace,
+            nodePath: spec.nodePath,
+            host: spec.host,
+            port: spec.port,
+        };
         const operation = await bootstrapManagerService(
             { service },
             { artifacts: bundledRuntimeArtifacts() },
@@ -105,7 +114,14 @@ export async function installManagerServiceCommand(
                 "\n该命令只对账，不重装或启动；中途失败仍会保留恢复门禁。",
             exitCode: 1,
         };
-    } catch {
+    } catch (error) {
+        if (error instanceof ManagerBootstrapCandidateError)
+            return {
+                output:
+                    `管理服务候选准备失败：操作 ${error.operationId}，阶段 ${error.phase}，原因 ${error.code}。` +
+                    "\n尚未派发系统服务注册；请保留 manager-artifacts 中的原操作和候选证据。",
+                exitCode: 1,
+            };
         return {
             output: "管理服务安装未完成，操作标识暂不可用；请检查本机服务记录。旧服务须执行 onebots migrate，勿重复安装或覆盖。",
             exitCode: 1,
