@@ -11,6 +11,7 @@ import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 import { inspectServiceMigrationRecovery } from "./service-recovery-inspection.js";
 import { readServiceMigrationPending } from "./service-migration-workspace.js";
 import { captureManagerServiceRemoval } from "./manager-service-removal.js";
+import { inspectMigrationManager } from "./service-migration-manager.js";
 import { assertServiceAbsent } from "./service-platform-presence.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
@@ -22,6 +23,7 @@ import type { ServiceScope } from "./service-definition.js";
 export interface ManagerServiceRecoveryDependencies {
     platform?: ServicePlatform;
     confirmStopped?: typeof verifyServiceMigrationProcessesWhileLocked;
+    inspectManager?: typeof inspectMigrationManager;
 }
 const failure = () => new Error("尚不能证明原操作已完成，保留恢复记录；未重放系统动作");
 
@@ -59,7 +61,7 @@ function existingWorkspace(workspace: string): void {
     }
 }
 
-/** 本机显式对账：只确认已完成的 stop/uninstall、已完成安装或已释放升级，不重启、不删除文件、不重放未知动作。 */
+/** 本机显式对账：只确认已达到的 start/stop/uninstall、已完成安装或已释放升级，不重放未知动作。 */
 export async function reconcileManagerServiceOperation(
     id: string,
     scope: ServiceScope,
@@ -86,18 +88,71 @@ export async function reconcileManagerServiceOperation(
             existingWorkspace(record.managerSpec.workspace);
             await verifyReleasedManagerServiceUpgrade(record, host, dependencies.platform);
             const completed: ManagerServiceRecord = {
-                ...record, phase: "completed", status: "succeeded", recoveryRequired: false,
+                ...record,
+                phase: "completed",
+                status: "succeeded",
+                recoveryRequired: false,
             };
             journal.save(completed);
             return journal.read(id);
         }
-        if (record.managerSpec.scope !== scope || !["stop", "uninstall", "install"].includes(record.action))
+        if (
+            record.managerSpec.scope !== scope ||
+            !["start", "stop", "uninstall", "install"].includes(record.action)
+        )
             throw failure();
         const spec = record.managerSpec;
         existingWorkspace(spec.workspace);
         assertNoPendingManagerUpgrade(spec.workspace);
         if (readServiceMigrationPending(spec.workspace)) throw failure();
-        const candidate = record.action === "install" ? captureInstalledManagerCandidate(record, host) : undefined;
+        if (record.action === "start") {
+            const captured = captureManagerServiceRemoval(spec, host);
+            try {
+                const platform =
+                    dependencies.platform ??
+                    (host.platform === "linux"
+                        ? new SystemdServicePlatform(host, scope, files.definition)
+                        : new LaunchdServicePlatform(host, scope, files.definition));
+                const before = await platform.inspect();
+                if (
+                    before.state !== "running" ||
+                    !before.running ||
+                    !before.loaded ||
+                    before.enabled !== record.desiredEnabled ||
+                    before.processId === null ||
+                    before.identity === null ||
+                    before.definitionPath !== files.definition ||
+                    !captured.verifyRemaining()
+                )
+                    throw failure();
+                const manager = await (dependencies.inspectManager ?? inspectMigrationManager)(
+                    spec.workspace,
+                );
+                const after = await platform.inspect();
+                if (
+                    manager.manager.pid !== before.processId ||
+                    !isDeepStrictEqual(before, after) ||
+                    !captured.verifyRemaining()
+                )
+                    throw failure();
+            } finally {
+                captured.dispose();
+            }
+            assertNoPendingManagerUpgrade(spec.workspace);
+            if (readServiceMigrationPending(spec.workspace)) throw failure();
+            const completed: ManagerServiceRecord = {
+                ...record,
+                phase: "completed",
+                status: "succeeded",
+                recoveryRequired: false,
+            };
+            journal.save(completed);
+            return completed;
+        }
+        const candidate =
+            record.action === "install"
+                ? captureInstalledManagerCandidate(record, host)
+                : undefined;
         let releaseWorkspace: (() => void) | undefined;
         try {
             releaseWorkspace = acquireControlWorkspace(spec.workspace);
@@ -159,7 +214,11 @@ export async function reconcileManagerServiceOperation(
             journal.save(completed);
             return completed;
         } finally {
-            try { releaseWorkspace?.(); } finally { candidate?.dispose(); }
+            try {
+                releaseWorkspace?.();
+            } finally {
+                candidate?.dispose();
+            }
         }
     } finally {
         release();

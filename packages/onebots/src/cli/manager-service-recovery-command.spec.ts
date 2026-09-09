@@ -140,7 +140,7 @@ describe("显式管理服务对账 CLI", () => {
         });
         expect(result.output).not.toContain(secret);
     });
-    it.each(["upgrade", "install"] as const)("%s 对账成功时明确只补日志", async action => {
+    it.each(["start", "upgrade", "install"] as const)("%s 对账成功时明确只补日志", async action => {
         vi.mocked(reconcileManagerServiceOperation).mockResolvedValue({ ...record(), action });
         const result = await managerServiceRecoveryCommand({ operation: "operation_123" });
         expect(result.exitCode).toBe(0);
@@ -172,7 +172,7 @@ describe("显式管理服务对账 CLI", () => {
     it("其他动作即使返回成功也不称完整恢复", async () => {
         vi.mocked(reconcileManagerServiceOperation).mockResolvedValue({
             ...record(),
-            action: "start",
+            action: "restart",
         });
         expect((await managerServiceRecoveryCommand({ operation: "operation_123" })).exitCode).toBe(
             1,

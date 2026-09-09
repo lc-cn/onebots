@@ -12,7 +12,7 @@ export interface ManagerServiceRecoveryOptions {
     rollbackMigration?: boolean;
 }
 const pending =
-    "未确认已达到安装、停止、卸载或已释放升级的目标；保留操作记录，未重放任何系统动作。这不是完整自动恢复。";
+    "未确认已达到安装、启动、停止、卸载或已释放升级的目标；保留操作记录，未重放任何系统动作。这不是完整自动恢复。";
 const phases = new Set([
     "prepared",
     "stopping",
@@ -95,7 +95,7 @@ export async function managerServiceRecoveryCommand(
             record.status === "succeeded" &&
             record.phase === "completed" &&
             !record.recoveryRequired &&
-            ["stop", "uninstall", "upgrade", "install"].includes(record.action)
+            ["start", "stop", "uninstall", "upgrade", "install"].includes(record.action)
         )
             return {
                 exitCode: 0,

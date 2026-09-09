@@ -19,6 +19,7 @@ export interface LaunchdServicePlatformOptions {
 function unavailable(): never {
     throw new Error("无法安全确认 launchd 服务及其进程组状态");
 }
+class LaunchdTransitionError extends Error {}
 function processExists(pid: number): boolean {
     try {
         process.kill(pid, 0);
@@ -245,6 +246,7 @@ export class LaunchdServicePlatform implements ServicePlatform {
             this.fresh = false;
             if (data.get("path") !== this.expectedDefinitionPath) unavailable();
             const state = data.get("state");
+            if (state === "xpcproxy" || state === "SIGTERMed") throw new LaunchdTransitionError();
             if (
                 !["running", "not running", "waiting", "exited", "crashed", "failed"].includes(
                     state ?? "",
@@ -252,9 +254,15 @@ export class LaunchdServicePlatform implements ServicePlatform {
             )
                 unavailable();
             const exitCode = data.get("last exit code");
+            const numericExitCode = exitCode !== undefined && /^-?(0|[1-9][0-9]*)$/.test(exitCode);
+            // A newly bootstrapped launchd job reports this literal until its first exit.
+            // It is only coherent while that same job is running; stopped jobs still need a number.
             if (
                 exitCode !== undefined &&
-                (!/^-?(0|[1-9][0-9]*)$/.test(exitCode) || !Number.isSafeInteger(Number(exitCode)))
+                !(
+                    (exitCode === "(never exited)" && state === "running") ||
+                    (numericExitCode && Number.isSafeInteger(Number(exitCode)))
+                )
             )
                 unavailable();
             const observedState: ServicePlatformState["state"] =
@@ -262,7 +270,7 @@ export class LaunchdServicePlatform implements ServicePlatform {
                     ? "running"
                     : state === "crashed" ||
                         state === "failed" ||
-                        (exitCode !== undefined && Number(exitCode) !== 0)
+                        (numericExitCode && Number(exitCode) !== 0)
                       ? "failed"
                       : state === "not running"
                         ? "stopped"
@@ -301,7 +309,8 @@ export class LaunchdServicePlatform implements ServicePlatform {
                     : null,
                 quiescent: observedState === "stopped" && pid === null && this.groupsGone(),
             };
-        } catch {
+        } catch (error) {
+            if (error instanceof LaunchdTransitionError) throw error;
             unavailable();
         }
     }
@@ -324,7 +333,18 @@ export class LaunchdServicePlatform implements ServicePlatform {
         accepts: (state: ServicePlatformState) => boolean,
     ): Promise<ServicePlatformState> {
         for (;;) {
-            const first = await this.inspectWithin(deadline);
+            let first: ServicePlatformState;
+            try {
+                first = await this.inspectWithin(deadline);
+            } catch (error) {
+                // launchd may briefly expose an undocumented transition immediately after
+                // bootstrap. No additional effect is dispatched until a full stable identity
+                // can be read twice.
+                if (!(error instanceof LaunchdTransitionError)) throw error;
+                if (this.now() >= deadline) unavailable();
+                await this.sleep(Math.min(100, deadline - this.now()));
+                continue;
+            }
             if (accepts(first)) {
                 const second = await this.inspectWithin(deadline);
                 if (accepts(second) && isDeepStrictEqual(first, second)) return second;
@@ -360,7 +380,17 @@ export class LaunchdServicePlatform implements ServicePlatform {
                 unavailable();
             if (disabled.loaded) this.command(["bootout", this.target], deadline);
             for (;;) {
-                const current = await this.inspectWithin(deadline);
+                let current: ServicePlatformState;
+                try {
+                    current = await this.inspectWithin(deadline);
+                } catch (error) {
+                    // A successful bootout can transiently report states such as SIGTERMed.
+                    // Keep waiting without issuing another bootout or accepting that state.
+                    if (!(error instanceof LaunchdTransitionError)) throw error;
+                    if (this.now() >= deadline) unavailable();
+                    await this.sleep(Math.min(100, deadline - this.now()));
+                    continue;
+                }
                 if (current.enabled || current.loaded || current.running) unavailable();
                 if (current.quiescent) return;
                 if (this.now() >= deadline) unavailable();

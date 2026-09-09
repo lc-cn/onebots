@@ -21,6 +21,7 @@ function fixture(options: LaunchdServicePlatformOptions = {}) {
         members: true,
         path: definition,
         rawState: "",
+        lastExitCode: "",
         override: "",
         plistDisabled: false,
     };
@@ -49,7 +50,7 @@ function fixture(options: LaunchdServicePlatformOptions = {}) {
                         status: 113,
                         stderr: `Bad request.\nCould not find service "${LAUNCHD_LABEL}" in domain for user gui: 501\n`,
                     };
-                return `${target} = {\n path = ${state.path}\n state = ${state.rawState || (state.running ? "running" : "not running")}\n${state.running ? ` pid = ${state.pid}\n` : ""}}\n`;
+                return `${target} = {\n path = ${state.path}\n state = ${state.rawState || (state.running ? "running" : "not running")}\n${state.running ? ` pid = ${state.pid}\n` : ""}${state.lastExitCode ? ` last exit code = ${state.lastExitCode}\n` : ""}}\n`;
             }
             if (args[0] === "disable" || args[0] === "enable") state.enabled = args[0] === "enable";
             else if (args[0] === "bootout") {
@@ -84,6 +85,23 @@ function fixture(options: LaunchdServicePlatformOptions = {}) {
 }
 
 describe("launchd service platform", () => {
+    it("accepts launchd's never-exited marker only for a running first instance", async () => {
+        const running = fixture();
+        running.state.lastExitCode = "(never exited)";
+        expect(await running.platform.inspect()).toMatchObject({
+            state: "running",
+            running: true,
+            processId: 321,
+        });
+
+        const stopped = fixture();
+        Object.assign(stopped.state, {
+            running: false,
+            rawState: "not running",
+            lastExitCode: "(never exited)",
+        });
+        await expect(stopped.platform.inspect()).rejects.toThrow("无法安全确认");
+    });
     it.each(["not running", "crashed"])(
         "unloads a stable cold %s job before consulting durable process proof",
         async rawState => {
@@ -238,6 +256,28 @@ describe("launchd service platform", () => {
         expect((await f.platform.inspect()).quiescent).toBe(true);
         expect(f.calls.some(call => call.includes("kill"))).toBe(false);
     });
+    it("waits through launchd's transient post-bootout state without replaying bootout", async () => {
+        const f = fixture();
+        const original = f.host.exec;
+        let bootedOut = false;
+        let transient = true;
+        f.host.exec = (file, args, options) => {
+            if (args[0] === "bootout") bootedOut = true;
+            if (bootedOut && transient && args[0] === "print") {
+                transient = false;
+                return `${target} = {\n path = ${definition}\n state = SIGTERMed\n pid = 321\n last exit code = (never exited)\n}\n`;
+            }
+            return original(file, args, options);
+        };
+        await f.platform.quiesce();
+        expect(f.calls.filter(call => call[1] === "bootout")).toHaveLength(1);
+        expect(await f.platform.inspect()).toMatchObject({
+            state: "stopped",
+            running: false,
+            loaded: false,
+            quiescent: true,
+        });
+    });
     it("never treats a cold missing or stopped legacy instance as proof of empty subtree", async () => {
         for (const loaded of [false, true]) {
             const f = fixture();
@@ -370,6 +410,27 @@ describe("launchd service platform", () => {
             return output;
         };
         await expect(f.platform.start()).rejects.toThrow("无法安全确认");
+        expect(f.calls.filter(call => call[1] === "bootstrap")).toHaveLength(1);
+    });
+    it("waits through a pre-identity bootstrap transition without replaying bootstrap", async () => {
+        const f = fixture({ freshDefinition: true });
+        Object.assign(f.state, { loaded: false, running: false });
+        const original = f.host.exec;
+        let bootstrapped = false;
+        let transient = true;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args[0] === "bootstrap") bootstrapped = true;
+            if (bootstrapped && transient && args[0] === "print") {
+                transient = false;
+                return `${target} = {\n path = ${definition}\n state = xpcproxy\n pid = 321\n last exit code = (never exited)\n}\n`;
+            }
+            return output;
+        };
+        expect(await f.platform.start()).toMatchObject({
+            state: "running",
+            processId: 321,
+        });
         expect(f.calls.filter(call => call[1] === "bootstrap")).toHaveLength(1);
     });
     it("expected initial state mismatch rejects before bootstrap", async () => {
