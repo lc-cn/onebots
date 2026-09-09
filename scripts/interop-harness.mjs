@@ -151,16 +151,16 @@ export async function verifyFrameworkSend(processHandle, evidence, options) {
     let body;
     if (protocol === "onebot.v11") {
         route = "/mock/interop/onebot/v11/get_friend_msg_history";
-        body = { user_id: protocolTarget, count: 20 };
+        body = { user_id: protocolTarget, count: 1_000 };
     } else if (protocol === "satori.v1") {
         route = "/mock/interop/satori/v1/message.list";
-        body = { channel_id: String(protocolTarget), limit: 20 };
+        body = { channel_id: String(protocolTarget), limit: 1_000 };
     } else {
         route = "/mock/interop/milky/v1/api/get_history_messages";
         body = {
             message_scene: "friend",
             peer_id: protocolTarget,
-            limit: 20,
+            limit: 1_000,
         };
     }
     assertRunning(processHandle);
@@ -353,10 +353,12 @@ function samePath(left, right) {
 }
 
 export function startProcess(command, args, environment, label, workingDirectory) {
+    const ownsProcessGroup = process.platform !== "win32";
     const child = spawn(command, args, {
         cwd: workingDirectory,
         env: { ...process.env, ...environment },
         stdio: ["ignore", "pipe", "pipe"],
+        detached: ownsProcessGroup,
     });
     let output = "";
     const append = chunk => {
@@ -366,7 +368,13 @@ export function startProcess(command, args, environment, label, workingDirectory
     child.stderr.on("data", append);
     const exit = new Promise(resolve => child.once("exit", code => resolve(code ?? 1)));
     child.once("error", error => append(`${label} spawn error: ${error.message}\n`));
-    return { child, exit, label, logs: () => output };
+    return {
+        child,
+        exit,
+        label,
+        logs: () => output,
+        processGroup: ownsProcessGroup ? child.pid : undefined,
+    };
 }
 
 export async function waitForPort(port, processHandle, timeoutMs) {
@@ -393,7 +401,9 @@ export async function waitForEvidence(evidenceFile, processHandles, timeoutMs) {
 
 export async function stopProcess(processHandle) {
     try {
-        if (processHandle.child.exitCode === null) {
+        if (processHandle.processGroup !== undefined) {
+            await stopProcessGroup(processHandle);
+        } else if (processHandle.child.exitCode === null) {
             processHandle.child.kill("SIGTERM");
             const stopped = await Promise.race([processHandle.exit.then(() => true), delay(3_000)]);
             if (stopped !== true && processHandle.child.exitCode === null) {
@@ -404,6 +414,42 @@ export async function stopProcess(processHandle) {
     } finally {
         if (processHandle.workspace)
             fs.rmSync(processHandle.workspace, { recursive: true, force: true });
+    }
+}
+
+async function stopProcessGroup(processHandle) {
+    signalProcessGroup(processHandle.processGroup, "SIGTERM");
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline && processGroupExists(processHandle.processGroup)) await delay(50);
+    if (processGroupExists(processHandle.processGroup)) {
+        signalProcessGroup(processHandle.processGroup, "SIGKILL");
+        const killedDeadline = Date.now() + 3_000;
+        while (Date.now() < killedDeadline && processGroupExists(processHandle.processGroup))
+            await delay(50);
+    }
+    if (processGroupExists(processHandle.processGroup))
+        throw new Error(`${processHandle.label} 进程组未能回收`);
+    if (processHandle.child.exitCode === null) {
+        const stopped = await Promise.race([processHandle.exit.then(() => true), delay(1_000)]);
+        if (stopped !== true) throw new Error(`${processHandle.label} 主进程退出状态未知`);
+    }
+}
+
+function signalProcessGroup(processGroup, signal) {
+    try {
+        process.kill(-processGroup, signal);
+    } catch (error) {
+        if (error?.code !== "ESRCH") throw error;
+    }
+}
+
+function processGroupExists(processGroup) {
+    try {
+        process.kill(-processGroup, 0);
+        return true;
+    } catch (error) {
+        if (error?.code === "ESRCH") return false;
+        throw error;
     }
 }
 
