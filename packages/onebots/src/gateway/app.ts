@@ -1,9 +1,12 @@
-import { BaseApp } from "@onebots/core";
+import { BaseApp, type Adapter } from "@onebots/core";
+import { GatewayMessageDebugStore } from "./message-debug-store.js";
 import packageMetadata from "../../package.json" with { type: "json" };
 import { mergeRuntimeConfigDefaults } from "../runtime-defaults.js";
 
 /** 只拥有平台和协议资源的真实宿主，无管理路由、管理凭据或管理 socket。 */
 export class GatewayApp extends BaseApp {
+    readonly messageDebug = new GatewayMessageDebugStore();
+
     constructor(config: BaseApp.Config) {
         // 注册表只提供协议字段默认值，不加载旧管理宿主或创建账号。
         const runtimeConfig = mergeRuntimeConfigDefaults(config);
@@ -11,6 +14,37 @@ export class GatewayApp extends BaseApp {
         delete runtimeConfig.password;
         delete runtimeConfig.access_token;
         super(runtimeConfig, { name: packageMetadata.name, version: packageMetadata.version });
+    }
+
+    protected override onAdapterCreated(adapter: Adapter): void {
+        adapter.on(
+            "message:dispatch",
+            (payload: { platform: string; account_id: string; event: unknown }) => {
+                this.messageDebug.recordInbound(
+                    payload.platform,
+                    payload.account_id,
+                    payload.event,
+                );
+            },
+        );
+        adapter.on(
+            "message:protocol-dispatch",
+            (payload: {
+                platform: string;
+                account_id: string;
+                protocol: string;
+                version: string;
+                data: unknown;
+            }) => {
+                this.messageDebug.recordOutbound(
+                    payload.platform,
+                    payload.account_id,
+                    payload.protocol,
+                    payload.version,
+                    payload.data,
+                );
+            },
+        );
     }
 
     protected override listenHttpServer(): Promise<void> {

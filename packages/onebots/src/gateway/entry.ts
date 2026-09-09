@@ -1,4 +1,6 @@
 import { GatewaySendExecutor } from "./send-executor.js";
+import { handleGatewayMessageDebug } from "./message-debug-ipc.js";
+import type { GatewayMessageDebugReply } from "./message-debug-contracts.js";
 import { handleGatewaySendMessage } from "./send-ipc.js";
 import type { GatewaySendReply } from "./send-contracts.js";
 import { GatewayMcpSessions } from "./mcp-sessions.js";
@@ -23,7 +25,9 @@ let stopping = false;
 let mcpSessions: GatewayMcpSessions | undefined;
 let sendExecutor: GatewaySendExecutor | undefined;
 
-function send(message: GatewayChildMessage | GatewayMcpReply | GatewaySendReply): void {
+function send(
+    message: GatewayChildMessage | GatewayMcpReply | GatewaySendReply | GatewayMessageDebugReply,
+): void {
     if (process.connected) process.send?.(message);
 }
 
@@ -93,7 +97,7 @@ async function start(message: GatewayStartMessage): Promise<void> {
         });
         send({
             type: "gateway.ready",
-            capabilities: ["mcp", "send"],
+            capabilities: ["mcp", "send", "message-debug"],
             protocolVersion: 1,
             controlInstanceId: message.controlInstanceId,
             gatewayInstanceId: message.gatewayInstanceId,
@@ -130,6 +134,15 @@ for (const name of Object.keys(process.env)) {
 }
 const handshakeTimer = setTimeout(() => process.exit(1), 30_000);
 process.on("message", value => {
+    if (
+        handleGatewayMessageDebug(
+            value,
+            startMessage,
+            stopping ? undefined : app?.messageDebug,
+            send,
+        )
+    )
+        return;
     if (handleGatewaySendMessage(value, startMessage, stopping ? undefined : sendExecutor, send))
         return;
     if (handleGatewayMcpMessage(value, startMessage, stopping ? undefined : mcpSessions, send))

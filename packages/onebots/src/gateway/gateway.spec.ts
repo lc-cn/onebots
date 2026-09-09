@@ -12,6 +12,9 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { once } from "node:events";
+import { randomUUID } from "node:crypto";
+import { GatewayRequestClient } from "../control/gateway-request-client.js";
+import { requestGatewayMessageDebug } from "../control/gateway-message-debug-client.js";
 import { isGatewayParentMessage, type GatewayStartMessage } from "./contracts.js";
 
 const directories: string[] = [];
@@ -67,6 +70,38 @@ function spawnGateway(withMock = false) {
 }
 
 describe("独立网关 IPC", () => {
+    it("实际构建网关仅通过私有 IPC 查询和清空消息调试", async () => {
+        const { child, message } = spawnGateway(true);
+        message.controlInstanceId = randomUUID();
+        message.gatewayInstanceId = randomUUID();
+        const ready = once(child, "message");
+        child.send(message);
+        expect((await ready)[0].capabilities).toContain("message-debug");
+        const requests = new GatewayRequestClient(child, 3000);
+        const identity = {
+            protocolVersion: 1 as const,
+            controlInstanceId: message.controlInstanceId,
+            gatewayInstanceId: message.gatewayInstanceId,
+        };
+        try {
+            const history = await requestGatewayMessageDebug(requests, identity, "history");
+            expect(history).toMatchObject({
+                action: "history",
+                outcome: "succeeded",
+                result: { entries: [] },
+            });
+            expect(await requestGatewayMessageDebug(requests, identity, "clear")).toMatchObject({
+                action: "clear",
+                outcome: "succeeded",
+                result: { clearedCount: 0, clearedThroughSeq: 0 },
+            });
+        } finally {
+            requests.close();
+            const exited = once(child, "exit");
+            child.disconnect();
+            expect((await exited)[0]).toBe(0);
+        }
+    });
     it("启动不修改已有账号数据目录权限", async () => {
         if (process.platform === "win32") return;
         const { child, message } = spawnGateway();

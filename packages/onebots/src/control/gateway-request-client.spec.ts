@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
 import { NodeGatewayDriver } from "./gateway-driver.js";
-it("one real child supports independent MCP/send codecs and context rejects stale configs", async () => {
+it("one real child supports MCP/send/debug codecs and rejects stale contexts", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ob-send-driver-")),
         entry = path.join(root, "gateway.mjs");
     await writeFile(
@@ -12,13 +12,18 @@ it("one real child supports independent MCP/send codecs and context rejects stal
         `
 process.on('disconnect',()=>process.exit(0));
 process.on('message',m=>{
- if(m.type==='gateway.start')process.send({...m,type:'gateway.ready',capabilities:['mcp','send'],address:{host:'127.0.0.1',port:12345}});
+ if(m.type==='gateway.start')process.send({...m,type:'gateway.ready',capabilities:['mcp','send','message-debug'],address:{host:'127.0.0.1',port:12345}});
  if(m.type==='gateway.stop')process.exit(0);
  if(m.type==='gateway.mcp')process.send({type:'gateway.mcp.result',protocolVersion:1,controlInstanceId:m.controlInstanceId,gatewayInstanceId:m.gatewayInstanceId,requestId:m.requestId,ok:true,result:{events:[]}});
  if(m.type==='gateway.send'){
   const base={type:'gateway.send.result',protocolVersion:1,controlInstanceId:m.controlInstanceId,gatewayInstanceId:m.gatewayInstanceId,requestId:m.requestId,operationId:m.request.id,configVersion:m.request.expected.configVersion,outcome:'succeeded',result:{messageId:'real-result'}};
   process.send({...base,configVersion:'b'.repeat(64),result:{messageId:'wrong'}});
   process.send({...base,operationId:'00000000-0000-4000-8000-000000000000',result:{messageId:'wrong'}});
+  process.send(base);
+ }
+ if(m.type==='gateway.message-debug'){
+  const base={type:'gateway.message-debug.result',protocolVersion:1,controlInstanceId:m.controlInstanceId,gatewayInstanceId:m.gatewayInstanceId,requestId:m.requestId,action:m.action,outcome:'succeeded',result:m.action==='history'?{entries:[]}:{clearedCount:2,clearedThroughSeq:9}};
+  process.send({...base,gatewayInstanceId:'00000000-0000-4000-8000-000000000000',result:m.action==='history'?{entries:[]}:{clearedCount:99,clearedThroughSeq:99}});
   process.send(base);
  }
 });`,
@@ -60,8 +65,21 @@ process.on('message',m=>{
         await expect(
             driver.mcp(instance.id, { action: "poll", sessionId: randomUUID() }),
         ).resolves.toEqual({ events: [] });
+        await expect(driver.messageDebug(instance.id, "history")).resolves.toMatchObject({
+            gatewayInstanceId: instance.id,
+            action: "history",
+            result: { entries: [] },
+        });
+        await expect(driver.messageDebug(instance.id, "clear")).resolves.toMatchObject({
+            gatewayInstanceId: instance.id,
+            action: "clear",
+            result: { clearedCount: 2, clearedThroughSeq: 9 },
+        });
         await driver.stop(instance);
         expect(driver.sendContext(instance.id)).toBeUndefined();
+        await expect(driver.messageDebug(instance.id, "clear")).rejects.toMatchObject({
+            outcome: "rejected",
+        });
     } finally {
         if (instance && driver.hasLiveChildren()) await driver.stop(instance);
         await rm(root, { recursive: true, force: true });

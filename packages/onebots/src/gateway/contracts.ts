@@ -23,7 +23,7 @@ export interface GatewayStopMessage extends GatewayIdentity {
 
 export interface GatewayReadyMessage extends GatewayIdentity {
     type: "gateway.ready";
-    capabilities?: Array<"mcp" | "send">;
+    capabilities?: Array<"mcp" | "send" | "message-debug">;
     configVersion: string;
     dependencyVersion: string;
     address: { host: "127.0.0.1"; port: number };

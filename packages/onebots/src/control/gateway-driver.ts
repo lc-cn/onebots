@@ -1,4 +1,6 @@
 import { GatewayRequestClient, GatewayRequestError } from "./gateway-request-client.js";
+import { requestGatewayMessageDebug } from "./gateway-message-debug-client.js";
+import type { GatewayMessageDebugReply } from "../gateway/message-debug-contracts.js";
 import {
     isGatewaySendMessage,
     isGatewaySendReply,
@@ -54,6 +56,7 @@ interface ManagedChild {
     mcp?: GatewayMcpClient;
     requests?: GatewayRequestClient;
     sendContext?: ControlSendContext;
+    messageDebug?: boolean;
 }
 
 /** This is process lifecycle isolation, not a security sandbox for hostile plugins. */
@@ -119,6 +122,7 @@ export class NodeGatewayDriver implements GatewayDriver {
             )
                 throw new Error("发送网关上下文无效");
             managed.requests = new GatewayRequestClient(child);
+            managed.messageDebug = ready.capabilities?.includes("message-debug") ?? false;
             if (ready.capabilities?.includes("send"))
                 managed.sendContext = {
                     gatewayInstanceId: id,
@@ -208,6 +212,30 @@ export class NodeGatewayDriver implements GatewayDriver {
                 closed: "发送网关已关闭，结果未知，请勿自动重试",
             },
         });
+    }
+
+    messageDebug(
+        instanceId: string,
+        action: "history" | "clear",
+    ): Promise<GatewayMessageDebugReply> {
+        const managed = this.children.get(instanceId);
+        if (
+            !managed ||
+            managed.stopping ||
+            managed.exited ||
+            !managed.messageDebug ||
+            !managed.requests
+        )
+            return Promise.reject(new GatewayRequestError("rejected", "消息调试网关不可用"));
+        return requestGatewayMessageDebug(
+            managed.requests,
+            {
+                protocolVersion: 1,
+                controlInstanceId: this.options.controlInstanceId,
+                gatewayInstanceId: instanceId,
+            },
+            action,
+        );
     }
 
     mcp(instanceId: string, request: GatewayMcpRequest): Promise<GatewayMcpResult> {
@@ -401,9 +429,11 @@ function isReady(value: unknown, start: GatewayStartMessage): value is GatewayRe
         message.dependencyVersion === start.dependencyVersion &&
         (message.capabilities === undefined ||
             (Array.isArray(message.capabilities) &&
-                message.capabilities.length <= 2 &&
+                message.capabilities.length <= 3 &&
                 new Set(message.capabilities).size === message.capabilities.length &&
-                message.capabilities.every(value => value === "mcp" || value === "send"))) &&
+                message.capabilities.every(
+                    value => value === "mcp" || value === "send" || value === "message-debug",
+                ))) &&
         message.address?.host === "127.0.0.1" &&
         Number.isInteger(message.address.port) &&
         message.address.port > 0 &&
