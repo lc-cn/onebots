@@ -393,21 +393,26 @@ describe("installed service migration entry", () => {
     it.each(["stopping-old", "configuration-drift"])(
         "rejects early cancellation after %s",
         async scenario => {
-            const test = fixture();
-            fs.rmSync(path.join(path.dirname(test.legacy.binPath), "node_modules"), {
-                recursive: true,
-            });
+            const test = fixture(false, scenario !== "stopping-old");
+            if (scenario === "configuration-drift") {
+                fs.rmSync(path.join(path.dirname(test.legacy.binPath), "node_modules"), {
+                    recursive: true,
+                });
+            }
             const record = await migrateInstalledService(test.target, test.host);
             const journal = new FileServiceMigrationJournal(
                 path.join(test.files.stateDir, "migrations"),
             );
-            if (scenario === "stopping-old") journal.save({ ...record, phase: "stopping-old" });
-            else fs.appendFileSync(test.legacy.configPath, "# external edit\n");
+            expect(record.phase).toBe(
+                scenario === "stopping-old" ? "stopping-old" : "capturing-runtime",
+            );
+            if (scenario === "configuration-drift")
+                fs.appendFileSync(test.legacy.configPath, "# external edit\n");
             await expect(
                 cancelUnstartedServiceMigration(record.id, "user", test.host),
             ).rejects.toThrow();
             expect(journal.read(record.id).recoveryRequired).toBe(true);
-            expect(test.osEffects).toEqual([]);
+            expect(test.osEffects).toEqual(scenario === "stopping-old" ? ["quiesce"] : []);
         },
     );
     it("invalid existing definition refuses capture and leaves every non-target file unchanged", async () => {

@@ -536,3 +536,5 @@ Linux 检查已补充 musl 的系统配置与默认搜索顺序。独立、禁�
 目标定义写入后的冷恢复先补充失败关闭的只读基础证据，尚未开放新阶段：never-started 证明要求进程收据从未被 manager 认领、gateway 保持精确初始状态，并将 `.control` 顶层限制为锁文件和迁移种子/封锁文件的稳定清单，任何认证、socket、运行版本、worker 或未知痕迹都拒绝。回退工作区检查严格读取私有 pending/blocked 标记并复验文件身份，但 schema v1 blocked 仍只绑定操作 ID，不能作为恢复或重启授权；目标文件、备份、候选、回退来源、reload 与旧实例收据尚未形成完整闭包前，`starting-manager` 继续只读封锁。
 
 旧网关当前进程的 Application 查询与动态加载接口现已退役：`/api/applications`、`/api/applications/load` 及其唯一工厂入口不再形成第二套扩展管理面；框架方案目录、连接计划和动态 provider 入口继续保留。Application 扩展仍由管理服务的安装计划写入不可变运行代，并在网关启动时注册和激活。本次只删除已确认无 Web/文档消费者的闭合切片；其余旧 App/Web 路径、`createOnebots` 与 `--service-runtime` 仍有迁移回退或真实运行时消费者，尚不能整体退役。
+
+迁移日志现预备严格的 schema v2 读取契约，并继续让现有事务写入 v1：v2 封闭 `target-written` 检查点、显式回退来源以及旧服务 reload/start 收据格式，拒绝 v1 混入新字段、缺少回退来源或 reload 收据的后期回退记录、旧 `restarting-old` 阶段、运行中的终态和携带回退证据的成功终态。journal 的普通保存不能把既有 v1 记录改成 v2。测试改为通过真实停服失败到达 `stopping-old`，不再用日志接口伪造阶段。此提交只建立后续冷回退的数据兼容边界；workspace v2 标记、唯一回退契约摘要、平台效果收据生产、journal 专用 CAS、事务写入检查点和 recovery 接线仍未实现，因此尚未开放目标写入后的回退，也没有改变当前 v1 迁移行为。

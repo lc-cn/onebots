@@ -7,14 +7,33 @@ export type ServiceMigrationPhase =
     | "preparing-manager"
     | "stopping-old"
     | "writing-target"
+    | "target-written"
     | "starting-manager"
     | "verifying"
     | "releasing-target"
     | "stopping-target"
     | "restoring"
     | "restarting-old"
+    | "reloading-old"
+    | "starting-old"
+    | "verifying-restored"
     | "cancelled"
     | "completed";
+export type ServiceMigrationRollbackOrigin = "pre-target" | "target-written";
+export interface ServiceMigrationReloadOldReceipt {
+    schemaVersion: 1;
+    backupDigest: string;
+    rollbackContractDigest: string;
+    enabled: boolean;
+    loaded: boolean;
+    definitionPath: string;
+}
+export interface ServiceMigrationStartOldReceipt {
+    schemaVersion: 1;
+    reloadReceiptDigest: string;
+    processId: number;
+    identity: string;
+}
 export interface ServiceMigrationFile {
     role: "definition" | "metadata" | "configuration" | "runner";
     path: string;
@@ -34,7 +53,8 @@ export interface ServiceMigrationBackup {
     targetCandidateDigest?: string;
 }
 export interface ServiceMigrationRecord {
-    schemaVersion: 1;
+    /** 当前生产者仍写v1；v2仅供严格读取，待闭合事务一次启用。 */
+    schemaVersion: 1 | 2;
     id: string;
     backupDigest: string;
     /** 工件/候选绑定前的不可变备份，仅由绑定事务追加，状态检查不读取其正文。 */
@@ -43,6 +63,12 @@ export interface ServiceMigrationRecord {
     status: "running" | "succeeded" | "failed" | "interrupted";
     recoveryRequired: boolean;
     rolledBack: boolean;
+    /** v2回退来源；未来必须由journal专用事务绑定。 */
+    rollbackOrigin?: ServiceMigrationRollbackOrigin;
+    /** v2旧定义重载收据；当前没有生产写入入口。 */
+    reloadOldReceipt?: ServiceMigrationReloadOldReceipt;
+    /** v2旧实例启动收据；当前没有生产写入入口。 */
+    startOldReceipt?: ServiceMigrationStartOldReceipt;
 }
 export interface ServiceMigrationJournal {
     /** 未结束操作或损坏日志必须拒绝新迁移；相同ID也不能自动重放。 */

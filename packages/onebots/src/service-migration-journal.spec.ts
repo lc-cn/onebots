@@ -135,6 +135,7 @@ describe("service migration private journal", () => {
         const record = test.journal.prepare("first", test.backup);
         expect(() => test.journal.save({ ...record, id: "second" })).toThrow();
         expect(() => test.journal.save({ ...record, backupDigest: "f".repeat(64) })).toThrow();
+        expect(() => test.journal.save({ ...record, schemaVersion: 2 })).toThrow();
         expect(() => test.journal.save({ ...record, status: "succeeded" })).toThrow();
     });
 });

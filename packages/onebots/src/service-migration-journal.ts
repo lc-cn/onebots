@@ -1,5 +1,9 @@
 import { parseServiceMigrationRecord } from "./service-migration-record.js";
-export { parseServiceMigrationRecord } from "./service-migration-record.js";
+export {
+    parseServiceMigrationRecord,
+    parseServiceMigrationReloadOldReceipt,
+    parseServiceMigrationStartOldReceipt,
+} from "./service-migration-record.js";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
@@ -242,6 +246,8 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             this.checkDirectory();
             const clean = parseServiceMigrationRecord(record);
             const previous = this.read(clean.id);
+            // 当前生产者只写v1；严格v2记录须由后续闭合事务创建，禁止普通save升级格式。
+            if (previous.schemaVersion !== clean.schemaVersion) throw invalid();
             if (previous.backupDigest !== clean.backupDigest) throw invalid();
             if (!isDeepStrictEqual(previous.previousBackupDigests, clean.previousBackupDigests))
                 throw invalid();
