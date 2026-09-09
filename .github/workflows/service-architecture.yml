@@ -13,6 +13,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  launchd-service:
+    name: Real launchd lifecycle
+    runs-on: macos-14
+    timeout-minutes: 30
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:packages
+      - name: Verify public CLI against real launchd
+        env:
+          ONEBOTS_LAUNCHD_ACCEPTANCE: "1"
+        run: node scripts/verify-launchd-service-lifecycle.mjs
+
   system-service:
     name: Real systemd lifecycle
     runs-on: ubuntu-latest
