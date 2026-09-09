@@ -185,10 +185,10 @@ export async function verifyManagerPatchUpgrade(options) {
     const interrupted = await eventually(
         () => newUpgradeJournal(stateDirectory, previousNames),
         value =>
-            value?.record.phase === "starting" &&
+            ["starting", "verifying"].includes(value?.record.phase) &&
             value.record.status === "interrupted" &&
             value.record.recoveryRequired === true,
-        "真实候选启动失败未保留可回退的 starting 阶段",
+        "真实候选启动失败未保留可回退的启动或验证阶段",
     );
     assertPreserved(dataDirectory, preserved);
     fs.rmdirSync(obstacle);
