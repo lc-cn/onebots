@@ -62,6 +62,33 @@ function fixture() {
 }
 
 describe("GenerationInstaller", () => {
+    it("最终持久状态投影不含安装计划或凭据，观察失败不改变结果", async () => {
+        const { plan, options } = fixture();
+        const onOperation = vi.fn(() => {
+            throw new Error("log unavailable");
+        });
+        const installer = new GenerationInstaller({ ...options, onOperation });
+        expect(
+            await installer.install("project-install", plan, { token: "private-token" }),
+        ).toMatchObject({
+            id: "project-install",
+            phase: "verified",
+        });
+        expect(onOperation).toHaveBeenCalledWith({
+            id: "project-install",
+            action: "installation.install",
+            status: "succeeded",
+            phase: "verified",
+            finishedAt: expect.any(String),
+        });
+        expect(Object.keys(onOperation.mock.calls[0][0]).sort()).toEqual([
+            "action",
+            "finishedAt",
+            "id",
+            "phase",
+            "status",
+        ]);
+    });
     it("收据已完成但最终操作写入失败时记录中断，不误报下载或验证失败", async () => {
         const { plan, options, download, verify } = fixture();
         const installer = new GenerationInstaller(options);
@@ -154,6 +181,7 @@ describe("GenerationInstaller", () => {
 
     it("冷启动标记中断而不重新执行下载，保留候选", async () => {
         const { plan, options, download } = fixture();
+        const onOperation = vi.fn();
         fs.mkdirSync(options.operationsDirectory);
         const candidate = options.store.allocate("crashed", plan.digest);
         fs.writeFileSync(
@@ -167,8 +195,11 @@ describe("GenerationInstaller", () => {
                 createdAt: new Date().toISOString(),
             }),
         );
-        const installer = new GenerationInstaller(options);
+        const installer = new GenerationInstaller({ ...options, onOperation });
         expect((await installer.install("crashed", plan)).phase).toBe("interrupted");
+        expect(onOperation).toHaveBeenCalledWith(
+            expect.objectContaining({ id: "crashed", status: "interrupted" }),
+        );
         expect(download).not.toHaveBeenCalled();
         expect(fs.existsSync(candidate.directory)).toBe(true);
     });

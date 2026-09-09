@@ -16,10 +16,10 @@ afterEach(() => {
     for (const directory of directories.splice(0))
         rmSync(directory, { recursive: true, force: true });
 });
-function fixture() {
+function fixture(onOperation?: ConstructorParameters<typeof ControlVerificationStore>[1]) {
     const directory = mkdtempSync(path.join(tmpdir(), "ob-verification-store-"));
     directories.push(directory);
-    const store = new ControlVerificationStore(directory);
+    const store = new ControlVerificationStore(directory, onOperation);
     const command = {
         operationId: randomUUID(),
         challengeId: randomUUID(),
@@ -48,6 +48,34 @@ function fixture() {
     };
 }
 describe("验证操作私有持久存储", () => {
+    it("最终回执投影不含账户、挑战或摘要，观察失败不改变回执", () => {
+        const onOperation = vi.fn(() => {
+            throw new Error("log unavailable");
+        });
+        const f = fixture(onOperation);
+        f.store.create(f.record);
+        const completed = {
+            ...f.record,
+            status: "succeeded" as const,
+            finishedAt: new Date().toISOString(),
+        };
+        expect(() => f.store.finish(completed)).not.toThrow();
+        expect(f.store.read(completed.id)).toEqual(completed);
+        expect(onOperation).toHaveBeenCalledWith({
+            id: completed.id,
+            action: "verification.submit",
+            status: "succeeded",
+            phase: "completed",
+            finishedAt: completed.finishedAt,
+        });
+        expect(Object.keys(onOperation.mock.calls[0][0]).sort()).toEqual([
+            "action",
+            "finishedAt",
+            "id",
+            "phase",
+            "status",
+        ]);
+    });
     it("接受未知风险保留原记录、隔离审计身份且冷启动解除门禁", () => {
         const f = fixture();
         f.store.create(f.record);
@@ -183,8 +211,12 @@ describe("验证操作私有持久存储", () => {
     it("启动将中断running持久转unknown，不重新派发，终态保持", () => {
         const f = fixture();
         f.store.create(f.record);
-        const reopened = new ControlVerificationStore(f.directory);
+        const onOperation = vi.fn();
+        const reopened = new ControlVerificationStore(f.directory, onOperation);
         expect(reopened.read(f.record.id).status).toBe("unknown");
+        expect(onOperation).toHaveBeenCalledWith(
+            expect.objectContaining({ id: f.record.id, status: "unknown", phase: "interrupted" }),
+        );
         expect(reopened.hasUncertainAccount(f.record.accountHash)).toBe(true);
         expect(new ControlVerificationStore(f.directory).read(f.record.id).status).toBe("unknown");
         const g = fixture();

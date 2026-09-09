@@ -7,6 +7,7 @@ import { recoverDownloadCredentials } from "../installation/generation-download.
 import { ConfigurationFile } from "../configuration/configuration-file.js";
 import { ControlInstallationService } from "./installation-service.js";
 import { controlDirectory, prepareGatewayWorkspace } from "./workspace.js";
+import type { PersistedOperationObserver } from "../persisted-operation-observer.js";
 
 /** 恢复安装边界后再开放安装/升级服务，所有基线均由当前管理宿主提供。 */
 export async function createHostInstallation(
@@ -15,6 +16,7 @@ export async function createHostInstallation(
     generations: GenerationStore | undefined,
     lifecycle: GenerationActivationController,
     ownershipAvailable: boolean,
+    onOperation?: PersistedOperationObserver,
 ): Promise<ControlInstallationService | undefined> {
     try {
         if (!ownershipAvailable) throw new Error("历史管理进程所有权不可确认");
@@ -29,6 +31,7 @@ export async function createHostInstallation(
             directory: controlDirectory(workspace),
             store: generations,
             lifecycle,
+            onOperation,
             currentGenerationId: () => lifecycle.status().active?.id ?? null,
             currentConfigurationRevision: () => source.read().revision,
             currentSelection: () => {

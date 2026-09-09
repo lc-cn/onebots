@@ -4,6 +4,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { createGenerationPlan, type GenerationPlan } from "./generation-plan.js";
 import { downloadGeneration, type GenerationDownloadInput } from "./generation-download.js";
 import { GenerationStore, type GenerationVerification } from "./generation-store.js";
+import {
+    observePersistedOperation,
+    type PersistedOperationObserver,
+} from "../persisted-operation-observer.js";
 
 export interface GenerationInstallOperation {
     schemaVersion: 1;
@@ -28,6 +32,7 @@ export interface GenerationInstallerOptions {
     download?: (input: GenerationDownloadInput) => Promise<void>;
     pnpmExecutable?: string;
     pnpmScript?: string;
+    onOperation?: PersistedOperationObserver;
 }
 
 /**
@@ -50,12 +55,14 @@ export class GenerationInstaller {
             if (!name.endsWith(".json")) continue;
             const operation = this.status(name.slice(0, -5));
             if (["queued", "downloading", "verifying"].includes(operation.phase)) {
-                this.save({
+                const interrupted = {
                     ...operation,
-                    phase: "interrupted",
-                    error: "INTERRUPTED",
+                    phase: "interrupted" as const,
+                    error: "INTERRUPTED" as const,
                     finishedAt: new Date().toISOString(),
-                });
+                };
+                this.save(interrupted);
+                this.observe(interrupted);
             }
         }
     }
@@ -168,6 +175,7 @@ export class GenerationInstaller {
             this.options.store.commitVerified(candidate.id, evidence);
             current = { ...current, phase: "verified", finishedAt: new Date().toISOString() };
             this.save(current);
+            this.observe(current);
             return current;
         } catch (error) {
             options.token = undefined;
@@ -191,6 +199,7 @@ export class GenerationInstaller {
                 finishedAt: new Date().toISOString(),
             };
             this.save(failed);
+            this.observe(failed);
             return failed;
         }
     }
@@ -223,6 +232,22 @@ export class GenerationInstaller {
         } finally {
             fs.rmSync(temporary, { force: true });
         }
+    }
+
+    private observe(operation: GenerationInstallOperation): void {
+        if (!operation.finishedAt) return;
+        observePersistedOperation(this.options.onOperation, {
+            id: operation.id,
+            action: "installation.install",
+            status:
+                operation.phase === "verified"
+                    ? "succeeded"
+                    : operation.phase === "interrupted"
+                      ? "interrupted"
+                      : "failed",
+            phase: operation.phase,
+            finishedAt: operation.finishedAt,
+        });
     }
 }
 

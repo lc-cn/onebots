@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
+import {
+    observePersistedOperation,
+    type PersistedOperationObserver,
+} from "../persisted-operation-observer.js";
 
 /** 仅受信 driver 在本次启动未产生进程或已确认回收全部所属进程后抛出。 */
 export class GatewayStartReapedError extends Error {}
@@ -43,7 +47,7 @@ export interface GatewayControllerOptions {
     driver: GatewayDriver;
     initialDesired?: GatewayDesiredState;
     /** Called only after the final operation state is durable; failures must remain isolated. */
-    onOperation?(operation: GatewayOperation): void;
+    onOperation?: PersistedOperationObserver;
 }
 
 /** One workspace lock must be held by the host throughout this controller's lifetime. */
@@ -212,11 +216,7 @@ export class GatewayController {
             } catch (error) {
                 throw this.markUnknown(error, operation);
             }
-            try {
-                this.options.onOperation?.(structuredClone(operation));
-            } catch {
-                // 可观察性失败不能改变已经持久化完成的生命周期结果。
-            }
+            observePersistedOperation(this.options.onOperation, operation);
             if (
                 operation.status === "succeeded" &&
                 ["stop", "shutdown", "reconcile", "suspend"].includes(action)

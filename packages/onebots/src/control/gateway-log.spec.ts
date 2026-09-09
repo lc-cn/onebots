@@ -2,7 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, expect, it } from "vitest";
-import { appendControlLog, openGatewayLog, readControlLog, readGatewayLog } from "./gateway-log.js";
+import {
+    appendControlLog,
+    createControlLogWriter,
+    openGatewayLog,
+    readControlLog,
+    readGatewayLog,
+} from "./gateway-log.js";
 const roots: string[] = [];
 afterEach(() => {
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
@@ -73,6 +79,27 @@ it("三类固定来源共享有界游标，轮换后显式重置", () => {
         reset: true,
     });
     expect(readControlLog(f.workspace, "manager").text).toBe("ready\n");
+});
+it("持久操作观察器写入统一日志时只保留固定投影", () => {
+    const f = fixture();
+    const writer = createControlLogWriter(f.workspace, "manager-1");
+    writer.operation({
+        id: "install-1",
+        action: "installation.install",
+        status: "succeeded",
+        phase: "verified",
+        finishedAt: "2026-09-10T00:00:00.000Z",
+        secret: "private-token",
+        path: "/private/workspace",
+    } as Parameters<typeof writer.operation>[0]);
+    const operation = JSON.parse(readControlLog(f.workspace, "operation").text.trim());
+    expect(operation).toEqual({
+        time: "2026-09-10T00:00:00.000Z",
+        id: "install-1",
+        action: "installation.install",
+        status: "succeeded",
+        phase: "verified",
+    });
 });
 it("拒绝符号链接和硬链接日志，不修改其指向的文件", () => {
     const f = fixture();

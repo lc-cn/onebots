@@ -13,6 +13,7 @@ import {
     verificationHash,
     type VerificationRecord,
 } from "./verification-record.js";
+import type { PersistedOperationObserver } from "../persisted-operation-observer.js";
 
 interface Context {
     gatewayInstanceId: string;
@@ -30,6 +31,7 @@ export interface ControlVerificationServiceOptions {
     abandonWhileStopped?(
         commit: () => ControlVerificationAbandonment,
     ): Promise<ControlVerificationAbandonment>;
+    onOperation?: PersistedOperationObserver;
 }
 type Operation = ReturnType<typeof projectVerification>;
 interface Pending {
@@ -48,7 +50,7 @@ export class ControlVerificationService {
         this.timeoutMs = options.timeoutMs ?? 30000;
         if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs < 1 || this.timeoutMs > 30000)
             throw new Error("账号验证请求期限无效");
-        this.store = new ControlVerificationStore(options.directory);
+        this.store = new ControlVerificationStore(options.directory, options.onOperation);
     }
     health() {
         return this.store.health();

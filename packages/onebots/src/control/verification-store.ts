@@ -18,6 +18,10 @@ import {
     verificationId,
     type VerificationRecord,
 } from "./verification-record.js";
+import {
+    observePersistedOperation,
+    type PersistedOperationObserver,
+} from "../persisted-operation-observer.js";
 export { ControlVerificationError, type VerificationRecord } from "./verification-record.js";
 /** 唯一manager持锁访问；密钥与回执分目录，验证码只参与带秘密密钥的摘要。 */
 export class ControlVerificationStore {
@@ -30,7 +34,10 @@ export class ControlVerificationStore {
     private blocked = false;
     private readonly uncertain = new Map<string, VerificationRecord>();
     private readonly observed = new Map<string, VerificationRecord>();
-    constructor(directory: string) {
+    constructor(
+        directory: string,
+        private readonly onOperation?: PersistedOperationObserver,
+    ) {
         try {
             this.root = new ServiceOperationStorage(directory);
             this.keys = new ServiceOperationStorage(path.join(directory, "keys"));
@@ -65,6 +72,7 @@ export class ControlVerificationStore {
                 };
                 this.uncertain.set(record.id, unknown);
                 this.write(unknown);
+                this.observe(unknown, "interrupted");
                 this.uncertain.delete(record.id);
             }
         } catch {
@@ -172,6 +180,7 @@ export class ControlVerificationStore {
                 throw new Error();
             this.write(record);
             this.observed.set(record.id, structuredClone(record));
+            this.observe(record);
         } catch {
             this.blocked = true;
             // 只从原有回执生成unknown，不接纳调用方篡改的不可变身份。
@@ -220,6 +229,7 @@ export class ControlVerificationStore {
         try {
             this.write(resolved);
             this.observed.set(resolved.id, structuredClone(resolved));
+            this.observe(resolved, "resolved");
             return structuredClone(resolved);
         } catch {
             // 写盘是否成功未知时不能允许新验证；重启后重新读取唯一持久事实。
@@ -258,6 +268,7 @@ export class ControlVerificationStore {
         try {
             this.write(accepted);
             this.observed.set(accepted.id, structuredClone(accepted));
+            this.observe(accepted, "acknowledged");
             return structuredClone(accepted);
         } catch {
             // 不能用内存中的接受状态掩盖写盘结果未知。
@@ -373,6 +384,16 @@ export class ControlVerificationStore {
             { keyFingerprint: this.fingerprint, record },
             createOnly,
         );
+    }
+    private observe(record: VerificationRecord, phase = "completed"): void {
+        if (record.status === "running") return;
+        observePersistedOperation(this.onOperation, {
+            id: record.id,
+            action: `verification.${record.action}`,
+            status: record.status,
+            phase,
+            finishedAt: record.finishedAt,
+        });
     }
     private finishedAt(record: VerificationRecord): string {
         return new Date(Math.max(Date.now(), Date.parse(record.startedAt))).toISOString();

@@ -3,6 +3,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { VerifiedGeneration } from "../installation/generation-store.js";
+import {
+    observeNamedPersistedOperation,
+    type PersistedOperationObserver,
+} from "../persisted-operation-observer.js";
 import type {
     GatewayController,
     GatewayControllerState,
@@ -46,6 +50,7 @@ export interface GenerationActivationOptions {
     configurationRecoveryRequired?(): boolean;
     /** Verify candidate configuration under the lifecycle queue; guard must synchronously recheck its snapshot. */
     verifyActivation?(generation: VerifiedGeneration, expectedConfigRevision?: string): Promise<() => void>;
+    onOperation?: PersistedOperationObserver;
 }
 
 /** 仅供可信配置服务使用；事务中必须 await 操作，不得调用外层 facade。 */
@@ -90,6 +95,7 @@ export class GenerationActivationController {
                 if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
                 // A missing pointer record is the initial bundled runtime.
             }
+            const interrupted: GenerationActivationOperation[] = [];
             for (const operation of this.state.operations) {
                 if (operation.status !== "running") continue;
                 operation.status = "failed";
@@ -98,9 +104,11 @@ export class GenerationActivationController {
                 operation.error = "前次版本切换中断，结果未知，必须人工对账";
                 this.state.recoveryRequired = true;
                 this.state.error = operation.error;
+                interrupted.push(operation);
             }
             if (this.state.active) this.verifyPointer(this.state.active);
             await this.persist();
+            for (const operation of interrupted) this.observe(operation);
             await this.options.gateway.initialize();
             this.initialized = true;
         });
@@ -264,6 +272,7 @@ export class GenerationActivationController {
                 if (samePointer(operation.previous, target)) {
                     this.complete(operation);
                     await this.persist();
+                    this.observe(operation);
                     return structuredClone(operation);
                 }
                 operation.phase = "stopping";
@@ -282,6 +291,7 @@ export class GenerationActivationController {
                     requireSuccess(await this.options.gateway.start());
                 this.complete(operation);
                 await this.persist();
+                this.observe(operation);
             } catch (error) {
                 if (!effectsStarted) {
                     operation.status = "failed";
@@ -294,12 +304,14 @@ export class GenerationActivationController {
                         this.markUnknown(operation, persistenceError);
                         throw persistenceError;
                     }
+                    this.observe(operation);
                     return structuredClone(operation);
                 }
                 if (!(error instanceof GatewayActionFailure) || this.options.hasLiveChildren()) {
                     this.markUnknown(operation, error);
                     // Persist when possible; failure leaves the previous unfinished record for recovery.
                     await this.persist();
+                    this.observe(operation);
                     return structuredClone(operation);
                 }
                 await this.restore(operation, error);
@@ -329,6 +341,7 @@ export class GenerationActivationController {
             operation.phase = "failed";
             operation.finishedAt = new Date().toISOString();
             await this.persist();
+            this.observe(operation);
         } catch (error) {
             this.markUnknown(
                 operation,
@@ -337,9 +350,13 @@ export class GenerationActivationController {
                 ),
             );
             await this.persist();
+            this.observe(operation);
         }
     }
 
+    private observe(operation: GenerationActivationOperation): void {
+        observeNamedPersistedOperation(this.options.onOperation, "generation.activate", operation);
+    }
     private lifecycle(
         action: "start" | "stop" | "restart" | "shutdown",
     ): Promise<GatewayOperation> {

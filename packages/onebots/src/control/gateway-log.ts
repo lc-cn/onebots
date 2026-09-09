@@ -2,6 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import type { ControlLogBatch, ControlLogSnapshot, ControlLogSource } from "@onebots/core/control";
+import type {
+    PersistedOperationObserver,
+    PersistedOperationProjection,
+} from "../persisted-operation-observer.js";
 
 const MAX_BYTES = 64 * 1024;
 const unavailable = () => new Error("网关日志不可读取，请检查工作区权限");
@@ -116,12 +120,7 @@ export function createControlLogWriter(workspace: string, managerId: string) {
             process.stderr.write("[onebots] 管理服务日志不可写，继续保留控制能力\n");
         }
     };
-    const operation = (record: {
-        id: string;
-        action: string;
-        status: string;
-        finishedAt?: string;
-    }) => {
+    const operation: PersistedOperationObserver = (record: PersistedOperationProjection) => {
         try {
             appendControlLog(
                 workspace,
@@ -131,6 +130,7 @@ export function createControlLogWriter(workspace: string, managerId: string) {
                     id: record.id,
                     action: record.action,
                     status: record.status,
+                    ...(record.phase ? { phase: record.phase } : {}),
                 })}\n`,
             );
         } catch {

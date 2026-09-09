@@ -12,7 +12,10 @@ import { randomUUID, createHash } from "node:crypto";
 import { GenerationInstaller } from "../installation/generation-installer.js";
 import { verifyGeneration } from "../installation/generation-verify.js";
 import { freezeGenerationArtifacts } from "../installation/generation-artifacts.js";
-import { bundledRuntimeArtifacts, bundledPnpmExecutor } from "../installation/bundled-runtime-artifacts.js";
+import {
+    bundledRuntimeArtifacts,
+    bundledPnpmExecutor,
+} from "../installation/bundled-runtime-artifacts.js";
 import {
     createGenerationPlan,
     type GenerationPlan,
@@ -30,6 +33,7 @@ import {
 import { TRUSTED_EXTENSION_CATALOG } from "../trusted-extension-catalog.js";
 import { getExtensionPackageCatalogEntry } from "../extension-capability-catalog.js";
 import { listFrameworkProfiles } from "../framework-integration.js";
+import type { PersistedOperationObserver } from "../persisted-operation-observer.js";
 
 const BUILTIN_APPLICATIONS = listFrameworkProfiles()
     .filter(profile => String(profile.applicationStage) !== "planned")
@@ -55,6 +59,7 @@ export interface ControlInstallationOptions {
     currentSelection?(): GenerationSelection;
     currentConfigurationRevision?(): string;
     resolveRelease?(): Promise<ResolvedRelease>;
+    onOperation?: PersistedOperationObserver;
 }
 
 /** CLI/TUI/Web 共用的安装应用服务；HTTP 层仅认证、解析和传送结果。 */
@@ -83,6 +88,7 @@ export class ControlInstallationService {
             operationsDirectory: path.join(options.directory, "installations"),
             store: options.store,
             verify: verifyGeneration,
+            onOperation: options.onOperation,
             ...executor,
         });
     }
@@ -369,7 +375,6 @@ export class ControlInstallationService {
         }
     }
 }
-
 
 function digest(value: unknown): string {
     return createHash("sha256").update(JSON.stringify(value)).digest("hex");

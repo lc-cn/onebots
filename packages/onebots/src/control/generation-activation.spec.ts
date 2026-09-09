@@ -6,6 +6,29 @@ import { GenerationActivationController } from "./generation-activation.js";
 import { fixture, verified } from "../../__tests__/generation-activation.fixture.js";
 
 describe("generation activation serialized lifecycle", () => {
+    it("projects only the persisted terminal activation and isolates observer failures", async () => {
+        const projected: object[] = [];
+        const { activation } = await fixture(undefined, operation => {
+            projected.push(operation);
+            throw new Error("observer unavailable");
+        });
+
+        const result = await activation.activate("target");
+
+        expect(result.status).toBe("succeeded");
+        expect(projected).toEqual([
+            {
+                id: result.id,
+                action: "generation.activate",
+                status: "succeeded",
+                phase: "completed",
+                finishedAt: result.finishedAt,
+            },
+        ]);
+        expect(projected[0]).not.toHaveProperty("target");
+        expect(projected[0]).not.toHaveProperty("previous");
+    });
+
     it("holds concurrent start and activation behind the entire configuration transaction", async () => {
         const { activation, events } = await fixture();
         let release!: () => void;
@@ -324,13 +347,25 @@ describe("configuration recovery serialized readonly port", () => {
         );
     });
     it("does not bypass an interrupted generation activation", async () => {
-        const { activation, statePath, options } = await fixture();
+        const projected: object[] = [];
+        const { activation, statePath, options } = await fixture(undefined, operation =>
+            projected.push(operation),
+        );
         await activation.activate("target");
+        projected.length = 0;
         const disk = JSON.parse(await readFile(statePath, "utf8"));
         disk.operations.at(-1).status = "running";
         await writeFile(statePath, JSON.stringify(disk));
         const cold = new GenerationActivationController(options);
         await cold.initialize();
+        expect(projected).toEqual([
+            expect.objectContaining({
+                id: disk.operations.at(-1).id,
+                action: "generation.activate",
+                status: "failed",
+                phase: "failed",
+            }),
+        ]);
         await expect(cold.runConfigurationRecoveryTransaction(async () => 1)).rejects.toThrow(
             "版本切换需要对账",
         );

@@ -5,6 +5,7 @@ import { afterEach, expect } from "vitest";
 import { GatewayController } from "../src/control/gateway-controller.js";
 import { GenerationActivationController } from "../src/control/generation-activation.js";
 import type { VerifiedGeneration } from "../src/installation/generation-store.js";
+import type { PersistedOperationObserver } from "../src/persisted-operation-observer.js";
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -49,6 +50,7 @@ export function verified(id: string): VerifiedGeneration {
 
 export async function fixture(
     verifyActivation?: (generation: VerifiedGeneration) => Promise<() => void>,
+    onOperation?: PersistedOperationObserver,
 ) {
     const directory = await mkdtemp(join(tmpdir(), "onebots-activation-"));
     directories.push(directory);
@@ -101,6 +103,7 @@ export async function fixture(
         },
         hasLiveChildren: () => state.live,
         configurationRecoveryRequired: () => state.configurationRecovery,
+        onOperation,
     };
     activation = new GenerationActivationController(options);
     await activation.initialize();

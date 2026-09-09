@@ -23,6 +23,10 @@ import {
     type ConfigurationBase,
     type ConfigurationRepairReference,
 } from "./configuration-store.js";
+import {
+    observeNamedPersistedOperation,
+    type PersistedOperationObserver,
+} from "../persisted-operation-observer.js";
 
 export interface ConfigurationSourceSnapshot {
     revision: string;
@@ -46,6 +50,7 @@ export interface ConfigurationApplicationOptions {
     lifecycle: Pick<GenerationActivationController, "runConfigurationTransaction"> &
         Partial<Pick<GenerationActivationController, "runConfigurationRecoveryTransaction">>;
     recovery?: { read(reference: ConfigurationRepairReference): Buffer };
+    onOperation?: PersistedOperationObserver;
 }
 export interface ConfigurationApplicationInput {
     repair?: ConfigurationRepairReference;
@@ -78,12 +83,10 @@ export interface ConfigurationApplicationJournal extends ConfigurationApplicatio
 const HASH = /^[a-f0-9]{64}$/;
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const invalid = (): Error => new Error("配置应用记录或请求无效");
-
 /** 唯一 manager 拥有此目录。私有文档与操作意图先落盘，未确认结果从不自动重放。 */
 export class ConfigurationApplication {
     private readonly directory: string;
     private blocked = false;
-
     constructor(private readonly options: ConfigurationApplicationOptions) {
         this.directory = path.resolve(options.directory);
         privateDirectory(this.directory);
@@ -106,7 +109,6 @@ export class ConfigurationApplication {
             }
         }
     }
-
     health(): { recoveryRequired: boolean } {
         return { recoveryRequired: this.blocked };
     }
@@ -145,7 +147,6 @@ export class ConfigurationApplication {
     status(id: string): ConfigurationApplicationOperation {
         return publicOperation(this.read(id));
     }
-
     /** 区分从未派发与损坏记录；调用者不能把 status 读取失败当成可重试。 */
     hasOperation(id: string): boolean {
         try {
@@ -156,7 +157,6 @@ export class ConfigurationApplication {
             throw invalid();
         }
     }
-
     apply(input: ConfigurationApplicationInput): Promise<ConfigurationApplicationOperation> {
         let request: ConfigurationApplicationInput;
         try {
@@ -267,7 +267,6 @@ export class ConfigurationApplication {
             return this.execute(operation, request.document, port);
         });
     }
-
     private async execute(
         operation: ConfigurationApplicationJournal,
         document: Record<string, unknown>,
@@ -315,7 +314,6 @@ export class ConfigurationApplication {
             return this.unknown(operation);
         }
     }
-
     private async rollback(
         operation: ConfigurationApplicationJournal,
         port: ConfigurationTransactionPort,
@@ -373,7 +371,6 @@ export class ConfigurationApplication {
             return this.unknown(operation);
         }
     }
-
     private unknown(operation: ConfigurationApplicationJournal): ConfigurationApplicationOperation {
         this.blocked = true;
         delete operation.rolledBack;
@@ -388,13 +385,18 @@ export class ConfigurationApplication {
         }
         return publicOperation(operation);
     }
-
     private file(id: string): string {
         if (typeof id !== "string" || !ID.test(id)) throw invalid();
         return path.join(this.directory, `${id}.json`);
     }
     private save(operation: ConfigurationApplicationJournal): void {
         atomic(this.file(operation.id), JSON.stringify(operation));
+        if (operation.status !== "running")
+            observeNamedPersistedOperation(
+                this.options.onOperation,
+                "configuration.apply",
+                operation,
+            );
     }
     private read(id: string): ConfigurationApplicationJournal {
         try {
@@ -462,7 +464,6 @@ export class ConfigurationApplication {
         return parseConfigurationDocument(JSON.parse(content));
     }
 }
-
 function publicOperation(
     value: ConfigurationApplicationJournal,
 ): ConfigurationApplicationOperation {

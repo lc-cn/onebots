@@ -6,6 +6,7 @@ import { ControlVerificationHttp } from "./verification-http.js";
 import { ControlVerificationError } from "./verification-record.js";
 import { serviceMigrationStatus } from "./service-migration-api.js";
 import { controlDirectory } from "./workspace.js";
+import type { PersistedOperationObserver } from "../persisted-operation-observer.js";
 
 interface StoppedVerificationOptions {
     lifecycle: GenerationActivationController;
@@ -40,6 +41,7 @@ export function createHostVerification(
         auth: ControlAuth;
         driver: Pick<NodeGatewayDriver, "verificationContext" | "verification">;
         currentGateway(): string | undefined;
+        onOperation?: PersistedOperationObserver;
     },
 ): ControlVerificationHttp {
     const whileStopped = <T>(commit: () => T) =>
@@ -62,6 +64,7 @@ export function createHostVerification(
                 options.driver.verification(context.gatewayInstanceId, operation),
             acknowledgeWhileStopped: whileStopped,
             abandonWhileStopped: whileStopped,
+            onOperation: options.onOperation,
         },
         options.auth,
     );

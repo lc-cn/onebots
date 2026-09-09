@@ -87,6 +87,27 @@ function fixture(desired: "running" | "stopped" = "running") {
 }
 
 describe("configuration application transaction", () => {
+    it("最终持久状态投影不含配置正文，观察失败不改变应用结果", async () => {
+        const test = fixture();
+        const onOperation = vi.fn(() => {
+            throw new Error("log unavailable");
+        });
+        const application = new ConfigurationApplication({ ...test.options, onOperation });
+        expect(await application.apply(test.request)).toMatchObject({ status: "succeeded" });
+        expect(onOperation).toHaveBeenCalledWith({
+            id: "request-1",
+            action: "configuration.apply",
+            status: "succeeded",
+            phase: "completed",
+        });
+        expect(JSON.stringify(onOperation.mock.calls)).not.toContain("synthetic-secret");
+        expect(Object.keys(onOperation.mock.calls[0][0]).sort()).toEqual([
+            "action",
+            "id",
+            "phase",
+            "status",
+        ]);
+    });
     it("先持久intent和私有文档再停机，成功后重放/冷重启不再产生副作用", async () => {
         const test = fixture();
         const original = test.options.lifecycle.runConfigurationTransaction.bind(
@@ -203,12 +224,16 @@ describe("configuration application transaction", () => {
         });
         expect((await completed.application.apply(completed.request)).recoveryRequired).toBe(true);
         vi.restoreAllMocks();
-        const reopened = new ConfigurationApplication(completed.options);
+        const onOperation = vi.fn();
+        const reopened = new ConfigurationApplication({ ...completed.options, onOperation });
         expect(reopened.status("request-1")).toMatchObject({
             status: "interrupted",
             recoveryRequired: true,
         });
         expect(reopened.health().recoveryRequired).toBe(true);
+        expect(onOperation).toHaveBeenCalledWith(
+            expect.objectContaining({ id: "request-1", status: "interrupted" }),
+        );
     });
     it("损坏私有文档阻止重放且目录权限私有", async () => {
         const test = fixture();

@@ -32,7 +32,6 @@ import { NodeGatewayDriver } from "./gateway-driver.js";
 import { GenerationActivationController } from "./generation-activation.js";
 import { GenerationStore } from "../installation/generation-store.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
-import type { ControlInstallationOptions } from "./installation-service.js";
 import { createHostInstallation } from "./host-installation.js";
 import { handleInstallationRequest, isInstallationPath } from "./installation-api.js";
 import { ConfigurationApplication } from "../configuration/configuration-application.js";
@@ -49,16 +48,9 @@ import { proxyGatewayHttp, proxyGatewayUpgrade } from "./proxy.js";
 import { listen, readBody, jsonResponse as json } from "./http-utils.js";
 import { ControlConfigurationService } from "./configuration-service.js";
 import { handleConfigurationRequest, isConfigurationPath } from "./configuration-api.js";
+import type { ControlHostOptions } from "./host-options.js";
 import packageMetadata from "../../package.json" with { type: "json" };
-export interface ControlHostOptions {
-    workspace: string;
-    host?: string;
-    port?: number;
-    runtimeRoot?: string;
-    webRoot?: string;
-    gatewayEntrypoint?: string;
-    installation?: Omit<ControlInstallationOptions, "directory" | "store" | "lifecycle">;
-}
+export type { ControlHostOptions } from "./host-options.js";
 export async function startControlHost(options: ControlHostOptions) {
     const installDeploymentAuth = consumeDeploymentAuthenticationEnvironment();
     fs.mkdirSync(options.workspace, { recursive: true });
@@ -141,6 +133,7 @@ export async function startControlHost(options: ControlHostOptions) {
         configurationRecoveryRequired: () =>
             configurationStorageUnavailable ||
             Boolean(configurationApplication?.health().recoveryRequired),
+        onOperation: controlLogs.operation,
     });
     const upgradeIdentity = createManagerUpgradeIdentity(id, import.meta.url);
     const releaseUpgrade = createManagerUpgradeRelease(
@@ -158,6 +151,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 path.join(controlDirectory(workspace), "configuration/recovery"),
             ),
             lifecycle,
+            onOperation: controlLogs.operation,
         });
         if (generations && ownershipAvailable)
             configuration = new ControlConfigurationService({
@@ -177,7 +171,7 @@ export async function startControlHost(options: ControlHostOptions) {
         workspace,
         generations,
         lifecycle,
-        ownershipAvailable,
+        ownershipAvailable, controlLogs.operation,
     );
     const sockets = new Set<Duplex>();
     let closed = false;
@@ -214,8 +208,13 @@ export async function startControlHost(options: ControlHostOptions) {
     }
     const verification = createHostVerification({
         workspace, auth, driver, lifecycle, currentGateway,
-        available: () => !closed && !storageError && ownershipAvailable &&
-            !configurationStorageUnavailable && !configurationApplication?.health().recoveryRequired,
+        onOperation: controlLogs.operation,
+        available: () =>
+            !closed &&
+            !storageError &&
+            ownershipAvailable &&
+            !configurationStorageUnavailable &&
+            !configurationApplication?.health().recoveryRequired,
     });
     const messageDebug = new ControlMessageDebugService({
         currentInstance: currentGateway,
