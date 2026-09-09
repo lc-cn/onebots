@@ -49,7 +49,7 @@ function execute(command, args, options = {}) {
         throw new Error(
             `验收命令失败：${path.basename(command)} ${args[0] ?? ""}（exit ${String(result.status)}）`,
         );
-    return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr };
+    return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
 }
 
 function launchdIdentityAbsent(domain, description) {
@@ -98,7 +98,7 @@ const { LAUNCHD_LABEL } = await import(
 );
 assert.equal(LAUNCHD_LABEL, LABEL, "验收固定 launchd label 与当前构建不一致");
 
-const temporary = fs.mkdtempSync("/tmp/ob-launchd-acceptance-");
+const temporary = fs.realpathSync(fs.mkdtempSync("/tmp/ob-launchd-acceptance-"));
 const artifacts = path.join(temporary, "artifacts");
 const runtime = path.join(temporary, "runtime");
 const dataDirectory = path.join(temporary, "data");
@@ -201,6 +201,56 @@ function operation(output, action) {
     return match[1];
 }
 
+function migrationJournalStates() {
+    const directory = path.join(STATE_DIRECTORY, "migrations");
+    if (!fs.existsSync(directory)) return [];
+    return fs
+        .readdirSync(directory)
+        .filter(name => name.endsWith(".journal.json"))
+        .map(name => {
+            try {
+                const value = JSON.parse(fs.readFileSync(path.join(directory, name), "utf8"));
+                const safe = field =>
+                    typeof field === "string" && /^[a-z-]{1,64}$/u.test(field) ? field : "invalid";
+                return { phase: safe(value.phase), status: safe(value.status) };
+            } catch {
+                return { phase: "unreadable", status: "unreadable" };
+            }
+        });
+}
+
+function invokeMigration(args) {
+    const result = invokeCli(args, [0, 1]);
+    if (result.status === 0) return result.stdout;
+    const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
+    throw new Error(
+        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}`,
+    );
+}
+
+function launchdState() {
+    const output = execute("/bin/launchctl", ["print", `${DOMAIN}/${LABEL}`], {
+        statuses: [0],
+    }).stdout;
+    const field = name => output.match(new RegExp(`^\\s*${name}\\s*=\\s*(.+)$`, "mu"))?.[1] ?? null;
+    const pid = field("pid");
+    const process =
+        pid && /^[1-9][0-9]*$/u.test(pid)
+            ? execute("/bin/ps", ["-o", "pid=,pgid=", "-p", pid], {
+                  statuses: [0, 1],
+              }).stdout
+            : null;
+    return { state: field("state"), pid, lastExitCode: field("last exit code"), process };
+}
+
+function assertLaunchdIndependentProcessGroup() {
+    const state = launchdState();
+    const match = /^\s*([1-9][0-9]*)\s+([1-9][0-9]*)\s*$/u.exec(state.process ?? "");
+    assert.ok(match, `旧 launchd 服务缺少可解析的 PID/PGID 证据：${JSON.stringify(state)}`);
+    assert.equal(match[1], state.pid, "launchctl PID 与 ps PID 不一致");
+    assert.equal(match[2], match[1], "真实旧 launchd 服务没有独立进程组，当前安全契约拒绝迁移");
+}
+
 async function freePort() {
     const server = net.createServer();
     await new Promise((resolve, reject) => {
@@ -240,11 +290,13 @@ async function assertManagementOnline(port) {
 }
 
 async function verifyLegacyMigration(port, operationIds) {
-    const legacyRuntime = path.join(temporary, "legacy-launchd-runtime");
-    const legacyData = path.join(temporary, "legacy-launchd-data");
+    let legacyRuntime = path.join(temporary, "legacy-launchd-runtime");
+    let legacyData = path.join(temporary, "legacy-launchd-data");
     const legacyCore = path.join(legacyRuntime, "node_modules/@onebots/core");
     fs.mkdirSync(legacyCore, { recursive: true, mode: 0o700 });
     fs.mkdirSync(legacyData, { recursive: true, mode: 0o700 });
+    legacyRuntime = fs.realpathSync(legacyRuntime);
+    legacyData = fs.realpathSync(legacyData);
     fs.writeFileSync(
         path.join(legacyRuntime, "package.json"),
         JSON.stringify({
@@ -261,14 +313,17 @@ async function verifyLegacyMigration(port, operationIds) {
         JSON.stringify({ name: "@onebots/core", private: true, version: "1.0.0" }),
         { mode: 0o600 },
     );
-    const legacyBin = path.join(legacyRuntime, "bin.js");
+    let legacyBin = path.join(legacyRuntime, "bin.js");
+    const readyMarker = path.join(legacyData, "legacy-ready");
     fs.writeFileSync(
         legacyBin,
-        "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 60_000);\n",
+        `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(readyMarker)}, "ready\\n", { mode: 0o600 }); process.on("SIGTERM", () => process.exit(0)); setInterval(() => {}, 60_000);\n`,
         { mode: 0o600 },
     );
-    const legacyConfig = path.join(legacyData, "config.yaml");
+    legacyBin = fs.realpathSync(legacyBin);
+    let legacyConfig = path.join(legacyData, "config.yaml");
     fs.writeFileSync(legacyConfig, "general: {}\n", { mode: 0o600 });
+    legacyConfig = fs.realpathSync(legacyConfig);
     fs.writeFileSync(path.join(legacyData, "acceptance-user-data.txt"), "legacy-preserve-me\n", {
         mode: 0o600,
     });
@@ -278,7 +333,7 @@ async function verifyLegacyMigration(port, operationIds) {
         adapters: [],
         protocols: [],
         applications: [],
-        nodePath: process.execPath,
+        nodePath: fs.realpathSync(process.execPath),
         binPath: legacyBin,
         workingDirectory: legacyRuntime,
     };
@@ -295,16 +350,24 @@ async function verifyLegacyMigration(port, operationIds) {
         { mode: 0o600 },
     );
     execute("/bin/launchctl", ["bootstrap", DOMAIN, DEFINITION]);
-    await eventually(
-        () => execute("/bin/launchctl", ["print", `${DOMAIN}/${LABEL}`]).stdout,
-        value => /\bstate\s*=\s*running\b/u.test(value),
-        "旧 launchd 服务未稳定运行",
-    );
+    try {
+        await eventually(
+            () => ({
+                output: execute("/bin/launchctl", ["print", `${DOMAIN}/${LABEL}`]).stdout,
+                ready: fs.existsSync(readyMarker),
+            }),
+            value => /\bstate\s*=\s*running\b/u.test(value.output) && value.ready,
+            "旧 launchd 服务未稳定运行或未执行真实入口",
+        );
+    } catch (error) {
+        throw new Error(`${error.message}；OS 状态：${JSON.stringify(launchdState())}`);
+    }
+    assertLaunchdIndependentProcessGroup();
     const legacyStatus = cliJson(["status", "--json"], [1]);
     assert.equal(legacyStatus.installation, "legacy");
     assert.equal(legacyStatus.diagnostic, "migration-required");
 
-    const migrationOutput = invokeCli([
+    const migrationOutput = invokeMigration([
         "migrate",
         "--host",
         "127.0.0.1",

@@ -50,7 +50,7 @@ function execute(command, args, options = {}) {
         throw new Error(
             `验收命令失败：${path.basename(command)} ${args[0] ?? ""}（exit ${String(result.status)}）`,
         );
-    return { status: result.status, stdout: result.stdout.trim() };
+    return { status: result.status, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
 }
 
 function systemdUnit() {
@@ -87,7 +87,7 @@ assert.equal(
     "真实 systemd 验收必须使用 pnpm 9.15.9",
 );
 
-const temporary = fs.mkdtempSync("/tmp/onebots-systemd-acceptance-");
+const temporary = fs.realpathSync(fs.mkdtempSync("/tmp/onebots-systemd-acceptance-"));
 const artifacts = path.join(temporary, "artifacts");
 const runtime = path.join(temporary, "runtime");
 const dataDirectory = path.join(temporary, "data");
@@ -187,6 +187,52 @@ function operation(output, action) {
     return match[1];
 }
 
+function migrationJournalStates() {
+    const directory = path.join(STATE_DIRECTORY, "migrations");
+    if (!fs.existsSync(directory)) return [];
+    return fs
+        .readdirSync(directory)
+        .filter(name => name.endsWith(".journal.json"))
+        .map(name => {
+            try {
+                const value = JSON.parse(fs.readFileSync(path.join(directory, name), "utf8"));
+                const safe = field =>
+                    typeof field === "string" && /^[a-z-]{1,64}$/u.test(field) ? field : "invalid";
+                return { phase: safe(value.phase), status: safe(value.status) };
+            } catch {
+                return { phase: "unreadable", status: "unreadable" };
+            }
+        });
+}
+
+function invokeMigration(args) {
+    const result = invokeCli(args, [0, 1]);
+    if (result.status === 0) return result.stdout;
+    const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
+    throw new Error(
+        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}`,
+    );
+}
+
+function systemdState() {
+    return execute(
+        "systemctl",
+        [
+            "show",
+            SERVICE,
+            "--no-pager",
+            "--property=LoadState",
+            "--property=ActiveState",
+            "--property=SubState",
+            "--property=Result",
+            "--property=ExecMainCode",
+            "--property=ExecMainStatus",
+            "--property=MainPID",
+        ],
+        { statuses: [0] },
+    ).stdout;
+}
+
 async function freePort() {
     const server = net.createServer();
     await new Promise((resolve, reject) => {
@@ -224,11 +270,13 @@ async function assertManagementOnline(port) {
 }
 
 async function verifyLegacyMigration(port, operationIds) {
-    const legacyRuntime = path.join(temporary, "legacy-systemd-runtime");
-    const legacyData = path.join(temporary, "legacy-systemd-data");
+    let legacyRuntime = path.join(temporary, "legacy-systemd-runtime");
+    let legacyData = path.join(temporary, "legacy-systemd-data");
     const legacyCore = path.join(legacyRuntime, "node_modules/@onebots/core");
     fs.mkdirSync(legacyCore, { recursive: true, mode: 0o700 });
     fs.mkdirSync(legacyData, { recursive: true, mode: 0o700 });
+    legacyRuntime = fs.realpathSync(legacyRuntime);
+    legacyData = fs.realpathSync(legacyData);
     fs.writeFileSync(
         path.join(legacyRuntime, "package.json"),
         JSON.stringify({
@@ -245,14 +293,17 @@ async function verifyLegacyMigration(port, operationIds) {
         JSON.stringify({ name: "@onebots/core", private: true, version: "1.0.0" }),
         { mode: 0o600 },
     );
-    const legacyBin = path.join(legacyRuntime, "bin.js");
+    let legacyBin = path.join(legacyRuntime, "bin.js");
+    const readyMarker = path.join(legacyData, "legacy-ready");
     fs.writeFileSync(
         legacyBin,
-        "process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 60_000);\n",
+        `import fs from "node:fs"; fs.writeFileSync(${JSON.stringify(readyMarker)}, "ready\\n", { mode: 0o600 }); process.on("SIGTERM", () => process.exit(0)); setInterval(() => {}, 60_000);\n`,
         { mode: 0o600 },
     );
-    const legacyConfig = path.join(legacyData, "config.yaml");
+    legacyBin = fs.realpathSync(legacyBin);
+    let legacyConfig = path.join(legacyData, "config.yaml");
     fs.writeFileSync(legacyConfig, "general: {}\n", { mode: 0o600 });
+    legacyConfig = fs.realpathSync(legacyConfig);
     fs.writeFileSync(path.join(legacyData, "acceptance-user-data.txt"), "legacy-preserve-me\n", {
         mode: 0o600,
     });
@@ -262,7 +313,7 @@ async function verifyLegacyMigration(port, operationIds) {
         adapters: [],
         protocols: [],
         applications: [],
-        nodePath: process.execPath,
+        nodePath: fs.realpathSync(process.execPath),
         binPath: legacyBin,
         workingDirectory: legacyRuntime,
     };
@@ -271,16 +322,25 @@ async function verifyLegacyMigration(port, operationIds) {
     fs.writeFileSync(DEFINITION, renderSystemdUnit(legacy), { mode: 0o600 });
     execute("systemctl", ["daemon-reload"]);
     execute("systemctl", ["enable", "--now", SERVICE]);
-    await eventually(
-        () => execute("systemctl", ["is-active", SERVICE], { statuses: [0, 3] }).stdout,
-        value => value === "active",
-        "旧 systemd 服务未稳定运行",
-    );
+    try {
+        await eventually(
+            () => ({
+                active: execute("systemctl", ["is-active", SERVICE], {
+                    statuses: [0, 3],
+                }).stdout,
+                ready: fs.existsSync(readyMarker),
+            }),
+            value => value.active === "active" && value.ready,
+            "旧 systemd 服务未稳定运行或未执行真实入口",
+        );
+    } catch (error) {
+        throw new Error(`${error.message}；OS 状态：${systemdState()}`);
+    }
     const legacyStatus = cliJson(["status", "--system", "--json"], [1]);
     assert.equal(legacyStatus.installation, "legacy");
     assert.equal(legacyStatus.diagnostic, "migration-required");
 
-    const migrationOutput = invokeCli([
+    const migrationOutput = invokeMigration([
         "migrate",
         "--system",
         "--host",
