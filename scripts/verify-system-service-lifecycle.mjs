@@ -234,12 +234,54 @@ function migrationCaptureState() {
     return { operation: true, programs: inspect("programs"), nodes: inspect("nodes") };
 }
 
-function invokeMigration(args) {
+async function linuxNodeCaptureState() {
+    const systemRoot = target =>
+        ["/lib/", "/lib64/", "/usr/lib/", "/usr/lib64/"].some(root => target.startsWith(root));
+    let preload = "missing";
+    try {
+        preload = fs.readFileSync("/etc/ld.so.preload", "utf8").trim() ? "nonempty" : "empty";
+    } catch (error) {
+        if (error?.code !== "ENOENT") preload = "unreadable";
+    }
+    let nativeValidation = "failed";
+    try {
+        const { assertSystemNativeDependencies } = await import(
+            path.join(runtime, "node_modules/onebots/lib/service-migration-native-dependencies.js")
+        );
+        await assertSystemNativeDependencies(fs.realpathSync(process.execPath));
+        nativeValidation = "passed";
+    } catch {
+        // 诊断只暴露固定分类，不透传 ELF、loader 输出或路径。
+    }
+    let needed = "unavailable";
+    let nonSystemCacheTargets = "unavailable";
+    try {
+        const dynamic = execute("/usr/bin/readelf", ["-d", fs.realpathSync(process.execPath)], {
+            statuses: [0],
+        }).stdout;
+        const names = new Set(
+            [...dynamic.matchAll(/\(NEEDED\).*\[([^\]]+)\]/gu)].map(match => match[1]),
+        );
+        const cache = execute("/sbin/ldconfig", ["-p"], { statuses: [0] }).stdout;
+        const targets = cache
+            .split(/\r?\n/u)
+            .map(line => /^\s+(\S+) \([^)]+\) => (\S+)$/u.exec(line))
+            .filter(match => match && names.has(match[1]))
+            .map(match => match[2]);
+        needed = names.size;
+        nonSystemCacheTargets = targets.filter(target => !systemRoot(target)).length;
+    } catch {
+        // 工具缺失同样只记固定分类。
+    }
+    return { preload, nativeValidation, needed, nonSystemCacheTargets };
+}
+
+async function invokeMigration(args) {
     const result = invokeCli(args, [0, 1]);
     if (result.status === 0) return result.stdout;
     const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
     throw new Error(
-        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；捕获阶段=${JSON.stringify(migrationCaptureState())}`,
+        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；捕获阶段=${JSON.stringify(migrationCaptureState())}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}`,
     );
 }
 
@@ -369,7 +411,7 @@ async function verifyLegacyMigration(port, operationIds) {
     assert.equal(legacyStatus.installation, "legacy");
     assert.equal(legacyStatus.diagnostic, "migration-required");
 
-    const migrationOutput = invokeMigration([
+    const migrationOutput = await invokeMigration([
         "migrate",
         "--system",
         "--host",
