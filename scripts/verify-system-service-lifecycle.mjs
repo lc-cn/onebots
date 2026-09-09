@@ -5,6 +5,7 @@
  * 和显式 ONEBOTS_SYSTEMD_ACCEPTANCE=1 同时成立时才允许执行；任何未知结果都保留现场，不重派动作。
  */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
@@ -89,6 +90,7 @@ assert.equal(
 
 const temporary = fs.realpathSync(fs.mkdtempSync("/tmp/onebots-systemd-acceptance-"));
 const artifacts = path.join(temporary, "artifacts");
+const previousArtifacts = path.join(temporary, "previous-artifacts");
 const runtime = path.join(temporary, "runtime");
 const dataDirectory = path.join(temporary, "data");
 const npmUserConfig = path.join(temporary, "user.npmrc");
@@ -118,6 +120,50 @@ const tarballs = fs
     .map(name => path.join(artifacts, name));
 assert.equal(tarballs.length, 3, "必须安装当前 core、web 和 onebots 三个打包工件");
 const manifest = JSON.parse(fs.readFileSync(path.join(artifacts, "manifest.json"), "utf8"));
+const versionMatch = /^(\d+)\.(\d+)\.(\d+)$/u.exec(manifest.host.version);
+assert.ok(versionMatch && Number(versionMatch[3]) > 0, "验收目标必须能构造前一个 patch 版本");
+const previousVersion = `${versionMatch[1]}.${versionMatch[2]}.${Number(versionMatch[3]) - 1}`;
+fs.mkdirSync(previousArtifacts, { mode: 0o700 });
+const previousStaging = path.join(temporary, "previous-package");
+fs.mkdirSync(previousStaging, { mode: 0o700 });
+execute("tar", ["-xzf", path.join(artifacts, manifest.host.file), "-C", previousStaging]);
+const previousPackage = path.join(previousStaging, "package/package.json");
+const previousPackageJson = JSON.parse(fs.readFileSync(previousPackage, "utf8"));
+previousPackageJson.version = previousVersion;
+fs.writeFileSync(previousPackage, `${JSON.stringify(previousPackageJson, null, 2)}\n`, {
+    mode: 0o600,
+});
+const previousHostFile = `onebots-${previousVersion}.tgz`;
+execute("tar", [
+    "-czf",
+    path.join(previousArtifacts, previousHostFile),
+    "-C",
+    previousStaging,
+    "package",
+]);
+for (const entry of [manifest.core, ...manifest.extensions])
+    fs.copyFileSync(path.join(artifacts, entry.file), path.join(previousArtifacts, entry.file));
+const previousManifest = {
+    ...manifest,
+    host: {
+        ...manifest.host,
+        version: previousVersion,
+        file: previousHostFile,
+        sha256: createHash("sha256")
+            .update(fs.readFileSync(path.join(previousArtifacts, previousHostFile)))
+            .digest("hex"),
+    },
+};
+fs.writeFileSync(
+    path.join(previousArtifacts, "manifest.json"),
+    `${JSON.stringify(previousManifest, null, 2)}\n`,
+    { mode: 0o600 },
+);
+const installTarballs = tarballs.map(file =>
+    path.basename(file) === manifest.host.file
+        ? path.join(previousArtifacts, previousHostFile)
+        : file,
+);
 fs.writeFileSync(
     path.join(runtime, "package.json"),
     JSON.stringify({ name: "onebots-systemd-acceptance", private: true, version: "1.0.0" }),
@@ -133,7 +179,7 @@ execute(
         "--no-fund",
         "--save-exact",
         "--registry=https://registry.npmjs.org",
-        ...tarballs,
+        ...installTarballs,
     ],
     { cwd: runtime, env: npmEnvironment, statuses: [0] },
 );
@@ -144,7 +190,7 @@ assert.equal(cliStat.isFile() || cliStat.isSymbolicLink(), true);
 assert.equal(
     JSON.parse(fs.readFileSync(path.join(runtime, "node_modules/onebots/package.json"), "utf8"))
         .version,
-    manifest.host.version,
+    previousVersion,
 );
 assert.equal(
     JSON.parse(
@@ -156,7 +202,7 @@ const cliEnvironment = {
     ...npmEnvironment,
     LANG: "C",
     NO_COLOR: "1",
-    ONEBOTS_RUNTIME_ARTIFACTS: path.join(artifacts, "manifest.json"),
+    ONEBOTS_RUNTIME_ARTIFACTS: path.join(previousArtifacts, "manifest.json"),
 };
 
 const { renderSystemdUnit } = await import(
@@ -170,6 +216,30 @@ function invokeCli(args, statuses = [0]) {
         statuses,
         timeout: 300_000,
     });
+}
+
+function spawnCli(args) {
+    const child = spawn(cli, args, {
+        cwd: runtime,
+        env: cliEnvironment,
+        stdio: ["ignore", "pipe", "pipe"],
+    });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", chunk => stdout.push(chunk));
+    child.stderr.on("data", chunk => stderr.push(chunk));
+    const closed = new Promise((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", (status, signal) =>
+            resolve({
+                status,
+                signal,
+                stdout: Buffer.concat(stdout).toString("utf8").trim(),
+                stderr: Buffer.concat(stderr).toString("utf8").trim(),
+            }),
+        );
+    });
+    return { child, closed };
 }
 
 function cliJson(args, statuses = [0]) {
@@ -188,6 +258,13 @@ function operation(output, action) {
         match,
         `公开 CLI ${action} 未返回已完成操作 ID；首行=${JSON.stringify(firstLine.slice(0, 256))}`,
     );
+    return match[1];
+}
+
+function managerUpgradeOperation(output) {
+    const match = /^管理程序升级操作 ID：([A-Za-z0-9_-]{1,100})$/mu.exec(output);
+    assert.ok(match, "公开 update --manager 未返回持久升级操作 ID");
+    assert.match(output, new RegExp(`管理程序已切换到 ${manifest.host.version}`, "u"));
     return match[1];
 }
 
@@ -359,6 +436,37 @@ function singleMigrationJournal() {
         file: path.join(directory, name),
         record: JSON.parse(fs.readFileSync(path.join(directory, name), "utf8")),
     };
+}
+
+function newUpgradeJournal(previousNames) {
+    const directory = path.join(STATE_DIRECTORY, "manager-operations");
+    if (!fs.existsSync(directory)) return null;
+    const names = fs
+        .readdirSync(directory)
+        .filter(name => name.endsWith(".json") && !previousNames.has(name));
+    if (names.length !== 1) return null;
+    const file = path.join(directory, names[0]);
+    const record = JSON.parse(fs.readFileSync(file, "utf8"));
+    return record.action === "upgrade" ? { file, record } : null;
+}
+
+async function obstructControlSocketWhenReleased(workspace, childResult) {
+    const socket = path.join(workspace, ".control/control.sock");
+    const deadline = Date.now() + 120_000;
+    for (;;) {
+        try {
+            fs.mkdirSync(socket, { mode: 0o700 });
+            return socket;
+        } catch (error) {
+            if (error?.code !== "EEXIST" || Date.now() >= deadline) throw error;
+            const exited = await Promise.race([
+                childResult.then(result => ({ result })),
+                new Promise(resolve => setTimeout(() => resolve(null), 5)),
+            ]);
+            if (exited)
+                throw new Error(`升级 CLI 在旧控制 socket 释放前退出：${exited.result.status}`);
+        }
+    }
 }
 
 function systemdState() {
@@ -840,7 +948,7 @@ try {
                 "utf8",
             ),
         ).version,
-        manifest.host.version,
+        previousVersion,
     );
     assert.equal(
         JSON.parse(
@@ -886,6 +994,221 @@ try {
         mode: 0o600,
     });
     const preservedConfig = fs.readFileSync(path.join(dataDirectory, "config.yaml"));
+    const preservedGatewayIntent = fs.readFileSync(
+        path.join(dataDirectory, ".control/gateway.json"),
+    );
+    const preservedAuthentication = fs.readFileSync(path.join(dataDirectory, ".control/auth.json"));
+
+    const managerOperationsDirectory = path.join(STATE_DIRECTORY, "manager-operations");
+    const operationsBeforeFailedUpgrade = new Set(fs.readdirSync(managerOperationsDirectory));
+    const failedUpgrade = spawnCli([
+        "update",
+        "--manager",
+        "--system",
+        "--yes",
+        "--version",
+        manifest.host.version,
+        "--artifacts",
+        path.join(artifacts, "manifest.json"),
+    ]);
+    effectUnknown = true;
+    const socketObstacle = await obstructControlSocketWhenReleased(
+        dataDirectory,
+        failedUpgrade.closed,
+    );
+    const failedUpgradeResult = await failedUpgrade.closed;
+    effectUnknown = false;
+    assert.equal(failedUpgradeResult.status, 1, "控制 socket 障碍必须让候选启动失败");
+    assert.equal(failedUpgradeResult.signal, null);
+    assert.equal(
+        failedUpgradeResult.stdout.includes("管理程序已切换"),
+        false,
+        "失败候选不得输出升级成功",
+    );
+    const interruptedUpgrade = await eventually(
+        () => newUpgradeJournal(operationsBeforeFailedUpgrade),
+        value =>
+            value?.record.action === "upgrade" &&
+            value.record.phase === "starting" &&
+            value.record.status === "interrupted" &&
+            value.record.recoveryRequired === true,
+        "真实候选启动失败未保留可回退的 starting 阶段",
+    );
+    const failedUpgradeId = interruptedUpgrade.record.id;
+    operationIds.push(failedUpgradeId);
+    assert.deepEqual(fs.readFileSync(path.join(dataDirectory, "config.yaml")), preservedConfig);
+    assert.deepEqual(
+        fs.readFileSync(path.join(dataDirectory, ".control/gateway.json")),
+        preservedGatewayIntent,
+    );
+    assert.deepEqual(
+        fs.readFileSync(path.join(dataDirectory, ".control/auth.json")),
+        preservedAuthentication,
+    );
+    fs.rmdirSync(socketObstacle);
+
+    effectUnknown = true;
+    const rollbackOutput = invokeCli([
+        "recover",
+        "--operation",
+        failedUpgradeId,
+        "--rollback-upgrade",
+        "--system",
+    ]).stdout;
+    effectUnknown = false;
+    assert.match(rollbackOutput, new RegExp(`操作 ${failedUpgradeId}：已恢复升级前`, "u"));
+    const afterRollback = await eventually(
+        () => ({
+            os: cliJson(["status", "--system", "--json"]),
+            control: cliJson(["control", "status", "--data-dir", dataDirectory]),
+            metadata: JSON.parse(fs.readFileSync(METADATA, "utf8")),
+        }),
+        value =>
+            value.os.manager.state === "running" &&
+            value.os.manager.version === previousVersion &&
+            value.os.manager.ipc === "available" &&
+            value.control.gateway.desired === "running" &&
+            value.control.gateway.actual === "running" &&
+            value.metadata.workingDirectory === installedMetadata.workingDirectory,
+        "公开升级回退未通过真实 systemd 恢复旧管理候选及网关意图",
+        600,
+    );
+    assert.notEqual(afterRollback.os.manager.pid, beforeRestart.os.manager.pid);
+    assert.notEqual(afterRollback.control.manager.id, beforeRestart.control.manager.id);
+    assert.deepEqual(fs.readFileSync(path.join(dataDirectory, "config.yaml")), preservedConfig);
+    assert.deepEqual(
+        fs.readFileSync(path.join(dataDirectory, ".control/gateway.json")),
+        preservedGatewayIntent,
+    );
+    assert.deepEqual(
+        fs.readFileSync(path.join(dataDirectory, ".control/auth.json")),
+        preservedAuthentication,
+    );
+    const rolledBackJournal = fs.readFileSync(interruptedUpgrade.file);
+    const rolledBackRecord = JSON.parse(rolledBackJournal);
+    assert.deepEqual(
+        {
+            phase: rolledBackRecord.phase,
+            status: rolledBackRecord.status,
+            recoveryRequired: rolledBackRecord.recoveryRequired,
+        },
+        { phase: "completed", status: "failed", recoveryRequired: false },
+    );
+    const identityAfterRollback = execute("systemctl", [
+        "show",
+        SERVICE,
+        "--property=MainPID",
+        "--property=InvocationID",
+    ]).stdout;
+    assert.match(
+        invokeCli(["recover", "--operation", failedUpgradeId, "--rollback-upgrade", "--system"])
+            .stdout,
+        new RegExp(`操作 ${failedUpgradeId}：已恢复升级前`, "u"),
+    );
+    assert.deepEqual(fs.readFileSync(interruptedUpgrade.file), rolledBackJournal);
+    assert.equal(
+        execute("systemctl", ["show", SERVICE, "--property=MainPID", "--property=InvocationID"])
+            .stdout,
+        identityAfterRollback,
+        "重复升级回退不得再次停止或启动旧服务",
+    );
+
+    effectUnknown = true;
+    const upgradedOutput = invokeCli([
+        "update",
+        "--manager",
+        "--system",
+        "--yes",
+        "--version",
+        manifest.host.version,
+        "--artifacts",
+        path.join(artifacts, "manifest.json"),
+    ]).stdout;
+    effectUnknown = false;
+    const upgradeId = managerUpgradeOperation(upgradedOutput);
+    operationIds.push(upgradeId);
+    const afterUpgrade = await eventually(
+        () => ({
+            os: cliJson(["status", "--system", "--json"]),
+            control: cliJson(["control", "status", "--data-dir", dataDirectory]),
+            metadata: JSON.parse(fs.readFileSync(METADATA, "utf8")),
+        }),
+        value =>
+            value.os.manager.state === "running" &&
+            value.os.manager.ipc === "available" &&
+            value.os.manager.version === manifest.host.version &&
+            value.control.gateway.actual === "running" &&
+            value.control.gateway.desired === "running" &&
+            value.metadata.workingDirectory !== installedMetadata.workingDirectory,
+        "公开管理程序升级未通过真实 systemd 切换到新不可变候选",
+        600,
+    );
+    assert.notEqual(afterUpgrade.os.manager.pid, beforeRestart.os.manager.pid);
+    assert.notEqual(afterUpgrade.control.manager.id, beforeRestart.control.manager.id);
+    assert.notEqual(
+        afterUpgrade.control.gateway.instance?.id,
+        beforeRestart.control.gateway.instance?.id,
+    );
+    assert.equal(
+        afterUpgrade.control.gateway.instance?.generationId,
+        beforeRestart.control.gateway.instance?.generationId,
+        "管理程序升级不得改变活动网关 generation",
+    );
+    assert.equal(
+        afterUpgrade.control.gateway.instance?.configRevision,
+        beforeRestart.control.gateway.instance?.configRevision,
+        "管理程序升级不得改变网关配置快照",
+    );
+    assert.deepEqual(fs.readFileSync(path.join(dataDirectory, "config.yaml")), preservedConfig);
+    assert.deepEqual(
+        fs.readFileSync(path.join(dataDirectory, ".control/gateway.json")),
+        preservedGatewayIntent,
+    );
+    assert.deepEqual(
+        fs.readFileSync(path.join(dataDirectory, ".control/auth.json")),
+        preservedAuthentication,
+    );
+    assert.equal(
+        JSON.parse(
+            fs.readFileSync(
+                path.join(
+                    afterUpgrade.metadata.workingDirectory,
+                    "node_modules/onebots/package.json",
+                ),
+                "utf8",
+            ),
+        ).version,
+        manifest.host.version,
+    );
+    const upgradeJournal = path.join(STATE_DIRECTORY, "manager-operations", `${upgradeId}.json`);
+    const completedUpgradeJournal = fs.readFileSync(upgradeJournal);
+    assert.deepEqual(JSON.parse(completedUpgradeJournal), {
+        ...JSON.parse(completedUpgradeJournal),
+        action: "upgrade",
+        phase: "completed",
+        status: "succeeded",
+        recoveryRequired: false,
+    });
+    const systemdIdentityAfterUpgrade = execute("systemctl", [
+        "show",
+        SERVICE,
+        "--property=MainPID",
+        "--property=InvocationID",
+    ]).stdout;
+    const repeatedUpgradeRecovery = invokeCli([
+        "recover",
+        "--operation",
+        upgradeId,
+        "--system",
+    ]).stdout;
+    assert.match(repeatedUpgradeRecovery, new RegExp(`操作 ${upgradeId}：succeeded`, "u"));
+    assert.deepEqual(fs.readFileSync(upgradeJournal), completedUpgradeJournal);
+    assert.equal(
+        execute("systemctl", ["show", SERVICE, "--property=MainPID", "--property=InvocationID"])
+            .stdout,
+        systemdIdentityAfterUpgrade,
+        "重复升级对账不得重启服务或重复派发切换",
+    );
 
     effectUnknown = true;
     const restartedOutput = invokeCli(["restart", "--system"]).stdout;
@@ -904,11 +1227,17 @@ try {
             value.control.gateway.actual === "running",
         "重启后系统级管理服务或网关未稳定运行",
     );
-    assert.notEqual(afterRestart.os.manager.pid, beforeRestart.os.manager.pid);
-    assert.notEqual(afterRestart.control.manager.id, beforeRestart.control.manager.id);
+    assert.notEqual(afterRestart.os.manager.pid, afterUpgrade.os.manager.pid);
+    assert.notEqual(afterRestart.control.manager.id, afterUpgrade.control.manager.id);
     assert.notEqual(
         afterRestart.control.gateway.instance?.id,
-        beforeRestart.control.gateway.instance?.id,
+        afterUpgrade.control.gateway.instance?.id,
+    );
+    assert.equal(afterRestart.os.manager.version, manifest.host.version);
+    assert.equal(
+        JSON.parse(fs.readFileSync(METADATA, "utf8")).workingDirectory,
+        afterUpgrade.metadata.workingDirectory,
+        "systemd 重启必须继续使用升级后的不可变候选",
     );
     await assertManagementOnline(port);
 
@@ -945,7 +1274,7 @@ try {
     assert.equal(new Set(operationIds).size, operationIds.length, "生命周期操作 ID 必须互不相同");
     completed = true;
     process.stdout.write(
-        "✓ 真实 systemd 系统级验收：旧服务迁移中断冷回退、完成迁移后的异常退出冷启动、operation 持久性、新安装生命周期及卸载保留数据均通过\n",
+        "✓ 真实 systemd 系统级验收：旧服务迁移中断冷回退、完成迁移后的异常退出冷启动、旧 patch 到当前 patch 的管理程序不可变升级与重启恢复、operation 幂等对账、新安装生命周期及卸载保留数据均通过\n",
     );
 } finally {
     if (completed) fs.rmSync(temporary, { recursive: true, force: true });

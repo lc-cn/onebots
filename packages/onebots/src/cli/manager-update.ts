@@ -15,11 +15,12 @@ export const UPDATE_HELP = `onebots update [--data-dir 工作区] [--check]
 --check 只输出版本计划；有更新退出 2，无更新退出 0，不安装或激活。
 交互模式分别确认安装和激活；非交互安装请使用 control plan-update/install/installation/activate。
 
-onebots update --manager [--check] [--version 精确版本] [--yes] [--system]
+onebots update --manager [--check] [--version 精确版本] [--artifacts 运行工件清单] [--yes] [--system]
 通过 CLI 升级本机常驻管理程序；只支持 Linux/macOS。--check 不下载或切换。
 交互模式显示当前/目标版本及发布归档摘要后确认；非交互必须显式传入 --yes。
 结果未知时使用原操作 ID：候选阶段追加 --operation ID 离线核对候选并继续同一切换（--version 仅作一致性校验）；系统服务阶段用 recover 对账。
 管理程序使用独立不可变候选，不在原目录执行 npm install。Docker/HF 请替换镜像并保留数据卷。
+--artifacts 接受 onebots 打包生成的本地运行工件清单；归档摘要仍会完整核验，依赖安装是否需要网络由工件内容决定。
 网关模式不支持旧 --yes、--packages-only、--system 或 -c/-r/-p/-t。`;
 
 export async function runManagerUpdate(
@@ -40,6 +41,7 @@ export async function runManagerUpdate(
     let system = false;
     let version: string | undefined;
     let operationId: string | undefined;
+    let artifacts: string | undefined;
     let dataDirProvided = false;
     for (let index = 0; index < args.length; index++) {
         const value = args[index];
@@ -57,6 +59,10 @@ export async function runManagerUpdate(
             if (!id || !/^[A-Za-z0-9_-]{1,100}$/.test(id))
                 throw new Error("--operation 需要有效的原操作 ID");
             operationId = id;
+        } else if (value === "--artifacts" || value.startsWith("--artifacts=")) {
+            const file = value === "--artifacts" ? args[++index] : value.slice(12);
+            if (!file || file.startsWith("-")) throw new Error("--artifacts 需要运行工件清单路径");
+            artifacts = path.resolve(file);
         } else if (value === "--data-dir" || value.startsWith("--data-dir=")) {
             dataDirProvided = true;
             const directory = value === "--data-dir" ? args[++index] : value.slice(11);
@@ -87,6 +93,7 @@ export async function runManagerUpdate(
                 system,
                 ...(version ? { version } : {}),
                 ...(operationId ? { operationId } : {}),
+                ...(artifacts ? { artifacts } : {}),
             },
             {
                 ...options.managerDependencies,
@@ -96,9 +103,9 @@ export async function runManagerUpdate(
             },
         );
     }
-    if (yes || system || version || operationId)
+    if (yes || system || version || operationId || artifacts)
         throw new Error(
-            "--yes、--system、--version 和 --operation 仅可与 --manager 一起使用；未执行更新",
+            "--yes、--system、--version、--operation 和 --artifacts 仅可与 --manager 一起使用；未执行更新",
         );
     if (!check && !interactive)
         throw new Error(

@@ -113,3 +113,38 @@ it("管理程序更新拒绝网关工作区及相互冲突的恢复检查参数"
     ).rejects.toThrow("不能与只读 --check");
     expect(f.client).not.toHaveBeenCalled();
 });
+
+it("离线运行工件只允许管理程序入口并传递绝对清单路径", async () => {
+    const f = fixture();
+    const resolve = vi.fn(async () => ({
+        host: { name: "onebots", version: "1.2.13", spec: "1.2.13" },
+        core: { name: "@onebots/core", version: "1.2.13", spec: "1.2.13" },
+        extensionVersions: {},
+        archiveSha256: "b".repeat(64),
+        archives: {
+            host: { bytes: Buffer.from("host"), sha256: "b".repeat(64) },
+            core: { bytes: Buffer.from("core"), sha256: "c".repeat(64) },
+        },
+    }));
+    const inspect = vi.fn(() => ({ version: "1.2.12", digest: "a".repeat(64) }));
+    await runManagerUpdate(["--manager", "--check", "--artifacts", "fixtures/release.json"], {
+        ...f,
+        managerDependencies: {
+            resolve,
+            inspect,
+            operationExists: () => false,
+            host: {
+                platform: "linux",
+                homedir: "/tmp",
+                uid: 1000,
+                env: {},
+                exec: vi.fn(),
+                spawn: vi.fn(),
+            },
+        },
+    });
+    expect(resolve).toHaveBeenCalledWith(undefined);
+    await expect(runManagerUpdate(["--artifacts", "fixtures/release.json"], f)).rejects.toThrow(
+        "仅可与 --manager",
+    );
+});

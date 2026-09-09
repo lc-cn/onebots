@@ -5,16 +5,21 @@ import {
     rollbackStoppedServiceMigration,
 } from "../service-migration-recovery.js";
 import { managerServiceRecoveryCommand } from "./manager-service-recovery-command.js";
+import { rollbackManagerServiceUpgrade } from "../manager-service-upgrade-rollback.js";
 import type { ManagerServiceRecord } from "../manager-service-journal.js";
 vi.mock("../manager-service-recovery.js", () => ({ reconcileManagerServiceOperation: vi.fn() }));
 vi.mock("../service-migration-recovery.js", () => ({
     cancelUnstartedServiceMigration: vi.fn(),
     rollbackStoppedServiceMigration: vi.fn(),
 }));
+vi.mock("../manager-service-upgrade-rollback.js", () => ({
+    rollbackManagerServiceUpgrade: vi.fn(),
+}));
 vi.mock("./command-runner.js", () => ({ CommandRunner: () => null }));
 afterEach(() => vi.mocked(reconcileManagerServiceOperation).mockReset());
 afterEach(() => vi.mocked(cancelUnstartedServiceMigration).mockReset());
 afterEach(() => vi.mocked(rollbackStoppedServiceMigration).mockReset());
+afterEach(() => vi.mocked(rollbackManagerServiceUpgrade).mockReset());
 it("only explicit migration cancellation dispatches to the early migration recovery path", async () => {
     vi.mocked(cancelUnstartedServiceMigration).mockResolvedValue({
         schemaVersion: 1,
@@ -81,6 +86,23 @@ it("rejects selecting migration cancellation and rollback together before dispat
     expect(result.exitCode).toBe(1);
     expect(cancelUnstartedServiceMigration).not.toHaveBeenCalled();
     expect(rollbackStoppedServiceMigration).not.toHaveBeenCalled();
+    expect(reconcileManagerServiceOperation).not.toHaveBeenCalled();
+});
+it("显式管理升级回退恢复旧候选且重复语义不冒充升级成功", async () => {
+    vi.mocked(rollbackManagerServiceUpgrade).mockResolvedValue({
+        ...record(),
+        action: "upgrade",
+        status: "failed",
+        recoveryRequired: false,
+    });
+    const result = await managerServiceRecoveryCommand({
+        operation: "operation_123",
+        rollbackUpgrade: true,
+        system: true,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain("已恢复升级前的管理程序");
+    expect(rollbackManagerServiceUpgrade).toHaveBeenCalledWith("operation_123", "system");
     expect(reconcileManagerServiceOperation).not.toHaveBeenCalled();
 });
 const secret = "synthetic-secret-no-output";

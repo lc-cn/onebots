@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import semver from "semver";
 import { readReleaseArchive } from "./release-archive.js";
+import { loadRuntimeArtifacts } from "./runtime-artifacts.js";
 import type { GenerationArtifact } from "./generation-plan.js";
 
 const FAILURE = "目标发布版本无法验证，请检查公开源或选择兼容的 OneBots 版本";
@@ -67,6 +70,64 @@ export async function resolveRelease(exactVersion?: string): Promise<ResolvedRel
         // HTTP、归档和解析错误均可能包含不可信正文；只返回固定诊断。
         throw new Error(FAILURE);
     }
+}
+
+/** 本地工件入口只接受产品生成的清单、同目录归档及逐字节摘要，再交给不可变候选安装器。 */
+export async function resolveLocalRelease(
+    file: string,
+    exactVersion?: string,
+): Promise<ResolvedRelease> {
+    try {
+        if (!path.isAbsolute(file)) throw new Error();
+        const stat = fs.lstatSync(file);
+        if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16_384) throw new Error();
+        const manifest: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (!record(manifest) || !record(manifest.host) || !record(manifest.core))
+            throw new Error();
+        const hostVersion = manifest.host.version;
+        const coreVersion = manifest.core.version;
+        if (
+            !exact(hostVersion) ||
+            !exact(coreVersion) ||
+            (exactVersion !== undefined && hostVersion !== exactVersion)
+        )
+            throw new Error();
+        const local = loadRuntimeArtifacts(file, {
+            host: { name: "onebots", version: hostVersion, spec: hostVersion },
+            core: { name: "@onebots/core", version: coreVersion, spec: coreVersion },
+        });
+        const hostArchive = localArchive(local.host.spec, local.host.sha256);
+        const coreArchive = localArchive(local.core.spec, local.core.sha256);
+        const { manifest: hostManifest, catalog } = await readReleaseArchive(hostArchive);
+        const release = parseReleaseCatalog(hostVersion, hostManifest, catalog);
+        if (release.core.version !== coreVersion) throw new Error();
+        const hostSha256 = local.host.sha256;
+        const coreSha256 = local.core.sha256;
+        if (!hostSha256 || !coreSha256) throw new Error();
+        return Object.freeze({
+            ...release,
+            host: Object.freeze(local.host),
+            core: Object.freeze(local.core),
+            archiveSha256: hostSha256,
+            archives: {
+                host: { bytes: hostArchive, sha256: hostSha256 },
+                core: { bytes: coreArchive, sha256: coreSha256 },
+            },
+        });
+    } catch {
+        throw new Error("本地管理程序运行工件无法验证；未下载候选或修改系统服务");
+    }
+}
+
+function localArchive(spec: string, expected: string | undefined): Buffer {
+    if (!spec.startsWith("file:") || !/^[a-f0-9]{64}$/.test(expected ?? "")) throw new Error();
+    const file = spec.slice(5);
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > ARCHIVE_LIMIT)
+        throw new Error();
+    const bytes = fs.readFileSync(file);
+    if (createHash("sha256").update(bytes).digest("hex") !== expected) throw new Error();
+    return bytes;
 }
 
 export function parseReleaseCatalog(

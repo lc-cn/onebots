@@ -223,6 +223,59 @@ describe("ordinary manager service operation journal", () => {
     });
 });
 
+it("升级回退只允许从候选切换后单向前进，完成后解除服务操作门禁", () => {
+    const test = fixture();
+    const record = test.journal.prepare({
+        id: "upgrade-rollback",
+        action: "upgrade",
+        desiredEnabled: true,
+        spec: { ...test.spec, workingDirectory: "/tmp/next", binPath: "/tmp/next/bin.js" },
+        upgrade: {
+            previousSpec: test.spec,
+            previousCandidateDigest: "a".repeat(64),
+            candidateDigest: "b".repeat(64),
+            snapshot: {
+                ...removal(true),
+                initial: { enabled: true, processId: 123, identity: "old-instance" },
+            },
+        },
+    });
+    test.journal.save({ ...record, phase: "stopping" });
+    test.journal.save({ ...record, phase: "writing" });
+    test.journal.save({ ...record, phase: "restoring-enablement" });
+    const cold = new FileManagerServiceJournal(test.root);
+    let current = cold.read(record.id);
+    expect(current).toMatchObject({ status: "interrupted", recoveryRequired: true });
+    expect(() => cold.save({ ...current, phase: "rollback-writing" })).toThrow();
+    for (const phase of [
+        "rollback-stopping",
+        "rollback-writing",
+        "rollback-reloading",
+        "rollback-starting",
+        "rollback-verifying",
+    ] as const) {
+        current = { ...current, phase };
+        cold.save(current);
+    }
+    const completed = {
+        ...current,
+        phase: "completed" as const,
+        status: "failed" as const,
+        recoveryRequired: false,
+    };
+    cold.save(completed);
+    expect(cold.health()).toEqual({ recoveryRequired: false });
+    expect(() => cold.save({ ...completed, phase: "rollback-verifying" })).toThrow();
+    expect(
+        cold.prepare({
+            id: "after-rollback",
+            action: "stop",
+            desiredEnabled: true,
+            spec: test.spec,
+        }).status,
+    ).toBe("running");
+});
+
 it("uninstall requires closed immutable snapshot and permits each durable removal phase", () => {
     const test = fixture();
     const input = {

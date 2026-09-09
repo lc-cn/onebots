@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { parseReleaseCatalog, resolveRelease } from "./release-resolver.js";
+import { parseReleaseCatalog, resolveLocalRelease, resolveRelease } from "./release-resolver.js";
 import { readReleaseArchive } from "./release-archive.js";
 import { resolveGenerationPlan } from "./generation-resolver.js";
 vi.mock("./release-archive.js", () => ({ readReleaseArchive: vi.fn() }));
@@ -100,6 +103,46 @@ it("core也必须来自固定registry归档并通过完整性校验", async () =
     });
     await expect(resolveRelease(version)).rejects.toThrow("无法验证");
     expect(f.fetcher).toHaveBeenCalledWith(f.corePublished.dist.tarball, expect.anything());
+});
+it("离线清单只读取同目录精确归档并绑定目标版本", async () => {
+    fixture();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-local-release-"));
+    try {
+        const host = Buffer.from("local host archive");
+        const core = Buffer.from("local core archive");
+        fs.writeFileSync(path.join(root, "onebots.tgz"), host);
+        fs.writeFileSync(path.join(root, "core.tgz"), core);
+        const file = path.join(root, "manifest.json");
+        fs.writeFileSync(
+            file,
+            JSON.stringify({
+                schemaVersion: 1,
+                host: {
+                    name: "onebots",
+                    version,
+                    file: "onebots.tgz",
+                    sha256: createHash("sha256").update(host).digest("hex"),
+                },
+                core: {
+                    name: "@onebots/core",
+                    version: "1.2.33",
+                    file: "core.tgz",
+                    sha256: createHash("sha256").update(core).digest("hex"),
+                },
+                extensions: [],
+            }),
+        );
+        const release = await resolveLocalRelease(file, version);
+        expect(release.archives?.host.bytes).toEqual(host);
+        expect(release.archives?.core.bytes).toEqual(core);
+        expect(release.host.spec).toBe(`file:${path.join(fs.realpathSync(root), "onebots.tgz")}`);
+        expect(fetch).not.toHaveBeenCalled();
+        await expect(resolveLocalRelease(file, "1.2.98")).rejects.toThrow("本地管理程序");
+        fs.appendFileSync(path.join(root, "onebots.tgz"), "changed");
+        await expect(resolveLocalRelease(file, version)).rejects.toThrow("本地管理程序");
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
 });
 it.each(["latest", "^1.2.0", "https://private.example/archive", "1.2.3/../../x"])(
     "拒绝客户端版本选择 %s",

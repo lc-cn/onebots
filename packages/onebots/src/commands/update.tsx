@@ -22,6 +22,10 @@ export const options = z
             .string()
             .optional()
             .describe(option({ description: "查询原管理程序升级操作" })),
+        artifacts: z
+            .string()
+            .optional()
+            .describe(option({ description: "本地管理程序运行工件清单" })),
     })
     .strict();
 export default function UpdateCommand({ options: input }: { options: z.infer<typeof options> }) {
@@ -36,6 +40,7 @@ export default function UpdateCommand({ options: input }: { options: z.infer<typ
                     ...(input.yes ? ["--yes"] : []),
                     ...(input.system ? ["--system"] : []),
                     ...(input.operation ? ["--operation", input.operation] : []),
+                    ...(input.artifacts ? ["--artifacts", input.artifacts] : []),
                 ]),
             })}
             pending="正在检查网关运行版本…"

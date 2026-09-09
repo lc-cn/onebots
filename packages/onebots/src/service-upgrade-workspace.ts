@@ -12,7 +12,7 @@ export interface ManagerUpgradePending {
     candidateDigest: string;
     phase?: "releasing" | "released";
     managerId?: string;
-    completion?: "offline";
+    completion?: "offline" | "rollback";
 }
 const failure = () => new Error("管理程序升级维护状态无法确认，请在本机对账");
 function parse(input: unknown): ManagerUpgradePending {
@@ -31,18 +31,26 @@ function parse(input: unknown): ManagerUpgradePending {
         !/^[a-f0-9]{64}$/.test(value.candidateDigest)
     )
         throw failure();
-    const offline = value.completion === "offline" && value.phase === "released" &&
+    const localCompletion =
+        ["offline", "rollback"].includes(String(value.completion)) &&
+        value.phase === "released" &&
         !Object.hasOwn(value, "managerId");
-    if (Object.hasOwn(value, "completion") && !offline) throw failure();
-    if (value.phase !== undefined && !offline &&
+    if (Object.hasOwn(value, "completion") && !localCompletion) throw failure();
+    if (
+        value.phase !== undefined &&
+        !localCompletion &&
         ((value.phase !== "releasing" && value.phase !== "released") ||
-            typeof value.managerId !== "string" || !/^[a-f0-9-]{36}$/.test(value.managerId)))
+            typeof value.managerId !== "string" ||
+            !/^[a-f0-9-]{36}$/.test(value.managerId))
+    )
         throw failure();
     return {
         ...(value.phase
             ? {
                   phase: value.phase as "releasing" | "released",
-                  ...(offline ? { completion: "offline" as const } : { managerId: value.managerId as string }),
+                  ...(localCompletion
+                      ? { completion: value.completion as "offline" | "rollback" }
+                      : { managerId: value.managerId as string }),
               }
             : {}),
         schemaVersion: 1,
@@ -191,10 +199,32 @@ export function completeStoppedManagerUpgradeWhileLocked(
     if (expected.phase) throw failure();
     const file = new ConfigurationFile(path.join(workspace, ".control", MARKER));
     const snapshot = file.readRaw();
-    if (JSON.stringify(readManagerUpgradePending(workspace)) !== JSON.stringify(expected) ||
-        JSON.stringify(parse(JSON.parse(snapshot.bytes.toString("utf8")))) !== JSON.stringify(expected))
+    if (
+        JSON.stringify(readManagerUpgradePending(workspace)) !== JSON.stringify(expected) ||
+        JSON.stringify(parse(JSON.parse(snapshot.bytes.toString("utf8")))) !==
+            JSON.stringify(expected)
+    )
         throw failure();
     const next = parse({ ...expected, phase: "released", completion: "offline" });
+    file.replaceRaw(snapshot.revision, Buffer.from(JSON.stringify(next)));
+}
+
+/** 旧候选文件已经恢复且系统服务仍静止时，允许回退事务关闭维护门禁。 */
+export function completeRolledBackManagerUpgradeWhileLocked(
+    workspace: string,
+    expected: ManagerUpgradePending,
+): void {
+    expected = parse(expected);
+    if (expected.phase) throw failure();
+    const file = new ConfigurationFile(path.join(workspace, ".control", MARKER));
+    const snapshot = file.readRaw();
+    if (
+        JSON.stringify(readManagerUpgradePending(workspace)) !== JSON.stringify(expected) ||
+        JSON.stringify(parse(JSON.parse(snapshot.bytes.toString("utf8")))) !==
+            JSON.stringify(expected)
+    )
+        throw failure();
+    const next = parse({ ...expected, phase: "released", completion: "rollback" });
     file.replaceRaw(snapshot.revision, Buffer.from(JSON.stringify(next)));
 }
 

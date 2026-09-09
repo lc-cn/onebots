@@ -33,6 +33,11 @@ export type ManagerServicePhase =
     | "removing"
     | "verifying"
     | "releasing"
+    | "rollback-stopping"
+    | "rollback-writing"
+    | "rollback-reloading"
+    | "rollback-starting"
+    | "rollback-verifying"
     | "completed";
 export interface ManagerServiceRecord {
     schemaVersion: 1;
@@ -68,6 +73,11 @@ const phases = [
     "removing-metadata",
     "verifying",
     "releasing",
+    "rollback-stopping",
+    "rollback-writing",
+    "rollback-reloading",
+    "rollback-starting",
+    "rollback-verifying",
     "completed",
 ];
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -79,6 +89,14 @@ const upgradePhases: ManagerServicePhase[] = [
     "starting",
     "verifying",
     "releasing",
+    "completed",
+];
+const rollbackPhases: ManagerServicePhase[] = [
+    "rollback-stopping",
+    "rollback-writing",
+    "rollback-reloading",
+    "rollback-starting",
+    "rollback-verifying",
     "completed",
 ];
 const failure = () => new Error("管理服务操作记录未确认或已损坏，禁止继续操作");
@@ -203,12 +221,24 @@ export class FileManagerServiceJournal {
                 throw failure();
             if (previous.status === "interrupted" && record.status === "running") throw failure();
             if (record.action === "upgrade" && record.phase !== previous.phase) {
+                const rollbackStart =
+                    record.phase === "rollback-stopping" &&
+                    previous.status === "interrupted" &&
+                    previous.recoveryRequired &&
+                    ["restoring-enablement", "starting", "verifying"].includes(previous.phase);
+                const previousRollbackIndex = rollbackPhases.indexOf(previous.phase);
+                const rollbackAdvance =
+                    previousRollbackIndex >= 0 &&
+                    rollbackPhases.indexOf(record.phase) === previousRollbackIndex + 1;
                 const sequence = upgradePhases.filter(
                     phase =>
                         phase !== "starting" || record.upgrade?.snapshot.initial.processId !== null,
                 );
-                if (sequence.indexOf(record.phase) !== sequence.indexOf(previous.phase) + 1)
-                    throw failure();
+                const previousUpgradeIndex = sequence.indexOf(previous.phase);
+                const upgradeAdvance =
+                    previousUpgradeIndex >= 0 &&
+                    sequence.indexOf(record.phase) === previousUpgradeIndex + 1;
+                if (!rollbackStart && !rollbackAdvance && !upgradeAdvance) throw failure();
             }
             this.storage.write(`${record.id}.json`, record);
         } catch {
@@ -267,7 +297,7 @@ export function parseManagerServiceRecord(input: unknown): ManagerServiceRecord 
         const upgrade = parseManagerServiceUpgrade(value.upgrade, spec, value.desiredEnabled);
         value.upgrade = upgrade;
         if (
-            !upgradePhases.includes(value.phase as ManagerServicePhase) ||
+            ![...upgradePhases, ...rollbackPhases].includes(value.phase as ManagerServicePhase) ||
             (value.phase === "starting" && upgrade.snapshot.initial.processId === null)
         )
             throw failure();

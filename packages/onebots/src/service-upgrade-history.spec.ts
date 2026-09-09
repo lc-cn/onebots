@@ -6,6 +6,8 @@ import {
     readManagerUpgradeHistory,
     readManagerUpgradePending,
     advanceManagerUpgrade,
+    completeRolledBackManagerUpgradeWhileLocked,
+    managerUpgradeStatus,
 } from "./service-upgrade-workspace.js";
 import { ConfigurationFile } from "./configuration/configuration-file.js";
 import { verifyServiceMigrationProcessesWhileLocked } from "./service-migration-processes.js";
@@ -131,4 +133,24 @@ it("替换已发生但结果未知时保留新门禁，不重派准备", async (
     expect(readManagerUpgradeHistory(f.root, "first")).toEqual(f.original);
     await expect(prepareManagerUpgradeWorkspace(f.root, f.next)).rejects.toThrow();
     expect(write).toHaveBeenCalledTimes(1);
+});
+
+it("回退提交只接受原pending并可归档，重复CAS不会重写", async () => {
+    const f = fixture();
+    await prepareManagerUpgradeWorkspace(f.root, f.next);
+    const expected = readManagerUpgradePending(f.root)!;
+    completeRolledBackManagerUpgradeWhileLocked(f.root, expected);
+    expect(readManagerUpgradePending(f.root)).toEqual({
+        ...f.next,
+        phase: "released",
+        completion: "rollback",
+    });
+    expect(managerUpgradeStatus(f.root)).toEqual({ pending: false, recoveryRequired: false });
+    expect(() => completeRolledBackManagerUpgradeWhileLocked(f.root, expected)).toThrow();
+    await prepareManagerUpgradeWorkspace(f.root, {
+        ...f.next,
+        operationId: "third",
+        candidateDigest: "c".repeat(64),
+    });
+    expect(readManagerUpgradeHistory(f.root, "second")?.completion).toBe("rollback");
 });

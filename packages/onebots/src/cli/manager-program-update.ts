@@ -4,7 +4,11 @@ import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import semver from "semver";
 import type { TuiPrompt } from "../tui/prompt.js";
-import { resolveRelease, type ResolvedRelease } from "../installation/release-resolver.js";
+import {
+    resolveLocalRelease,
+    resolveRelease,
+    type ResolvedRelease,
+} from "../installation/release-resolver.js";
 import {
     managerCandidateDigest,
     readRunningManagerCandidate,
@@ -30,6 +34,7 @@ export interface ManagerProgramUpdateOptions {
     system: boolean;
     version?: string;
     operationId?: string;
+    artifacts?: string;
 }
 
 interface InstalledManager {
@@ -125,7 +130,12 @@ export async function runManagerProgramUpdate(
             throw managerUpdateFailure(error, id, options.system, options.version);
         }
     }
-    const release = await (dependencies.resolve ?? resolveRelease)(options.version);
+    const release = await (
+        dependencies.resolve ??
+        (options.artifacts
+            ? version => resolveLocalRelease(options.artifacts!, version)
+            : resolveRelease)
+    )(options.version);
     if (
         !release.archives ||
         release.archives.host.sha256 !== release.archiveSha256 ||
