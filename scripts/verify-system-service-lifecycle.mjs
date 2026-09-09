@@ -392,9 +392,11 @@ async function assertManagementOnline(port) {
 async function verifyLegacyMigration(port, operationIds) {
     let legacyRuntime = path.join(temporary, "legacy-systemd-runtime");
     let legacyData = path.join(temporary, "legacy-systemd-data");
+    const legacyNodeDirectory = path.join(temporary, "legacy-systemd-node");
     const legacyCore = path.join(legacyRuntime, "node_modules/@onebots/core");
     fs.mkdirSync(legacyCore, { recursive: true, mode: 0o700 });
     fs.mkdirSync(legacyData, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(legacyNodeDirectory, { mode: 0o700 });
     legacyRuntime = fs.realpathSync(legacyRuntime);
     legacyData = fs.realpathSync(legacyData);
     fs.writeFileSync(
@@ -421,6 +423,17 @@ async function verifyLegacyMigration(port, operationIds) {
         { mode: 0o600 },
     );
     legacyBin = fs.realpathSync(legacyBin);
+    // setup-node 的共享 toolcache 元数据不是旧系统服务的稳定工件契约；验收先建立
+    // 私有、不可被组或其他用户改写的 Node，随后由生产迁移再次复制并验证它。
+    let legacyNode = path.join(legacyNodeDirectory, "node");
+    fs.copyFileSync(process.execPath, legacyNode, fs.constants.COPYFILE_EXCL);
+    fs.chmodSync(legacyNode, 0o700);
+    legacyNode = fs.realpathSync(legacyNode);
+    const legacyNodeStat = fs.lstatSync(legacyNode);
+    assert.equal(legacyNodeStat.isFile(), true);
+    assert.equal(legacyNodeStat.isSymbolicLink(), false);
+    assert.equal(legacyNodeStat.nlink, 1);
+    assert.equal(legacyNodeStat.mode & 0o7777, 0o700);
     let legacyConfig = path.join(legacyData, "config.yaml");
     fs.writeFileSync(legacyConfig, "general: {}\n", { mode: 0o600 });
     legacyConfig = fs.realpathSync(legacyConfig);
@@ -433,7 +446,7 @@ async function verifyLegacyMigration(port, operationIds) {
         adapters: [],
         protocols: [],
         applications: [],
-        nodePath: fs.realpathSync(process.execPath),
+        nodePath: legacyNode,
         binPath: legacyBin,
         workingDirectory: legacyRuntime,
     };
