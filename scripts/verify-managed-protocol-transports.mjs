@@ -218,12 +218,21 @@ function discoverProtocolSuites() {
     return ["onebot", "satori", "milky"]
         .flatMap(protocol => {
             const directory = path.join(ROOT, "__tests__", protocol);
-            return fs
-                .readdirSync(directory, { recursive: true, encoding: "utf8" })
-                .filter(name => name.endsWith(".spec.js"))
-                .map(name =>
-                    path.posix.join("__tests__", protocol, name.split(path.sep).join("/")),
-                );
+            return discoverSpecFiles(directory).map(name =>
+                path.posix.join("__tests__", protocol, name.split(path.sep).join("/")),
+            );
         })
         .sort();
+}
+
+function discoverSpecFiles(directory, relativeDirectory = "") {
+    return fs
+        .readdirSync(path.join(directory, relativeDirectory), { withFileTypes: true })
+        .flatMap(entry => {
+            const relativePath = path.join(relativeDirectory, entry.name);
+            if (entry.isDirectory()) {
+                return discoverSpecFiles(directory, relativePath);
+            }
+            return entry.isFile() && entry.name.endsWith(".spec.js") ? [relativePath] : [];
+        });
 }
