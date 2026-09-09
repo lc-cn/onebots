@@ -14,7 +14,13 @@ export function parseServeOptions(args: string[], env = process.env) {
         const name = args[index];
         const value = args[index + 1];
         if (
-            !["--data-dir", "--host", "--port", "--windows-host-pipe"].includes(name) ||
+            ![
+                "--data-dir",
+                "--host",
+                "--port",
+                "--windows-host-pipe",
+                "--windows-host-rpc-pipe",
+            ].includes(name) ||
             values.has(name)
         )
             throw new Error("serve 参数无效或重复，请运行 onebots serve --help");
@@ -29,10 +35,18 @@ export function parseServeOptions(args: string[], env = process.env) {
     const windowsHostPipe = values.get("--windows-host-pipe");
     if (windowsHostPipe !== undefined && windowsHostPipe !== WINDOWS_HOST_PIPE_NAME)
         throw new Error("Windows 原生宿主管道无效");
+    const windowsHostRpcPipe = values.get("--windows-host-rpc-pipe");
+    if (
+        (windowsHostRpcPipe !== undefined) !== (windowsHostPipe !== undefined) ||
+        (windowsHostRpcPipe !== undefined &&
+            !/^\\\\\.\\pipe\\onebots-manager-rpc-[0-9a-f]{32}$/.test(windowsHostRpcPipe))
+    )
+        throw new Error("Windows 原生宿主 RPC 管道无效");
     return {
         workspace: path.resolve(values.get("--data-dir") ?? env.ONEBOTS_WORKSPACE ?? process.cwd()),
         host: values.get("--host") ?? "127.0.0.1",
         port,
         ...(windowsHostPipe ? { windowsHostPipe } : {}),
+        ...(windowsHostRpcPipe ? { windowsHostRpcPipe } : {}),
     };
 }

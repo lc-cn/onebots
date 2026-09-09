@@ -53,9 +53,10 @@ type statusPipe struct {
 	handlers sync.WaitGroup
 	done     chan struct{}
 	once     sync.Once
+	manager  *managerRPC
 }
 
-func startStatusPipe(config Config, state *stateStore) (*statusPipe, error) {
+func startStatusPipe(config Config, state *stateStore, manager *managerRPC) (*statusPipe, error) {
 	sddl, allowed, err := controlPipeSecurity(config.ControlSID)
 	if err != nil {
 		return nil, err
@@ -95,6 +96,7 @@ func startStatusPipe(config Config, state *stateStore) (*statusPipe, error) {
 		allowed:  allowed,
 		slots:    make(chan struct{}, pipeConnectionLimit),
 		done:     make(chan struct{}),
+		manager:  manager,
 	}
 	failed = false
 	go server.serve()
@@ -276,41 +278,68 @@ func (server *statusPipe) handle(connection net.Conn) {
 	}
 	client, err := server.authorize(connection)
 	if err != nil {
-		server.writeFailure(connection, "unauthorized_client", "named pipe client identity is not authorized")
+		server.writeFailure(connection, "", "unauthorized_client", "named pipe client identity is not authorized")
 		return
 	}
 	message, err := protocol.ReadSingleMessage(connection)
 	if err != nil {
-		server.writeFailure(connection, "invalid_request", "request must contain exactly one JSON document")
+		server.writeFailure(connection, "", "invalid_request", "request must contain exactly one JSON document")
 		return
 	}
 	request, err := protocol.DecodeRequest(message)
 	if err != nil {
-		server.writeFailure(connection, "invalid_request", err.Error())
+		server.writeFailure(connection, "", "invalid_request", err.Error())
 		return
 	}
 	if request.Operation == "publish_status" {
 		if request.Control == nil || !mayPublishControlStatus(
 			client, server.allowed.serviceSID, request.Control.Manager.PID,
 		) {
-			server.writeFailure(connection, "forbidden_operation", "only the service identity may publish control status")
+			server.writeFailure(connection, request.RequestID, "forbidden_operation", "only the service identity may publish control status")
 			return
 		}
 		if server.state.publish(*request.Control) != nil {
-			server.writeFailure(connection, "state_mismatch", "published control status does not match the running manager")
+			server.writeFailure(connection, request.RequestID, "state_mismatch", "published control status does not match the running manager")
 			return
 		}
 	} else if request.Operation == "invalidate_status" {
 		if request.Manager == nil || !mayPublishControlStatus(
 			client, server.allowed.serviceSID, request.Manager.PID,
 		) {
-			server.writeFailure(connection, "forbidden_operation", "only the service identity may invalidate control status")
+			server.writeFailure(connection, request.RequestID, "forbidden_operation", "only the service identity may invalidate control status")
 			return
 		}
 		if server.state.invalidate(*request.Manager, request.Revision) != nil {
-			server.writeFailure(connection, "state_mismatch", "control invalidation does not match the running manager")
+			server.writeFailure(connection, request.RequestID, "state_mismatch", "control invalidation does not match the running manager")
 			return
 		}
+	} else if request.Operation == "control_request" {
+		if request.Binding == nil || !server.state.matches(*request.Binding) {
+			server.writeFailure(connection, request.RequestID, "stale_binding", "control request does not match the current manager")
+			return
+		}
+		if server.manager == nil {
+			server.writeFailure(connection, request.RequestID, "manager_unavailable", "manager control RPC is disabled")
+			return
+		}
+		timeout := pipeRequestTimeout
+		if request.Method == "POST" {
+			timeout = managerRPCMaxTimeout
+		}
+		if err := connection.SetDeadline(time.Now().Add(timeout)); err != nil {
+			return
+		}
+		status, body, err := server.manager.exchange(request, timeout)
+		if err != nil {
+			server.writeFailure(connection, request.RequestID, "manager_unavailable", "manager control result is unavailable")
+			return
+		}
+		if !server.state.confirms(*request.Binding) {
+			server.writeFailure(connection, request.RequestID, "stale_binding", "manager changed before the control result was confirmed")
+			return
+		}
+		_ = json.NewEncoder(connection).Encode(protocol.ControlSuccess(request.RequestID, status, body))
+		return
 	}
 	_ = json.NewEncoder(connection).Encode(protocol.Success(request.RequestID, server.state.snapshot()))
 }
@@ -360,8 +389,8 @@ func (server *statusPipe) authorize(connection net.Conn) (pipeClientIdentity, er
 	return pipeClientIdentity{sid: clientSID, pid: firstPID}, nil
 }
 
-func (server *statusPipe) writeFailure(connection io.Writer, code, message string) {
-	_ = json.NewEncoder(connection).Encode(protocol.Failure("", code, message))
+func (server *statusPipe) writeFailure(connection io.Writer, requestID, code, message string) {
+	_ = json.NewEncoder(connection).Encode(protocol.Failure(requestID, code, message))
 }
 
 func (server *statusPipe) Close() error {

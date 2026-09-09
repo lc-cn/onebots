@@ -7,6 +7,7 @@ import { writeCliOutput } from "../cli-output.js";
 import { runConfigurationCommand } from "./configuration-command.js";
 import { runVerificationCommand } from "./verification-command.js";
 import { parseServeOptions, SERVE_HELP } from "./serve-options.js";
+import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 
 /** 新控制入口只在独立架构分支启用，所有启停调用同一客户端。 */
 export async function runControlCommand(argv: string[]): Promise<boolean> {
@@ -61,8 +62,18 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
             });
         return true;
     }
-    const client = createLocalControlClient(workspace);
     const action = options[0];
+    const remoteUrl = option("--url", "");
+    const remote = Boolean(remoteUrl);
+    if (remote && !["status", "start", "stop", "restart"].includes(action))
+        throw new Error("远程 CLI 当前只支持 status、start、stop、restart");
+    if (remote && (options.length !== 4 || options[1] !== "--url" || options[3] !== "--auth-stdin"))
+        throw new Error("远程控制必须通过 --auth-stdin 从安全管道读取设备凭证");
+    const client = remote
+        ? new ControlClient(createHttpControlTransport(remoteUrl, () => remoteToken))
+        : createLocalControlClient(workspace);
+    let remoteToken = "";
+    if (remote) remoteToken = await readControlToken();
     if (command === "control" && action === "tui") {
         const { runControlTui } = await import("./tui.js");
         await runControlTui(client);
@@ -76,8 +87,11 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
         if (options.length !== 1 && !(options.length === 3 && options[1] === "--data-dir"))
             throw new Error("认证命令只接受 --data-dir 工作区，不接受凭证参数");
         const result =
-            action === "recover" ? await client.recoverAuthentication()
-                : action === "device" ? await client.authorizeDevice() : await client.bootstrap();
+            action === "recover"
+                ? await client.recoverAuthentication()
+                : action === "device"
+                  ? await client.authorizeDevice()
+                  : await client.bootstrap();
         writeCliOutput(result.code);
         return true;
     }
@@ -147,5 +161,18 @@ async function readDownloadToken(): Promise<string> {
     }
     const token = input.trim();
     if (!/^[A-Za-z0-9_]+$/.test(token)) throw new Error("下载授权格式无效");
+    return token;
+}
+
+async function readControlToken(): Promise<string> {
+    if (process.stdin.isTTY)
+        throw new Error("--auth-stdin 仅接受安全管道输入，不能在终端明文输入设备凭证");
+    let input = "";
+    for await (const chunk of process.stdin) {
+        input += chunk.toString();
+        if (Buffer.byteLength(input) > 4096) throw new Error("设备凭证格式无效");
+    }
+    const token = input.trim();
+    if (!/^[A-Za-z0-9_-]{16,4096}$/.test(token)) throw new Error("设备凭证格式无效");
     return token;
 }

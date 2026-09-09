@@ -121,3 +121,43 @@ func TestDecodeRequestEnforcesBound(t *testing.T) {
 		t.Fatal("expected oversized request rejection")
 	}
 }
+
+func TestDecodeBoundControlRequest(t *testing.T) {
+	request, err := DecodeRequest([]byte(`{"version":2,"requestId":"control:1","operation":"control_request","binding":{"revision":7,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"POST","route":"/api/control/auth/bootstrap","body":{}}`))
+	if err != nil || request.Binding == nil || request.Binding.Revision != 7 {
+		t.Fatalf("valid bound request rejected: %#v, %v", request, err)
+	}
+	for _, input := range []string{
+		`{"version":2,"requestId":"control:2","operation":"control_request","binding":{"revision":7,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"POST","route":"/api/control/auth/bootstrap\r\nX: bad"}`,
+		`{"version":2,"requestId":"control:3","operation":"control_request","binding":{"revision":0,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"GET","route":"/api/control/status"}`,
+		`{"version":2,"requestId":"control:4","operation":"control_request","binding":{"revision":7,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"GET","route":"/api/control/status","body":{}}`,
+	} {
+		if _, err := DecodeRequest([]byte(input)); err == nil {
+			t.Fatalf("invalid bound request accepted: %s", input)
+		}
+	}
+}
+
+func TestDecodeControlResponse(t *testing.T) {
+	response, err := DecodeResponse([]byte(`{"version":2,"requestId":"control:1","ok":true,"result":{"status":201,"body":{"code":"123456"}}}`), "control:1")
+	if err != nil || response.Result == nil || response.Result.Status != 201 {
+		t.Fatalf("valid control response rejected: %#v, %v", response, err)
+	}
+}
+
+func TestDecodeControlResponseHasIndependentOneMiBBound(t *testing.T) {
+	body := strings.Repeat("x", 70*1024)
+	encoded, err := json.Marshal(ControlSuccess("control:large", 200, json.RawMessage(`{"payload":"`+body+`"}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) <= MaxMessageBytes {
+		t.Fatal("fixture did not cross status bound")
+	}
+	if _, err := DecodeResponse(encoded, "control:large"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DecodeResponse([]byte(strings.Repeat("x", MaxControlResultBytes+1)), "control:large"); err == nil {
+		t.Fatal("oversized control response accepted")
+	}
+}

@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { createGenerationPlan } from "../installation/generation-plan.js";
-import { verifyManagerCandidate } from "./manager-candidate.js";
+import {
+    verifyManagerCandidate,
+    windowsManagerCandidateHostArguments,
+} from "./manager-candidate.js";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -58,3 +61,21 @@ it.each(["digest", "abi", "extension", "cancelled", "timeout"])(
         expect(fs.readdirSync(root)).toEqual([]);
     },
 );
+
+it("Windows candidate uses the console-only no-manager-rpc contract", () => {
+    const args = windowsManagerCandidateHostArguments({
+        id: "operation",
+        root: "C:\\candidate",
+        worker: "C:\\candidate\\worker.js",
+        request: "C:\\private\\request.json",
+        result: "C:\\private\\result.json",
+        sid: "S-1-5-18",
+    });
+    expect(args.slice(0, 4)).toEqual([
+        "console-run",
+        "--no-manager-rpc",
+        "--manager",
+        process.execPath,
+    ]);
+    expect(args).not.toContain("--windows-host-rpc-pipe");
+});

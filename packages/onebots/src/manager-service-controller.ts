@@ -25,6 +25,7 @@ import type { ServiceScope } from "./service-definition.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform } from "./service-platform.js";
 import { assertManagerServiceTransactionsSupported } from "./windows-manager-support.js";
+import { WindowsServicePlatform } from "./service-platform-windows.js";
 
 export type ManagerControlAction = "start" | "stop" | "restart";
 export interface ManagerControllerDependencies {
@@ -46,10 +47,14 @@ export async function controlManagerService(
     assertManagerServiceTransactionsSupported(host);
     if (
         !["start", "stop", "restart"].includes(action) ||
-        !["linux", "darwin"].includes(host.platform)
+        !["linux", "darwin", "win32"].includes(host.platform)
     )
         throw new Error("此系统或操作尚未通过管理服务控制验收");
-    if (scope === "system" && host.uid !== 0) throw new Error("系统级服务需要管理员权限");
+    if (
+        (host.platform === "win32" && scope !== "system") ||
+        (host.platform !== "win32" && scope === "system" && host.uid !== 0)
+    )
+        throw new Error("系统级服务需要管理员权限");
     const timeout = dependencies.readinessTimeoutMs ?? 120_000;
     if (!Number.isFinite(timeout) || timeout < 1 || timeout > 120_000)
         throw new Error("管理服务验收期限无效");
@@ -80,9 +85,11 @@ export async function controlManagerService(
             dependencies.platform?.(spec) ??
             (host.platform === "linux"
                 ? new SystemdServicePlatform(host, scope, files.definition)
-                : new LaunchdServicePlatform(host, scope, files.definition, {
-                      confirmUnloadedProcesses: () => confirmStopped(spec.workspace),
-                  }));
+                : host.platform === "darwin"
+                  ? new LaunchdServicePlatform(host, scope, files.definition, {
+                        confirmUnloadedProcesses: () => confirmStopped(spec.workspace),
+                    })
+                  : new WindowsServicePlatform(host, scope, files.definition));
         const inspect = dependencies.inspectManager ?? inspectMigrationManager;
         const definition = renderInstalledManagerService(spec, host.platform, files.stateDir);
         function unchanged() {
@@ -113,7 +120,11 @@ export async function controlManagerService(
         }
         async function quiet() {
             const state = await platform.inspect();
-            return !state.running && state.quiescent && (await confirmStopped(spec.workspace));
+            return (
+                !state.running &&
+                state.quiescent &&
+                (host.platform === "win32" || (await confirmStopped(spec.workspace)))
+            );
         }
         const now = dependencies.now ?? Date.now;
         const sleep =
@@ -130,8 +141,24 @@ export async function controlManagerService(
                         first.state === "running" &&
                         first.enabled === initial.enabled
                     ) {
-                        const manager = await inspect(spec.workspace);
                         const second = await platform.inspect();
+                        if (host.platform === "win32") {
+                            const native = await (
+                                platform as ServicePlatform & {
+                                    inspectNative(): Promise<{
+                                        control?: { manager: { id: string; pid: number } };
+                                    }>;
+                                }
+                            ).inspectNative();
+                            if (
+                                isDeepStrictEqual(first, second) &&
+                                native.control?.manager.pid === first.processId &&
+                                (!previousId || native.control.manager.id !== previousId)
+                            )
+                                return true;
+                            throw new Error();
+                        }
+                        const manager = await inspect(spec.workspace);
                         if (
                             isDeepStrictEqual(first, second) &&
                             manager.manager.pid === first.processId &&
@@ -150,9 +177,24 @@ export async function controlManagerService(
         try {
             let previousId: string | undefined;
             if (action === "restart" && initial.running) {
-                const manager = await inspect(spec.workspace);
-                if (manager.manager.pid !== initial.processId) throw new Error("管理实例身份不符");
-                previousId = manager.manager.id;
+                if (host.platform === "win32") {
+                    if (!initial.identity) throw new Error("管理实例身份不符");
+                    const native = await (
+                        platform as ServicePlatform & {
+                            inspectNative(): Promise<{
+                                control?: { manager: { id: string; pid: number } };
+                            }>;
+                        }
+                    ).inspectNative();
+                    if (native.control?.manager.pid !== initial.processId)
+                        throw new Error("管理实例身份不符");
+                    previousId = native.control.manager.id;
+                } else {
+                    const manager = await inspect(spec.workspace);
+                    if (manager.manager.pid !== initial.processId)
+                        throw new Error("管理实例身份不符");
+                    previousId = manager.manager.id;
+                }
             }
             if (action !== "start" || initial.state === "failed") {
                 unchanged();

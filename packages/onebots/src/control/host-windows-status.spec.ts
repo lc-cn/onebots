@@ -1,6 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import net from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
 
@@ -27,6 +28,9 @@ vi.mock("./http-utils.js", async importOriginal => ({
     ...(await importOriginal<typeof import("./http-utils.js")>()),
     listen: vi.fn(async () => undefined),
 }));
+vi.mock("../windows-manager-rpc.js", () => ({
+    connectWindowsManagerRPC: vi.fn(async () => new net.Socket()),
+}));
 import { startControlHost } from "./host.js";
 
 const roots: string[] = [];
@@ -46,6 +50,8 @@ describe("Windows原生宿主状态接线", () => {
                 workspace,
                 port: 0,
                 windowsHostPipe: WINDOWS_HOST_PIPE_NAME,
+                windowsHostRpcPipe:
+                    "\\\\.\\pipe\\onebots-manager-rpc-0123456789abcdef0123456789abcdef",
             });
             expect(publisher.construct).toHaveBeenCalledWith(WINDOWS_HOST_PIPE_NAME, {
                 id: host.id,

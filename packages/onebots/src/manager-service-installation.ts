@@ -7,12 +7,18 @@ import { renderInstalledManagerService } from "./manager-service-definition.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform } from "./service-platform.js";
+import {
+    inspectWindowsServiceFileSecurity,
+    secureWindowsServiceFile,
+} from "./windows-service-security.js";
 
 interface Candidate {
     path: string;
     bytes: Buffer;
     mode: number;
     owned?: { descriptor: number; dev: number; ino: number };
+    windowsAclDigest?: string;
+    verifyWindowsAcl?: () => boolean;
 }
 export interface ManagerServiceInstallation {
     readonly definitionPath: string;
@@ -59,6 +65,10 @@ function parents(directory: string, create: boolean): void {
         }
         if (!exists(current)) continue;
         const stat = fs.lstatSync(current);
+        if (process.platform === "win32") {
+            if (!stat.isDirectory() || stat.isSymbolicLink()) throw fail();
+            continue;
+        }
         // 系统临时根的 sticky 位只允许作为祖先，不能成为服务文件直接父目录。
         const trustedStickyRoot =
             current !== directory && stat.uid === 0 && Boolean(stat.mode & 0o1000);
@@ -72,6 +82,7 @@ function parents(directory: string, create: boolean): void {
     }
 }
 function sync(directory: string): void {
+    if (process.platform === "win32") return;
     const descriptor = fs.openSync(directory, "r");
     try {
         fs.fsyncSync(descriptor);
@@ -95,8 +106,13 @@ function equal(candidate: Candidate): boolean {
             stat.nlink !== 1 ||
             stat.dev !== candidate.owned.dev ||
             stat.ino !== candidate.owned.ino ||
-            (stat.mode & 0o7777) !== candidate.mode ||
-            (process.getuid && stat.uid !== process.getuid())
+            (process.platform !== "win32" && (stat.mode & 0o7777) !== candidate.mode) ||
+            (process.platform !== "win32" && process.getuid && stat.uid !== process.getuid())
+        )
+            return false;
+        if (
+            process.platform === "win32" &&
+            (!candidate.windowsAclDigest || !candidate.verifyWindowsAcl?.())
         )
             return false;
         return new ConfigurationFile(candidate.path).readRaw().bytes.equals(candidate.bytes);
@@ -104,7 +120,7 @@ function equal(candidate: Candidate): boolean {
         return false;
     }
 }
-function publish(candidate: Candidate): void {
+function publish(candidate: Candidate, host: ServiceHost): void {
     const directory = path.dirname(candidate.path);
     parents(directory, false);
     if (exists(candidate.path)) throw fail();
@@ -119,12 +135,24 @@ function publish(candidate: Candidate): void {
         } finally {
             fs.closeSync(descriptor);
         }
+        if (process.platform === "win32") {
+            candidate.windowsAclDigest = secureWindowsServiceFile(host, temporary);
+            candidate.verifyWindowsAcl = () =>
+                inspectWindowsServiceFileSecurity(host, candidate.path) ===
+                candidate.windowsAclDigest;
+        }
         // 在发布前固定仍存活的临时 inode；unlink 后 inode 也不能被外部替换复用。
         anchor = fs.openSync(temporary, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
         const stat = fs.fstatSync(anchor);
         const temporaryStat = fs.lstatSync(temporary);
-        if (!stat.isFile() || stat.nlink !== 1 || stat.dev !== temporaryStat.dev ||
-            stat.ino !== temporaryStat.ino || temporaryStat.isSymbolicLink()) throw fail();
+        if (
+            !stat.isFile() ||
+            stat.nlink !== 1 ||
+            stat.dev !== temporaryStat.dev ||
+            stat.ino !== temporaryStat.ino ||
+            temporaryStat.isSymbolicLink()
+        )
+            throw fail();
         fs.linkSync(temporary, candidate.path); // 原缺失 CAS，不覆盖竞态中新建的文件。
         candidate.owned = { descriptor: anchor, dev: stat.dev, ino: stat.ino };
         anchor = undefined; // 已发布的候选由 rollback/dispose 释放，部分失败也保留证据。
@@ -142,7 +170,12 @@ export function prepareManagerServiceInstallation(
     host: ServiceHost,
 ): ManagerServiceInstallation {
     const spec = parseManagerServiceSpec(input);
-    if (!["linux", "darwin"].includes(host.platform) || (spec.scope === "system" && host.uid !== 0))
+    if (
+        !["linux", "darwin", "win32"].includes(host.platform) ||
+        (host.platform === "win32"
+            ? spec.scope !== "system" || host.isElevated !== true
+            : spec.scope === "system" && host.uid !== 0)
+    )
         throw fail();
     const files = getServiceFiles(spec.scope, host);
     for (const file of [files.definition, files.metadata]) {
@@ -172,10 +205,13 @@ export function prepareManagerServiceInstallation(
             if (candidates.some(candidate => exists(candidate.path))) throw fail();
             parents(files.stateDir, true);
             const state = fs.lstatSync(files.stateDir);
-            if ((state.mode & 0o077) !== 0 || (process.getuid && state.uid !== process.getuid()))
+            if (
+                process.platform !== "win32" &&
+                ((state.mode & 0o077) !== 0 || (process.getuid && state.uid !== process.getuid()))
+            )
                 throw fail();
             parents(path.dirname(files.definition), true);
-            for (const candidate of candidates) publish(candidate);
+            for (const candidate of candidates) publish(candidate, host);
             if (!verify()) throw fail();
         },
         verify,

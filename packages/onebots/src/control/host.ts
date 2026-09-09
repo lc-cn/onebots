@@ -58,6 +58,7 @@ import {
     WindowsManagerStatusPublisher,
 } from "../windows-manager-status-publisher.js";
 import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
+import { connectWindowsManagerRPC } from "../windows-manager-rpc.js";
 export type { ControlHostOptions } from "./host-options.js";
 export async function startControlHost(options: ControlHostOptions) {
     if (
@@ -65,11 +66,20 @@ export async function startControlHost(options: ControlHostOptions) {
         (process.platform !== "win32" || options.windowsHostPipe !== WINDOWS_HOST_PIPE_NAME)
     )
         throw new Error("Windows 原生宿主管道无效");
+    if (
+        (options.windowsHostRpcPipe !== undefined) !== (options.windowsHostPipe !== undefined) ||
+        (options.windowsHostRpcPipe !== undefined &&
+            !/^\\\\\.\\pipe\\onebots-manager-rpc-[0-9a-f]{32}$/.test(options.windowsHostRpcPipe))
+    )
+        throw new Error("Windows 原生宿主 RPC 管道无效");
     const installDeploymentAuth = consumeDeploymentAuthenticationEnvironment();
     fs.mkdirSync(options.workspace, { recursive: true });
     const workspace = fs.realpathSync(options.workspace);
     const windowsNativeMode = options.windowsHostPipe !== undefined;
-    const socketPath = options.windowsHostPipe ?? controlSocket(workspace);
+    // Windows foreground/candidate verification has no Unix socket. Production Windows service
+    // supplies windowsHostPipe and is additionally bound to the native Job Object/status channel.
+    const socketPath =
+        options.windowsHostPipe ?? (process.platform === "win32" ? "" : controlSocket(workspace));
     const webRoot =
         options.webRoot ??
         path.join(
@@ -79,7 +89,11 @@ export async function startControlHost(options: ControlHostOptions) {
     const freshWorkspace = !fs.existsSync(controlDirectory(workspace));
     const release = acquireControlWorkspace(workspace);
     const id = randomUUID();
-    const ownershipAvailable = await claimServiceProcessOwnership(workspace, id, freshWorkspace);
+    // Windows manager 已在 native host 创建的 KILL_ON_JOB_CLOSE Job Object 内；受保护管道
+    // 的 publish 确认替代 POSIX PID/进程组收据，后者在 Windows 无可靠语义。
+    const ownershipAvailable = windowsNativeMode
+        ? true
+        : await claimServiceProcessOwnership(workspace, id, freshWorkspace);
     const controlLogs = createControlLogWriter(workspace, id);
     let auth: ControlAuth | undefined;
     let authAvailable = true;
@@ -133,6 +147,8 @@ export async function startControlHost(options: ControlHostOptions) {
     });
     let publisher: WindowsManagerStatusPublisher | undefined;
     let windowsStatusHeartbeat: NodeJS.Timeout | undefined;
+    let windowsRpcReconnect: NodeJS.Timeout | undefined;
+    let windowsRpcClosed = false;
     function publishWindowsStatus(): Promise<void> {
         if (!publisher) return Promise.resolve();
         return publisher.publish(controller.status()).catch(() => {
@@ -445,6 +461,9 @@ export async function startControlHost(options: ControlHostOptions) {
         listener.requestTimeout = 30_000;
         listener.headersTimeout = 10_000;
     }
+    // native host owns this private transport for the manager lifetime. Disabling Node's
+    // five-second idle reap avoids losing the sole authenticated reverse channel.
+    local.keepAliveTimeout = 0;
     server.on("upgrade", (req, socket, head) => {
         try {
             if (new URL(req.url ?? "/", "http://localhost").pathname.startsWith("/api/")) {
@@ -456,9 +475,35 @@ export async function startControlHost(options: ControlHostOptions) {
             socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
         }
     });
+    if (options.windowsHostRpcPipe) {
+        const attach = async (): Promise<void> => {
+            try {
+                const socket = await connectWindowsManagerRPC(options.windowsHostRpcPipe!);
+                if (windowsRpcClosed) {
+                    socket.destroy();
+                    return;
+                }
+                local.emit("connection", socket);
+                socket.once("close", () => {
+                    if (!windowsRpcClosed) {
+                        windowsRpcReconnect = setTimeout(() => void attach(), 25);
+                        windowsRpcReconnect.unref();
+                    }
+                });
+            } catch {
+                if (!windowsRpcClosed) {
+                    windowsRpcReconnect = setTimeout(() => void attach(), 25);
+                    windowsRpcReconnect.unref();
+                }
+            }
+        };
+        await attach();
+    }
     async function close() {
         if (closed) return;
         closed = true;
+        windowsRpcClosed = true;
+        if (windowsRpcReconnect) clearTimeout(windowsRpcReconnect);
         if (windowsStatusHeartbeat) clearInterval(windowsStatusHeartbeat);
         messageDebugHttp.close();
         const verificationClosed = verification.close();
@@ -494,7 +539,8 @@ export async function startControlHost(options: ControlHostOptions) {
         );
         try {
             if (!windowsNativeMode && fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
-            if (ownershipAvailable) await closeServiceProcessOwnership(workspace, id);
+            if (ownershipAvailable && !windowsNativeMode)
+                await closeServiceProcessOwnership(workspace, id);
         } finally {
             controlLogs.manager("stopped");
             release();

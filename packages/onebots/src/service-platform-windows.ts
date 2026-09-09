@@ -47,9 +47,6 @@ export interface WindowsNativeStatus {
 
 export const WINDOWS_HOST_PIPE_NAME = `\\\\.\\pipe\\${SERVICE_NAME}-control`;
 export const WINDOWS_CONTROL_FRESHNESS_MS = 30_000;
-const POWERSHELL_QUERY =
-    `$service=Get-CimInstance Win32_Service -Filter \"Name='${SERVICE_NAME}'\";` +
-    "if($null -ne $service){$service|Select-Object Name,State,StartMode,ProcessId,PathName|ConvertTo-Json -Compress}";
 
 function unavailable(): never {
     throw new Error("无法安全确认 Windows SCM 管理服务状态");
@@ -84,7 +81,6 @@ function singleJsonLine(output: string, limit: number): string {
 }
 
 function parseScmState(output: string): WindowsScmState | null {
-    if (!output.trim()) return null;
     const text = singleJsonLine(output, 16_384);
     let value: unknown;
     try {
@@ -94,22 +90,39 @@ function parseScmState(output: string): WindowsScmState | null {
     }
     if (
         !plainObject(value) ||
-        !exactKeys(value, ["Name", "State", "StartMode", "ProcessId", "PathName"])
+        !exactKeys(value, ["loaded", "path", "state", "processId", "enabled"])
     )
         unavailable();
     if (
-        value.Name !== SERVICE_NAME ||
-        !["Running", "Stopped", "Start Pending", "Stop Pending"].includes(String(value.State)) ||
-        !["Auto", "Manual", "Disabled"].includes(String(value.StartMode)) ||
-        typeof value.ProcessId !== "number" ||
-        !Number.isSafeInteger(value.ProcessId) ||
-        value.ProcessId < 0 ||
-        value.ProcessId > 0xffffffff ||
-        typeof value.PathName !== "string" ||
-        !value.PathName
+        typeof value.loaded !== "boolean" ||
+        typeof value.enabled !== "boolean" ||
+        !["running", "stopped", "transitioning"].includes(String(value.state)) ||
+        typeof value.processId !== "number" ||
+        !Number.isSafeInteger(value.processId) ||
+        value.processId < 0 ||
+        value.processId > 0xffffffff ||
+        typeof value.path !== "string" ||
+        (value.loaded && !value.path) ||
+        (!value.loaded && (value.path || value.processId !== 0 || value.state !== "stopped"))
     )
         unavailable();
-    return value as unknown as WindowsScmState;
+    if (!value.loaded) return null;
+    return {
+        Name: SERVICE_NAME,
+        State:
+            value.state === "running"
+                ? "Running"
+                : value.state === "stopped"
+                  ? "Stopped"
+                  : "Start Pending",
+        StartMode: value.enabled ? "Auto" : "Manual",
+        ProcessId: value.processId,
+        PathName: value.path,
+    };
+}
+
+function scmRequest(request: Record<string, unknown>): string {
+    return Buffer.from(JSON.stringify(request)).toString("base64url");
 }
 
 function parseDefinitionBytes(bytes: Buffer): WindowsServiceDefinition {
@@ -351,12 +364,15 @@ export class WindowsServicePlatform implements ServicePlatform {
         if (!Number.isInteger(this.timeout) || this.timeout < 1 || this.timeout > 300_000)
             unavailable();
     }
-    private scm(): WindowsScmState | null {
+    private scm(
+        definition: WindowsServiceDefinition,
+        request: Record<string, unknown> = { operation: "inspect", expectedLoaded: false },
+    ): WindowsScmState | null {
         return parseScmState(
             this.host.exec(
-                "powershell.exe",
-                ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", POWERSHELL_QUERY],
-                { timeoutMs: 5000 },
+                definition.hostExecutable,
+                ["scm-control", "--request", scmRequest(request)],
+                { timeoutMs: 125_000 },
             ),
         );
     }
@@ -364,7 +380,8 @@ export class WindowsServicePlatform implements ServicePlatform {
         return (await this.inspectNative()).service;
     }
     async inspectNative(): Promise<WindowsServiceObservation> {
-        const scm = this.scm();
+        const definition = this.definition();
+        const scm = this.scm(definition);
         if (!scm)
             return {
                 service: {
@@ -378,7 +395,6 @@ export class WindowsServicePlatform implements ServicePlatform {
                     quiescent: true,
                 },
             };
-        const definition = this.definition();
         if (scm.PathName !== serviceCommand(definition, this.host.windowsSid!)) unavailable();
         const running = scm.State !== "Stopped";
         let identity: string | null = null;
@@ -434,12 +450,14 @@ export class WindowsServicePlatform implements ServicePlatform {
         }
     }
     async quiesce(): Promise<void> {
+        const definition = this.definition();
         const before = await this.inspect();
         if (!before.loaded) return;
-        this.host.exec("sc.exe", ["config", SERVICE_NAME, "start=", "disabled"], {
-            timeoutMs: 5000,
+        this.scm(definition, {
+            operation: "quiesce",
+            expectedLoaded: true,
+            expectedPath: serviceCommand(definition, this.host.windowsSid!),
         });
-        if (before.running) this.host.exec("sc.exe", ["stop", SERVICE_NAME], { timeoutMs: 5000 });
         await this.stable(
             state => state.loaded && state.state === "stopped" && !state.enabled && state.quiescent,
         );
@@ -453,29 +471,13 @@ export class WindowsServicePlatform implements ServicePlatform {
         }
         const command = serviceCommand(definition, this.host.windowsSid!);
         const before = await this.inspect();
-        this.host.exec(
-            "sc.exe",
-            before.loaded
-                ? [
-                      "config",
-                      SERVICE_NAME,
-                      "binPath=",
-                      command,
-                      "start=",
-                      enabled ? "auto" : "demand",
-                  ]
-                : [
-                      "create",
-                      SERVICE_NAME,
-                      "binPath=",
-                      command,
-                      "start=",
-                      enabled ? "auto" : "demand",
-                      "DisplayName=",
-                      "OneBots Control Service",
-                  ],
-            { timeoutMs: 5000 },
-        );
+        this.scm(definition, {
+            operation: "configure",
+            expectedLoaded: before.loaded,
+            ...(before.loaded ? { expectedPath: command } : {}),
+            targetPath: command,
+            enabled,
+        });
         return this.stable(
             state => state.loaded && state.enabled === enabled && state.state === "stopped",
         );
@@ -496,7 +498,7 @@ export class WindowsServicePlatform implements ServicePlatform {
         } catch {
             unavailable();
         }
-        const scm = this.scm();
+        const scm = this.scm(current);
         if (
             !scm ||
             scm.State !== "Stopped" ||
@@ -504,18 +506,13 @@ export class WindowsServicePlatform implements ServicePlatform {
             scm.PathName !== serviceCommand(previous, this.host.windowsSid!)
         )
             unavailable();
-        this.host.exec(
-            "sc.exe",
-            [
-                "config",
-                SERVICE_NAME,
-                "binPath=",
-                serviceCommand(current, this.host.windowsSid!),
-                "start=",
-                enabled ? "auto" : "demand",
-            ],
-            { timeoutMs: 5000 },
-        );
+        this.scm(current, {
+            operation: "configure",
+            expectedLoaded: true,
+            expectedPath: serviceCommand(previous, this.host.windowsSid!),
+            targetPath: serviceCommand(current, this.host.windowsSid!),
+            enabled,
+        });
         return this.stable(
             state => state.loaded && state.enabled === enabled && state.state === "stopped",
         );
@@ -525,7 +522,12 @@ export class WindowsServicePlatform implements ServicePlatform {
         if (expectedInitialState && !isDeepStrictEqual(initial, expectedInitialState))
             unavailable();
         if (!initial.loaded || !initial.quiescent) unavailable();
-        this.host.exec("sc.exe", ["start", SERVICE_NAME], { timeoutMs: 5000 });
+        const definition = this.definition();
+        this.scm(definition, {
+            operation: "start",
+            expectedLoaded: true,
+            expectedPath: serviceCommand(definition, this.host.windowsSid!),
+        });
         return this.stable(state => state.state === "running" && state.identity !== null);
     }
 }
@@ -544,17 +546,18 @@ export function unregisterWindowsManagerService(
         unavailable();
     const state = parseScmState(
         host.exec(
-            "powershell.exe",
-            ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", POWERSHELL_QUERY],
-            { timeoutMs: 5000 },
+            definition.hostExecutable,
+            [
+                "scm-control",
+                "--request",
+                scmRequest({
+                    operation: "delete",
+                    expectedLoaded: true,
+                    expectedPath: serviceCommand(definition, host.windowsSid),
+                }),
+            ],
+            { timeoutMs: 125_000 },
         ),
     );
-    if (
-        !state ||
-        state.State !== "Stopped" ||
-        state.ProcessId !== 0 ||
-        state.PathName !== serviceCommand(definition, host.windowsSid!)
-    )
-        unavailable();
-    host.exec("sc.exe", ["delete", SERVICE_NAME], { timeoutMs: 5000 });
+    if (state !== null) unavailable();
 }

@@ -99,13 +99,36 @@ type hostRuntime struct {
 
 func startRuntime(config Config) (*hostRuntime, error) {
 	state := newStateStore(time.Now())
+	var managerRPC *managerRPC
+	if !config.NoManagerRPC {
+		var managerPipe string
+		var err error
+		managerRPC, managerPipe, err = createManagerRPCPipe()
+		if err != nil {
+			return nil, err
+		}
+		config.ManagerArgs = append(append([]string{}, config.ManagerArgs...), "--windows-host-rpc-pipe", managerPipe)
+	}
 	process, err := startManagedProcess(config)
 	if err != nil {
+		if managerRPC != nil {
+			_ = managerRPC.Close()
+		}
 		return nil, err
 	}
 	state.set("starting", "running", process.pid)
-	pipeServer, err := startStatusPipe(config, state)
+	if managerRPC != nil {
+		if err := managerRPC.acceptManager(process.pid); err != nil {
+			_ = managerRPC.Close()
+			_ = process.gracefulStop(config.StopTimeout)
+			return nil, err
+		}
+	}
+	pipeServer, err := startStatusPipe(config, state, managerRPC)
 	if err != nil {
+		if managerRPC != nil {
+			_ = managerRPC.Close()
+		}
 		_ = process.gracefulStop(config.StopTimeout)
 		return nil, err
 	}
@@ -116,9 +139,13 @@ func startRuntime(config Config) (*hostRuntime, error) {
 func (runtime *hostRuntime) stop(timeout time.Duration) error {
 	runtime.state.set("stopping", "stopping", runtime.process.pid)
 	pipeErr := runtime.pipe.Close()
+	var managerErr error
+	if runtime.pipe.manager != nil {
+		managerErr = runtime.pipe.manager.Close()
+	}
 	processErr := runtime.process.gracefulStop(timeout)
 	runtime.state.set("stopped", "stopped", 0)
-	return errors.Join(pipeErr, processErr)
+	return errors.Join(pipeErr, managerErr, processErr)
 }
 
 func runConsole(config Config) error {

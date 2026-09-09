@@ -46,11 +46,11 @@ function scm(
     manager = "C:\\OneBots\\lib\\bin.js",
 ) {
     return JSON.stringify({
-        Name: SERVICE_NAME,
-        State: state,
-        StartMode: mode,
-        ProcessId: pid,
-        PathName:
+        loaded: true,
+        state: state === "Running" ? "running" : "stopped",
+        enabled: mode === "Auto",
+        processId: pid,
+        path:
             `C:\\OneBots\\lib\\native\\onebots-windows-host.exe service-run --service-name onebots-gateway --manager C:\\Node\\node.exe --manager-arg ${manager} --manager-arg serve --manager-arg --data-dir --manager-arg "C:\\Data Dir" --manager-arg --windows-host-pipe --manager-arg \\\\.\\pipe\\onebots-gateway-control --working-dir C:\\OneBots --pipe \\\\.\\pipe\\onebots-gateway-control --control-sid ` +
             sid,
     });
@@ -203,7 +203,7 @@ describe("Windows SCM TypeScript纵切", () => {
 
     it("同名SCM服务的命令行未绑定定义时拒绝控制", async () => {
         const value = JSON.parse(scm("Stopped", "Auto"));
-        value.PathName = "C:\\outside\\other.exe";
+        value.path = "C:\\outside\\other.exe";
         const host = makeHost([JSON.stringify(value)]);
         const platform = new WindowsServicePlatform(host, "system", "C:\\state\\service.json", {
             definition,
@@ -212,7 +212,19 @@ describe("Windows SCM TypeScript纵切", () => {
     });
 
     it("首次reload通过SCM注册固定宿主，停止态双读后返回", async () => {
-        const host = makeHost(["", scm("Stopped", "Auto"), scm("Stopped", "Auto")]);
+        const absent = JSON.stringify({
+            loaded: false,
+            path: "",
+            state: "stopped",
+            processId: 0,
+            enabled: false,
+        });
+        const host = makeHost([
+            absent,
+            scm("Stopped", "Auto"),
+            scm("Stopped", "Auto"),
+            scm("Stopped", "Auto"),
+        ]);
         const platform = new WindowsServicePlatform(host, "system", "C:\\state\\service.json", {
             definition,
             hostExecutableExists: () => true,
@@ -222,20 +234,20 @@ describe("Windows SCM TypeScript纵切", () => {
             enabled: true,
             state: "stopped",
         });
-        expect(host.exec).toHaveBeenCalledWith(
-            "sc.exe",
-            expect.arrayContaining([
-                "create",
-                SERVICE_NAME,
-                "binPath=",
-                expect.stringContaining("service-run"),
-            ]),
-            { timeoutMs: 5000 },
+        const action = JSON.parse(
+            Buffer.from(
+                (host.exec as ReturnType<typeof vi.fn>).mock.calls[1][1][2],
+                "base64url",
+            ).toString("utf8"),
         );
-        expect((host.exec as ReturnType<typeof vi.fn>).mock.calls[1][1][3]).toContain(
-            "--control-sid",
-        );
-        expect((host.exec as ReturnType<typeof vi.fn>).mock.calls[1][1][3]).toContain(sid);
+        expect(action).toMatchObject({
+            operation: "configure",
+            expectedLoaded: false,
+            enabled: true,
+        });
+        expect(action.targetPath).toContain("service-run");
+        expect(action.targetPath).toContain("--control-sid");
+        expect(action.targetPath).toContain(sid);
     });
 
     it("升级仅在SCM仍绑定旧定义且稳定停止时切到新PathName", async () => {
@@ -254,6 +266,7 @@ describe("Windows SCM TypeScript纵切", () => {
             scm("Stopped", "Manual", 0, "C:\\OneBots\\old\\bin.js"),
             scm("Stopped", "Auto"),
             scm("Stopped", "Auto"),
+            scm("Stopped", "Auto"),
         ]);
         const platform = new WindowsServicePlatform(host, "system", "C:\\state\\service.json", {
             definition,
@@ -262,16 +275,14 @@ describe("Windows SCM TypeScript纵切", () => {
         expect(
             await platform.reloadReplacing(Buffer.from(JSON.stringify(previous)), true),
         ).toMatchObject({ state: "stopped", enabled: true });
-        expect(host.exec).toHaveBeenCalledWith(
-            "sc.exe",
-            expect.arrayContaining([
-                "config",
-                SERVICE_NAME,
-                "binPath=",
-                expect.stringContaining("C:\\OneBots\\lib\\bin.js"),
-            ]),
-            { timeoutMs: 5000 },
+        const upgrade = JSON.parse(
+            Buffer.from(
+                (host.exec as ReturnType<typeof vi.fn>).mock.calls[1][1][2],
+                "base64url",
+            ).toString("utf8"),
         );
+        expect(upgrade).toMatchObject({ operation: "configure", expectedLoaded: true });
+        expect(upgrade.targetPath).toContain("C:\\OneBots\\lib\\bin.js");
         const drifted = makeHost([scm("Stopped", "Manual")]);
         const rejected = new WindowsServicePlatform(drifted, "system", "C:\\state\\service.json", {
             definition,
@@ -280,11 +291,54 @@ describe("Windows SCM TypeScript纵切", () => {
         await expect(
             rejected.reloadReplacing(Buffer.from(JSON.stringify(previous)), true),
         ).rejects.toThrow("无法安全确认");
-        expect(drifted.exec).not.toHaveBeenCalledWith(
-            "sc.exe",
-            expect.anything(),
-            expect.anything(),
+        expect(drifted.exec).toHaveBeenCalledTimes(1);
+    });
+
+    it("start与quiesce把复核和动作交给同一native SCM handle", async () => {
+        const starting = makeHost([
+            scm("Stopped", "Auto"),
+            scm("Running", "Auto", 4321),
+            scm("Running", "Auto", 4321),
+            native(8765),
+            scm("Running", "Auto", 4321),
+            native(8765),
+        ]);
+        const startPlatform = new WindowsServicePlatform(
+            starting,
+            "system",
+            "C:\\state\\service.json",
+            { definition },
         );
+        await startPlatform.start();
+        const startRequest = JSON.parse(
+            Buffer.from(
+                (starting.exec as ReturnType<typeof vi.fn>).mock.calls[1][1][2],
+                "base64url",
+            ).toString("utf8"),
+        );
+        expect(startRequest).toMatchObject({ operation: "start", expectedLoaded: true });
+
+        const stopping = makeHost([
+            scm("Running", "Auto", 4321),
+            native(8765),
+            scm("Stopped", "Manual"),
+            scm("Stopped", "Manual"),
+            scm("Stopped", "Manual"),
+        ]);
+        const stopPlatform = new WindowsServicePlatform(
+            stopping,
+            "system",
+            "C:\\state\\service.json",
+            { definition },
+        );
+        await stopPlatform.quiesce();
+        const stopRequest = JSON.parse(
+            Buffer.from(
+                (stopping.exec as ReturnType<typeof vi.fn>).mock.calls[2][1][2],
+                "base64url",
+            ).toString("utf8"),
+        );
+        expect(stopRequest).toMatchObject({ operation: "quiesce", expectedLoaded: true });
     });
 
     it("拒绝非管理员、user范围和不闭合SCM JSON", async () => {
@@ -306,15 +360,22 @@ describe("Windows SCM TypeScript纵切", () => {
     });
 
     it("卸载边界只删除固定SCM服务身份", () => {
-        const host = makeHost([scm("Stopped", "Manual")]);
-        unregisterWindowsManagerService(host, definition);
-        expect(host.exec).toHaveBeenLastCalledWith("sc.exe", ["delete", SERVICE_NAME], {
-            timeoutMs: 5000,
+        const absent = JSON.stringify({
+            loaded: false,
+            path: "",
+            state: "stopped",
+            processId: 0,
+            enabled: false,
         });
-        const foreign = JSON.parse(scm("Stopped", "Manual"));
-        foreign.PathName = "C:\\outside\\service.exe";
-        expect(() =>
-            unregisterWindowsManagerService(makeHost([JSON.stringify(foreign)]), definition),
-        ).toThrow("无法安全确认");
+        const host = makeHost([absent]);
+        unregisterWindowsManagerService(host, definition);
+        const removal = JSON.parse(
+            Buffer.from(
+                (host.exec as ReturnType<typeof vi.fn>).mock.calls[0][1][2],
+                "base64url",
+            ).toString("utf8"),
+        );
+        expect(removal).toMatchObject({ operation: "delete", expectedLoaded: true });
+        expect(removal.expectedPath).toContain("service-run");
     });
 });

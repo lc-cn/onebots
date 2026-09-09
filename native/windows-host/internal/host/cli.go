@@ -57,6 +57,18 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		return 0
+	case "scm-control":
+		set := flag.NewFlagSet("scm-control", flag.ContinueOnError)
+		set.SetOutput(stderr)
+		request := set.String("request", "", "base64url encoded closed SCM request")
+		if err := set.Parse(args[1:]); err != nil || set.NArg() != 0 || *request == "" {
+			return 2
+		}
+		if err := runSCMControl(*request, stdout); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	default:
 		printUsage(stderr)
 		return 2
@@ -74,6 +86,7 @@ func parseRunConfig(command string, args []string, output io.Writer) (Config, er
 	set.StringVar(&config.PipeName, "pipe", defaultPipeName, "local host status pipe")
 	set.StringVar(&config.ControlSID, "control-sid", "", "installer-authorized Windows SID")
 	set.DurationVar(&config.StopTimeout, "stop-timeout", defaultStopTimeout, "graceful manager stop deadline")
+	set.BoolVar(&config.NoManagerRPC, "no-manager-rpc", false, "console worker isolation without manager control RPC")
 	set.Var(&managerArgs, "manager-arg", "manager argument; repeat for each argument")
 	if err := set.Parse(args); err != nil {
 		return Config{}, err
@@ -82,6 +95,9 @@ func parseRunConfig(command string, args []string, output io.Writer) (Config, er
 		return Config{}, errors.New("unexpected positional arguments")
 	}
 	config.ManagerArgs = managerArgs
+	if config.NoManagerRPC && command != "console-run" {
+		return Config{}, errors.New("no-manager-rpc is restricted to console-run")
+	}
 	config = withDefaults(config)
 	if err := config.Validate(); err != nil {
 		return Config{}, err
@@ -90,7 +106,7 @@ func parseRunConfig(command string, args []string, output io.Writer) (Config, er
 }
 
 func printUsage(output io.Writer) {
-	fmt.Fprintln(output, "usage: onebots-windows-host <service-run|console-run|status> [options]")
+	fmt.Fprintln(output, "usage: onebots-windows-host <service-run|console-run|status|scm-control> [options]")
 }
 
 func Main() {

@@ -27,6 +27,12 @@ import { acquireControlWorkspace } from "./control/workspace.js";
 import type { ServiceScope } from "./service-definition.js";
 import type { ServicePlatform } from "./service-platform.js";
 import { assertManagerServiceTransactionsSupported } from "./windows-manager-support.js";
+import {
+    WindowsServicePlatform,
+    unregisterWindowsManagerService,
+    type WindowsServiceDefinition,
+} from "./service-platform-windows.js";
+import { ConfigurationFile } from "./configuration/configuration-file.js";
 
 export interface ManagerServiceUninstallDependencies {
     platform?: ServicePlatform;
@@ -47,6 +53,13 @@ export function unregisterManagerService(scope: ServiceScope, host: ServiceHost)
             ],
             { timeoutMs: 5000 },
         );
+    } else if (host.platform === "win32") {
+        const files = getServiceFiles(scope, host);
+        const definition = JSON.parse(
+            new ConfigurationFile(files.definition).readRaw().bytes.toString("utf8"),
+        ) as WindowsServiceDefinition;
+        unregisterWindowsManagerService(host, definition);
+        return;
     } else if (host.platform !== "darwin") throw new Error("此系统尚未通过管理服务卸载验收");
     assertServiceAbsent(scope, host);
 }
@@ -58,9 +71,16 @@ export async function uninstallManagerService(
     dependencies: ManagerServiceUninstallDependencies = {},
 ): Promise<ManagerServiceRecord> {
     assertManagerServiceTransactionsSupported(host);
-    if (!["user", "system"].includes(scope) || !["linux", "darwin"].includes(host.platform))
+    if (
+        !["user", "system"].includes(scope) ||
+        !["linux", "darwin", "win32"].includes(host.platform)
+    )
         throw new Error("此系统或范围尚未通过管理服务卸载验收");
-    if (scope === "system" && host.uid !== 0) throw new Error("系统级服务需要管理员权限");
+    if (
+        (host.platform === "win32" && scope !== "system") ||
+        (host.platform !== "win32" && scope === "system" && host.uid !== 0)
+    )
+        throw new Error("系统级服务需要管理员权限");
     const files = getServiceFiles(scope, host);
     const release = acquireServiceMigrationLock(files.stateDir);
     let removal: ManagerServiceRemoval | undefined;
@@ -87,10 +107,12 @@ export async function uninstallManagerService(
             dependencies.platform ??
             (host.platform === "linux"
                 ? new SystemdServicePlatform(host, scope, files.definition)
-                : new LaunchdServicePlatform(host, scope, files.definition, {
-                      confirmUnloadedProcesses: () =>
-                          verifyServiceMigrationProcesses(spec.workspace),
-                  }));
+                : host.platform === "darwin"
+                  ? new LaunchdServicePlatform(host, scope, files.definition, {
+                        confirmUnloadedProcesses: () =>
+                            verifyServiceMigrationProcesses(spec.workspace),
+                    })
+                  : new WindowsServicePlatform(host, scope, files.definition));
         const initial = await platform.inspect();
         if (
             !["running", "stopped", "failed"].includes(initial.state) ||
@@ -104,7 +126,12 @@ export async function uninstallManagerService(
             desiredEnabled: false,
             spec,
             removal: {
-                platform: host.platform === "linux" ? "linux" : "darwin",
+                platform:
+                    host.platform === "linux"
+                        ? "linux"
+                        : host.platform === "darwin"
+                          ? "darwin"
+                          : "win32",
                 files: removal.snapshot,
                 initial: {
                     enabled: initial.enabled,
@@ -114,8 +141,33 @@ export async function uninstallManagerService(
             },
         });
         const confirmStopped =
-            dependencies.confirmStopped ?? verifyServiceMigrationProcessesWhileLocked;
-        const unregister = dependencies.unregister ?? unregisterManagerService;
+            dependencies.confirmStopped ??
+            (host.platform === "win32"
+                ? async () => {
+                      // Windows 原生宿主只有在关闭受 KILL_ON_JOB_CLOSE 保护的 Job、
+                      // manager 及其完整子树退出后才向 SCM 报告 Stopped；再次读取
+                      // SCM 是卸载各阶段的静止证明，不能用无条件成功绕过。
+                      const state = await platform.inspect();
+                      return (
+                          state.state === "stopped" &&
+                          !state.running &&
+                          state.quiescent &&
+                          state.processId === null &&
+                          state.definitionPath === files.definition
+                      );
+                  }
+                : verifyServiceMigrationProcessesWhileLocked);
+        const definition =
+            host.platform === "win32"
+                ? (JSON.parse(
+                      new ConfigurationFile(files.definition).readRaw().bytes.toString("utf8"),
+                  ) as WindowsServiceDefinition)
+                : undefined;
+        const unregister =
+            dependencies.unregister ??
+            (host.platform === "win32"
+                ? () => unregisterWindowsManagerService(host, definition!)
+                : unregisterManagerService);
         const phase = (value: ManagerServicePhase) => {
             record.phase = value;
             journal.save(record);

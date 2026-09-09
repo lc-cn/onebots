@@ -31,10 +31,22 @@ describe("管理服务命令边界", () => {
             }),
         ).toEqual({ workspace: "/tmp/onebots test", host: "127.0.0.1", port: 8080 });
     });
-    it("只接受固定的Windows原生宿主管道", () => {
-        expect(parseServeOptions(["--windows-host-pipe", WINDOWS_HOST_PIPE_NAME])).toMatchObject({
-            windowsHostPipe: WINDOWS_HOST_PIPE_NAME,
-        });
+    it("Windows原生状态管道必须与宿主生成的私有RPC管道成对", () => {
+        const rpc = "\\\\.\\pipe\\onebots-manager-rpc-0123456789abcdef0123456789abcdef";
+        expect(
+            parseServeOptions([
+                "--windows-host-pipe",
+                WINDOWS_HOST_PIPE_NAME,
+                "--windows-host-rpc-pipe",
+                rpc,
+            ]),
+        ).toMatchObject({ windowsHostPipe: WINDOWS_HOST_PIPE_NAME, windowsHostRpcPipe: rpc });
+        expect(() => parseServeOptions(["--windows-host-pipe", WINDOWS_HOST_PIPE_NAME])).toThrow(
+            "Windows 原生宿主 RPC 管道无效",
+        );
+        expect(() => parseServeOptions(["--windows-host-rpc-pipe", rpc])).toThrow(
+            "Windows 原生宿主 RPC 管道无效",
+        );
         expect(() =>
             parseServeOptions(["--windows-host-pipe", "\\\\server\\pipe\\onebots"]),
         ).toThrow("Windows 原生宿主管道无效");

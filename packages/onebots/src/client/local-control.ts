@@ -1,14 +1,35 @@
 import http from "node:http";
 import { ControlClient, ControlRequestError, type ControlTransport } from "@onebots/core/control";
 import { controlSocket } from "../control/workspace.js";
+import { WindowsHostControlClient } from "../windows-host-control-client.js";
+import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
 
 export function createLocalControlTransport(workspace: string): ControlTransport {
+    if (process.platform === "win32") {
+        const client = new WindowsHostControlClient(WINDOWS_HOST_PIPE_NAME);
+        return {
+            async request<T>(method: "GET" | "POST", route: string, body?: unknown): Promise<T> {
+                const response = await client.request<T>(method, route, body);
+                if (response.status < 200 || response.status >= 300)
+                    throw new ControlRequestError(
+                        response.status,
+                        response.body &&
+                            typeof response.body === "object" &&
+                            "message" in response.body &&
+                            typeof response.body.message === "string"
+                            ? response.body.message
+                            : "本地控制请求失败",
+                    );
+                return response.body;
+            },
+        };
+    }
     const transport: ControlTransport = {
         request<T>(method: "GET" | "POST", route: string, body?: unknown): Promise<T> {
             return new Promise((resolve, reject) => {
                 // 发布检查包含远端目录与归档验证；仅此只读检查允许较长等待。
-                const timeout = method === "POST" && route === "/api/control/updates/plan"
-                    ? 120_000 : 60_000;
+                const timeout =
+                    method === "POST" && route === "/api/control/updates/plan" ? 120_000 : 60_000;
                 const request = http.request(
                     {
                         socketPath: controlSocket(workspace),

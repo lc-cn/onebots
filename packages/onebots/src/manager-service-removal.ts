@@ -1,10 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { ConfigurationFile } from "./configuration/configuration-file.js";
 import { parseManagerServiceSpec, type ManagerServiceSpec } from "./manager-service-spec.js";
 import { renderInstalledManagerService } from "./manager-service-definition.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
+import {
+    inspectWindowsServiceDirectorySecurity,
+    inspectWindowsServiceFileSecurity,
+} from "./windows-service-security.js";
 
 import type {
     ManagerServiceRemovalSnapshot,
@@ -26,6 +31,8 @@ interface CapturedFile {
     bytes: Buffer;
     digest: string;
     removed: boolean;
+    windowsAclDigest?: string;
+    verifyWindowsAcl?: () => boolean;
 }
 const failure = () => new Error("管理服务卸载文件身份不明、已变化或权限不安全");
 function parents(file: string): void {
@@ -35,6 +42,10 @@ function parents(file: string): void {
     for (const part of directory.split(path.sep).filter(Boolean)) {
         current = path.join(current, part);
         const stat = fs.lstatSync(current);
+        if (process.platform === "win32") {
+            if (!stat.isDirectory() || stat.isSymbolicLink()) throw failure();
+            continue;
+        }
         const stickyAncestor =
             current !== directory && stat.uid === 0 && Boolean(stat.mode & 0o1000);
         if (
@@ -51,7 +62,12 @@ function release(file: CapturedFile): void {
     file.descriptor = undefined;
     if (descriptor !== undefined) fs.closeSync(descriptor);
 }
-function capture(file: string, modes: readonly number[]): CapturedFile {
+function capture(
+    file: string,
+    modes: readonly number[],
+    windowsAclDigest?: string,
+    verifyWindowsAcl?: () => boolean,
+): CapturedFile {
     parents(file);
     const descriptor = fs.openSync(
         file,
@@ -62,8 +78,8 @@ function capture(file: string, modes: readonly number[]): CapturedFile {
         if (
             !stat.isFile() ||
             stat.nlink !== 1n ||
-            !modes.includes(Number(stat.mode & 0o7777n)) ||
-            stat.uid !== BigInt(process.getuid!())
+            (process.platform !== "win32" && !modes.includes(Number(stat.mode & 0o7777n))) ||
+            (process.platform !== "win32" && stat.uid !== BigInt(process.getuid!()))
         )
             throw failure();
         const raw = new ConfigurationFile(file).readRaw();
@@ -74,6 +90,7 @@ function capture(file: string, modes: readonly number[]): CapturedFile {
             bytes: raw.bytes,
             digest: raw.revision,
             removed: false,
+            ...(windowsAclDigest ? { windowsAclDigest, verifyWindowsAcl } : {}),
         };
         if (!equal(captured)) throw failure();
         return captured;
@@ -86,6 +103,7 @@ function equal(file: CapturedFile): boolean {
     try {
         parents(file.file);
         if (file.descriptor === undefined) return false;
+        if (file.verifyWindowsAcl && !file.verifyWindowsAcl()) return false;
         const anchor = fs.fstatSync(file.descriptor, { bigint: true });
         if (file.removed) {
             if (anchor.nlink !== 0n) return false;
@@ -125,11 +143,17 @@ function snapshot(file: CapturedFile): RemovalFileSnapshot {
         sha256: file.digest,
         dev: String(stat.dev),
         ino: String(stat.ino),
-        uid: Number(stat.uid),
-        mode: Number(stat.mode & 0o7777n),
+        uid: process.platform === "win32" ? 0 : Number(stat.uid),
+        mode:
+            process.platform === "win32"
+                ? file.file.endsWith("service.json")
+                    ? 0o600
+                    : 0o644
+                : Number(stat.mode & 0o7777n),
         size: Number(stat.size),
         ctimeNs: String(stat.ctimeNs),
         mtimeNs: String(stat.mtimeNs),
+        ...(file.windowsAclDigest ? { windowsAclDigest: file.windowsAclDigest } : {}),
     });
 }
 /** 调用者持服务锁；捕获可在停机前，删除前须证明 OS 服务及所有工作进程静止。本端口不调用 OS、不恢复文件。 */
@@ -138,13 +162,45 @@ export function captureManagerServiceRemoval(
     host: ServiceHost,
 ): ManagerServiceRemoval {
     const spec = parseManagerServiceSpec(input);
-    if (!["linux", "darwin"].includes(host.platform) || (spec.scope === "system" && host.uid !== 0))
+    if (
+        !["linux", "darwin", "win32"].includes(host.platform) ||
+        (host.platform === "win32"
+            ? spec.scope !== "system" || host.isElevated !== true
+            : spec.scope === "system" && host.uid !== 0)
+    )
         throw failure();
     const files = getServiceFiles(spec.scope, host);
+    const windowsDirectoryAclDigest =
+        host.platform === "win32"
+            ? inspectWindowsServiceDirectorySecurity(host, files.stateDir)
+            : undefined;
     const captured: CapturedFile[] = [];
     try {
-        captured.push(capture(files.definition, [0o600, 0o644]));
-        captured.push(capture(files.metadata, [0o600]));
+        for (const [file, modes] of [
+            [files.definition, [0o600, 0o644]],
+            [files.metadata, [0o600]],
+        ] as const) {
+            const fileAclDigest = windowsDirectoryAclDigest
+                ? inspectWindowsServiceFileSecurity(host, file)
+                : undefined;
+            const aclDigest =
+                windowsDirectoryAclDigest && fileAclDigest
+                    ? createHash("sha256")
+                          .update(`${windowsDirectoryAclDigest}:${fileAclDigest}`)
+                          .digest("hex")
+                    : undefined;
+            const verifyWindowsAcl = aclDigest
+                ? () =>
+                      inspectWindowsServiceDirectorySecurity(host, files.stateDir) ===
+                          windowsDirectoryAclDigest &&
+                      createHash("sha256")
+                          .update(
+                              `${windowsDirectoryAclDigest}:${inspectWindowsServiceFileSecurity(host, file)}`,
+                          )
+                          .digest("hex") === aclDigest
+                : undefined;
+            captured.push(capture(file, modes, aclDigest, verifyWindowsAcl));
+        }
         if (
             !captured[0].bytes.equals(
                 Buffer.from(renderInstalledManagerService(spec, host.platform, files.stateDir)),
@@ -174,11 +230,13 @@ export function captureManagerServiceRemoval(
         try {
             fs.unlinkSync(captured[index].file);
             captured[index].removed = true;
-            const descriptor = fs.openSync(path.dirname(captured[index].file), "r");
-            try {
-                fs.fsyncSync(descriptor);
-            } finally {
-                fs.closeSync(descriptor);
+            if (process.platform !== "win32") {
+                const descriptor = fs.openSync(path.dirname(captured[index].file), "r");
+                try {
+                    fs.fsyncSync(descriptor);
+                } finally {
+                    fs.closeSync(descriptor);
+                }
             }
             if (!captured.every(equal)) throw failure();
             uncertain = false;
@@ -192,7 +250,8 @@ export function captureManagerServiceRemoval(
             metadata: snapshot(captured[1]),
         }),
         verifyRemaining,
-        verifyFile: file => !disposed && !uncertain && equal(captured[file === "definition" ? 0 : 1]),
+        verifyFile: file =>
+            !disposed && !uncertain && equal(captured[file === "definition" ? 0 : 1]),
         removeDefinition: () => remove(0),
         removeMetadata: () => remove(1),
         dispose() {

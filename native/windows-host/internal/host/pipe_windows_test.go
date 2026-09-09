@@ -25,7 +25,7 @@ func TestStatusPipeHasVerifiedSecurityAndServesState(t *testing.T) {
 		ManagerPath: "unused.exe",
 		PipeName:    fmt.Sprintf(`\\.\pipe\onebots-host-test-%d`, windows.GetCurrentProcessId()),
 	})
-	server, err := startStatusPipe(config, state)
+	server, err := startStatusPipe(config, state, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
 		ManagerPath: "unused.exe",
 		PipeName:    fmt.Sprintf(`\\.\pipe\onebots-host-control-test-%d`, windows.GetCurrentProcessId()),
 	})
-	server, err := startStatusPipe(config, state)
+	server, err := startStatusPipe(config, state, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,6 +90,41 @@ func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
 	})
 	if !republished.OK || republished.State == nil || republished.State.Control == nil || republished.State.Control.Revision != 3 {
 		t.Fatalf("higher revision was not published: %#v", republished)
+	}
+}
+
+func TestConsoleWorkerPipeRejectsControlRequestWhenManagerRPCIsDisabled(t *testing.T) {
+	state := newStateStore(time.Now())
+	managerPID := windows.GetCurrentProcessId()
+	state.set("running", "running", managerPID)
+	config := withDefaults(Config{
+		ManagerPath:  "unused.exe",
+		NoManagerRPC: true,
+		PipeName:     fmt.Sprintf(`\\.\pipe\onebots-host-no-rpc-test-%d`, managerPID),
+	})
+	server, err := startStatusPipe(config, state, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	control := protocol.ControlState{
+		Revision: 1,
+		Manager:  protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: managerPID},
+		Gateway:  protocol.ControlGatewayState{Desired: "stopped", Actual: "stopped"},
+	}
+	published := exchangePipeRequest(t, config.PipeName, protocol.Request{
+		Version: protocol.Version, RequestID: "publish:no-rpc", Operation: "publish_status", Control: &control,
+	})
+	if !published.OK {
+		t.Fatalf("failed to establish control binding: %#v", published)
+	}
+	response := exchangePipeRequest(t, config.PipeName, protocol.Request{
+		Version: protocol.Version, RequestID: "control:no-rpc", Operation: "control_request",
+		Binding: &protocol.ControlBinding{Revision: control.Revision, Manager: control.Manager},
+		Method:  "GET", Route: "/api/control/status",
+	})
+	if response.OK || response.Error == nil || response.Error.Code != "manager_unavailable" {
+		t.Fatalf("disabled manager RPC did not fail closed: %#v", response)
 	}
 }
 
@@ -204,7 +239,7 @@ func TestStatusPipeClosesStalledAuthorizedClient(t *testing.T) {
 		ManagerPath: "unused.exe",
 		PipeName:    fmt.Sprintf(`\\.\pipe\onebots-host-deadline-test-%d`, windows.GetCurrentProcessId()),
 	})
-	server, err := startStatusPipe(config, state)
+	server, err := startStatusPipe(config, state, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +278,7 @@ func TestStatusPipeRejectsUNCRemoteClient(t *testing.T) {
 		ManagerPath: "unused.exe",
 		PipeName:    fmt.Sprintf(`\\.\pipe\onebots-host-remote-test-%d`, windows.GetCurrentProcessId()),
 	})
-	server, err := startStatusPipe(config, state)
+	server, err := startStatusPipe(config, state, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

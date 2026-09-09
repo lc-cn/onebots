@@ -27,6 +27,8 @@ import {
 import { acquireControlWorkspace } from "./control/workspace.js";
 import type { ServicePlatform } from "./service-platform.js";
 import { assertManagerServiceTransactionsSupported } from "./windows-manager-support.js";
+import { WindowsServicePlatform } from "./service-platform-windows.js";
+import { secureWindowsServiceDirectory } from "./windows-service-security.js";
 
 export interface ManagerServiceInstallDependencies {
     assertAbsent?: typeof assertServiceAbsent;
@@ -44,10 +46,15 @@ export async function installManagerServiceWhileLocked(
         throw new Error("管理服务安装操作 ID 无效");
     const spec = parseManagerServiceSpec(input);
     assertManagerServiceTransactionsSupported(host);
-    if (!["linux", "darwin"].includes(host.platform))
+    if (!["linux", "darwin", "win32"].includes(host.platform))
         throw new Error("此系统尚未通过管理服务安装验收");
-    if (spec.scope === "system" && host.uid !== 0) throw new Error("系统级服务需要管理员权限");
+    if (
+        (spec.scope !== "system" && host.platform === "win32") ||
+        (spec.scope === "system" && host.platform !== "win32" && host.uid !== 0)
+    )
+        throw new Error("系统级服务需要管理员权限");
     const files = getServiceFiles(spec.scope, host);
+    if (host.platform === "win32") secureWindowsServiceDirectory(host, files.stateDir);
     let installation: ManagerServiceInstallation | undefined;
     try {
         const metadata = readServiceMetadata(files.metadata);
@@ -89,9 +96,11 @@ export async function installManagerServiceWhileLocked(
             dependencies.platform ??
             (host.platform === "linux"
                 ? new SystemdServicePlatform(host, spec.scope, files.definition)
-                : new LaunchdServicePlatform(host, spec.scope, files.definition, {
-                      freshDefinition: true,
-                  }));
+                : host.platform === "darwin"
+                  ? new LaunchdServicePlatform(host, spec.scope, files.definition, {
+                        freshDefinition: true,
+                    })
+                  : new WindowsServicePlatform(host, spec.scope, files.definition));
         function phase(value: ManagerServicePhase) {
             record.phase = value;
             journal.save(record);
@@ -104,7 +113,10 @@ export async function installManagerServiceWhileLocked(
                 prepareServiceMigrationWorkspace(spec.workspace, record.id, "running");
                 const unlock = acquireControlWorkspace(spec.workspace);
                 try {
-                    prepareServiceProcessOwnershipSeed(spec.workspace);
+                    // Windows 的进程树身份由 SCM 宿主 Job Object 与受 ACL 保护的状态管道证明。
+                    // 不写 POSIX PID 收据，避免把可复用 PID 当成 Windows 所有权依据。
+                    if (host.platform !== "win32")
+                        prepareServiceProcessOwnershipSeed(spec.workspace);
                 } finally {
                     unlock();
                 }

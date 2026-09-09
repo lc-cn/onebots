@@ -2,15 +2,14 @@ import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSyn
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { bootstrapManagerService } from "./manager-service-bootstrap.js";
-import { controlManagerService } from "./manager-service-controller.js";
-import { installManagerServiceWhileLocked } from "./manager-service-install.js";
-import { uninstallManagerService } from "./manager-service-uninstall.js";
 import { inspectManagerServiceStatus } from "./manager-service-status.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServiceHost } from "./service-host.js";
-import { WINDOWS_MANAGER_TRANSACTIONS_UNAVAILABLE } from "./windows-manager-support.js";
+import {
+    assertManagerServiceTransactionsSupported,
+    WINDOWS_MANAGER_TRANSACTIONS_UNAVAILABLE,
+} from "./windows-manager-support.js";
 import { renderInstalledManagerService } from "./manager-service-definition.js";
 
 const roots: string[] = [];
@@ -49,52 +48,19 @@ function fixture() {
 }
 
 describe("Windows顶层管理事务门禁", () => {
-    it("安装、启停和卸载都在文件与SCM副作用前拒绝", async () => {
-        for (const action of [
-            async (f: ReturnType<typeof fixture>) =>
-                installManagerServiceWhileLocked(f.spec, "install-1", f.host),
-            async (f: ReturnType<typeof fixture>) =>
-                controlManagerService("start", "system", f.host),
-            async (f: ReturnType<typeof fixture>) => uninstallManagerService("system", f.host),
-        ]) {
-            const f = fixture();
-            const before = readdirSync(f.root);
-            await expect(action(f)).rejects.toThrow(WINDOWS_MANAGER_TRANSACTIONS_UNAVAILABLE);
-            expect(readdirSync(f.root)).toEqual(before);
-            expect(f.host.exec).not.toHaveBeenCalled();
-            expect(f.host.spawn).not.toHaveBeenCalled();
-        }
-    });
-
-    it("完整bootstrap在下载、候选目录和SCM动作前拒绝", async () => {
+    it("只允许管理员和已确认SID进入Windows system事务", () => {
         const f = fixture();
-        const before = readdirSync(f.root);
-        await expect(
-            bootstrapManagerService(
-                {
-                    service: {
-                        schemaVersion: 1,
-                        runtimeKind: "control",
-                        scope: "system",
-                        workspace: f.spec.workspace,
-                        nodePath: f.spec.nodePath,
-                        host: f.spec.host,
-                        port: f.spec.port,
-                    },
-                },
-                {
-                    artifacts: {
-                        host: { name: "onebots", version: "1.2.12", spec: "1.2.12" },
-                        core: { name: "@onebots/core", version: "1.2.12", spec: "1.2.12" },
-                    },
-                    download: vi.fn(async () => {
-                        throw new Error("download must not run");
-                    }),
-                },
-                f.host,
-            ),
-        ).rejects.toThrow(WINDOWS_MANAGER_TRANSACTIONS_UNAVAILABLE);
-        expect(readdirSync(f.root)).toEqual(before);
+        expect(() => assertManagerServiceTransactionsSupported(f.host)).not.toThrow();
+        for (const host of [
+            { ...f.host, isElevated: false },
+            { ...f.host, windowsSid: undefined },
+            { ...f.host, windowsSid: "Administrators" },
+        ]) {
+            expect(() => assertManagerServiceTransactionsSupported(host)).toThrow(
+                WINDOWS_MANAGER_TRANSACTIONS_UNAVAILABLE,
+            );
+        }
+        expect(readdirSync(f.root)).toEqual([]);
         expect(f.host.exec).not.toHaveBeenCalled();
     });
 

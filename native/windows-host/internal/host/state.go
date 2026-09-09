@@ -97,3 +97,25 @@ func (store *stateStore) snapshot() protocol.HostState {
 	}
 	return state
 }
+
+func (store *stateStore) matches(binding protocol.ControlBinding) bool {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	age := store.now().Sub(store.published)
+	return store.service == "running" && store.manager.State == "running" &&
+		store.control != nil && age >= 0 && age <= controlFreshness &&
+		store.control.Revision == binding.Revision &&
+		store.control.Manager == binding.Manager &&
+		store.manager.PID == binding.Manager.PID
+}
+
+func (store *stateStore) confirms(binding protocol.ControlBinding) bool {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	age := store.now().Sub(store.published)
+	return store.service == "running" && store.manager.State == "running" &&
+		store.control != nil && age >= 0 && age <= controlFreshness &&
+		store.control.Revision >= binding.Revision &&
+		store.control.Manager == binding.Manager &&
+		store.manager.PID == binding.Manager.PID
+}

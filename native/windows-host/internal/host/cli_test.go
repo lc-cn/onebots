@@ -27,3 +27,14 @@ func TestParseRunConfigRejectsPositionalArguments(t *testing.T) {
 		t.Fatal("expected positional argument rejection")
 	}
 }
+
+func TestNoManagerRPCIsRestrictedToConsoleRun(t *testing.T) {
+	var output bytes.Buffer
+	config, err := parseRunConfig("console-run", []string{"--manager", "node.exe", "--no-manager-rpc"}, &output)
+	if err != nil || !config.NoManagerRPC {
+		t.Fatalf("console-run did not accept isolated worker mode: %#v, %v", config, err)
+	}
+	if _, err := parseRunConfig("service-run", []string{"--manager", "node.exe", "--no-manager-rpc"}, &output); err == nil {
+		t.Fatal("service-run accepted no-manager-rpc")
+	}
+}

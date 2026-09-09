@@ -13,13 +13,14 @@ const (
 )
 
 type Config struct {
-	ServiceName string
-	ManagerPath string
-	ManagerArgs []string
-	WorkingDir  string
-	PipeName    string
-	ControlSID  string
-	StopTimeout time.Duration
+	ServiceName  string
+	ManagerPath  string
+	ManagerArgs  []string
+	WorkingDir   string
+	PipeName     string
+	ControlSID   string
+	StopTimeout  time.Duration
+	NoManagerRPC bool
 }
 
 func (config Config) Validate() error {

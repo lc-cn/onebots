@@ -80,3 +80,31 @@ func TestControlInvalidationRevisionAndFreshnessFailClosed(t *testing.T) {
 		t.Fatal("expired state remained readable")
 	}
 }
+
+func TestControlRequestBindingRejectsReplacementAndAllowsConfirmedRevisionAdvance(t *testing.T) {
+	now := time.Date(2026, 9, 10, 1, 2, 3, 0, time.UTC)
+	store := newStateStore(now)
+	store.now = func() time.Time { return now }
+	store.set("running", "running", 42)
+	manager := protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 42}
+	control := protocol.ControlState{Revision: 1, Manager: manager, Gateway: protocol.ControlGatewayState{Desired: "running", Actual: "stopped"}}
+	if err := store.publish(control); err != nil {
+		t.Fatal(err)
+	}
+	binding := protocol.ControlBinding{Revision: 1, Manager: manager}
+	if !store.matches(binding) || !store.confirms(binding) {
+		t.Fatal("current control binding was rejected")
+	}
+	control.Revision = 2
+	if err := store.publish(control); err != nil {
+		t.Fatal(err)
+	}
+	if store.matches(binding) || !store.confirms(binding) {
+		t.Fatal("advanced revision must only confirm an already-dispatched request")
+	}
+	replacement := binding
+	replacement.Manager.ID = "223e4567-e89b-42d3-a456-426614174000"
+	if store.confirms(replacement) {
+		t.Fatal("replacement manager unexpectedly confirmed the request")
+	}
+}

@@ -11,18 +11,23 @@ export interface ManagerServiceRemovalFile {
     size: number;
     ctimeNs: string;
     mtimeNs: string;
+    windowsAclDigest?: string;
 }
 export interface ManagerServiceRemovalSnapshot {
     definition: ManagerServiceRemovalFile;
     metadata: ManagerServiceRemovalFile;
 }
 export interface ManagerServiceRemoval {
-    platform: "linux" | "darwin";
+    platform: "linux" | "darwin" | "win32";
     files: ManagerServiceRemovalSnapshot;
     initial: { enabled: boolean; processId: number | null; identity: string | null };
 }
 const fail = () => new Error("管理服务卸载快照无效");
-function file(input: unknown, modes: readonly number[]): ManagerServiceRemovalFile {
+function file(
+    input: unknown,
+    modes: readonly number[],
+    windows: boolean,
+): ManagerServiceRemovalFile {
     const value = closedServiceObject(input, [
         "path",
         "sha256",
@@ -33,6 +38,7 @@ function file(input: unknown, modes: readonly number[]): ManagerServiceRemovalFi
         "size",
         "ctimeNs",
         "mtimeNs",
+        ...(windows ? ["windowsAclDigest"] : []),
     ]);
     if (
         typeof value.path !== "string" ||
@@ -48,7 +54,10 @@ function file(input: unknown, modes: readonly number[]): ManagerServiceRemovalFi
         Number(value.uid) >= 0xffffffff ||
         !Number.isSafeInteger(value.size) ||
         Number(value.size) < 0 ||
-        Number(value.size) > 1_048_576
+        Number(value.size) > 1_048_576 ||
+        (windows &&
+            (typeof value.windowsAclDigest !== "string" ||
+                !/^[0-9a-f]{64}$/.test(value.windowsAclDigest)))
     )
         throw fail();
     for (const key of ["dev", "ino", "ctimeNs", "mtimeNs"]) {
@@ -60,10 +69,11 @@ function file(input: unknown, modes: readonly number[]): ManagerServiceRemovalFi
 /** 只解析无业务内容的身份快照；实际路径归属由事务与 getServiceFiles 再核验。 */
 export function parseManagerServiceRemovalSnapshot(input: unknown): ManagerServiceRemoval {
     const value = closedServiceObject(input, ["platform", "files", "initial"]);
-    if (value.platform !== "linux" && value.platform !== "darwin") throw fail();
+    if (!["linux", "darwin", "win32"].includes(String(value.platform))) throw fail();
     const files = closedServiceObject(value.files, ["definition", "metadata"]);
-    const definition = file(files.definition, [0o600, 0o644]),
-        metadata = file(files.metadata, [0o600]);
+    const windows = value.platform === "win32";
+    const definition = file(files.definition, [0o600, 0o644], windows),
+        metadata = file(files.metadata, [0o600], windows);
     if (definition.path === metadata.path) throw fail();
     const initial = closedServiceObject(value.initial, ["enabled", "processId", "identity"]);
     if (
@@ -80,7 +90,7 @@ export function parseManagerServiceRemovalSnapshot(input: unknown): ManagerServi
     )
         throw fail();
     return {
-        platform: value.platform,
+        platform: value.platform as ManagerServiceRemoval["platform"],
         files: { definition, metadata },
         initial: initial as unknown as ManagerServiceRemoval["initial"],
     };

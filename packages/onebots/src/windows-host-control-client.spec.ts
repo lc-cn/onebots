@@ -96,4 +96,119 @@ describe("Windows named pipe ControlClient边界", () => {
             new WindowsHostControlClient(pipe, async () => Buffer.alloc(65_537, 0x61)).status(),
         ).rejects.toThrow();
     });
+
+    it("以刚读取的manager/revision绑定通用本地ControlTransport请求", async () => {
+        const exchange = vi.fn(async (_pipe: string, bytes: Buffer, timeout: number) => {
+            const request = JSON.parse(bytes.toString("utf8"));
+            if (request.operation === "status")
+                return Buffer.from(
+                    JSON.stringify({
+                        version: 2,
+                        requestId: request.requestId,
+                        ok: true,
+                        state: {
+                            service: "running",
+                            manager: { state: "running", pid: 42 },
+                            startedAt: "2026-09-10T00:00:00Z",
+                            control: { ...control, publishedAt },
+                        },
+                    }) + "\n",
+                );
+            expect(timeout).toBe(120_000);
+            expect(request).toEqual({
+                version: 2,
+                requestId: expect.stringMatching(/^control:/),
+                operation: "control_request",
+                binding: { revision: 1, manager: control.manager },
+                method: "POST",
+                route: "/api/control/auth/bootstrap",
+                body: {},
+            });
+            return Buffer.from(
+                JSON.stringify({
+                    version: 2,
+                    requestId: request.requestId,
+                    ok: true,
+                    result: { status: 201, body: { code: "123456" } },
+                }) + "\n",
+            );
+        });
+        await expect(
+            new WindowsHostControlClient(pipe, exchange).request(
+                "POST",
+                "/api/control/auth/bootstrap",
+                {},
+            ),
+        ).resolves.toEqual({ status: 201, body: { code: "123456" } });
+        expect(exchange).toHaveBeenCalledTimes(2);
+    });
+
+    it("旧manager绑定由host拒绝后不伪造控制结果", async () => {
+        const exchange = vi.fn(async (_pipe: string, bytes: Buffer) => {
+            const request = JSON.parse(bytes.toString("utf8"));
+            if (request.operation === "status")
+                return Buffer.from(
+                    JSON.stringify({
+                        version: 2,
+                        requestId: request.requestId,
+                        ok: true,
+                        state: {
+                            service: "running",
+                            manager: { state: "running", pid: 42 },
+                            startedAt: "2026-09-10T00:00:00Z",
+                            control: { ...control, publishedAt },
+                        },
+                    }) + "\n",
+                );
+            return Buffer.from(
+                JSON.stringify({
+                    version: 2,
+                    requestId: request.requestId,
+                    ok: false,
+                    error: { code: "stale_binding", message: "manager changed" },
+                }) + "\n",
+            );
+        });
+        await expect(
+            new WindowsHostControlClient(pipe, exchange).request("GET", "/api/control/status"),
+        ).rejects.toThrow("manager changed");
+    });
+
+    it("控制结果可超过64KiB但仍受1MiB独立上限", async () => {
+        const payload = "x".repeat(70 * 1024);
+        const exchange = vi.fn(async (_pipe: string, bytes: Buffer) => {
+            const request = JSON.parse(bytes.toString("utf8"));
+            if (request.operation === "status")
+                return Buffer.from(
+                    JSON.stringify({
+                        version: 2,
+                        requestId: request.requestId,
+                        ok: true,
+                        state: {
+                            service: "running",
+                            manager: { state: "running", pid: 42 },
+                            startedAt: "2026-09-10T00:00:00Z",
+                            control: { ...control, publishedAt },
+                        },
+                    }),
+                );
+            return Buffer.from(
+                JSON.stringify({
+                    version: 2,
+                    requestId: request.requestId,
+                    ok: true,
+                    result: { status: 200, body: { payload } },
+                }),
+            );
+        });
+        await expect(
+            new WindowsHostControlClient(pipe, exchange).request("GET", "/api/control/status"),
+        ).resolves.toEqual({ status: 200, body: { payload } });
+        const tooLarge = new WindowsHostControlClient(pipe, async (_pipe, bytes) => {
+            const request = JSON.parse(bytes.toString("utf8"));
+            if (request.operation === "status") return exchange(_pipe, bytes, 5000);
+            return Buffer.alloc(1024 * 1024 + 1, 0x61);
+        });
+        await expect(tooLarge.request("GET", "/api/control/status")).rejects.toThrow("大小无效");
+    });
 });

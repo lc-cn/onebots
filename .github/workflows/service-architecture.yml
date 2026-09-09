@@ -30,7 +30,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:packages
-      - name: Verify migration, cold recovery, and lifecycle on real launchd
+      - name: Verify migration, manager upgrade, cold recovery, and lifecycle on real launchd
         env:
           ONEBOTS_LAUNCHD_ACCEPTANCE: "1"
         run: node scripts/verify-launchd-service-lifecycle.mjs
@@ -52,7 +52,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:packages
-      - name: Verify migration, cold recovery, and lifecycle on real systemd
+      - name: Verify migration, manager upgrade, cold recovery, and lifecycle on real systemd
         run: |
           sudo env \
             "PATH=$PATH" \
@@ -64,12 +64,11 @@ jobs:
             "$(command -v node)" scripts/verify-system-service-lifecycle.mjs
 
   windows-host:
-    name: Windows native host foundation
+    name: Windows native host and managed lifecycle
     runs-on: windows-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: native/windows-host
+    timeout-minutes: 45
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -78,8 +77,26 @@ jobs:
           cache-dependency-path: native/windows-host/go.sum
       - name: Test Windows host, pipe ACL, and remote rejection
         run: go test ./...
+        working-directory: native/windows-host
       - name: Build Windows host executable
         run: go build ./cmd/onebots-windows-host
+        working-directory: native/windows-host
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        shell: bash
+      - run: pnpm build:packages
+        shell: bash
+      - run: node scripts/build-windows-host.mjs ${{ runner.arch == 'X64' && 'x64' || 'arm64' }}
+      - name: Verify installed Windows SCM lifecycle through public CLI
+        run: node scripts/verify-windows-service-lifecycle.mjs
+        env:
+          ONEBOTS_WINDOWS_ACCEPTANCE: "1"
 
   interop:
     name: Framework interop (${{ matrix.group }})
@@ -183,6 +200,10 @@ jobs:
         run: pnpm test:protocols:managed
       - name: Verify installed CLI and TUI control entries
         run: pnpm test:entries:installed
+      - name: Verify installed Web control entry in Chrome
+        run: pnpm test:entries:web-installed
+      - name: Verify cross-entry concurrency and recovery
+        run: pnpm test:entries:cross-entry-race
       - run: node scripts/build-windows-host.mjs
       - run: pnpm test
       - run: pnpm packages:pack:check
