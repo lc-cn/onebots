@@ -6,6 +6,7 @@ import { parseManagerServiceSpec, type ManagerServiceSpec } from "./manager-serv
 import { captureServiceMigration } from "./service-migration-capture.js";
 import { migrateSystemService } from "./service-migration-coordinator.js";
 import { createServiceMigrationPort } from "./service-migration-port.js";
+import { retainServiceMigrationRuntime } from "./service-migration-retention.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import type { ServicePlatformState } from "./service-platform.js";
@@ -38,6 +39,7 @@ export async function migrateInstalledService(
                 },
             });
         },
+        retain: backup => retainServiceMigrationRuntime(backup, paths.stateDir, id),
         port: backup => {
             if (!original) throw new Error("旧服务捕获未完成，禁止迁移");
             return createServiceMigrationPort({

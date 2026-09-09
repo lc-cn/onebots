@@ -3,8 +3,10 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { migrateInstalledService } from "./service-migration.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
+import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import { getServiceFiles } from "./service-files.js";
-import { renderSystemdUnit, type ServiceSpec } from "./service-definition.js";
+import { renderSystemdUnit, renderLaunchdPlist, type ServiceSpec } from "./service-definition.js";
+import { verifyRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import { readServiceMigrationPending } from "./service-migration-workspace.js";
 import { verifyServiceMigrationProcesses } from "./service-migration-processes.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
@@ -24,8 +26,9 @@ function fixture() {
     const version = { text: "v24.0.0" };
     const osEffects: string[] = [];
     const host: ServiceHost = {
-        platform: "linux",
+        platform: process.platform === "darwin" ? "darwin" : "linux",
         homedir: root,
+        uid: process.getuid?.() ?? 1000,
         env: {},
         exec: (_file, args) => {
             if (args.length === 1 && args[0] === "--version") return version.text;
@@ -36,8 +39,19 @@ function fixture() {
         },
     };
     const files = getServiceFiles("user", host);
-    const bin = path.join(root, "bin.js");
-    fs.writeFileSync(bin, "export {};\n");
+    const install = path.join(root, "install");
+    const core = path.join(install, "node_modules", "@onebots", "core");
+    fs.mkdirSync(core, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(
+        path.join(install, "package.json"),
+        '{"name":"onebots","type":"module","dependencies":{"@onebots/core":"1.0.0"}}',
+        { mode: 0o600 },
+    );
+    fs.writeFileSync(path.join(core, "package.json"), '{"name":"@onebots/core","type":"module"}', {
+        mode: 0o600,
+    });
+    const bin = path.join(install, "bin.js");
+    fs.writeFileSync(bin, "export {};\n", { mode: 0o600 });
     const legacy: ServiceSpec = {
         scope: "user",
         configPath: path.join(workspace, "old.yaml"),
@@ -48,7 +62,14 @@ function fixture() {
         binPath: bin,
         workingDirectory: workspace,
     };
-    const definition = renderSystemdUnit(legacy);
+    const definition =
+        host.platform === "linux"
+            ? renderSystemdUnit(legacy)
+            : renderLaunchdPlist(
+                  legacy,
+                  path.join(files.stateDir, "onebots.log"),
+                  path.join(files.stateDir, "onebots-error.log"),
+              );
     const config = "general: {}\n";
     for (const [file, content] of [
         [files.definition, definition],
@@ -81,23 +102,25 @@ function fixture() {
         identity: null,
         quiescent: true,
     };
+    const prototype =
+        host.platform === "linux"
+            ? SystemdServicePlatform.prototype
+            : LaunchdServicePlatform.prototype;
     const inspect = vi
-        .spyOn(SystemdServicePlatform.prototype, "inspect")
+        .spyOn(prototype, "inspect")
         .mockImplementation(async () => structuredClone(state));
-    vi.spyOn(SystemdServicePlatform.prototype, "quiesce").mockImplementation(async () => {
+    vi.spyOn(prototype, "quiesce").mockImplementation(async () => {
         osEffects.push("quiesce");
         state = { ...state, enabled: false };
     });
-    vi.spyOn(SystemdServicePlatform.prototype, "reload").mockImplementation(async enabled => {
+    vi.spyOn(prototype, "reload").mockImplementation(async enabled => {
         osEffects.push("reload");
         state = { ...state, enabled };
     });
-    const start = vi
-        .spyOn(SystemdServicePlatform.prototype, "start")
-        .mockImplementation(async () => {
-            osEffects.push("start");
-            throw new Error("stopped service must never start");
-        });
+    const start = vi.spyOn(prototype, "start").mockImplementation(async () => {
+        osEffects.push("start");
+        throw new Error("stopped service must never start");
+    });
     return {
         root,
         target,
@@ -139,32 +162,63 @@ describe("installed service migration entry", () => {
             expect(fs.existsSync(path.join(test.target.workspace, ".control"))).toBe(false);
         },
     );
-    it("migrates stopped legacy service through real capture/journal/file/ownership proof without starting it", async () => {
+    it.skipIf(process.platform === "win32")(
+        "migrates stopped legacy service through real capture/journal/file/ownership proof without starting it",
+        async () => {
+            const test = fixture();
+            const result = await migrateInstalledService(test.target, test.host);
+            expect(result).toMatchObject({
+                status: "succeeded",
+                phase: "completed",
+                recoveryRequired: false,
+            });
+            expect(test.osEffects).toEqual(["quiesce", "reload"]);
+            expect(test.start).not.toHaveBeenCalled();
+            expect(readServiceMigrationPending(test.target.workspace)).toBeNull();
+            const gateway = JSON.parse(
+                fs.readFileSync(path.join(test.target.workspace, ".control/gateway.json"), "utf8"),
+            );
+            expect(gateway).toMatchObject({ desired: "stopped", actual: "stopped" });
+            expect(await verifyServiceMigrationProcesses(test.target.workspace)).toBe(true);
+            const journal = new FileServiceMigrationJournal(
+                path.join(test.files.stateDir, "migrations"),
+            );
+            expect(journal.read(result.id)).toEqual(result);
+            expect(journal.backup(result).previousRunning).toBe(false);
+            const retained = journal.backup(result).retainedRuntime!;
+            expect(retained.schemaVersion).toBe(2);
+            expect(retained.original).toEqual(test.legacy);
+            expect(retained.rollback.configPath).toBe(test.legacy.configPath);
+            await verifyRetainedLegacyRuntime(retained);
+            expect(JSON.parse(fs.readFileSync(test.files.metadata, "utf8")).runtimeKind).toBe(
+                "control",
+            );
+            expect(fs.readFileSync(test.legacy.configPath, "utf8")).toBe(test.config);
+            expect(fs.readFileSync(test.unrelated, "utf8")).toBe("synthetic-unrelated");
+        },
+        120_000,
+    );
+    it("cannot stop or rewrite a service when its old runtime cannot be retained", async () => {
         const test = fixture();
+        fs.rmSync(path.join(path.dirname(test.legacy.binPath), "node_modules"), {
+            recursive: true,
+        });
         const result = await migrateInstalledService(test.target, test.host);
         expect(result).toMatchObject({
-            status: "succeeded",
-            phase: "completed",
-            recoveryRequired: false,
+            phase: "capturing-runtime",
+            status: "interrupted",
+            recoveryRequired: true,
+            rolledBack: false,
         });
-        expect(test.osEffects).toEqual(["quiesce", "reload"]);
-        expect(test.start).not.toHaveBeenCalled();
-        expect(readServiceMigrationPending(test.target.workspace)).toBeNull();
-        const gateway = JSON.parse(
-            fs.readFileSync(path.join(test.target.workspace, ".control/gateway.json"), "utf8"),
-        );
-        expect(gateway).toMatchObject({ desired: "stopped", actual: "stopped" });
-        expect(await verifyServiceMigrationProcesses(test.target.workspace)).toBe(true);
+        expect(test.osEffects).toEqual([]);
+        expect(fs.readFileSync(test.files.definition, "utf8")).toBe(test.definition);
+        expect(fs.readFileSync(test.legacy.configPath, "utf8")).toBe(test.config);
         const journal = new FileServiceMigrationJournal(
             path.join(test.files.stateDir, "migrations"),
         );
-        expect(journal.read(result.id)).toEqual(result);
-        expect(journal.backup(result).previousRunning).toBe(false);
-        expect(JSON.parse(fs.readFileSync(test.files.metadata, "utf8")).runtimeKind).toBe(
-            "control",
-        );
-        expect(fs.readFileSync(test.legacy.configPath, "utf8")).toBe(test.config);
-        expect(fs.readFileSync(test.unrelated, "utf8")).toBe("synthetic-unrelated");
+        expect(journal.backup(result).retainedRuntime).toBeUndefined();
+        await expect(migrateInstalledService(test.target, test.host)).rejects.toThrow();
+        expect(test.osEffects).toEqual([]);
     });
     it("invalid existing definition refuses capture and leaves every non-target file unchanged", async () => {
         const test = fixture();
