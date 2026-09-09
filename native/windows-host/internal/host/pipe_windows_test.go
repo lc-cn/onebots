@@ -122,8 +122,11 @@ func TestStatusPipeClosesStalledAuthorizedClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stalled client was not closed cleanly: %v", err)
 	}
-	if len(response) == 0 || len(response) > protocol.MaxMessageBytes {
-		t.Fatalf("unexpected bounded failure response length: %d", len(response))
+	// The single absolute deadline bounds both read and write. Once an authorized client
+	// consumes the whole window without sending a frame, the server closes it instead of
+	// extending the connection to deliver an error document.
+	if len(response) != 0 {
+		t.Fatalf("stalled client received data after the absolute deadline: %d bytes", len(response))
 	}
 	elapsed := time.Since(started)
 	if elapsed < pipeRequestTimeout-time.Second || elapsed > pipeRequestTimeout+2*time.Second {
