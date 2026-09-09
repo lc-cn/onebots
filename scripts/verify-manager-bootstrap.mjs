@@ -15,9 +15,14 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     fs.mkdirSync(home, { mode: 0o700 });
     const workspace = path.join(home, "data");
     const effects = [];
+    let unregistered = false;
     const host = {
         platform: "linux", homedir: home, uid: process.getuid(), env: {},
         exec(command, args) {
+            if (command === "systemctl" && args.includes("show")) {
+                assert.equal(unregistered, true);
+                return "LoadState=not-found\nActiveState=inactive\nSubState=dead\nMainPID=0\nControlPID=0\nControlGroup=\nFragmentPath=\n";
+            }
             assert.equal(command, process.execPath);
             assert.deepEqual(args, ["--version"]);
             return process.version;
@@ -105,5 +110,24 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     // 首次安装旧回执不能覆盖升级后的服务契约，也不能重复安装旧候选。
     await assert.rejects(bootstrapManagerService(request, dependencies, host));
     assert.deepEqual(effects, ["reload", "quiesce", "reload"]);
-    process.stdout.write("✓ 真实首次安装候选：自带 pnpm 下载、双证明、稳定注册绑定、冷对账、重复只读及另一真实候选升级通过（OS 驱动注入，未安装原生系统服务）\n");
+    const { uninstallManagerService } = await load("manager-service-uninstall.js");
+    const candidateProof = fs.readFileSync(path.join(candidate.directory, "manager-verification.json"));
+    const removed = await uninstallManagerService("user", host, { platform,
+        unregister: () => { unregistered = true; effects.push("unregister"); },
+    });
+    assert.equal(removed.status, "succeeded");
+    assert.equal(fs.existsSync(files.definition), false);
+    assert.equal(fs.existsSync(files.metadata), false);
+    assert.deepEqual(fs.readFileSync(path.join(candidate.directory, "manager-verification.json")), candidateProof);
+    assert.deepEqual(fs.readFileSync(path.join(workspace, ".control/gateway.json")), gateway);
+    const removalJournal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
+    removalJournal.save({ ...removed, status: "interrupted", recoveryRequired: true });
+    const effectsAfterRemoval = [...effects];
+    assert.equal((await reconcileManagerServiceOperation(removed.id, "user", host)).status, "succeeded");
+    assert.deepEqual(effects, effectsAfterRemoval);
+    assert.equal(fs.existsSync(files.definition), false);
+    assert.equal(fs.existsSync(files.metadata), false);
+    await assert.rejects(bootstrapManagerService(request, dependencies, host));
+    assert.deepEqual(effects, effectsAfterRemoval);
+    process.stdout.write("✓ 真实首次安装候选：自带 pnpm 下载、双证明、稳定注册绑定、冷对账、重复只读、另一真实候选升级、卸载保留数据及卸载冷对账通过（OS 驱动注入，未安装原生系统服务）\n");
 }
