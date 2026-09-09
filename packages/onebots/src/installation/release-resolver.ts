@@ -13,6 +13,11 @@ export interface ResolvedRelease {
     extensionVersions: Readonly<Record<string, string>>;
     /** 本次确实检查过的宿主发布包摘要，不是活动安装目录的摘要。 */
     archiveSha256: string;
+    /** 已按 registry integrity 验证的精确归档；可信安装入口可将这些字节固化为 file: 工件。 */
+    archives?: {
+        host: { bytes: Buffer; sha256: string };
+        core: { bytes: Buffer; sha256: string };
+    };
 }
 
 /** 公开源只读检查：不调用 npm、不读取 npmrc、不执行目标宿主或第三方插件。 */
@@ -31,18 +36,32 @@ export async function resolveRelease(exactVersion?: string): Promise<ResolvedRel
             !record(published.dist)
         )
             throw new Error();
-        const tarball = `${REGISTRY}/onebots/-/onebots-${version}.tgz`;
-        if (published.dist.tarball !== tarball || typeof published.dist.integrity !== "string")
-            throw new Error();
-        const match = /^sha512-([A-Za-z0-9+/]{86}==)$/.exec(published.dist.integrity);
-        if (!match) throw new Error();
-        const archive = await download(tarball, ARCHIVE_LIMIT);
-        if (createHash("sha512").update(archive).digest("base64") !== match[1]) throw new Error();
+        const archive = await verifiedArchive(
+            published,
+            `${REGISTRY}/onebots/-/onebots-${version}.tgz`,
+        );
         const { manifest, catalog } = await readReleaseArchive(archive);
         const release = parseReleaseCatalog(version, manifest, catalog);
+        const corePublished = await metadataFor("@onebots/core", release.core.version);
+        if (
+            !record(corePublished) ||
+            corePublished.name !== "@onebots/core" ||
+            corePublished.version !== release.core.version
+        )
+            throw new Error();
+        const coreArchive = await verifiedArchive(
+            corePublished,
+            `${REGISTRY}/@onebots/core/-/core-${release.core.version}.tgz`,
+        );
+        const archiveSha256 = createHash("sha256").update(archive).digest("hex");
+        const coreSha256 = createHash("sha256").update(coreArchive).digest("hex");
         return Object.freeze({
             ...release,
-            archiveSha256: createHash("sha256").update(archive).digest("hex"),
+            archiveSha256,
+            archives: {
+                host: { bytes: archive, sha256: archiveSha256 },
+                core: { bytes: coreArchive, sha256: coreSha256 },
+            },
         });
     } catch {
         // HTTP、归档和解析错误均可能包含不可信正文；只返回固定诊断。
@@ -90,11 +109,33 @@ export function parseReleaseCatalog(
     });
 }
 async function metadata(version: string): Promise<unknown> {
+    return metadataFor("onebots", version);
+}
+async function metadataFor(name: string, version: string): Promise<unknown> {
     return JSON.parse(
-        (await download(`${REGISTRY}/onebots/${encodeURIComponent(version)}`, META_LIMIT)).toString(
-            "utf8",
-        ),
+        (
+            await download(
+                `${REGISTRY}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+                META_LIMIT,
+            )
+        ).toString("utf8"),
     );
+}
+async function verifiedArchive(
+    published: Record<string, unknown>,
+    tarball: string,
+): Promise<Buffer> {
+    if (
+        !record(published.dist) ||
+        published.dist.tarball !== tarball ||
+        typeof published.dist.integrity !== "string"
+    )
+        throw new Error();
+    const match = /^sha512-([A-Za-z0-9+/]{86}==)$/.exec(published.dist.integrity);
+    if (!match) throw new Error();
+    const archive = await download(tarball, ARCHIVE_LIMIT);
+    if (createHash("sha512").update(archive).digest("base64") !== match[1]) throw new Error();
+    return archive;
 }
 async function download(url: string, limit: number): Promise<Buffer> {
     const response = await fetch(url, {

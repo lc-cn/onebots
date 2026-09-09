@@ -17,6 +17,7 @@ const catalog = {
 function fixture() {
     vi.clearAllMocks();
     const archive = Buffer.from("synthetic-public-package");
+    const coreArchive = Buffer.from("synthetic-core-package");
     const published = {
         name: "onebots",
         version,
@@ -25,12 +26,23 @@ function fixture() {
             integrity: `sha512-${createHash("sha512").update(archive).digest("base64")}`,
         },
     };
+    const corePublished = {
+        name: "@onebots/core",
+        version: "1.2.33",
+        dist: {
+            tarball: "https://registry.npmjs.org/@onebots/core/-/core-1.2.33.tgz",
+            integrity: `sha512-${createHash("sha512").update(coreArchive).digest("base64")}`,
+        },
+    };
     vi.mocked(readReleaseArchive).mockResolvedValue({ manifest, catalog });
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async url => {
-        return String(url).endsWith(".tgz") ? new Response(archive) : Response.json(published);
+        const target = String(url);
+        if (target === corePublished.dist.tarball) return new Response(coreArchive);
+        if (target.includes("%40onebots%2Fcore")) return Response.json(corePublished);
+        return target.endsWith(".tgz") ? new Response(archive) : Response.json(published);
     });
     vi.stubGlobal("fetch", fetcher);
-    return { archive, published, fetcher };
+    return { archive, coreArchive, published, corePublished, fetcher };
 }
 it("latest仅选择精确版本，校验归档摘要后读取目标发布目录", async () => {
     const f = fixture();
@@ -39,11 +51,18 @@ it("latest仅选择精确版本，校验归档摘要后读取目标发布目录"
         "https://registry.npmjs.org/onebots/latest",
         `https://registry.npmjs.org/onebots/${version}`,
         f.published.dist.tarball,
+        "https://registry.npmjs.org/%40onebots%2Fcore/1.2.33",
+        f.corePublished.dist.tarball,
     ]);
     expect(release.host.version).toBe(version);
     expect(release.core.version).toBe("1.2.33");
     expect(release.extensionVersions["@onebots/adapter-matrix"]).toBe("3.0.99");
     expect(release.archiveSha256).toBe(createHash("sha256").update(f.archive).digest("hex"));
+    expect(release.archives?.host.bytes).toEqual(f.archive);
+    expect(release.archives?.core.bytes).toEqual(f.coreArchive);
+    expect(release.archives?.core.sha256).toBe(
+        createHash("sha256").update(f.coreArchive).digest("hex"),
+    );
     for (const [, options] of f.fetcher.mock.calls) {
         expect(options).toMatchObject({ redirect: "error", credentials: "omit" });
         expect(options?.signal).toBeInstanceOf(AbortSignal);
@@ -64,6 +83,23 @@ it("指定精确版本不查询latest，失配摘要不读取归档", async () =
     await expect(resolveRelease(version)).rejects.toThrow("无法验证");
     expect(f.fetcher.mock.calls[0][0]).toBe(`https://registry.npmjs.org/onebots/${version}`);
     expect(readReleaseArchive).not.toHaveBeenCalled();
+});
+it("core也必须来自固定registry归档并通过完整性校验", async () => {
+    const f = fixture();
+    f.fetcher.mockImplementation(async url => {
+        const target = String(url);
+        if (target.includes("%40onebots%2Fcore"))
+            return Response.json({
+                ...f.corePublished,
+                dist: {
+                    ...f.corePublished.dist,
+                    integrity: `sha512-${Buffer.alloc(64).toString("base64")}`,
+                },
+            });
+        return target.endsWith(".tgz") ? new Response(f.archive) : Response.json(f.published);
+    });
+    await expect(resolveRelease(version)).rejects.toThrow("无法验证");
+    expect(f.fetcher).toHaveBeenCalledWith(f.corePublished.dist.tarball, expect.anything());
 });
 it.each(["latest", "^1.2.0", "https://private.example/archive", "1.2.3/../../x"])(
     "拒绝客户端版本选择 %s",

@@ -1,11 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { upgradeManagerService } from "./manager-service-upgrade.js";
+import {
+    ManagerServiceUpgradeRejectedError,
+    upgradeManagerService,
+    type ManagerServiceUpgradeRequest,
+} from "./manager-service-upgrade.js";
 import { prepareManagerServiceInstallation } from "./manager-service-installation.js";
 import { FileManagerServiceJournal } from "./manager-service-journal.js";
 import { acquireServiceMigrationLock } from "./service-migration-lock.js";
-import { prepareServiceMigrationWorkspace, releaseServiceMigrationPending } from "./service-migration-workspace.js";
+import {
+    prepareServiceMigrationWorkspace,
+    releaseServiceMigrationPending,
+} from "./service-migration-workspace.js";
 import { prepareServiceProcessOwnershipSeed } from "./service-migration-processes.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
 import * as workspaceLocks from "./control/workspace.js";
@@ -24,22 +31,39 @@ vi.mock("./manager-runtime/identity.js", () => ({
 vi.mock("./manager-runtime/reader.js", () => ({
     readVerifiedManagerCandidate: vi.fn(() => ({ directory: candidates.target })),
 }));
-vi.mock("./manager-service-upgrade-candidate.js", () => ({ verifyManagerServiceCandidate: vi.fn() }));
+vi.mock("./manager-service-upgrade-candidate.js", () => ({
+    verifyManagerServiceCandidate: vi.fn(),
+}));
 const roots: string[] = [];
 afterEach(() => {
     vi.restoreAllMocks();
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 function fixture(enabled = true) {
-    const root = fs.realpathSync(fs.mkdtempSync("/tmp/ob-upgrade-entry-")); roots.push(root);
-    const host: ServiceHost = { platform: "linux", homedir: root, uid: process.getuid?.(), env: {},
-        exec: vi.fn(() => { throw new Error("no OS command"); }),
-        spawn: vi.fn(async () => { throw new Error("no spawn"); }) };
-    const workspace = path.join(root, "data"); fs.mkdirSync(workspace, { mode: 0o700 });
+    const root = fs.realpathSync(fs.mkdtempSync("/tmp/ob-upgrade-entry-"));
+    roots.push(root);
+    const host: ServiceHost = {
+        platform: "linux",
+        homedir: root,
+        uid: process.getuid?.(),
+        env: {},
+        exec: vi.fn(() => {
+            throw new Error("no OS command");
+        }),
+        spawn: vi.fn(async () => {
+            throw new Error("no spawn");
+        }),
+    };
+    const workspace = path.join(root, "data");
+    fs.mkdirSync(workspace, { mode: 0o700 });
     prepareServiceMigrationWorkspace(workspace, "seed", "running");
     const release = acquireControlWorkspace(workspace);
-    try { prepareServiceProcessOwnershipSeed(workspace); releaseServiceMigrationPending(workspace, "seed"); }
-    finally { release(); }
+    try {
+        prepareServiceProcessOwnershipSeed(workspace);
+        releaseServiceMigrationPending(workspace, "seed");
+    } finally {
+        release();
+    }
     fs.writeFileSync(path.join(workspace, "config.yaml"), "broken: [\r\n");
     const gateway = fs.readFileSync(path.join(workspace, ".control/gateway.json"));
     const homes = [path.join(root, "old-artifacts"), path.join(root, "new-artifacts")];
@@ -50,64 +74,142 @@ function fixture(enabled = true) {
     candidates.previous = path.join(homes[0], "versions", "11111111-1111-4111-8111-111111111111");
     candidates.target = path.join(homes[1], "versions", "22222222-2222-4222-8222-222222222222");
     candidates.previousDigest = "a".repeat(64);
-    for (const directory of [candidates.previous, candidates.target]) fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-    const previous: ManagerServiceSpec = { schemaVersion: 1, runtimeKind: "control", scope: "user", workspace,
-        workingDirectory: candidates.previous, binPath: path.join(candidates.previous, "node_modules/onebots/lib/bin.js"),
-        nodePath: process.execPath, host: "127.0.0.1", port: 6727 };
+    for (const directory of [candidates.previous, candidates.target])
+        fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+    const previous: ManagerServiceSpec = {
+        schemaVersion: 1,
+        runtimeKind: "control",
+        scope: "user",
+        workspace,
+        workingDirectory: candidates.previous,
+        binPath: path.join(candidates.previous, "node_modules/onebots/lib/bin.js"),
+        nodePath: process.execPath,
+        host: "127.0.0.1",
+        port: 6727,
+    };
     const installation = prepareManagerServiceInstallation(previous, host);
-    try { installation.apply(); } finally { installation.dispose(); }
+    try {
+        installation.apply();
+    } finally {
+        installation.dispose();
+    }
     const files = getServiceFiles("user", host);
-    const state: ServicePlatformState = { state: "stopped", running: false, quiescent: true, enabled,
-        loaded: true, processId: null, identity: null, definitionPath: files.definition };
+    const state: ServicePlatformState = {
+        state: "stopped",
+        running: false,
+        quiescent: true,
+        enabled,
+        loaded: true,
+        processId: null,
+        identity: null,
+        definitionPath: files.definition,
+    };
     const effects: string[] = [];
     const platform: ServicePlatform = {
         inspect: async () => structuredClone(state),
-        quiesce: async () => { effects.push("quiesce"); state.enabled = false; },
-        reload: async value => { effects.push("reload"); state.enabled = value; },
-        start: async () => { effects.push("start"); throw new Error("must not start"); },
+        quiesce: async () => {
+            effects.push("quiesce");
+            state.enabled = false;
+        },
+        reload: async value => {
+            effects.push("reload");
+            state.enabled = value;
+        },
+        start: async () => {
+            effects.push("start");
+            throw new Error("must not start");
+        },
     };
-    const request = { id: "upgrade", scope: "user" as const, candidateDirectory: candidates.target, candidateDigest: "b".repeat(64) };
+    const request: ManagerServiceUpgradeRequest = {
+        id: "upgrade",
+        scope: "user",
+        candidateDirectory: candidates.target,
+        candidateDigest: "b".repeat(64),
+    };
     const run = () => upgradeManagerService(request, host, { platform });
-    const journal = () => new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
-    return { host, workspace, gateway, homes, previous, files, state, effects, request, run, journal, platform };
+    const journal = () =>
+        new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
+    return {
+        host,
+        workspace,
+        gateway,
+        homes,
+        previous,
+        files,
+        state,
+        effects,
+        request,
+        run,
+        journal,
+        platform,
+    };
 }
 it.each([true, false])("外部入口完成停止服务升级并保持 enabled=%s，不启动网关", async enabled => {
     const f = fixture(enabled);
     const result = await f.run();
-    expect(result).toMatchObject({ status: "succeeded", phase: "completed", recoveryRequired: false });
+    expect(result).toMatchObject({
+        status: "succeeded",
+        phase: "completed",
+        recoveryRequired: false,
+    });
     expect(f.effects).toEqual(["quiesce", "reload"]);
     expect(f.state).toMatchObject({ enabled, running: false });
     expect(f.journal().read("upgrade")).toMatchObject({ status: "succeeded", phase: "completed" });
-    expect(readManagerUpgradePending(f.workspace)).toMatchObject({ phase: "released", completion: "offline" });
-    expect(JSON.parse(fs.readFileSync(f.files.metadata, "utf8"))).toMatchObject({ workingDirectory: candidates.target });
+    expect(readManagerUpgradePending(f.workspace)).toMatchObject({
+        phase: "released",
+        completion: "offline",
+    });
+    expect(JSON.parse(fs.readFileSync(f.files.metadata, "utf8"))).toMatchObject({
+        workingDirectory: candidates.target,
+    });
     expect(fs.readFileSync(path.join(f.workspace, "config.yaml"), "utf8")).toBe("broken: [\r\n");
     expect(fs.readFileSync(path.join(f.workspace, ".control/gateway.json"))).toEqual(f.gateway);
     for (const home of f.homes) acquireControlWorkspace(home)();
     acquireServiceMigrationLock(f.files.stateDir)();
 });
-it.each(["service", "previous", "target"])("%s 锁已占用时不派发系统动作，释放后可以升级", async lock => {
-    const f = fixture();
-    const release = lock === "service" ? acquireServiceMigrationLock(f.files.stateDir)
-        : acquireControlWorkspace(f.homes[lock === "previous" ? 0 : 1]);
-    try {
-        await expect(f.run()).rejects.toThrow();
-        expect(f.effects).toEqual([]);
-        expect(readManagerUpgradePending(f.workspace)).toBeNull();
-    } finally { release(); }
-    await expect(f.run()).resolves.toMatchObject({ status: "succeeded" });
-});
+it.each(["service", "previous", "target"])(
+    "%s 锁已占用时不派发系统动作，释放后可以升级",
+    async lock => {
+        const f = fixture();
+        const release =
+            lock === "service"
+                ? acquireServiceMigrationLock(f.files.stateDir)
+                : acquireControlWorkspace(f.homes[lock === "previous" ? 0 : 1]);
+        try {
+            if (lock === "service")
+                await expect(f.run()).rejects.toBeInstanceOf(ManagerServiceUpgradeRejectedError);
+            else await expect(f.run()).rejects.toThrow();
+            expect(f.effects).toEqual([]);
+            expect(readManagerUpgradePending(f.workspace)).toBeNull();
+        } finally {
+            release();
+        }
+        await expect(f.run()).resolves.toMatchObject({ status: "succeeded" });
+    },
+);
 it("存在未完成服务操作时拒绝升级且不修改服务文件", async () => {
     const f = fixture();
     f.journal().prepare({ id: "pending", action: "stop", spec: f.previous, desiredEnabled: true });
     const definition = fs.readFileSync(f.files.definition);
-    await expect(f.run()).rejects.toThrow();
+    await expect(f.run()).rejects.toBeInstanceOf(ManagerServiceUpgradeRejectedError);
     expect(f.effects).toEqual([]);
     expect(fs.readFileSync(f.files.definition)).toEqual(definition);
     expect(readManagerUpgradePending(f.workspace)).toBeNull();
 });
 it("相同候选摘要拒绝升级且释放所有锁", async () => {
-    const f = fixture(); candidates.previousDigest = f.request.candidateDigest;
+    const f = fixture();
+    candidates.previousDigest = f.request.candidateDigest;
     await expect(f.run()).rejects.toThrow();
+    expect(f.effects).toEqual([]);
+    expect(readManagerUpgradePending(f.workspace)).toBeNull();
+    for (const home of f.homes) acquireControlWorkspace(home)();
+    acquireServiceMigrationLock(f.files.stateDir)();
+});
+
+it("活动管理版本在候选准备后变化时按摘要CAS拒绝，且不派发系统动作", async () => {
+    const f = fixture();
+    f.request.expectedPreviousDigest = "c".repeat(64);
+    await expect(f.run()).rejects.toBeInstanceOf(ManagerServiceUpgradeRejectedError);
     expect(f.effects).toEqual([]);
     expect(readManagerUpgradePending(f.workspace)).toBeNull();
     for (const home of f.homes) acquireControlWorkspace(home)();
@@ -121,7 +223,11 @@ it("停止结果未知时持久记录中断，释放所有锁且拒绝再次派�
         throw new Error("lost OS acknowledgement");
     };
     await expect(f.run()).rejects.toThrow();
-    expect(f.journal().read("upgrade")).toMatchObject({ phase: "stopping", status: "interrupted", recoveryRequired: true });
+    expect(f.journal().read("upgrade")).toMatchObject({
+        phase: "stopping",
+        status: "interrupted",
+        recoveryRequired: true,
+    });
     for (const home of f.homes) acquireControlWorkspace(home)();
     acquireServiceMigrationLock(f.files.stateDir)();
     await expect(f.run()).rejects.toThrow();
@@ -150,17 +256,22 @@ it.each([false, true])("释放错误不遗漏锁，并保持事务失败=%s 的�
             throw new Error("private service database path and secret");
         };
     });
-    if (transactionFails) f.platform.quiesce = async () => {
-        f.effects.push("quiesce");
-        throw new Error("private OS error");
-    };
-    await expect(f.run()).rejects.toThrow(transactionFails
-        ? "管理服务升级尚未确认，已停止派发；请对账原操作，禁止重试安装或自动回滚"
-        : "管理服务升级已完成，但锁释放未确认；请核对原操作结果，禁止重复升级");
+    if (transactionFails)
+        f.platform.quiesce = async () => {
+            f.effects.push("quiesce");
+            throw new Error("private OS error");
+        };
+    await expect(f.run()).rejects.toThrow(
+        transactionFails
+            ? "管理服务升级尚未确认，已停止派发；请对账原操作，禁止重试安装或自动回滚"
+            : "管理服务升级已完成，但锁释放未确认；请核对原操作结果，禁止重复升级",
+    );
     expect(released).toEqual([...f.homes].sort().reverse().concat("service"));
-    expect(f.journal().read("upgrade")).toMatchObject(transactionFails
-        ? { phase: "stopping", status: "interrupted", recoveryRequired: true }
-        : { phase: "completed", status: "succeeded", recoveryRequired: false });
+    expect(f.journal().read("upgrade")).toMatchObject(
+        transactionFails
+            ? { phase: "stopping", status: "interrupted", recoveryRequired: true }
+            : { phase: "completed", status: "succeeded", recoveryRequired: false },
+    );
     // 用真实 SQLite 再次取得所有锁，证明不是仅调用了 mock 回调。
     for (const home of f.homes) realArtifactLock(home)();
     realServiceLock(f.files.stateDir)();
