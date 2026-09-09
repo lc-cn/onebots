@@ -11,6 +11,7 @@ import {
     prepareServiceProcessOwnershipSeed,
     verifyServiceMigrationProcesses,
     verifyServiceMigrationProcessesWhileLocked,
+    verifyNeverStartedServiceMigrationProcessesWhileLocked,
 } from "./service-migration-processes.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
 import {
@@ -53,6 +54,21 @@ function fixture() {
     prepareServiceProcessOwnershipSeed(workspace);
     release();
     return { workspace, control, state, save };
+}
+function rollbackFixture() {
+    const result = fixture();
+    result.state.desired = "running";
+    result.save();
+    fs.writeFileSync(
+        path.join(result.control, "migration-pending.json"),
+        JSON.stringify({
+            schemaVersion: 1,
+            operationId: "migration-test",
+            desired: "running",
+        }),
+        { mode: 0o600 },
+    );
+    return result;
 }
 async function deadPid() {
     const child = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
@@ -226,6 +242,125 @@ describe("管理服务迁移进程证明", () => {
 });
 
 describe("caller-owned workspace lock process verification", () => {
+    it("the strict rollback proof accepts only an untouched never-started receipt", async () => {
+        const f = rollbackFixture();
+        const unlock = acquireControlWorkspace(f.workspace);
+        try {
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(true);
+            const managerId = randomUUID();
+            expect(await claimServiceProcessOwnership(f.workspace, managerId, false)).toBe(true);
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+            await closeServiceProcessOwnership(f.workspace, managerId);
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+        } finally {
+            unlock();
+        }
+    });
+    it("the strict rollback proof rejects any gateway history or worker trace", async () => {
+        const f = rollbackFixture();
+        const unlock = acquireControlWorkspace(f.workspace);
+        try {
+            f.save({ ...f.state, operations: [{ status: "succeeded" }] });
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+            f.save();
+            fs.mkdirSync(path.join(f.control, "downloads"), { mode: 0o700 });
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+            fs.rmSync(path.join(f.control, "downloads"), { recursive: true });
+            fs.writeFileSync(path.join(f.control, "auth.json"), "{}", { mode: 0o600 });
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+            fs.unlinkSync(path.join(f.control, "auth.json"));
+            fs.mkdirSync(path.join(f.control, "unknown-state"), { mode: 0o700 });
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+        } finally {
+            unlock();
+        }
+    });
+    it("the strict rollback proof requires the exact migration marker set", async () => {
+        const f = rollbackFixture();
+        const unlock = acquireControlWorkspace(f.workspace);
+        const pending = path.join(f.control, "migration-pending.json");
+        try {
+            fs.unlinkSync(pending);
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+            fs.writeFileSync(
+                pending,
+                JSON.stringify({
+                    schemaVersion: 1,
+                    operationId: "migration-test",
+                    desired: "stopped",
+                }),
+                { mode: 0o600 },
+            );
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+            fs.writeFileSync(
+                pending,
+                JSON.stringify({
+                    schemaVersion: 1,
+                    operationId: "migration-test",
+                    desired: "running",
+                }),
+                { mode: 0o600 },
+            );
+            fs.writeFileSync(
+                path.join(f.control, "migration-blocked.json"),
+                JSON.stringify({ schemaVersion: 1, operationId: "foreign-operation" }),
+                { mode: 0o600 },
+            );
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+        } finally {
+            unlock();
+        }
+    });
     it("verifies inside the caller's real lock without releasing it while the wrapper remains exclusive", async () => {
         const f = fixture();
         const unlock = acquireControlWorkspace(f.workspace);

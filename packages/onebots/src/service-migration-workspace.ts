@@ -128,6 +128,39 @@ export function blockServiceMigrationWorkspace(workspace: string, operationId: s
     }
 }
 
+/** 调用方持workspace锁；只读识别标记状态，不构成恢复或重启授权。 */
+export function inspectServiceMigrationRollbackWorkspace(
+    workspace: string,
+    operationId: string,
+): "pending" | "blocked" {
+    try {
+        if (typeof operationId !== "string" || !ID.test(operationId)) throw failure();
+        const directory = path.join(workspaceRoot(workspace), ".control");
+        checkDirectory(directory);
+        const pending = readMarker(path.join(directory, MARKER));
+        if (pending.seed.operationId !== operationId || pending.seed.desired !== "running")
+            throw failure();
+        const blocked = path.join(directory, BLOCKED);
+        if (!exists(blocked)) {
+            const current = readMarker(path.join(directory, MARKER));
+            if (current.identity !== pending.identity || current.content !== pending.content)
+                throw failure();
+            return "pending";
+        }
+        const value = readBlocked(blocked);
+        if (value.operationId !== operationId) throw failure();
+        const current = readMarker(path.join(directory, MARKER));
+        const currentBlocked = readBlocked(blocked);
+        if (current.identity !== pending.identity || current.content !== pending.content)
+            throw failure();
+        if (currentBlocked.identity !== value.identity || currentBlocked.content !== value.content)
+            throw failure();
+        return "blocked";
+    } catch {
+        throw failure();
+    }
+}
+
 function workspaceRoot(workspace: string): string {
     if (
         typeof workspace !== "string" ||
@@ -178,6 +211,36 @@ function checkDirectory(directory: string): void {
         throw failure();
 }
 function readMarker(file: string) {
+    const snapshot = readPrivateFile(file);
+    return {
+        seed: parse(JSON.parse(snapshot.content)),
+        content: snapshot.content,
+        identity: snapshot.identity,
+    };
+}
+function readBlocked(file: string): { operationId: string; content: string; identity: string } {
+    const snapshot = readPrivateFile(file);
+    const value: unknown = JSON.parse(snapshot.content);
+    if (
+        !value ||
+        typeof value !== "object" ||
+        Array.isArray(value) ||
+        ![Object.prototype, null].includes(Object.getPrototypeOf(value)) ||
+        Reflect.ownKeys(value).length !== 2 ||
+        !Object.hasOwn(value, "schemaVersion") ||
+        !Object.hasOwn(value, "operationId")
+    )
+        throw failure();
+    const record = value as Record<string, unknown>;
+    if (
+        record.schemaVersion !== 1 ||
+        typeof record.operationId !== "string" ||
+        !ID.test(record.operationId)
+    )
+        throw failure();
+    return { operationId: record.operationId, ...snapshot };
+}
+function readPrivateFile(file: string): { content: string; identity: string } {
     const stat = fs.lstatSync(file);
     if (
         !stat.isFile() ||
@@ -217,11 +280,7 @@ function readMarker(file: string) {
         )
             throw failure();
         const content = new TextDecoder("utf-8", { fatal: true }).decode(buffer.subarray(0, count));
-        return {
-            seed: parse(JSON.parse(content)),
-            content,
-            identity: `${stat.dev}:${stat.ino}:${stat.ctimeMs}`,
-        };
+        return { content, identity: `${stat.dev}:${stat.ino}:${stat.ctimeMs}` };
     } finally {
         fs.closeSync(descriptor);
     }

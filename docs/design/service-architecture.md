@@ -532,3 +532,5 @@ Linux 检查已补充 musl 的系统配置与默认搜索顺序。独立、禁�
 停旧服务后、写目标文件前的中断现可显式执行 `onebots recover --operation <id> --rollback-migration`。恢复只接受已禁用且完全静止的原服务、未出现 `.control` 接管目录、原始或回退文件摘要和完整保留运行时；先记录 restoring，再恢复到保留工件，按原启用/运行意图 reload 和启动，最后以两次稳定 OS 观测结束记录。目标文件、管理工作区或启用竞态一旦出现即拒绝，不停止未知实例。macOS 的 `otool` 检查补充固定系统临时目录，避免裁剪环境产生警告而误拒绝合法二进制；launchd 冷启动后尚无可复验的旧进程组停止证明，因此默认回退入口继续拒绝，仅 Linux systemd 具备该阶段的真实内核观测契约。专项 3 个文件 68 项通过、1 项按平台跳过；迁移及管理服务相关回归在可创建 Unix socket 并保留特殊权限位的环境中 46 个文件 506 项通过、3 项按平台跳过，主包构建通过。目标已写入、目标已启动及 launchd 的冷回退仍待后续专用对账。
 
 旧 CLI 服务 application 包装现已退役：install/start/stop/restart/status/logs/uninstall/doctor 均只保留 manager/control 实现，setup 只进入统一控制 TUI，不再保留第二套配置写入器。旧包装及专用测试、旧 setup 模块一并删除，command-application 只保留运行参数、能力目录和配置读写的共享边界；相关文档与诊断提示改为当前工作区和管理服务命令。实际原生系统托管、后续冷恢复阶段和剩余旧 App/Web 路径仍未完成。
+
+目标定义写入后的冷恢复先补充失败关闭的只读基础证据，尚未开放新阶段：never-started 证明要求进程收据从未被 manager 认领、gateway 保持精确初始状态，并将 `.control` 顶层限制为锁文件和迁移种子/封锁文件的稳定清单，任何认证、socket、运行版本、worker 或未知痕迹都拒绝。回退工作区检查严格读取私有 pending/blocked 标记并复验文件身份，但 schema v1 blocked 仍只绑定操作 ID，不能作为恢复或重启授权；目标文件、备份、候选、回退来源、reload 与旧实例收据尚未形成完整闭包前，`starting-manager` 继续只读封锁。

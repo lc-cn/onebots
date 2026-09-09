@@ -1,5 +1,8 @@
 import { ConfigurationFile } from "./configuration/configuration-file.js";
-import { readServiceMigrationPending } from "./service-migration-workspace.js";
+import {
+    inspectServiceMigrationRollbackWorkspace,
+    readServiceMigrationPending,
+} from "./service-migration-workspace.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -207,6 +210,30 @@ async function quiet(control: string, neverStarted = false): Promise<boolean> {
     return gatewayQuiet(control) && (await workersQuiet(control));
 }
 
+function neverStartedQuiet(control: string): boolean {
+    const allowed = new Set([
+        "gateway.json",
+        "migration-pending.json",
+        "migration-blocked.json",
+        "process-ownership.json",
+    ]);
+    const before = fs.readdirSync(control).sort();
+    if (!before.every(name => isLock(name) || allowed.has(name))) return false;
+    const state = json(path.join(control, "gateway.json"));
+    if (
+        Object.keys(state).sort().join() !==
+            "actual,desired,operations,recoveryRequired,schemaVersion" ||
+        state.schemaVersion !== 1 ||
+        !["running", "stopped"].includes(String(state.desired)) ||
+        state.actual !== "stopped" ||
+        state.recoveryRequired !== false ||
+        !Array.isArray(state.operations) ||
+        state.operations.length !== 0
+    )
+        return false;
+    return before.join("\n") === fs.readdirSync(control).sort().join("\n");
+}
+
 /** 调用前 OS 驱动已确认主服务静止。这里只读探测历史 PID/PGID，不删除 owner 或杀进程。 */
 export async function verifyServiceMigrationProcesses(workspace: string): Promise<boolean> {
     let release: (() => void) | undefined;
@@ -233,6 +260,28 @@ export async function verifyServiceMigrationProcessesWhileLocked(
         const receipt = readReceipt(control);
         if (receipt.pid !== null && !gone(receipt.pid)) return false;
         return await quiet(control, receipt.phase === "never-started");
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * 调用方持workspace锁；只接受迁移写目标时创建、且从未被manager认领的进程种子。
+ * active/closed都表示目标管理程序可能执行过业务动作，不能用于冷回退证明。
+ */
+export async function verifyNeverStartedServiceMigrationProcessesWhileLocked(
+    workspace: string,
+    operationId: string,
+): Promise<boolean> {
+    try {
+        const workspaceState = inspectServiceMigrationRollbackWorkspace(workspace, operationId);
+        const control = root(workspace);
+        const receipt = readReceipt(control);
+        if (receipt.phase !== "never-started" || !neverStartedQuiet(control)) return false;
+        return (
+            readReceipt(control).phase === "never-started" &&
+            inspectServiceMigrationRollbackWorkspace(workspace, operationId) === workspaceState
+        );
     } catch {
         return false;
     }

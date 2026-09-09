@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     prepareServiceMigrationWorkspace,
     blockServiceMigrationWorkspace,
+    inspectServiceMigrationRollbackWorkspace,
     readServiceMigrationPending,
     releaseServiceMigrationPending,
 } from "./service-migration-workspace.js";
@@ -126,7 +127,9 @@ it("rollback blockade preserves pending/auth/gateway and permanently rejects rea
     try {
         expect(() => blockServiceMigrationWorkspace(root, "other-operation")).toThrow();
         expect(fs.existsSync(path.join(directory, "migration-blocked.json"))).toBe(false);
+        expect(inspectServiceMigrationRollbackWorkspace(root, "operation-1")).toBe("pending");
         blockServiceMigrationWorkspace(root, "operation-1");
+        expect(inspectServiceMigrationRollbackWorkspace(root, "operation-1")).toBe("blocked");
         expect(() => readServiceMigrationPending(root)).toThrow();
         expect(() => releaseServiceMigrationPending(root, "operation-1")).toThrow();
         expect(() => blockServiceMigrationWorkspace(root, "operation-1")).toThrow();
@@ -147,6 +150,7 @@ it("any blocked trace including corrupted or dangling entries forbids reuse and 
     const blocked = path.join(root, ".control/migration-blocked.json");
     fs.writeFileSync(blocked, "synthetic-unknown");
     expect(() => blockServiceMigrationWorkspace(root, "operation-1")).toThrow();
+    expect(() => inspectServiceMigrationRollbackWorkspace(root, "operation-1")).toThrow();
     expect(fs.readFileSync(blocked, "utf8")).toBe("synthetic-unknown");
     expect(() => readServiceMigrationPending(root)).toThrow();
     expect(() => releaseServiceMigrationPending(root, "operation-1")).toThrow();
@@ -156,4 +160,26 @@ it("any blocked trace including corrupted or dangling entries forbids reuse and 
     expect(() => releaseServiceMigrationPending(root, "operation-1")).toThrow();
     expect(() => blockServiceMigrationWorkspace(root, "operation-1")).toThrow();
     expect(fs.lstatSync(blocked).isSymbolicLink()).toBe(true);
+});
+it("rollback workspace inspection rejects stopped seeds", () => {
+    const root = fixture();
+    prepareServiceMigrationWorkspace(root, "operation-1", "stopped");
+    expect(() => inspectServiceMigrationRollbackWorkspace(root, "operation-1")).toThrow();
+});
+it("rollback workspace inspection rejects non-exact private block records", () => {
+    const root = fixture();
+    prepareServiceMigrationWorkspace(root, "operation-1", "running");
+    const blocked = path.join(root, ".control/migration-blocked.json");
+    fs.writeFileSync(
+        blocked,
+        JSON.stringify({ schemaVersion: 1, operationId: "other-operation" }),
+        { mode: 0o600 },
+    );
+    expect(() => inspectServiceMigrationRollbackWorkspace(root, "operation-1")).toThrow();
+    expect(() => blockServiceMigrationWorkspace(root, "operation-1")).toThrow();
+    fs.unlinkSync(blocked);
+    fs.writeFileSync(blocked, JSON.stringify({ schemaVersion: 1, operationId: "operation-1" }));
+    fs.chmodSync(blocked, 0o644);
+    expect(() => inspectServiceMigrationRollbackWorkspace(root, "operation-1")).toThrow();
+    expect(() => blockServiceMigrationWorkspace(root, "operation-1")).toThrow();
 });
