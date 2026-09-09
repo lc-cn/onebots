@@ -48,7 +48,7 @@ import { acquireRuntimeOperation, type RuntimeOperation } from "./runtime-operat
 import { createAccountWithRouteScope } from "./scoped-account.js";
 import { closeAdapterRouteScope } from "./scoped-adapter.js";
 import { listenHttpServer } from "./http-listener.js";
-import { getHostLifecycleState } from "./host-lifecycle-state.js";
+import { getHostLifecycleState, type ManagedRuntimeStart } from "./host-lifecycle-state.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -490,22 +490,53 @@ export class BaseApp extends Koa {
     }
 
     start(): Promise<void> {
-        const state = getHostLifecycleState(this);
         try {
-            this.assertCanStart();
+            this.ensureStartup();
+            return getHostLifecycleState(this).starting!;
         } catch (error) {
             return Promise.reject(error);
         }
-        if (state.starting) return state.starting;
-        if (this.isStarted) return Promise.resolve();
-        const controller = new AbortController();
-        state.controller = controller;
-        // 先保存共享任务，再运行扩展，防止同步钩子重入启动。
-        state.starting = Promise.resolve().then(() => this.startAttempt(controller.signal));
-        return state.starting;
     }
 
-    private async startAttempt(signal: AbortSignal): Promise<void> {
+    /** 私有管理传输就绪；账号与协议仍由 accountsSettled 表达完成状态。 */
+    protected startManagedRuntime(): Promise<ManagedRuntimeStart> {
+        try {
+            this.router.enableProtocolReadiness();
+            this.ensureStartup();
+            return getHostLifecycleState(this).managed!;
+        } catch (error) {
+            return Promise.reject(error);
+        }
+    }
+
+    private ensureStartup(): void {
+        this.assertCanStart();
+        const state = getHostLifecycleState(this);
+        if (state.starting) return;
+        const controller = new AbortController();
+        state.controller = controller;
+        let resolveReady!: () => void;
+        let rejectReady!: (error: unknown) => void;
+        const ready = new Promise<void>((resolve, reject) => {
+            resolveReady = resolve;
+            rejectReady = reject;
+        });
+        // 先保存共享任务，再运行扩展，防止同步钩子重入启动。
+        state.starting = Promise.resolve().then(() =>
+            this.startAttempt(controller.signal, resolveReady),
+        );
+        state.managed = ready.then(() => {
+            controller.signal.throwIfAborted();
+            return { accountsSettled: state.starting! };
+        });
+        // 两种入口只会等待其中一个任务；内部观察拒绝不改变调用者收到的结果。
+        void state.starting.catch(rejectReady);
+        void state.managed.catch(() => {
+            // 启动失败已由 startAttempt 回滚并记录；取消由停止任务负责。
+        });
+    }
+
+    private async startAttempt(signal: AbortSignal, markManagedReady: () => void): Promise<void> {
         const stopTimer = this.enhancedLogger.start("Application start");
         try {
             signal.throwIfAborted();
@@ -522,6 +553,8 @@ export class BaseApp extends Koa {
                 `Server listening at http://${listeningHost.includes(":") ? `[${listeningHost}]` : listeningHost}:${listeningPort}${this.config.path || "/"}`,
                 { port: listeningPort, path: this.config.path },
             );
+            signal.throwIfAborted();
+            markManagedReady();
             await this.startAdapters(false, signal);
             signal.throwIfAborted();
             this.isStarted = true;

@@ -59,6 +59,11 @@ export class GatewayApp extends BaseApp {
         return listenHttpServer(this.httpServer, { host: "127.0.0.1", port: 0 }, signal);
     }
 
+    /** 管理传输就绪不代表账号登录或协议启动已完成。 */
+    startManaged(): Promise<{ accountsSettled: Promise<void> }> {
+        return this.startManagedRuntime();
+    }
+
     /** 配置快照属于管理服务，网关不允许通过账号 API 回写。 */
     protected override assertAccountConfigSourceCurrent(): void {
         throw new Error("网关配置由管理服务管理，请通过控制接口提交配置");

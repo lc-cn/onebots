@@ -128,12 +128,16 @@ describe("独立网关 IPC", () => {
                 0o600,
             );
         }
-        const response = await fetch(
-            `http://127.0.0.1:${ready.address.port}/mock/bot/onebot/v11/get_login_info`,
-            { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
-        );
-        expect(response.status).toBe(200);
-        expect(await response.json()).toMatchObject({ status: "ok", retcode: 0 });
+        // gateway.ready 只证明私有监听与管理通道可用，协议需观察自己的实际响应。
+        await expect
+            .poll(async () => {
+                const response = await fetch(
+                    `http://127.0.0.1:${ready.address.port}/mock/bot/onebot/v11/get_login_info`,
+                    { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+                );
+                return response.status === 200 ? response.json() : { httpStatus: response.status };
+            })
+            .toMatchObject({ status: "ok", retcode: 0 });
         const exited = once(child, "exit");
         child.disconnect();
         expect((await exited)[0]).toBe(0);

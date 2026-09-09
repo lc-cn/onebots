@@ -10,6 +10,7 @@ afterEach(() => {
     for (const session of cleanups.splice(0)) session.close();
 });
 class Protocol extends EventEmitter {
+    lifecycleStatus = "ready";
     name = "mcp";
     version = "v1";
     handleStdioMessage = vi.fn(async (text: string): Promise<string | null> => {
@@ -50,6 +51,37 @@ async function initialize(sessions: GatewayMcpSessions, id: string) {
         message: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
     });
 }
+it("pending protocols cannot open sessions; losing readiness invalidates existing sessions", async () => {
+    const f = fixture();
+    const id = randomUUID();
+    f.protocol.lifecycleStatus = "pending";
+    await expect(f.sessions.request({ action: "open", sessionId: id })).rejects.toThrow();
+    expect(f.protocol.listenerCount("mcp.notification")).toBe(0);
+    f.protocol.lifecycleStatus = "ready";
+    await f.sessions.request({ action: "open", sessionId: id });
+    f.protocol.lifecycleStatus = "stopping";
+    await expect(f.sessions.request({ action: "poll", sessionId: id })).rejects.toThrow();
+    expect(f.protocol.listenerCount("mcp.notification")).toBe(0);
+    expect(f.protocol.handleStdioMessage).not.toHaveBeenCalled();
+});
+it("a protocol stopped during exchange cannot return a late successful response", async () => {
+    const f = fixture();
+    const id = randomUUID();
+    await f.sessions.request({ action: "open", sessionId: id });
+    const pending = Promise.withResolvers<string | null>();
+    f.protocol.handleStdioMessage.mockReturnValueOnce(pending.promise);
+    const result = expect(
+        f.sessions.request({
+            action: "exchange",
+            sessionId: id,
+            message: "{}",
+        }),
+    ).rejects.toThrow("MCP 消息处理失败");
+    f.protocol.lifecycleStatus = "stopped";
+    pending.resolve("{}");
+    await result;
+    expect(f.protocol.listenerCount("mcp.notification")).toBe(0);
+});
 it("only uses configured accounts and preserves slash suffix; close only removes its listener", async () => {
     const f = fixture(true),
         id = randomUUID();

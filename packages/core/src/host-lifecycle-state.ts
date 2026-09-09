@@ -1,6 +1,12 @@
+export interface ManagedRuntimeStart {
+    /** 与 BaseApp.start() 相同的完整账号启动任务。 */
+    accountsSettled: Promise<void>;
+}
+
 interface HostLifecycleState {
     controller?: AbortController;
     starting?: Promise<void>;
+    managed?: Promise<ManagedRuntimeStart>;
     stopping?: Promise<void>;
 }
 

@@ -207,7 +207,13 @@ export class Account<
         for (const protocol of this.protocols) {
             protocol.lifecycleStatus = "starting";
             try {
-                await protocol.start(signal);
+                const router = this.adapter.app.router;
+                await (router
+                    ? router.runWithProtocolReadiness(
+                          () => protocol.lifecycleStatus === "ready",
+                          () => protocol.start(signal),
+                      )
+                    : protocol.start(signal));
                 this.#assertStartCurrent(generation);
                 protocol.lifecycleStatus = "ready";
             } catch (error) {

@@ -187,6 +187,9 @@ export class Router extends KoaRouter {
     private readonly wsOwners = new Map<string, RouterRegistrationOwner>();
     private readonly registrationScope = new AsyncLocalStorage<RouterRegistrationScope>();
     private readonly httpOwners = new WeakMap<Layer, RouterRegistrationOwner>();
+    private readonly readinessScope = new AsyncLocalStorage<() => boolean>();
+    private readonly wsReadiness = new Map<string, () => boolean>();
+    private enforceReadiness = false;
     private registrationDepth = 0;
     private upgradeHandler?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
 
@@ -211,6 +214,11 @@ export class Router extends KoaRouter {
             const wsServer = this.wsMap.get(pathname);
             if (!wsServer) {
                 this.rejectUpgrade(socket, 404, "Not Found");
+                return;
+            }
+
+            if (!this.routeIsReady(this.wsReadiness.get(pathname))) {
+                this.rejectUpgrade(socket, 503, "Service Unavailable", { "Retry-After": "1" });
                 return;
             }
 
@@ -285,6 +293,26 @@ export class Router extends KoaRouter {
         return this.registrationScope.run(scope, operation);
     }
 
+    /** 分阶段宿主启用协议接入闸门；普通嵌入式启动保留既有契约。 */
+    enableProtocolReadiness(): void {
+        this.enforceReadiness = true;
+    }
+
+    /** 独立于账号清理作用域，仅给协议构造/启动注册的路由附加就绪条件。 */
+    runWithProtocolReadiness<T>(ready: () => boolean, operation: () => T): T {
+        return this.readinessScope.run(ready, operation);
+    }
+
+    private routeIsReady(ready?: () => boolean): boolean {
+        if (!this.enforceReadiness || !ready) return true;
+        try {
+            return ready();
+        } catch {
+            // 生命周期判断异常时拒绝接入，不暴露扩展异常。
+            return false;
+        }
+    }
+
     override register(
         path: string | RegExp | string[],
         methods: string[],
@@ -301,6 +329,17 @@ export class Router extends KoaRouter {
             const result = super.register(path, methods, middleware, additionalOptions);
             const addedLayers = this.stack.filter(layer => !previousLayers.has(layer));
             const scope = this.registrationScope.getStore();
+            const ready = this.readinessScope.getStore();
+            if (ready) {
+                for (const layer of addedLayers) {
+                    layer.stack.unshift(async (ctx, next) => {
+                        if (this.routeIsReady(ready)) return next();
+                        ctx.set("Retry-After", "1");
+                        ctx.status = 503;
+                        ctx.body = "协议尚未就绪";
+                    });
+                }
+            }
             this.assertNoHttpRouteConflicts(addedLayers, previousLayers, scope?.owner);
             if (scope) {
                 for (const layer of addedLayers) scope.trackHttp(layer);
@@ -379,6 +418,8 @@ export class Router extends KoaRouter {
             maxPayload: maxPayloadBytes,
         });
         this.wsMap.set(normalized, wsServer);
+        const ready = this.readinessScope.getStore();
+        if (ready) this.wsReadiness.set(normalized, ready);
         this.wsCapacityRejections.set(normalized, 0);
         if (options.authorize) this.wsAuthorizers.set(normalized, options.authorize);
         if (options.maxConnections !== undefined) {
@@ -434,6 +475,7 @@ export class Router extends KoaRouter {
         if (!wsServer) return false;
 
         this.wsMap.delete(normalized);
+        this.wsReadiness.delete(normalized);
         this.wsAuthorizers.delete(normalized);
         this.wsConnectionLimits.delete(normalized);
         this.wsCapacityRejections.delete(normalized);
@@ -448,6 +490,7 @@ export class Router extends KoaRouter {
         this.detachUpgradeHandler();
         const servers = [...this.wsMap.values()];
         this.wsMap.clear();
+        this.wsReadiness.clear();
         this.wsAuthorizers.clear();
         this.wsConnectionLimits.clear();
         this.wsCapacityRejections.clear();
@@ -463,6 +506,7 @@ export class Router extends KoaRouter {
         this.detachUpgradeHandler();
         const servers = [...this.wsMap.values()];
         this.wsMap.clear();
+        this.wsReadiness.clear();
         this.wsAuthorizers.clear();
         this.wsConnectionLimits.clear();
         this.wsCapacityRejections.clear();

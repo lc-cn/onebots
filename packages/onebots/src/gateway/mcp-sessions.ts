@@ -8,6 +8,7 @@ import {
     type GatewayMcpResult,
 } from "./mcp-contracts.js";
 interface McpProtocol {
+    lifecycleStatus: string;
     handleStdioMessage(message: string): Promise<string | null>;
     on(event: string, callback: (message: string) => void): unknown;
     off(event: string, callback: (message: string) => void): unknown;
@@ -58,7 +59,12 @@ export class GatewayMcpSessions {
                     )
                         continue;
                     for (const protocol of account.protocols) {
-                        if (protocol.name !== "mcp" || protocol.version !== "v1") continue;
+                        if (
+                            protocol.name !== "mcp" ||
+                            protocol.version !== "v1" ||
+                            protocol.lifecycleStatus !== "ready"
+                        )
+                            continue;
                         if (
                             typeof (protocol as unknown as McpProtocol).handleStdioMessage ===
                             "function"
@@ -80,6 +86,10 @@ export class GatewayMcpSessions {
                 overflow: false,
             };
             session.listener = message => {
+                if (session.protocol.lifecycleStatus !== "ready") {
+                    this.remove(sessionId);
+                    return;
+                }
                 if (!session.initialized || !this.sessions.has(sessionId)) return;
                 const size = typeof message === "string" ? Buffer.byteLength(message) : Infinity;
                 if (
@@ -100,6 +110,10 @@ export class GatewayMcpSessions {
         }
         const session = this.sessions.get(sessionId);
         if (!session) throw new Error(MCP_ERRORS[4]);
+        if (session.protocol.lifecycleStatus !== "ready") {
+            this.remove(sessionId);
+            throw new Error(MCP_ERRORS[4]);
+        }
         session.touched = this.now();
         if (session.overflow) {
             this.remove(sessionId);
@@ -134,6 +148,10 @@ export class GatewayMcpSessions {
 
             const message = await session.protocol.handleStdioMessage(request.message!);
             if (this.sessions.get(sessionId) !== session) throw new Error();
+            if (session.protocol.lifecycleStatus !== "ready") {
+                this.remove(sessionId);
+                throw new Error();
+            }
             if (message !== null && typeof message !== "string") throw new Error();
             if (!mcpFrameFits({ message, padding: " ".repeat(1024) })) throw new Error();
             try {

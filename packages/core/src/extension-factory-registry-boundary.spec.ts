@@ -16,7 +16,7 @@ describe("extension factory registry boundary", () => {
     });
 
     it("拒绝协议工厂注册其他扩展并恢复原注册表", () => {
-        const adapter = {} as Adapter;
+        const adapter = { app: {} } as unknown as Adapter;
         const account = {} as Account;
         AdapterRegistry.register("stable", inertAdapterFactory);
         ProtocolRegistry.register("expected", "v1", (() => {
@@ -56,7 +56,7 @@ describe("extension factory registry boundary", () => {
     });
 
     it("允许实例工厂执行没有改变状态的幂等注册", () => {
-        const adapter = {} as Adapter;
+        const adapter = { app: {} } as unknown as Adapter;
         const account = {} as Account;
         const factory = (() => {
             ProtocolRegistry.register("expected", "v1", factory);
@@ -71,7 +71,7 @@ describe("extension factory registry boundary", () => {
     });
 
     it("注册表恢复失败时同时保留边界错误和恢复错误", () => {
-        const adapter = {} as Adapter;
+        const adapter = { app: {} } as unknown as Adapter;
         const account = {} as Account;
         ProtocolRegistry.register("expected", "v1", (() => {
             AdapterRegistry.register("ghost", inertAdapterFactory);

@@ -84,7 +84,7 @@ async function start(message: GatewayStartMessage): Promise<void> {
         if (stopping) return;
         validateRuntimeConfig(config);
         app = new GatewayApp(config);
-        await app.start();
+        const { accountsSettled } = await app.startManaged();
         if (stopping) return;
         const address = app.httpServer.address();
         if (!address || typeof address === "string" || address.address !== "127.0.0.1") {
@@ -105,7 +105,14 @@ async function start(message: GatewayStartMessage): Promise<void> {
             dependencyVersion: message.dependencyVersion,
             address: { host: "127.0.0.1", port: address.port },
         });
+        // 继续观察受管账号任务；ready 只表示私有管理通道可用。
+        await accountsSettled;
     } catch (error) {
+        // 已由停止路径接管时，不重复报告启动失败或重新清理。
+        if (stopping) return;
+        stopping = true;
+        sendExecutor?.close();
+        mcpSessions?.close();
         failure("START_FAILED", "网关启动失败，请检查配置与依赖版本");
         process.stderr.write("[onebots] 网关启动失败，请检查配置与依赖版本\n");
         // 父进程以退出码判定失败，不发布任何可能含凭据的错误对象。

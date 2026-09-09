@@ -260,7 +260,7 @@ describe("extension registries", () => {
     });
 
     it("rejects a protocol factory whose runtime identity differs from registration", () => {
-        const adapter = {} as Adapter;
+        const adapter = { app: {} } as unknown as Adapter;
         const account = {} as Account;
         ProtocolRegistry.register("expected", "v1", (() =>
             fakeProtocol(adapter, account, "expected", "v2")) as unknown as Protocol.Factory);
@@ -271,7 +271,7 @@ describe("extension registries", () => {
     });
 
     it("rejects a protocol factory detached from the current account", () => {
-        const adapter = {} as Adapter;
+        const adapter = { app: {} } as unknown as Adapter;
         const account = {} as Account;
         const otherAccount = {} as Account;
         ProtocolRegistry.register("expected", "v1", (() =>
@@ -283,7 +283,7 @@ describe("extension registries", () => {
     });
 
     it("rejects a protocol factory that omits a required runtime method", () => {
-        const adapter = {} as Adapter;
+        const adapter = { app: {} } as unknown as Adapter;
         const account = {} as Account;
         const protocol = fakeProtocol(adapter, account, "expected", "v1");
         Reflect.deleteProperty(protocol, "apply");
@@ -299,7 +299,7 @@ describe("extension registries", () => {
     });
 
     it("rejects a protocol factory whose path configuration claims another identity", () => {
-        const adapter = {} as Adapter;
+        const adapter = { app: {} } as unknown as Adapter;
         const account = {} as Account;
         const protocol = fakeProtocol(adapter, account, "expected", "v1");
         protocol.config.protocol = "other";

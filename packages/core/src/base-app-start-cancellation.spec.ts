@@ -16,6 +16,7 @@ function deferred() {
 }
 
 class TestApp extends BaseApp {
+    startManaged() { return this.startManagedRuntime(); }
     listen = vi.fn(async (_signal?: AbortSignal) => undefined);
     protected override listenHttpServer(signal?: AbortSignal): Promise<void> {
         return this.listen(signal);
@@ -185,4 +186,80 @@ describe("BaseApp startup cancellation", () => {
         expect(stopHook).toHaveBeenCalledOnce();
         expect(app.isDisposed).toBe(true);
     });
+    it("shares both startup entries while management becomes ready before accounts", async () => {
+        const app = createApp();
+        const pending = deferred();
+        const adapter = new TestAdapter(app);
+        adapter.startTask.mockImplementation(() => pending.promise);
+        app.adapters.set("mock", adapter);
+        const managed = app.startManaged();
+        const started = app.start();
+        expect(app.startManaged()).toBe(managed);
+        expect(app.start()).toBe(started);
+        const runtime = await managed;
+        expect(runtime.accountsSettled).toBe(started);
+        expect(app.isStarted).toBe(false);
+        expect(app.listen).toHaveBeenCalledOnce();
+        expect(adapter.startTask).toHaveBeenCalledOnce();
+        pending.resolve();
+        await runtime.accountsSettled;
+        expect(app.isStarted).toBe(true);
+        expect(app.startManaged()).toBe(managed);
+        expect(app.start()).toBe(started);
+    });
+
+    it.each(["lifecycle", "http"])("rejects both entries and rolls back once when %s fails", async phase => {
+        const app = createApp();
+        const onStop = vi.fn();
+        app.lifecycle.addHook({ onStop });
+        if (phase === "lifecycle") {
+            app.lifecycle.addHook({ onStart: () => { throw new Error("阶段失败"); } });
+        } else {
+            app.listen.mockRejectedValue(new Error("阶段失败"));
+        }
+        const complete = expect(app.start()).rejects.toThrow("阶段失败");
+        const managed = expect(app.startManaged()).rejects.toThrow("阶段失败");
+        await Promise.all([complete, managed]);
+        expect(onStop).toHaveBeenCalledOnce();
+        expect(app.isDisposed).toBe(true);
+    });
+
+    it("cannot publish management readiness after stop wins an in-flight bind", async () => {
+        const app = createApp();
+        const pending = deferred();
+        const entered = deferred();
+        app.listen.mockImplementation(() => { entered.resolve(); return pending.promise; });
+        const managed = expect(app.startManaged()).rejects.toMatchObject({ name: "AbortError" });
+        const complete = expect(app.start()).rejects.toMatchObject({ name: "AbortError" });
+        await entered.promise;
+        await app.stop();
+        pending.resolve();
+        await Promise.all([managed, complete]);
+        expect(app.isStarted).toBe(false);
+    });
+
+    it("keeps account completion cancelled after management readiness and stop", async () => {
+        const app = createApp();
+        const pending = deferred();
+        const adapter = new TestAdapter(app);
+        adapter.startTask.mockImplementation(() => pending.promise);
+        app.adapters.set("mock", adapter);
+        const runtime = await app.startManaged();
+        const complete = expect(runtime.accountsSettled).rejects.toMatchObject({ name: "AbortError" });
+        await app.stop();
+        pending.resolve();
+        await complete;
+        expect(app.isDisposed).toBe(true);
+        expect(app.isStarted).toBe(false);
+    });
+
+    it("observes an unused managed task when the legacy entry fails", async () => {
+        const app = createApp();
+        app.listen.mockRejectedValue(new Error("监听失败"));
+        await expect(app.start()).rejects.toThrow("监听失败");
+        // Vitest also fails this test run for any unhandled rejection from the unused phase.
+        await new Promise<void>(resolve => setImmediate(resolve));
+        expect(app.isDisposed).toBe(true);
+    });
+
 });
