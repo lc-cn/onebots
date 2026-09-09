@@ -174,7 +174,6 @@ export {
 } from "@onebots/core";
 
 export * from "./installation.js";
-export { createLocalInstallationBackend } from "./installation-local.js";
 export {
     createDockerRequestBackend,
     readInstallationRequest,

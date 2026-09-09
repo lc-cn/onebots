@@ -65,9 +65,7 @@ describe("Docker 构建上下文", () => {
         expect(dockerfile).toContain(
             "COPY --chown=node:node scripts/docker-healthcheck.mjs ./scripts/docker-healthcheck.mjs",
         );
-        expect(dockerfile).toContain(
-            "COPY --chown=node:node scripts/docker-extension-runtime.mjs scripts/docker-extension-release.mjs scripts/docker-extension-installer.mjs ./scripts/",
-        );
+        expect(dockerfile).not.toContain("docker-extension-");
         expect(dockerfile).toContain(
             'HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "/app/scripts/docker-healthcheck.mjs"]',
         );
