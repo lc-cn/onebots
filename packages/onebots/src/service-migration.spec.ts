@@ -9,6 +9,14 @@ import { renderSystemdUnit, renderLaunchdPlist, type ServiceSpec } from "./servi
 import { verifyRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import { cancelUnstartedServiceMigration } from "./service-migration-recovery.js";
 import { inspectServiceMigrationRecovery } from "./service-recovery-inspection.js";
+import { prepareServiceMigrationManagerCandidate } from "./service-migration-manager-candidate.js";
+vi.mock("./service-migration-manager-candidate.js", () => ({
+    prepareServiceMigrationManagerCandidate: vi.fn(),
+}));
+// 此入口套件注入候选准备/证明，真实下载与双证明由候选安装及产物套件验收。
+vi.mock("./manager-service-upgrade-candidate.js", () => ({
+    verifyManagerServiceCandidate: vi.fn(),
+}));
 import { readServiceMigrationPending } from "./service-migration-workspace.js";
 import { verifyServiceMigrationProcesses } from "./service-migration-processes.js";
 import { FileServiceMigrationJournal } from "./service-migration-journal.js";
@@ -18,6 +26,7 @@ import type { ManagerServiceSpec } from "./manager-service-spec.js";
 const roots: string[] = [];
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(prepareServiceMigrationManagerCandidate).mockReset();
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 function fixture() {
@@ -54,13 +63,17 @@ function fixture() {
     });
     const bin = path.join(install, "bin.js");
     fs.writeFileSync(bin, "export {};\n", { mode: 0o600 });
+    // 旧安装夹具拥有自己的受保护Node，不依赖CI工具缓存的可写权限约定。
+    const legacyNode = path.join(root, "legacy-node");
+    fs.copyFileSync(process.execPath, legacyNode, fs.constants.COPYFILE_FICLONE);
+    fs.chmodSync(legacyNode, 0o700);
     const legacy: ServiceSpec = {
         scope: "user",
         configPath: path.join(workspace, "old.yaml"),
         adapters: [],
         protocols: [],
         applications: [],
-        nodePath: process.execPath,
+        nodePath: legacyNode,
         binPath: bin,
         workingDirectory: workspace,
     };
@@ -94,6 +107,27 @@ function fixture() {
         host: "127.0.0.1",
         port: 6727,
     };
+    vi.mocked(prepareServiceMigrationManagerCandidate).mockImplementation(
+        async (backup, stateDirectory, id) => {
+            expect(
+                JSON.parse(
+                    fs.readFileSync(
+                        path.join(stateDirectory, "migrations", `${id}.journal.json`),
+                        "utf8",
+                    ),
+                ).phase,
+            ).toBe("preparing-manager");
+            expect(osEffects).toEqual([]);
+            const directory = path.join(stateDirectory, "manager-artifacts");
+            fs.mkdirSync(directory, { mode: 0o700 });
+            const candidateBin = path.join(directory, "candidate.js");
+            fs.writeFileSync(candidateBin, "export {};", { mode: 0o600 });
+            return {
+                spec: { ...backup.target, binPath: candidateBin, workingDirectory: directory },
+                digest: "a".repeat(64),
+            };
+        },
+    );
     let state: ServicePlatformState = {
         state: "stopped",
         running: false,
@@ -188,6 +222,10 @@ describe("installed service migration entry", () => {
             expect(journal.read(result.id)).toEqual(result);
             expect(journal.backup(result).previousRunning).toBe(false);
             const retained = journal.backup(result).retainedRuntime!;
+            expect(journal.backup(result).targetCandidateDigest).toBe("a".repeat(64));
+            expect(journal.backup(result).target.workingDirectory).not.toBe(
+                test.legacy.workingDirectory,
+            );
             expect(retained.schemaVersion).toBe(2);
             expect(retained.original).toEqual(test.legacy);
             expect(retained.rollback.configPath).toBe(test.legacy.configPath);
@@ -197,6 +235,38 @@ describe("installed service migration entry", () => {
             );
             expect(fs.readFileSync(test.legacy.configPath, "utf8")).toBe(test.config);
             expect(fs.readFileSync(test.unrelated, "utf8")).toBe("synthetic-unrelated");
+        },
+        120_000,
+    );
+    it.skipIf(process.platform === "win32")(
+        "rejects candidate changes to the requested service contract before stopping",
+        async () => {
+            const test = fixture();
+            const prepare = vi
+                .mocked(prepareServiceMigrationManagerCandidate)
+                .getMockImplementation()!;
+            vi.mocked(prepareServiceMigrationManagerCandidate).mockImplementation(
+                async (...args) => {
+                    const candidate = await prepare(...args);
+                    return { ...candidate, spec: { ...candidate.spec, port: 7001 } };
+                },
+            );
+            const result = await migrateInstalledService(test.target, test.host);
+            expect(result).toMatchObject({
+                phase: "preparing-manager",
+                status: "interrupted",
+                recoveryRequired: true,
+            });
+            expect(test.osEffects).toEqual([]);
+            const journal = new FileServiceMigrationJournal(
+                path.join(test.files.stateDir, "migrations"),
+            );
+            expect(journal.backup(result).target).toEqual(test.target);
+            expect(journal.backup(result).targetCandidateDigest).toBeUndefined();
+            expect(journal.backup(result).retainedRuntime).toBeDefined();
+            const cancelled = await cancelUnstartedServiceMigration(result.id, "user", test.host);
+            expect(cancelled.phase).toBe("cancelled");
+            expect(test.osEffects).toEqual([]);
         },
         120_000,
     );

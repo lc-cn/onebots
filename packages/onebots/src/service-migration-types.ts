@@ -4,6 +4,7 @@ import type { RetainedLegacyRuntime } from "./service-migration-retained-runtime
 export type ServiceMigrationPhase =
     | "prepared"
     | "capturing-runtime"
+    | "preparing-manager"
     | "stopping-old"
     | "writing-target"
     | "starting-manager"
@@ -29,6 +30,8 @@ export interface ServiceMigrationBackup {
     files: ServiceMigrationFile[];
     /** 新捕获的旧工件；历史记录缺失时仍可只读，但不能据此宣称旧运行闭包已保留。 */
     retainedRuntime?: RetainedLegacyRuntime;
+    /** 绑定目标管理程序的双验证收据摘要，不将当前CLI目录视为不可变工件。 */
+    targetCandidateDigest?: string;
 }
 export interface ServiceMigrationRecord {
     schemaVersion: 1;

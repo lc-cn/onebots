@@ -9,8 +9,6 @@ import { createServiceMigrationConfig } from "./service-migration-config.js";
 export function prepareServiceMigration(legacy: ServiceSpec, input: ManagerServiceSpec) {
     const target = parseManagerServiceSpec(input);
     if (legacy.scope !== target.scope) throw new Error("迁移不能同时改变系统托管范围");
-    if (path.resolve(legacy.workingDirectory) !== target.workingDirectory)
-        throw new Error("迁移不能同时改变旧服务工作目录");
     const workspace = fs.realpathSync(target.workspace);
     const sourcePath = fs.realpathSync(legacy.configPath);
     if (

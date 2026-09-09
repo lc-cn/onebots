@@ -40,7 +40,7 @@ export async function cancelUnstartedServiceMigration(
         if (
             !record.recoveryRequired ||
             record.status !== "interrupted" ||
-            !["prepared", "capturing-runtime"].includes(record.phase) ||
+            !["prepared", "capturing-runtime", "preparing-manager"].includes(record.phase) ||
             record.rolledBack
         )
             throw failure();
@@ -52,7 +52,11 @@ export async function cancelUnstartedServiceMigration(
                 ? new SystemdServicePlatform(host, scope, paths.definition)
                 : new LaunchdServicePlatform(host, scope, paths.definition));
         const current = await captureServiceMigration(backup.target, host, inspector);
-        const { retainedRuntime: _retained, ...original } = backup;
+        const {
+            retainedRuntime: _retained,
+            targetCandidateDigest: _candidate,
+            ...original
+        } = backup;
         if (!isDeepStrictEqual(current, original) || !isDeepStrictEqual(journal.read(id), record))
             throw failure();
         // 早期阶段证明本操作未派发OS变更；这里只结束原意图，绝不声称做过回滚。

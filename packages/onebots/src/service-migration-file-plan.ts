@@ -46,7 +46,6 @@ export function createServiceMigrationFilePlan(
             !original ||
             original.path !== legacy.configPath ||
             path.dirname(legacy.configPath) !== target.workspace ||
-            legacy.workingDirectory !== target.workingDirectory ||
             legacy.scope !== target.scope
         )
             throw new Error();

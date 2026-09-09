@@ -3,7 +3,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { parseLegacyServiceSpec } from "./service-metadata.js";
-import { parseManagerServiceSpec } from "./manager-service-spec.js";
+import { parseManagerServiceSpec, type ManagerServiceSpec } from "./manager-service-spec.js";
 import { parseRetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import type { RetainedLegacyRuntime } from "./service-migration-retained-runtime.js";
 import type {
@@ -18,6 +18,7 @@ const LIMIT = 8 * 1024 * 1024;
 const phases = [
     "prepared",
     "capturing-runtime",
+    "preparing-manager",
     "stopping-old",
     "writing-target",
     "starting-manager",
@@ -183,6 +184,47 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
             throw invalid();
         }
     }
+    bindManagerCandidate(
+        record: ServiceMigrationRecord,
+        input: ManagerServiceSpec,
+        digest: string,
+    ): ServiceMigrationRecord {
+        try {
+            this.checkDirectory();
+            const previous = this.read(record.id);
+            if (
+                canonical(previous) !== canonical(record) ||
+                previous.phase !== "preparing-manager" ||
+                previous.status !== "running" ||
+                previous.recoveryRequired ||
+                !HASH.test(digest)
+            )
+                throw invalid();
+            const original = this.backup(previous);
+            if (!original.retainedRuntime || original.targetCandidateDigest) throw invalid();
+            const target = parseManagerServiceSpec(input);
+            if (
+                !isDeepStrictEqual(target, {
+                    ...original.target,
+                    binPath: target.binPath,
+                    workingDirectory: target.workingDirectory,
+                })
+            )
+                throw invalid();
+            const backup = parseBackup({ ...original, target, targetCandidateDigest: digest });
+            const content = canonical(backup);
+            const backupDigest = hash(content);
+            const file = this.backupFile(backupDigest);
+            if (!exists(file)) atomic(file, content, 0o400);
+            const next: ServiceMigrationRecord = { ...previous, backupDigest, phase: "prepared" };
+            this.backup(next);
+            if (canonical(this.read(record.id)) !== canonical(previous)) throw invalid();
+            atomic(this.file(record.id), canonical(next), 0o600);
+            return this.read(record.id);
+        } catch {
+            throw invalid();
+        }
+    }
     save(record: ServiceMigrationRecord): void {
         try {
             this.checkDirectory();
@@ -194,7 +236,9 @@ export class FileServiceMigrationJournal implements ServiceMigrationJournal {
                 previous.phase !== "cancelled" &&
                 (previous.status !== "interrupted" ||
                     !previous.recoveryRequired ||
-                    !["prepared", "capturing-runtime"].includes(previous.phase))
+                    !["prepared", "capturing-runtime", "preparing-manager"].includes(
+                        previous.phase,
+                    ))
             )
                 throw invalid();
             if (
@@ -267,6 +311,9 @@ function parseBackup(input: unknown): ServiceMigrationBackup {
         ...(input && typeof input === "object" && Object.hasOwn(input, "retainedRuntime")
             ? ["retainedRuntime"]
             : []),
+        ...(input && typeof input === "object" && Object.hasOwn(input, "targetCandidateDigest")
+            ? ["targetCandidateDigest"]
+            : []),
     ]);
     if (
         value.schemaVersion !== 1 ||
@@ -279,6 +326,13 @@ function parseBackup(input: unknown): ServiceMigrationBackup {
     )
         throw invalid();
     const target = parseManagerServiceSpec(value.target);
+    if (
+        Object.hasOwn(value, "targetCandidateDigest") &&
+        (typeof value.targetCandidateDigest !== "string" ||
+            !HASH.test(value.targetCandidateDigest) ||
+            !Object.hasOwn(value, "retainedRuntime"))
+    )
+        throw invalid();
     const roles = new Set<string>();
     const paths = new Set<string>();
     const files = Array.from({ length: value.files.length }, (_, index) => {
@@ -317,6 +371,9 @@ function parseBackup(input: unknown): ServiceMigrationBackup {
         files,
         ...(Object.hasOwn(value, "retainedRuntime")
             ? { retainedRuntime: parseRetainedLegacyRuntime(value.retainedRuntime) }
+            : {}),
+        ...(typeof value.targetCandidateDigest === "string"
+            ? { targetCandidateDigest: value.targetCandidateDigest }
             : {}),
     };
     if (Buffer.byteLength(canonical(backup)) > LIMIT) throw invalid();

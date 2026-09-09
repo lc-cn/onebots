@@ -45,8 +45,17 @@ export class ServiceMigrationFiles {
                 "previousEnabled",
                 "files",
                 ...(Object.hasOwn(backup, "retainedRuntime") ? ["retainedRuntime"] : []),
+                ...(Object.hasOwn(backup, "targetCandidateDigest")
+                    ? ["targetCandidateDigest"]
+                    : []),
             ]);
             parseManagerServiceSpec(value.target);
+            if (
+                Object.hasOwn(value, "targetCandidateDigest") &&
+                (typeof value.targetCandidateDigest !== "string" ||
+                    !/^[a-f0-9]{64}$/.test(value.targetCandidateDigest))
+            )
+                throw failure();
             if (
                 value.schemaVersion !== 1 ||
                 typeof value.previousRunning !== "boolean" ||
