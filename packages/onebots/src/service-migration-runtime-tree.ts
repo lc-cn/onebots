@@ -49,15 +49,54 @@ export async function captureLegacyRuntimeTree(
     excludedPaths: string[] = [],
 ): Promise<LegacyRuntimeTreeReceipt> {
     try {
-        if (!uuid.test(id) || !path.isAbsolute(sourceRoot) || !path.isAbsolute(storeDirectory))
-            throw runtimeTreeError();
         const source = await realpath(sourceRoot);
-        if ((await lstat(sourceRoot)).isSymbolicLink()) throw runtimeTreeError();
+        const excluded = [...excludedPaths];
+        return await captureLegacyRuntimeProjection([sourceRoot], storeDirectory, id, async () => {
+            const entries = await scanRuntimeTree(source, false, excluded);
+            return {
+                entries,
+                files: new Map(
+                    entries
+                        .filter(entry => entry.type === "file")
+                        .map(entry => [entry.path, path.join(source, entry.path)]),
+                ),
+            };
+        });
+    } catch {
+        throw runtimeTreeError();
+    }
+}
+
+/** 内部复制引擎；投影只提供已选择源根中的物理文件，不执行安装或服务动作。 */
+export async function captureLegacyRuntimeProjection(
+    sourceRoots: string[],
+    storeDirectory: string,
+    id: string,
+    readSource: () => Promise<{ entries: RuntimeTreeEntry[]; files: Map<string, string> }>,
+): Promise<LegacyRuntimeTreeReceipt> {
+    try {
+        if (
+            !uuid.test(id) ||
+            !sourceRoots.length ||
+            sourceRoots.length > 128 ||
+            sourceRoots.some(root => !path.isAbsolute(root)) ||
+            !path.isAbsolute(storeDirectory)
+        )
+            throw runtimeTreeError();
+        const sources: string[] = [];
+        for (const source of sourceRoots) {
+            if ((await lstat(source)).isSymbolicLink()) throw runtimeTreeError();
+            sources.push(await realpath(source));
+        }
         // 先拒绝嵌套目标，不能在源目录内创建快照工件。
-        if (within(source, path.resolve(storeDirectory))) throw runtimeTreeError();
+        if (sources.some(source => within(source, path.resolve(storeDirectory))))
+            throw runtimeTreeError();
         await mkdir(storeDirectory, { recursive: true, mode: 0o700 });
         const store = await realpath(storeDirectory);
-        if ((await lstat(storeDirectory)).isSymbolicLink() || within(source, store))
+        if (
+            (await lstat(storeDirectory)).isSymbolicLink() ||
+            sources.some(source => within(source, store))
+        )
             throw runtimeTreeError();
         await privateDirectory(store);
         const storeIdentity = await lstat(store);
@@ -68,8 +107,25 @@ export async function captureLegacyRuntimeTree(
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         }
-        const excluded = [...excludedPaths];
-        const entries = await scanRuntimeTree(source, false, excluded);
+        const { entries, files } = await readSource();
+        const paths = new Set(entries.map(entry => entry.path));
+        if (
+            !entries.length ||
+            entries.length > 100000 ||
+            paths.size !== entries.length ||
+            !entries.some(entry => entry.path === "." && entry.type === "directory") ||
+            entries.some(
+                entry =>
+                    !entry.path ||
+                    entry.path.length > 4096 ||
+                    path.posix.normalize(entry.path) !== entry.path ||
+                    path.isAbsolute(entry.path) ||
+                    entry.path === ".." ||
+                    entry.path.startsWith("../") ||
+                    /[\u0000-\u001f\u007f\\]/u.test(entry.path),
+            )
+        )
+            throw runtimeTreeError();
         const expectedDigest = digest(entries);
         // 失败时保留私有候选用于显式清理；绝不递归删除可能已交付或归属不明的目录。
         const staging = await mkdtemp(path.join(store, `.${id}-`));
@@ -83,23 +139,27 @@ export async function captureLegacyRuntimeTree(
         for (const entry of entries) {
             const destination = path.join(runtime, entry.path);
             if (entry.type === "file") {
+                const sourceFile = files.get(entry.path);
+                if (
+                    !sourceFile ||
+                    !path.isAbsolute(sourceFile) ||
+                    !sources.some(source => within(source, sourceFile))
+                )
+                    throw runtimeTreeError();
                 const output = await open(destination, "wx", 0o600);
                 try {
-                    const copied = await hashRuntimeFile(
-                        path.join(source, entry.path),
-                        async bytes => {
-                            let offset = 0;
-                            while (offset < bytes.length) {
-                                const { bytesWritten } = await output.write(
-                                    bytes,
-                                    offset,
-                                    bytes.length - offset,
-                                );
-                                if (!bytesWritten) throw runtimeTreeError();
-                                offset += bytesWritten;
-                            }
-                        },
-                    );
+                    const copied = await hashRuntimeFile(sourceFile, async bytes => {
+                        let offset = 0;
+                        while (offset < bytes.length) {
+                            const { bytesWritten } = await output.write(
+                                bytes,
+                                offset,
+                                bytes.length - offset,
+                            );
+                            if (!bytesWritten) throw runtimeTreeError();
+                            offset += bytesWritten;
+                        }
+                    });
                     if (
                         JSON.stringify({ path: entry.path, type: "file", ...copied }) !==
                         JSON.stringify(entry)
@@ -118,7 +178,7 @@ export async function captureLegacyRuntimeTree(
             await syncDirectory(path.join(runtime, entry.path));
         }
         if (
-            digest(await scanRuntimeTree(source, false, excluded)) !== expectedDigest ||
+            digest((await readSource()).entries) !== expectedDigest ||
             digest(await scanRuntimeTree(runtime, true)) !== expectedDigest
         )
             throw runtimeTreeError();

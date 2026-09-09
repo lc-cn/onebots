@@ -68,15 +68,16 @@ export async function hashRuntimeFile(
         await handle.close();
     }
 }
-/** 不遍历链接目标；目标必须完整位于同一棵物理树内。 */
+/** 不遍历链接目标；跨根扫描显式投影链接，普通扫描要求目标位于同一棵物理树内。 */
 export async function scanRuntimeTree(
     root: string,
     snapshot = false,
     excludedPaths: string[] = [],
+    projectLink?: (absolute: string, lexicalTarget: string, realTarget: string) => string,
 ): Promise<RuntimeTreeEntry[]> {
     const excluded = new Set(excludedPaths);
     if (
-        (snapshot && excluded.size) ||
+        (snapshot && (excluded.size || projectLink)) ||
         excluded.size !== excludedPaths.length ||
         [...excluded].some(
             item =>
@@ -103,10 +104,15 @@ export async function scanRuntimeTree(
         if (stat.isSymbolicLink()) {
             const raw = await readlink(absolute);
             const resolved = path.resolve(path.dirname(absolute), raw);
-            if (!within(root, resolved) || !within(root, await realpath(absolute)))
+            const realTarget = await realpath(absolute);
+            const included = (file: string) =>
+                within(root, file) &&
+                !excludedPaths.some(item => within(path.join(root, item), file));
+            if (!projectLink && (!included(resolved) || !included(realTarget)))
                 throw runtimeTreeError();
-            const target =
-                path.relative(path.dirname(absolute), resolved).split(path.sep).join("/") || ".";
+            const target = projectLink
+                ? projectLink(absolute, resolved, realTarget)
+                : path.relative(path.dirname(absolute), resolved).split(path.sep).join("/") || ".";
             if (snapshot && raw !== target) throw runtimeTreeError();
             if (!sameFile(stat, await lstat(absolute)) || raw !== (await readlink(absolute)))
                 throw runtimeTreeError();
