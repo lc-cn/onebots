@@ -11,6 +11,7 @@ import {
 } from "./control-verification-state";
 const props = defineProps<{ client: ControlClient; gatewayInstanceId?: string }>();
 const view = reactive(verificationView());
+const accepted = reactive<Record<string, boolean>>({});
 const controller = new VerificationController(props.client, view, {
     getItem: key => localStorage.getItem(key),
     setItem: (key, value) => localStorage.setItem(key, value),
@@ -27,6 +28,7 @@ const labels = {
     succeeded: "验证调用已完成（不代表账号已上线）",
     rejected: "请求被拒绝",
     unknown: "执行结果未知，可核对网关原回执，不可重新提交",
+    acknowledged: "已接受未知结果，仅解除阻塞，不代表成功",
 };
 </script>
 
@@ -148,7 +150,7 @@ const labels = {
         <div v-if="view.ids.length" class="border-t border-border pt-4 space-y-3">
             <h3 class="font-medium">验证操作回执</h3>
             <p class="text-sm text-fg-secondary">
-                核对只读取原网关结果，不会重新验证。仅原网关存活且有确定结果才能解锁；网关退出或结果缺失仍保留未知，暂不支持手工接受风险解锁。
+                核对只读取原网关结果，不会重新验证。仅原网关存活且有确定结果才能解锁；网关退出或结果缺失仍保留未知。停止网关后可明确接受未知风险，只解除阻塞，不代表成功。
             </p>
             <div v-for="id in [...view.ids].reverse()" :key="id" class="space-y-1">
                 <code class="text-xs break-all">{{ id }}</code>
@@ -161,11 +163,47 @@ const labels = {
                 </p>
                 <UiButton :disabled="view.busy" @click="controller.query(id)">查询原回执</UiButton>
                 <UiButton
-                    v-if="view.receipts[id]?.status === 'unknown' && !view.receipts[id]?.resolution"
+                    v-if="
+                        view.receipts[id]?.status === 'unknown' &&
+                        !view.receipts[id]?.resolution &&
+                        !view.receipts[id]?.acknowledgement
+                    "
                     :disabled="view.busy"
                     @click="controller.reconcile(id)"
                     >核对网关原回执</UiButton
                 >
+                <div
+                    v-if="
+                        view.receipts[id]?.status === 'unknown' &&
+                        !view.receipts[id]?.resolution &&
+                        !view.receipts[id]?.acknowledgement
+                    "
+                    class="space-y-2">
+                    <p class="text-sm text-danger">
+                        短信或登录可能已执行，接受结果不会撤销。请先停止网关；这里只解锁，不自动停止、发短信或重新提交。
+                    </p>
+                    <label class="flex gap-2 text-sm">
+                        <input
+                            v-model="accepted[id]"
+                            type="checkbox"
+                            :disabled="view.busy || !!gatewayInstanceId" />
+                        我理解并接受未知结果风险
+                    </label>
+                    <UiButton
+                        :disabled="view.busy || !!gatewayInstanceId || !accepted[id]"
+                        @click="
+                            controller.acknowledge(id, accepted[id]);
+                            accepted[id] = false;
+                        "
+                        >停止网关后接受未知结果</UiButton
+                    >
+                </div>
+                <p v-if="view.receipts[id]?.acknowledgement" class="text-xs text-fg-muted">
+                    原结果仍未知；{{
+                        view.receipts[id].acknowledgement?.acceptedAt
+                    }}
+                    已明确接受风险。
+                </p>
                 <p v-if="view.receipts[id]?.resolution" class="text-xs text-fg-muted">
                     原回执为未知；{{ view.receipts[id].resolution?.confirmedAt }} 已核对网关结果。
                 </p>

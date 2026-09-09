@@ -141,3 +141,34 @@ it("查询未知回执后明确确认才对账，不重新收集答案", async (
     expect(f.asks).toHaveLength(2);
     expect(f.reports.join(" ")).toContain("不代表账号已登录");
 });
+
+it.each(["no", "yes"])("接受未知风险另需确认 %s，不停止网关或重提", async accepted => {
+    const f = fixture([challengeId, "acknowledge", accepted]);
+    f.request.mockImplementation(
+        async <T>(_method: "GET" | "POST", route: string): Promise<T> =>
+            ({
+                ...receipt,
+                id: challengeId,
+                status: "unknown",
+                ...(route.endsWith("acknowledge")
+                    ? { acknowledgement: { acceptedAt: "2026-09-09T00:00:02.000Z" } }
+                    : {}),
+            }) as T,
+    );
+    await queryControlVerification(f.client, f.prompt);
+    expect(f.asks).toHaveLength(3);
+    expect(f.asks[2].detail).toContain("可能已经执行");
+    expect(f.request.mock.calls).toEqual([
+        ["GET", `/api/control/verification/operations/${challengeId}`],
+        ...(accepted === "yes"
+            ? [
+                  [
+                      "POST",
+                      "/api/control/verification/acknowledge",
+                      { id: challengeId, acceptUnknownOutcome: true },
+                  ],
+              ]
+            : []),
+    ]);
+    if (accepted === "yes") expect(f.reports.join(" ")).toContain("不代表执行成功");
+});

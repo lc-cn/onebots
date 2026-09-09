@@ -65,6 +65,21 @@ export class ControlVerificationHttp {
                 body = await this.service.reconcile(owner, input.id, authorized, local);
             } else if (
                 request.method === "POST" &&
+                pathname === "/api/control/verification/acknowledge"
+            ) {
+                const input = await readBody(request, 1024);
+                if (
+                    !input ||
+                    typeof input !== "object" ||
+                    Array.isArray(input) ||
+                    Object.keys(input).length !== 2 ||
+                    typeof input.id !== "string" ||
+                    input.acceptUnknownOutcome !== true
+                )
+                    throw new ControlVerificationError(400);
+                body = await this.service.acknowledge(owner, input.id, true, authorized, local);
+            } else if (
+                request.method === "POST" &&
                 pathname === "/api/control/verification/execute"
             ) {
                 const input = await readBody(request, 131072);

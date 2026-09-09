@@ -24,6 +24,7 @@ function fixture() {
         pending: vi.fn(async () => ({ ...command.expected, challenges: [] })),
         execute: vi.fn(async () => receipt),
         reconcile: vi.fn(),
+        acknowledge: vi.fn(),
         operation: vi.fn(async () => receipt),
     };
     const output = vi.fn();
@@ -78,4 +79,22 @@ it("显式对账只传原 ID，失败不重发或执行验证", async () => {
     await expect(f.run(["reconcile", "--request", f.receipt.id])).rejects.toThrow(f.receipt.id);
     expect(f.verification.reconcile).toHaveBeenCalledTimes(2);
     expect(f.verification.operation).not.toHaveBeenCalled();
+});
+
+it("接受未知结果必须有显式风险参数，丢失确认仅引导查询原 ID", async () => {
+    const f = fixture();
+    await expect(f.run(["acknowledge", "--request", f.receipt.id])).rejects.toThrow();
+    expect(f.verification.acknowledge).not.toHaveBeenCalled();
+    f.verification.acknowledge.mockResolvedValue({
+        ...f.receipt,
+        acknowledgement: { acceptedAt: new Date(2).toISOString() },
+    });
+    await f.run(["acknowledge", "--request", f.receipt.id, "--accept-unknown"]);
+    expect(f.verification.acknowledge).toHaveBeenCalledExactlyOnceWith(f.receipt.id, true);
+    f.verification.acknowledge.mockRejectedValue(new Error("private"));
+    await expect(
+        f.run(["acknowledge", "--request", f.receipt.id, "--accept-unknown"]),
+    ).rejects.toThrow(f.receipt.id);
+    expect(f.verification.acknowledge).toHaveBeenCalledTimes(2);
+    expect(f.verification.execute).not.toHaveBeenCalled();
 });

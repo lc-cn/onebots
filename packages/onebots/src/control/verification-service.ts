@@ -25,6 +25,7 @@ export interface ControlVerificationServiceOptions {
         operation: GatewayVerificationOperation,
     ): Promise<GatewayVerificationReply>;
     timeoutMs?: number;
+    acknowledgeWhileStopped?(commit: () => Operation): Promise<Operation>;
 }
 type Operation = ReturnType<typeof projectVerification>;
 interface Pending {
@@ -93,7 +94,8 @@ export class ControlVerificationService {
         if (this.closed || !authorized()) throw new ControlVerificationError(403);
         this.operation(owner, id, localRecovery);
         const record = this.store.read(id);
-        if (record.status !== "unknown" || record.resolution) return projectVerification(record);
+        if (record.status !== "unknown" || record.resolution || record.acknowledgement)
+            return projectVerification(record);
         if (!this.store.health().available) throw new ControlVerificationError(503);
         const context = {
             gatewayInstanceId: record.gatewayInstanceId,
@@ -127,6 +129,30 @@ export class ControlVerificationService {
         return reply.state === "succeeded" || reply.state === "rejected"
             ? projectVerification(this.store.resolve(record, reply.state))
             : projectVerification(record);
+    }
+    async acknowledge(
+        owner: string,
+        id: string,
+        acceptUnknownOutcome: boolean,
+        authorized: () => boolean = () => true,
+        localRecovery = false,
+    ): Promise<Operation> {
+        const check = () => {
+            if (this.closed || !authorized()) throw new ControlVerificationError(403);
+            if (acceptUnknownOutcome !== true) throw new ControlVerificationError(400);
+            this.operation(owner, id, localRecovery);
+        };
+        check();
+        const record = this.store.read(id);
+        if (record.status !== "unknown" || record.resolution)
+            throw new ControlVerificationError(409);
+        if (record.acknowledgement) return projectVerification(record);
+        if (!this.options.acknowledgeWhileStopped) throw new ControlVerificationError(503);
+        return this.options.acknowledgeWhileStopped(() => {
+            check();
+            if (this.pending.has(id)) throw new ControlVerificationError(409);
+            return projectVerification(this.store.acknowledge(record, owner));
+        });
     }
     execute(
         owner: string,

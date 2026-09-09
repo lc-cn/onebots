@@ -239,3 +239,36 @@ it("rejects malformed or retroactive reconciliation evidence", () => {
     ])
         expect(isControlVerificationOperation(invalid)).toBe(false);
 });
+
+it("requires explicit acceptance and validates acknowledgement without converting unknown to success", async () => {
+    const base = { ...receipt(command()), status: "unknown" as const };
+    const acknowledgement = { acceptedAt: "2026-09-09T00:00:02.000Z" };
+    const result = { ...base, acknowledgement };
+    expect(isControlVerificationOperation(result)).toBe(true);
+    expect(controlVerificationOutcome(result)).toBe("acknowledged");
+    for (const invalid of [
+        { ...result, status: "succeeded" },
+        { ...result, acknowledgement: { acceptedAt: base.startedAt } },
+        { ...result, acknowledgement: { ...acknowledgement, secret: "answer" } },
+        { ...result, acknowledgement: {} },
+        { ...result, resolution: { outcome: "rejected", confirmedAt: acknowledgement.acceptedAt } },
+    ])
+        expect(isControlVerificationOperation(invalid)).toBe(false);
+    const request = vi.fn<ControlTransport["request"]>().mockResolvedValue(result);
+    const client = new ControlClient({ request });
+    await expect(client.verification.acknowledge(base.id, false as never)).rejects.toThrow();
+    expect(request).not.toHaveBeenCalled();
+    expect(await client.verification.acknowledge(base.id, true)).toEqual(result);
+    expect(request).toHaveBeenCalledExactlyOnceWith(
+        "POST",
+        "/api/control/verification/acknowledge",
+        { id: base.id, acceptUnknownOutcome: true },
+    );
+    for (const invalid of [base, { ...result, id: randomUUID() }]) {
+        request.mockResolvedValue(invalid);
+        await expect(client.verification.acknowledge(base.id, true)).rejects.toThrow("未确认");
+    }
+    request.mockRejectedValue(new Error("lost"));
+    await expect(client.verification.acknowledge(base.id, true)).rejects.toThrow("lost");
+    expect(request).toHaveBeenCalledTimes(4);
+});

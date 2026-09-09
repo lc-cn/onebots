@@ -65,7 +65,7 @@ export class VerificationController {
         private readonly client: {
             verification: Pick<
                 ControlClient["verification"],
-                "pending" | "execute" | "operation" | "reconcile"
+                "pending" | "execute" | "operation" | "reconcile" | "acknowledge"
             >;
             sessions: ControlClient["sessions"];
         },
@@ -256,7 +256,8 @@ export class VerificationController {
             this.view.busy ||
             !this.view.ids.includes(id) ||
             operation?.status !== "unknown" ||
-            operation.resolution
+            operation.resolution ||
+            operation.acknowledgement
         )
             return;
         this.view.busy = true;
@@ -273,6 +274,35 @@ export class VerificationController {
         } catch {
             if (!this.closed && revision === this.revision)
                 this.view.error = "核对结果未确认，请查询原操作回执，不要重新提交。";
+        } finally {
+            this.view.busy = false;
+        }
+    }
+    async acknowledge(id: string, acceptUnknownOutcome: boolean): Promise<void> {
+        const operation = this.view.receipts[id];
+        if (
+            this.closed ||
+            this.view.busy ||
+            this.gateway ||
+            !acceptUnknownOutcome ||
+            !this.view.ids.includes(id) ||
+            operation?.status !== "unknown" ||
+            operation.resolution ||
+            operation.acknowledgement
+        )
+            return;
+        this.view.busy = true;
+        const revision = this.revision;
+        try {
+            const receipt = await this.client.verification.acknowledge(id, true);
+            if (!this.closed && revision === this.revision) {
+                this.view.receipts[id] = receipt;
+                this.view.error = "";
+            }
+        } catch {
+            if (!this.closed && revision === this.revision)
+                this.view.error =
+                    "接受结果未确认，请查询原操作回执。网关必须已停止；不要重新提交。";
         } finally {
             this.view.busy = false;
         }

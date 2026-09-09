@@ -29,6 +29,7 @@ export interface ControlVerificationOperation {
     status: "running" | "succeeded" | "rejected" | "unknown";
     startedAt: string;
     finishedAt?: string;
+    acknowledgement?: { acceptedAt: string };
     resolution?: { outcome: "succeeded" | "rejected"; confirmedAt: string };
 }
 const uuid = (value: unknown): value is string =>
@@ -113,6 +114,7 @@ export function isControlVerificationOperation(
                     "startedAt",
                     "finishedAt",
                     "resolution",
+                    "acknowledgement",
                 ],
                 [
                     "id",
@@ -144,6 +146,19 @@ export function isControlVerificationOperation(
                 (resolution.outcome !== "succeeded" && resolution.outcome !== "rejected") ||
                 !date(resolution.confirmedAt) ||
                 Date.parse(resolution.confirmedAt) < Date.parse(value.finishedAt)
+            )
+                return false;
+        }
+        if (Object.hasOwn(value, "acknowledgement")) {
+            const acknowledgement = value.acknowledgement;
+            if (
+                value.status !== "unknown" ||
+                Object.hasOwn(value, "resolution") ||
+                !date(value.finishedAt) ||
+                !object(acknowledgement) ||
+                !exact(acknowledgement, ["acceptedAt"]) ||
+                !date(acknowledgement.acceptedAt) ||
+                Date.parse(acknowledgement.acceptedAt) < Date.parse(value.finishedAt)
             )
                 return false;
         }
@@ -197,7 +212,8 @@ export function isControlVerificationSnapshot(
 }
 export function controlVerificationOutcome(
     operation: ControlVerificationOperation,
-): ControlVerificationOperation["status"] {
+): ControlVerificationOperation["status"] | "acknowledged" {
+    if (operation.acknowledgement) return "acknowledged";
     return operation.resolution?.outcome ?? operation.status;
 }
 const unconfirmed = (): Error =>
@@ -233,6 +249,21 @@ export class ControlVerificationClient {
             { id },
         );
         if (!isControlVerificationOperation(result) || result.id !== id) throw unconfirmed();
+        return structuredClone(result);
+    }
+
+    async acknowledge(
+        id: string,
+        acceptUnknownOutcome: true,
+    ): Promise<ControlVerificationOperation> {
+        if (!uuid(id) || acceptUnknownOutcome !== true) throw new Error("必须明确接受未知结果风险");
+        const result: unknown = await this.transport.request(
+            "POST",
+            "/api/control/verification/acknowledge",
+            { id, acceptUnknownOutcome: true },
+        );
+        if (!isControlVerificationOperation(result) || result.id !== id || !result.acknowledgement)
+            throw unconfirmed();
         return structuredClone(result);
     }
 

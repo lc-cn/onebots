@@ -11,6 +11,7 @@ export interface VerificationRecord extends ControlVerificationOperation {
     ownerHash: string;
     requestDigest: string;
     accountHash: string;
+    acknowledgedByHash?: string;
 }
 export type VerificationOperation = ControlVerificationOperation;
 export const verificationHash = (value: unknown): value is string =>
@@ -42,6 +43,8 @@ export function parseVerificationRecord(input: unknown): VerificationRecord {
             "startedAt",
             ...(Object.hasOwn(input, "finishedAt") ? ["finishedAt"] : []),
             ...(Object.hasOwn(input, "resolution") ? ["resolution"] : []),
+            ...(Object.hasOwn(input, "acknowledgement") ? ["acknowledgement"] : []),
+            ...(Object.hasOwn(input, "acknowledgedByHash") ? ["acknowledgedByHash"] : []),
         ]);
         if (
             value.schemaVersion !== 1 ||
@@ -80,6 +83,18 @@ export function parseVerificationRecord(input: unknown): VerificationRecord {
             )
                 throw new Error();
         }
+        if (Object.hasOwn(value, "acknowledgement") || Object.hasOwn(value, "acknowledgedByHash")) {
+            const acknowledgement = closedServiceObject(value.acknowledgement, ["acceptedAt"]);
+            if (
+                value.status !== "unknown" ||
+                Object.hasOwn(value, "resolution") ||
+                !verificationHash(value.acknowledgedByHash) ||
+                !date(value.finishedAt) ||
+                !date(acknowledgement.acceptedAt) ||
+                Date.parse(acknowledgement.acceptedAt) < Date.parse(value.finishedAt)
+            )
+                throw new Error();
+        }
         return value as unknown as VerificationRecord;
     } catch {
         throw new ControlVerificationError(503);
@@ -91,6 +106,7 @@ export function projectVerification(input: VerificationRecord): VerificationOper
         ownerHash: _owner,
         requestDigest: _digest,
         accountHash: _account,
+        acknowledgedByHash: _actor,
         ...operation
     } = parseVerificationRecord(input);
     return structuredClone(operation);

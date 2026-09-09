@@ -48,6 +48,59 @@ function fixture() {
     };
 }
 describe("验证操作私有持久存储", () => {
+    it("接受未知风险保留原记录、隔离审计身份且冷启动解除门禁", () => {
+        const f = fixture();
+        f.store.create(f.record);
+        const unknown = {
+            ...f.record,
+            status: "unknown" as const,
+            finishedAt: new Date().toISOString(),
+        };
+        f.store.finish(unknown);
+        const result = f.store.acknowledge(unknown, "b".repeat(64));
+        expect(result).toMatchObject({
+            ...unknown,
+            acknowledgedByHash: "b".repeat(64),
+            acknowledgement: { acceptedAt: expect.any(String) },
+        });
+        expect(projectVerification(result)).not.toHaveProperty("acknowledgedByHash");
+        expect(f.store.acknowledge(unknown, "c".repeat(64))).toEqual(result);
+        expect(() => f.store.resolve(result, "succeeded")).toThrow();
+        expect(() =>
+            f.store.acknowledge({ ...unknown, ownerHash: "c".repeat(64) }, "b".repeat(64)),
+        ).toThrow();
+        const reopened = new ControlVerificationStore(f.directory);
+        expect(reopened.read(unknown.id)).toEqual(result);
+        expect(reopened.hasUncertainAccount(unknown.accountHash)).toBe(false);
+        expect(() =>
+            parseVerificationRecord({ ...result, acknowledgedByHash: undefined }),
+        ).toThrow();
+        expect(() =>
+            parseVerificationRecord({
+                ...result,
+                resolution: {
+                    outcome: "succeeded",
+                    confirmedAt: result.acknowledgement!.acceptedAt,
+                },
+            }),
+        ).toThrow();
+    });
+    it("接受风险写盘失败仍未知且封锁，不伪造接受成功", () => {
+        const f = fixture();
+        f.store.create(f.record);
+        const unknown = {
+            ...f.record,
+            status: "unknown" as const,
+            finishedAt: new Date().toISOString(),
+        };
+        f.store.finish(unknown);
+        vi.spyOn(ServiceOperationStorage.prototype, "write").mockImplementation(() => {
+            throw new Error("disk");
+        });
+        expect(() => f.store.acknowledge(unknown, f.record.ownerHash)).toThrow();
+        expect(f.store.read(unknown.id)).toEqual(unknown);
+        expect(f.store.health().available).toBe(false);
+    });
     it("确定性对账追加证明并保留unknown历史，重启仍可读取且解除账号保护", () => {
         const f = fixture();
         f.store.create(f.record);

@@ -129,6 +129,60 @@ async function fixture(secret: string) {
 }
 
 describe("真实管理服务持久账号验证", () => {
+    it("原进程停止后才能显式接受未知，原回执不变且不重派验证", async () => {
+        const original = NodeGatewayDriver.prototype.verification;
+        vi.spyOn(NodeGatewayDriver.prototype, "verification").mockImplementation(
+            async function (id, operation) {
+                const result = await original.call(this, id, operation);
+                if (operation.action === "execute")
+                    throw new GatewayRequestError("unknown", "模拟回执丢失");
+                return result;
+            },
+        );
+        const f = await fixture("246810");
+        const client = new ControlClient(createHttpControlTransport(f.url, () => f.token));
+        const pending = await client.verification.pending();
+        const id = randomUUID();
+        const unknown = await client.verification.execute({
+            operationId: id,
+            challengeId: pending.challenges[0].id,
+            expected: {
+                gatewayInstanceId: pending.gatewayInstanceId,
+                configVersion: pending.configVersion,
+            },
+            action: "submit",
+            data: { code: "246810" },
+        });
+        expect(unknown.status).toBe("unknown");
+        expect((await f.request("acknowledge", f.token, { id })).status).toBe(400);
+        expect(
+            (await f.request("acknowledge", f.token, { id, acceptUnknownOutcome: false })).status,
+        ).toBe(400);
+        expect(
+            (await f.request("acknowledge", "", { id, acceptUnknownOutcome: true })).status,
+        ).toBe(401);
+        await expect(client.verification.acknowledge(id, true)).rejects.toMatchObject({
+            status: 409,
+        });
+        await client.gateway("stop");
+        const other = new ControlClient(createHttpControlTransport(f.url, () => f.otherToken));
+        await expect(other.verification.acknowledge(id, true)).rejects.toMatchObject({
+            status: 404,
+        });
+        const result = await client.verification.acknowledge(id, true);
+        expect(result).toMatchObject({
+            ...unknown,
+            acknowledgement: { acceptedAt: expect.any(String) },
+        });
+        expect(result).not.toHaveProperty("resolution");
+        expect(result).not.toHaveProperty("acknowledgedByHash");
+        expect(await createLocalControlClient(f.workspace).verification.operation(id)).toEqual(
+            result,
+        );
+        await client.gateway("start");
+        expect(await client.verification.acknowledge(id, true)).toEqual(result);
+        expect(fs.readFileSync(f.calls, "utf8")).toBe("submit\n");
+    });
     it("提交响应丢失后通过原网关回执对账，不再次执行SDK", async () => {
         const original = NodeGatewayDriver.prototype.verification;
         vi.spyOn(NodeGatewayDriver.prototype, "verification").mockImplementation(

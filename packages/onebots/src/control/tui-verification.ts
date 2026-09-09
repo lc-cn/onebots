@@ -31,6 +31,7 @@ function reportOperation(prompt: TuiPrompt, operation: ControlVerificationOperat
         succeeded: "验证操作已提交，不代表账号已登录",
         rejected: "操作被拒绝",
         unknown: "结果未确认，请勿重新提交或重复发送短信",
+        acknowledged: "已接受未知结果，仅解除阻塞，不代表执行成功",
     };
     prompt.report(`操作 ${operation.id}：${labels[controlVerificationOutcome(operation)]}`);
 }
@@ -46,16 +47,30 @@ export async function queryControlVerification(
     try {
         const operation = await client.verification.operation(id);
         reportOperation(prompt, operation);
-        if (operation.status !== "unknown" || operation.resolution) return;
+        if (operation.status !== "unknown" || operation.resolution || operation.acknowledgement)
+            return;
         const [confirm] = await prompt.ask({
-            title: "核对网关原回执？",
-            detail: "只查询原网关，不重新执行验证。仅原网关存活且有确定结果才能解锁；退出或结果缺失仍保留未知，暂不支持手工接受风险解锁。",
+            title: "处理未知验证结果",
+            detail: "核对只查询原网关。接受未知结果需先自行停止网关；可能已执行短信或登录，接受不会撤销，也不会重新提交。",
             choices: [
                 { value: "no", label: "返回" },
                 { value: "yes", label: "核对网关原回执" },
+                { value: "acknowledge", label: "停止网关后接受未知结果" },
             ],
         });
         if (confirm === "yes") reportOperation(prompt, await client.verification.reconcile(id));
+        if (confirm === "acknowledge") {
+            const [accepted] = await prompt.ask({
+                title: "明确接受未知结果风险？",
+                detail: "短信或登录可能已经执行，无法因此撤销。仅解除阻塞，不代表成功，不停止网关、不重新提交；服务端将检查网关已停止。",
+                choices: [
+                    { value: "no", label: "取消" },
+                    { value: "yes", label: "我理解并接受未知结果" },
+                ],
+            });
+            if (accepted === "yes")
+                reportOperation(prompt, await client.verification.acknowledge(id, true));
+        }
     } catch {
         prompt.report("原回执暂不可查询。请保留操作 ID，不要重新提交。");
     }

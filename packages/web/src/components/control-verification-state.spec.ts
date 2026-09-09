@@ -43,6 +43,7 @@ function fixture() {
         pending: vi.fn().mockResolvedValue(snapshot),
         execute: vi.fn(),
         reconcile: vi.fn(),
+        acknowledge: vi.fn(),
         operation: vi.fn(),
     };
     const sessions = vi.fn().mockResolvedValue({ sessions: [session] });
@@ -253,5 +254,42 @@ it("reconciliation ignores late gateway responses and prevents duplicate clicks"
     });
     await f.controller.query(challengeId);
     expect(f.controller.uncertain).toBe(false);
+    expect(f.verification.execute).not.toHaveBeenCalled();
+});
+
+it("requires stopped gateway and explicit risk acceptance; lost confirmation stays uncertain until original query", async () => {
+    const f = fixture();
+    const operation: ControlVerificationOperation = {
+        id: challengeId,
+        challengeId,
+        gatewayInstanceId: gateway,
+        configVersion: "v1",
+        action: "submit",
+        status: "unknown",
+        startedAt: "2026-09-09T00:00:00.000Z",
+        finishedAt: "2026-09-09T00:00:01.000Z",
+    };
+    f.view.ids = [challengeId];
+    f.view.receipts[challengeId] = operation;
+    await f.controller.acknowledge(challengeId, true);
+    f.controller.setGateway(undefined);
+    await f.controller.acknowledge(challengeId, false);
+    expect(f.verification.acknowledge).not.toHaveBeenCalled();
+    f.verification.acknowledge.mockRejectedValue(new Error("lost"));
+    await f.controller.acknowledge(challengeId, true);
+    expect(f.verification.acknowledge).toHaveBeenCalledExactlyOnceWith(challengeId, true);
+    expect(f.controller.uncertain).toBe(true);
+    expect(f.view.error).toContain("查询原操作回执");
+    f.verification.operation.mockResolvedValue({
+        ...operation,
+        acknowledgement: { acceptedAt: "2026-09-09T00:00:02.000Z" },
+    });
+    await f.controller.query(challengeId);
+    expect(f.controller.uncertain).toBe(false);
+    expect(f.view.receipts[challengeId].status).toBe("unknown");
+    await f.controller.acknowledge(challengeId, true);
+    await f.controller.reconcile(challengeId);
+    expect(f.verification.acknowledge).toHaveBeenCalledTimes(1);
+    expect(f.verification.reconcile).not.toHaveBeenCalled();
     expect(f.verification.execute).not.toHaveBeenCalled();
 });

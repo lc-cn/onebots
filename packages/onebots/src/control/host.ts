@@ -4,7 +4,7 @@ import { GenerationConfigurationVerifier } from "./generation-configuration.js";
 import { authorizeControlHttp } from "./auth-check.js";
 import { ControlSendService } from "./send-service.js";
 import { respondControlSend } from "./send-http.js";
-import { ControlVerificationHttp } from "./verification-http.js";
+import { createHostVerification } from "./host-verification.js";
 import { ControlMessageDebugService } from "./message-debug-service.js";
 import { ControlMessageDebugHttp } from "./message-debug-http.js";
 import { ControlMcpService } from "./mcp-api.js";
@@ -208,14 +208,11 @@ export async function startControlHost(options: ControlHostOptions) {
     } catch {
         process.stderr.write("[onebots] 发送操作记录不可用，管理端保留用于诊断\n");
     }
-    const verification = new ControlVerificationHttp({
-        directory: path.join(controlDirectory(workspace), "verification"),
-        currentContext: () => {
-            const id = currentGateway();
-            return id ? driver.verificationContext(id) : undefined;
-        },
-        forward: (context, operation) => driver.verification(context.gatewayInstanceId, operation),
-    }, auth);
+    const verification = createHostVerification({
+        workspace, auth, driver, lifecycle, currentGateway,
+        available: () => !closed && !storageError && ownershipAvailable &&
+            !configurationStorageUnavailable && !configurationApplication?.health().recoveryRequired,
+    });
     const messageDebug = new ControlMessageDebugService({
         currentInstance: currentGateway,
         forward: (instanceId, action) => driver.messageDebug(instanceId, action),

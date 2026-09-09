@@ -193,6 +193,7 @@ export class ControlVerificationStore {
         }
         if (
             previous.status !== "unknown" ||
+            previous.acknowledgement ||
             canonicalServiceJson(previous) !== canonicalServiceJson(expected)
         )
             throw new ControlVerificationError(409);
@@ -216,6 +217,44 @@ export class ControlVerificationStore {
             throw new ControlVerificationError(503);
         }
     }
+    /** 接受风险只解除后续操作门禁，不改变原调用的未知结果。 */
+    acknowledge(expected: VerificationRecord, actor: string): VerificationRecord {
+        this.assertAvailable();
+        if (!verificationHash(actor)) throw new ControlVerificationError(400);
+        const previous = this.read(expected.id);
+        const identity = ({
+            acknowledgement: _ack,
+            acknowledgedByHash: _actor,
+            ...value
+        }: VerificationRecord) => value;
+        if (
+            canonicalServiceJson(identity(previous)) !==
+                canonicalServiceJson(identity(parseVerificationRecord(expected))) ||
+            previous.status !== "unknown" ||
+            previous.resolution
+        )
+            throw new ControlVerificationError(409);
+        if (previous.acknowledgement) return previous;
+        const accepted = parseVerificationRecord({
+            ...previous,
+            acknowledgedByHash: actor,
+            acknowledgement: {
+                acceptedAt: new Date(
+                    Math.max(Date.now(), Date.parse(previous.finishedAt!)),
+                ).toISOString(),
+            },
+        });
+        try {
+            this.write(accepted);
+            this.observed.set(accepted.id, structuredClone(accepted));
+            return structuredClone(accepted);
+        } catch {
+            // 不能用内存中的接受状态掩盖写盘结果未知。
+            this.blocked = true;
+            this.uncertain.set(previous.id, structuredClone(previous));
+            throw new ControlVerificationError(503);
+        }
+    }
     hasUncertainAccount(accountHash: string): boolean {
         if (!verificationHash(accountHash)) throw new ControlVerificationError(400);
         this.assertAvailable();
@@ -225,7 +264,9 @@ export class ControlVerificationStore {
                 if (
                     record.accountHash === accountHash &&
                     (record.status === "running" ||
-                        (record.status === "unknown" && !record.resolution))
+                        (record.status === "unknown" &&
+                            !record.resolution &&
+                            !record.acknowledgement))
                 )
                     return true;
             }
