@@ -308,6 +308,43 @@ function installationEvidence() {
         })(),
     });
 }
+function diagnosticLog(name) {
+    try {
+        const value = fs.readFileSync(path.join(workspace, ".control", `${name}.log`), "utf8");
+        return value
+            .slice(-8192)
+            .replace(
+                /(authorization|access[_-]?token|token|password|secret)(["'\s:=]+)[^\s,"'}]+/giu,
+                "$1$2[redacted]",
+            );
+    } catch (error) {
+        return `READ_FAILED:${error?.code ?? "UNKNOWN"}`;
+    }
+}
+async function lifecycleFailureEvidence(token) {
+    let status;
+    try {
+        status = await request("/api/control/status", {
+            headers: { authorization: `Bearer ${token}` },
+        });
+    } catch (error) {
+        status = { readError: error?.message ?? "UNKNOWN" };
+    }
+    let gatewayState;
+    try {
+        gatewayState = JSON.parse(
+            fs.readFileSync(path.join(workspace, ".control", "gateway.json"), "utf8"),
+        );
+    } catch (error) {
+        gatewayState = { readError: error?.code ?? "UNKNOWN" };
+    }
+    return JSON.stringify({
+        status,
+        gatewayState,
+        operationLog: diagnosticLog("operation"),
+        gatewayLog: diagnosticLog("gateway"),
+    });
+}
 function servicePresence() {
     return powershell(
         `$s=Get-CimInstance Win32_Service -Filter \"Name='${service}'\";if($null -eq $s){'absent'}else{$s|Select-Object Name,State,StartMode,ProcessId,PathName|ConvertTo-Json -Compress}`,
@@ -433,9 +470,16 @@ try {
     const firstManager = initial.manager.id;
     const firstGatewayPid = initial.gateway.instance?.pid;
     assert.ok(Number.isSafeInteger(firstGatewayPid) && firstGatewayPid > 0);
-    const restart = JSON.parse(
-        cli(bin, ["control", "restart", "--url", origin, "--auth-stdin"], paired.token),
-    );
+    let restart;
+    try {
+        restart = JSON.parse(
+            cli(bin, ["control", "restart", "--url", origin, "--auth-stdin"], paired.token),
+        );
+    } catch (error) {
+        throw new Error(
+            `${error.message}; evidence=${await lifecycleFailureEvidence(paired.token)}`,
+        );
+    }
     assert.equal(restart.status, "succeeded");
     const afterGatewayRestart = JSON.parse(
         cli(bin, ["control", "status", "--url", origin, "--auth-stdin"], paired.token),

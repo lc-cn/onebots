@@ -4,8 +4,10 @@ import {
     WindowsHostControlClient,
     type WindowsPublishedControlStatus,
 } from "./windows-host-control-client.js";
+import type { WindowsNativeStatus } from "./service-platform-windows.js";
 
 interface WindowsStatusClient {
+    status(): ReturnType<WindowsHostControlClient["status"]>;
     publish(
         control: WindowsPublishedControlStatus,
     ): ReturnType<WindowsHostControlClient["publish"]>;
@@ -47,20 +49,19 @@ export class WindowsManagerStatusPublisher {
             gateway: { desired: gateway.desired, actual: gateway.actual },
         };
         const result = this.queue.then(async () => {
-            const response = await this.client.publish(control);
-            const confirmed = response.state.control;
-            if (
-                !confirmed ||
-                !isDeepStrictEqual(
-                    {
-                        revision: confirmed.revision,
-                        manager: confirmed.manager,
-                        gateway: confirmed.gateway,
-                    },
-                    control,
-                )
-            )
-                throw new Error("Windows 原生宿主未确认当前管理状态");
+            try {
+                const response = await this.client.publish(control);
+                this.assertPublished(response.state.control, control);
+            } catch (error) {
+                // Pipe writes are external effects: the host may commit the publication before
+                // the response is lost. Read back the exact revision and identity before failing.
+                const observed = await this.client.status().catch(() => undefined);
+                try {
+                    this.assertPublished(observed?.state.control, control);
+                } catch {
+                    throw error;
+                }
+            }
             if (confirmsInvalidation) this.invalidated = false;
         });
         this.queue = result.catch(() => undefined);
@@ -71,9 +72,16 @@ export class WindowsManagerStatusPublisher {
         this.invalidated = true;
         const revision = this.nextRevision();
         const result = this.queue.then(async () => {
-            const response = await this.client.invalidate(this.manager, revision);
-            if (response.state.control !== undefined)
-                throw new Error("Windows 原生宿主未确认旧状态失效");
+            try {
+                const response = await this.client.invalidate(this.manager, revision);
+                if (response.state.control !== undefined)
+                    throw new Error("Windows 原生宿主未确认旧状态失效");
+            } catch (error) {
+                // Missing control state is already the required fail-closed result, including
+                // an accepted invalidation whose acknowledgement was lost.
+                const observed = await this.client.status().catch(() => undefined);
+                if (!observed || observed.state.control !== undefined) throw error;
+            }
         });
         this.queue = result.catch(() => undefined);
         return result;
@@ -88,6 +96,24 @@ export class WindowsManagerStatusPublisher {
             throw new Error("Windows 管理状态 revision 已耗尽");
         this.revision += 1;
         return this.revision;
+    }
+
+    private assertPublished(
+        confirmed: WindowsNativeStatus["state"]["control"],
+        expected: WindowsPublishedControlStatus,
+    ): void {
+        if (
+            !confirmed ||
+            !isDeepStrictEqual(
+                {
+                    revision: confirmed.revision,
+                    manager: confirmed.manager,
+                    gateway: confirmed.gateway,
+                },
+                expected,
+            )
+        )
+            throw new Error("Windows 原生宿主未确认当前管理状态");
     }
 }
 

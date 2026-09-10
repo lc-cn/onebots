@@ -34,6 +34,7 @@ describe("Windows manager状态发布", () => {
             "\\\\.\\pipe\\onebots-gateway-control",
             manager,
             {
+                status: vi.fn(async () => response()),
                 publish,
                 invalidate,
             },
@@ -51,6 +52,7 @@ describe("Windows manager状态发布", () => {
             "\\\\.\\pipe\\onebots-gateway-control",
             manager,
             {
+                status: vi.fn(async () => response()),
                 publish: vi.fn(async () => response()),
                 invalidate: vi.fn(async () => response()),
             },
@@ -136,7 +138,7 @@ describe("Windows manager状态发布", () => {
         const publisher = new WindowsManagerStatusPublisher(
             "\\\\.\\pipe\\onebots-gateway-control",
             manager,
-            { publish, invalidate },
+            { status: vi.fn(async () => response()), publish, invalidate },
         );
         await publisher.publish({ desired: "running", actual: "running" });
         await publisher.invalidate();
@@ -148,5 +150,61 @@ describe("Windows manager状态发布", () => {
             revision: 3,
             gateway: { desired: "stopped", actual: "stopped" },
         });
+    });
+
+    it("发布响应丢失后只在精确回读同一 revision 时确认成功", async () => {
+        let requested: WindowsPublishedControlStatus | undefined;
+        const status = vi.fn(async () => response(requested));
+        const publisher = new WindowsManagerStatusPublisher(
+            "\\\\.\\pipe\\onebots-gateway-control",
+            manager,
+            {
+                status,
+                publish: vi.fn(async control => {
+                    requested = control;
+                    throw new Error("pipe acknowledgement lost");
+                }),
+                invalidate: vi.fn(async () => response()),
+            },
+        );
+        await expect(
+            publisher.publish({ desired: "running", actual: "running" }),
+        ).resolves.toBeUndefined();
+        expect(status).toHaveBeenCalledOnce();
+    });
+
+    it("发布响应丢失且回读不匹配时保持失败", async () => {
+        const publisher = new WindowsManagerStatusPublisher(
+            "\\\\.\\pipe\\onebots-gateway-control",
+            manager,
+            {
+                status: vi.fn(async () => response()),
+                publish: vi.fn(async () => {
+                    throw new Error("pipe acknowledgement lost");
+                }),
+                invalidate: vi.fn(async () => response()),
+            },
+        );
+        await expect(publisher.publish({ desired: "running", actual: "running" })).rejects.toThrow(
+            "pipe acknowledgement lost",
+        );
+    });
+
+    it("失效响应丢失后以宿主已关闭控制状态完成对账", async () => {
+        const status = vi.fn(async () => response());
+        const publisher = new WindowsManagerStatusPublisher(
+            "\\\\.\\pipe\\onebots-gateway-control",
+            manager,
+            {
+                status,
+                publish: vi.fn(async control => response(control)),
+                invalidate: vi.fn(async () => {
+                    throw new Error("pipe acknowledgement lost");
+                }),
+            },
+        );
+        await publisher.publish({ desired: "running", actual: "running" });
+        await expect(publisher.invalidate()).resolves.toBeUndefined();
+        expect(status).toHaveBeenCalledOnce();
     });
 });
