@@ -33,7 +33,7 @@ pnpm --version
 从源码安装 ICQQ 适配器时，需要把 GitHub Packages token 写入用户级 npm 配置；pnpm 10 不会展开仓库内 `.npmrc` 的认证变量：
 
 ```bash
-pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
+pnpm config set --global '//npm.pkg.github.com/:_authToken' '${NODE_AUTH_TOKEN}'
 ```
 
 产品中的 CLI、TUI 与 Web 安装流程会为单次私有依赖下载建立临时认证文件并在完成后清理，无需用户修改容器或工作区的 `.npmrc`。

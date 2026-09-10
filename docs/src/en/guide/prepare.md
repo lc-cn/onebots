@@ -33,7 +33,7 @@ pnpm is not required when you only install and run the published OneBots package
 When installing the ICQQ adapter from source, store the GitHub Packages token in the user-level npm configuration. pnpm 10 does not expand authentication variables from a repository `.npmrc`:
 
 ```bash
-pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
+pnpm config set --global '//npm.pkg.github.com/:_authToken' '${NODE_AUTH_TOKEN}'
 ```
 
 The product's CLI, TUI, and Web installation flow creates a temporary authentication file for each private dependency download and removes it afterward, so users do not need to edit the container or workspace `.npmrc`.

@@ -50,7 +50,7 @@ jobs:
           python-version: "3.12"
 
       - name: Configure GitHub Packages authentication
-        run: pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
+        run: pnpm config set --global '//npm.pkg.github.com/:_authToken' '${NODE_AUTH_TOKEN}'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
