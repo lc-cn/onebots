@@ -94,6 +94,29 @@ describe("Windows reboot receipt client", () => {
         ).toThrow("响应无效");
     });
 
+    it("rejects a receipt phase that does not match the requested operation", () => {
+        const host = {
+            platform: "win32",
+            isElevated: true,
+            exec: () =>
+                '{"schemaVersion":1,"operationId":"op_1","phase":"cleaned","restorationReady":true}',
+        } as unknown as ServiceHost;
+        expect(() =>
+            requestWindowsLegacyReboot(
+                host,
+                "C:\\host.exe",
+                {
+                    operationId: "op_1",
+                    stateDirectory: "C:\\ProgramData\\OneBots",
+                    snapshotDigest: "a".repeat(64),
+                    nonce: "b".repeat(64),
+                    expected,
+                },
+                "inspect",
+            ),
+        ).toThrow("响应无效");
+    });
+
     it("derives only the packaged fixed-architecture native host path", () => {
         expect(windowsMigrationHostExecutable("C:\\pkg\\lib\\bin.js")).toBe(
             `C:\\pkg\\lib\\native\\win32-${process.arch}\\onebots-windows-host.exe`,

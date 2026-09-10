@@ -39,6 +39,16 @@ const phases = new Set<WindowsLegacyRebootResult["phase"]>([
     "legacy-removed",
     "cleaned",
 ]);
+const operationPhases: Readonly<
+    Record<WindowsLegacyRebootOperation, readonly WindowsLegacyRebootResult["phase"][]>
+> = {
+    prepare: ["awaiting-restart", "restoration-ready"],
+    inspect: ["awaiting-restart", "restoration-ready"],
+    restart: ["restart-requested"],
+    rollback: ["rolled-back"],
+    commit: ["legacy-removed"],
+    cleanup: ["cleaned"],
+};
 
 export function windowsMigrationHostExecutable(binPath: string): string {
     if (process.arch !== "x64" && process.arch !== "arm64")
@@ -79,14 +89,15 @@ export function requestWindowsLegacyReboot(
     )
         throw new Error("Windows 重启迁移收据无效");
     const result = value as Record<string, unknown>;
+    const phase = result.phase as WindowsLegacyRebootResult["phase"];
     if (
         result.schemaVersion !== 1 ||
         result.operationId !== binding.operationId ||
         typeof result.phase !== "string" ||
-        !phases.has(result.phase as WindowsLegacyRebootResult["phase"]) ||
+        !phases.has(phase) ||
+        !operationPhases[operation].includes(phase) ||
         typeof result.restorationReady !== "boolean" ||
-        (result.restorationReady !==
-            ["restoration-ready", "cleaned"].includes(String(result.phase)))
+        result.restorationReady !== ["restoration-ready", "cleaned"].includes(phase)
     )
         throw new Error("Windows 重启迁移收据无效");
     return result as unknown as WindowsLegacyRebootResult;

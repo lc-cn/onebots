@@ -295,8 +295,9 @@ describe('McpV1Protocol dedicated notification output', () => {
     };
     it('real dispatch emits a serialized JSON-RPC notification and preserves SSE payload', () => {
         const { protocol } = createProtocol();
-        const notification = vi.fn(), write = vi.fn();
+        const notification = vi.fn(), dispatch = vi.fn(), write = vi.fn();
         protocol.on('mcp.notification', notification);
+        protocol.on('dispatch', dispatch);
         const clients = Reflect.get(protocol, 'sseClients') as Map<string, unknown>;
         clients.set('active', { initialized: true, write });
         protocol.dispatch(event as never);
@@ -305,6 +306,7 @@ describe('McpV1Protocol dedicated notification output', () => {
             sender: { id: '7', name: 'sender' }, raw_message: 'hello', timestamp: 123,
         } };
         expect(notification).toHaveBeenCalledExactlyOnceWith(JSON.stringify({ jsonrpc: '2.0', ...payload }));
+        expect(dispatch).toHaveBeenCalledExactlyOnceWith(payload.params);
         expect(write).toHaveBeenCalledExactlyOnceWith('message', JSON.stringify(payload));
     });
     it('filtered and unsupported events produce no notification', () => {

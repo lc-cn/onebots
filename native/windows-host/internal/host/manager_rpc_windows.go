@@ -25,12 +25,14 @@ const managerRPCConnectTimeout = 30 * time.Second
 const managerRPCMaxTimeout = 120 * time.Second
 
 type managerRPC struct {
-	listener   net.Listener
-	conn       net.Conn
-	reader     *bufio.Reader
-	mu         sync.Mutex
-	serviceSID string
-	managerPID uint32
+	listener    net.Listener
+	conn        net.Conn
+	reader      *bufio.Reader
+	mu          sync.Mutex
+	serviceSID  string
+	managerPID  uint32
+	pendingConn chan net.Conn
+	pendingErr  chan error
 }
 
 func createManagerRPCPipe() (*managerRPC, string, error) {
@@ -71,18 +73,12 @@ func (rpc *managerRPC) acceptManager(pid uint32) error {
 }
 
 func (rpc *managerRPC) acceptConnection() error {
-	accepted := make(chan net.Conn, 1)
-	acceptErr := make(chan error, 1)
-	go func() {
-		conn, err := rpc.listener.Accept()
-		if err != nil {
-			acceptErr <- err
-			return
-		}
-		accepted <- conn
-	}()
+	rpc.ensurePendingAccept()
+	timeout := time.NewTimer(managerRPCConnectTimeout)
+	defer timeout.Stop()
 	select {
-	case conn := <-accepted:
+	case conn := <-rpc.pendingConn:
+		rpc.clearPendingAccept()
 		client, err := (&statusPipe{allowed: allowedPipeClients{serviceSID: rpc.serviceSID, controlSID: rpc.serviceSID}}).authorize(conn)
 		if err != nil || client.pid != rpc.managerPID || client.sid != rpc.serviceSID {
 			_ = conn.Close()
@@ -94,11 +90,35 @@ func (rpc *managerRPC) acceptConnection() error {
 		rpc.conn = conn
 		rpc.reader = bufio.NewReaderSize(conn, protocol.MaxControlResultBytes+1)
 		return nil
-	case err := <-acceptErr:
+	case err := <-rpc.pendingErr:
+		rpc.clearPendingAccept()
 		return err
-	case <-time.After(managerRPCConnectTimeout):
+	case <-timeout.C:
 		return errors.New("timed out waiting for manager RPC connection")
 	}
+}
+
+func (rpc *managerRPC) ensurePendingAccept() {
+	if rpc.pendingConn != nil || rpc.pendingErr != nil {
+		return
+	}
+	pendingConn := make(chan net.Conn, 1)
+	pendingErr := make(chan error, 1)
+	rpc.pendingConn = pendingConn
+	rpc.pendingErr = pendingErr
+	go func() {
+		conn, err := rpc.listener.Accept()
+		if err != nil {
+			pendingErr <- err
+			return
+		}
+		pendingConn <- conn
+	}()
+}
+
+func (rpc *managerRPC) clearPendingAccept() {
+	rpc.pendingConn = nil
+	rpc.pendingErr = nil
 }
 
 func (rpc *managerRPC) exchange(request protocol.Request, timeout time.Duration) (int, json.RawMessage, error) {
@@ -172,6 +192,20 @@ func (rpc *managerRPC) Close() error {
 	if rpc.conn != nil {
 		connErr = rpc.conn.Close()
 	}
+	if rpc.pendingConn != nil {
+		select {
+		case conn := <-rpc.pendingConn:
+			_ = conn.Close()
+		default:
+		}
+	}
+	if rpc.pendingErr != nil {
+		select {
+		case <-rpc.pendingErr:
+		default:
+		}
+	}
+	rpc.clearPendingAccept()
 	rpc.conn = nil
 	rpc.reader = nil
 	return errors.Join(connErr, listenerErr)

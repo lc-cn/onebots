@@ -96,6 +96,13 @@ export class McpV1Protocol extends Protocol<"v1", McpV1Config> {
         if (!notification) return;
 
         this.emit("mcp.notification", JSON.stringify({ jsonrpc: "2.0", ...notification }));
+        if (
+            "params" in notification &&
+            notification.params &&
+            typeof notification.params === "object" &&
+            !Array.isArray(notification.params)
+        )
+            this.emit("dispatch", notification.params);
         const data = JSON.stringify(notification);
         for (const client of this.sseClients.values()) {
             if (client.initialized) {
