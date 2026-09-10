@@ -32,6 +32,7 @@ const port = await new Promise((resolve, reject) => {
 });
 const origin = `http://127.0.0.1:${port}`;
 const service = "onebots-gateway";
+const localControlPipe = "\\\\.\\pipe\\onebots-gateway-control";
 let installed = false;
 let installedDefinition;
 let installedScmPathName;
@@ -400,8 +401,11 @@ try {
     } catch (error) {
         throw new Error(`${error.message}; evidence=${installationEvidence()}`);
     }
-    const health = await eventually(() => request("/health"));
-    assert.equal(health.ready, true);
+    const ready = await eventually(() => request("/ready"));
+    const nativeReady = JSON.parse(run(host, ["status", "--pipe", localControlPipe]));
+    assert.equal(ready.application, "onebots");
+    assert.equal(ready.instance_id, nativeReady.state.control.manager.id);
+    assert.equal(ready.ready, true);
     const remotePipe = spawnSync(
         host,
         ["status", "--pipe", "\\\\localhost\\pipe\\onebots-gateway-control"],
@@ -443,9 +447,7 @@ try {
         ),
         "gone",
     );
-    const nativeBefore = JSON.parse(
-        run(host, ["status", "--pipe", "\\\\.\\pipe\\onebots-gateway-control"]),
-    );
+    const nativeBefore = JSON.parse(run(host, ["status", "--pipe", localControlPipe]));
     const managerPid = nativeBefore.state.manager.pid;
     cli(bin, ["restart", "--system"]);
     const afterRestart = await eventually(async () => {
@@ -485,8 +487,6 @@ try {
         "✓ Windows SCM 安装、启动、Web、网关重启、manager重启、停止和卸载闭环通过\n",
     );
 } finally {
-    // 只在契约文件和 SCM 身份仍精确属于本次安装时使用产品公开卸载。
-    // 未知结果保留 runner 现场，避免 raw sc stop/delete 掩盖产品失败。
     if (installed && stillOwnsInstallation()) {
         try {
             cli(path.join(runtime, "node_modules", "onebots", "lib", "bin.js"), [

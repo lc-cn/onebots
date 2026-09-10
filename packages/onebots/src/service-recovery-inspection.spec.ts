@@ -155,6 +155,24 @@ describe("系统操作恢复状态纯只读检查", () => {
         f.journal.save(f.record);
         expect(inspectServiceRecovery(root).serviceRecoveryRequired).toBe(false);
     });
+    it("Windows 恢复检查依赖 DACL，不因 NTFS 的 POSIX mode 映射阻止卸载", () => {
+        const root = fixture(),
+            f = prepare(root);
+        f.record.status = "succeeded";
+        f.record.recoveryRequired = false;
+        f.record.phase = "completed";
+        f.journal.save(f.record);
+        fs.chmodSync(path.dirname(f.file), 0o777);
+        fs.chmodSync(f.file, 0o666);
+        const originalPlatform = process.platform;
+        try {
+            Object.defineProperty(process, "platform", { value: "win32" });
+            expect(inspectServiceRecovery(root)).toEqual({ serviceRecoveryRequired: false });
+        } finally {
+            Object.defineProperty(process, "platform", { value: originalPlatform });
+        }
+        expect(inspectServiceRecovery(root)).toEqual({ serviceRecoveryRequired: true });
+    });
     it("迁移记录也检查，备份仅核验文件边界不打开正文", () => {
         const root = fixture(),
             directory = path.join(root, "migrations");

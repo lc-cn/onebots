@@ -26,7 +26,7 @@ function stat(file: string, mode: number, directory = false): fs.Stats {
     if (
         (directory ? !result.isDirectory() : !result.isFile() || result.nlink !== 1) ||
         result.isSymbolicLink() ||
-        (result.mode & 0o7777) !== mode ||
+        (process.platform !== "win32" && (result.mode & 0o7777) !== mode) ||
         (process.getuid && result.uid !== process.getuid())
     )
         fail();
