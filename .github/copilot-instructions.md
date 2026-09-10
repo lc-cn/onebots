@@ -172,10 +172,11 @@ telegram.my_bot:
 `@icqqjs/icqq` 是私有 GitHub Package，需要配置：
 
 ```bash
-# .npmrc
-//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
-@icqqjs:registry=https://npm.pkg.github.com
+export NODE_AUTH_TOKEN=<具有 read:packages 权限的 token>
+pnpm config set --global '//npm.pkg.github.com/:_authToken' '${NODE_AUTH_TOKEN}'
 ```
+
+作用域 registry 已由仓库 `.npmrc` 配置；认证占位符必须写入可信用户配置，不能写入仓库级 `.npmrc`。
 
 ## 发布流程
 
@@ -199,4 +200,3 @@ telegram.my_bot:
 3. Node.js 环境下需要代理时使用 `https-proxy-agent`
 4. WebSocket 代理使用 `socks-proxy-agent`
 5. 所有 API 方法返回统一的 `CommonTypes` 格式
-

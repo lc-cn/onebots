@@ -33,7 +33,7 @@ COPY scripts/pack-control-runtime.mjs ./scripts/pack-control-runtime.mjs
 RUN node scripts/pack-control-runtime.mjs /app/runtime-artifacts adapters/* protocols/*/protocol
 
 # 生产依赖（去掉 devDependencies 以减小镜像）
-RUN pnpm prune --prod --ignore-scripts
+RUN CI=true pnpm prune --prod --ignore-scripts
 
 # ---------- 运行阶段 ----------
 FROM node:24-alpine
