@@ -166,3 +166,54 @@ it("Windows native watchdog 超时保留父原因和 worker 最后完整阶段",
     ).toEqual({ schemaVersion: 1, stage: "dependencies" });
     expect(fs.existsSync(path.join(allocation, "result.json"))).toBe(false);
 });
+
+it("Windows schemas 提交失败时不清理 native 验证证据", async () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ob-manager-windows-schema-"));
+    roots.push(root);
+    const candidate = path.join(root, "candidate");
+    const privateRoot = path.join(root, "private");
+    fs.mkdirSync(candidate);
+    fs.mkdirSync(path.join(candidate, "schemas.json"));
+    const plan = createGenerationPlan({
+        host: { name: "onebots", version: "1.2.12", spec: "1.2.12" },
+        core: { name: "@onebots/core", version: "1.2.9", spec: "1.2.9" },
+        extensions: [],
+        selection: { adapters: [], protocols: [], applications: [] },
+    });
+    const originalStatSync = fs.statSync.bind(fs);
+    vi.spyOn(fs, "statSync").mockImplementation(file => {
+        if (String(file).endsWith("onebots-windows-host.exe"))
+            return { isFile: () => true, size: 100_001 } as fs.Stats;
+        return originalStatSync(file);
+    });
+    spawnSync.mockImplementation((_executable: string, args: string[]) => {
+        const request = args[args.indexOf("--request") + 2];
+        const result = args[args.indexOf("--result") + 2];
+        const input = JSON.parse(fs.readFileSync(request, "utf8"));
+        fs.writeFileSync(
+            result,
+            JSON.stringify({
+                schemas: JSON.stringify({
+                    schemaVersion: 1,
+                    adapters: {},
+                    protocols: {},
+                    applications: {},
+                    runtimeOnly: [],
+                }),
+                verification: input.expected,
+            }),
+        );
+        return { status: 1, signal: null };
+    });
+    const { verifyManagerCandidateInstallation } = await import("./manager-candidate.js");
+    await expect(
+        verifyManagerCandidateInstallation(candidate, plan, { privateRoot }),
+    ).rejects.toThrow("Windows 管理程序候选未通过 Job Object 隔离验证");
+    const allocation = path.join(privateRoot, fs.readdirSync(privateRoot)[0]);
+    expect(
+        JSON.parse(fs.readFileSync(path.join(allocation, "parent-failure.json"), "utf8")),
+    ).toEqual({ schemaVersion: 1, reason: "schema-commit" });
+    expect(fs.existsSync(path.join(allocation, "result.json"))).toBe(true);
+    expect(fs.lstatSync(path.join(candidate, "schemas.json")).isDirectory()).toBe(true);
+});

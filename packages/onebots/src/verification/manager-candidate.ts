@@ -196,7 +196,8 @@ function verifyWindowsManagerCandidate(
         | "native-exit"
         | "result-missing"
         | "result-invalid"
-        | "worker-failed" = "native-error";
+        | "worker-failed"
+        | "schema-commit" = "native-error";
     try {
         secureWindowsServiceDirectory(host, allocation);
         fs.writeFileSync(
@@ -253,7 +254,7 @@ function verifyWindowsManagerCandidate(
             parentFailure = "result-invalid";
             throw new Error();
         }
-        cleanup = true;
+        parentFailure = "schema-commit";
         const schemaFile = path.join(root, "schemas.json");
         const temporary = `${schemaFile}.${randomUUID()}.tmp`;
         try {
@@ -262,6 +263,8 @@ function verifyWindowsManagerCandidate(
         } finally {
             fs.rmSync(temporary, { force: true });
         }
+        // schemas 是验证器最后一项持久提交；它失败时必须保留 native/worker 证据。
+        cleanup = true;
         return {
             dependencies: generationVerification(plan),
             management: expected,

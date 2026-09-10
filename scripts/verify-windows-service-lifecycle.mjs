@@ -125,7 +125,8 @@ function installationEvidence() {
         "management-close",
         "authentication-preserved",
     ]);
-    const operations = directory => {
+    const versions = path.join(stateDirectory, "manager-artifacts", "versions");
+    const operations = (directory, includeCandidateFiles = false) => {
         try {
             return fs
                 .readdirSync(directory)
@@ -133,6 +134,14 @@ function installationEvidence() {
                 .sort()
                 .map(file => {
                     const value = JSON.parse(fs.readFileSync(path.join(directory, file), "utf8"));
+                    const candidateId =
+                        typeof value.candidateId === "string" &&
+                        /^[0-9a-f-]{36}$/.test(value.candidateId)
+                            ? value.candidateId
+                            : undefined;
+                    const candidateDirectory = candidateId
+                        ? path.join(versions, candidateId)
+                        : undefined;
                     return {
                         id: typeof value.id === "string" ? value.id : "invalid",
                         phase: typeof value.phase === "string" ? value.phase : "invalid",
@@ -142,6 +151,27 @@ function installationEvidence() {
                             typeof value.recoveryRequired === "boolean"
                                 ? value.recoveryRequired
                                 : undefined,
+                        ...(includeCandidateFiles
+                            ? {
+                                  candidateId,
+                                  candidateFiles: candidateDirectory
+                                      ? {
+                                            schemas: fs.existsSync(
+                                                path.join(candidateDirectory, "schemas.json"),
+                                            ),
+                                            managerVerification: fs.existsSync(
+                                                path.join(
+                                                    candidateDirectory,
+                                                    "manager-verification.json",
+                                                ),
+                                            ),
+                                            receipt: fs.existsSync(
+                                                path.join(candidateDirectory, "receipt.json"),
+                                            ),
+                                        }
+                                      : undefined,
+                              }
+                            : {}),
                     };
                 });
         } catch {
@@ -174,10 +204,12 @@ function installationEvidence() {
             return [];
         }
     })();
-    const candidateVerificationFailures = (() => {
+    const candidateVerificationEvidence = (() => {
+        const root = path.join(stateDirectory, "manager-artifacts", "generation-verifications");
         try {
-            const root = path.join(stateDirectory, "manager-artifacts", "generation-verifications");
-            return fs
+            fs.lstatSync(root);
+            let entryReadFailed = false;
+            const entries = fs
                 .readdirSync(root)
                 .filter(name => /^windows-[0-9a-f-]{36}$/.test(name))
                 .sort()
@@ -224,6 +256,7 @@ function installationEvidence() {
                                     "result-missing",
                                     "result-invalid",
                                     "worker-failed",
+                                    "schema-commit",
                                 ]).has(value.reason)
                             )
                                 reason = value.reason;
@@ -234,18 +267,31 @@ function installationEvidence() {
                             ? [{ stage, failureStage, reason }]
                             : [];
                     } catch {
+                        entryReadFailed = true;
                         return [];
                     }
                 });
-        } catch {
-            return [];
+            return {
+                entries,
+                readError: entryReadFailed ? "ENTRY_READ_FAILED" : undefined,
+            };
+        } catch (error) {
+            return {
+                entries: [],
+                readError:
+                    error && typeof error === "object" && error.code === "ENOENT"
+                        ? "ROOT_MISSING"
+                        : "ROOT_READ_FAILED",
+            };
         }
     })();
     return JSON.stringify({
         bootstrapEntries,
-        candidateVerificationFailures,
+        candidateVerificationFailures: candidateVerificationEvidence.entries,
+        candidateVerificationReadError: candidateVerificationEvidence.readError,
         candidateOperations: operations(
             path.join(stateDirectory, "manager-artifacts", "operations"),
+            true,
         ),
         managerOperations: operations(path.join(stateDirectory, "manager-operations")),
         definitionExists: fs.existsSync(definitionPath),
