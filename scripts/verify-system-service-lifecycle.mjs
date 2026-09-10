@@ -1054,10 +1054,10 @@ try {
         () => newUpgradeJournal(operationsBeforeFailedUpgrade),
         value =>
             value?.record.action === "upgrade" &&
-            ["starting", "verifying"].includes(value.record.phase) &&
+            ["restoring-enablement", "starting", "verifying"].includes(value.record.phase) &&
             value.record.status === "interrupted" &&
             value.record.recoveryRequired === true,
-        "真实候选启动失败未保留可回退的启动或验证阶段",
+        "真实候选切换失败未保留可回退阶段",
     );
     const failedUpgradeId = interruptedUpgrade.record.id;
     operationIds.push(failedUpgradeId);
