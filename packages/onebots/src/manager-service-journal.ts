@@ -30,6 +30,7 @@ export type ManagerServicePhase =
     | "stopping"
     | "restoring-enablement"
     | "starting"
+    | "initializing-workspace"
     | "writing"
     | "removing-definition"
     | "unregistering"
@@ -70,6 +71,7 @@ const phases = [
     "stopping",
     "restoring-enablement",
     "starting",
+    "initializing-workspace",
     "writing",
     "removing",
     "removing-definition",

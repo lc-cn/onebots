@@ -294,6 +294,13 @@ function installationEvidence() {
             true,
         ),
         managerOperations: operations(path.join(stateDirectory, "manager-operations")),
+        controlEntries: (() => {
+            try {
+                return fs.readdirSync(path.join(workspace, ".control")).sort();
+            } catch (error) {
+                return [`READ_FAILED:${error?.code ?? "UNKNOWN"}`];
+            }
+        })(),
         definitionExists: fs.existsSync(definitionPath),
         metadataExists: fs.existsSync(metadataPath),
     });

@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { controlManagerService } from "./manager-service-controller.js";
-import { installManagerServiceWhileLocked, type ManagerServiceInstallDependencies } from "./manager-service-install.js";
+import {
+    installManagerServiceWhileLocked,
+    type ManagerServiceInstallDependencies,
+} from "./manager-service-install.js";
 import { acquireServiceMigrationLock } from "./service-migration-lock.js";
 import { randomUUID } from "node:crypto";
 import { LAUNCHD_LABEL } from "./service-definition.js";
@@ -22,10 +25,17 @@ import type { ServiceHost } from "./service-host.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform } from "./service-platform.js";
 // 仅测试安装事务；产品入口必须先完成 bootstrap 候选验证。
-async function installManagerService(spec: ManagerServiceSpec, host: ServiceHost, dependencies: ManagerServiceInstallDependencies) {
+async function installManagerService(
+    spec: ManagerServiceSpec,
+    host: ServiceHost,
+    dependencies: ManagerServiceInstallDependencies,
+) {
     const release = acquireServiceMigrationLock(getServiceFiles(spec.scope, host).stateDir);
-    try { return await installManagerServiceWhileLocked(spec, randomUUID(), host, dependencies); }
-    finally { release(); }
+    try {
+        return await installManagerServiceWhileLocked(spec, randomUUID(), host, dependencies);
+    } finally {
+        release();
+    }
 }
 const roots: string[] = [];
 afterEach(() => {
@@ -210,13 +220,13 @@ describe("manager installation transaction", () => {
         expect(fs.existsSync(test.files.definition)).toBe(false);
         expect(fs.existsSync(path.join(test.workspace, ".control"))).toBe(false);
     });
-    it("writing intent persistence failure leaves unknown journal and prevents retry with a new id", async () => {
+    it("workspace initialization intent persistence failure leaves no workspace and prevents retry", async () => {
         const test = fixture();
         const original = fs.renameSync;
         vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
             if (
                 String(to).includes("manager-operations") &&
-                JSON.parse(fs.readFileSync(String(from), "utf8")).phase === "writing"
+                JSON.parse(fs.readFileSync(String(from), "utf8")).phase === "initializing-workspace"
             )
                 throw new Error("synthetic-secret");
             original(from, to);

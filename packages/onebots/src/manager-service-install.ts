@@ -110,7 +110,7 @@ export async function installManagerServiceWhileLocked(
             journal.save(record);
         }
         try {
-            phase("writing");
+            phase("initializing-workspace");
             // 共用一次性工作区初始化与维护门禁；已有工作区不重置、不修改认证。
             const created = !exists(path.join(spec.workspace, ".control"));
             if (created) {
@@ -125,6 +125,7 @@ export async function installManagerServiceWhileLocked(
                     unlock();
                 }
             }
+            phase("writing");
             plan.apply();
             phase("restoring-enablement");
             await plan.reload(platform, true);
