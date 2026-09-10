@@ -27,21 +27,27 @@ export interface ManagerServiceRemoval {
 }
 interface CapturedFile {
     file: string;
+    platform: NodeJS.Platform;
     descriptor?: number;
     stat: fs.BigIntStats;
     bytes: Buffer;
     digest: string;
     removed: boolean;
     windowsAclDigest?: string;
-    verifyWindowsAcl?: () => boolean;
+    verifyWindowsDirectoryAcl?: () => boolean;
+    verifyWindowsFileAcl?: () => boolean;
 }
 const failure = () => new Error("管理服务卸载文件身份不明、已变化或权限不安全");
-function parents(file: string): void {
+/** @internal */
+export function validRemovedAnchorLinkCount(platform: NodeJS.Platform, links: bigint): boolean {
+    return platform === "win32" ? links === 0n || links === 1n : links === 0n;
+}
+function parents(file: string, platform: NodeJS.Platform): void {
     if (!path.isAbsolute(file) || path.normalize(file) !== file) throw failure();
     const directory = path.dirname(file);
-    for (const current of serviceAncestorPaths(directory)) {
+    for (const current of serviceAncestorPaths(directory, platform)) {
         const stat = fs.lstatSync(current);
-        if (process.platform === "win32") {
+        if (platform === "win32") {
             if (!stat.isDirectory() || stat.isSymbolicLink()) throw failure();
             continue;
         }
@@ -64,10 +70,12 @@ function release(file: CapturedFile): void {
 function capture(
     file: string,
     modes: readonly number[],
+    platform: NodeJS.Platform,
     windowsAclDigest?: string,
-    verifyWindowsAcl?: () => boolean,
+    verifyWindowsDirectoryAcl?: () => boolean,
+    verifyWindowsFileAcl?: () => boolean,
 ): CapturedFile {
-    parents(file);
+    parents(file, platform);
     const descriptor = fs.openSync(
         file,
         fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
@@ -77,19 +85,26 @@ function capture(
         if (
             !stat.isFile() ||
             stat.nlink !== 1n ||
-            (process.platform !== "win32" && !modes.includes(Number(stat.mode & 0o7777n))) ||
-            (process.platform !== "win32" && stat.uid !== BigInt(process.getuid!()))
+            (platform !== "win32" && !modes.includes(Number(stat.mode & 0o7777n))) ||
+            (platform !== "win32" && stat.uid !== BigInt(process.getuid!()))
         )
             throw failure();
         const raw = new ConfigurationFile(file).readRaw();
         const captured = {
             file,
+            platform,
             descriptor,
             stat,
             bytes: raw.bytes,
             digest: raw.revision,
             removed: false,
-            ...(windowsAclDigest ? { windowsAclDigest, verifyWindowsAcl } : {}),
+            ...(windowsAclDigest
+                ? {
+                      windowsAclDigest,
+                      verifyWindowsDirectoryAcl,
+                      verifyWindowsFileAcl,
+                  }
+                : {}),
         };
         if (!equal(captured)) throw failure();
         return captured;
@@ -100,12 +115,17 @@ function capture(
 }
 function equal(file: CapturedFile): boolean {
     try {
-        parents(file.file);
+        parents(file.file, file.platform);
         if (file.descriptor === undefined) return false;
-        if (file.verifyWindowsAcl && !file.verifyWindowsAcl()) return false;
+        if (file.verifyWindowsDirectoryAcl && !file.verifyWindowsDirectoryAcl()) return false;
+        if (!file.removed && file.verifyWindowsFileAcl && !file.verifyWindowsFileAcl())
+            return false;
         const anchor = fs.fstatSync(file.descriptor, { bigint: true });
         if (file.removed) {
-            if (anchor.nlink !== 0n) return false;
+            // Windows keeps the link count at one while an open, delete-sharing handle
+            // anchors a file whose directory entry is already delete-pending. The path
+            // must still be absent; dispose closes the handle and completes deletion.
+            if (!validRemovedAnchorLinkCount(file.platform, anchor.nlink)) return false;
             try {
                 fs.lstatSync(file.file);
                 return false;
@@ -142,9 +162,9 @@ function snapshot(file: CapturedFile): RemovalFileSnapshot {
         sha256: file.digest,
         dev: String(stat.dev),
         ino: String(stat.ino),
-        uid: process.platform === "win32" ? 0 : Number(stat.uid),
+        uid: file.platform === "win32" ? 0 : Number(stat.uid),
         mode:
-            process.platform === "win32"
+            file.platform === "win32"
                 ? file.file.endsWith("service.json")
                     ? 0o600
                     : 0o644
@@ -188,17 +208,24 @@ export function captureManagerServiceRemoval(
                           .update(`${windowsDirectoryAclDigest}:${fileAclDigest}`)
                           .digest("hex")
                     : undefined;
-            const verifyWindowsAcl = aclDigest
+            const verifyWindowsDirectoryAcl = windowsDirectoryAclDigest
                 ? () =>
                       inspectWindowsServiceDirectorySecurity(host, files.stateDir) ===
-                          windowsDirectoryAclDigest &&
-                      createHash("sha256")
-                          .update(
-                              `${windowsDirectoryAclDigest}:${inspectWindowsServiceFileSecurity(host, file)}`,
-                          )
-                          .digest("hex") === aclDigest
+                      windowsDirectoryAclDigest
                 : undefined;
-            captured.push(capture(file, modes, aclDigest, verifyWindowsAcl));
+            const verifyWindowsFileAcl = fileAclDigest
+                ? () => inspectWindowsServiceFileSecurity(host, file) === fileAclDigest
+                : undefined;
+            captured.push(
+                capture(
+                    file,
+                    modes,
+                    host.platform,
+                    aclDigest,
+                    verifyWindowsDirectoryAcl,
+                    verifyWindowsFileAcl,
+                ),
+            );
         }
         if (
             !captured[0].bytes.equals(
@@ -229,7 +256,7 @@ export function captureManagerServiceRemoval(
         try {
             fs.unlinkSync(captured[index].file);
             captured[index].removed = true;
-            if (process.platform !== "win32") {
+            if (captured[index].platform !== "win32") {
                 const descriptor = fs.openSync(path.dirname(captured[index].file), "r");
                 try {
                     fs.fsyncSync(descriptor);

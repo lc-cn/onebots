@@ -34,8 +34,7 @@ const origin = `http://127.0.0.1:${port}`;
 const service = "onebots-gateway";
 const localControlPipe = "\\\\.\\pipe\\onebots-gateway-control";
 let installed = false;
-let installedDefinition;
-let installedScmPathName;
+let installedDefinition, installedScmPathName;
 const npmCli = [
     process.env.npm_execpath,
     path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
@@ -412,7 +411,8 @@ try {
         { cwd: runtime, encoding: "utf8", timeout: 10_000 },
     );
     assert.notEqual(remotePipe.status, 0, "远程 UNC 客户端不应连接本机管理管道");
-    const systemStatus = JSON.parse(cli(bin, ["status", "--system", "--json"]));
+    // prettier-ignore
+    const systemStatus = await eventually(() => JSON.parse(cli(bin, ["status", "--system", "--json"])));
     assert.equal(systemStatus.installation, "control");
     assert.equal(systemStatus.manager.state, "running");
     assert.equal(systemStatus.manager.loaded, true);
