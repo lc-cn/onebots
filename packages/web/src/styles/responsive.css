@@ -46,8 +46,10 @@
         border-bottom: 1px solid var(--border);
         background: var(--surface);
         padding: 0.55rem 1rem;
+        overscroll-behavior-x: contain;
+        scrollbar-width: thin;
     }
-    .mobile-nav button {
+    .mobile-nav a {
         display: inline-flex;
         flex: none;
         align-items: center;
@@ -58,8 +60,11 @@
         color: var(--fg-secondary);
         padding: 0.5rem 0.7rem;
         font-size: 0.75rem;
+        min-height: 2.75rem;
+        touch-action: manipulation;
+        text-decoration: none;
     }
-    .mobile-nav button.active {
+    .mobile-nav a.active {
         background: var(--fg);
         color: var(--bg);
     }
@@ -97,6 +102,16 @@
     .workspace {
         padding: 1.5rem 1rem 3rem;
     }
+    .workspace-scroll {
+        overscroll-behavior: contain;
+    }
+    .ui-button,
+    .ui-input,
+    .ui-number-input,
+    .ui-select-trigger {
+        min-height: 2.75rem;
+        touch-action: manipulation;
+    }
     .page-heading {
         margin-bottom: 1.6rem;
     }
@@ -128,6 +143,27 @@
     }
     .overview-skeleton {
         grid-template-columns: 1fr;
+    }
+    .verification-panel {
+        padding: 1rem;
+    }
+    .verification-panel img {
+        margin-inline: auto;
+    }
+    .verification-actions > *,
+    .verification-receipt > button {
+        width: 100%;
+    }
+    .verification-panel button,
+    .verification-panel input,
+    .verification-panel textarea,
+    .verification-panel [role="combobox"] {
+        min-height: 2.75rem;
+        touch-action: manipulation;
+    }
+    .verification-panel pre,
+    .verification-panel code {
+        overflow-wrap: anywhere;
     }
 }
 

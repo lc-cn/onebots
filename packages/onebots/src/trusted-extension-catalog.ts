@@ -21,11 +21,14 @@ export function getTrustedExtensionCatalogEntry(id: string): ExtensionCatalogEnt
 function snapshotExtensionCatalogEntry(entry: ExtensionCatalogEntry): ExtensionCatalogEntry {
     const setup = entry.setup.map(snapshotSetupStep);
     Object.freeze(setup);
+    const requirements = entry.requirements.map(requirement => Object.freeze({ ...requirement }));
+    Object.freeze(requirements);
     const configurationTarget = Object.freeze({ ...entry.configurationTarget });
     return Object.freeze({
         ...entry,
         configurationTarget,
         setup,
+        requirements,
     });
 }
 

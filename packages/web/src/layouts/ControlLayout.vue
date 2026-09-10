@@ -10,7 +10,7 @@ import {
     IconRefresh,
     IconSun,
 } from "@tabler/icons-vue";
-import { workspaceNavigation, type Workspace } from "../control-workspace.js";
+import { workspaceHash, workspaceNavigation, type Workspace } from "../control-workspace.js";
 
 const emit = defineEmits<{
     select: [workspace: Workspace];
@@ -29,6 +29,13 @@ const props = defineProps<{
     pendingVerificationCount?: number;
 }>();
 const activeItem = computed(() => workspaceNavigation.find(item => item.id === props.active));
+
+function navigate(event: MouseEvent, workspace: Workspace) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
+    event.preventDefault();
+    emit("select", workspace);
+}
 </script>
 
 <template>
@@ -39,14 +46,14 @@ const activeItem = computed(() => workspaceNavigation.find(item => item.id === p
                 <div><strong>onebots</strong><small>control plane</small></div>
             </div>
             <nav class="primary-nav" aria-label="控制台导航">
-                <button
+                <a
                     v-for="item in workspaceNavigation"
                     :key="item.id"
-                    type="button"
+                    :href="workspaceHash(item.id)"
                     :class="{ active: active === item.id }"
                     :aria-current="active === item.id ? 'page' : undefined"
-                    @click="emit('select', item.id)">
-                    <component :is="item.icon" :size="19" />
+                    @click="navigate($event, item.id)">
+                    <component :is="item.icon" :size="19" aria-hidden="true" />
                     <span
                         ><strong>{{ item.label }}</strong
                         ><small>{{ item.hint }}</small></span
@@ -57,7 +64,7 @@ const activeItem = computed(() => workspaceNavigation.find(item => item.id === p
                         :aria-label="`${pendingVerificationCount} 个待处理验证`"
                         >{{ pendingVerificationCount }}</em
                     >
-                </button>
+                </a>
             </nav>
             <div class="sidebar-status">
                 <span
@@ -76,21 +83,24 @@ const activeItem = computed(() => workspaceNavigation.find(item => item.id === p
                     class="icon-button"
                     aria-label="刷新状态"
                     @click="emit('refresh')">
-                    <IconRefresh :size="18" />
+                    <IconRefresh :size="18" aria-hidden="true" />
                 </button>
                 <button
                     type="button"
                     class="icon-button"
                     aria-label="切换主题"
                     @click="emit('toggleTheme')">
-                    <IconSun v-if="isDark" :size="18" /><IconMoon v-else :size="18" />
+                    <IconSun v-if="isDark" :size="18" aria-hidden="true" /><IconMoon
+                        v-else
+                        :size="18"
+                        aria-hidden="true" />
                 </button>
                 <button
                     type="button"
                     class="icon-button"
                     aria-label="退出登录"
                     @click="emit('logout')">
-                    <IconLogout :size="18" />
+                    <IconLogout :size="18" aria-hidden="true" />
                 </button>
             </div>
         </aside>
@@ -112,21 +122,24 @@ const activeItem = computed(() => workspaceNavigation.find(item => item.id === p
                         class="icon-button"
                         aria-label="刷新状态"
                         @click="emit('refresh')">
-                        <IconRefresh :size="17" />
+                        <IconRefresh :size="17" aria-hidden="true" />
                     </button>
                     <button
                         type="button"
                         class="icon-button"
                         aria-label="切换主题"
                         @click="emit('toggleTheme')">
-                        <IconSun v-if="isDark" :size="17" /><IconMoon v-else :size="17" />
+                        <IconSun v-if="isDark" :size="17" aria-hidden="true" /><IconMoon
+                            v-else
+                            :size="17"
+                            aria-hidden="true" />
                     </button>
                     <button
                         type="button"
                         class="icon-button"
                         aria-label="退出登录"
                         @click="emit('logout')">
-                        <IconLogout :size="17" />
+                        <IconLogout :size="17" aria-hidden="true" />
                     </button>
                 </div>
             </header>
@@ -140,31 +153,35 @@ const activeItem = computed(() => workspaceNavigation.find(item => item.id === p
                         class="icon-button"
                         aria-label="切换主题"
                         @click="emit('toggleTheme')">
-                        <IconSun v-if="isDark" :size="17" /><IconMoon v-else :size="17" />
+                        <IconSun v-if="isDark" :size="17" aria-hidden="true" /><IconMoon
+                            v-else
+                            :size="17"
+                            aria-hidden="true" />
                     </button>
                     <button
                         type="button"
                         class="icon-button"
                         aria-label="退出登录"
                         @click="emit('logout')">
-                        <IconLogout :size="17" />
+                        <IconLogout :size="17" aria-hidden="true" />
                     </button>
                 </div>
             </header>
             <nav class="mobile-nav" aria-label="控制台导航">
-                <button
+                <a
                     v-for="item in workspaceNavigation"
                     :key="item.id"
-                    type="button"
+                    :href="workspaceHash(item.id)"
                     :class="{ active: active === item.id }"
-                    @click="emit('select', item.id)">
-                    <component :is="item.icon" :size="17" />{{ item.label
+                    :aria-current="active === item.id ? 'page' : undefined"
+                    @click="navigate($event, item.id)">
+                    <component :is="item.icon" :size="17" aria-hidden="true" />{{ item.label
                     }}<em
                         v-if="item.id === 'activity' && pendingVerificationCount"
                         class="nav-count"
                         >{{ pendingVerificationCount }}</em
                     >
-                </button>
+                </a>
             </nav>
             <div id="main-content" class="workspace-scroll" tabindex="-1">
                 <div class="workspace">

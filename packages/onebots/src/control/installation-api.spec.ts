@@ -118,13 +118,22 @@ describe("installation HTTP boundary", () => {
     });
     it("目录与计划无需账号，框架选择保留且不启动任何协议", async () => {
         const test = fixture();
-        expect(await test.request("/api/control/installations/catalog", "GET")).toMatchObject({
+        const catalog = await test.request("/api/control/installations/catalog", "GET");
+        expect(catalog).toMatchObject({
             status: 200,
             body: {
                 adapters: expect.any(Array),
                 protocols: expect.any(Array),
                 applications: expect.any(Array),
             },
+        });
+        const adapters = (catalog.body as { adapters: Array<Record<string, unknown>> }).adapters;
+        expect(adapters.find(entry => entry.name === "mock")).toMatchObject({
+            description: expect.any(String),
+            setup: expect.any(Array),
+            capabilitySnapshot: expect.objectContaining({
+                manifest: expect.objectContaining({ version: 1 }),
+            }),
         });
         const result = await test.request("/api/control/installations/plan", "POST", {
             selection,

@@ -44,8 +44,10 @@ const labels = {
 </script>
 
 <template>
-    <section class="border border-border rounded-panel p-6 bg-surface space-y-4">
-        <h2 class="text-lg font-medium">账号登录验证</h2>
+    <section
+        class="verification-panel space-y-4 rounded-panel border border-border bg-surface p-6"
+        aria-labelledby="verification-title">
+        <h2 id="verification-title" class="text-lg font-medium">账号登录验证</h2>
         <p class="text-sm text-fg-secondary">
             按平台提示完成验证。答案仅用于本次提交；浏览器只保存操作编号。不要清除记录来绕过未知结果。
         </p>
@@ -62,7 +64,9 @@ const labels = {
         <p v-if="controller.uncertain" role="status" class="text-sm text-danger">
             有尚未确认的操作，已禁止新提交和短信请求。请查询原回执；未知结果不能自动解锁。
         </p>
-        <p v-if="view.snapshot && !view.snapshot.challenges.length">当前没有待处理验证。</p>
+        <p v-if="view.snapshot && !view.snapshot.challenges.length" role="status">
+            当前没有待处理验证。
+        </p>
         <article
             v-for="challenge in view.snapshot?.challenges ?? []"
             :key="challenge.id"
@@ -88,10 +92,13 @@ const labels = {
                         :id="`${challenge.id}-${index}`"
                         v-model="view.answers[challenge.id][block.key]"
                         type="password"
-                        autocomplete="off"
+                        :name="`verification-${challenge.id}-${block.key}`"
+                        autocomplete="one-time-code"
+                        spellcheck="false"
+                        autocapitalize="none"
                         :maxlength="Math.min(block.maxLength ?? 16384, 16384)"
                         :disabled="view.busy || controller.uncertain || !!mutationBlock"
-                        class="w-full rounded-control border border-border bg-surface p-3" />
+                        class="w-full rounded-control border border-border bg-surface p-3 focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--ring)]" />
                 </div>
                 <template v-else-if="block.type === 'link' || block.type === 'image_url'">
                     <a
@@ -114,8 +121,10 @@ const labels = {
                         v-if="safeVerificationImage(block.base64)"
                         :src="safeVerificationImage(block.base64)"
                         :alt="block.alt || '验证图片'"
-                        class="max-w-full max-h-80" />
-                    <p v-else class="text-danger">
+                        width="320"
+                        height="320"
+                        class="h-auto max-h-80 max-w-full object-contain" />
+                    <p v-else role="alert" class="text-danger">
                         图片格式不受支持，请使用平台提供的其他验证方式。
                     </p>
                 </template>
@@ -136,7 +145,7 @@ const labels = {
                     >
                 </div>
             </template>
-            <div class="flex flex-wrap gap-3">
+            <div class="verification-actions flex flex-wrap gap-3">
                 <UiButton
                     v-if="
                         challenge.request.confirmable ||
@@ -161,12 +170,18 @@ const labels = {
                 >
             </div>
         </article>
-        <div v-if="view.ids.length" class="border-t border-border pt-4 space-y-3">
+        <div
+            v-if="view.ids.length"
+            class="verification-receipts space-y-3 border-t border-border pt-4"
+            aria-live="polite">
             <h3 class="font-medium">验证操作回执</h3>
             <p class="text-sm text-fg-secondary">
                 核对只读取原网关结果，不会重新验证。仅原网关存活且有确定结果才能解锁；网关退出或结果缺失仍保留未知。停止网关后可明确接受未知风险，只解除阻塞，不代表成功。
             </p>
-            <div v-for="id in [...view.ids].reverse()" :key="id" class="space-y-1">
+            <div
+                v-for="id in [...view.ids].reverse()"
+                :key="id"
+                class="verification-receipt space-y-2 rounded-card border border-border p-3">
                 <code class="text-xs break-all">{{ id }}</code>
                 <p class="text-sm">
                     {{
@@ -198,7 +213,7 @@ const labels = {
                     <p class="text-sm text-danger">
                         短信或登录可能已执行，接受结果不会撤销。请先停止网关；这里只解锁，不自动停止、发短信或重新提交。
                     </p>
-                    <label class="flex gap-2 text-sm">
+                    <label class="flex min-h-11 items-start gap-2 text-sm">
                         <input
                             v-model="accepted[id]"
                             type="checkbox"
@@ -220,7 +235,7 @@ const labels = {
                     <p class="text-sm text-danger">
                         查询失败不代表未执行。请先停止网关；服务端只有确认原操作未受理后才允许封存，迟到请求将永久拒绝。不表示平台从未发生过动作，不会重提或删除历史编号。
                     </p>
-                    <label class="flex gap-2 text-sm">
+                    <label class="flex min-h-11 items-start gap-2 text-sm">
                         <input
                             v-model="abandoned[id]"
                             type="checkbox"

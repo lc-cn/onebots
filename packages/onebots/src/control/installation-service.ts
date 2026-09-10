@@ -23,7 +23,12 @@ import {
     type GenerationActivationController,
 } from "./generation-activation.js";
 import { TRUSTED_EXTENSION_CATALOG } from "../trusted-extension-catalog.js";
-import { getExtensionPackageCatalogEntry } from "../extension-capability-catalog.js";
+import {
+    getExtensionCapabilityCatalogEntry,
+    getExtensionPackageCatalogEntry,
+} from "../extension-capability-catalog.js";
+import { summarizeManifest } from "../capability-report.js";
+import type { ControlInstallationCatalog } from "@onebots/core/control";
 import { listFrameworkProfiles } from "../framework-integration.js";
 import type { PersistedOperationObserver } from "../persisted-operation-observer.js";
 import {
@@ -37,14 +42,6 @@ import { ControlInstallationPlanStore } from "./installation-plan-store.js";
 const BUILTIN_APPLICATIONS = listFrameworkProfiles()
     .filter(profile => String(profile.applicationStage) !== "planned")
     .map(profile => Object.freeze({ name: profile.id, displayName: profile.displayName }));
-
-export interface ControlInstallationCatalog {
-    activeGenerationId: string | null;
-    selection: GenerationSelection;
-    adapters: Array<{ name: string; displayName: string; version: string }>;
-    protocols: Array<{ name: string; displayName: string; version: string }>;
-    applications: Array<{ name: string; displayName: string }>;
-}
 
 export interface ControlInstallationOptions {
     directory: string;
@@ -106,6 +103,40 @@ export class ControlInstallationService {
                     ? [{ name: entry.name, displayName: entry.displayName, version }]
                     : [];
             });
+        const adapters = entries("adapter").map(adapter => {
+            const extension = TRUSTED_EXTENSION_CATALOG.find(
+                entry => entry.type === "adapter" && entry.name === adapter.name,
+            );
+            const capability = getExtensionCapabilityCatalogEntry(adapter.name);
+            const packageEntry = extension
+                ? getExtensionPackageCatalogEntry(extension.packageName)
+                : undefined;
+            if (!extension || !capability) {
+                throw new Error(`适配器目录缺少产品信息: ${adapter.name}`);
+            }
+            const versionMatched =
+                capability.packageVersion === adapter.version &&
+                packageEntry?.packageVersion === adapter.version;
+            return {
+                ...adapter,
+                description: extension.description,
+                packageName: extension.packageName,
+                setup: extension.setup.map(step => ({ ...step })),
+                requirements: extension.requirements.map(requirement => ({ ...requirement })),
+                ...(versionMatched
+                    ? {
+                          peerDependencies: Object.entries(packageEntry.peerDependencies ?? {}).map(
+                              ([packageName, range]) => ({ packageName, range }),
+                          ),
+                          capabilitySnapshot: {
+                              packageVersion: capability.packageVersion,
+                              summary: summarizeManifest(capability.manifest),
+                              manifest: structuredClone(capability.manifest),
+                          },
+                      }
+                    : {}),
+            };
+        });
         return {
             activeGenerationId,
             selection: structuredClone(
@@ -115,7 +146,7 @@ export class ControlInstallationService {
                     applications: [],
                 },
             ),
-            adapters: entries("adapter"),
+            adapters,
             protocols: entries("protocol"),
             applications: BUILTIN_APPLICATIONS.map(application => ({ ...application })),
         };

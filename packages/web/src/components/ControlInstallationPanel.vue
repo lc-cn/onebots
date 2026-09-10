@@ -9,6 +9,7 @@ import type {
     ControlUpdatePlan,
 } from "@onebots/core/control";
 import UiButton from "../ui/UiButton.vue";
+import ControlAdapterCatalogBrowser from "./ControlAdapterCatalogBrowser.vue";
 import ControlInstallPlanPreview from "./ControlInstallPlanPreview.vue";
 import ControlUpdatePreview from "./ControlUpdatePreview.vue";
 import type { ControlMutationBlock } from "../control-product-state.js";
@@ -19,12 +20,10 @@ import {
 const props = defineProps<{ client: ControlClient; mutationBlock?: ControlMutationBlock }>();
 const emit = defineEmits<{ applied: [] }>();
 type Catalog = ControlInstallationCatalog;
-interface Tracking {
-    id: string;
+type Tracking = Pick<ControlInstallOperation, "id" | "planDigest"> & {
     planId: string;
-    planDigest: string;
     activationRequested?: boolean;
-}
+};
 const STORAGE_KEY = "onebots.control.installation";
 const catalog = ref<Catalog>();
 const selected = ref<ControlExtensionSelection>({ adapters: [], protocols: [], applications: [] });
@@ -216,7 +215,6 @@ async function install() {
         schedule();
     }
 }
-
 async function cancel() {
     if (!tracking.value || !pending.value || props.mutationBlock) return;
     busy.value = true;
@@ -231,7 +229,6 @@ async function cancel() {
         await query();
     }
 }
-
 async function apply() {
     if (
         operation.value?.phase !== "verified" ||
@@ -272,7 +269,6 @@ async function apply() {
         busy.value = false;
     }
 }
-
 async function newPlan() {
     if (!terminal.value) return;
     try {
@@ -291,7 +287,6 @@ async function newPlan() {
     note.value = "";
     await loadCatalog();
 }
-
 watch(
     selected,
     () => {
@@ -336,7 +331,6 @@ onUnmounted(() => {
     privateToken.value = "";
 });
 </script>
-
 <template>
     <section class="border-t border-border pt-6 space-y-5" aria-labelledby="installation-heading">
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -374,44 +368,51 @@ onUnmounted(() => {
             class="border border-border rounded-control p-3 text-sm text-fg-secondary">
             服务端尚未提供当前完整依赖集合。为避免覆盖已安装扩展，暂不允许生成计划，请刷新或升级管理服务。
         </p>
-        <div v-if="catalog && !tracking && !updatePreview" class="grid gap-4 sm:grid-cols-3">
-            <fieldset
-                v-for="section in sections"
-                :key="section.key"
-                :disabled="busy || !selectionKnown || !!mutationBlock"
-                class="border border-border rounded-panel p-4 bg-surface">
-                <legend class="px-1 text-sm font-medium">{{ section.label }}</legend>
-                <div class="space-y-3 max-h-64 overflow-y-auto pt-1">
-                    <label
-                        v-for="entry in catalog[section.key]"
-                        :key="entry.name"
-                        class="flex items-start gap-2 text-sm cursor-pointer">
-                        <input
-                            v-model="selected[section.key]"
-                            type="checkbox"
-                            :value="entry.name"
-                            class="mt-1 accent-accent" />
-                        <span
-                            >{{ entry.displayName
-                            }}<span class="block text-xs text-fg-muted">{{
-                                entry.name
-                            }}</span></span
-                        >
-                    </label>
-                    <p v-if="!catalog[section.key].length" class="text-sm text-fg-muted">
-                        暂无可选项
+        <div v-if="catalog && !tracking && !updatePreview" class="space-y-5">
+            <ControlAdapterCatalogBrowser
+                v-model="selected.adapters"
+                :entries="catalog.adapters"
+                :disabled="busy || !selectionKnown || !!mutationBlock" />
+
+            <div class="grid gap-4 sm:grid-cols-2">
+                <fieldset
+                    v-for="section in sections.slice(1)"
+                    :key="section.key"
+                    :disabled="busy || !selectionKnown || !!mutationBlock"
+                    class="border border-border rounded-panel p-4 bg-surface">
+                    <legend class="px-1 text-sm font-medium">{{ section.label }}</legend>
+                    <div class="space-y-3 max-h-64 overflow-y-auto pt-1">
+                        <label
+                            v-for="entry in catalog[section.key]"
+                            :key="entry.name"
+                            class="flex min-h-11 items-center gap-2 text-sm cursor-pointer">
+                            <input
+                                v-model="selected[section.key]"
+                                type="checkbox"
+                                :value="entry.name"
+                                class="mt-1 accent-accent" />
+                            <span
+                                >{{ entry.displayName
+                                }}<span class="block text-xs text-fg-muted">{{
+                                    entry.name
+                                }}</span></span
+                            >
+                        </label>
+                        <p v-if="!catalog[section.key].length" class="text-sm text-fg-muted">
+                            暂无可选项
+                        </p>
+                    </div>
+                    <p
+                        v-if="
+                            selected[section.key].some(
+                                name => !catalog![section.key].some(entry => entry.name === name),
+                            )
+                        "
+                        class="text-xs text-danger mt-3">
+                        当前集合含目录外扩展，已保留选择；请先由管理员核查。
                     </p>
-                </div>
-                <p
-                    v-if="
-                        selected[section.key].some(
-                            name => !catalog![section.key].some(entry => entry.name === name),
-                        )
-                    "
-                    class="text-xs text-danger mt-3">
-                    当前集合含目录外扩展，已保留选择；请先由管理员核查。
-                </p>
-            </fieldset>
+                </fieldset>
+            </div>
         </div>
         <UiButton
             v-if="!tracking && !updatePreview"

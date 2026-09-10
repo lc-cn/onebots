@@ -4,7 +4,7 @@ import type {
     ControlInstallationCatalog,
     ControlStatus,
 } from "@onebots/core/control";
-import { controlMutationBlock, workspaceReadiness } from "./control-product-state.js";
+import { controlMutationBlock, setupJourney, workspaceReadiness } from "./control-product-state.js";
 
 const selection = { adapters: [], protocols: [], applications: [] };
 const catalog = (
@@ -57,6 +57,70 @@ describe("workspaceReadiness", () => {
             workspaceReadiness(catalog(), configuration({ unknownPaths: [["legacy.account"]] })),
         ).toBe("configured");
         expect(workspaceReadiness(catalog(), configuration(), true)).toBe("unavailable");
+    });
+});
+
+describe("setupJourney", () => {
+    it("guides an empty workspace through extensions, configuration and start", () => {
+        expect(setupJourney(catalog(), configuration(), status()).state).toBe("needs-extensions");
+
+        const installed = catalog({
+            activeGenerationId: "generation",
+            selection: { adapters: ["mock"], protocols: ["onebot-v11"], applications: ["zhin"] },
+        });
+        const needsAccount = setupJourney(installed, configuration(), status());
+        expect(needsAccount.state).toBe("needs-configuration");
+        expect(needsAccount.nextWorkspace).toBe("configuration");
+        expect(needsAccount.counts).toEqual({
+            adapters: 1,
+            protocols: 1,
+            applications: 1,
+            accounts: 0,
+        });
+
+        const configured = configuration({ document: { "mock.10000": { token: "redacted" } } });
+        expect(setupJourney(installed, configured, status()).state).toBe("ready-to-start");
+        expect(
+            setupJourney(
+                installed,
+                configured,
+                status({
+                    gateway: {
+                        desired: "running",
+                        actual: "running",
+                        recoveryRequired: false,
+                        operations: [],
+                    },
+                }),
+            ).state,
+        ).toBe("running");
+    });
+
+    it("does not invent progress while authoritative facts are unavailable", () => {
+        expect(setupJourney(undefined, configuration(), status()).state).toBe("loading");
+        expect(setupJourney(catalog(), configuration(), status(), true).state).toBe("unavailable");
+    });
+
+    it("routes a gateway recovery state to diagnostics instead of start", () => {
+        const installed = catalog({
+            selection: { adapters: ["mock"], protocols: ["onebot-v11"], applications: [] },
+        });
+        const configured = configuration({ document: { "mock.10000": {} } });
+        const journey = setupJourney(
+            installed,
+            configured,
+            status({
+                gateway: {
+                    desired: "running",
+                    actual: "failed",
+                    recoveryRequired: true,
+                    operations: [],
+                },
+            }),
+        );
+        expect(journey.state).toBe("recovery");
+        expect(journey.nextWorkspace).toBe("activity");
+        expect(journey.nextLabel).toBe("打开恢复诊断");
     });
 });
 

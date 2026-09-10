@@ -11,6 +11,7 @@ const entry = (overrides: Partial<ExtensionCatalogEntry> = {}): ExtensionCatalog
     packageName: "@onebots/protocol-onebot-v11",
     configurationTarget: { kind: "protocol", protocolKey: "onebot.v11" },
     setup: [],
+    requirements: [],
     ...overrides,
 });
 

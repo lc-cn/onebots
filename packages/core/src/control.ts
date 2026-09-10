@@ -35,6 +35,7 @@ import type {
     ControlSendRequest,
     ControlSendOperation,
 } from "./control-send.js";
+import type { AdapterCapabilityManifest } from "./adapter-capability.js";
 export type {
     ControlSendContext,
     ControlSendRequest,
@@ -130,9 +131,51 @@ export interface ControlUpdatePlan {
 export interface ControlInstallationCatalog {
     activeGenerationId: string | null;
     selection: ControlExtensionSelection;
-    adapters: Array<{ name: string; displayName: string; version: string }>;
+    adapters: ControlAdapterCatalogEntry[];
     protocols: Array<{ name: string; displayName: string; version: string }>;
     applications: Array<{ name: string; displayName: string }>;
+}
+
+export interface ControlExtensionSetupStep {
+    title: string;
+    description: string;
+    url?: string;
+}
+
+export interface ControlExtensionInstallRequirement {
+    kind: "registry-authentication";
+    title: string;
+    description: string;
+    scope: string;
+    permission: string;
+}
+
+export interface ControlCapabilityCategorySummary {
+    total: number;
+    supported: number;
+    native: number;
+    emulated: number;
+    unsupported: number;
+}
+
+export interface ControlAdapterCatalogEntry {
+    name: string;
+    displayName: string;
+    version: string;
+    /** 以下产品信息由支持富目录的管理服务提供；旧服务仍可返回基础三字段条目。 */
+    description?: string;
+    packageName?: string;
+    setup?: ControlExtensionSetupStep[];
+    requirements?: ControlExtensionInstallRequirement[];
+    peerDependencies?: Array<{ packageName: string; range: string }>;
+    capabilitySnapshot?: {
+        packageVersion: string;
+        summary: Record<
+            "actions" | "events" | "segments" | "transports",
+            ControlCapabilityCategorySummary
+        >;
+        manifest: AdapterCapabilityManifest;
+    };
 }
 
 export interface ControlInstallOperation {

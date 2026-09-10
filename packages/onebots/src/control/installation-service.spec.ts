@@ -192,10 +192,36 @@ describe("control installation service", () => {
         );
         expect(catalog.protocols.some(entry => entry.name === "onebot-v11")).toBe(true);
         expect(catalog.applications.some(entry => entry.name === "zhin")).toBe(true);
+        const mock = catalog.adapters.find(entry => entry.name === "mock");
+        expect(mock).toMatchObject({
+            description: expect.any(String),
+            packageName: "@onebots/adapter-mock",
+            setup: expect.any(Array),
+            capabilitySnapshot: {
+                packageVersion: expect.stringMatching(/^\d+\.\d+\.\d+/),
+                summary: { actions: { supported: expect.any(Number) } },
+                manifest: { version: 1 },
+            },
+        });
+        expect(catalog.adapters.find(entry => entry.name === "icqq")).toMatchObject({
+            requirements: [
+                { kind: "registry-authentication", scope: "@icqqjs", permission: "read:packages" },
+            ],
+            peerDependencies: [
+                { packageName: "@icqqjs/icqq", range: expect.stringMatching(/^\^/) },
+            ],
+        });
         catalog.adapters.length = 0;
         catalog.applications[0].displayName = "changed";
+        if (mock) mock.capabilitySnapshot.manifest.actions = {};
         expect(test.service.catalog().adapters.length).toBeGreaterThan(0);
         expect(test.service.catalog().applications[0].displayName).not.toBe("changed");
+        expect(
+            Object.keys(
+                test.service.catalog().adapters.find(entry => entry.name === "mock")!
+                    .capabilitySnapshot.manifest.actions,
+            ).length,
+        ).toBeGreaterThan(0);
         expect(fs.readdirSync(test.directory).sort()).toEqual(before);
         expect(fs.existsSync(path.join(test.directory, "config.yaml"))).toBe(false);
         expect(test.resolver.fetchMetadata).not.toHaveBeenCalled();

@@ -8,9 +8,9 @@ import {
     type ControlInstallationCatalog,
     type ControlStatus,
 } from "@onebots/core/control";
-import { controlMutationBlock, workspaceReadiness } from "./control-product-state.js";
+import { controlMutationBlock, setupJourney } from "./control-product-state.js";
 import type { Workspace } from "./control-workspace.js";
-import { workspaceNavigation } from "./control-workspace.js";
+import { workspaceFromHash, workspaceHash } from "./control-workspace.js";
 import ControlLayout from "./layouts/ControlLayout.vue";
 import AccessView from "./views/AccessView.vue";
 import ConfigurationView from "./views/ConfigurationView.vue";
@@ -27,6 +27,7 @@ const notice = ref("");
 const busy = ref(false);
 const lastUpdated = ref<Date>();
 const activeWorkspace = ref<Workspace>("overview");
+const configurationDirty = ref(false);
 const installationCatalog = ref<ControlInstallationCatalog>();
 const configurationSnapshot = ref<ControlConfigurationSnapshot>();
 const workspaceFactsUnavailable = ref(false);
@@ -48,10 +49,11 @@ const gatewayInstanceId = computed(() =>
         : undefined,
 );
 const mutationBlock = computed(() => controlMutationBlock(state.value));
-const readiness = computed(() =>
-    workspaceReadiness(
+const journey = computed(() =>
+    setupJourney(
         installationCatalog.value,
         configurationSnapshot.value,
+        state.value,
         workspaceFactsUnavailable.value,
     ),
 );
@@ -59,10 +61,30 @@ let refreshTimer: ReturnType<typeof setInterval> | undefined;
 let factsRevision = 0;
 let verificationRevision = 0;
 
-function selectWorkspace(workspace: Workspace) {
+function confirmConfigurationLeave() {
+    return window.confirm("配置中还有未保存的本地修改。离开后这些修改会丢失，是否继续？");
+}
+
+function showWorkspace(workspace: Workspace) {
     activeWorkspace.value = workspace;
-    history.replaceState(null, "", `#${workspace}`);
     document.querySelector(".workspace-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function selectWorkspace(workspace: Workspace) {
+    if (workspace !== activeWorkspace.value)
+        history.pushState({ workspace }, "", workspaceHash(workspace));
+    showWorkspace(workspace);
+}
+
+function restoreWorkspaceFromLocation() {
+    const workspace = workspaceFromHash(window.location.hash);
+    showWorkspace(workspace);
+}
+
+function protectUnsavedConfiguration(event: BeforeUnloadEvent) {
+    if (!configurationDirty.value) return;
+    event.preventDefault();
+    event.returnValue = "";
 }
 
 function toggleTheme() {
@@ -163,9 +185,16 @@ function reconnect() {
     code.value = "";
     error.value = "";
     notice.value = "";
+    configurationDirty.value = false;
+}
+
+function requestReconnect() {
+    if (configurationDirty.value && !confirmConfigurationLeave()) return;
+    reconnect();
 }
 
 async function logout() {
+    if (configurationDirty.value && !confirmConfigurationLeave()) return;
     busy.value = true;
     error.value = "";
     try {
@@ -191,7 +220,7 @@ async function command(action: "start" | "stop" | "restart") {
         if (result.status === "failed") {
             error.value = result.error ?? "操作未完成，请检查网关状态";
         } else {
-            notice.value = `${label}请求已提交。`;
+            notice.value = `${label}已完成。`;
         }
     } catch (cause) {
         error.value = cause instanceof Error ? cause.message : "操作结果暂不可确认，请刷新状态";
@@ -201,8 +230,13 @@ async function command(action: "start" | "stop" | "restart") {
 }
 
 onMounted(() => {
-    const hash = window.location.hash.slice(1) as Workspace;
-    if (workspaceNavigation.some(item => item.id === hash)) activeWorkspace.value = hash;
+    const workspace = workspaceFromHash(window.location.hash);
+    activeWorkspace.value = workspace;
+    if (window.location.hash !== workspaceHash(workspace))
+        history.replaceState({ workspace }, "", workspaceHash(workspace));
+    window.addEventListener("popstate", restoreWorkspaceFromLocation);
+    window.addEventListener("hashchange", restoreWorkspaceFromLocation);
+    window.addEventListener("beforeunload", protectUnsavedConfiguration);
     void refreshProductState();
     refreshTimer = setInterval(() => {
         if (!busy.value) void refresh();
@@ -211,6 +245,9 @@ onMounted(() => {
 
 onUnmounted(() => {
     if (refreshTimer) clearInterval(refreshTimer);
+    window.removeEventListener("popstate", restoreWorkspaceFromLocation);
+    window.removeEventListener("hashchange", restoreWorkspaceFromLocation);
+    window.removeEventListener("beforeunload", protectUnsavedConfiguration);
 });
 </script>
 
@@ -244,19 +281,24 @@ onUnmounted(() => {
             :busy="busy"
             :last-updated="lastUpdated"
             :stale="!!error && !!state"
-            :readiness="readiness"
+            :journey="journey"
             :mutation-block="mutationBlock"
             @command="command"
             @select="selectWorkspace" />
         <ExtensionsView
             v-show="activeWorkspace === 'extensions'"
             :client="client"
+            :journey="journey"
             :mutation-block="mutationBlock"
+            @select="selectWorkspace"
             @applied="refreshProductState" />
         <ConfigurationView
             v-show="activeWorkspace === 'configuration'"
             :client="client"
+            :journey="journey"
             :mutation-block="mutationBlock"
+            @select="selectWorkspace"
+            @dirty-change="configurationDirty = $event"
             @applied="refreshProductState" />
         <OperationsView
             v-show="activeWorkspace === 'activity'"
@@ -268,7 +310,9 @@ onUnmounted(() => {
             v-show="activeWorkspace === 'access'"
             :client="client"
             :busy="busy"
+            :configuration-dirty="configurationDirty"
             @logout="logout"
-            @reconnect="reconnect" />
+            @revoked-self="reconnect"
+            @reconnect="requestReconnect" />
     </ControlLayout>
 </template>

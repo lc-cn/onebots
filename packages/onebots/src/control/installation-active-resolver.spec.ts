@@ -84,9 +84,11 @@ it("升级后新增扩展保留活动host/core且目录版本来自活动发布�
         "@onebots/adapter-mock",
         "1.0.2",
     );
-    expect(f.service.catalog().adapters).toEqual([
+    expect(f.service.catalog().adapters).toMatchObject([
         { name: "mock", displayName: expect.any(String), version: "1.0.2" },
     ]);
+    expect(f.service.catalog().adapters[0].capabilitySnapshot).toBeUndefined();
+    expect(f.service.catalog().adapters[0].peerDependencies).toBeUndefined();
     expect(f.service.catalog().selection).toEqual(f.plan.selection);
 });
 it.each(["missing", "broken", "symlink", "hardlink", "oversized", "outside-parent"])(

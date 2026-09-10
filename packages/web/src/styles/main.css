@@ -2,6 +2,7 @@
 @import "./shell.css";
 @import "./workspace.css";
 @import "./control-components.css";
+@import "./setup-journey.css";
 @import "./responsive.css";
 
 @custom-variant dark (&:where(.dark, .dark *));

@@ -34,6 +34,12 @@ onUnmounted(() => {
 });
 </script>
 <template>
-    <img v-if="image" :src="image" :alt="alt || '使用平台应用扫描二维码'" class="max-w-full" />
-    <p v-if="error" class="text-sm text-danger">{{ error }}</p>
+    <img
+        v-if="image"
+        :src="image"
+        :alt="alt || '使用平台应用扫描二维码'"
+        width="280"
+        height="280"
+        class="h-auto max-w-full" />
+    <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
 </template>

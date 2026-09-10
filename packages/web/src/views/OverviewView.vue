@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, ref } from "vue";
 import type { ControlOperation, ControlStatus } from "@onebots/core/control";
 import { IconAlertTriangle, IconChevronRight } from "@tabler/icons-vue";
+import ControlSetupJourney from "../components/ControlSetupJourney.vue";
 import type { Workspace } from "../control-workspace.js";
-import type { ControlMutationBlock, WorkspaceReadiness } from "../control-product-state.js";
+import type { ControlMutationBlock, SetupJourney } from "../control-product-state.js";
 import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
@@ -11,7 +12,7 @@ const props = defineProps<{
     busy: boolean;
     lastUpdated?: Date;
     stale: boolean;
-    readiness: WorkspaceReadiness;
+    journey: SetupJourney;
     mutationBlock?: ControlMutationBlock;
 }>();
 const emit = defineEmits<{
@@ -45,6 +46,74 @@ const onlineAccounts = computed(
 const recentOperations = computed(() =>
     [...(props.state?.gateway.operations ?? [])].reverse().slice(0, 6),
 );
+const pendingCommand = ref<"stop" | "restart">();
+const commandDialog = ref<HTMLElement>();
+const runtimeStatus = ref<HTMLElement>();
+let commandTrigger: HTMLElement | null = null;
+const commandImpact = computed(() => {
+    if (pendingCommand.value === "stop")
+        return {
+            title: "停止网关？",
+            detail: "平台账号会断开，所有协议出口将停止响应，直到你再次启动网关。管理控制台仍会保持在线。",
+            confirm: "确认停止",
+        };
+    return {
+        title: "重启网关？",
+        detail: "平台账号和协议连接会短暂中断并重新建立。当前网关进程会退出，新的实例标识与进程号将发生变化。",
+        confirm: "确认重启",
+    };
+});
+
+function requestCommand(action: "start" | "stop" | "restart") {
+    if (action === "start") emit("command", action);
+    else {
+        commandTrigger =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        pendingCommand.value = action;
+        void nextTick(() =>
+            commandDialog.value?.querySelector<HTMLButtonElement>("button")?.focus(),
+        );
+    }
+}
+
+function closeCommand() {
+    pendingCommand.value = undefined;
+    void nextTick(restoreCommandFocus);
+}
+
+function confirmCommand() {
+    const action = pendingCommand.value;
+    pendingCommand.value = undefined;
+    if (action) emit("command", action);
+    void nextTick(restoreCommandFocus);
+}
+
+function restoreCommandFocus() {
+    if (commandTrigger && !commandTrigger.matches(":disabled")) commandTrigger.focus();
+    else runtimeStatus.value?.focus();
+}
+
+function keepCommandFocus(event: KeyboardEvent) {
+    if (event.key === "Escape") {
+        event.preventDefault();
+        closeCommand();
+        return;
+    }
+    if (event.key !== "Tab" || !commandDialog.value) return;
+    const controls = [
+        ...commandDialog.value.querySelectorAll<HTMLElement>("button:not(:disabled)"),
+    ];
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
 </script>
 
 <template>
@@ -72,7 +141,11 @@ const recentOperations = computed(() =>
             <div class="skeleton"></div>
         </div>
         <template v-else>
-            <section class="runtime-hero" :class="`is-${state.gateway.actual}`">
+            <section
+                ref="runtimeStatus"
+                class="runtime-hero"
+                tabindex="-1"
+                :class="`is-${state.gateway.actual}`">
                 <div class="runtime-copy">
                     <p class="runtime-kicker">
                         <span class="status-dot" :class="state.gateway.actual"></span> GATEWAY
@@ -90,20 +163,20 @@ const recentOperations = computed(() =>
                         variant="primary"
                         :loading="busy"
                         :disabled="!!mutationBlock || state.gateway.actual === 'running'"
-                        @click="emit('command', 'start')"
+                        @click="requestCommand('start')"
                         >启动网关</UiButton
                     >
                     <UiButton
                         :loading="busy"
                         :disabled="!!mutationBlock || state.gateway.actual === 'stopped'"
-                        @click="emit('command', 'stop')"
+                        @click="requestCommand('stop')"
                         >停止</UiButton
                     >
                     <UiButton
                         variant="ghost"
                         :loading="busy"
                         :disabled="!!mutationBlock"
-                        @click="emit('command', 'restart')"
+                        @click="requestCommand('restart')"
                         >重启</UiButton
                     >
                 </div>
@@ -120,55 +193,56 @@ const recentOperations = computed(() =>
                 </div>
             </section>
             <div
+                v-if="pendingCommand"
+                class="command-confirm-backdrop"
+                role="presentation"
+                @click.self="closeCommand">
+                <section
+                    ref="commandDialog"
+                    class="command-confirm"
+                    role="dialog"
+                    tabindex="-1"
+                    aria-modal="true"
+                    aria-labelledby="command-confirm-title"
+                    aria-describedby="command-confirm-detail"
+                    @keydown="keepCommandFocus">
+                    <div class="command-confirm-icon">
+                        <IconAlertTriangle :size="22" aria-hidden="true" />
+                    </div>
+                    <div>
+                        <h2 id="command-confirm-title">{{ commandImpact.title }}</h2>
+                        <p id="command-confirm-detail">{{ commandImpact.detail }}</p>
+                        <p v-if="accountItems.length" class="command-confirm-count">
+                            当前涉及 {{ accountItems.length }} 个账号，其中 {{ onlineAccounts }}
+                            个在线。
+                        </p>
+                    </div>
+                    <div class="command-confirm-actions">
+                        <UiButton @click="closeCommand">取消</UiButton>
+                        <UiButton variant="danger" @click="confirmCommand">{{
+                            commandImpact.confirm
+                        }}</UiButton>
+                    </div>
+                </section>
+            </div>
+            <div
                 v-if="state.gateway.recoveryRequired"
                 class="feedback feedback-error recovery-block">
-                <IconAlertTriangle :size="20" /><span
+                <IconAlertTriangle :size="20" aria-hidden="true" /><span
                     ><strong>网关需要人工恢复</strong
                     >请先查看最近操作与服务日志，确认上一操作结果后再继续。</span
                 >
                 <button type="button" @click="emit('select', 'activity')">查看诊断</button>
             </div>
             <div v-else-if="state.gateway.error" class="feedback feedback-error">
-                <IconAlertTriangle :size="18" /><span>{{ state.gateway.error }}</span>
+                <IconAlertTriangle :size="18" aria-hidden="true" /><span>{{
+                    state.gateway.error
+                }}</span>
             </div>
-            <section v-if="readiness === 'empty'" class="onboarding">
-                <div class="onboarding-intro">
-                    <span>01</span>
-                    <div>
-                        <p class="eyebrow">EMPTY WORKSPACE</p>
-                        <h2>从空白工作区开始</h2>
-                        <p>
-                            先选择平台与协议，再填写账号配置，最后启动网关。控制台不会替你启用任何外部连接。
-                        </p>
-                    </div>
-                </div>
-                <ol class="onboarding-steps">
-                    <li>
-                        <span>1</span>
-                        <div>
-                            <strong>安装扩展</strong>
-                            <p>选择平台适配器与协议出口，生成不可变运行版本。</p>
-                        </div>
-                    </li>
-                    <li>
-                        <span>2</span>
-                        <div>
-                            <strong>配置账号</strong>
-                            <p>创建配置草稿，校验后应用到当前工作区。</p>
-                        </div>
-                    </li>
-                    <li>
-                        <span>3</span>
-                        <div>
-                            <strong>启动网关</strong>
-                            <p>启动后在诊断区完成登录验证并观察日志。</p>
-                        </div>
-                    </li>
-                </ol>
-                <UiButton variant="primary" @click="emit('select', 'extensions')"
-                    >开始安装与配置 <IconChevronRight :size="16"
-                /></UiButton>
-            </section>
+            <ControlSetupJourney
+                v-if="journey.state !== 'running'"
+                :journey="journey"
+                @select="emit('select', $event)" />
             <div class="overview-grid">
                 <section class="account-strip">
                     <div class="section-heading">
@@ -177,7 +251,7 @@ const recentOperations = computed(() =>
                             <h2>账号连接</h2>
                         </div>
                         <button type="button" @click="emit('select', 'configuration')">
-                            管理配置 <IconChevronRight :size="15" />
+                            管理配置 <IconChevronRight :size="15" aria-hidden="true" />
                         </button>
                     </div>
                     <p v-if="state.accounts?.available === false" class="empty-copy">
@@ -210,7 +284,7 @@ const recentOperations = computed(() =>
                             <h2>最近操作</h2>
                         </div>
                         <button type="button" @click="emit('select', 'activity')">
-                            打开诊断 <IconChevronRight :size="15" />
+                            打开诊断 <IconChevronRight :size="15" aria-hidden="true" />
                         </button>
                     </div>
                     <p v-if="!recentOperations.length" class="empty-copy">还没有网关操作记录。</p>
@@ -231,3 +305,63 @@ const recentOperations = computed(() =>
         </template>
     </section>
 </template>
+
+<style scoped>
+.command-confirm-backdrop {
+    position: fixed;
+    z-index: 60;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 1.25rem;
+    background: rgb(0 0 0 / 48%);
+    backdrop-filter: blur(3px);
+}
+
+.command-confirm {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1rem;
+    width: min(100%, 34rem);
+    padding: 1.25rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+
+.command-confirm-icon {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.command-confirm h2 {
+    margin: 0 0 0.45rem;
+    font-size: 1.1rem;
+}
+
+.command-confirm p {
+    margin: 0;
+    color: var(--fg-secondary);
+    line-height: 1.55;
+}
+
+.command-confirm .command-confirm-count {
+    margin-top: 0.75rem;
+    color: var(--fg);
+    font-weight: 600;
+}
+
+.command-confirm-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.65rem;
+    padding-top: 0.25rem;
+}
+</style>

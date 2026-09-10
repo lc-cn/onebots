@@ -18,6 +18,8 @@ describe("trusted extension catalog", () => {
         expect(Object.isFrozen(trusted.configurationTarget)).toBe(true);
         expect(Object.isFrozen(trusted.setup)).toBe(true);
         expect(trusted.setup.every(Object.isFrozen)).toBe(true);
+        expect(Object.isFrozen(trusted.requirements)).toBe(true);
+        expect(trusted.requirements.every(Object.isFrozen)).toBe(true);
     });
 
     it("keeps install identity and setup guidance stable after a source mutation", () => {
@@ -48,6 +50,15 @@ describe("trusted extension catalog", () => {
         }).toThrow(TypeError);
         expect(() => {
             trusted.setup.push({ title: "新增步骤", description: "不应成功" });
+        }).toThrow(TypeError);
+        expect(() => {
+            trusted.requirements.push({
+                kind: "registry-authentication",
+                title: "恶意要求",
+                description: "不应成功",
+                scope: "@evil",
+                permission: "write:packages",
+            });
         }).toThrow(TypeError);
     });
 });

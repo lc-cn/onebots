@@ -1,0 +1,119 @@
+.setup-journey {
+    display: grid;
+    grid-template-columns: minmax(17rem, 0.9fr) minmax(22rem, 1.25fr);
+    gap: clamp(2rem, 5vw, 5rem);
+    margin-block: 1.5rem;
+    border-radius: 1rem;
+    background: #10291f;
+    color: #f2f6f0;
+    padding: clamp(1.5rem, 4vw, 3rem);
+}
+.setup-journey.complete {
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    color: var(--fg);
+}
+.setup-journey-copy h2 {
+    margin-top: 0.45rem;
+    max-width: 32rem;
+    font-size: clamp(1.4rem, 2.4vw, 1.85rem);
+    font-weight: 610;
+    letter-spacing: -0.035em;
+    line-height: 1.12;
+}
+.setup-journey-copy > p:not(.eyebrow) {
+    margin-top: 0.75rem;
+    max-width: 34rem;
+    color: #b8c7bd;
+    line-height: 1.65;
+}
+.setup-journey.complete .setup-journey-copy > p:not(.eyebrow) {
+    color: var(--fg-secondary);
+}
+.setup-journey-copy > button {
+    margin-top: 1.35rem;
+}
+.setup-journey-steps {
+    align-self: center;
+}
+.setup-journey-steps li {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.11);
+    padding: 0.8rem 0;
+    color: #96a79c;
+}
+.setup-journey.complete .setup-journey-steps li {
+    border-color: var(--border);
+    color: var(--fg-secondary);
+}
+.setup-journey-steps li.current {
+    color: #ffffff;
+}
+.setup-journey.complete .setup-journey-steps li.current {
+    color: var(--fg);
+}
+.setup-step-mark {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    place-items: center;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+}
+.setup-journey-steps li.complete .setup-step-mark {
+    border-color: #61d2a0;
+    background: #61d2a0;
+    color: #10291f;
+}
+.setup-journey-steps li > span:last-child {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+.setup-journey-steps strong {
+    color: inherit;
+    font-size: 0.82rem;
+    font-weight: 620;
+}
+.setup-journey-steps small {
+    margin-top: 0.15rem;
+    overflow: hidden;
+    color: inherit;
+    font-size: 0.72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.setup-journey.compact {
+    grid-template-columns: minmax(16rem, 0.75fr) minmax(24rem, 1.25fr);
+    gap: 2rem;
+    margin-top: 0;
+    padding: 1.35rem 1.5rem;
+}
+.setup-journey.compact .setup-journey-copy h2 {
+    font-size: 1.15rem;
+}
+.setup-journey.compact .setup-journey-copy > p:not(.eyebrow) {
+    font-size: 0.78rem;
+}
+.setup-journey.compact .setup-journey-copy > button {
+    margin-top: 0.9rem;
+}
+.setup-journey.compact .setup-journey-steps li {
+    padding: 0.55rem 0;
+}
+
+@media (max-width: 760px) {
+    .setup-journey,
+    .setup-journey.compact {
+        grid-template-columns: 1fr;
+        gap: 1.35rem;
+    }
+    .setup-journey-steps small {
+        white-space: normal;
+    }
+}

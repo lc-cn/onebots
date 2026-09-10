@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useId } from "vue";
 import UiField from "../ui/UiField.vue";
 import UiInput from "../ui/UiInput.vue";
 import UiNumberInput from "../ui/UiNumberInput.vue";
@@ -91,12 +91,25 @@ const choiceModel = computed<string | number | boolean | undefined>({
         model.value = value;
     },
 });
+const controlId = `schema-field-${useId()}`;
+const descriptionId = `${controlId}-description`;
+const simpleWidget = computed(() =>
+    ["input", "number", "switch", "select", "textarea"].includes(widget.value),
+);
 </script>
 
 <template>
-    <UiField :label="field.label" :required="field.rule.required" :hint="field.rule.description">
+    <UiField
+        :label="field.label"
+        :for="simpleWidget ? controlId : undefined"
+        :description-id="field.rule.description ? descriptionId : undefined"
+        :required="field.rule.required"
+        :hint="field.rule.description">
         <UiInput
             v-if="widget === 'input'"
+            :id="controlId"
+            :aria-describedby="field.rule.description ? descriptionId : undefined"
+            :aria-required="field.rule.required || undefined"
             v-model="stringModel"
             :type="field.rule.sensitive ? 'password' : 'text'"
             :autocomplete="field.rule.sensitive ? 'off' : undefined"
@@ -104,13 +117,25 @@ const choiceModel = computed<string | number | boolean | undefined>({
             :disabled="disabled" />
         <UiNumberInput
             v-else-if="widget === 'number'"
+            :id="controlId"
+            :aria-describedby="field.rule.description ? descriptionId : undefined"
+            :aria-required="field.rule.required || undefined"
             v-model="numberModel"
             :min="field.rule.min"
             :max="field.rule.max"
             :disabled="disabled" />
-        <UiSwitch v-else-if="widget === 'switch'" v-model="booleanModel" :disabled="disabled" />
+        <UiSwitch
+            v-else-if="widget === 'switch'"
+            :id="controlId"
+            :aria-describedby="field.rule.description ? descriptionId : undefined"
+            :aria-required="field.rule.required || undefined"
+            v-model="booleanModel"
+            :disabled="disabled" />
         <UiSelect
             v-else-if="widget === 'select'"
+            :id="controlId"
+            :aria-describedby="field.rule.description ? descriptionId : undefined"
+            :aria-required="field.rule.required || undefined"
             v-model="choiceModel"
             :options="choiceOptions"
             :placeholder="field.placeholder || '请选择'"
@@ -137,6 +162,9 @@ const choiceModel = computed<string | number | boolean | undefined>({
             :disabled="disabled" />
         <UiTextarea
             v-else
+            :id="controlId"
+            :aria-describedby="field.rule.description ? descriptionId : undefined"
+            :aria-required="field.rule.required || undefined"
             v-model="stringModel"
             mono
             :rows="4"

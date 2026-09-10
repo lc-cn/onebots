@@ -196,7 +196,7 @@
     gap: 0.3rem;
     padding-top: 1.5rem;
 }
-.primary-nav button {
+.primary-nav a {
     display: grid;
     width: 100%;
     grid-template-columns: 1.5rem minmax(0, 1fr) auto;
@@ -208,6 +208,7 @@
     color: var(--fg-secondary);
     padding: 0.72rem 0.75rem;
     text-align: left;
+    text-decoration: none;
     transition:
         background 160ms ease,
         color 160ms ease,
@@ -227,29 +228,29 @@
     font-weight: 700;
     padding: 0 0.3rem;
 }
-.primary-nav button.active .nav-count {
+.primary-nav a.active .nav-count {
     background: var(--warning-soft);
     color: currentColor;
 }
-.primary-nav button:hover {
+.primary-nav a:hover {
     background: var(--surface-raised);
     color: var(--fg);
     transform: translateX(2px);
 }
-.primary-nav button.active {
+.primary-nav a.active {
     background: var(--fg);
     color: var(--bg);
 }
-.primary-nav button span {
+.primary-nav a span {
     display: flex;
     min-width: 0;
     flex-direction: column;
 }
-.primary-nav button strong {
+.primary-nav a strong {
     font-size: 0.84rem;
     font-weight: 570;
 }
-.primary-nav button small {
+.primary-nav a small {
     margin-top: 0.08rem;
     overflow: hidden;
     opacity: 0.62;

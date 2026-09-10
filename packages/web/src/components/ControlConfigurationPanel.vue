@@ -5,8 +5,9 @@ import ControlConfigurationRepair from "./ControlConfigurationRepair.vue";
 import ControlConfigurationFields from "./ControlConfigurationFields.vue";
 import { useControlConfigurationPanel } from "./use-control-configuration-panel.js";
 import type { ControlMutationBlock } from "../control-product-state.js";
+import { watch } from "vue";
 const props = defineProps<{ client: ControlClient; mutationBlock?: ControlMutationBlock }>();
-const emit = defineEmits<{ applied: [] }>();
+const emit = defineEmits<{ applied: []; dirtyChange: [dirty: boolean] }>();
 const {
     source,
     repair,
@@ -47,6 +48,13 @@ const {
     change,
     mode,
 } = useControlConfigurationPanel(props.client, () => emit("applied"));
+watch(dirty, value => emit("dirtyChange", value), { immediate: true, flush: "sync" });
+
+function reloadWithConfirmation() {
+    if (dirty.value && !window.confirm("重新读取会放弃尚未保存到草稿的本地修改，是否继续？"))
+        return;
+    void reload();
+}
 </script>
 <template>
     <section class="border-t border-border pt-6 space-y-5">
@@ -57,7 +65,7 @@ const {
                     先编辑草稿，再校验和应用。管理认证不属于运行配置。
                 </p>
             </div>
-            <UiButton :disabled="busy" @click="reload">{{
+            <UiButton :disabled="busy" @click="reloadWithConfirmation">{{
                 dirty ? "放弃本地修改并重读" : "重新读取配置"
             }}</UiButton>
         </div>
