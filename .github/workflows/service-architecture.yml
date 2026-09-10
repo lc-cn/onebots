@@ -28,6 +28,8 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Configure GitHub Packages authentication
+        run: pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:packages
       - name: Verify migration, manager upgrade, cold recovery, and lifecycle on real launchd
@@ -50,6 +52,8 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Configure GitHub Packages authentication
+        run: pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:packages
       - name: Verify migration, manager upgrade, cold recovery, and lifecycle on real systemd
@@ -88,6 +92,8 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Configure GitHub Packages authentication
+        run: pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
       - run: pnpm install --frozen-lockfile
         shell: bash
       - run: pnpm build:packages
@@ -123,6 +129,8 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Configure GitHub Packages authentication
+        run: pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
       - uses: actions/setup-python@v5
         if: startsWith(matrix.group, 'python')
         with:
@@ -194,6 +202,8 @@ jobs:
         with:
           go-version: "1.23.x"
           cache-dependency-path: native/windows-host/go.sum
+      - name: Configure GitHub Packages authentication
+        run: pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Verify managed Mock protocol transports

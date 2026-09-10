@@ -30,6 +30,14 @@ pnpm --version
 
 pnpm is not required when you only install and run the published OneBots package globally with npm. See the [Quick Start](./start.md). After meeting the runtime requirement, run `onebots doctor` for configuration, plugin, permission, and service diagnostics if deployment checks still fail.
 
+When installing the ICQQ adapter from source, store the GitHub Packages token in the user-level npm configuration. pnpm 10 does not expand authentication variables from a repository `.npmrc`:
+
+```bash
+pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
+```
+
+The product's CLI, TUI, and Web installation flow creates a temporary authentication file for each private dependency download and removes it afterward, so users do not need to edit the container or workspace `.npmrc`.
+
 ## Prepare platform accounts
 
 Before connecting a real platform, create an application in its developer console and obtain the required credentials. Use the Mock adapter for the first installation check because it does not connect to an external platform. After the gateway is healthy, follow the [Platform Configuration](/en/config/platform) to add a real account.

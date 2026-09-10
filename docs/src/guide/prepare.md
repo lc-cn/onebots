@@ -30,6 +30,14 @@ pnpm --version
 
 仅通过 npm 全局安装并运行 OneBots 时不要求 pnpm，参见[快速开始](./start.md)。满足运行时版本要求后，若部署检查仍失败，可执行 `onebots doctor` 获取配置、插件、权限与服务状态诊断。
 
+从源码安装 ICQQ 适配器时，需要把 GitHub Packages token 写入用户级 npm 配置；pnpm 10 不会展开仓库内 `.npmrc` 的认证变量：
+
+```bash
+pnpm config set --location=user "//npm.pkg.github.com/:_authToken" "$NODE_AUTH_TOKEN"
+```
+
+产品中的 CLI、TUI 与 Web 安装流程会为单次私有依赖下载建立临时认证文件并在完成后清理，无需用户修改容器或工作区的 `.npmrc`。
+
 ## 准备平台账号
 
 接入真实平台前，请先在对应开放平台申请应用并取得所需凭据。首次验证安装建议使用 Mock 适配器，它不会连接外部平台；确认网关运行正常后，再按照[平台配置](/config/platform)添加真实账号。
