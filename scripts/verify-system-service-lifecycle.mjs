@@ -287,15 +287,10 @@ function migrationJournalStates() {
         });
 }
 
-function migrationCaptureState() {
+function migrationCaptureState(id) {
     const migrations = path.join(STATE_DIRECTORY, "migrations");
     if (!fs.existsSync(migrations)) return { operation: false };
-    const ids = fs
-        .readdirSync(migrations)
-        .map(name => /^([0-9a-f-]{36})\.journal\.json$/iu.exec(name)?.[1])
-        .filter(Boolean);
-    if (ids.length !== 1) return { operation: ids.length === 1 };
-    const id = ids[0];
+    if (!fs.existsSync(path.join(migrations, `${id}.journal.json`))) return { operation: false };
     const inspect = kind => {
         const directory = path.join(STATE_DIRECTORY, "legacy-runtime-artifacts", kind);
         try {
@@ -407,8 +402,9 @@ async function invokeMigration(args) {
     const result = invokeCli(args, [0, 1]);
     if (result.status === 0) return result.stdout;
     const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
+    const id = /操作 ([0-9a-f-]{36})：/iu.exec(text)?.[1];
     throw new Error(
-        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；捕获阶段=${JSON.stringify(migrationCaptureState())}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}`,
+        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；捕获阶段=${JSON.stringify(id ? migrationCaptureState(id) : { operation: false })}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}`,
     );
 }
 
