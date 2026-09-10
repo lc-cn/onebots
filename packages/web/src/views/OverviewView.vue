@@ -3,6 +3,7 @@ import { computed } from "vue";
 import type { ControlOperation, ControlStatus } from "@onebots/core/control";
 import { IconAlertTriangle, IconChevronRight } from "@tabler/icons-vue";
 import type { Workspace } from "../control-workspace.js";
+import type { ControlMutationBlock, WorkspaceReadiness } from "../control-product-state.js";
 import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
@@ -10,6 +11,8 @@ const props = defineProps<{
     busy: boolean;
     lastUpdated?: Date;
     stale: boolean;
+    readiness: WorkspaceReadiness;
+    mutationBlock?: ControlMutationBlock;
 }>();
 const emit = defineEmits<{
     command: [action: "start" | "stop" | "restart"];
@@ -38,9 +41,6 @@ const operationStatusLabels: Record<ControlOperation["status"], string> = {
 const accountItems = computed(() => props.state?.accounts?.items ?? []);
 const onlineAccounts = computed(
     () => accountItems.value.filter(account => account.status === "online").length,
-);
-const isEmptyWorkspace = computed(
-    () => props.state?.accounts?.available === true && accountItems.value.length === 0,
 );
 const recentOperations = computed(() =>
     [...(props.state?.gateway.operations ?? [])].reverse().slice(0, 6),
@@ -89,17 +89,21 @@ const recentOperations = computed(() =>
                     <UiButton
                         variant="primary"
                         :loading="busy"
-                        :disabled="state.gateway.actual === 'running'"
+                        :disabled="!!mutationBlock || state.gateway.actual === 'running'"
                         @click="emit('command', 'start')"
                         >启动网关</UiButton
                     >
                     <UiButton
                         :loading="busy"
-                        :disabled="state.gateway.actual === 'stopped'"
+                        :disabled="!!mutationBlock || state.gateway.actual === 'stopped'"
                         @click="emit('command', 'stop')"
                         >停止</UiButton
                     >
-                    <UiButton variant="ghost" :loading="busy" @click="emit('command', 'restart')"
+                    <UiButton
+                        variant="ghost"
+                        :loading="busy"
+                        :disabled="!!mutationBlock"
+                        @click="emit('command', 'restart')"
                         >重启</UiButton
                     >
                 </div>
@@ -127,7 +131,7 @@ const recentOperations = computed(() =>
             <div v-else-if="state.gateway.error" class="feedback feedback-error">
                 <IconAlertTriangle :size="18" /><span>{{ state.gateway.error }}</span>
             </div>
-            <section v-if="isEmptyWorkspace" class="onboarding">
+            <section v-if="readiness === 'empty'" class="onboarding">
                 <div class="onboarding-intro">
                     <span>01</span>
                     <div>

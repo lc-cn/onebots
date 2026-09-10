@@ -83,6 +83,25 @@
     margin-bottom: 1rem;
     box-shadow: var(--shadow);
 }
+.global-blocker {
+    position: sticky;
+    top: 1rem;
+    z-index: 12;
+    margin-bottom: 1rem;
+    border-width: 2px;
+    box-shadow: var(--shadow);
+}
+.global-blocker span,
+.verification-alert span {
+    display: flex;
+    flex-direction: column;
+}
+.verification-alert {
+    margin-bottom: 1rem;
+    border-color: color-mix(in srgb, var(--warning) 38%, transparent);
+    background: var(--warning-soft);
+    color: var(--warning);
+}
 .recovery-block {
     margin: 1rem 0;
 }

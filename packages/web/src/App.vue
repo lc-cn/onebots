@@ -4,8 +4,11 @@ import {
     ControlClient,
     ControlRequestError,
     createHttpControlTransport,
+    type ControlConfigurationSnapshot,
+    type ControlInstallationCatalog,
     type ControlStatus,
 } from "@onebots/core/control";
+import { controlMutationBlock, workspaceReadiness } from "./control-product-state.js";
 import type { Workspace } from "./control-workspace.js";
 import { workspaceNavigation } from "./control-workspace.js";
 import ControlLayout from "./layouts/ControlLayout.vue";
@@ -24,6 +27,10 @@ const notice = ref("");
 const busy = ref(false);
 const lastUpdated = ref<Date>();
 const activeWorkspace = ref<Workspace>("overview");
+const installationCatalog = ref<ControlInstallationCatalog>();
+const configurationSnapshot = ref<ControlConfigurationSnapshot>();
+const workspaceFactsUnavailable = ref(false);
+const pendingVerificationCount = ref<number>();
 const storedTheme = localStorage.getItem("onebots.theme");
 const isDark = ref(
     storedTheme
@@ -40,7 +47,17 @@ const gatewayInstanceId = computed(() =>
         ? state.value.gateway.instance?.id
         : undefined,
 );
+const mutationBlock = computed(() => controlMutationBlock(state.value));
+const readiness = computed(() =>
+    workspaceReadiness(
+        installationCatalog.value,
+        configurationSnapshot.value,
+        workspaceFactsUnavailable.value,
+    ),
+);
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
+let factsRevision = 0;
+let verificationRevision = 0;
 
 function selectWorkspace(workspace: Workspace) {
     activeWorkspace.value = workspace;
@@ -63,6 +80,11 @@ async function refresh() {
         state.value = next;
         lastUpdated.value = new Date();
         error.value = "";
+        void refreshVerificationSummary(
+            next.gateway.actual === "running" && !next.gateway.recoveryRequired
+                ? next.gateway.instance?.id
+                : undefined,
+        );
     } catch (cause) {
         if (token.value !== expectedToken) return;
         if (cause instanceof ControlRequestError && cause.status === 401) {
@@ -74,6 +96,44 @@ async function refresh() {
     }
 }
 
+async function refreshWorkspaceFacts() {
+    if (!token.value) return;
+    const revision = ++factsRevision;
+    const [catalog, configuration] = await Promise.allSettled([
+        client.installationCatalog(),
+        client.configurationSnapshot(),
+    ]);
+    if (revision !== factsRevision || !token.value) return;
+    if (catalog.status === "fulfilled" && configuration.status === "fulfilled") {
+        installationCatalog.value = catalog.value;
+        configurationSnapshot.value = configuration.value;
+        workspaceFactsUnavailable.value = false;
+    } else {
+        installationCatalog.value = undefined;
+        configurationSnapshot.value = undefined;
+        workspaceFactsUnavailable.value = true;
+    }
+}
+
+async function refreshVerificationSummary(instanceId?: string) {
+    const revision = ++verificationRevision;
+    if (!instanceId) {
+        pendingVerificationCount.value = undefined;
+        return;
+    }
+    try {
+        const snapshot = await client.verification.pending();
+        if (revision !== verificationRevision || snapshot.gatewayInstanceId !== instanceId) return;
+        pendingVerificationCount.value = snapshot.challenges.length;
+    } catch {
+        if (revision === verificationRevision) pendingVerificationCount.value = undefined;
+    }
+}
+
+async function refreshProductState() {
+    await Promise.all([refresh(), refreshWorkspaceFacts()]);
+}
+
 async function pair() {
     busy.value = true;
     error.value = "";
@@ -83,7 +143,7 @@ async function pair() {
         token.value = result.token;
         localStorage.setItem("onebots.control.token", result.token);
         code.value = "";
-        await refresh();
+        await refreshProductState();
         notice.value = "此设备已连接到管理服务。";
     } catch (cause) {
         error.value = cause instanceof Error ? cause.message : "配对失败";
@@ -96,6 +156,10 @@ function reconnect() {
     token.value = "";
     localStorage.removeItem("onebots.control.token");
     state.value = undefined;
+    installationCatalog.value = undefined;
+    configurationSnapshot.value = undefined;
+    workspaceFactsUnavailable.value = false;
+    pendingVerificationCount.value = undefined;
     code.value = "";
     error.value = "";
     notice.value = "";
@@ -116,6 +180,7 @@ async function logout() {
 }
 
 async function command(action: "start" | "stop" | "restart") {
+    if (mutationBlock.value) return;
     busy.value = true;
     error.value = "";
     notice.value = "";
@@ -138,7 +203,7 @@ async function command(action: "start" | "stop" | "restart") {
 onMounted(() => {
     const hash = window.location.hash.slice(1) as Workspace;
     if (workspaceNavigation.some(item => item.id === hash)) activeWorkspace.value = hash;
-    void refresh();
+    void refreshProductState();
     refreshTimer = setInterval(() => {
         if (!busy.value) void refresh();
     }, 3000);
@@ -166,6 +231,8 @@ onUnmounted(() => {
         :error="error"
         :notice="notice"
         :is-dark="isDark"
+        :mutation-block="mutationBlock"
+        :pending-verification-count="pendingVerificationCount"
         @select="selectWorkspace"
         @refresh="refresh"
         @logout="logout"
@@ -177,20 +244,26 @@ onUnmounted(() => {
             :busy="busy"
             :last-updated="lastUpdated"
             :stale="!!error && !!state"
+            :readiness="readiness"
+            :mutation-block="mutationBlock"
             @command="command"
             @select="selectWorkspace" />
         <ExtensionsView
             v-show="activeWorkspace === 'extensions'"
             :client="client"
-            @applied="refresh" />
+            :mutation-block="mutationBlock"
+            @applied="refreshProductState" />
         <ConfigurationView
             v-show="activeWorkspace === 'configuration'"
             :client="client"
-            @applied="refresh" />
+            :mutation-block="mutationBlock"
+            @applied="refreshProductState" />
         <OperationsView
             v-show="activeWorkspace === 'activity'"
             :client="client"
-            :gateway-instance-id="gatewayInstanceId" />
+            :gateway-instance-id="gatewayInstanceId"
+            :active="activeWorkspace === 'activity'"
+            :mutation-block="mutationBlock" />
         <AccessView
             v-show="activeWorkspace === 'access'"
             :client="client"

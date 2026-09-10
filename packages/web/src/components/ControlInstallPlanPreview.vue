@@ -7,6 +7,7 @@ defineProps<{
     privateNeeded: boolean;
     secureTransport: boolean;
     busy: boolean;
+    blocked: boolean;
 }>();
 defineEmits<{ install: [] }>();
 const privateToken = defineModel<string>({ required: true });
@@ -83,7 +84,7 @@ const removalLabels = (plan: ControlInstallPlan) => [
         <UiButton
             variant="primary"
             :loading="busy"
-            :disabled="!!privateNeeded && (!privateToken || !secureTransport)"
+            :disabled="blocked || (!!privateNeeded && (!privateToken || !secureTransport))"
             @click="$emit('install')"
             >确认并安装</UiButton
         >

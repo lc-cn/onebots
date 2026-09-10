@@ -199,7 +199,7 @@
 .primary-nav button {
     display: grid;
     width: 100%;
-    grid-template-columns: 1.5rem minmax(0, 1fr);
+    grid-template-columns: 1.5rem minmax(0, 1fr) auto;
     gap: 0.65rem;
     align-items: center;
     border: 0;
@@ -212,6 +212,24 @@
         background 160ms ease,
         color 160ms ease,
         transform 160ms ease;
+}
+.nav-count {
+    display: inline-grid;
+    min-width: 1.3rem;
+    height: 1.3rem;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--warning);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-style: normal;
+    font-weight: 700;
+    padding: 0 0.3rem;
+}
+.primary-nav button.active .nav-count {
+    background: var(--warning-soft);
+    color: currentColor;
 }
 .primary-nav button:hover {
     background: var(--surface-raised);

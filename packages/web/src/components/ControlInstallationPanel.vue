@@ -11,12 +11,12 @@ import type {
 import UiButton from "../ui/UiButton.vue";
 import ControlInstallPlanPreview from "./ControlInstallPlanPreview.vue";
 import ControlUpdatePreview from "./ControlUpdatePreview.vue";
+import type { ControlMutationBlock } from "../control-product-state.js";
 import {
     createControlUpdateCheck,
     boundedControlRequest as bounded,
 } from "./control-update-check.js";
-
-const props = defineProps<{ client: ControlClient }>();
+const props = defineProps<{ client: ControlClient; mutationBlock?: ControlMutationBlock }>();
 const emit = defineEmits<{ applied: [] }>();
 type Catalog = ControlInstallationCatalog;
 interface Tracking {
@@ -69,7 +69,6 @@ const phaseLabels = {
     failed: "安装失败",
     interrupted: "操作中断，需要核查",
 };
-
 function validSelection(value: unknown): value is ControlExtensionSelection {
     if (!value || typeof value !== "object") return false;
     return ["adapters", "protocols", "applications"].every(key => {
@@ -77,10 +76,9 @@ function validSelection(value: unknown): value is ControlExtensionSelection {
         return Array.isArray(items) && items.every(item => typeof item === "string");
     });
 }
-
 const updateCheck = createControlUpdateCheck({
     client: () => props.client,
-    blocked: () => busy.value || !!tracking.value || disposed,
+    blocked: () => busy.value || !!tracking.value || disposed || !!props.mutationBlock,
     bounded,
     begin: () => {
         catalogRevision++;
@@ -112,7 +110,6 @@ function leaveUpdate() {
     privateToken.value = "";
     void loadCatalog();
 }
-
 async function loadCatalog() {
     const request = ++catalogRevision;
     const client = props.client;
@@ -133,12 +130,10 @@ async function loadCatalog() {
         error.value = "无法读取安装目录，请稍后刷新。";
     }
 }
-
 function schedule() {
     clearTimeout(timer);
     if (!disposed && watching.value && pending.value) timer = setTimeout(() => void query(), 2000);
 }
-
 async function query() {
     if (!tracking.value || querying.value || disposed) return;
     const expected = tracking.value;
@@ -157,9 +152,9 @@ async function query() {
         schedule();
     }
 }
-
 async function createPlan() {
-    if (busy.value || disposed || !selectionKnown.value || tracking.value) return;
+    if (busy.value || disposed || !selectionKnown.value || tracking.value || props.mutationBlock)
+        return;
     updatePreview.value = undefined;
     busy.value = true;
     error.value = "";
@@ -185,9 +180,8 @@ async function createPlan() {
         busy.value = false;
     }
 }
-
 async function install() {
-    if (busy.value || (!tracking.value && !plan.value)) return;
+    if (busy.value || (!tracking.value && !plan.value) || props.mutationBlock) return;
     if (privateToken.value && !secureTransport) {
         error.value = "私有仓库授权需要 HTTPS 或本机连接。";
         return;
@@ -224,7 +218,7 @@ async function install() {
 }
 
 async function cancel() {
-    if (!tracking.value || !pending.value) return;
+    if (!tracking.value || !pending.value || props.mutationBlock) return;
     busy.value = true;
     try {
         await bounded(props.client.cancelInstallation(tracking.value.id));
@@ -243,7 +237,8 @@ async function apply() {
         operation.value?.phase !== "verified" ||
         !operation.value.candidateId ||
         !tracking.value ||
-        tracking.value.activationRequested
+        tracking.value.activationRequested ||
+        props.mutationBlock
     )
         return;
     const requested = { ...tracking.value, activationRequested: true };
@@ -356,7 +351,9 @@ onUnmounted(() => {
             >
         </div>
         <div v-if="!tracking" class="flex flex-wrap items-center gap-3">
-            <UiButton :disabled="busy" @click="updateCheck.run">检查网关升级</UiButton>
+            <UiButton :disabled="busy || !!mutationBlock" @click="updateCheck.run"
+                >检查网关升级</UiButton
+            >
             <p class="text-sm text-fg-secondary">只升级网关运行版本，不升级管理服务或 CLI。</p>
         </div>
         <p v-if="busy && updateCheck.isRunning()" role="status" class="text-sm text-fg-secondary">
@@ -369,6 +366,9 @@ onUnmounted(() => {
             @leave="leaveUpdate" />
         <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
         <p v-if="note" role="status" class="text-sm text-fg-secondary">{{ note }}</p>
+        <p v-if="mutationBlock" role="alert" class="text-sm text-danger">
+            {{ mutationBlock.title }}，扩展目录保持只读；不会生成、安装或应用新版本。
+        </p>
         <p
             v-if="catalog && !selectionKnown"
             class="border border-border rounded-control p-3 text-sm text-fg-secondary">
@@ -378,7 +378,7 @@ onUnmounted(() => {
             <fieldset
                 v-for="section in sections"
                 :key="section.key"
-                :disabled="busy || !selectionKnown"
+                :disabled="busy || !selectionKnown || !!mutationBlock"
                 class="border border-border rounded-panel p-4 bg-surface">
                 <legend class="px-1 text-sm font-medium">{{ section.label }}</legend>
                 <div class="space-y-3 max-h-64 overflow-y-auto pt-1">
@@ -417,7 +417,7 @@ onUnmounted(() => {
             v-if="!tracking && !updatePreview"
             variant="primary"
             :loading="busy"
-            :disabled="!selectionKnown"
+            :disabled="!selectionKnown || !!mutationBlock"
             @click="createPlan"
             >查看安装计划</UiButton
         >
@@ -429,6 +429,7 @@ onUnmounted(() => {
             :private-needed="!!privateNeeded"
             :secure-transport="secureTransport"
             :busy="busy"
+            :blocked="!!mutationBlock"
             @install="install" />
         <section
             v-if="tracking"
@@ -467,14 +468,21 @@ onUnmounted(() => {
                 <UiButton v-if="pending" @click="watching = !watching">{{
                     watching ? "暂停自动刷新" : "恢复自动刷新"
                 }}</UiButton>
-                <UiButton v-if="pending" :loading="busy" @click="cancel">取消安装</UiButton>
-                <UiButton v-if="!operation" :loading="busy" @click="install"
+                <UiButton v-if="pending" :loading="busy" :disabled="!!mutationBlock" @click="cancel"
+                    >取消安装</UiButton
+                >
+                <UiButton
+                    v-if="!operation"
+                    :loading="busy"
+                    :disabled="!!mutationBlock"
+                    @click="install"
                     >重新提交同一操作</UiButton
                 >
                 <UiButton
                     v-if="operation?.phase === 'verified' && !tracking.activationRequested"
                     variant="primary"
                     :loading="busy"
+                    :disabled="!!mutationBlock"
                     @click="apply"
                     >应用此运行版本</UiButton
                 >

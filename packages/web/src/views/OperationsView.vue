@@ -4,8 +4,14 @@ import { IconBell, IconBug, IconFileText } from "@tabler/icons-vue";
 import ControlLogsPanel from "../components/ControlLogsPanel.vue";
 import ControlMessageDebugPanel from "../components/ControlMessageDebugPanel.vue";
 import ControlVerificationPanel from "../components/ControlVerificationPanel.vue";
+import type { ControlMutationBlock } from "../control-product-state.js";
 
-defineProps<{ client: ControlClient; gatewayInstanceId?: string }>();
+defineProps<{
+    client: ControlClient;
+    gatewayInstanceId?: string;
+    active: boolean;
+    mutationBlock?: ControlMutationBlock;
+}>();
 </script>
 
 <template>
@@ -26,7 +32,11 @@ defineProps<{ client: ControlClient; gatewayInstanceId?: string }>();
             <span><strong>日志</strong><small>读取管理服务与网关输出</small></span>
         </div>
         <div class="panel-grid">
-            <ControlVerificationPanel :client="client" :gateway-instance-id="gatewayInstanceId" />
+            <ControlVerificationPanel
+                :client="client"
+                :gateway-instance-id="gatewayInstanceId"
+                :active="active"
+                :mutation-block="mutationBlock" />
             <ControlMessageDebugPanel :client="client" :gateway-instance-id="gatewayInstanceId" />
             <ControlLogsPanel :client="client" />
         </div>

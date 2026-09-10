@@ -2,8 +2,9 @@
 import type { ControlClient } from "@onebots/core/control";
 import { IconPackage } from "@tabler/icons-vue";
 import ControlInstallationPanel from "../components/ControlInstallationPanel.vue";
+import type { ControlMutationBlock } from "../control-product-state.js";
 
-defineProps<{ client: ControlClient }>();
+defineProps<{ client: ControlClient; mutationBlock?: ControlMutationBlock }>();
 const emit = defineEmits<{ applied: [] }>();
 </script>
 
@@ -32,7 +33,10 @@ const emit = defineEmits<{ applied: [] }>();
             </li>
         </ol>
         <div class="panel-stack">
-            <ControlInstallationPanel :client="client" @applied="emit('applied')" />
+            <ControlInstallationPanel
+                :client="client"
+                :mutation-block="mutationBlock"
+                @applied="emit('applied')" />
         </div>
     </section>
 </template>

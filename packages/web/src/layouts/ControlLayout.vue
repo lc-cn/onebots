@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { ControlStatus } from "@onebots/core/control";
+import type { ControlMutationBlock } from "../control-product-state.js";
 import {
     IconAlertTriangle,
     IconCircleCheck,
@@ -24,6 +25,8 @@ const props = defineProps<{
     error: string;
     notice: string;
     isDark: boolean;
+    mutationBlock?: ControlMutationBlock;
+    pendingVerificationCount?: number;
 }>();
 const activeItem = computed(() => workspaceNavigation.find(item => item.id === props.active));
 </script>
@@ -47,6 +50,12 @@ const activeItem = computed(() => workspaceNavigation.find(item => item.id === p
                     <span
                         ><strong>{{ item.label }}</strong
                         ><small>{{ item.hint }}</small></span
+                    >
+                    <em
+                        v-if="item.id === 'activity' && pendingVerificationCount"
+                        class="nav-count"
+                        :aria-label="`${pendingVerificationCount} 个待处理验证`"
+                        >{{ pendingVerificationCount }}</em
                     >
                 </button>
             </nav>
@@ -149,11 +158,38 @@ const activeItem = computed(() => workspaceNavigation.find(item => item.id === p
                     type="button"
                     :class="{ active: active === item.id }"
                     @click="emit('select', item.id)">
-                    <component :is="item.icon" :size="17" />{{ item.label }}
+                    <component :is="item.icon" :size="17" />{{ item.label
+                    }}<em
+                        v-if="item.id === 'activity' && pendingVerificationCount"
+                        class="nav-count"
+                        >{{ pendingVerificationCount }}</em
+                    >
                 </button>
             </nav>
             <div id="main-content" class="workspace-scroll" tabindex="-1">
                 <div class="workspace">
+                    <div
+                        v-if="mutationBlock"
+                        role="alert"
+                        class="feedback feedback-error global-blocker">
+                        <IconAlertTriangle :size="19" />
+                        <span
+                            ><strong>{{ mutationBlock.title }}</strong
+                            >{{ mutationBlock.detail }}</span
+                        >
+                        <button type="button" @click="emit('select', 'activity')">打开诊断</button>
+                    </div>
+                    <div
+                        v-if="pendingVerificationCount"
+                        role="status"
+                        class="feedback verification-alert">
+                        <IconAlertTriangle :size="18" />
+                        <span
+                            ><strong>{{ pendingVerificationCount }} 个账号验证等待处理</strong
+                            >平台登录正在等待人工输入，处理前账号可能无法上线。</span
+                        >
+                        <button type="button" @click="emit('select', 'activity')">立即处理</button>
+                    </div>
                     <div v-if="error" role="alert" class="feedback feedback-error sticky-feedback">
                         <IconAlertTriangle :size="18" /><span>{{ error }}</span
                         ><button type="button" @click="emit('refresh')">重试</button>

@@ -4,7 +4,8 @@ import UiButton from "../ui/UiButton.vue";
 import ControlConfigurationRepair from "./ControlConfigurationRepair.vue";
 import ControlConfigurationFields from "./ControlConfigurationFields.vue";
 import { useControlConfigurationPanel } from "./use-control-configuration-panel.js";
-const props = defineProps<{ client: ControlClient }>();
+import type { ControlMutationBlock } from "../control-product-state.js";
+const props = defineProps<{ client: ControlClient; mutationBlock?: ControlMutationBlock }>();
 const emit = defineEmits<{ applied: [] }>();
 const {
     source,
@@ -62,10 +63,13 @@ const {
         </div>
         <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
         <p v-if="message" role="status" class="text-sm text-fg-secondary">{{ message }}</p>
+        <p v-if="mutationBlock" role="alert" class="text-sm text-danger">
+            {{ mutationBlock.title }}，配置保持只读；可以重新读取和查询已有操作。
+        </p>
         <ControlConfigurationRepair
             v-if="source?.state === 'damaged'"
             :source="source"
-            :disabled="repairBlocked"
+            :disabled="repairBlocked || !!mutationBlock"
             @confirm="repair" />
         <p v-if="projection?.unknownPaths.length" class="text-sm text-amber-700">
             存在无法安全展示的字段，已在服务端保留。此页面不会用空值覆盖它们。
@@ -76,7 +80,7 @@ const {
             <p class="text-sm">读取到 {{ accounts.length }} 个账号。可创建草稿开始配置。</p>
             <UiButton
                 variant="primary"
-                :disabled="busy"
+                :disabled="busy || !!mutationBlock"
                 @click="staleBase ? createFresh() : create()"
                 >{{ staleBase ? "读取当前配置并创建新草稿" : "创建配置草稿" }}</UiButton
             >
@@ -86,7 +90,7 @@ const {
                 草稿 {{ draft.id }} · {{ dirty ? "有本地修改尚未保存" : "已保存" }}
             </p>
             <fieldset
-                :disabled="locked || dirty"
+                :disabled="locked || dirty || !!mutationBlock"
                 class="rounded-xl border border-border p-4 space-y-3">
                 <legend class="px-2 text-sm font-medium">平台账号</legend>
                 <div class="flex flex-wrap gap-2">
@@ -126,7 +130,7 @@ const {
                 </ul>
             </fieldset>
             <fieldset
-                :disabled="locked || dirty"
+                :disabled="locked || dirty || !!mutationBlock"
                 class="rounded-xl border border-border p-4 space-y-3">
                 <legend class="px-2 text-sm font-medium">协议出口（可选）</legend>
                 <div class="flex flex-wrap gap-2">
@@ -161,17 +165,21 @@ const {
                 :values="values"
                 :modes="modes"
                 :secret-states="draft.secretStates"
-                :locked="locked"
-                :list-locked="locked || dirty"
+                :locked="locked || !!mutationBlock"
+                :list-locked="locked || dirty || !!mutationBlock"
                 @list="editList"
                 @change="change"
                 @mode="mode" />
             <div class="flex flex-wrap gap-3">
-                <UiButton :disabled="locked || !dirty" @click="save">保存草稿</UiButton>
-                <UiButton :disabled="locked || dirty" @click="validate">校验配置</UiButton>
+                <UiButton :disabled="locked || !dirty || !!mutationBlock" @click="save"
+                    >保存草稿</UiButton
+                >
+                <UiButton :disabled="locked || dirty || !!mutationBlock" @click="validate"
+                    >校验配置</UiButton
+                >
                 <UiButton
                     variant="primary"
-                    :disabled="locked || dirty || !validation?.valid"
+                    :disabled="locked || dirty || !validation?.valid || !!mutationBlock"
                     @click="apply"
                     >应用已校验配置</UiButton
                 >
@@ -211,7 +219,7 @@ const {
             <UiButton :disabled="busy" @click="query">查询原操作</UiButton>
             <UiButton
                 v-if="operation && operation.status !== 'running' && !operation.recoveryRequired"
-                :disabled="busy"
+                :disabled="busy || !!mutationBlock"
                 @click="createFresh"
                 >读取当前配置并创建新草稿</UiButton
             >

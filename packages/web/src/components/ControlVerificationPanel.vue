@@ -3,13 +3,19 @@ import { onUnmounted, reactive, watch } from "vue";
 import { controlVerificationOutcome, type ControlClient } from "@onebots/core/control";
 import ControlVerificationCode from "./ControlVerificationCode.vue";
 import UiButton from "../ui/UiButton.vue";
+import type { ControlMutationBlock } from "../control-product-state.js";
 import {
     VerificationController,
     verificationView,
     safeVerificationImage,
     safeVerificationUrl,
 } from "./control-verification-state";
-const props = defineProps<{ client: ControlClient; gatewayInstanceId?: string }>();
+const props = defineProps<{
+    client: ControlClient;
+    gatewayInstanceId?: string;
+    active: boolean;
+    mutationBlock?: ControlMutationBlock;
+}>();
 const view = reactive(verificationView());
 const abandoned = reactive<Record<string, boolean>>({});
 const accepted = reactive<Record<string, boolean>>({});
@@ -17,10 +23,14 @@ const controller = new VerificationController(props.client, view, {
     getItem: key => localStorage.getItem(key),
     setItem: (key, value) => localStorage.setItem(key, value),
 });
-void controller.initialize();
 watch(
-    () => props.gatewayInstanceId,
-    id => controller.setGateway(id),
+    [() => props.active, () => props.gatewayInstanceId],
+    async ([active, id]) => {
+        controller.setGateway(id);
+        if (!active) return;
+        await controller.initialize();
+        await controller.refresh();
+    },
     { immediate: true },
 );
 onUnmounted(() => controller.dispose());
@@ -38,6 +48,9 @@ const labels = {
         <h2 class="text-lg font-medium">账号登录验证</h2>
         <p class="text-sm text-fg-secondary">
             按平台提示完成验证。答案仅用于本次提交；浏览器只保存操作编号。不要清除记录来绕过未知结果。
+        </p>
+        <p v-if="mutationBlock" role="alert" class="text-sm text-danger">
+            {{ mutationBlock.title }}，验证请求保持只读；仍可刷新挑战和查询既有回执。
         </p>
         <p v-if="view.error" role="alert" class="text-danger">{{ view.error }}</p>
         <UiButton :disabled="view.busy || !gatewayInstanceId" @click="controller.refresh()"
@@ -77,7 +90,7 @@ const labels = {
                         type="password"
                         autocomplete="off"
                         :maxlength="Math.min(block.maxLength ?? 16384, 16384)"
-                        :disabled="view.busy || controller.uncertain"
+                        :disabled="view.busy || controller.uncertain || !!mutationBlock"
                         class="w-full rounded-control border border-border bg-surface p-3" />
                 </div>
                 <template v-else-if="block.type === 'link' || block.type === 'image_url'">
@@ -129,20 +142,20 @@ const labels = {
                         challenge.request.confirmable ||
                         challenge.request.options?.blocks?.some(block => block.type === 'input')
                     "
-                    :disabled="view.busy || !view.ready || controller.uncertain"
+                    :disabled="view.busy || !view.ready || controller.uncertain || !!mutationBlock"
                     @click="controller.submit(challenge.id, 'submit')"
                     >{{ challenge.request.confirmLabel || "提交验证" }}</UiButton
                 >
                 <UiButton
                     v-if="challenge.request.requestSmsAvailable"
-                    :disabled="view.busy || !view.ready || controller.uncertain"
+                    :disabled="view.busy || !view.ready || controller.uncertain || !!mutationBlock"
                     @click="controller.submit(challenge.id, 'request-sms')"
                     >请求短信验证码</UiButton
                 >
                 <UiButton
                     v-for="action in challenge.request.actions ?? []"
                     :key="action.id"
-                    :disabled="view.busy || !view.ready || controller.uncertain"
+                    :disabled="view.busy || !view.ready || controller.uncertain || !!mutationBlock"
                     @click="controller.submit(challenge.id, 'submit', action.id)"
                     >{{ action.label }}</UiButton
                 >
@@ -171,7 +184,7 @@ const labels = {
                         !view.receipts[id]?.resolution &&
                         !view.receipts[id]?.acknowledgement
                     "
-                    :disabled="view.busy"
+                    :disabled="view.busy || !!mutationBlock"
                     @click="controller.reconcile(id)"
                     >核对网关原回执</UiButton
                 >
@@ -189,11 +202,13 @@ const labels = {
                         <input
                             v-model="accepted[id]"
                             type="checkbox"
-                            :disabled="view.busy || !!gatewayInstanceId" />
+                            :disabled="view.busy || !!gatewayInstanceId || !!mutationBlock" />
                         我理解并接受未知结果风险
                     </label>
                     <UiButton
-                        :disabled="view.busy || !!gatewayInstanceId || !accepted[id]"
+                        :disabled="
+                            view.busy || !!gatewayInstanceId || !accepted[id] || !!mutationBlock
+                        "
                         @click="
                             controller.acknowledge(id, accepted[id]);
                             accepted[id] = false;
@@ -209,11 +224,13 @@ const labels = {
                         <input
                             v-model="abandoned[id]"
                             type="checkbox"
-                            :disabled="view.busy || !!gatewayInstanceId" />
+                            :disabled="view.busy || !!gatewayInstanceId || !!mutationBlock" />
                         我理解并确认永久封存此编号
                     </label>
                     <UiButton
-                        :disabled="view.busy || !!gatewayInstanceId || !abandoned[id]"
+                        :disabled="
+                            view.busy || !!gatewayInstanceId || !abandoned[id] || !!mutationBlock
+                        "
                         @click="
                             controller.abandon(id, abandoned[id]);
                             abandoned[id] = false;
