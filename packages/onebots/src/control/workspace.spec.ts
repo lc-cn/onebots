@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { gatewayProcessExists } from "./workspace.js";
+import { gatewayProcessExists, supportsFilesystemControlSocket } from "./workspace.js";
 afterEach(() => vi.restoreAllMocks());
 const missing = () => Object.assign(new Error("missing"), { code: "ESRCH" });
 describe("历史网关进程组只读探测", () => {
@@ -39,5 +39,13 @@ describe("历史网关进程组只读探测", () => {
         for (const pid of [0, -1, NaN, 1.5, 0x80000000])
             expect(() => gatewayProcessExists(pid)).toThrow();
         expect(signal).not.toHaveBeenCalled();
+    });
+});
+
+describe("本地控制 socket 平台边界", () => {
+    it("Windows 前台候选不尝试监听空路径 socket", () => {
+        expect(supportsFilesystemControlSocket("win32")).toBe(false);
+        expect(supportsFilesystemControlSocket("linux")).toBe(true);
+        expect(supportsFilesystemControlSocket("darwin")).toBe(true);
     });
 });

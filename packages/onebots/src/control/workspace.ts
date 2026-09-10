@@ -16,8 +16,13 @@ export function controlDirectory(root: string): string {
     return path.join(path.resolve(root), ".control");
 }
 
+/** Windows 前台/候选 manager 没有 Unix socket；原生服务模式另用反向命名管道。 */
+export function supportsFilesystemControlSocket(platform: NodeJS.Platform = process.platform) {
+    return platform !== "win32";
+}
+
 export function controlSocket(root: string): string {
-    if (process.platform === "win32")
+    if (!supportsFilesystemControlSocket())
         throw new Error("Windows 本地控制传输尚待 ACL 验收，当前不开放命名管道");
     const socket = path.join(controlDirectory(root), "control.sock");
     // sockaddr_un 包含终止字节；使用各 POSIX 平台可接受的保守上限。

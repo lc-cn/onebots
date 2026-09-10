@@ -215,6 +215,7 @@ function verifyWindowsManagerCandidate(
         const resultStat = fs.statSync(result);
         if (!resultStat.isFile() || resultStat.size > 2 * 1024 * 1024) throw new Error();
         const value: unknown = JSON.parse(fs.readFileSync(result, "utf8"));
+        if (isWindowsVerificationFailure(value)) throw new Error();
         if (!isWindowsVerificationResult(value, expected)) throw new Error();
         cleanup = true;
         const schemaFile = path.join(root, "schemas.json");
@@ -235,6 +236,32 @@ function verifyWindowsManagerCandidate(
         // 只有 native host 已返回、Job 已关闭时才清理；超时/派发错误保留证据并 fail-close。
         if (cleanup) fs.rmSync(allocation, { recursive: true, force: true });
     }
+}
+
+function isWindowsVerificationFailure(value: unknown): boolean {
+    return Boolean(
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        Reflect.ownKeys(value).length === 2 &&
+        (value as Record<string, unknown>).failed === true &&
+        typeof (value as Record<string, unknown>).stage === "string" &&
+        [
+            "request",
+            "dependencies",
+            "package-identity",
+            "workspace",
+            "authentication",
+            "management-startup",
+            "management-state",
+            "web-page",
+            "web-asset",
+            "authentication-v2",
+            "anonymous-denied",
+            "management-close",
+            "authentication-preserved",
+        ].includes((value as Record<string, string>).stage),
+    );
 }
 
 function isWindowsVerificationResult(

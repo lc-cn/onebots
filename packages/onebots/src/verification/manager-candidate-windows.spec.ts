@@ -82,3 +82,39 @@ it("Windows 在一个 native Job Object worker 内完成通用和管理候选验
         },
     );
 });
+
+it("Windows worker 固定失败阶段保留在私有验证目录且不被当成成功", async () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ob-manager-windows-failure-"));
+    roots.push(root);
+    const candidate = path.join(root, "candidate");
+    const privateRoot = path.join(root, "private");
+    fs.mkdirSync(candidate);
+    const plan = createGenerationPlan({
+        host: { name: "onebots", version: "1.2.12", spec: "1.2.12" },
+        core: { name: "@onebots/core", version: "1.2.9", spec: "1.2.9" },
+        extensions: [],
+        selection: { adapters: [], protocols: [], applications: [] },
+    });
+    const originalStatSync = fs.statSync.bind(fs);
+    vi.spyOn(fs, "statSync").mockImplementation(file => {
+        if (String(file).endsWith("onebots-windows-host.exe"))
+            return { isFile: () => true, size: 100_001 } as fs.Stats;
+        return originalStatSync(file);
+    });
+    spawnSync.mockImplementation((_executable: string, args: string[]) => {
+        const result = args[args.indexOf("--result") + 2];
+        fs.writeFileSync(result, JSON.stringify({ failed: true, stage: "management-startup" }));
+        return { status: 1, signal: null };
+    });
+
+    const { verifyManagerCandidateInstallation } = await import("./manager-candidate.js");
+    await expect(
+        verifyManagerCandidateInstallation(candidate, plan, { privateRoot }),
+    ).rejects.toThrow("Windows 管理程序候选未通过 Job Object 隔离验证");
+    const allocations = fs.readdirSync(privateRoot);
+    expect(allocations).toHaveLength(1);
+    expect(
+        JSON.parse(fs.readFileSync(path.join(privateRoot, allocations[0], "result.json"), "utf8")),
+    ).toEqual({ failed: true, stage: "management-startup" });
+});

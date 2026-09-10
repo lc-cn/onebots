@@ -39,6 +39,7 @@ import {
     controlSocket,
     prepareGatewayWorkspace,
     gatewayProcessExists,
+    supportsFilesystemControlSocket,
 } from "./workspace.js";
 import { proxyGatewayUpgrade } from "./proxy.js";
 import { listen } from "./http-utils.js";
@@ -69,10 +70,11 @@ export async function startControlHost(options: ControlHostOptions) {
     fs.mkdirSync(options.workspace, { recursive: true });
     const workspace = fs.realpathSync(options.workspace);
     const windowsNativeMode = options.windowsHostPipe !== undefined;
+    const filesystemControlSocket = supportsFilesystemControlSocket();
     // Windows foreground/candidate verification has no Unix socket. Production Windows service
     // supplies windowsHostPipe and is additionally bound to the native Job Object/status channel.
     const socketPath =
-        options.windowsHostPipe ?? (process.platform === "win32" ? "" : controlSocket(workspace));
+        options.windowsHostPipe ?? (filesystemControlSocket ? controlSocket(workspace) : "");
     const webRoot =
         options.webRoot ??
         path.join(
@@ -412,7 +414,7 @@ export async function startControlHost(options: ControlHostOptions) {
             storageError = true;
             process.stderr.write("[onebots] 控制状态不可读取，保持管理端用于诊断\n");
         }
-        if (!windowsNativeMode) {
+        if (!windowsNativeMode && filesystemControlSocket) {
             if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
             await listen(local, socketPath);
             fs.chmodSync(socketPath, 0o600);

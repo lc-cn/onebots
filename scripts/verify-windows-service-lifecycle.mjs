@@ -110,6 +110,21 @@ function cli(bin, args, input = "", env = process.env) {
 }
 
 function installationEvidence() {
+    const verificationStages = new Set([
+        "request",
+        "dependencies",
+        "package-identity",
+        "workspace",
+        "authentication",
+        "management-startup",
+        "management-state",
+        "web-page",
+        "web-asset",
+        "authentication-v2",
+        "anonymous-denied",
+        "management-close",
+        "authentication-preserved",
+    ]);
     const operations = directory => {
         try {
             return fs
@@ -159,8 +174,32 @@ function installationEvidence() {
             return [];
         }
     })();
+    const candidateVerificationFailures = (() => {
+        try {
+            const root = path.join(stateDirectory, "manager-artifacts", "generation-verifications");
+            return fs
+                .readdirSync(root)
+                .filter(name => /^windows-[0-9a-f-]{36}$/.test(name))
+                .sort()
+                .flatMap(name => {
+                    try {
+                        const value = JSON.parse(
+                            fs.readFileSync(path.join(root, name, "result.json"), "utf8"),
+                        );
+                        return value.failed === true && verificationStages.has(value.stage)
+                            ? [{ stage: value.stage }]
+                            : [];
+                    } catch {
+                        return [];
+                    }
+                });
+        } catch {
+            return [];
+        }
+    })();
     return JSON.stringify({
         bootstrapEntries,
+        candidateVerificationFailures,
         candidateOperations: operations(
             path.join(stateDirectory, "manager-artifacts", "operations"),
         ),
