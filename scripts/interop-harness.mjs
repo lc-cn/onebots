@@ -82,9 +82,10 @@ export async function startManagedGateway({
     );
     const local = createLocalControlClient(managerWorkspace);
     await waitForManager(local, manager, 15_000);
-    await verifyDevicePairing(root, local, managerPort);
-    const stopped = await local.gateway("stop");
-    if (stopped.status !== "succeeded") throw new Error("空白网关停止失败");
+    await interopControlStep("验证设备码配对", manager, () =>
+        verifyDevicePairing(root, local, managerPort),
+    );
+    await stopInitialGateway(local, manager);
 
     const installationStep = async (name, action) => {
         try {
@@ -147,6 +148,54 @@ export async function startManagedGateway({
         )
             throw new Error(`激活代际扩展选择异常：${JSON.stringify(activeCatalog.selection)}`);
     return Object.assign(manager, { control: local });
+}
+
+/**
+ * 空白 manager 会按持久化期望尝试启动内置网关；互操作安装前必须先停止它。
+ * 若响应在持久化成功后丢失，只根据回读状态确认，不重放停止操作。
+ */
+export async function stopInitialGateway(local, manager) {
+    try {
+        const stopped = await local.gateway("stop");
+        if (stopped.status !== "succeeded")
+            throw new Error(`停止操作未成功：${JSON.stringify(stopped)}`);
+        return stopped;
+    } catch (error) {
+        let status;
+        try {
+            status = await local.status();
+        } catch (statusError) {
+            throw new Error(
+                `空白网关停止失败，且无法回读状态：${errorMessage(error)}；回读失败：${errorMessage(statusError)}\n${manager.logs()}`,
+            );
+        }
+        const gateway = status?.gateway;
+        const operation = Array.isArray(gateway?.operations)
+            ? gateway.operations.findLast(item => item?.action === "stop")
+            : undefined;
+        if (
+            gateway?.desired === "stopped" &&
+            gateway.actual === "stopped" &&
+            gateway.recoveryRequired === false &&
+            operation?.status === "succeeded"
+        )
+            return operation;
+        throw new Error(
+            `空白网关停止失败：${errorMessage(error)}\n回读状态：${JSON.stringify(gateway)}\n${manager.logs()}`,
+        );
+    }
+}
+
+async function interopControlStep(name, manager, action) {
+    try {
+        return await action();
+    } catch (error) {
+        throw new Error(`${name}失败：${errorMessage(error)}\n${manager.logs()}`);
+    }
+}
+
+function errorMessage(error) {
+    return error instanceof Error ? error.message : String(error);
 }
 
 export async function stopManagedGateway(processHandle) {
