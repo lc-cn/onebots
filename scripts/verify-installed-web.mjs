@@ -381,12 +381,12 @@ try {
             const expected = ${JSON.stringify(label)};
             const navigation = document.querySelector('nav[aria-label="控制台导航"]');
             if (!(navigation instanceof HTMLElement)) throw new Error("找不到控制台导航");
-            const button = [...navigation.querySelectorAll("button")].find(value =>
+            const link = [...navigation.querySelectorAll("a")].find(value =>
                 value.querySelector("strong")?.textContent?.trim() === expected,
             );
-            if (!(button instanceof HTMLButtonElement) || button.disabled)
+            if (!(link instanceof HTMLAnchorElement))
                 throw new Error(expected + "导航不可用");
-            button.click();
+            link.click();
             return true;
         })()`);
         await waitFor(
@@ -419,7 +419,7 @@ try {
             return input.value;
         })()`);
 
-    await openWorkspace("扩展版本", "extensions-title");
+    await openWorkspace("安装与扩展", "extensions-title");
     await waitFor(
         () =>
             devtools.evaluate(`Boolean(

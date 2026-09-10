@@ -29,7 +29,7 @@ const emit = defineEmits<{ applied: []; select: [workspace: Workspace] }>();
             compact
             :journey="journey"
             @select="emit('select', $event)" />
-        <ol class="workflow-rail" aria-label="扩展版本流程">
+        <ol class="workflow-rail" aria-label="安装与扩展流程">
             <li>
                 <span>01</span>
                 <div><strong>了解并选择</strong><small>能力、凭据与连接方式</small></div>
