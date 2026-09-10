@@ -264,16 +264,71 @@ describe("systemd服务平台边界", () => {
         ]);
         expect(f.sleep).toHaveBeenCalled();
     });
-    it("旧子树未清空有界失败，外部换代拒绝继续控制", async () => {
+    it("重复恢复已证明静止且禁用的固定 unit 时不重派命令", async () => {
+        const f = fixture();
+        f.state({
+            UnitFileState: "disabled",
+            ActiveState: "inactive",
+            SubState: "dead",
+            MainPID: "0",
+            ControlPID: "0",
+            ControlGroup: "",
+            InvocationID: "",
+        });
+        f.events("populated 0\n");
+        await f.platform.quiesce();
+        expect(f.exec.mock.calls.map(call => call[1]).flat()).not.toContain("disable");
+        expect(f.exec.mock.calls.map(call => call[1]).flat()).not.toContain("stop");
+    });
+    it("旧子树未清空时有界失败", async () => {
         const f = fixture();
         await expect(f.platform.quiesce()).rejects.toThrow();
         expect(f.sleep.mock.calls.length).toBeLessThanOrEqual(3);
-        const other = fixture();
-        other.sleep.mockImplementation(async ms => {
-            other.advance(ms);
-            other.state({ UnitFileState: "disabled", InvocationID: "b".repeat(32) });
+    });
+    it("disable 后故障候选换代仍静止同一固定 unit", async () => {
+        const f = fixture();
+        const original = f.host.exec;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args.includes("disable"))
+                f.state({
+                    UnitFileState: "disabled",
+                    InvocationID: "b".repeat(32),
+                    MainPID: "456",
+                });
+            return output;
+        };
+        f.sleep.mockImplementation(async ms => {
+            f.advance(ms);
+            f.state({
+                UnitFileState: "disabled",
+                ActiveState: "inactive",
+                SubState: "dead",
+                MainPID: "0",
+                ControlPID: "0",
+                ControlGroup: "",
+                InvocationID: "",
+            });
+            f.events("populated 0\n");
         });
-        await expect(other.platform.quiesce()).rejects.toThrow("无法安全确认");
+        await f.platform.quiesce();
+        expect(await f.platform.inspect()).toMatchObject({
+            state: "stopped",
+            enabled: false,
+            running: false,
+            quiescent: true,
+        });
+    });
+    it("disable 后定义路径变化仍拒绝继续控制", async () => {
+        const f = fixture();
+        const original = f.host.exec;
+        f.host.exec = (file, args, options) => {
+            const output = original(file, args, options);
+            if (args.includes("disable"))
+                f.state({ UnitFileState: "disabled", FragmentPath: "/tmp/foreign.service" });
+            return output;
+        };
+        await expect(f.platform.quiesce()).rejects.toThrow("无法安全确认");
     });
 
     it("每次systemctl有超时，初始检查也消耗停止总时限，耗尽后不执行副作用", async () => {

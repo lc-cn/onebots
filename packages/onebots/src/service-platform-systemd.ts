@@ -284,12 +284,17 @@ export class SystemdServicePlatform implements ServicePlatform {
             if (!before.quiescent) unavailable();
             return;
         }
+        // 显式恢复可在上一次 disable/stop 的响应丢失后再次进入。inspectWithin 已用完整
+        // systemd 状态与 cgroup 证据证明固定 unit 静止且禁用时，只读接受目标，不重派命令。
+        if (!before.enabled && before.quiescent) return;
         this.command(["disable", "--", UNIT], deadline);
         this.command(["stop", "--no-block", "--", UNIT], deadline);
         for (;;) {
             const current = await this.inspectWithin(deadline);
-            if (current.enabled || (current.running && current.identity !== before.identity))
-                unavailable();
+            // disable/stop 针对固定 unit；故障候选可能在两个命令之间被 systemd 自动换代。
+            // inspectWithin 仍逐次核验精确定义路径与 cgroup，调用方也持服务锁并核验文件，
+            // 因此不能把同一 unit 的新 InvocationID 误判成外部替换而放弃静止。
+            if (current.enabled) unavailable();
             if (current.quiescent) return;
             if (this.now() >= deadline)
                 throw new Error("systemd 服务停止超时，尚未确认子进程全部退出");
