@@ -23,7 +23,7 @@ const PROPERTIES = [
 type Properties = Record<(typeof PROPERTIES)[number], string>;
 export interface SystemdServicePlatformOptions {
     /** 仅接收已检查的 /sys/fs/cgroup/.../cgroup.events，测试替换不扩大生产读取权限。 */
-    readFile?(file: string): Promise<string>;
+    readFile?(file: string): Promise<string | null>;
     now?(): number;
     sleep?(milliseconds: number): Promise<void>;
     stopTimeoutMs?: number;
@@ -40,14 +40,21 @@ function unavailable(): never {
     throw new Error("无法安全确认 systemd 服务状态");
 }
 
-async function readCgroupEvents(file: string): Promise<string> {
+async function readCgroupEvents(file: string): Promise<string | null> {
     // 禁止祖先符号链接绕过固定内核目录；不读取进程提供的任意文件。
-    if ((await realpath(file)) !== file || (await statfs(CGROUP_ROOT)).type !== 0x63677270)
+    if ((await statfs(CGROUP_ROOT)).type !== 0x63677270) unavailable();
+    let handle;
+    try {
+        if ((await realpath(file)) !== file) unavailable();
+        handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    } catch (error) {
+        // systemd 在 unit 进入 inactive 后可以继续报告原 ControlGroup，同时内核已删除
+        // 空 cgroup。其不存在是无残留进程的正向证据，仍由调用方的第二次 show 绑定
+        // 同一份 inactive/零 PID systemd 快照。realpath 与 open 间删除也同样收敛；
+        // 其他读取错误继续失败关闭。
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
         unavailable();
-    const handle = await open(
-        file,
-        constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-    );
+    }
     try {
         const stat = await handle.stat();
         if (!stat.isFile()) unavailable();
@@ -266,7 +273,8 @@ export class SystemdServicePlatform implements ServicePlatform {
             if ((running || main || control) && !identity) unavailable();
             let empty = false;
             if (properties.ControlGroup) {
-                empty = !populated(await this.readFile(cgroupFile(properties.ControlGroup)));
+                const events = await this.readFile(cgroupFile(properties.ControlGroup));
+                empty = events === null || !populated(events);
                 // 读取内核证据期间发生换代不能把两个实例的观察拼成一份证明。
                 const after = this.show(deadline);
                 if (PROPERTIES.some(key => properties[key] !== after[key])) unavailable();
