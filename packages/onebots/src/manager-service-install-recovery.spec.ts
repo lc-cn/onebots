@@ -20,6 +20,21 @@ vi.mock("./manager-runtime/identity.js", () => ({
 vi.mock("./manager-service-upgrade-candidate.js", () => ({
     verifyManagerServiceCandidate: vi.fn(() => proof.candidate),
 }));
+// 这些测试验证安装恢复状态机；Linux 临时目录不能表示 Windows drive/UNC 路径。
+// 卸载文件端口的真实路径与 ACL 契约由 manager-service-removal.spec.ts 单独覆盖。
+vi.mock("./manager-service-removal.js", () => ({
+    captureManagerServiceRemoval: vi.fn(() => ({
+        verifyRemaining: () => true,
+        verifyFile: () => true,
+        removeDefinition: () => {
+            throw new Error("安装恢复测试不得删除服务定义");
+        },
+        removeMetadata: () => {
+            throw new Error("安装恢复测试不得删除服务元数据");
+        },
+        dispose: vi.fn(),
+    })),
+}));
 
 import { captureInstalledManagerCandidate } from "./manager-service-install-recovery.js";
 import { reconcileManagerServiceOperation } from "./manager-service-recovery.js";
