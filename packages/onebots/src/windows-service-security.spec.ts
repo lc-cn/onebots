@@ -9,6 +9,7 @@ import type { ServiceHost } from "./service-host.js";
 import {
     inspectWindowsServiceFileSecurity,
     inspectWindowsServiceDirectorySecurity,
+    createExclusiveWindowsServiceDirectory,
     secureWindowsServiceDirectory,
     secureWindowsServiceFile,
     WindowsServiceSecurityError,
@@ -27,6 +28,28 @@ function host(output = '{"secured":true,"sddl":"TzpTWVNURU0="}'): ServiceHost {
 }
 
 describe("Windows 服务状态 ACL", () => {
+    it("首次目录通过受保护临时目录和原子 Move 排他发布", () => {
+        const value = host();
+        createExclusiveWindowsServiceDirectory(value, "C:\\ProgramData\\OneBots\\.control");
+        const script = Buffer.from(
+            (value.exec as ReturnType<typeof vi.fn>).mock.calls[0][1][4] as string,
+            "base64",
+        ).toString("utf16le");
+        expect(script).toContain("if([IO.Directory]::Exists($p)){throw 'target exists'}");
+        expect(script).toContain("[IO.Directory]::Move($temporary,$p)");
+        expect(script).toContain("[System.IO.Directory]::CreateDirectory($temporary,$acl)");
+        expect(script).toContain(
+            "[System.IO.FileSystemAclExtensions]::CreateDirectory($acl,$temporary)",
+        );
+        expect(script).not.toContain("CreateDirectory($p");
+        expect(() =>
+            createExclusiveWindowsServiceDirectory(
+                host('{"secured":false,"stage":"exclusive-create"}'),
+                "C:\\ProgramData\\OneBots\\.control",
+            ),
+        ).toThrow(new WindowsServiceSecurityError("exclusive-create"));
+    });
+
     it("使用编码 PowerShell 建立无继承的提升管理员组与 LocalSystem 边界", () => {
         const value = host();
         secureWindowsServiceDirectory(value, "C:\\ProgramData\\OneBots");

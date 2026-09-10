@@ -22,6 +22,7 @@ import {
 } from "./manager-bootstrap-error.js";
 
 const windowsSecurity = vi.hoisted(() => ({
+    createDirectory: vi.fn(),
     secureDirectory: vi.fn(),
     secureFile: vi.fn(),
     inspectDirectory: vi.fn(),
@@ -29,6 +30,7 @@ const windowsSecurity = vi.hoisted(() => ({
 }));
 vi.mock("./windows-service-security.js", async importOriginal => ({
     ...(await importOriginal<typeof import("./windows-service-security.js")>()),
+    createExclusiveWindowsServiceDirectory: windowsSecurity.createDirectory,
     secureWindowsServiceDirectory: windowsSecurity.secureDirectory,
     secureWindowsServiceFile: windowsSecurity.secureFile,
     inspectWindowsServiceDirectorySecurity: windowsSecurity.inspectDirectory,
@@ -168,6 +170,10 @@ function windowsFixture() {
     fixtureValue.request.service.scope = "system";
     windowsSecurity.secureDirectory.mockImplementation((_host, directory: string) => {
         fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+        return "acl-proof";
+    });
+    windowsSecurity.createDirectory.mockImplementation((_host, directory: string) => {
+        fs.mkdirSync(directory, { mode: 0o700 });
         return "acl-proof";
     });
     windowsSecurity.secureFile.mockReturnValue("acl-proof");

@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { acquireControlWorkspace } from "./control/workspace.js";
 import type { ServiceHost } from "./service-host.js";
+import { createExclusiveWindowsServiceDirectory } from "./windows-service-security.js";
 
 export interface ServiceMigrationWorkspaceSeed {
     schemaVersion: 1;
@@ -28,7 +29,8 @@ export function prepareServiceMigrationWorkspace(
         fs.mkdirSync(root, { recursive: true, mode: 0o700 });
         const canonical = fs.realpathSync(root);
         const directory = path.join(canonical, ".control");
-        fs.mkdirSync(directory, { mode: 0o700 }); // 排他创建，EEXIST也不认领。
+        if (host?.platform === "win32") createExclusiveWindowsServiceDirectory(host, directory);
+        else fs.mkdirSync(directory, { mode: 0o700 }); // 排他创建，EEXIST也不认领。
         sync(canonical);
         // Windows 首次创建锁时必须立即应用受保护文件 DACL；之后再用 Windows
         // 安全门禁重开一个仅继承 ACL 的锁文件会被正确拒绝，不能靠后续修补接管。

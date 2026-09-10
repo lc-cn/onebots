@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { GenerationInstallOperation } from "./installation/generation-installer.js";
 import { parseManagerServiceRecord, type ManagerServicePhase } from "./manager-service-journal.js";
+import type { WindowsServiceSecurityStage } from "./windows-service-security.js";
 
 export type ManagerBootstrapCandidateErrorCode =
     | NonNullable<GenerationInstallOperation["error"]>
@@ -47,13 +48,7 @@ export class ManagerBootstrapSetupError extends Error {
     constructor(
         readonly bootstrapPhase: ManagerBootstrapSetupPhase,
         readonly code: ManagerBootstrapSetupErrorCode,
-        readonly securityStage?:
-            | "process"
-            | "ancestor"
-            | "acl-build"
-            | "create"
-            | "inspect"
-            | "verify",
+        readonly securityStage?: WindowsServiceSecurityStage,
     ) {
         super("管理服务首次安装前置检查未完成");
         this.name = "ManagerBootstrapSetupError";
@@ -241,11 +236,3 @@ export class ManagerBootstrapCandidateError extends Error {
         this.name = "ManagerBootstrapCandidateError";
     }
 }
-
-type WindowsServiceSecurityStage =
-    | "process"
-    | "ancestor"
-    | "acl-build"
-    | "create"
-    | "inspect"
-    | "verify";

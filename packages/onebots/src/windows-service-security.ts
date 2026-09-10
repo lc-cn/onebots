@@ -10,6 +10,7 @@ export type WindowsServiceSecurityStage =
     | "ancestor"
     | "acl-build"
     | "create"
+    | "exclusive-create"
     | "inspect"
     | "verify";
 
@@ -33,7 +34,7 @@ function parseProof(output: string): string {
         Reflect.ownKeys(value).length === 2 &&
         (value as Record<string, unknown>).secured === false &&
         typeof (value as Record<string, unknown>).stage === "string" &&
-        ["ancestor", "acl-build", "create", "inspect", "verify"].includes(
+        ["ancestor", "acl-build", "create", "exclusive-create", "inspect", "verify"].includes(
             (value as Record<string, string>).stage,
         )
     )
@@ -53,6 +54,101 @@ function parseProof(output: string): string {
     const sddl = Buffer.from((value as Record<string, string>).sddl, "base64");
     if (!sddl.length || sddl.length > 4096) throw failure();
     return createHash("sha256").update(sddl).digest("hex");
+}
+
+/**
+ * 为首次工作区建立受保护目录。先以最终 ACL 创建随机同级目录，再用 Directory.Move
+ * 排他发布；目标已存在或竞态出现都失败，绝不检查后认领既有目录。
+ */
+export function createExclusiveWindowsServiceDirectory(
+    host: ServiceHost,
+    directory: string,
+): string {
+    if (
+        host.platform !== "win32" ||
+        host.isElevated !== true ||
+        typeof host.windowsSid !== "string" ||
+        !SID.test(host.windowsSid) ||
+        !path.win32.isAbsolute(directory) ||
+        !/^(?:[A-Za-z]:\\|\\\\[^\\]+\\[^\\]+\\)/.test(directory) ||
+        directory.includes("/") ||
+        /[\u0000\r\n]/.test(directory)
+    )
+        throw failure();
+    const script = String.raw`
+$ErrorActionPreference='Stop'
+$p=${JSON.stringify(directory)}
+$ownerSid='S-1-5-32-544'
+$allowedSids=@($ownerSid,'S-1-5-18')
+$temporary=$null
+$stage='ancestor'
+try {
+$parentPath=[IO.Path]::GetDirectoryName($p)
+$ancestor=$parentPath
+while($ancestor){
+  $parent=New-Object System.IO.DirectoryInfo($ancestor)
+  if(-not $parent.Exists -or (($parent.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe ancestor'}
+  $next=[IO.Path]::GetDirectoryName($ancestor)
+  if(-not $next -or $next -eq $ancestor){break}
+  $ancestor=$next
+}
+$stage='acl-build'
+$acl=New-Object System.Security.AccessControl.DirectorySecurity
+$acl.SetAccessRuleProtection($true,$false)
+$inherit=[System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
+$prop=[System.Security.AccessControl.PropagationFlags]::None
+$allow=[System.Security.AccessControl.AccessControlType]::Allow
+foreach($identity in $allowedSids){
+  $principal=New-Object System.Security.Principal.SecurityIdentifier($identity)
+  $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($principal,'FullControl',$inherit,$prop,$allow)
+  $acl.AddAccessRule($rule)|Out-Null
+}
+$acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($ownerSid)))
+$stage='exclusive-create'
+if([IO.Directory]::Exists($p)){throw 'target exists'}
+$temporary=[IO.Path]::Combine($parentPath,'.onebots-directory-'+[Guid]::NewGuid().ToString('N'))
+if($PSVersionTable.PSEdition -eq 'Desktop'){
+  [System.IO.Directory]::CreateDirectory($temporary,$acl)|Out-Null
+} elseif($PSVersionTable.PSEdition -eq 'Core'){
+  [System.IO.FileSystemAclExtensions]::CreateDirectory($acl,$temporary)|Out-Null
+} else {throw 'unsupported powershell runtime'}
+[IO.Directory]::Move($temporary,$p)
+$temporary=$null
+$stage='inspect'
+$item=New-Object System.IO.DirectoryInfo($p)
+if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe path'}
+if($PSVersionTable.PSEdition -eq 'Desktop'){
+  $check=[System.IO.Directory]::GetAccessControl($p)
+} elseif($PSVersionTable.PSEdition -eq 'Core'){
+  $check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+} else {throw 'unsupported powershell runtime'}
+$rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
+$ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
+$owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
+$bad=@($rules|Where-Object{$_.IsInherited -or $_.AccessControlType -ne 'Allow' -or $_.InheritanceFlags -ne $inherit -or $_.PropagationFlags -ne $prop -or $_.FileSystemRights -ne [System.Security.AccessControl.FileSystemRights]::FullControl})
+$stage='verify'
+if(-not $check.AreAccessRulesProtected -or $owner -ne $ownerSid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin $allowedSids -or $ids[1] -notin $allowedSids -or $bad.Count -ne 0){throw 'unsafe acl'}
+$encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
+[Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
+} catch {
+  if($temporary -and [IO.Directory]::Exists($temporary)){
+    try{[IO.Directory]::Delete($temporary)}catch{}
+  }
+  [Console]::Out.Write((@{secured=$false;stage=$stage}|ConvertTo-Json -Compress))
+}
+`;
+    try {
+        return parseProof(
+            host.exec(
+                "powershell.exe",
+                ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded(script)],
+                { timeoutMs: 15_000 },
+            ),
+        );
+    } catch (error) {
+        if (error instanceof WindowsServiceSecurityError) throw error;
+        throw new WindowsServiceSecurityError("process");
+    }
 }
 
 /**

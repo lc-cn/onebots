@@ -14,10 +14,12 @@ import type { ServiceHost } from "./service-host.js";
 import {
     inspectWindowsServiceDirectorySecurity,
     inspectWindowsServiceFileSecurity,
+    createExclusiveWindowsServiceDirectory,
     secureWindowsServiceFile,
 } from "./windows-service-security.js";
 vi.mock("./windows-service-security.js", async importOriginal => ({
     ...(await importOriginal<typeof import("./windows-service-security.js")>()),
+    createExclusiveWindowsServiceDirectory: vi.fn(() => "a".repeat(64)),
     inspectWindowsServiceDirectorySecurity: vi.fn(() => "a".repeat(64)),
     inspectWindowsServiceFileSecurity: vi.fn(() => "b".repeat(64)),
     secureWindowsServiceFile: vi.fn(() => "b".repeat(64)),
@@ -48,6 +50,7 @@ describe("migration owned workspace seed", () => {
         const release = acquireControlWorkspace(root, host);
         release();
         expect(inspectWindowsServiceDirectorySecurity).toHaveBeenCalled();
+        expect(createExclusiveWindowsServiceDirectory).toHaveBeenCalledOnce();
         expect(secureWindowsServiceFile).toHaveBeenCalledOnce();
         expect(inspectWindowsServiceFileSecurity).toHaveBeenCalledOnce();
         expect(fs.existsSync(path.join(root, ".control/manager-lock.sqlite"))).toBe(true);
