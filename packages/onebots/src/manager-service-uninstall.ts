@@ -1,4 +1,5 @@
 import { assertNoPendingManagerUpgrade } from "./service-upgrade-workspace.js";
+import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { readServiceMetadata } from "./service-metadata.js";
@@ -41,6 +42,28 @@ export interface ManagerServiceUninstallDependencies {
     unregister?(scope: ServiceScope, host: ServiceHost): Promise<void> | void;
     confirmStopped?: typeof verifyServiceMigrationProcessesWhileLocked;
     onOperation?: PersistedOperationObserver;
+}
+
+/** Windows 定义仍在时核验稳定停态；定义按事务删除后改由固定 SCM 身份证明缺失。 */
+export async function confirmWindowsManagerStopped(
+    platform: ServicePlatform,
+    scope: ServiceScope,
+    host: ServiceHost,
+    definitionPath: string,
+    assertAbsent: typeof assertServiceAbsent = assertServiceAbsent,
+): Promise<boolean> {
+    if (fsExists(definitionPath)) {
+        const state = await platform.inspect();
+        return (
+            state.state === "stopped" &&
+            !state.running &&
+            state.quiescent &&
+            state.processId === null &&
+            state.definitionPath === definitionPath
+        );
+    }
+    assertAbsent(scope, host);
+    return true;
 }
 
 /** 定义已删除且完整进程树已退出后使用；不复用要求定义仍loaded的reload。 */
@@ -168,19 +191,10 @@ async function uninstallManagerServiceImpl(
         const confirmStopped =
             dependencies.confirmStopped ??
             (host.platform === "win32"
-                ? async () => {
-                      // Windows 原生宿主只有在关闭受 KILL_ON_JOB_CLOSE 保护的 Job、
-                      // manager 及其完整子树退出后才向 SCM 报告 Stopped；再次读取
-                      // SCM 是卸载各阶段的静止证明，不能用无条件成功绕过。
-                      const state = await platform.inspect();
-                      return (
-                          state.state === "stopped" &&
-                          !state.running &&
-                          state.quiescent &&
-                          state.processId === null &&
-                          state.definitionPath === files.definition
-                      );
-                  }
+                ? async () =>
+                      // 删除定义前由原生宿主核验 stopped；注销后定义已不存在，
+                      // 只能从固定 SCM 身份证明 absent，不能再读取已删除定义。
+                      confirmWindowsManagerStopped(platform, scope, host, files.definition)
                 : verifyServiceMigrationProcessesWhileLocked);
         const definition =
             host.platform === "win32"
@@ -250,5 +264,15 @@ async function uninstallManagerServiceImpl(
                 release();
             }
         }
+    }
+}
+
+function fsExists(file: string): boolean {
+    try {
+        fs.lstatSync(file);
+        return true;
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+        throw error;
     }
 }

@@ -10,6 +10,7 @@ import {
     inspectWindowsServiceDirectorySecurity,
     inspectWindowsServiceFileSecurity,
 } from "./windows-service-security.js";
+import { serviceAncestorPaths } from "./service-path-ancestors.js";
 
 import type {
     ManagerServiceRemovalSnapshot,
@@ -38,9 +39,7 @@ const failure = () => new Error("管理服务卸载文件身份不明、已变�
 function parents(file: string): void {
     if (!path.isAbsolute(file) || path.normalize(file) !== file) throw failure();
     const directory = path.dirname(file);
-    let current = path.parse(directory).root;
-    for (const part of directory.split(path.sep).filter(Boolean)) {
-        current = path.join(current, part);
+    for (const current of serviceAncestorPaths(directory)) {
         const stat = fs.lstatSync(current);
         if (process.platform === "win32") {
             if (!stat.isDirectory() || stat.isSymbolicLink()) throw failure();

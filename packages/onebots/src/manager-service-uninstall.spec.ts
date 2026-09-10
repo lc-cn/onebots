@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+    confirmWindowsManagerStopped,
     uninstallManagerService,
     uninstallManagerServiceWhileLocked,
 } from "./manager-service-uninstall.js";
@@ -23,6 +24,37 @@ const roots: string[] = [];
 afterEach(() => {
     vi.restoreAllMocks();
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+});
+
+it("Windows 卸载在定义删除后以 SCM 缺失证明替代定义驱动读取", async () => {
+    const root = fs.realpathSync(fs.mkdtempSync("/tmp/manager-windows-stop-proof-"));
+    roots.push(root);
+    const definition = path.join(root, "onebots-service.xml");
+    const host = {
+        platform: "win32" as const,
+        homedir: root,
+        isElevated: true,
+        windowsSid: "S-1-5-21-100-200-300-1001",
+        env: {},
+        exec: vi.fn(() => ""),
+        spawn: vi.fn(async () => 0),
+    };
+    const inspect = vi.fn(async () => {
+        throw new Error("已删除定义不得再由平台驱动读取");
+    });
+    const assertAbsent = vi.fn();
+
+    await expect(
+        confirmWindowsManagerStopped(
+            { inspect, quiesce: vi.fn(), reload: vi.fn(), start: vi.fn() },
+            "system",
+            host,
+            definition,
+            assertAbsent,
+        ),
+    ).resolves.toBe(true);
+    expect(inspect).not.toHaveBeenCalled();
+    expect(assertAbsent).toHaveBeenCalledWith("system", host);
 });
 function fixture(running = false) {
     const root = fs.realpathSync(fs.mkdtempSync("/tmp/manager-uninstall-"));

@@ -11,6 +11,7 @@ import {
     inspectWindowsServiceFileSecurity,
     secureWindowsServiceFile,
 } from "./windows-service-security.js";
+import { serviceAncestorPaths } from "./service-path-ancestors.js";
 
 interface Candidate {
     path: string;
@@ -57,19 +58,12 @@ export function managerServiceAncestorPaths(
     directory: string,
     platform: NodeJS.Platform = process.platform,
 ): string[] {
-    const paths = platform === "win32" ? path.win32 : path.posix;
-    const root = paths.parse(directory).root;
-    const relative = paths.relative(root, directory);
-    let current = root;
-    return relative
-        .split(paths.sep)
-        .filter(Boolean)
-        .map(part => (current = paths.join(current, part)));
+    return serviceAncestorPaths(directory, platform);
 }
 /** 所有已存在祖先必须是普通目录；不沿符号链接创建服务文件。 */
 function parents(directory: string, create: boolean): void {
     safePath(directory);
-    for (const current of managerServiceAncestorPaths(directory)) {
+    for (const current of serviceAncestorPaths(directory)) {
         if (!exists(current)) {
             if (!create) continue;
             fs.mkdirSync(current, { mode: 0o700 });

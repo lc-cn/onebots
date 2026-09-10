@@ -6,10 +6,8 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { packControlRuntime } from "./pack-control-runtime.mjs";
-
 if (process.platform !== "win32" || process.env.ONEBOTS_WINDOWS_ACCEPTANCE !== "1")
     throw new Error("Windows 生命周期验收只能在显式启用的 windows-latest 主机运行");
-
 const root = path.resolve(import.meta.dirname, "..");
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-windows-lifecycle-"));
 const artifacts = path.join(temporary, "artifacts");
@@ -37,13 +35,11 @@ const service = "onebots-gateway";
 let installed = false;
 let installedDefinition;
 let installedScmPathName;
-
 const npmCli = [
     process.env.npm_execpath,
     path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
 ].find(candidate => candidate && fs.existsSync(candidate));
 if (!npmCli) throw new Error("无法定位 npm CLI JavaScript 入口");
-
 function run(file, args, options = {}) {
     return execFileSync(file, args, {
         cwd: options.cwd ?? runtime,
@@ -54,7 +50,6 @@ function run(file, args, options = {}) {
         maxBuffer: 8 * 1024 * 1024,
     }).trim();
 }
-
 function powershell(script) {
     return run(
         "powershell.exe",
@@ -68,7 +63,6 @@ function powershell(script) {
         { cwd: root },
     );
 }
-
 async function eventually(probe, timeout = 120_000) {
     const deadline = Date.now() + timeout;
     let error;
@@ -82,7 +76,6 @@ async function eventually(probe, timeout = 120_000) {
     }
     throw error ?? new Error("等待 Windows 状态超时");
 }
-
 async function request(route, init = {}) {
     const response = await fetch(`${origin}${route}`, {
         ...init,
@@ -92,7 +85,6 @@ async function request(route, init = {}) {
     if (!response.ok) throw new Error(`${route}: ${response.status}`);
     return body;
 }
-
 function cli(bin, args, input = "", env = process.env) {
     const result = spawnSync(process.execPath, [bin, ...args], {
         cwd: runtime,
@@ -108,7 +100,6 @@ function cli(bin, args, input = "", env = process.env) {
         );
     return result.stdout.trim();
 }
-
 function installationEvidence() {
     const verificationStages = new Set([
         "request",
@@ -303,22 +294,31 @@ function installationEvidence() {
         })(),
         definitionExists: fs.existsSync(definitionPath),
         metadataExists: fs.existsSync(metadataPath),
+        scm: (() => {
+            try {
+                const value = JSON.parse(servicePresence());
+                return {
+                    state: value.State,
+                    startMode: value.StartMode,
+                    processId: value.ProcessId,
+                };
+            } catch {
+                return { state: servicePresence() };
+            }
+        })(),
     });
 }
-
 function servicePresence() {
     return powershell(
         `$s=Get-CimInstance Win32_Service -Filter \"Name='${service}'\";if($null -eq $s){'absent'}else{$s|Select-Object Name,State,StartMode,ProcessId,PathName|ConvertTo-Json -Compress}`,
     );
 }
-
 function assertBlankMachineState() {
     assert.equal(servicePresence(), "absent", "固定 SCM 服务已存在，拒绝覆盖 runner 现场");
     assert.equal(fs.existsSync(stateDirectory), false, "固定服务状态目录已存在，拒绝覆盖");
     assert.equal(fs.existsSync(definitionPath), false);
     assert.equal(fs.existsSync(metadataPath), false);
 }
-
 function stillOwnsInstallation() {
     if (!installedDefinition || !fs.existsSync(definitionPath) || !fs.existsSync(metadataPath))
         return false;
@@ -333,7 +333,6 @@ function stillOwnsInstallation() {
         return false;
     }
 }
-
 try {
     run("net.exe", ["session"], { cwd: root });
     assertBlankMachineState();
@@ -396,7 +395,11 @@ try {
     assert.equal(JSON.parse(servicePresence()).PathName, installedScmPathName);
     fs.writeFileSync(marker, randomBytes(16).toString("hex"));
     const preserved = fs.readFileSync(marker, "utf8");
-    cli(bin, ["start", "--system"]);
+    try {
+        cli(bin, ["start", "--system"]);
+    } catch (error) {
+        throw new Error(`${error.message}; evidence=${installationEvidence()}`);
+    }
     const health = await eventually(() => request("/health"));
     assert.equal(health.ready, true);
     const remotePipe = spawnSync(
