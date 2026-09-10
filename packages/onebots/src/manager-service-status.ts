@@ -34,6 +34,14 @@ export interface ManagerServiceStatus {
         pid: number | null;
         ipc: "not-queried" | "available" | "unavailable" | "mismatch";
     };
+    accounts: {
+        available: boolean;
+        items: Array<{
+            platform: string;
+            accountId: string;
+            status: "pending" | "online" | "offline";
+        }>;
+    };
     gateway: {
         actual: "starting" | "running" | "stopping" | "stopped" | "failed" | "unknown";
         desired: "running" | "stopped" | "unknown";
@@ -93,6 +101,7 @@ async function inspectManagerServiceStatusSnapshot(
             operations: [],
         },
         manager: { state: "unknown", enabled: null, loaded: null, pid: null, ipc: "not-queried" },
+        accounts: { available: false, items: [] },
         gateway: {
             actual: "unknown",
             desired: "unknown",
@@ -224,6 +233,21 @@ async function inspectManagerServiceStatusSnapshot(
             recoveryRequired: null,
             knownConfigurationFailure: null,
         };
+        try {
+            const manager = await (dependencies.inspectManager ?? inspectMigrationManager)(
+                spec.workspace,
+            );
+            if (
+                manager.manager.id === before.control.manager.id &&
+                manager.manager.pid === before.control.manager.pid &&
+                manager.manager.version === before.control.manager.version &&
+                manager.gateway.actual === before.control.gateway.actual &&
+                manager.gateway.desired === before.control.gateway.desired
+            )
+                result.accounts = parseAccountStatuses(manager.accounts);
+        } catch {
+            // 原生宿主状态仍可信；账号摘要取不到时明确保持 unavailable。
+        }
         return result;
     }
     let platform: Pick<ServicePlatform, "inspect">;
@@ -316,9 +340,56 @@ async function inspectManagerServiceStatusSnapshot(
             recoveryRequired: manager.gateway.recoveryRequired,
             knownConfigurationFailure: manager.knownConfigurationFailure,
         };
+        result.accounts = parseAccountStatuses(manager.accounts);
     } catch {
         result.manager.ipc = "unavailable";
         result.diagnostic = "ipc-unavailable";
     }
     return result;
+}
+
+function parseAccountStatuses(value: unknown): ManagerServiceStatus["accounts"] {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+        return { available: false, items: [] };
+    const record = value as Record<string, unknown>;
+    if (
+        Object.keys(record).length !== 2 ||
+        typeof record.available !== "boolean" ||
+        !Array.isArray(record.items) ||
+        record.items.length > 1000 ||
+        (!record.available && record.items.length > 0)
+    )
+        return { available: false, items: [] };
+    const items: ManagerServiceStatus["accounts"]["items"] = [];
+    for (const raw of record.items) {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw))
+            return { available: false, items: [] };
+        const item = raw as Record<string, unknown>;
+        if (
+            Object.keys(item).length !== 3 ||
+            !safeAccountIdentifier(item.platform) ||
+            !safeAccountIdentifier(item.accountId) ||
+            !isAccountStatus(item.status)
+        )
+            return { available: false, items: [] };
+        items.push({
+            platform: item.platform,
+            accountId: item.accountId,
+            status: item.status,
+        });
+    }
+    return { available: record.available, items: record.available ? items : [] };
+}
+
+function isAccountStatus(value: unknown): value is "pending" | "online" | "offline" {
+    return typeof value === "string" && ["pending", "online", "offline"].includes(value);
+}
+
+function safeAccountIdentifier(value: unknown): value is string {
+    return (
+        typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= 512 &&
+        !/[\p{Cc}\p{Cf}]/u.test(value)
+    );
 }

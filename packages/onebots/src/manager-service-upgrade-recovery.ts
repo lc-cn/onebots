@@ -6,11 +6,15 @@ import { captureManagerServiceRemoval } from "./manager-service-removal.js";
 import { getServiceFiles } from "./service-files.js";
 import { readManagerUpgradePending } from "./service-upgrade-workspace.js";
 import { readServiceMigrationPending } from "./service-migration-workspace.js";
-import { inspectMigrationManager, inspectPrivateControlSocket } from "./service-migration-manager.js";
+import {
+    inspectMigrationManager,
+    inspectPrivateControlSocket,
+} from "./service-migration-manager.js";
 import { createLocalControlTransport } from "./client/local-control.js";
 import { closedServiceObject } from "./service-operation-storage.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
+import { WindowsServicePlatform } from "./service-platform-windows.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform } from "./service-platform.js";
 const failure = () => new Error("升级完成证据不足，保留恢复门禁；未重放系统动作");
@@ -22,17 +26,29 @@ export async function verifyReleasedManagerServiceUpgrade(
     platform?: ServicePlatform,
 ): Promise<void> {
     const record = parseManagerServiceRecord(input);
-    if (record.action !== "upgrade" || !record.upgrade ||
+    if (
+        record.action !== "upgrade" ||
+        !record.upgrade ||
         !["releasing", "completed"].includes(record.phase) ||
-        record.upgrade.snapshot.platform !== host.platform) throw failure();
+        record.upgrade.snapshot.platform !== host.platform
+    )
+        throw failure();
     const spec = record.managerSpec;
     const files = getServiceFiles(spec.scope, host);
-    if (record.upgrade.snapshot.files.definition.path !== files.definition ||
+    if (
+        record.upgrade.snapshot.files.definition.path !== files.definition ||
         record.upgrade.snapshot.files.metadata.path !== files.metadata ||
-        readServiceMigrationPending(spec.workspace)) throw failure();
+        readServiceMigrationPending(spec.workspace)
+    )
+        throw failure();
     const marker = readManagerUpgradePending(spec.workspace);
-    if (!marker || marker.phase !== "released" || marker.operationId !== record.id ||
-        marker.candidateDigest !== record.upgrade.candidateDigest) throw failure();
+    if (
+        !marker ||
+        marker.phase !== "released" ||
+        marker.operationId !== record.id ||
+        marker.candidateDigest !== record.upgrade.candidateDigest
+    )
+        throw failure();
     if (record.upgrade.snapshot.initial.processId === null) {
         if (marker.completion !== "offline") throw failure();
         await verifyCompletedStoppedManagerServiceUpgrade(record, host, platform);
@@ -42,23 +58,45 @@ export async function verifyReleasedManagerServiceUpgrade(
     verifyManagerServiceCandidate(spec, record.upgrade.candidateDigest);
     const captured = captureManagerServiceRemoval(spec, host);
     try {
-        const driver = platform ?? (host.platform === "linux"
-            ? new SystemdServicePlatform(host, spec.scope, files.definition)
-            : new LaunchdServicePlatform(host, spec.scope, files.definition));
+        const driver =
+            platform ??
+            (host.platform === "linux"
+                ? new SystemdServicePlatform(host, spec.scope, files.definition)
+                : host.platform === "darwin"
+                  ? new LaunchdServicePlatform(host, spec.scope, files.definition)
+                  : new WindowsServicePlatform(host, spec.scope, files.definition));
         const before = await driver.inspect();
-        const socket = inspectPrivateControlSocket(spec.workspace);
+        const socket =
+            host.platform === "win32" ? undefined : inspectPrivateControlSocket(spec.workspace);
         const manager = await inspectMigrationManager(spec.workspace);
-        const identity = closedServiceObject(await createLocalControlTransport(spec.workspace).request<unknown>(
-            "GET", "/api/control/service-upgrade/identity",
-        ), ["managerId", "candidateDigest"]);
-        if (before.state !== "running" || !before.running || !before.identity || before.processId !== manager.manager.pid ||
-            before.enabled !== record.desiredEnabled || before.definitionPath !== files.definition ||
-            manager.serviceMigration.pending || manager.serviceMigration.recoveryRequired ||
-            manager.gateway.recoveryRequired || manager.gateway.actual !== manager.gateway.desired ||
-            identity.managerId !== manager.manager.id || identity.candidateDigest !== record.upgrade.candidateDigest ||
-            inspectPrivateControlSocket(spec.workspace) !== socket ||
-            !isDeepStrictEqual(before, await driver.inspect()) || !captured.verifyRemaining() ||
-            !isDeepStrictEqual(marker, readManagerUpgradePending(spec.workspace))) throw failure();
+        const identity = closedServiceObject(
+            await createLocalControlTransport(spec.workspace).request<unknown>(
+                "GET",
+                "/api/control/service-upgrade/identity",
+            ),
+            ["managerId", "candidateDigest"],
+        );
+        if (
+            before.state !== "running" ||
+            !before.running ||
+            !before.identity ||
+            before.processId !== manager.manager.pid ||
+            before.enabled !== record.desiredEnabled ||
+            before.definitionPath !== files.definition ||
+            manager.serviceMigration.pending ||
+            manager.serviceMigration.recoveryRequired ||
+            manager.gateway.recoveryRequired ||
+            manager.gateway.actual !== manager.gateway.desired ||
+            identity.managerId !== manager.manager.id ||
+            identity.candidateDigest !== record.upgrade.candidateDigest ||
+            (host.platform !== "win32" && inspectPrivateControlSocket(spec.workspace) !== socket) ||
+            !isDeepStrictEqual(before, await driver.inspect()) ||
+            !captured.verifyRemaining() ||
+            !isDeepStrictEqual(marker, readManagerUpgradePending(spec.workspace))
+        )
+            throw failure();
         verifyManagerServiceCandidate(spec, record.upgrade.candidateDigest);
-    } finally { captured.dispose(); }
+    } finally {
+        captured.dispose();
+    }
 }

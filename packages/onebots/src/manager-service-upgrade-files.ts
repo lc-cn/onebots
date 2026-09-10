@@ -6,6 +6,7 @@ import { renderInstalledManagerService } from "./manager-service-definition.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ManagerServiceRemovalSnapshot } from "./manager-service-removal-snapshot.js";
+import { secureWindowsServiceFile } from "./windows-service-security.js";
 
 const failure = () => new Error("管理升级服务文件切换未确认，保留现场，禁止重派或覆盖业务数据");
 
@@ -19,9 +20,14 @@ export function writeManagerServiceUpgradeFiles(
     host: ServiceHost,
 ): ManagerServiceRemovalSnapshot {
     const record = parseManagerServiceRecord(input);
-    if (record.action !== "upgrade" || !record.upgrade || record.phase !== "writing" ||
-        record.status !== "running" || record.recoveryRequired ||
-        host.platform !== record.upgrade.snapshot.platform)
+    if (
+        record.action !== "upgrade" ||
+        !record.upgrade ||
+        record.phase !== "writing" ||
+        record.status !== "running" ||
+        record.recoveryRequired ||
+        host.platform !== record.upgrade.snapshot.platform
+    )
         throw failure();
     const spec = record.managerSpec;
     const files = getServiceFiles(spec.scope, host);
@@ -32,15 +38,23 @@ export function writeManagerServiceUpgradeFiles(
     try {
         if (!isDeepStrictEqual(captured.snapshot, expected) || !captured.verifyRemaining())
             throw failure();
-        const definition = Buffer.from(renderInstalledManagerService(spec, host.platform, files.stateDir));
+        const definition = Buffer.from(
+            renderInstalledManagerService(spec, host.platform, files.stateDir),
+        );
         const definitionFile = new ConfigurationFile(files.definition);
         const written = definitionFile.replaceRaw(expected.definition.sha256, definition);
+        if (host.platform === "win32") secureWindowsServiceFile(host, files.definition);
         // 定义替换后原定义锚点自然失效；不得因此放弃对原元数据身份的检查。
-        if (!captured.verifyFile("metadata") ||
-            !definitionFile.readRaw().bytes.equals(written.bytes)) throw failure();
+        if (
+            !captured.verifyFile("metadata") ||
+            !definitionFile.readRaw().bytes.equals(written.bytes)
+        )
+            throw failure();
         new ConfigurationFile(files.metadata).replaceRaw(
-            expected.metadata.sha256, Buffer.from(JSON.stringify(spec) + "\n"),
+            expected.metadata.sha256,
+            Buffer.from(JSON.stringify(spec) + "\n"),
         );
+        if (host.platform === "win32") secureWindowsServiceFile(host, files.metadata);
         const installed = captureManagerServiceRemoval(spec, host);
         try {
             if (!installed.verifyRemaining()) throw failure();

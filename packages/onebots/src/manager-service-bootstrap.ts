@@ -242,6 +242,12 @@ async function bootstrapManagerServiceImpl(
             operationsDirectory: path.join(home, "operations"),
             store: new GenerationStore({
                 root: path.join(home, "versions"),
+                ...(host.platform === "win32"
+                    ? {
+                          secureCandidateDirectory: (directory: string) =>
+                              secureWindowsServiceDirectory(host, directory),
+                      }
+                    : {}),
                 isActive: id => {
                     // 新候选必须允许提交收据；只有持久绑定的候选受活动版本保护。
                     // 已验证版本另由 GenerationStore.discard 的收据门禁保护，不在此回收。
@@ -317,6 +323,7 @@ async function bootstrapManagerServiceImpl(
                     id,
                     "verified",
                     "CANDIDATE_SECURITY_FAILED",
+                    error instanceof WindowsServiceSecurityError ? error.stage : "process",
                 );
             }
         }

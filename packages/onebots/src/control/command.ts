@@ -12,15 +12,15 @@ import { ControlClient, createHttpControlTransport } from "@onebots/core/control
 /** 新控制入口只在独立架构分支启用，所有启停调用同一客户端。 */
 export async function runControlCommand(argv: string[]): Promise<boolean> {
     const command = argv[2];
-    if (!["serve", "auth", "control"].includes(command)) return false;
+    if (!["serve", "auth", "control", "config"].includes(command)) return false;
     const options = argv.slice(3);
     const serve = command === "serve" ? parseServeOptions(options) : undefined;
     if (serve === null) {
         writeCliOutput(SERVE_HELP);
         return true;
     }
-    if (command === "control" && options[0] === "config") {
-        await runConfigurationCommand(options.slice(1));
+    if (command === "config" || (command === "control" && options[0] === "config")) {
+        await runConfigurationCommand(command === "config" ? options : options.slice(1));
         return true;
     }
     if (command === "control" && options[0] === "verification") {

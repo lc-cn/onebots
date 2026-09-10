@@ -136,6 +136,12 @@ describe("control host integration", () => {
                 return response.status === 200 ? response.json() : { httpStatus: response.status };
             })
             .toMatchObject({ status: "ok" });
+        await expect
+            .poll(async () => (await client.status()).accounts)
+            .toEqual({
+                available: true,
+                items: [{ platform: "mock", accountId: "003.with.dot", status: "online" }],
+            });
     });
     it("空白工作区通过统一HTTP客户端完成草稿校验应用，保持停止意图", async () => {
         const root = workspace();

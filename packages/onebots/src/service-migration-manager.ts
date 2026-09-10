@@ -4,6 +4,9 @@ import semver from "semver";
 import type { ControlStatus } from "@onebots/core/control";
 import { createLocalControlTransport } from "./client/local-control.js";
 import { controlSocket } from "./control/workspace.js";
+import { isDeepStrictEqual } from "node:util";
+import { WindowsHostControlClient } from "./windows-host-control-client.js";
+import { WINDOWS_HOST_PIPE_NAME, type WindowsNativeStatus } from "./service-platform-windows.js";
 
 export interface MigrationManagerState extends Pick<ControlStatus, "schemaVersion" | "manager"> {
     manager: ControlStatus["manager"] & { pid: number };
@@ -12,6 +15,7 @@ export interface MigrationManagerState extends Pick<ControlStatus, "schemaVersio
     };
     serviceMigration: { pending: boolean; recoveryRequired: boolean };
     knownConfigurationFailure: boolean;
+    accounts?: NonNullable<ControlStatus["accounts"]>;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const failure = () => new Error("本地迁移管理服务状态无法确认，请保留现场并对账");
@@ -99,6 +103,7 @@ function parseStatus(input: unknown): MigrationManagerState {
         instance = { id: raw.id, pid: raw.pid, address: { host: "127.0.0.1", port: address.port } };
     }
     if (gateway.actual === "running" && !instance) throw failure();
+    const accounts = parseAccountStatuses(value.accounts);
     return {
         schemaVersion: 1,
         manager: { id: manager.id, version: manager.version, pid: manager.pid },
@@ -121,10 +126,103 @@ function parseStatus(input: unknown): MigrationManagerState {
                 "网关配置无法读取或解析，请检查工作区配置",
                 "网关配置必须是 YAML 对象，管理服务仍可用于修复",
             ].includes(gateway.error as string),
+        accounts,
     };
 }
+
+function parseAccountStatuses(input: unknown): NonNullable<ControlStatus["accounts"]> {
+    // 允许从尚未发布账号摘要的同架构旧 patch 管理服务读取状态。
+    if (input === undefined) return { available: false, items: [] };
+    if (!input || typeof input !== "object" || Array.isArray(input)) throw failure();
+    const value = input as Record<string, unknown>;
+    if (
+        typeof value.available !== "boolean" ||
+        !Array.isArray(value.items) ||
+        value.items.length > 1000
+    )
+        throw failure();
+    const items: NonNullable<ControlStatus["accounts"]>["items"] = [];
+    for (const inputItem of value.items) {
+        const item = object(inputItem);
+        if (
+            Object.keys(item).length !== 3 ||
+            !safeIdentifier(item.platform) ||
+            !safeIdentifier(item.accountId) ||
+            !isAccountStatus(item.status)
+        )
+            throw failure();
+        items.push({
+            platform: item.platform,
+            accountId: item.accountId,
+            status: item.status,
+        });
+    }
+    if (!value.available && items.length > 0) throw failure();
+    return { available: value.available, items };
+}
+
+function isAccountStatus(value: unknown): value is "pending" | "online" | "offline" {
+    return typeof value === "string" && ["pending", "online", "offline"].includes(value);
+}
+
+function safeIdentifier(value: unknown): value is string {
+    return (
+        typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= 512 &&
+        !/[\p{Cc}\p{Cf}]/u.test(value)
+    );
+}
+
+function stableWindowsManagerIdentity(status: WindowsNativeStatus):
+    | (Pick<WindowsNativeStatus["state"], "service" | "manager" | "startedAt"> & {
+          control: NonNullable<WindowsNativeStatus["state"]["control"]>;
+      })
+    | null {
+    const control = status.state.control;
+    if (!control) return null;
+    return {
+        service: status.state.service,
+        manager: status.state.manager,
+        startedAt: status.state.startedAt,
+        control: {
+            ...control,
+            // 心跳发布可在只读请求期间合法推进；身份与网关状态必须保持稳定。
+            revision: 0,
+            publishedAt: "",
+        },
+    };
+}
+
 export async function inspectMigrationManager(workspace: string): Promise<MigrationManagerState> {
     try {
+        if (process.platform === "win32") {
+            if (!path.win32.isAbsolute(workspace) || /[\u0000\r\n]/.test(workspace))
+                throw failure();
+            const client = new WindowsHostControlClient(WINDOWS_HOST_PIPE_NAME);
+            const before = await client.status();
+            const response = await client.request<unknown>("GET", "/api/control/status");
+            const after = await client.status();
+            const manager = parseStatus(response.body);
+            const beforeIdentity = stableWindowsManagerIdentity(before);
+            const afterIdentity = stableWindowsManagerIdentity(after);
+            const control = after.state.control;
+            if (
+                response.status < 200 ||
+                response.status >= 300 ||
+                !beforeIdentity ||
+                !afterIdentity ||
+                !control ||
+                !isDeepStrictEqual(beforeIdentity, afterIdentity) ||
+                control.manager.id !== manager.manager.id ||
+                control.manager.version !== manager.manager.version ||
+                control.manager.pid !== manager.manager.pid ||
+                control.gateway.desired !== manager.gateway.desired ||
+                control.gateway.actual !== manager.gateway.actual
+            )
+                throw failure();
+            return manager;
+        }
         const identity = inspectPrivateControlSocket(workspace);
         const response = await createLocalControlTransport(workspace).request<unknown>(
             "GET",

@@ -174,16 +174,28 @@ it("已有服务事务只引导recover，不解析版本或重派", async () => 
     expect(f.output.mock.calls[0][0]).toContain("recover --operation original --system");
 });
 
-it("Windows明确拒绝且无发布或安装副作用", async () => {
+it("Windows 仅允许管理员系统级升级，check 路径不派发候选或 SCM 动作", async () => {
     const f = fixture();
     await expect(
         runManagerProgramUpdate(
             { check: true, yes: false, system: false },
             { ...f, host: { ...f.host, platform: "win32" }, interactive: false },
         ),
-    ).rejects.toThrow("Windows");
-    expect(f.resolve).not.toHaveBeenCalled();
-    expect(f.inspect).not.toHaveBeenCalled();
+    ).rejects.toThrow("管理员终端");
+    expect(
+        await runManagerProgramUpdate(
+            { check: true, yes: false, system: true, version: "1.2.13" },
+            {
+                ...f,
+                host: { ...f.host, platform: "win32", isElevated: true },
+                interactive: false,
+            },
+        ),
+    ).toBe(2);
+    expect(f.resolve).toHaveBeenCalledOnce();
+    expect(f.inspect).toHaveBeenCalledOnce();
+    expect(f.prepare).not.toHaveBeenCalled();
+    expect(f.upgrade).not.toHaveBeenCalled();
 });
 
 it("隐式latest低于当前版本标记ahead且禁止降级，显式精确目标允许确认", async () => {

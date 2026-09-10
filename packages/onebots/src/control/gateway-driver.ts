@@ -26,6 +26,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
     GATEWAY_PROTOCOL_VERSION,
+    isGatewayAccountStatusMessage,
     type GatewayReadyMessage,
     type GatewayStartMessage,
 } from "../gateway/contracts.js";
@@ -64,6 +65,11 @@ interface ManagedChild {
     sendContext?: ControlSendContext;
     messageDebug?: boolean;
     verificationConfig?: string;
+    accounts?: Array<{
+        platform: string;
+        accountId: string;
+        status: "pending" | "online" | "offline";
+    }>;
 }
 
 /** This is process lifecycle isolation, not a security sandbox for hostile plugins. */
@@ -78,6 +84,16 @@ export class NodeGatewayDriver implements GatewayDriver {
             this.starting ||
             [...this.children.values()].some(child => !child.exited || groupExists(child.child.pid))
         );
+    }
+
+    accountStatuses(instanceId: string): {
+        available: boolean;
+        items: NonNullable<ManagedChild["accounts"]>;
+    } {
+        const managed = this.children.get(instanceId);
+        if (!managed || managed.stopping || managed.exited || !managed.accounts)
+            return { available: false, items: [] };
+        return { available: true, items: structuredClone(managed.accounts) };
     }
 
     async start(): Promise<GatewayInstance> {
@@ -325,6 +341,14 @@ export class NodeGatewayDriver implements GatewayDriver {
             }),
         };
         this.children.set(id, managed);
+        child.on("message", value => {
+            if (
+                isGatewayAccountStatusMessage(value) &&
+                value.controlInstanceId === this.options.controlInstanceId &&
+                value.gatewayInstanceId === id
+            )
+                managed.accounts = structuredClone(value.accounts);
+        });
         // Keep an error listener even after handshake so late IPC errors are not unhandled.
         let processError: string | undefined;
         child.on("error", error => {
@@ -341,8 +365,11 @@ export class NodeGatewayDriver implements GatewayDriver {
                 .then(() => this.terminate(managed))
                 .then(() => this.options.onExit(id, error))
                 .catch(() => {
-                    try { appendGatewayLog(workspace, "[onebots] 网关退出观察器处理失败\n"); }
-                    catch { /* 日志失败不能撤销已经确认的子进程退出。 */ }
+                    try {
+                        appendGatewayLog(workspace, "[onebots] 网关退出观察器处理失败\n");
+                    } catch {
+                        /* 日志失败不能撤销已经确认的子进程退出。 */
+                    }
                 });
         });
         return managed;

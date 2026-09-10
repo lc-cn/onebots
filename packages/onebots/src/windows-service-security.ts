@@ -57,7 +57,8 @@ function parseProof(output: string): string {
 
 /**
  * 在任何 TS 日志或候选工件落盘前建立 SCM 管理事务的 Windows 权威边界。
- * ACL 只保留调用管理员与 LocalSystem；拒绝继承、重解析点和额外显式主体。
+ * ACL 只保留已提升 Administrators 与 LocalSystem；过滤 token 中 deny-only 的管理员组
+ * 不会命中 Allow ACE，因此同一用户的非提升进程不能改写管理工件。
  */
 export function secureWindowsServiceDirectory(host: ServiceHost, directory: string): string {
     if (
@@ -72,11 +73,11 @@ export function secureWindowsServiceDirectory(host: ServiceHost, directory: stri
     )
         throw failure();
     const location = JSON.stringify(directory);
-    const sid = JSON.stringify(host.windowsSid);
     const script = String.raw`
 $ErrorActionPreference='Stop'
 $p=${location}
-$sid=${sid}
+$ownerSid='S-1-5-32-544'
+$allowedSids=@($ownerSid,'S-1-5-18')
 $stage='ancestor'
 try {
 $ancestor=[IO.Path]::GetDirectoryName($p)
@@ -94,12 +95,12 @@ $acl.SetAccessRuleProtection($true,$false)
 $inherit=[System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
 $prop=[System.Security.AccessControl.PropagationFlags]::None
 $allow=[System.Security.AccessControl.AccessControlType]::Allow
-foreach($identity in @($sid,'S-1-5-18')){
+foreach($identity in $allowedSids){
   $principal=New-Object System.Security.Principal.SecurityIdentifier($identity)
   $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($principal,'FullControl',$inherit,$prop,$allow)
   $acl.AddAccessRule($rule)|Out-Null
 }
-$acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($sid)))
+$acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($ownerSid)))
 $stage='create'
 $item=New-Object System.IO.DirectoryInfo($p)
 if(-not $item.Exists){
@@ -122,7 +123,7 @@ $ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
 $owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
 $bad=@($rules|Where-Object{$_.IsInherited -or $_.AccessControlType -ne 'Allow' -or $_.InheritanceFlags -ne $inherit -or $_.PropagationFlags -ne $prop -or $_.FileSystemRights -ne [System.Security.AccessControl.FileSystemRights]::FullControl})
 $stage='verify'
-if(-not $check.AreAccessRulesProtected -or $owner -ne $sid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin @($sid,'S-1-5-18') -or $ids[1] -notin @($sid,'S-1-5-18') -or $bad.Count -ne 0){throw 'unsafe acl'}
+if(-not $check.AreAccessRulesProtected -or $owner -ne $ownerSid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin $allowedSids -or $ids[1] -notin $allowedSids -or $bad.Count -ne 0){throw 'unsafe acl'}
 $encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
 [Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
 } catch {
@@ -160,7 +161,10 @@ export function inspectWindowsServiceDirectorySecurity(
     const script = String.raw`
 $ErrorActionPreference='Stop'
 $p=${JSON.stringify(directory)}
-$sid=${JSON.stringify(host.windowsSid)}
+$ownerSid='S-1-5-32-544'
+$allowedSids=@($ownerSid,'S-1-5-18')
+$stage='inspect'
+try {
 $item=New-Object System.IO.DirectoryInfo($p)
 if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe directory'}
 if($PSVersionTable.PSEdition -eq 'Desktop'){
@@ -177,9 +181,13 @@ $bad=@($rules|Where-Object{$_.AccessControlType -ne 'Allow' -or $_.InheritanceFl
 $inherited=@($rules|Where-Object{$_.IsInherited}).Count
 $legalInheritance=(-not $check.AreAccessRulesProtected -and $inherited -eq 2)
 $protectedExact=($check.AreAccessRulesProtected -and $inherited -eq 0)
-if((-not $legalInheritance -and -not $protectedExact) -or $owner -ne $sid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin @($sid,'S-1-5-18') -or $ids[1] -notin @($sid,'S-1-5-18') -or $bad.Count -ne 0){throw 'unsafe acl'}
+$stage='verify'
+if((-not $legalInheritance -and -not $protectedExact) -or $owner -ne $ownerSid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin $allowedSids -or $ids[1] -notin $allowedSids -or $bad.Count -ne 0){throw 'unsafe acl'}
 $encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
 [Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
+} catch {
+  [Console]::Out.Write((@{secured=$false;stage=$stage}|ConvertTo-Json -Compress))
+}
 `;
     try {
         return parseProof(
@@ -189,7 +197,8 @@ $encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
                 { timeoutMs: 15_000 },
             ),
         );
-    } catch {
+    } catch (error) {
+        if (error instanceof WindowsServiceSecurityError) throw error;
         throw failure();
     }
 }
@@ -209,7 +218,8 @@ export function inspectWindowsServiceFileSecurity(host: ServiceHost, file: strin
     const script = String.raw`
 $ErrorActionPreference='Stop'
 $p=${JSON.stringify(file)}
-$sid=${JSON.stringify(host.windowsSid)}
+$ownerSid='S-1-5-32-544'
+$allowedSids=@($ownerSid,'S-1-5-18')
 $item=New-Object System.IO.FileInfo($p)
 if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe file'}
 if($PSVersionTable.PSEdition -eq 'Desktop'){
@@ -221,7 +231,7 @@ $rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityId
 $ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
 $owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
 $bad=@($rules|Where-Object{$_.AccessControlType -ne 'Allow' -or $_.FileSystemRights -ne [System.Security.AccessControl.FileSystemRights]::FullControl})
-if(-not $check.AreAccessRulesProtected -or $owner -ne $sid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin @($sid,'S-1-5-18') -or $ids[1] -notin @($sid,'S-1-5-18') -or $bad.Count -ne 0){throw 'unsafe acl'}
+if(-not $check.AreAccessRulesProtected -or $owner -ne $ownerSid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin $allowedSids -or $ids[1] -notin $allowedSids -or $bad.Count -ne 0){throw 'unsafe acl'}
 $encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
 [Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
 `;
@@ -253,18 +263,19 @@ export function secureWindowsServiceFile(host: ServiceHost, file: string): strin
     const script = String.raw`
 $ErrorActionPreference='Stop'
 $p=${JSON.stringify(file)}
-$sid=${JSON.stringify(host.windowsSid)}
+$ownerSid='S-1-5-32-544'
+$allowedSids=@($ownerSid,'S-1-5-18')
 $item=New-Object System.IO.FileInfo($p)
 if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe file'}
 $acl=New-Object System.Security.AccessControl.FileSecurity
 $acl.SetAccessRuleProtection($true,$false)
 $allow=[System.Security.AccessControl.AccessControlType]::Allow
-foreach($identity in @($sid,'S-1-5-18')){
+foreach($identity in $allowedSids){
   $principal=New-Object System.Security.Principal.SecurityIdentifier($identity)
   $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($principal,'FullControl',$allow)
   $acl.AddAccessRule($rule)|Out-Null
 }
-$acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($sid)))
+$acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($ownerSid)))
 if($PSVersionTable.PSEdition -eq 'Desktop'){
   [System.IO.File]::SetAccessControl($p,$acl)
 } elseif($PSVersionTable.PSEdition -eq 'Core'){

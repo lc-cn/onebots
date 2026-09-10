@@ -55,6 +55,8 @@ export interface GenerationStoreOptions {
     root: string;
     /** 由控制服务提供；须与激活操作在同一个工作区锁内串行调用。 */
     isActive(id: string): boolean;
+    /** 系统级仓库可在写入任何候选字节前原子收紧新目录。 */
+    secureCandidateDirectory?(directory: string): void;
 }
 
 interface CandidateRecord {
@@ -76,6 +78,7 @@ export class GenerationStore {
     private readonly root: string;
     private readonly storeId: string;
     private readonly isActive: (id: string) => boolean;
+    private readonly secureCandidateDirectory?: (directory: string) => void;
 
     constructor(options: GenerationStoreOptions) {
         fs.mkdirSync(options.root, { recursive: true, mode: 0o700 });
@@ -83,6 +86,7 @@ export class GenerationStore {
         this.root = fs.realpathSync(options.root);
         fs.chmodSync(this.root, 0o700);
         this.isActive = options.isActive;
+        this.secureCandidateDirectory = options.secureCandidateDirectory;
         const identityPath = path.join(this.root, "store.json");
         if (!exists(identityPath)) {
             writeAtomic(identityPath, { schemaVersion: 1, id: randomUUID() });
@@ -103,6 +107,12 @@ export class GenerationStore {
         const id = randomUUID();
         const directory = path.join(this.root, id);
         fs.mkdirSync(directory, { mode: 0o700 });
+        try {
+            this.secureCandidateDirectory?.(directory);
+        } catch (error) {
+            fs.rmSync(directory, { recursive: true, force: true });
+            throw error;
+        }
         const record: CandidateRecord = {
             schemaVersion: 1,
             phase: "candidate",

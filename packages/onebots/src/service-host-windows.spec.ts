@@ -13,10 +13,10 @@ afterEach(() => {
 });
 
 describe("Windows service host identity", () => {
-    it("uses one bounded token query and does not invoke net session", () => {
+    it("uses one bounded native token query and does not start PowerShell", () => {
         Object.defineProperty(process, "platform", { value: "win32" });
         child.execFileSync.mockReturnValue(
-            JSON.stringify({ sid: "S-1-5-21-1000", elevated: true }),
+            JSON.stringify({ version: 1, sid: "S-1-5-21-1000", elevated: true }),
         );
 
         const host = createDefaultServiceHost();
@@ -28,13 +28,12 @@ describe("Windows service host identity", () => {
         });
         expect(child.execFileSync).toHaveBeenCalledOnce();
         const [file, args, options] = child.execFileSync.mock.calls[0];
-        expect(file).toBe("powershell.exe");
-        expect(args).toContain("-EncodedCommand");
+        expect(file).toMatch(
+            new RegExp(`native[/\\\\]win32-${process.arch}[/\\\\]onebots-windows-host\\.exe$`),
+        );
+        expect(args).toEqual(["identity"]);
         expect(options).toMatchObject({ timeout: 5000, stdio: ["ignore", "pipe", "ignore"] });
-        expect(JSON.stringify(child.execFileSync.mock.calls)).not.toContain("net.exe");
-        const script = Buffer.from(args.at(-1), "base64").toString("utf16le");
-        expect(script).toContain("WindowsIdentity]::GetCurrent()");
-        expect(script).toContain("WindowsBuiltInRole]::Administrator");
+        expect(JSON.stringify(child.execFileSync.mock.calls)).not.toContain("powershell.exe");
     });
 
     it("fails closed on timeout or malformed token proof", () => {
@@ -47,7 +46,9 @@ describe("Windows service host identity", () => {
             isElevated: undefined,
         });
 
-        child.execFileSync.mockReturnValueOnce('{"sid":"S-1-5-21-1000","elevated":true,"extra":1}');
+        child.execFileSync.mockReturnValueOnce(
+            '{"version":1,"sid":"S-1-5-21-1000","elevated":true,"extra":1}',
+        );
         expect(createDefaultServiceHost()).toMatchObject({
             windowsSid: undefined,
             isElevated: undefined,

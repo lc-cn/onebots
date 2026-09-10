@@ -27,6 +27,7 @@ import type { ServiceScope } from "../service-definition.js";
 import { getServiceFiles } from "../service-files.js";
 import { createDefaultServiceHost, type ServiceHost } from "../service-host.js";
 import { readServiceMetadata } from "../service-metadata.js";
+import { inspectWindowsServiceDirectorySecurity } from "../windows-service-security.js";
 
 export interface ManagerProgramUpdateOptions {
     check: boolean;
@@ -74,9 +75,13 @@ export async function runManagerProgramUpdate(
 ): Promise<number> {
     const host = dependencies.host ?? createDefaultServiceHost();
     const scope: ServiceScope = options.system ? "system" : "user";
-    if (host.platform !== "linux" && host.platform !== "darwin")
-        throw new Error("管理程序原生升级仅支持 Linux 和 macOS；Windows 未执行任何安装或服务动作");
-    if (scope === "system" && host.uid !== 0)
+    if (!["linux", "darwin", "win32"].includes(host.platform))
+        throw new Error("当前平台不支持管理程序原生升级；未执行任何安装或服务动作");
+    if (host.platform === "win32" && (scope !== "system" || host.isElevated !== true))
+        throw new Error(
+            "Windows 管理程序升级必须使用管理员终端并传入 --system；未下载候选或修改系统服务",
+        );
+    if (host.platform !== "win32" && scope === "system" && host.uid !== 0)
         throw new Error("系统级管理程序升级需要 root；未下载候选或修改系统服务");
     if (
         options.operationId &&
@@ -264,20 +269,22 @@ function inspectInstalledManager(scope: ServiceScope, host: ServiceHost): Instal
 
 function operationExists(id: string, scope: ServiceScope, host: ServiceHost): boolean {
     try {
-        const file = path.join(
-            getServiceFiles(scope, host).stateDir,
-            "manager-operations",
-            `${id}.json`,
-        );
+        const stateDirectory = getServiceFiles(scope, host).stateDir;
+        const directory = path.join(stateDirectory, "manager-operations");
+        const file = path.join(directory, `${id}.json`);
         const stat = fs.lstatSync(file);
         if (
             !stat.isFile() ||
             stat.isSymbolicLink() ||
             stat.nlink !== 1 ||
-            (stat.mode & 0o077) !== 0 ||
-            (process.getuid && stat.uid !== process.getuid())
+            (host.platform !== "win32" && (stat.mode & 0o077) !== 0) ||
+            (host.platform !== "win32" && process.getuid && stat.uid !== process.getuid())
         )
             throw new Error();
+        if (host.platform === "win32") {
+            inspectWindowsServiceDirectorySecurity(host, stateDirectory);
+            inspectWindowsServiceDirectorySecurity(host, directory);
+        }
         return true;
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;

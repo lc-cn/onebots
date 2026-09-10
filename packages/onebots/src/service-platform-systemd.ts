@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { open, realpath, statfs } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { MANAGER_SERVICE_STOP_TIMEOUT_SECONDS } from "./manager-service-definition.js";
 import { SERVICE_NAME, type ServiceScope } from "./service-definition.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
@@ -26,6 +27,14 @@ export interface SystemdServicePlatformOptions {
     now?(): number;
     sleep?(milliseconds: number): Promise<void>;
     stopTimeoutMs?: number;
+    /** 优雅停止超期后，对已验证固定 unit 的 cgroup 执行一次兜底强制终止。 */
+    forceKillAfterMs?: number;
+    /** 仅用于测试替换；生产实现持有已验证 cgroup v2 的 cgroup.kill 文件句柄。 */
+    openCgroupKill?(file: string): Promise<CgroupKillHandle>;
+}
+interface CgroupKillHandle {
+    kill(): Promise<void>;
+    close(): Promise<void>;
 }
 function unavailable(): never {
     throw new Error("无法安全确认 systemd 服务状态");
@@ -49,6 +58,29 @@ async function readCgroupEvents(file: string): Promise<string> {
     } finally {
         await handle.close();
     }
+}
+
+async function openCgroupKill(file: string): Promise<CgroupKillHandle> {
+    if ((await realpath(file)) !== file || (await statfs(CGROUP_ROOT)).type !== 0x63677270)
+        unavailable();
+    const handle = await open(
+        file,
+        constants.O_WRONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+    );
+    try {
+        const stat = await handle.stat();
+        if (!stat.isFile()) unavailable();
+    } catch (error) {
+        await handle.close();
+        throw error;
+    }
+    return {
+        kill: async () => {
+            const result = await handle.write("1");
+            if (result.bytesWritten !== 1) unavailable();
+        },
+        close: async () => handle.close(),
+    };
 }
 
 function parse(output: string): Properties {
@@ -84,6 +116,10 @@ function cgroupFile(group: string): string {
         unavailable();
     return `${CGROUP_ROOT}${group}/cgroup.events`;
 }
+function cgroupKillFile(group: string): string {
+    cgroupFile(group);
+    return `${CGROUP_ROOT}${group}/cgroup.kill`;
+}
 function populated(text: string): boolean {
     if (text.length > 4096) unavailable();
     const values = new Map<string, string>();
@@ -99,9 +135,11 @@ function populated(text: string): boolean {
 /** 调用者持有服务锁；这里既不写定义，也不尝试用未知状态恢复服务。 */
 export class SystemdServicePlatform implements ServicePlatform {
     private readonly readFile: (file: string) => Promise<string>;
+    private readonly openCgroupKill: (file: string) => Promise<CgroupKillHandle>;
     private readonly now: () => number;
     private readonly sleep: (milliseconds: number) => Promise<void>;
     private readonly timeout: number;
+    private readonly forceKillAfter: number;
     constructor(
         private readonly host: ServiceHost,
         private readonly scope: ServiceScope,
@@ -120,7 +158,16 @@ export class SystemdServicePlatform implements ServicePlatform {
         this.timeout = options.stopTimeoutMs ?? 120_000;
         if (!Number.isInteger(this.timeout) || this.timeout < 1 || this.timeout > 300_000)
             unavailable();
+        this.forceKillAfter =
+            options.forceKillAfterMs ?? MANAGER_SERVICE_STOP_TIMEOUT_SECONDS * 1000 + 5_000;
+        if (
+            !Number.isInteger(this.forceKillAfter) ||
+            this.forceKillAfter < 1 ||
+            this.forceKillAfter >= this.timeout
+        )
+            unavailable();
         this.readFile = options.readFile ?? readCgroupEvents;
+        this.openCgroupKill = options.openCgroupKill ?? openCgroupKill;
         this.now = options.now ?? Date.now;
         this.sleep =
             options.sleep ??
@@ -153,6 +200,21 @@ export class SystemdServicePlatform implements ServicePlatform {
         return this.inspectWithin();
     }
     private async inspectWithin(deadline?: number): Promise<ServicePlatformState> {
+        const detailed = await this.inspectDetailedWithin(deadline);
+        return {
+            state: detailed.state,
+            running: detailed.running,
+            enabled: detailed.enabled,
+            loaded: detailed.loaded,
+            definitionPath: detailed.definitionPath,
+            processId: detailed.processId,
+            identity: detailed.identity,
+            quiescent: detailed.quiescent,
+        };
+    }
+    private async inspectDetailedWithin(
+        deadline?: number,
+    ): Promise<ServicePlatformState & { controlGroup: string | null }> {
         try {
             const properties = this.show(deadline);
             const main = pid(properties.MainPID),
@@ -227,6 +289,7 @@ export class SystemdServicePlatform implements ServicePlatform {
                 processId: main || null,
                 identity,
                 quiescent: !running && !main && !control && empty,
+                controlGroup: properties.ControlGroup || null,
             };
         } catch {
             unavailable();
@@ -278,8 +341,10 @@ export class SystemdServicePlatform implements ServicePlatform {
         }
     }
     async quiesce(): Promise<void> {
-        const deadline = this.now() + this.timeout;
-        const before = await this.inspectWithin(deadline);
+        const startedAt = this.now();
+        const deadline = startedAt + this.timeout;
+        const forceAt = startedAt + this.forceKillAfter;
+        const before = await this.inspectDetailedWithin(deadline);
         if (!before.loaded) {
             if (!before.quiescent) unavailable();
             return;
@@ -289,15 +354,67 @@ export class SystemdServicePlatform implements ServicePlatform {
         if (!before.enabled && before.quiescent) return;
         this.command(["disable", "--", UNIT], deadline);
         this.command(["stop", "--no-block", "--", UNIT], deadline);
+        let forced = false;
         for (;;) {
-            const current = await this.inspectWithin(deadline);
+            const current = await this.inspectDetailedWithin(deadline);
             // disable/stop 针对固定 unit；故障候选可能在两个命令之间被 systemd 自动换代。
-            // inspectWithin 仍逐次核验精确定义路径与 cgroup，调用方也持服务锁并核验文件，
+            // inspectDetailedWithin 仍逐次核验精确定义路径与 cgroup，调用方也持服务锁并核验文件，
             // 因此不能把同一 unit 的新 InvocationID 误判成外部替换而放弃静止。
             if (current.enabled) unavailable();
             if (current.quiescent) return;
             if (this.now() >= deadline)
                 throw new Error("systemd 服务停止超时，尚未确认子进程全部退出");
+            if (!forced && this.now() >= forceAt) {
+                // systemd 自身应在 TimeoutStopSec 后清理整个 cgroup；若 stop job 与故障候选
+                // 自动换代竞态导致子进程仍存活，显式回退可以在优雅窗口后兜底终止该固定
+                // unit。先重申人工 stop，确保强制终止不会被 Restart=on-failure 当作新故障
+                // 再次拉起；随后再次核验实例身份和 ControlGroup，只写已绑定 cgroup v2
+                // 的 cgroup.kill，避免同名 unit 换代时误杀新实例。写入结果仍不是完成证明。
+                if (!current.identity || !current.controlGroup) unavailable();
+                this.command(["stop", "--no-block", "--", UNIT], deadline);
+                const target = await this.inspectDetailedWithin(deadline);
+                if (target.quiescent) return;
+                if (
+                    target.enabled ||
+                    target.identity !== current.identity ||
+                    target.controlGroup !== current.controlGroup
+                )
+                    unavailable();
+                let handle: CgroupKillHandle | undefined;
+                try {
+                    handle = await this.openCgroupKill(cgroupKillFile(target.controlGroup));
+                    // 路径校验与 open 之间旧 cgroup 仍可能消失并被同名新实例复用；持有文件
+                    // 描述符后再核验一次，确保即将写入的内核对象仍属于目标实例。
+                    const bound = await this.inspectDetailedWithin(deadline);
+                    if (bound.quiescent) return;
+                    if (
+                        bound.enabled ||
+                        bound.identity !== target.identity ||
+                        bound.controlGroup !== target.controlGroup
+                    )
+                        unavailable();
+                    await handle.kill();
+                } catch {
+                    // 权限不足、cgroup 消失、短写或换代均不得降级回按 unit 名终止。
+                    unavailable();
+                } finally {
+                    if (handle)
+                        try {
+                            await handle.close();
+                        } catch {
+                            unavailable();
+                        }
+                }
+                const after = await this.inspectDetailedWithin(deadline);
+                if (
+                    !after.quiescent &&
+                    (after.identity !== target.identity ||
+                        after.controlGroup !== target.controlGroup)
+                )
+                    unavailable();
+                forced = true;
+                continue;
+            }
             await this.sleep(Math.min(100, deadline - this.now()));
         }
     }

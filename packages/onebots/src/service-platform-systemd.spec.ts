@@ -52,17 +52,30 @@ function fixture() {
     const sleep = vi.fn(async (ms: number) => {
         clock += ms;
     });
+    const killCgroup = vi.fn(async () => {
+        throw new Error("测试未授权强制终止 cgroup");
+    });
+    const closeCgroup = vi.fn(async () => undefined);
+    const openCgroupKill = vi.fn(async (_file: string) => ({
+        kill: killCgroup,
+        close: closeCgroup,
+    }));
     const platform = new SystemdServicePlatform(host, "user", definition, {
         readFile,
+        openCgroupKill,
         now: () => clock,
         sleep,
         stopTimeoutMs: 300,
+        forceKillAfterMs: 200,
     });
     return {
         platform,
         host,
         exec,
         readFile,
+        openCgroupKill,
+        killCgroup,
+        closeCgroup,
         sleep,
         state: (value: Record<string, string>) => {
             state = properties(value);
@@ -284,6 +297,73 @@ describe("systemd服务平台边界", () => {
         const f = fixture();
         await expect(f.platform.quiesce()).rejects.toThrow();
         expect(f.sleep.mock.calls.length).toBeLessThanOrEqual(3);
+    });
+    it("优雅停止窗口后只强制终止一次固定 unit，并以 cgroup 清空闭环", async () => {
+        const f = fixture();
+        let replaced = false;
+        f.sleep.mockImplementation(async ms => {
+            f.advance(ms);
+            if (!replaced) {
+                replaced = true;
+                f.state({
+                    UnitFileState: "disabled",
+                    InvocationID: "b".repeat(32),
+                    MainPID: "456",
+                });
+            }
+        });
+        f.killCgroup.mockImplementation(async () => {
+            f.state({
+                UnitFileState: "disabled",
+                ActiveState: "inactive",
+                SubState: "dead",
+                MainPID: "0",
+                ControlPID: "0",
+                ControlGroup: "",
+                InvocationID: "",
+            });
+            f.events("populated 0\n");
+        });
+        await f.platform.quiesce();
+        expect(replaced).toBe(true);
+        expect(f.exec.mock.calls.filter(call => call[1].includes("stop"))).toHaveLength(2);
+        expect(f.openCgroupKill).toHaveBeenCalledOnce();
+        expect(f.openCgroupKill).toHaveBeenCalledWith(`/sys/fs/cgroup${group}/cgroup.kill`);
+        expect(f.killCgroup).toHaveBeenCalledOnce();
+        expect(f.closeCgroup).toHaveBeenCalledOnce();
+        expect(f.exec.mock.calls.flatMap(call => call[1])).not.toContain("kill");
+        expect(await f.platform.inspect()).toMatchObject({
+            state: "stopped",
+            enabled: false,
+            quiescent: true,
+        });
+    });
+    it("打开 cgroup.kill 句柄后同名 unit 换代时拒绝写入并关闭句柄", async () => {
+        const f = fixture();
+        f.sleep.mockImplementation(async ms => f.advance(ms));
+        f.openCgroupKill.mockImplementationOnce(async () => {
+            f.state({
+                UnitFileState: "disabled",
+                InvocationID: "c".repeat(32),
+                MainPID: "789",
+                ControlGroup:
+                    "/user.slice/user-1000.slice/user@1000.service/app.slice/replacement/onebots-gateway.service",
+            });
+            return { kill: f.killCgroup, close: f.closeCgroup };
+        });
+        await expect(f.platform.quiesce()).rejects.toThrow("无法安全确认 systemd 服务状态");
+        expect(f.openCgroupKill).toHaveBeenCalledWith(`/sys/fs/cgroup${group}/cgroup.kill`);
+        expect(f.killCgroup).not.toHaveBeenCalled();
+        expect(f.closeCgroup).toHaveBeenCalledOnce();
+    });
+    it("cgroup.kill 权限失败时拒绝降级为按 unit 强杀", async () => {
+        const f = fixture();
+        f.sleep.mockImplementation(async ms => f.advance(ms));
+        f.openCgroupKill.mockRejectedValueOnce(new Error("EPERM: operation not permitted"));
+        await expect(f.platform.quiesce()).rejects.toThrow("无法安全确认 systemd 服务状态");
+        expect(f.openCgroupKill).toHaveBeenCalledWith(`/sys/fs/cgroup${group}/cgroup.kill`);
+        expect(f.killCgroup).not.toHaveBeenCalled();
+        expect(f.exec.mock.calls.flatMap(call => call[1])).not.toContain("kill");
     });
     it("disable 后故障候选换代仍静止同一固定 unit", async () => {
         const f = fixture();

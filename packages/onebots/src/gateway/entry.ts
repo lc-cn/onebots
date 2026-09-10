@@ -16,6 +16,7 @@ import { loadPlugins } from "../runtime-plugins.js";
 import { parseRuntimeConfig, validateRuntimeConfig } from "../runtime-config-validator.js";
 import { GatewayApp } from "./app.js";
 import {
+    isGatewayAccountStatusMessage,
     isGatewayParentMessage,
     type GatewayStartMessage,
     type GatewayChildMessage,
@@ -28,6 +29,7 @@ let stopping = false;
 let mcpSessions: GatewayMcpSessions | undefined;
 let sendExecutor: GatewaySendExecutor | undefined;
 let verificationExecutor: GatewayVerificationExecutor | undefined;
+let accountStatusTimer: NodeJS.Timeout | undefined;
 
 function send(
     message:
@@ -55,6 +57,7 @@ function failure(code: GatewayFailedMessage["code"], message: string): void {
 async function stop(timeoutMs = 15_000): Promise<void> {
     if (stopping) return;
     stopping = true;
+    if (accountStatusTimer) clearInterval(accountStatusTimer);
     verificationExecutor?.close();
     sendExecutor?.close();
     sendExecutor = undefined;
@@ -71,6 +74,22 @@ async function stop(timeoutMs = 15_000): Promise<void> {
         process.stderr.write("[onebots] 网关资源清理失败\n");
         process.exit(1);
     }
+}
+
+function publishAccountStatus(): void {
+    if (!startMessage || !app || stopping) return;
+    const message = {
+        type: "gateway.account-status" as const,
+        protocolVersion: 1 as const,
+        controlInstanceId: startMessage.controlInstanceId,
+        gatewayInstanceId: startMessage.gatewayInstanceId,
+        accounts: app.accounts.map(account => ({
+            platform: String(account.platform),
+            accountId: String(account.account_id),
+            status: account.status,
+        })),
+    };
+    if (isGatewayAccountStatusMessage(message)) send(message);
 }
 
 async function start(message: GatewayStartMessage): Promise<void> {
@@ -119,8 +138,12 @@ async function start(message: GatewayStartMessage): Promise<void> {
             dependencyVersion: message.dependencyVersion,
             address: { host: "127.0.0.1", port: address.port },
         });
+        publishAccountStatus();
+        accountStatusTimer = setInterval(publishAccountStatus, 2_000);
+        accountStatusTimer.unref?.();
         // 继续观察受管账号任务；ready 只表示私有管理通道可用。
         await accountsSettled;
+        publishAccountStatus();
     } catch (error) {
         // 已由停止路径接管时，不重复报告启动失败或重新清理。
         if (stopping) return;

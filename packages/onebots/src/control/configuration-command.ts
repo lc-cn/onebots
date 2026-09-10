@@ -4,7 +4,8 @@ import { createLocalControlClient } from "../client/local-control.js";
 import { writeCliOutput } from "../cli-output.js";
 import { parseConfigurationDocument } from "../configuration/configuration-document.js";
 
-export const CONFIGURATION_HELP = `onebots control config <命令> [--data-dir 工作区]
+export const CONFIGURATION_HELP = `onebots config <命令> [--data-dir 工作区]
+也可使用完整形式 onebots control config <命令>。
   reconcile --request 操作ID --revision SHA256
                                  本地对账中断修复，恢复原始坏文件，不启动网关
   source                         检查配置源状态（不输出损坏原文）

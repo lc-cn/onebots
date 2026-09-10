@@ -37,6 +37,18 @@ interface WindowsScmState {
     StartMode: "Auto" | "Manual" | "Disabled";
     ProcessId: number;
     PathName: string;
+    Config: {
+        ServiceType: "own-process";
+        ErrorControl: "normal";
+        LoadOrderGroup: "";
+        Dependencies: [];
+        ServiceStartName: "LocalSystem";
+        DisplayName: "OneBots Control Service";
+        TagId: 0;
+        Description: "";
+        SidType: 0;
+        DelayedAutoStart: false;
+    };
 }
 
 export const WINDOWS_HOST_PIPE_NAME = `\\\\.\\pipe\\${SERVICE_NAME}-control`;
@@ -49,14 +61,18 @@ function parseScmState(output: string): WindowsScmState | null {
     } catch {
         unavailable();
     }
+    if (!plainObject(value)) unavailable();
+    const stateKeys = ["loaded", "path", "state", "processId", "enabled"];
     if (
-        !plainObject(value) ||
-        !exactKeys(value, ["loaded", "path", "state", "processId", "enabled"])
+        !exactKeys(value, value.loaded === true ? [...stateKeys, "startMode", "config"] : stateKeys)
     )
         unavailable();
+    const config = value.config;
     if (
         typeof value.loaded !== "boolean" ||
         typeof value.enabled !== "boolean" ||
+        (value.loaded && !["auto", "manual", "disabled"].includes(String(value.startMode))) ||
+        (value.loaded && value.enabled !== (value.startMode === "auto")) ||
         !["running", "stopped", "transitioning"].includes(String(value.state)) ||
         typeof value.processId !== "number" ||
         !Number.isSafeInteger(value.processId) ||
@@ -68,6 +84,33 @@ function parseScmState(output: string): WindowsScmState | null {
     )
         unavailable();
     if (!value.loaded) return null;
+    if (
+        !plainObject(config) ||
+        !exactKeys(config, [
+            "serviceType",
+            "errorControl",
+            "loadOrderGroup",
+            "dependencies",
+            "serviceStartName",
+            "displayName",
+            "tagId",
+            "description",
+            "sidType",
+            "delayedAutoStart",
+        ]) ||
+        config.serviceType !== "own-process" ||
+        config.errorControl !== "normal" ||
+        config.loadOrderGroup !== "" ||
+        !Array.isArray(config.dependencies) ||
+        config.dependencies.length !== 0 ||
+        config.serviceStartName !== "LocalSystem" ||
+        config.displayName !== "OneBots Control Service" ||
+        config.tagId !== 0 ||
+        config.description !== "" ||
+        config.sidType !== 0 ||
+        config.delayedAutoStart !== false
+    )
+        unavailable();
     return {
         Name: SERVICE_NAME,
         State:
@@ -76,9 +119,26 @@ function parseScmState(output: string): WindowsScmState | null {
                 : value.state === "stopped"
                   ? "Stopped"
                   : "Start Pending",
-        StartMode: value.enabled ? "Auto" : "Manual",
+        StartMode:
+            value.startMode === "auto"
+                ? "Auto"
+                : value.startMode === "manual"
+                  ? "Manual"
+                  : "Disabled",
         ProcessId: value.processId,
         PathName: value.path,
+        Config: {
+            ServiceType: "own-process",
+            ErrorControl: "normal",
+            LoadOrderGroup: "",
+            Dependencies: [],
+            ServiceStartName: "LocalSystem",
+            DisplayName: "OneBots Control Service",
+            TagId: 0,
+            Description: "",
+            SidType: 0,
+            DelayedAutoStart: false,
+        },
     };
 }
 
@@ -320,12 +380,14 @@ export class WindowsServicePlatform implements ServicePlatform {
     }
     async quiesce(): Promise<void> {
         const definition = this.definition();
-        const before = await this.inspect();
-        if (!before.loaded) return;
+        const before = this.scm(definition);
+        if (!before) return;
+        if (before.PathName !== serviceCommand(definition, this.host.windowsSid!)) unavailable();
         this.scm(definition, {
             operation: "quiesce",
             expectedLoaded: true,
             expectedPath: serviceCommand(definition, this.host.windowsSid!),
+            expectedStartMode: before.StartMode.toLowerCase(),
         });
         await this.stable(
             state => state.loaded && state.state === "stopped" && !state.enabled && state.quiescent,
@@ -339,11 +401,14 @@ export class WindowsServicePlatform implements ServicePlatform {
             unavailable();
         }
         const command = serviceCommand(definition, this.host.windowsSid!);
-        const before = await this.inspect();
+        const before = this.scm(definition);
+        if (before && before.PathName !== command) unavailable();
         this.scm(definition, {
             operation: "configure",
-            expectedLoaded: before.loaded,
-            ...(before.loaded ? { expectedPath: command } : {}),
+            expectedLoaded: before !== null,
+            ...(before
+                ? { expectedPath: command, expectedStartMode: before.StartMode.toLowerCase() }
+                : {}),
             targetPath: command,
             enabled,
         });
@@ -379,6 +444,7 @@ export class WindowsServicePlatform implements ServicePlatform {
             operation: "configure",
             expectedLoaded: true,
             expectedPath: serviceCommand(previous, this.host.windowsSid!),
+            expectedStartMode: scm.StartMode.toLowerCase(),
             targetPath: serviceCommand(current, this.host.windowsSid!),
             enabled,
         });
@@ -392,10 +458,18 @@ export class WindowsServicePlatform implements ServicePlatform {
             unavailable();
         if (!initial.loaded || !initial.quiescent) unavailable();
         const definition = this.definition();
+        const scm = this.scm(definition);
+        if (
+            !scm ||
+            scm.PathName !== serviceCommand(definition, this.host.windowsSid!) ||
+            (scm.StartMode === "Auto") !== initial.enabled
+        )
+            unavailable();
         this.scm(definition, {
             operation: "start",
             expectedLoaded: true,
             expectedPath: serviceCommand(definition, this.host.windowsSid!),
+            expectedStartMode: scm.StartMode.toLowerCase(),
         });
         return this.stable(state => state.state === "running" && state.identity !== null);
     }
@@ -413,6 +487,18 @@ export function unregisterWindowsManagerService(
         !/^S-1-(?:[0-9]+-)+[0-9]+$/.test(host.windowsSid)
     )
         unavailable();
+    const current = parseScmState(
+        host.exec(
+            definition.hostExecutable,
+            [
+                "scm-control",
+                "--request",
+                scmRequest({ operation: "inspect", expectedLoaded: false }),
+            ],
+            { timeoutMs: 125_000 },
+        ),
+    );
+    if (!current || current.PathName !== serviceCommand(definition, host.windowsSid)) unavailable();
     const state = parseScmState(
         host.exec(
             definition.hostExecutable,
@@ -423,6 +509,7 @@ export function unregisterWindowsManagerService(
                     operation: "delete",
                     expectedLoaded: true,
                     expectedPath: serviceCommand(definition, host.windowsSid),
+                    expectedStartMode: current.StartMode.toLowerCase(),
                 }),
             ],
             { timeoutMs: 125_000 },

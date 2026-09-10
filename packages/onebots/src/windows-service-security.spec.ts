@@ -27,7 +27,7 @@ function host(output = '{"secured":true,"sddl":"TzpTWVNURU0="}'): ServiceHost {
 }
 
 describe("Windows 服务状态 ACL", () => {
-    it("使用编码 PowerShell 建立无继承的调用SID与LocalSystem边界", () => {
+    it("使用编码 PowerShell 建立无继承的提升管理员组与 LocalSystem 边界", () => {
         const value = host();
         secureWindowsServiceDirectory(value, "C:\\ProgramData\\OneBots");
         expect(value.exec).toHaveBeenCalledWith(
@@ -43,6 +43,9 @@ describe("Windows 服务状态 ACL", () => {
         );
         const encoded = (value.exec as ReturnType<typeof vi.fn>).mock.calls[0][1][4] as string;
         const script = Buffer.from(encoded, "base64").toString("utf16le");
+        expect(script).toContain("$ownerSid='S-1-5-32-544'");
+        expect(script).toContain("$allowedSids=@($ownerSid,'S-1-5-18')");
+        expect(script).not.toContain(value.windowsSid);
         expect(script).toContain("$rules.Count -ne 2");
         expect(script).toContain("$_.AccessControlType -ne 'Allow'");
         expect(script).toContain("$_.FileSystemRights -ne");
@@ -103,6 +106,8 @@ describe("Windows 服务状态 ACL", () => {
             (value.exec as ReturnType<typeof vi.fn>).mock.calls[0][1][4] as string,
             "base64",
         ).toString("utf16le");
+        expect(script).toContain("$ownerSid='S-1-5-32-544'");
+        expect(script).not.toContain(value.windowsSid);
         expect(script).toContain("$check.AreAccessRulesProtected");
         expect(script).toContain("$rules.Count -ne 2");
         expect(script).toContain("$_.AccessControlType -ne 'Allow'");
@@ -119,6 +124,8 @@ describe("Windows 服务状态 ACL", () => {
             (secured.exec as ReturnType<typeof vi.fn>).mock.calls[0][1][4] as string,
             "base64",
         ).toString("utf16le");
+        expect(secureScript).toContain("$ownerSid='S-1-5-32-544'");
+        expect(secureScript).not.toContain(secured.windowsSid);
         expect(secureScript).toContain("[System.IO.FileSystemAclExtensions]::SetAccessControl");
         expect(secureScript).toContain("[System.IO.File]::SetAccessControl($p,$acl)");
         expect(secureScript).toContain(
@@ -140,6 +147,12 @@ describe("Windows 服务状态 ACL", () => {
         expect(script).toContain("$legalInheritance");
         expect(script).not.toContain("SetAccessRuleProtection");
         expect(script).not.toContain("Set-Acl");
+        expect(() =>
+            inspectWindowsServiceDirectorySecurity(
+                host('{"secured":false,"stage":"verify"}'),
+                "C:\\ProgramData\\OneBots",
+            ),
+        ).toThrow(new WindowsServiceSecurityError("verify"));
     });
 
     it.runIf(process.platform === "win32")("接受可信父目录的完整合法继承", () => {
@@ -182,7 +195,7 @@ Set-Acl -LiteralPath $p -AclObject $acl
             );
             expect(() => secureWindowsServiceDirectory(real, directory)).toThrow("ACL 无法确认");
         } finally {
-            // 调用者仍是 owner，可以在删除前恢复继承；失败时让 CI 保留现场。
+            // 提升管理员仍可在删除前恢复继承；失败时让 CI 保留现场。
             try {
                 execFileSync(
                     "powershell.exe",

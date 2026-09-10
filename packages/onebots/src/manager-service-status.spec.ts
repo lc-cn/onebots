@@ -65,6 +65,7 @@ function fixture() {
         gateway: { actual: "failed", desired: "running", recoveryRequired: false },
         serviceMigration: { pending: false, recoveryRequired: false },
         knownConfigurationFailure: true,
+        accounts: { available: true, items: [] },
     };
     const inspect = vi.fn(async () => ({ ...os })),
         ipc = vi.fn(async () => manager);
@@ -164,6 +165,45 @@ describe("manager service readonly status", () => {
         expect(f.host.exec).not.toHaveBeenCalled();
         expect(f.host.spawn).not.toHaveBeenCalled();
         expect(f.inspect).toHaveBeenCalledTimes(2);
+    });
+    it("只接受管理端最小账号摘要，不暴露配置或凭据", async () => {
+        const f = fixture();
+        f.manager.accounts = {
+            available: true,
+            items: [{ platform: "mock", accountId: "bot", status: "online" }],
+        };
+        const result = await inspectManagerServiceStatus("user", f.host, f.dependencies);
+        expect(result.accounts).toEqual(f.manager.accounts);
+        expect(JSON.stringify(result.accounts)).toBe(
+            '{"available":true,"items":[{"platform":"mock","accountId":"bot","status":"online"}]}',
+        );
+    });
+    it.each([
+        {
+            available: true,
+            items: [{ platform: "mock", accountId: "bot", status: { toString: () => "online" } }],
+        },
+        {
+            available: true,
+            items: [{ platform: "mock", accountId: "bot", status: "online", token: "secret" }],
+        },
+        {
+            available: false,
+            items: [{ platform: "mock", accountId: "bot", status: "online" }],
+        },
+        {
+            available: true,
+            items: Array.from({ length: 1001 }, () => ({
+                platform: "mock",
+                accountId: "bot",
+                status: "online",
+            })),
+        },
+    ])("拒绝不闭合的账号状态摘要", async accounts => {
+        const f = fixture();
+        f.manager.accounts = accounts;
+        const result = await inspectManagerServiceStatus("user", f.host, f.dependencies);
+        expect(result.accounts).toEqual({ available: false, items: [] });
     });
     it.each(["missing", "legacy", "invalid"] as const)(
         "%s元数据不会落回旧业务服务或调用OS",

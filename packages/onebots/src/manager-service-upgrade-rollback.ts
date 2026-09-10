@@ -21,12 +21,18 @@ import {
 import { readServiceMigrationPending } from "./service-migration-workspace.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
+import { WindowsServicePlatform } from "./service-platform-windows.js";
 import type { ServicePlatform } from "./service-platform.js";
 import {
     completeRolledBackManagerUpgradeWhileLocked,
     readManagerUpgradePending,
 } from "./service-upgrade-workspace.js";
 import type { ServiceScope } from "./service-definition.js";
+import {
+    inspectWindowsServiceDirectorySecurity,
+    inspectWindowsServiceFileSecurity,
+    secureWindowsServiceFile,
+} from "./windows-service-security.js";
 
 const failure = () => new Error("管理程序升级回退现场无法确认，保留恢复门禁；未重复派发系统动作");
 const rollbackPhases = [
@@ -41,6 +47,8 @@ export interface ManagerUpgradeRollbackDependencies {
     platform?: ServicePlatform;
     inspectManager?: typeof inspectMigrationManager;
     readinessTimeoutMs?: number;
+    /** Windows 测试 seam；生产使用固定 SCM 服务的 compare-and-swap 替换。 */
+    replaceWindowsDefinition?(targetDefinition: Buffer, enabled: boolean): Promise<void>;
 }
 
 /**
@@ -57,14 +65,16 @@ export async function rollbackManagerServiceUpgrade(
         typeof id !== "string" ||
         !/^[A-Za-z0-9_-]{1,128}$/.test(id) ||
         !["user", "system"].includes(scope) ||
-        !["linux", "darwin"].includes(host.platform) ||
-        (scope === "system" && host.uid !== 0)
+        !["linux", "darwin", "win32"].includes(host.platform) ||
+        (host.platform === "win32"
+            ? scope !== "system" || host.isElevated !== true
+            : scope === "system" && host.uid !== 0)
     )
         throw failure();
     const timeout = dependencies.readinessTimeoutMs ?? 120_000;
     if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 120_000) throw failure();
     const files = getServiceFiles(scope, host);
-    const releaseService = acquireServiceMigrationLock(files.stateDir);
+    const releaseService = acquireServiceMigrationLock(files.stateDir, host);
     const releases: Array<() => void> = [];
     let releaseWorkspace: (() => void) | undefined;
     try {
@@ -92,7 +102,8 @@ export async function rollbackManagerServiceUpgrade(
         ].sort()) {
             if (fs.realpathSync(home) !== home || home === record.managerSpec.workspace)
                 throw failure();
-            releases.push(acquireControlWorkspace(home));
+            if (host.platform === "win32") inspectWindowsServiceDirectorySecurity(host, home);
+            releases.push(acquireControlWorkspace(home, host));
         }
         verify(record, previous, target);
         if (readServiceMigrationPending(record.managerSpec.workspace)) throw failure();
@@ -100,14 +111,16 @@ export async function rollbackManagerServiceUpgrade(
             dependencies.platform ??
             (host.platform === "linux"
                 ? new SystemdServicePlatform(host, scope, files.definition)
-                : new LaunchdServicePlatform(host, scope, files.definition, {
-                      confirmUnloadedProcesses: () =>
-                          releaseWorkspace
-                              ? verifyServiceMigrationProcessesWhileLocked(
-                                    record.managerSpec.workspace,
-                                )
-                              : verifyServiceMigrationProcesses(record.managerSpec.workspace),
-                  }));
+                : host.platform === "darwin"
+                  ? new LaunchdServicePlatform(host, scope, files.definition, {
+                        confirmUnloadedProcesses: () =>
+                            releaseWorkspace
+                                ? verifyServiceMigrationProcessesWhileLocked(
+                                      record.managerSpec.workspace,
+                                  )
+                                : verifyServiceMigrationProcesses(record.managerSpec.workspace),
+                    })
+                  : new WindowsServicePlatform(host, scope, files.definition));
         if (
             record.phase === "completed" &&
             record.status === "failed" &&
@@ -125,7 +138,7 @@ export async function rollbackManagerServiceUpgrade(
         )
             throw failure();
         if (["rollback-writing", "rollback-reloading"].includes(record.phase))
-            releaseWorkspace = acquireControlWorkspace(record.managerSpec.workspace);
+            releaseWorkspace = acquireControlWorkspace(record.managerSpec.workspace, host);
         if (!rollbackPhases.includes(record.phase as (typeof rollbackPhases)[number])) {
             record = advance(journal, record, "rollback-stopping");
         }
@@ -138,7 +151,7 @@ export async function rollbackManagerServiceUpgrade(
             // 静止为幂等目标，并自行容忍派发前的服务换代；外层不能先做一次脆弱快照。
             await driver.quiesce();
             await assertQuiet(driver, false);
-            releaseWorkspace = acquireControlWorkspace(record.managerSpec.workspace);
+            releaseWorkspace = acquireControlWorkspace(record.managerSpec.workspace, host);
             record = advance(journal, record, "rollback-writing");
         }
         let enteredReloading = false;
@@ -154,13 +167,16 @@ export async function rollbackManagerServiceUpgrade(
         }
         if (record.phase === "rollback-reloading") {
             assertFiles(record.upgrade.previousSpec, host);
-            const before = await driver.inspect();
-            const alreadyReloaded =
-                before.state === "stopped" &&
-                !before.running &&
-                before.quiescent &&
-                before.enabled === record.desiredEnabled;
             const marker = readManagerUpgradePending(record.managerSpec.workspace);
+            let alreadyReloaded = false;
+            if (host.platform !== "win32" || marker?.phase === "released" || !enteredReloading) {
+                const before = await driver.inspect();
+                alreadyReloaded =
+                    before.state === "stopped" &&
+                    !before.running &&
+                    before.quiescent &&
+                    before.enabled === record.desiredEnabled;
+            }
             if (marker?.phase === "released") {
                 rolledBackMarker(record);
                 if (!alreadyReloaded) throw failure();
@@ -169,15 +185,37 @@ export async function rollbackManagerServiceUpgrade(
                 if (!alreadyReloaded) {
                     // Only the invocation which just durably entered this phase may dispatch reload.
                     // On cold re-entry an unsatisfied state has an unknown prior outcome, so block.
-                    if (!enteredReloading || before.running || !before.quiescent) throw failure();
-                    const reloaded = await driver.reload(record.desiredEnabled);
-                    if (
-                        reloaded.state !== "stopped" ||
-                        reloaded.running ||
-                        !reloaded.quiescent ||
-                        reloaded.enabled !== record.desiredEnabled
-                    )
-                        throw failure();
+                    if (!enteredReloading) throw failure();
+                    if (host.platform === "win32") {
+                        const targetDefinition = Buffer.from(
+                            renderInstalledManagerService(
+                                record.managerSpec,
+                                host.platform,
+                                files.stateDir,
+                            ),
+                        );
+                        if (dependencies.replaceWindowsDefinition)
+                            await dependencies.replaceWindowsDefinition(
+                                targetDefinition,
+                                record.desiredEnabled,
+                            );
+                        else {
+                            if (!(driver instanceof WindowsServicePlatform)) throw failure();
+                            await driver.reloadReplacing(targetDefinition, record.desiredEnabled);
+                        }
+                        await assertQuiet(driver, record.desiredEnabled);
+                    } else {
+                        const before = await driver.inspect();
+                        if (before.running || !before.quiescent) throw failure();
+                        const reloaded = await driver.reload(record.desiredEnabled);
+                        if (
+                            reloaded.state !== "stopped" ||
+                            reloaded.running ||
+                            !reloaded.quiescent ||
+                            reloaded.enabled !== record.desiredEnabled
+                        )
+                            throw failure();
+                    }
                 }
                 completeRolledBackManagerUpgradeWhileLocked(record.managerSpec.workspace, expected);
             }
@@ -325,7 +363,7 @@ export function restorePreviousManagerServiceFiles(
         record.phase !== "rollback-writing" ||
         record.status !== "interrupted" ||
         !record.recoveryRequired ||
-        !["linux", "darwin"].includes(host.platform)
+        !["linux", "darwin", "win32"].includes(host.platform)
     )
         throw failure();
     const files = getServiceFiles(record.managerSpec.scope, host);
@@ -335,16 +373,12 @@ export function restorePreviousManagerServiceFiles(
             file: files.definition,
             modes: [0o600, 0o644],
             target: Buffer.from(
-                renderInstalledManagerService(
-                    record.managerSpec,
-                    host.platform as "linux" | "darwin",
-                    files.stateDir,
-                ),
+                renderInstalledManagerService(record.managerSpec, host.platform, files.stateDir),
             ),
             previous: Buffer.from(
                 renderInstalledManagerService(
                     record.upgrade.previousSpec,
-                    host.platform as "linux" | "darwin",
+                    host.platform,
                     files.stateDir,
                 ),
             ),
@@ -363,24 +397,31 @@ export function restorePreviousManagerServiceFiles(
             !stat.isFile() ||
             stat.isSymbolicLink() ||
             stat.nlink !== 1 ||
-            !pair.modes.includes(stat.mode & 0o7777) ||
-            (process.getuid && stat.uid !== process.getuid())
+            (host.platform !== "win32" && !pair.modes.includes(stat.mode & 0o7777)) ||
+            (host.platform !== "win32" && process.getuid && stat.uid !== process.getuid())
         )
             throw failure();
+        if (host.platform === "win32") inspectWindowsServiceFileSecurity(host, pair.file);
         const file = new ConfigurationFile(pair.file);
         const snapshot = file.readRaw();
         const previousMode = record.upgrade.snapshot.files[pair.key].mode;
         if (snapshot.bytes.equals(pair.previous)) {
-            if ((stat.mode & 0o7777) === previousMode) continue;
+            if (host.platform === "win32" || (stat.mode & 0o7777) === previousMode) continue;
             // replaceRaw publishes mode 0600 before the old bytes' original mode is restored.
             // This exact intermediate state is resumable; any other mode remains ambiguous.
             if ((stat.mode & 0o7777) !== 0o600) throw failure();
         } else {
-            if (!snapshot.bytes.equals(pair.target) || (stat.mode & 0o7777) !== 0o600)
+            if (
+                !snapshot.bytes.equals(pair.target) ||
+                (host.platform !== "win32" && (stat.mode & 0o7777) !== 0o600)
+            )
                 throw failure();
             file.replaceRaw(snapshot.revision, pair.previous);
         }
-        restoreMode(pair.file, pair.previous, previousMode);
+        if (host.platform === "win32") {
+            secureWindowsServiceFile(host, pair.file);
+            inspectWindowsServiceFileSecurity(host, pair.file);
+        } else restoreMode(pair.file, pair.previous, previousMode);
     }
     assertFiles(record.upgrade.previousSpec, host);
 }

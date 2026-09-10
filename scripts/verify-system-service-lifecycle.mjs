@@ -1065,6 +1065,17 @@ try {
     assertGatewayIntentPreserved();
     assertAuthenticationPreserved();
     fs.rmdirSync(socketObstacle);
+    // 固定覆盖更难的分支：障碍移除后让故障候选真正重启并取得 manager IPC，
+    // 再执行回退。否则调度较快时 recover 只碰到 RestartSec 空窗，无法稳定验证
+    // 正在运行的候选及其 cgroup 能否在回退中完成优雅/兜底停止。
+    await eventually(
+        () => cliJson(["status", "--system", "--json"], [0, 1]),
+        value =>
+            value.manager.state === "running" &&
+            value.manager.ipc === "available" &&
+            value.gateway.desired === "running",
+        "控制 socket 障碍移除后，故障候选未进入可观测运行态",
+    );
 
     effectUnknown = true;
     let rollbackOutput;

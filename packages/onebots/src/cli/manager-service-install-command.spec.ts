@@ -254,6 +254,19 @@ describe("首次管理服务安装CLI", () => {
         });
 
         vi.mocked(bootstrapManagerService).mockRejectedValue(
+            new ManagerBootstrapCandidateError(
+                "candidate-install",
+                "verified",
+                "CANDIDATE_SECURITY_FAILED",
+                "verify",
+            ),
+        );
+        const candidateSecurity = await installManagerServiceCommand({ dataDir: root });
+        expect(candidateSecurity.output).toContain(
+            "bootstrapPhase=candidate-verified，code=CANDIDATE_SECURITY_FAILED，securityStage=verify",
+        );
+
+        vi.mocked(bootstrapManagerService).mockRejectedValue(
             new ManagerBootstrapStageError(
                 "candidate-install",
                 "manager-prepared",

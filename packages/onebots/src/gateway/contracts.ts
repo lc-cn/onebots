@@ -36,8 +36,45 @@ export interface GatewayFailedMessage extends GatewayIdentity {
     message: string;
 }
 
+export interface GatewayAccountStatusMessage extends GatewayIdentity {
+    type: "gateway.account-status";
+    accounts: Array<{
+        platform: string;
+        accountId: string;
+        status: "pending" | "online" | "offline";
+    }>;
+}
+
 export type GatewayParentMessage = GatewayStartMessage | GatewayStopMessage;
-export type GatewayChildMessage = GatewayReadyMessage | GatewayFailedMessage;
+export type GatewayChildMessage =
+    | GatewayReadyMessage
+    | GatewayFailedMessage
+    | GatewayAccountStatusMessage;
+
+export function isGatewayAccountStatusMessage(
+    value: unknown,
+): value is GatewayAccountStatusMessage {
+    if (!value || typeof value !== "object") return false;
+    const message = value as Record<string, unknown>;
+    if (
+        message.type !== "gateway.account-status" ||
+        message.protocolVersion !== GATEWAY_PROTOCOL_VERSION ||
+        ![message.controlInstanceId, message.gatewayInstanceId].every(isIdentifier) ||
+        !Array.isArray(message.accounts) ||
+        message.accounts.length > 1000
+    )
+        return false;
+    return message.accounts.every(account => {
+        if (!account || typeof account !== "object" || Array.isArray(account)) return false;
+        const item = account as Record<string, unknown>;
+        return (
+            Object.keys(item).length === 3 &&
+            safeDisplayIdentifier(item.platform) &&
+            safeDisplayIdentifier(item.accountId) &&
+            isAccountStatus(item.status)
+        );
+    });
+}
 
 export function isGatewayParentMessage(value: unknown): value is GatewayParentMessage {
     if (!value || typeof value !== "object") return false;
@@ -74,4 +111,17 @@ export function isGatewayParentMessage(value: unknown): value is GatewayParentMe
 
 function isIdentifier(value: unknown): value is string {
     return typeof value === "string" && value.length > 0 && value.length <= 4096;
+}
+
+function isAccountStatus(value: unknown): value is "pending" | "online" | "offline" {
+    return typeof value === "string" && ["pending", "online", "offline"].includes(value);
+}
+
+function safeDisplayIdentifier(value: unknown): value is string {
+    return (
+        typeof value === "string" &&
+        value.length > 0 &&
+        value.length <= 512 &&
+        !/[\p{Cc}\p{Cf}]/u.test(value)
+    );
 }

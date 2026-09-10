@@ -20,12 +20,14 @@ import { verifyServiceMigrationProcesses } from "./service-migration-processes.j
 import { closedServiceObject } from "./service-operation-storage.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
 import { LaunchdServicePlatform } from "./service-platform-launchd.js";
+import { WindowsServicePlatform } from "./service-platform-windows.js";
 import {
     createManagerServiceUpgradeNativePort,
     type ManagerUpgradeNativeDependencies,
 } from "./manager-service-upgrade-native-port.js";
 import { runManagerServiceUpgrade } from "./manager-service-upgrade-transaction.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
+import { inspectWindowsServiceDirectorySecurity } from "./windows-service-security.js";
 
 export interface ManagerServiceUpgradeRequest {
     id: string;
@@ -98,15 +100,17 @@ export async function upgradeManagerService(
         (value.expectedPreviousDigest !== undefined &&
             (typeof value.expectedPreviousDigest !== "string" ||
                 !/^[a-f0-9]{64}$/.test(value.expectedPreviousDigest))) ||
-        (host.platform !== "linux" && host.platform !== "darwin") ||
-        (value.scope === "system" && host.uid !== 0)
+        (host.platform !== "linux" && host.platform !== "darwin" && host.platform !== "win32") ||
+        (host.platform === "win32"
+            ? value.scope !== "system" || host.isElevated !== true
+            : value.scope === "system" && host.uid !== 0)
     )
         throw failure("INVALID_REQUEST");
     const scope = value.scope;
     const files = getServiceFiles(scope, host);
     let releaseService: () => void;
     try {
-        releaseService = acquireServiceMigrationLock(files.stateDir);
+        releaseService = acquireServiceMigrationLock(files.stateDir, host);
     } catch {
         throw failure("SERVICE_BUSY");
     }
@@ -155,12 +159,13 @@ export async function upgradeManagerService(
                 if (
                     !stat.isDirectory() ||
                     stat.isSymbolicLink() ||
-                    (stat.mode & 0o077) !== 0 ||
-                    (process.getuid && stat.uid !== process.getuid())
+                    (host.platform !== "win32" && (stat.mode & 0o077) !== 0) ||
+                    (host.platform !== "win32" && process.getuid && stat.uid !== process.getuid())
                 )
                     throw failure("CANDIDATE_INVALID");
+                if (host.platform === "win32") inspectWindowsServiceDirectorySecurity(host, item);
             }
-            releases.push(acquireControlWorkspace(home));
+            releases.push(acquireControlWorkspace(home, host));
         }
         const previousDigest = managerCandidateDigest(previous);
         if (
@@ -181,9 +186,11 @@ export async function upgradeManagerService(
             dependencies.platform ??
             (host.platform === "linux"
                 ? new SystemdServicePlatform(host, scope, files.definition)
-                : new LaunchdServicePlatform(host, scope, files.definition, {
-                      confirmUnloadedProcesses: () => confirm(spec.workspace),
-                  }));
+                : host.platform === "darwin"
+                  ? new LaunchdServicePlatform(host, scope, files.definition, {
+                        confirmUnloadedProcesses: () => confirm(spec.workspace),
+                    })
+                  : new WindowsServicePlatform(host, scope, files.definition));
         let captured: ReturnType<typeof captureManagerServiceRemoval>;
         try {
             captured = captureManagerServiceRemoval(previousSpec, host);
@@ -213,8 +220,7 @@ export async function upgradeManagerService(
             } catch {
                 throw failure("PLATFORM_UNSTABLE");
             }
-            if (!isDeepStrictEqual(initial, confirmed))
-                throw failure("PLATFORM_UNSTABLE");
+            if (!isDeepStrictEqual(initial, confirmed)) throw failure("PLATFORM_UNSTABLE");
             if (!captured.verifyRemaining()) throw failure("SERVICE_FILES_CHANGED");
             transactionEntered = true;
             return await runManagerServiceUpgrade(

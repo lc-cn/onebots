@@ -24,6 +24,16 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	switch args[0] {
+	case "identity":
+		if len(args) != 1 {
+			fmt.Fprintln(stderr, "identity accepts no options")
+			return 2
+		}
+		if err := runIdentity(stdout); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	case "legacy-reboot-control", "legacy-reboot-receipt":
 		set := flag.NewFlagSet(args[0], flag.ContinueOnError)
 		set.SetOutput(stderr)
@@ -134,7 +144,7 @@ func parseRunConfig(command string, args []string, output io.Writer) (Config, er
 }
 
 func printUsage(output io.Writer) {
-	fmt.Fprintln(output, "usage: onebots-windows-host <service-run|console-run|status|scm-control|legacy-scm-inspect|legacy-reboot-control> [options]")
+	fmt.Fprintln(output, "usage: onebots-windows-host <identity|service-run|console-run|status|scm-control|legacy-scm-inspect|legacy-reboot-control> [options]")
 }
 
 func Main() {

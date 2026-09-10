@@ -139,13 +139,17 @@ export function createControlRequestHandler(options: ControlRequestHandlerOption
                     ["/api/control/status", "/api/control/diagnostics"].includes(pathname) &&
                     request.method === "GET"
                 ) {
+                    const gateway = gatewayDiagnosticStatus(
+                        options.controller.status(),
+                        options.storageError(),
+                    );
                     const status = {
                         schemaVersion: 1,
                         manager: { ...options.manager },
-                        gateway: gatewayDiagnosticStatus(
-                            options.controller.status(),
-                            options.storageError(),
-                        ),
+                        gateway,
+                        accounts: gateway.instance
+                            ? options.driver.accountStatuses(gateway.instance.id)
+                            : { available: false, items: [] },
                         authAvailable: options.authAvailable(),
                         processOwnership: { available: options.ownershipAvailable },
                         serviceMigration: serviceMigrationStatus(options.workspace),

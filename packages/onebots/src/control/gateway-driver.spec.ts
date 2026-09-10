@@ -44,6 +44,8 @@ process.on('message', message => {
     if (mode === 'port') ready.address.port = 65536;
     if (mode === 'unknown') ready.type = 'unknown';
     process.send(ready);
+    if (mode === 'accounts') process.send({...message, type:'gateway.account-status', accounts:[{platform:'mock',accountId:'bot',status:'online'}]});
+    if (mode === 'bad-accounts') process.send({...message, type:'gateway.account-status', accounts:[{platform:'mock',accountId:'bot',status:'online',token:'private-secret'}]});
 });
 `,
     );
@@ -168,6 +170,36 @@ describe("NodeGatewayDriver real fork lifecycle", () => {
         }
         expect(driver.hasLiveChildren()).toBe(false);
         expect(onExit).toHaveBeenCalledWith(instance.id, undefined);
+    });
+
+    it("只保存网关发布的最小账号状态摘要", async () => {
+        const { driver } = await fixture("accounts");
+        const instance = await driver.start();
+        try {
+            await vi.waitFor(() =>
+                expect(driver.accountStatuses(instance.id)).toEqual({
+                    available: true,
+                    items: [{ platform: "mock", accountId: "bot", status: "online" }],
+                }),
+            );
+            expect(JSON.stringify(driver.accountStatuses(instance.id))).not.toMatch(
+                /token|password|nickname|avatar/i,
+            );
+        } finally {
+            await driver.stop(instance);
+        }
+        expect(driver.accountStatuses(instance.id)).toEqual({ available: false, items: [] });
+    });
+
+    it("拒绝带额外字段的账号状态帧", async () => {
+        const { driver } = await fixture("bad-accounts");
+        const instance = await driver.start();
+        try {
+            await new Promise(resolve => setTimeout(resolve, 20));
+            expect(driver.accountStatuses(instance.id)).toEqual({ available: false, items: [] });
+        } finally {
+            await driver.stop(instance);
+        }
     });
 
     it.each(["identity", "version", "address", "port", "unknown"])(

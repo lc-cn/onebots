@@ -19,3 +19,4 @@ func runSCMControl(string, io.Writer) error              { return errWindowsOnly
 func runLegacySCMInspect(io.Writer) error                { return errWindowsOnly }
 func runLegacyRebootControl(string, io.Writer) error     { return errWindowsOnly }
 func runLegacyRebootReceipt(string) error                { return errWindowsOnly }
+func runIdentity(io.Writer) error                        { return errWindowsOnly }

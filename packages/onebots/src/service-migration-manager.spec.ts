@@ -13,6 +13,10 @@ function status() {
     return {
         schemaVersion: 1,
         manager: { id: randomUUID(), version: "1.2.3", pid: process.pid },
+        accounts: {
+            available: true,
+            items: [{ platform: "mock", accountId: "bot", status: "online" as const }],
+        },
         gateway: { desired: "stopped", actual: "stopped", recoveryRequired: false, operations: [] },
         serviceMigration: { pending: true, recoveryRequired: false },
     };
@@ -73,6 +77,7 @@ describe("迁移manager本地身份适配层", () => {
         expect(await inspectMigrationManager(f.root)).toEqual({
             schemaVersion: 1,
             manager: source.manager,
+            accounts: source.accounts,
             gateway: { desired: "running", actual: "running", recoveryRequired: false, instance },
             serviceMigration: source.serviceMigration,
             knownConfigurationFailure: false,
@@ -171,6 +176,23 @@ describe("迁移manager本地身份适配层", () => {
             },
             { ...source, serviceMigration: { pending: "false", recoveryRequired: false } },
             { ...source, gateway: { ...source.gateway, recoveryRequired: null } },
+            {
+                ...source,
+                accounts: {
+                    available: true,
+                    items: [{ platform: "mock", accountId: "bot", status: 1 }],
+                },
+            },
+            {
+                ...source,
+                accounts: {
+                    available: true,
+                    items: [
+                        { platform: "mock", accountId: "bot", status: "online", token: "secret" },
+                    ],
+                },
+            },
+            { ...source, accounts: { ...source.accounts, available: false } },
             { tooLarge: "x".repeat(1024 * 1024) },
         ]) {
             f.state.body = body;

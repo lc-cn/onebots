@@ -5,6 +5,13 @@ import (
 	"testing"
 )
 
+func TestIdentityRejectsArgumentsBeforePlatformCall(t *testing.T) {
+	var output bytes.Buffer
+	if code := RunCLI([]string{"identity", "unexpected"}, &output, &output); code != 2 {
+		t.Fatalf("identity with arguments returned %d", code)
+	}
+}
+
 func TestParseRunConfigKeepsArgumentBoundaries(t *testing.T) {
 	var output bytes.Buffer
 	config, err := parseRunConfig("service-run", []string{

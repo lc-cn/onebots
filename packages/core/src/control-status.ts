@@ -4,6 +4,11 @@ export interface ControlStatus {
     manager: { id: string; version: string; pid?: number };
     serviceMigration?: { pending: boolean; recoveryRequired: boolean };
     processOwnership?: { available: boolean };
+    /** 来自当前网关进程的最小账号摘要；不包含配置、昵称、凭据或平台 SDK 数据。 */
+    accounts?: {
+        available: boolean;
+        items: ControlAccountStatus[];
+    };
     gateway: {
         desired: "running" | "stopped";
         actual: "starting" | "running" | "stopping" | "stopped" | "failed";
@@ -12,6 +17,12 @@ export interface ControlStatus {
         error?: string;
         operations: ControlOperation[];
     };
+}
+
+export interface ControlAccountStatus {
+    platform: string;
+    accountId: string;
+    status: "pending" | "online" | "offline";
 }
 
 export interface ControlOperation {

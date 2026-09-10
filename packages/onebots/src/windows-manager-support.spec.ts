@@ -97,8 +97,23 @@ describe("Windows顶层管理事务门禁", () => {
             },
         };
         const inspectNative = vi.fn(async () => structuredClone(observation));
+        const inspectManager = vi.fn(async () => ({
+            schemaVersion: 1 as const,
+            manager: structuredClone(observation.control.manager),
+            gateway: {
+                ...structuredClone(observation.control.gateway),
+                recoveryRequired: false,
+            },
+            serviceMigration: { pending: false, recoveryRequired: false },
+            knownConfigurationFailure: false,
+            accounts: {
+                available: true,
+                items: [{ platform: "mock", accountId: "bot", status: "online" as const }],
+            },
+        }));
         const status = await inspectManagerServiceStatus("system", f.host, {
             windowsPlatform: () => ({ inspectNative }),
+            inspectManager,
             now: () => Date.parse("2026-09-10T01:02:04Z"),
         });
         expect(status.installation).toBe("control");
@@ -109,6 +124,10 @@ describe("Windows顶层管理事务门禁", () => {
             actual: "stopped",
             recoveryRequired: null,
             knownConfigurationFailure: null,
+        });
+        expect(status.accounts).toEqual({
+            available: true,
+            items: [{ platform: "mock", accountId: "bot", status: "online" }],
         });
         expect(inspectNative).toHaveBeenCalledTimes(2);
         expect(f.host.exec).not.toHaveBeenCalled();

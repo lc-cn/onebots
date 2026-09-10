@@ -231,8 +231,17 @@ export class ManagerBootstrapCandidateError extends Error {
         readonly operationId: string,
         readonly phase: GenerationInstallOperation["phase"],
         readonly code: ManagerBootstrapCandidateErrorCode,
+        readonly securityStage?: WindowsServiceSecurityStage,
     ) {
         super("管理服务候选准备未完成");
         this.name = "ManagerBootstrapCandidateError";
     }
 }
+
+type WindowsServiceSecurityStage =
+    | "process"
+    | "ancestor"
+    | "acl-build"
+    | "create"
+    | "inspect"
+    | "verify";

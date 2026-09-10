@@ -22,6 +22,10 @@ import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 import { readServiceMetadata } from "./service-metadata.js";
 import { ServiceOperationStorage, closedServiceObject } from "./service-operation-storage.js";
+import {
+    secureWindowsServiceDirectory,
+    secureWindowsServiceFile,
+} from "./windows-service-security.js";
 
 export interface ManagerUpgradeCandidateRequest {
     id: string;
@@ -126,8 +130,10 @@ export async function prepareManagerUpgradeCandidate(
                 !/^[a-f0-9]{64}$/.test(parsed.expectedPreviousDigest) ||
                 typeof parsed.archiveSha256 !== "string" ||
                 !/^[a-f0-9]{64}$/.test(parsed.archiveSha256) ||
-                (host.platform !== "linux" && host.platform !== "darwin") ||
-                (parsed.scope === "system" && host.uid !== 0)
+                !["linux", "darwin", "win32"].includes(host.platform) ||
+                (host.platform === "win32"
+                    ? parsed.scope !== "system" || host.isElevated !== true
+                    : parsed.scope === "system" && host.uid !== 0)
             )
                 throw failure("INVALID_REQUEST");
             return {
@@ -174,9 +180,9 @@ export async function prepareManagerUpgradeCandidate(
     const home = path.join(files.stateDir, "manager-artifacts");
     let release: () => void;
     try {
-        ensurePrivateManagerUpgradeDirectory(files.stateDir, false);
-        ensurePrivateManagerUpgradeDirectory(home);
-        release = acquireControlWorkspace(home);
+        ensurePrivateManagerUpgradeDirectory(files.stateDir, false, host);
+        ensurePrivateManagerUpgradeDirectory(home, true, host);
+        release = acquireControlWorkspace(home, host);
     } catch {
         throw failure("CANDIDATE_STORE_INVALID");
     }
@@ -185,18 +191,27 @@ export async function prepareManagerUpgradeCandidate(
     let rejectionCode: ManagerUpgradeCandidateRejectionCode = "CANDIDATE_STORE_INVALID";
     try {
         const upgrades = path.join(home, "upgrades");
-        ensurePrivateManagerUpgradeDirectory(upgrades);
+        ensurePrivateManagerUpgradeDirectory(upgrades, true, host);
         const directory = path.join(upgrades, value.id);
-        ensurePrivateManagerUpgradeDirectory(directory);
+        ensurePrivateManagerUpgradeDirectory(directory, true, host);
         const binding = new ServiceOperationStorage(directory);
         const resolvedArtifacts = path.join(home, "resolved-artifacts");
-        ensurePrivateManagerUpgradeDirectory(resolvedArtifacts);
+        ensurePrivateManagerUpgradeDirectory(resolvedArtifacts, true, host);
         rejectionCode = "ARTIFACT_INPUT_INVALID";
-        const hostArchive = materializeManagerUpgradeArchive(archives.host, resolvedArtifacts);
-        const coreArchive = materializeManagerUpgradeArchive(archives.core, resolvedArtifacts);
+        const hostArchive = materializeManagerUpgradeArchive(
+            archives.host,
+            resolvedArtifacts,
+            host,
+        );
+        const coreArchive = materializeManagerUpgradeArchive(
+            archives.core,
+            resolvedArtifacts,
+            host,
+        );
         if (hostArchive.sha256 !== value.archiveSha256) throw failure("ARTIFACT_INPUT_INVALID");
         const hostArtifact = artifact(artifacts.host, "onebots");
         const coreArtifact = artifact(artifacts.core, "@onebots/core");
+        ensurePrivateManagerUpgradeDirectory(path.join(home, "artifacts"), true, host);
         const frozen = await freezeGenerationArtifacts(
             {
                 host: {
@@ -242,11 +257,21 @@ export async function prepareManagerUpgradeCandidate(
             )
                 throw failure("OPERATION_CONFLICT");
             binding.write("intent.json", intent, true);
+            if (host.platform === "win32")
+                secureWindowsServiceFile(host, path.join(directory, "intent.json"));
         }
+        ensurePrivateManagerUpgradeDirectory(path.join(home, "operations"), true, host);
+        ensurePrivateManagerUpgradeDirectory(path.join(home, "versions"), true, host);
         installer = new ManagerCandidateInstaller({
             operationsDirectory: path.join(home, "operations"),
             store: new GenerationStore({
                 root: path.join(home, "versions"),
+                ...(host.platform === "win32"
+                    ? {
+                          secureCandidateDirectory: (candidateDirectory: string) =>
+                              secureWindowsServiceDirectory(host, candidateDirectory),
+                      }
+                    : {}),
                 isActive: candidateId => {
                     if (!binding.has("candidate.json")) return false;
                     const receipt = closedServiceObject(binding.read("candidate.json"), [
@@ -315,7 +340,11 @@ export async function prepareManagerUpgradeCandidate(
         if (binding.has("candidate.json")) {
             if (!isDeepStrictEqual(binding.read("candidate.json"), receipt))
                 throw failure("OPERATION_CONFLICT");
-        } else binding.write("candidate.json", receipt, true);
+        } else {
+            binding.write("candidate.json", receipt, true);
+            if (host.platform === "win32")
+                secureWindowsServiceFile(host, path.join(directory, "candidate.json"));
+        }
         return {
             operationId: value.id,
             candidateDirectory: candidate.directory,
@@ -352,8 +381,10 @@ export async function resumeManagerUpgradeCandidate(
         !/^[A-Za-z0-9_-]{1,100}$/.test(id) ||
         (scope !== "user" && scope !== "system") ||
         !/^[a-f0-9]{64}$/.test(expectedPreviousDigest) ||
-        (host.platform !== "linux" && host.platform !== "darwin") ||
-        (scope === "system" && host.uid !== 0)
+        !["linux", "darwin", "win32"].includes(host.platform) ||
+        (host.platform === "win32"
+            ? scope !== "system" || host.isElevated !== true
+            : scope === "system" && host.uid !== 0)
     )
         throw failure();
     const files = getServiceFiles(scope, host);
@@ -367,16 +398,25 @@ export async function resumeManagerUpgradeCandidate(
     const home = path.join(files.stateDir, "manager-artifacts");
     let release: () => void;
     try {
-        ensurePrivateManagerUpgradeDirectory(files.stateDir, false);
-        ensurePrivateManagerUpgradeDirectory(home, false);
-        release = acquireControlWorkspace(home);
+        ensurePrivateManagerUpgradeDirectory(files.stateDir, false, host);
+        ensurePrivateManagerUpgradeDirectory(home, false, host);
+        release = acquireControlWorkspace(home, host);
     } catch {
         throw failure();
     }
     let installer: ManagerCandidateInstaller | undefined;
     let querying = false;
     try {
-        const binding = new ServiceOperationStorage(path.join(home, "upgrades", id));
+        const upgrades = path.join(home, "upgrades");
+        const bindingDirectory = path.join(upgrades, id);
+        for (const directory of [
+            upgrades,
+            bindingDirectory,
+            path.join(home, "operations"),
+            path.join(home, "versions"),
+        ])
+            ensurePrivateManagerUpgradeDirectory(directory, false, host);
+        const binding = new ServiceOperationStorage(bindingDirectory);
         const intent = closedServiceObject(binding.read("intent.json"), [
             "schemaVersion",
             "id",

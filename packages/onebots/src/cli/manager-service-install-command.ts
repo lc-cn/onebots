@@ -131,7 +131,9 @@ export async function installManagerServiceCommand(
         if (error instanceof ManagerBootstrapCandidateError) {
             return {
                 output:
-                    `管理服务首次安装失败：operationId=${error.operationId}，bootstrapPhase=candidate-${error.phase}，code=${error.code}。` +
+                    `管理服务首次安装失败：operationId=${error.operationId}，bootstrapPhase=candidate-${error.phase}，code=${error.code}` +
+                    (error.securityStage ? `，securityStage=${error.securityStage}` : "") +
+                    "。" +
                     "\n尚未派发系统服务注册；请保留 manager-artifacts 中的原操作和候选证据。",
                 exitCode: 1,
             };

@@ -19,6 +19,7 @@ function status(): ManagerServiceStatus {
             operations: [],
         },
         manager: { state: "running", enabled: true, loaded: true, pid: 42, ipc: "available" },
+        accounts: { available: false, items: [] },
         gateway: {
             actual: "failed",
             desired: "running",
@@ -110,6 +111,22 @@ describe("manager status CLI", () => {
         expect(result.output).toContain("网关：实际失败；期望运行中");
         expect(result.output).toContain("控制台修复");
         expect(result.exitCode).toBe(1);
+    });
+    it("账号只显示安全标识和生命周期状态", async () => {
+        const value = status();
+        value.accounts = {
+            available: true,
+            items: [
+                { platform: "mock", accountId: "bot", status: "online" },
+                { platform: "qq", accountId: "10001", status: "pending" },
+            ],
+        };
+        vi.mocked(inspectManagerServiceStatus).mockResolvedValue(value);
+        const result = await managerServiceStatusCommand({ system: false });
+        expect(result.output).toContain("账号：2 个");
+        expect(result.output).toContain("mock/bot：在线");
+        expect(result.output).toContain("qq/10001：上线中");
+        expect(result.output).not.toMatch(/token|password|nickname|avatar/i);
     });
     it("json是单一新状态摘要，system只决定scope", async () => {
         vi.mocked(inspectManagerServiceStatus).mockResolvedValue(status());

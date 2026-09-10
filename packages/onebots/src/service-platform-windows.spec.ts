@@ -49,10 +49,23 @@ function scm(
         loaded: true,
         state: state === "Running" ? "running" : "stopped",
         enabled: mode === "Auto",
+        startMode: mode.toLowerCase(),
         processId: pid,
         path:
             `C:\\OneBots\\lib\\native\\onebots-windows-host.exe service-run --service-name onebots-gateway --manager C:\\Node\\node.exe --manager-arg ${manager} --manager-arg serve --manager-arg --data-dir --manager-arg "C:\\Data Dir" --manager-arg --windows-host-pipe --manager-arg \\\\.\\pipe\\onebots-gateway-control --working-dir C:\\OneBots --pipe \\\\.\\pipe\\onebots-gateway-control --control-sid ` +
             sid,
+        config: {
+            serviceType: "own-process",
+            errorControl: "normal",
+            loadOrderGroup: "",
+            dependencies: [],
+            serviceStartName: "LocalSystem",
+            displayName: "OneBots Control Service",
+            tagId: 0,
+            description: "",
+            sidType: 0,
+            delayedAutoStart: false,
+        },
     });
 }
 
@@ -211,6 +224,26 @@ describe("Windows SCM TypeScript纵切", () => {
         await expect(platform.inspect()).rejects.toThrow("无法安全确认");
     });
 
+    it("同名服务任一受管 SCM 配置漂移时拒绝认领", async () => {
+        for (const mutate of [
+            (value: Record<string, unknown>) => (value.serviceStartName = ".\\LocalSystem"),
+            (value: Record<string, unknown>) => (value.serviceType = "share-process"),
+            (value: Record<string, unknown>) => (value.errorControl = "ignore"),
+            (value: Record<string, unknown>) => (value.dependencies = ["Tcpip"]),
+            (value: Record<string, unknown>) => (value.loadOrderGroup = "network"),
+        ]) {
+            const value = JSON.parse(scm("Stopped", "Auto"));
+            mutate(value.config as Record<string, unknown>);
+            const platform = new WindowsServicePlatform(
+                makeHost([JSON.stringify(value)]),
+                "system",
+                "C:\\state\\service.json",
+                { definition },
+            );
+            await expect(platform.inspect()).rejects.toThrow("无法安全确认");
+        }
+    });
+
     it("首次reload通过SCM注册固定宿主，停止态双读后返回", async () => {
         const absent = JSON.stringify({
             loaded: false,
@@ -297,6 +330,7 @@ describe("Windows SCM TypeScript纵切", () => {
     it("start与quiesce把复核和动作交给同一native SCM handle", async () => {
         const starting = makeHost([
             scm("Stopped", "Auto"),
+            scm("Stopped", "Auto"),
             scm("Running", "Auto", 4321),
             scm("Running", "Auto", 4321),
             native(8765),
@@ -312,7 +346,7 @@ describe("Windows SCM TypeScript纵切", () => {
         await startPlatform.start();
         const startRequest = JSON.parse(
             Buffer.from(
-                (starting.exec as ReturnType<typeof vi.fn>).mock.calls[1][1][2],
+                (starting.exec as ReturnType<typeof vi.fn>).mock.calls[2][1][2],
                 "base64url",
             ).toString("utf8"),
         );
@@ -320,10 +354,9 @@ describe("Windows SCM TypeScript纵切", () => {
 
         const stopping = makeHost([
             scm("Running", "Auto", 4321),
-            native(8765),
-            scm("Stopped", "Manual"),
-            scm("Stopped", "Manual"),
-            scm("Stopped", "Manual"),
+            scm("Stopped", "Disabled"),
+            scm("Stopped", "Disabled"),
+            scm("Stopped", "Disabled"),
         ]);
         const stopPlatform = new WindowsServicePlatform(
             stopping,
@@ -334,7 +367,7 @@ describe("Windows SCM TypeScript纵切", () => {
         await stopPlatform.quiesce();
         const stopRequest = JSON.parse(
             Buffer.from(
-                (stopping.exec as ReturnType<typeof vi.fn>).mock.calls[2][1][2],
+                (stopping.exec as ReturnType<typeof vi.fn>).mock.calls[1][1][2],
                 "base64url",
             ).toString("utf8"),
         );
@@ -367,11 +400,11 @@ describe("Windows SCM TypeScript纵切", () => {
             processId: 0,
             enabled: false,
         });
-        const host = makeHost([absent]);
+        const host = makeHost([scm("Stopped", "Manual"), absent]);
         unregisterWindowsManagerService(host, definition);
         const removal = JSON.parse(
             Buffer.from(
-                (host.exec as ReturnType<typeof vi.fn>).mock.calls[0][1][2],
+                (host.exec as ReturnType<typeof vi.fn>).mock.calls[1][1][2],
                 "base64url",
             ).toString("utf8"),
         );

@@ -1,6 +1,8 @@
 /** 服务管理器依赖的宿主进程边界。 */
 import * as os from "node:os";
 import { execFileSync, spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface ServiceHost {
     platform: NodeJS.Platform;
@@ -56,34 +58,27 @@ interface WindowsIdentityProof {
     elevated: boolean;
 }
 
-/** 单次、限时读取当前 token；不依赖可能等待 Server 服务的 `net session`。 */
+/** 由随包发布的固定 native host 单次、限时读取当前进程 token。 */
 function readWindowsIdentity(): WindowsIdentityProof | undefined {
     try {
-        const script = String.raw`
-$ErrorActionPreference='Stop'
-$identity=[System.Security.Principal.WindowsIdentity]::GetCurrent()
-$principal=New-Object System.Security.Principal.WindowsPrincipal($identity)
-$admin=[System.Security.Principal.WindowsBuiltInRole]::Administrator
-$value=@{sid=$identity.User.Value;elevated=$principal.IsInRole($admin)}|ConvertTo-Json -Compress
-[Console]::Out.Write($value)
-`;
-        const output = execFileSync(
-            "powershell.exe",
-            [
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-EncodedCommand",
-                Buffer.from(script, "utf16le").toString("base64"),
-            ],
-            { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 },
-        ).trim();
+        const executable = path.join(
+            path.dirname(fileURLToPath(import.meta.url)),
+            "native",
+            `win32-${process.arch}`,
+            "onebots-windows-host.exe",
+        );
+        const output = execFileSync(executable, ["identity"], {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"],
+            timeout: 5000,
+        }).trim();
         const value: unknown = JSON.parse(output);
         if (
             !value ||
             typeof value !== "object" ||
             Array.isArray(value) ||
-            Reflect.ownKeys(value).length !== 2 ||
+            Reflect.ownKeys(value).length !== 3 ||
+            (value as Record<string, unknown>).version !== 1 ||
             typeof (value as Record<string, unknown>).sid !== "string" ||
             !/^S-1-(?:[0-9]+-)+[0-9]+$/.test((value as Record<string, string>).sid) ||
             typeof (value as Record<string, unknown>).elevated !== "boolean"

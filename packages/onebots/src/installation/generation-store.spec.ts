@@ -67,6 +67,32 @@ function fixture() {
 }
 
 describe("generation store", () => {
+    it("在写入候选记录前完成调用方提供的目录安全门禁", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-generation-security-"));
+        folders.push(root);
+        const secure = vi.fn((directory: string) => {
+            expect(fs.readdirSync(directory)).toEqual([]);
+        });
+        const store = new GenerationStore({
+            root,
+            isActive: () => false,
+            secureCandidateDirectory: secure,
+        });
+        const candidate = store.allocate("operation-1", "a".repeat(64));
+        expect(secure).toHaveBeenCalledOnce();
+        expect(fs.existsSync(path.join(candidate.directory, "candidate.json"))).toBe(true);
+
+        const rejected = new GenerationStore({
+            root,
+            isActive: () => false,
+            secureCandidateDirectory: () => {
+                throw new Error("unsafe boundary");
+            },
+        });
+        expect(() => rejected.allocate("operation-2", "b".repeat(64))).toThrow("unsafe boundary");
+        expect(fs.readdirSync(root).filter(name => name !== "store.json")).toEqual([candidate.id]);
+    });
+
     it("分配唯一私有候选，下载文件不能自行成为已验证版本", () => {
         const test = fixture();
         test.fill();

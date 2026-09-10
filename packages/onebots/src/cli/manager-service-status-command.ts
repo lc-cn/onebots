@@ -73,6 +73,16 @@ export async function managerServiceStatusCommand(
         `管理服务（OS）：${stateNames[status.manager.state]}；${enabled}`,
         `网关：实际${stateNames[status.gateway.actual]}；期望${stateNames[status.gateway.desired]}`,
     ];
+    if (!status.accounts.available) lines.push("账号：实时状态不可用");
+    else if (status.accounts.items.length === 0) lines.push("账号：未配置");
+    else {
+        const accountStateNames = { pending: "上线中", online: "在线", offline: "离线" };
+        lines.push(`账号：${status.accounts.items.length} 个`);
+        for (const account of status.accounts.items)
+            lines.push(
+                `  ${account.platform}/${account.accountId}：${accountStateNames[account.status]}`,
+            );
+    }
     if (status.gateway.knownConfigurationFailure)
         lines.push("网关配置无效，管理服务仍在运行，可通过控制台修复。");
     if (status.gateway.recoveryRequired) lines.push("网关前次操作结果尚待核实。");

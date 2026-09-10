@@ -24,7 +24,7 @@ export async function runCli(argv = process.argv): Promise<void> {
             );
             return;
         }
-        if (["serve", "auth", "control"].includes(argv[2])) {
+        if (["serve", "auth", "control", "config"].includes(argv[2])) {
             const { runControlCommand } = await import("./control/command.js");
             if (await runControlCommand(argv)) return;
         }
