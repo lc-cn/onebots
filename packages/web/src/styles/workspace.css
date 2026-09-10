@@ -1,0 +1,423 @@
+.page-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 2rem;
+    margin-bottom: 2.4rem;
+}
+.page-heading h1 {
+    margin-top: 0.35rem;
+    font-size: clamp(2rem, 4vw, 3.25rem);
+    font-weight: 620;
+    letter-spacing: -0.055em;
+    line-height: 1;
+}
+.page-heading p:last-child {
+    max-width: 42rem;
+    margin-top: 0.8rem;
+    color: var(--fg-secondary);
+    font-size: 0.95rem;
+}
+.page-heading > svg,
+.heading-icons {
+    color: var(--fg-tertiary);
+}
+.heading-icons {
+    display: flex;
+    gap: 0.55rem;
+}
+.manager-identity {
+    max-width: 16rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--fg-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    padding: 0.4rem 0.7rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.manager-identity.stale {
+    border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.feedback {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    border: 1px solid;
+    border-radius: 0.65rem;
+    padding: 0.8rem 0.95rem;
+    font-size: 0.84rem;
+}
+.feedback > svg {
+    flex: none;
+    margin-top: 0.05rem;
+}
+.feedback > span {
+    flex: 1;
+}
+.feedback button {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-weight: 600;
+}
+.feedback-error {
+    border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+.feedback-success {
+    border-color: color-mix(in srgb, var(--success) 35%, transparent);
+    background: var(--success-soft);
+    color: var(--success);
+}
+.sticky-feedback {
+    position: sticky;
+    top: 1rem;
+    z-index: 10;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow);
+}
+.recovery-block {
+    margin: 1rem 0;
+}
+.recovery-block span {
+    display: flex;
+    flex-direction: column;
+}
+
+.runtime-hero {
+    display: grid;
+    grid-template-columns: minmax(15rem, 1fr) auto;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+}
+.runtime-copy {
+    padding: clamp(1.5rem, 3vw, 2.5rem);
+}
+.runtime-kicker {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--fg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 650;
+    letter-spacing: 0.14em;
+}
+.runtime-copy h2 {
+    margin-top: 1rem;
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    font-weight: 580;
+    letter-spacing: -0.07em;
+    line-height: 0.9;
+}
+.runtime-copy > p:last-child {
+    margin-top: 1rem;
+    color: var(--fg-secondary);
+}
+.runtime-actions {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 2.25rem 2rem;
+}
+.runtime-metrics {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface-raised) 62%, transparent);
+}
+.runtime-metrics div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.3rem;
+}
+.runtime-metrics div + div {
+    border-left: 1px solid var(--border);
+}
+.runtime-metrics span {
+    color: var(--fg-secondary);
+    font-size: 0.76rem;
+}
+.runtime-metrics strong {
+    font-family: var(--font-mono);
+    font-size: 1.2rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.onboarding {
+    display: grid;
+    grid-template-columns: minmax(16rem, 0.9fr) minmax(20rem, 1.25fr);
+    gap: 2rem 4rem;
+    margin-top: 1.5rem;
+    border-radius: 1rem;
+    background: #10291f;
+    color: #f2f6f0;
+    padding: clamp(1.5rem, 4vw, 3.25rem);
+}
+.onboarding-intro {
+    display: grid;
+    grid-template-columns: 2.8rem 1fr;
+    gap: 1rem;
+}
+.onboarding-intro > span {
+    color: #6cc49c;
+    font-family: var(--font-mono);
+}
+.onboarding h2 {
+    margin-top: 0.5rem;
+    font-size: 1.65rem;
+    font-weight: 600;
+    letter-spacing: -0.035em;
+}
+.onboarding p {
+    margin-top: 0.6rem;
+    color: #aebdb3;
+    line-height: 1.7;
+}
+.onboarding-steps {
+    grid-row: span 2;
+}
+.onboarding-steps li {
+    display: grid;
+    grid-template-columns: 2rem 1fr;
+    gap: 0.85rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.85rem 0;
+}
+.onboarding-steps li > span {
+    display: grid;
+    width: 1.7rem;
+    height: 1.7rem;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    color: #72caa2;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+}
+.onboarding-steps p {
+    margin-top: 0.2rem;
+    font-size: 0.78rem;
+}
+.onboarding > button {
+    width: max-content;
+}
+
+.overview-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(19rem, 0.9fr);
+    gap: 1px;
+    margin-top: 1.5rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--border);
+}
+.account-strip,
+.operation-timeline {
+    background: var(--surface);
+    padding: 1.4rem;
+}
+.section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.15rem;
+}
+.section-heading h2 {
+    margin-top: 0.2rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+.section-heading button {
+    display: flex;
+    align-items: center;
+    border: 0;
+    background: transparent;
+    color: var(--fg-secondary);
+    font-size: 0.74rem;
+}
+.section-heading button:hover {
+    color: var(--accent);
+}
+.empty-copy {
+    display: grid;
+    min-height: 8rem;
+    place-items: center;
+    color: var(--fg-tertiary);
+    text-align: center;
+}
+.account-list li,
+.operation-timeline li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-top: 1px solid var(--border);
+    padding: 0.75rem 0;
+}
+.account-icon {
+    display: grid;
+    width: 2.1rem;
+    height: 2.1rem;
+    flex: none;
+    place-items: center;
+    border-radius: 0.55rem;
+    background: var(--surface-raised);
+    color: var(--fg-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+}
+.account-list li > span:nth-child(2),
+.operation-timeline li > div {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+}
+.account-list strong,
+.operation-timeline strong {
+    overflow: hidden;
+    font-size: 0.8rem;
+    font-weight: 570;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.account-list small,
+.operation-timeline small {
+    color: var(--fg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+}
+.account-list em,
+.operation-timeline em {
+    font-size: 0.7rem;
+    font-style: normal;
+}
+.account-list em.online,
+.operation-timeline em.succeeded {
+    color: var(--success);
+}
+.account-list em.offline,
+.operation-timeline em.failed {
+    color: var(--danger);
+}
+.account-list em.pending,
+.operation-timeline em.running {
+    color: var(--warning);
+}
+.timeline-mark {
+    width: 0.48rem;
+    height: 0.48rem;
+    flex: none;
+    border-radius: 50%;
+    background: var(--border-strong);
+}
+.timeline-mark.succeeded {
+    background: var(--success);
+}
+.timeline-mark.failed {
+    background: var(--danger);
+}
+.timeline-mark.running {
+    background: var(--warning);
+}
+
+.overview-skeleton {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+.skeleton {
+    min-height: 13rem;
+    border-radius: 1rem;
+    background: linear-gradient(
+        90deg,
+        var(--surface-raised),
+        var(--surface),
+        var(--surface-raised)
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+.skeleton-hero {
+    grid-column: 1 / -1;
+    min-height: 20rem;
+}
+@keyframes shimmer {
+    to {
+        background-position-x: -200%;
+    }
+}
+
+.panel-stack,
+.panel-grid {
+    display: grid;
+    gap: 1.25rem;
+}
+.panel-stack > section,
+.panel-grid > section,
+.access-layout > section {
+    border: 1px solid var(--border) !important;
+    border-radius: 1rem !important;
+    background: var(--surface) !important;
+    padding: clamp(1.25rem, 2.5vw, 2rem) !important;
+    box-shadow: none;
+}
+.panel-stack > section {
+    border-top: 1px solid var(--border) !important;
+}
+.panel-stack > section > div:first-child h2,
+.panel-grid > section > h2,
+.access-layout > section h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+.panel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+}
+.panel-grid > section:last-child {
+    grid-column: 1 / -1;
+}
+.access-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    gap: 1.25rem;
+    align-items: start;
+}
+.access-layout > aside {
+    position: sticky;
+    top: 1rem;
+    border-radius: 1rem;
+    background: var(--fg);
+    color: var(--bg);
+    padding: 1.4rem;
+}
+.access-layout > aside h2 {
+    font-size: 1rem;
+    font-weight: 600;
+}
+.access-layout > aside p {
+    margin: 0.65rem 0 1.25rem;
+    opacity: 0.68;
+    font-size: 0.78rem;
+    line-height: 1.65;
+}
+.access-layout > aside button {
+    width: 100%;
+}

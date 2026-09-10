@@ -1,0 +1,289 @@
+.auth-shell {
+    display: grid;
+    min-height: 100dvh;
+    grid-template-columns: minmax(0, 1.08fr) minmax(28rem, 0.92fr);
+    background: var(--surface);
+}
+
+.auth-story {
+    position: relative;
+    display: flex;
+    min-height: 100dvh;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    padding: clamp(2rem, 5vw, 5rem);
+    background:
+        radial-gradient(circle at 85% 12%, rgba(73, 166, 124, 0.28), transparent 32%),
+        linear-gradient(145deg, #10291f, #081410 72%);
+    color: #f4f7f1;
+}
+
+.auth-story::after {
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 3.5rem 3.5rem;
+    content: "";
+    mask-image: linear-gradient(to bottom, transparent, black 24%, transparent 92%);
+    pointer-events: none;
+}
+
+.auth-story .brand-lockup,
+.auth-story-copy,
+.auth-signal {
+    position: relative;
+    z-index: 1;
+}
+.auth-story-copy {
+    max-width: 39rem;
+    padding: 5rem 0;
+}
+.auth-story-copy .eyebrow {
+    color: #79cba8;
+}
+.auth-story-copy h1 {
+    margin: 1.2rem 0 1.4rem;
+    max-width: 10ch;
+    font-size: clamp(3rem, 6vw, 6.4rem);
+    font-weight: 620;
+    letter-spacing: -0.065em;
+    line-height: 0.93;
+    text-wrap: balance;
+}
+.auth-story-copy > p:last-child {
+    max-width: 34rem;
+    color: #b3c3b9;
+    font-size: 1.02rem;
+    line-height: 1.75;
+}
+.auth-signal {
+    display: flex;
+    height: 3.5rem;
+    align-items: end;
+    gap: 0.45rem;
+}
+.auth-signal span {
+    width: 0.28rem;
+    border-radius: 1rem;
+    background: #65cea0;
+    opacity: 0.75;
+}
+.auth-signal span:nth-child(1) {
+    height: 28%;
+}
+.auth-signal span:nth-child(2) {
+    height: 64%;
+}
+.auth-signal span:nth-child(3) {
+    height: 100%;
+}
+.auth-signal span:nth-child(4) {
+    height: 52%;
+}
+.auth-signal span:nth-child(5) {
+    height: 76%;
+}
+
+.auth-panel {
+    position: relative;
+    display: grid;
+    min-height: 100dvh;
+    place-items: center;
+    padding: 3rem clamp(1.5rem, 5vw, 5rem);
+    background: var(--surface);
+}
+.auth-form {
+    display: flex;
+    width: min(100%, 25rem);
+    flex-direction: column;
+    gap: 1.35rem;
+}
+.auth-form h2 {
+    margin-top: 0.45rem;
+    font-size: 2rem;
+    font-weight: 620;
+    letter-spacing: -0.04em;
+}
+.auth-help {
+    border-top: 1px solid var(--border);
+    color: var(--fg-secondary);
+    padding-top: 1rem;
+}
+.auth-help summary {
+    cursor: pointer;
+    font-weight: 550;
+    color: var(--fg);
+}
+.auth-help p {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.auth-help code {
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.console-shell {
+    display: grid;
+    height: 100dvh;
+    grid-template-columns: 16rem minmax(0, 1fr);
+    overflow: hidden;
+}
+.sidebar {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+    padding: 1.15rem;
+}
+.sidebar-brand {
+    height: 3.5rem;
+    padding: 0 0.55rem;
+}
+.sidebar-brand > div {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+.sidebar-brand small,
+.sidebar-status small {
+    color: var(--fg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+}
+
+.primary-nav {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding-top: 2rem;
+}
+.primary-nav button {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1.5rem minmax(0, 1fr);
+    gap: 0.65rem;
+    align-items: center;
+    border: 0;
+    border-radius: 0.65rem;
+    background: transparent;
+    color: var(--fg-secondary);
+    padding: 0.72rem 0.75rem;
+    text-align: left;
+    transition:
+        background 160ms ease,
+        color 160ms ease,
+        transform 160ms ease;
+}
+.primary-nav button:hover {
+    background: var(--surface-raised);
+    color: var(--fg);
+    transform: translateX(2px);
+}
+.primary-nav button.active {
+    background: var(--fg);
+    color: var(--bg);
+}
+.primary-nav button span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+.primary-nav button strong {
+    font-size: 0.84rem;
+    font-weight: 570;
+}
+.primary-nav button small {
+    margin-top: 0.08rem;
+    overflow: hidden;
+    opacity: 0.62;
+    font-size: 0.68rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-status {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    border-top: 1px solid var(--border);
+    padding: 1rem 0.65rem;
+}
+.sidebar-status > span:last-child {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.75rem;
+}
+.sidebar-actions {
+    display: flex;
+    justify-content: space-between;
+    border-top: 1px solid var(--border);
+    padding: 0.8rem 0.3rem 0;
+}
+.status-dot {
+    display: inline-block;
+    width: 0.52rem;
+    height: 0.52rem;
+    flex: none;
+    border-radius: 50%;
+    background: var(--fg-tertiary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--fg-tertiary) 14%, transparent);
+}
+.status-dot.online,
+.status-dot.running {
+    background: var(--success);
+    box-shadow: 0 0 0 4px var(--success-soft);
+}
+.status-dot.starting,
+.status-dot.stopping {
+    background: var(--warning);
+    box-shadow: 0 0 0 4px var(--warning-soft);
+}
+.status-dot.failed {
+    background: var(--danger);
+    box-shadow: 0 0 0 4px var(--danger-soft);
+}
+
+.console-main {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+}
+.mobile-header,
+.mobile-nav {
+    display: none;
+}
+.workspace-scroll {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg);
+}
+.workspace {
+    width: min(100%, 94rem);
+    min-height: 100%;
+    margin: 0 auto;
+    padding: clamp(2rem, 4vw, 4.5rem);
+}
+.workspace-view {
+    animation: enter 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes enter {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
