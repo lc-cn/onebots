@@ -1,11 +1,5 @@
 <script setup lang="ts">
-import {
-    IconAlertTriangle,
-    IconChevronRight,
-    IconMoon,
-    IconRobot,
-    IconSun,
-} from "@tabler/icons-vue";
+import { IconAlertTriangle, IconChevronRight, IconMoon, IconSun } from "@tabler/icons-vue";
 import UiButton from "../ui/UiButton.vue";
 import UiInput from "../ui/UiInput.vue";
 
@@ -18,16 +12,27 @@ const emit = defineEmits<{ pair: []; toggleTheme: [] }>();
     <main class="auth-shell">
         <section class="auth-story" aria-labelledby="auth-title">
             <div class="brand-lockup">
-                <span class="brand-mark"><IconRobot :size="23" /></span>
-                <span>onebots</span>
+                <span class="brand-mark" aria-hidden="true">OB</span>
+                <span>onebots <small>control</small></span>
             </div>
             <div class="auth-story-copy">
-                <p class="eyebrow">SELF-HOSTED IM GATEWAY</p>
-                <h1 id="auth-title">连接你的<br />消息基础设施</h1>
-                <p>管理服务持续在线，网关按需运行。所有账号、协议与扩展都留在你的工作区。</p>
+                <p class="eyebrow">SELF-HOSTED IM CONTROL PLANE</p>
+                <h1 id="auth-title">运行你的<br />消息网关</h1>
+                <p>在一个本地控制面中管理平台账号、协议出口与网关生命周期。</p>
             </div>
-            <div class="auth-signal" aria-hidden="true">
-                <span></span><span></span><span></span><span></span><span></span>
+            <div class="auth-principles" aria-label="产品特性">
+                <div>
+                    <span>01</span>
+                    <p><strong>数据留在本地</strong><small>配置与凭据保存在你的工作区</small></p>
+                </div>
+                <div>
+                    <span>02</span>
+                    <p><strong>设备独立授权</strong><small>每个管理会话均可单独撤销</small></p>
+                </div>
+                <div>
+                    <span>03</span>
+                    <p><strong>网关独立运行</strong><small>停止网关不影响管理服务</small></p>
+                </div>
             </div>
         </section>
         <section class="auth-panel">
@@ -41,10 +46,10 @@ const emit = defineEmits<{ pair: []; toggleTheme: [] }>();
             </button>
             <form class="auth-form" @submit.prevent="emit('pair')">
                 <div>
-                    <p class="eyebrow">DEVICE PAIRING</p>
+                    <div class="auth-step"><span>设备授权</span><span>01 / 01</span></div>
                     <h2>授权此设备</h2>
                     <p class="mt-3 text-fg-secondary">
-                        输入管理服务生成的一次性授权码，有效期为 5 分钟。
+                        使用管理服务生成的一次性代码，建立此浏览器的独立管理会话。
                     </p>
                 </div>
                 <div v-if="error" role="alert" class="feedback feedback-error">
@@ -62,6 +67,7 @@ const emit = defineEmits<{ pair: []; toggleTheme: [] }>();
                 <UiButton type="submit" variant="primary" :loading="busy" :disabled="!code.trim()">
                     连接管理服务 <IconChevronRight :size="16" />
                 </UiButton>
+                <p class="auth-expiry">授权码 5 分钟后失效 · 不会挤掉已有设备</p>
                 <details class="auth-help">
                     <summary>如何获取授权码</summary>
                     <div class="space-y-4 pt-4">

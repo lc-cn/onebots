@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import type { ControlStatus } from "@onebots/core/control";
 import {
     IconAlertTriangle,
@@ -6,18 +7,10 @@ import {
     IconLogout,
     IconMoon,
     IconRefresh,
-    IconRobot,
     IconSun,
 } from "@tabler/icons-vue";
 import { workspaceNavigation, type Workspace } from "../control-workspace.js";
 
-defineProps<{
-    active: Workspace;
-    state?: ControlStatus;
-    error: string;
-    notice: string;
-    isDark: boolean;
-}>();
 const emit = defineEmits<{
     select: [workspace: Workspace];
     refresh: [];
@@ -25,13 +18,21 @@ const emit = defineEmits<{
     toggleTheme: [];
     dismissNotice: [];
 }>();
+const props = defineProps<{
+    active: Workspace;
+    state?: ControlStatus;
+    error: string;
+    notice: string;
+    isDark: boolean;
+}>();
+const activeItem = computed(() => workspaceNavigation.find(item => item.id === props.active));
 </script>
 
 <template>
     <div class="console-shell">
         <aside class="sidebar">
             <div class="brand-lockup sidebar-brand">
-                <span class="brand-mark"><IconRobot :size="21" /></span>
+                <span class="brand-mark" aria-hidden="true">OB</span>
                 <div><strong>onebots</strong><small>control plane</small></div>
             </div>
             <nav class="primary-nav" aria-label="控制台导航">
@@ -86,9 +87,43 @@ const emit = defineEmits<{
         </aside>
 
         <div class="console-main">
+            <header class="desktop-header">
+                <div class="workspace-crumb">
+                    <span>ONEBOTS</span><i>/</i><strong>{{ activeItem?.label }}</strong>
+                </div>
+                <div class="desktop-header-actions">
+                    <span class="header-health" :class="{ failed: !!error }">
+                        <span
+                            class="status-dot"
+                            :class="error ? 'failed' : state ? 'online' : ''"></span>
+                        {{ error ? "状态待确认" : state ? "管理服务在线" : "正在连接" }}
+                    </span>
+                    <button
+                        type="button"
+                        class="icon-button"
+                        aria-label="刷新状态"
+                        @click="emit('refresh')">
+                        <IconRefresh :size="17" />
+                    </button>
+                    <button
+                        type="button"
+                        class="icon-button"
+                        aria-label="切换主题"
+                        @click="emit('toggleTheme')">
+                        <IconSun v-if="isDark" :size="17" /><IconMoon v-else :size="17" />
+                    </button>
+                    <button
+                        type="button"
+                        class="icon-button"
+                        aria-label="退出登录"
+                        @click="emit('logout')">
+                        <IconLogout :size="17" />
+                    </button>
+                </div>
+            </header>
             <header class="mobile-header">
                 <div class="brand-lockup">
-                    <span class="brand-mark"><IconRobot :size="19" /></span><strong>onebots</strong>
+                    <span class="brand-mark" aria-hidden="true">OB</span><strong>onebots</strong>
                 </div>
                 <div class="flex gap-1">
                     <button

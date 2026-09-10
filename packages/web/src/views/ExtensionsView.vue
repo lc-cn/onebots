@@ -17,6 +17,20 @@ const emit = defineEmits<{ applied: [] }>();
             </div>
             <IconPackage :size="28" />
         </header>
+        <ol class="workflow-rail" aria-label="扩展版本流程">
+            <li>
+                <span>01</span>
+                <div><strong>选择扩展</strong><small>适配器、协议与应用</small></div>
+            </li>
+            <li>
+                <span>02</span>
+                <div><strong>核对计划</strong><small>版本与必需依赖</small></div>
+            </li>
+            <li>
+                <span>03</span>
+                <div><strong>验证并应用</strong><small>切换不可变运行版本</small></div>
+            </li>
+        </ol>
         <div class="panel-stack">
             <ControlInstallationPanel :client="client" @applied="emit('applied')" />
         </div>

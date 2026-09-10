@@ -1,8 +1,8 @@
 .auth-shell {
     display: grid;
     min-height: 100dvh;
-    grid-template-columns: minmax(0, 1.08fr) minmax(28rem, 0.92fr);
-    background: var(--surface);
+    grid-template-columns: minmax(25rem, 0.78fr) minmax(34rem, 1.22fr);
+    background: var(--bg);
 }
 
 .auth-story {
@@ -12,10 +12,10 @@
     flex-direction: column;
     justify-content: space-between;
     overflow: hidden;
-    padding: clamp(2rem, 5vw, 5rem);
+    padding: clamp(2rem, 4vw, 4rem);
     background:
-        radial-gradient(circle at 85% 12%, rgba(73, 166, 124, 0.28), transparent 32%),
-        linear-gradient(145deg, #10291f, #081410 72%);
+        radial-gradient(circle at 18% 76%, rgba(65, 176, 126, 0.2), transparent 34%),
+        linear-gradient(155deg, #10271e, #09140f 68%);
     color: #f4f7f1;
 }
 
@@ -33,58 +33,60 @@
 
 .auth-story .brand-lockup,
 .auth-story-copy,
-.auth-signal {
+.auth-principles {
     position: relative;
     z-index: 1;
 }
 .auth-story-copy {
-    max-width: 39rem;
-    padding: 5rem 0;
+    max-width: 31rem;
+    padding: 3rem 0 2rem;
 }
 .auth-story-copy .eyebrow {
     color: #79cba8;
 }
 .auth-story-copy h1 {
     margin: 1.2rem 0 1.4rem;
-    max-width: 10ch;
-    font-size: clamp(3rem, 6vw, 6.4rem);
-    font-weight: 620;
-    letter-spacing: -0.065em;
-    line-height: 0.93;
+    max-width: 9ch;
+    font-size: clamp(3.2rem, 5vw, 5.2rem);
+    font-weight: 590;
+    letter-spacing: -0.06em;
+    line-height: 0.96;
     text-wrap: balance;
 }
 .auth-story-copy > p:last-child {
-    max-width: 34rem;
+    max-width: 27rem;
     color: #b3c3b9;
     font-size: 1.02rem;
     line-height: 1.75;
 }
-.auth-signal {
+.auth-principles {
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.auth-principles > div {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: 0.85rem;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 0.8rem 0;
+}
+.auth-principles > div > span {
+    color: #70c99e;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+}
+.auth-principles p {
     display: flex;
-    height: 3.5rem;
-    align-items: end;
-    gap: 0.45rem;
+    flex-direction: column;
 }
-.auth-signal span {
-    width: 0.28rem;
-    border-radius: 1rem;
-    background: #65cea0;
-    opacity: 0.75;
+.auth-principles strong {
+    font-size: 0.78rem;
+    font-weight: 560;
 }
-.auth-signal span:nth-child(1) {
-    height: 28%;
-}
-.auth-signal span:nth-child(2) {
-    height: 64%;
-}
-.auth-signal span:nth-child(3) {
-    height: 100%;
-}
-.auth-signal span:nth-child(4) {
-    height: 52%;
-}
-.auth-signal span:nth-child(5) {
-    height: 76%;
+.auth-principles small {
+    margin-top: 0.1rem;
+    color: #81978a;
+    font-size: 0.68rem;
 }
 
 .auth-panel {
@@ -92,20 +94,48 @@
     display: grid;
     min-height: 100dvh;
     place-items: center;
-    padding: 3rem clamp(1.5rem, 5vw, 5rem);
-    background: var(--surface);
+    padding: 4rem clamp(2rem, 6vw, 6rem);
+    background:
+        linear-gradient(
+            90deg,
+            transparent 0 95%,
+            color-mix(in srgb, var(--border) 24%, transparent) 95%
+        ),
+        var(--bg);
+    background-size: 3.5rem 100%;
 }
 .auth-form {
     display: flex;
-    width: min(100%, 25rem);
+    width: min(100%, 30rem);
     flex-direction: column;
-    gap: 1.35rem;
+    gap: 1.2rem;
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    background: var(--surface);
+    padding: clamp(1.75rem, 3vw, 2.5rem);
+    box-shadow: var(--shadow);
 }
 .auth-form h2 {
-    margin-top: 0.45rem;
+    margin-top: 1.8rem;
     font-size: 2rem;
     font-weight: 620;
     letter-spacing: -0.04em;
+}
+.auth-step {
+    display: flex;
+    justify-content: space-between;
+    color: var(--fg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.auth-expiry {
+    margin-top: -0.45rem;
+    color: var(--fg-tertiary);
+    font-size: 0.7rem;
+    text-align: center;
 }
 .auth-help {
     border-top: 1px solid var(--border);
@@ -130,7 +160,7 @@
 .console-shell {
     display: grid;
     height: 100dvh;
-    grid-template-columns: 16rem minmax(0, 1fr);
+    grid-template-columns: 15rem minmax(0, 1fr);
     overflow: hidden;
 }
 .sidebar {
@@ -138,8 +168,8 @@
     min-height: 0;
     flex-direction: column;
     border-right: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface) 88%, var(--bg));
-    padding: 1.15rem;
+    background: var(--surface);
+    padding: 1rem;
 }
 .sidebar-brand {
     height: 3.5rem;
@@ -164,7 +194,7 @@
     flex: 1;
     flex-direction: column;
     gap: 0.3rem;
-    padding-top: 2rem;
+    padding-top: 1.5rem;
 }
 .primary-nav button {
     display: grid;
@@ -258,6 +288,49 @@
     min-height: 0;
     flex-direction: column;
 }
+.desktop-header {
+    display: flex;
+    height: 3.75rem;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    padding: 0 1.5rem;
+}
+.workspace-crumb {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.76rem;
+}
+.workspace-crumb span,
+.workspace-crumb i {
+    color: var(--fg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+    font-style: normal;
+    letter-spacing: 0.08em;
+}
+.workspace-crumb strong {
+    font-weight: 580;
+}
+.desktop-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.header-health {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-right: 0.75rem;
+    color: var(--fg-secondary);
+    font-size: 0.72rem;
+}
+.header-health.failed {
+    color: var(--danger);
+}
 .mobile-header,
 .mobile-nav {
     display: none;
@@ -269,10 +342,10 @@
     background: var(--bg);
 }
 .workspace {
-    width: min(100%, 94rem);
+    width: min(100%, 88rem);
     min-height: 100%;
     margin: 0 auto;
-    padding: clamp(2rem, 4vw, 4.5rem);
+    padding: clamp(1.75rem, 3vw, 3.25rem);
 }
 .workspace-view {
     animation: enter 240ms cubic-bezier(0.2, 0.8, 0.2, 1);

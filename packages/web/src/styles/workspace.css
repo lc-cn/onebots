@@ -3,11 +3,11 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 2rem;
-    margin-bottom: 2.4rem;
+    margin-bottom: 1.75rem;
 }
 .page-heading h1 {
     margin-top: 0.35rem;
-    font-size: clamp(2rem, 4vw, 3.25rem);
+    font-size: clamp(1.8rem, 3vw, 2.35rem);
     font-weight: 620;
     letter-spacing: -0.055em;
     line-height: 1;
@@ -101,7 +101,7 @@
     box-shadow: var(--shadow);
 }
 .runtime-copy {
-    padding: clamp(1.5rem, 3vw, 2.5rem);
+    padding: clamp(1.4rem, 2.5vw, 2rem);
 }
 .runtime-kicker {
     display: flex;
@@ -115,10 +115,10 @@
 }
 .runtime-copy h2 {
     margin-top: 1rem;
-    font-size: clamp(2.5rem, 6vw, 5rem);
-    font-weight: 580;
-    letter-spacing: -0.07em;
-    line-height: 0.9;
+    font-size: clamp(2.3rem, 4vw, 3.8rem);
+    font-weight: 590;
+    letter-spacing: -0.055em;
+    line-height: 0.95;
 }
 .runtime-copy > p:last-child {
     margin-top: 1rem;
@@ -128,7 +128,7 @@
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    padding: 2.25rem 2rem;
+    padding: 1.75rem 1.5rem;
 }
 .runtime-metrics {
     display: grid;

@@ -20,6 +20,11 @@ defineProps<{ client: ControlClient; gatewayInstanceId?: string }>();
                 <IconBell :size="22" /><IconBug :size="22" /><IconFileText :size="22" />
             </div>
         </header>
+        <div class="operations-summary">
+            <span><strong>验证</strong><small>处理平台登录挑战</small></span>
+            <span><strong>消息</strong><small>按需采集与筛选事件</small></span>
+            <span><strong>日志</strong><small>读取管理服务与网关输出</small></span>
+        </div>
         <div class="panel-grid">
             <ControlVerificationPanel :client="client" :gateway-instance-id="gatewayInstanceId" />
             <ControlMessageDebugPanel :client="client" :gateway-instance-id="gatewayInstanceId" />

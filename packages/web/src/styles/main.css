@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "./shell.css";
 @import "./workspace.css";
+@import "./control-components.css";
 @import "./responsive.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -194,6 +195,15 @@ code {
     font-weight: 650;
     letter-spacing: -0.025em;
 }
+.brand-lockup > span:last-child small {
+    margin-left: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    opacity: 0.5;
+    text-transform: uppercase;
+}
 
 .brand-mark {
     display: inline-flex;
@@ -201,9 +211,13 @@ code {
     height: 2.25rem;
     align-items: center;
     justify-content: center;
-    border-radius: 0.65rem;
+    border-radius: 0.52rem;
     background: var(--accent);
     color: var(--accent-fg);
+    font-family: var(--font-mono);
+    font-size: 0.67rem;
+    font-weight: 750;
+    letter-spacing: -0.06em;
     box-shadow: 0 8px 24px var(--accent-soft);
 }
 

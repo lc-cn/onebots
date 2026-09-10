@@ -1,0 +1,146 @@
+.workflow-rail {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 1rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 0.8rem;
+    background: var(--surface);
+}
+.workflow-rail li {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: 0.65rem;
+    align-items: center;
+    padding: 0.85rem 1rem;
+}
+.workflow-rail li + li {
+    border-left: 1px solid var(--border);
+}
+.workflow-rail li > span {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    font-weight: 650;
+}
+.workflow-rail li > div,
+.operations-summary > span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+.workflow-rail strong,
+.operations-summary strong {
+    font-size: 0.77rem;
+    font-weight: 590;
+}
+.workflow-rail small,
+.operations-summary small {
+    margin-top: 0.1rem;
+    overflow: hidden;
+    color: var(--fg-tertiary);
+    font-size: 0.68rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.operations-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 0.8rem;
+    background: var(--border);
+}
+.operations-summary > span {
+    background: var(--surface);
+    padding: 0.75rem 1rem;
+}
+
+.panel-stack,
+.panel-grid,
+.access-layout {
+    --panel-inset: color-mix(in srgb, var(--surface-raised) 72%, var(--surface));
+}
+.panel-stack > section,
+.panel-grid > section,
+.access-layout > section {
+    border-radius: 0.8rem !important;
+    padding: 1.35rem !important;
+}
+.panel-stack > section > div:first-child,
+.panel-grid > section > h2,
+.access-layout > section > div:first-child {
+    margin-bottom: 0.2rem;
+}
+.panel-stack fieldset {
+    border: 0 !important;
+    border-radius: 0.7rem !important;
+    background: var(--panel-inset);
+    padding: 1rem !important;
+}
+.panel-stack fieldset legend {
+    color: var(--fg-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.68rem !important;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+.panel-stack input:not([type="checkbox"]),
+.panel-stack select,
+.panel-stack textarea,
+.panel-grid input:not([type="checkbox"]),
+.panel-grid select,
+.panel-grid textarea {
+    border-color: var(--border-strong) !important;
+    background: var(--bg) !important;
+}
+.panel-stack input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+}
+.panel-stack [role="alert"],
+.panel-grid [role="alert"] {
+    color: var(--danger) !important;
+}
+.panel-stack > section > section,
+.panel-stack > section > div[class*="border"],
+.panel-grid details {
+    border-color: var(--border) !important;
+    background: var(--panel-inset);
+}
+.panel-grid > section {
+    min-width: 0;
+}
+.panel-grid pre {
+    border: 1px solid var(--border);
+    border-radius: 0.55rem;
+    background: #101412;
+    color: #c7d8cd;
+    padding: 0.9rem;
+    font-size: 0.7rem;
+    line-height: 1.65;
+}
+.panel-grid summary {
+    transition: color 150ms ease;
+}
+.panel-grid summary:hover {
+    color: var(--accent);
+}
+.access-layout > section ul li {
+    border-color: var(--border);
+    padding-block: 0.85rem;
+}
+
+@media (max-width: 700px) {
+    .workflow-rail,
+    .operations-summary {
+        grid-template-columns: 1fr;
+    }
+    .workflow-rail li + li {
+        border-top: 1px solid var(--border);
+        border-left: 0;
+    }
+}

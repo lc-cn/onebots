@@ -17,6 +17,20 @@ const emit = defineEmits<{ applied: [] }>();
             </div>
             <IconSettings :size="28" />
         </header>
+        <ol class="workflow-rail" aria-label="配置应用流程">
+            <li>
+                <span>01</span>
+                <div><strong>读取快照</strong><small>确认当前配置基线</small></div>
+            </li>
+            <li>
+                <span>02</span>
+                <div><strong>编辑草稿</strong><small>账号与协议出口</small></div>
+            </li>
+            <li>
+                <span>03</span>
+                <div><strong>校验并应用</strong><small>显式提交新版本</small></div>
+            </li>
+        </ol>
         <div class="panel-stack">
             <ControlConfigurationPanel :client="client" @applied="emit('applied')" />
         </div>

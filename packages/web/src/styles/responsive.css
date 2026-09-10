@@ -11,9 +11,6 @@
     .auth-story-copy h1 {
         font-size: clamp(3rem, 9vw, 4.75rem);
     }
-    .auth-signal {
-        height: 2.25rem;
-    }
     .auth-panel {
         min-height: auto;
         padding-block: 5rem;
@@ -23,6 +20,9 @@
         height: 100dvh;
     }
     .sidebar {
+        display: none;
+    }
+    .desktop-header {
         display: none;
     }
     .console-main {
@@ -91,7 +91,7 @@
     .auth-story-copy > p:last-child {
         font-size: 0.86rem;
     }
-    .auth-signal {
+    .auth-principles {
         display: none;
     }
     .workspace {
