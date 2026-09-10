@@ -2,7 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { prepareManagerServiceInstallation, type ManagerServiceInstallation } from "./manager-service-installation.js";
+import {
+    prepareManagerServiceInstallation,
+    type ManagerServiceInstallation,
+} from "./manager-service-installation.js";
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
@@ -49,6 +52,27 @@ function fixture(platform: "linux" | "darwin" = "darwin") {
     return { root, host, spec, files: getServiceFiles("user", host) };
 }
 describe("新管理服务首次安装文件端口", () => {
+    it("Windows 使用原子 rename 发布定义而不依赖硬链接", () => {
+        const base = fixture();
+        const host: ServiceHost = {
+            ...base.host,
+            platform: "win32",
+            isElevated: true,
+            windowsSid: "S-1-5-21-1000",
+            env: { ProgramData: path.join(base.root, "program-data") },
+        };
+        const spec: ManagerServiceSpec = { ...base.spec, scope: "system" };
+        const files = getServiceFiles("system", host);
+        const plan = prepare(spec, host);
+        const rename = vi.spyOn(fs, "renameSync");
+        const link = vi.spyOn(fs, "linkSync");
+        plan.apply();
+        expect(rename).toHaveBeenCalledTimes(2);
+        expect(link).not.toHaveBeenCalled();
+        expect(fs.existsSync(files.definition)).toBe(true);
+        expect(fs.existsSync(files.metadata)).toBe(true);
+    });
+
     it.each(["linux", "darwin"] as const)(
         "%s 准备只读，应用不要求配置/扩展且不启动",
         async platform => {
@@ -156,7 +180,8 @@ describe("新管理服务首次安装文件端口", () => {
     it.each(["dispose", "rollback", "publish-failure"] as const)(
         "%s 释放全部只读文件锚点，dispose 幂等且不删除已发布文件",
         action => {
-            const f = fixture(), plan = prepare(f.spec, f.host);
+            const f = fixture(),
+                plan = prepare(f.spec, f.host);
             const descriptors: number[] = [];
             const open = fs.openSync;
             vi.spyOn(fs, "openSync").mockImplementation((file, flags, mode) => {
@@ -174,17 +199,22 @@ describe("新管理服务首次安装文件端口", () => {
             } else {
                 plan.apply();
                 expect(descriptors).toHaveLength(2);
-                for (const descriptor of descriptors) expect(fs.fstatSync(descriptor).nlink).toBe(1);
+                for (const descriptor of descriptors)
+                    expect(fs.fstatSync(descriptor).nlink).toBe(1);
                 if (action === "rollback") plan.rollback();
             }
             if (action !== "dispose") {
                 for (const descriptor of descriptors)
-                    expect(() => fs.fstatSync(descriptor)).toThrow(expect.objectContaining({ code: "EBADF" }));
+                    expect(() => fs.fstatSync(descriptor)).toThrow(
+                        expect.objectContaining({ code: "EBADF" }),
+                    );
             }
             plan.dispose();
             plan.dispose();
             for (const descriptor of descriptors)
-                expect(() => fs.fstatSync(descriptor)).toThrow(expect.objectContaining({ code: "EBADF" }));
+                expect(() => fs.fstatSync(descriptor)).toThrow(
+                    expect.objectContaining({ code: "EBADF" }),
+                );
             expect(plan.verify()).toBe(false);
             expect(() => plan.apply()).toThrow();
             expect(() => plan.rollback()).toThrow();
@@ -195,7 +225,8 @@ describe("新管理服务首次安装文件端口", () => {
     it.each(["dispose", "rollback"] as const)(
         "%s 的 close 已成功却报错时不重复关闭 FD，仍释放其他锚点",
         action => {
-            const f = fixture(), plan = prepare(f.spec, f.host);
+            const f = fixture(),
+                plan = prepare(f.spec, f.host);
             const descriptors: number[] = [];
             const open = fs.openSync;
             vi.spyOn(fs, "openSync").mockImplementation((file, flags, mode) => {
@@ -219,7 +250,9 @@ describe("新管理服务首次安装文件端口", () => {
             plan.dispose();
             for (const descriptor of descriptors) {
                 expect(calls.filter(value => value === descriptor)).toHaveLength(1);
-                expect(() => fs.fstatSync(descriptor)).toThrow(expect.objectContaining({ code: "EBADF" }));
+                expect(() => fs.fstatSync(descriptor)).toThrow(
+                    expect.objectContaining({ code: "EBADF" }),
+                );
             }
         },
     );
@@ -234,9 +267,7 @@ describe("新管理服务首次安装文件端口", () => {
         const other = fixture();
         fs.mkdirSync(other.files.stateDir, { recursive: true, mode: 0o755 });
         expect(() => prepare(other.spec, other.host).apply()).toThrow();
-        expect(() =>
-            prepare(other.spec, { ...other.host, platform: "win32" }),
-        ).toThrow();
+        expect(() => prepare(other.spec, { ...other.host, platform: "win32" })).toThrow();
     });
     it("OS重载后发现实际运行/未知静止时不得报告安装验收通过", async () => {
         const f = fixture(),

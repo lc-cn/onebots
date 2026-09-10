@@ -153,10 +153,13 @@ function publish(candidate: Candidate, host: ServiceHost): void {
             temporaryStat.isSymbolicLink()
         )
             throw fail();
-        fs.linkSync(temporary, candidate.path); // 原缺失 CAS，不覆盖竞态中新建的文件。
+        // Windows 的受保护 ProgramData 目录不保证普通硬链接发布可用；同卷 rename
+        // 对已存在目标会失败，仍保持原缺失 CAS。POSIX 继续用 link 避免 rename 覆盖。
+        if (host.platform === "win32") fs.renameSync(temporary, candidate.path);
+        else fs.linkSync(temporary, candidate.path);
         candidate.owned = { descriptor: anchor, dev: stat.dev, ino: stat.ino };
         anchor = undefined; // 已发布的候选由 rollback/dispose 释放，部分失败也保留证据。
-        fs.unlinkSync(temporary);
+        if (host.platform !== "win32") fs.unlinkSync(temporary);
         sync(directory);
     } finally {
         if (anchor !== undefined) fs.closeSync(anchor);
