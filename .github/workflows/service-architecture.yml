@@ -99,6 +99,8 @@ jobs:
       - run: pnpm build:packages
         shell: bash
       - run: node scripts/build-windows-host.mjs ${{ runner.arch == 'X64' && 'x64' || 'arm64' }}
+      - name: Verify blank Windows bootstrap installer
+        run: node scripts/verify-windows-bootstrap-install.mjs
       - name: Verify installed Windows SCM lifecycle through public CLI
         run: node scripts/verify-windows-service-lifecycle.mjs
         env:

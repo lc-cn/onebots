@@ -1,7 +1,7 @@
 # 升级网关与管理程序
 
-::: warning 重构分支功能
-本文适用于 `codex/service-architecture` 分支，尚未发布到 master。原生 Linux/macOS 安装可分别升级网关运行版本和常驻管理程序；Docker/HF 仍通过替换镜像升级，并保留数据卷。
+::: tip 版本边界
+本文适用于包含常驻管理服务的版本。原生安装可分别升级网关运行版本和常驻管理程序；Docker/HF 仍通过替换镜像升级，并保留数据卷。
 :::
 
 管理服务必须在线，配置应可正常读取。网关可以处于停止状态；升级保留其启停意图，不会自动启用账号或协议。
@@ -41,7 +41,7 @@ onebots control activate --data-dir <工作区> --generation <candidateId>
 
 ## 升级管理程序
 
-管理程序升级入口目前只用于已经由 OneBots 托管的 Linux/macOS 原生服务。Windows 已具备原生生命周期，但管理程序的不可变候选升级尚未完成实机验收；Docker/HF 则通过替换镜像升级。Linux/macOS 先检查版本，不下载或切换：
+管理程序升级入口用于已经由 OneBots 托管的 Linux、macOS 或 Windows 原生服务。Windows 必须在管理员终端中追加 `--system`；Docker/HF 则通过替换镜像升级。先检查版本，不下载或切换：
 
 ```sh
 onebots update --manager --check
@@ -67,7 +67,7 @@ onebots update --manager --operation <原操作ID> --version <精确版本>
 onebots recover --operation <原操作ID>
 ```
 
-系统级服务在以上命令追加 `--system`。Windows 按后续发布说明替换已安装管理工件，Docker 和 HF 替换镜像；三者都不使用当前 `update --manager` 入口。
+系统级服务在以上命令追加 `--system`；Windows 的管理服务固定为系统级，因此必须在管理员终端中使用该参数。Docker 和 HF 替换镜像，不使用 `update --manager` 入口。
 
 ## 失败处理
 

@@ -21,7 +21,7 @@ flowchart LR
 - The **gateway** loads the activated adapters, protocols, and framework extensions, connects platform accounts, and exposes protocol endpoints. Gateway controls in TUI or Web do not stop the manager.
 - **CLI, TUI, and Web** use the same manager API. They do not keep separate configuration copies or replace live dependencies directly.
 
-Foreground and container deployments run `onebots serve --data-dir <workspace>`. Native Linux and macOS service hosting uses `onebots install --data-dir <workspace>` followed by `onebots start`; migrate an existing legacy service with `onebots migrate` first. Windows now implements the SCM host, named-pipe transport, ACLs, and native lifecycle commands. Its latest real CI job is still failing, so the PowerShell bootstrap continues to exit before writing until final verification passes. Use Docker Desktop for current production deployments.
+Foreground and container deployments run `onebots serve --data-dir <workspace>`. Native Linux and macOS service hosting uses `onebots install --data-dir <workspace>` followed by `onebots start`; migrate an existing legacy service with `onebots migrate` first. Windows uses `install.ps1` for blank bootstrap and provides the same manager lifecycle through its SCM host, named-pipe transport, and ACLs. Bootstrap and full lifecycle acceptance run in Windows CI.
 
 ## Authentication and configuration
 

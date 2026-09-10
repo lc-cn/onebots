@@ -21,7 +21,7 @@ flowchart LR
 - **网关进程**加载已激活的适配器、协议和框架扩展，连接平台账号并暴露协议接口。TUI 与 Web 的网关启停不会关闭管理进程。
 - **CLI、TUI 与 Web**共享管理服务 API。它们不会各自维护配置副本，也不会绕过管理服务直接替换运行依赖。
 
-前台或容器部署使用 `onebots serve --data-dir <工作区>` 运行管理进程。Linux/macOS 原生系统托管先执行 `onebots install --data-dir <工作区>`，再执行 `onebots start`；已有旧服务必须先执行 `onebots migrate`。Windows 已实现 SCM 宿主、命名管道、ACL 与原生生命周期命令，但最新实机 CI 尚未通过，PowerShell 首次安装入口在最终验证完成前仍保持写入前退出。当前生产部署请使用 Docker Desktop。
+前台或容器部署使用 `onebots serve --data-dir <工作区>` 运行管理进程。Linux/macOS 原生系统托管先执行 `onebots install --data-dir <工作区>`，再执行 `onebots start`；已有旧服务必须先执行 `onebots migrate`。Windows 使用 `install.ps1` 完成空白引导，并由 SCM 原生宿主、命名管道和 ACL 提供相同的管理服务生命周期；首次安装与完整生命周期均纳入 Windows CI。
 
 ## 认证与配置
 

@@ -1,7 +1,7 @@
 # Management login and recovery
 
-::: warning Scope
-This page describes the permanent management service on `codex/service-architecture`. It has not been released to the `master` image. Do not apply this procedure to legacy images.
+::: tip Version boundary
+This page applies to releases containing the persistent manager. Legacy images do not implement device sessions; replace the whole image while preserving `/data` when upgrading.
 :::
 
 The Web console uses device pairing. A short-lived code authorizes the browser, which then uses a server-issued session. Do not configure a management username, password, or `access_token`, or put credentials in URLs.

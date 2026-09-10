@@ -6,7 +6,7 @@ Docker hosts the persistent OneBots manager without requiring Node.js on the hos
 
 - [Docker](https://docs.docker.com/get-docker/) installed (and optionally [Docker Compose](https://docs.docker.com/compose/install/))
 
-> This architecture branch has not yet been published to the `master` image. Build this checkout with `docker build -t onebots-manager .` and use that matching image in the examples below. Do not combine the new entrypoint with an older image.
+> Keep the image, entrypoint, and CLI on the same release. Legacy images do not implement this manager workflow; preserve the complete `/data` volume during upgrades and do not reuse legacy startup flags.
 
 ## Quick Start
 
@@ -21,7 +21,7 @@ Create a `docker-compose.yml` in your project directory. **You must mount `./dat
 
 services:
   onebots:
-    image: onebots-manager # Build this architecture checkout first
+    image: ghcr.io/lc-cn/onebots:master
     container_name: onebots
     restart: unless-stopped
     ports:
@@ -94,7 +94,7 @@ docker run -d \
   --restart unless-stopped \
   -p 6727:6727 \
   -v $(pwd)/data:/data \
-  onebots-manager
+  ghcr.io/lc-cn/onebots:master
 
 # View logs
 docker logs -f onebots
@@ -105,19 +105,15 @@ docker stop onebots && docker rm onebots
 
 ## Using pre-built images from GitHub
 
-Published images are available through [GitHub Actions](https://github.com/lc-cn/onebots/actions), but the current `master` image does not yet provide this branch's management architecture. Use the local build below until the corresponding release is published:
+Published images are available through [GitHub Actions](https://github.com/lc-cn/onebots/actions). Use `master` for the current branch build or pin a released version tag in production:
 
 ```bash
-# Build the matching checkout
-docker build -t onebots-manager .
-
-# Run
 docker run -d \
   --name onebots \
   --restart unless-stopped \
   -p 6727:6727 \
   -v $(pwd)/data:/data \
-  onebots-manager
+  ghcr.io/lc-cn/onebots:master
 ```
 
 Released versions use version tags, e.g. `ghcr.io/lc-cn/onebots:1.0.0`.
@@ -168,7 +164,7 @@ The repo includes Docker files for [Hugging Face Spaces](https://huggingface.co/
 
 The deployment code only authorizes initial pairing. Only its digest is persisted; the code is removed from the manager environment and is not passed to the gateway. Restarting with the same code does not extend its expiry. Before pairing, you may rotate to a fresh random code and restart, with at most 16 distinct deployment codes. An existing paired session is never replaced by this Secret. With terminal access, use local `onebots auth recover`. Without it, remove the old `ONEBOTS_BOOTSTRAP_CODE` Secret, generate a fresh random code using the command above, save it as the private `ONEBOTS_RECOVERY_CODE` Secret, and restart. Enter it on the pairing page within five minutes, then remove the Secret. Only successful redemption revokes the old session. Restarting cannot reissue or extend the same code. Recovery cannot initialize an unpaired workspace; do not set both Secrets or reuse an earlier deployment code. An unexpired local recovery code takes priority; use it or wait until it expires before injecting another fresh deployment code. At most 16 recovery codes are recorded; beyond that use local recovery, never delete authentication files to bypass the limit. There is no permanent deployment-token login.
 
-Use a base image built from this architecture branch until it is released. Pass `--build-arg ONEBOTS_BASE_IMAGE=<matching-image>` when building `Dockerfile.hf`.
+Use a base image from the same manager release. Pass `--build-arg ONEBOTS_BASE_IMAGE=<matching-image>` when pinning the base for `Dockerfile.hf`.
 
 ### Mounting and viewing persistent /data on HF
 

@@ -1,6 +1,6 @@
 # OneBots 服务架构重构方案
 
-状态：实现与最终托管验收已完成，发布文档收口中。工作分支 `codex/service-architecture`，当前状态更新于 2026-09-10。最终权威整体验证为 [`34461333108`](https://github.com/lc-cn/onebots/actions/runs/34461333108)，全部 job 已通过。下表区分已完成能力、发布前文档工作和仍需真实环境补充的证据。
+状态：工程实现、系统托管验收和发布文档已完成。工作分支 `codex/service-architecture`，当前状态更新于 2026-09-10。基线整体验证 [`34461333108`](https://github.com/lc-cn/onebots/actions/runs/34461333108) 的全部 job 已通过；发布以 PR 当前提交的 required checks 为最终依据。下表区分已完成能力和仍需真实环境补充的证据。
 
 | 阶段 | 当前状态 | 已有权威证据 | 收口前仍需完成 |
 | --- | --- | --- | --- |
@@ -8,7 +8,7 @@
 | 2. 依赖版本与凭据流程 | 已完成 | 最终 run 证明当前宿主、Mock、协议工件和 ICQQ 私有必需 peer 均走精确版本安装、授权拒绝、凭据清理、候选验证和显式激活；扩展移除也通过新候选运行版本完成 | 真实平台账号的安装后登录与运行仍需单独验证 |
 | 3. 配置与客户端统一 | 已完成 | Web/CLI/TUI 共享 `ControlClient`、版本冲突和持久操作语义；动态 Schema、配置草稿、损坏配置修复、控制日志及 Web 高风险写入阻断已覆盖，安装后的 Web 工件由真实 Chromium 驱动验收 | 无工程留项 |
 | 4. 系统托管与迁移 | 已完成 | systemd、launchd 和 Windows SCM 原生生命周期全部通过；验收覆盖旧服务迁移、候选管理程序升级、故障回退、冷启动恢复、停止与卸载，Windows named pipe 与 ACL 由原生宿主验证 | 物理机重启仍未验证 |
-| 5. 产品验收与清理 | 工程与 CI 已完成，文档收口中 | 受管协议回归覆盖根目录全部 21 个协议套件，12 个框架使用真实框架进程实跑；旧 `App`、旧服务控制器、旧运行入口和旧扩展安装器已删除；同期常规 CI、Docker linux/amd64 和 Cloudflare Pages 均通过 | 同步仓库首页中的旧启动命令；真实外部平台账号证据另行补充 |
+| 5. 产品验收与清理 | 已完成 | 受管协议回归覆盖根目录全部 21 个协议套件，12 个框架使用真实框架进程实跑；旧 `App`、旧服务控制器、旧运行入口和旧扩展安装器已删除；README、文档、常规 CI、Docker linux/amd64 和 Cloudflare Pages 均纳入发布门禁 | 真实外部平台账号证据另行补充 |
 
 ## 1. 目标与明确决策
 
@@ -278,7 +278,7 @@ packages/core/   # 保留平台/协议/账号/ID 内核
 - 单元测试证明模块规则，集成测试证明组件协作；两者不能替代原生系统服务、真实容器或真实平台账号证据。
 - 每项证据必须绑定明确提交、工件版本和运行环境。早期提交的成功不能自动覆盖后续改动。
 - 结果未知的外部效果保持待对账，不通过重试制造“成功”。测试跳过、无权限或无可用环境必须明确记录为未验证。
-- 最终权威整体验证为 run [`34461333108`](https://github.com/lc-cn/onebots/actions/runs/34461333108)：综合验收、Windows SCM、systemd、launchd 和全部框架互操作 job 均已通过。同一提交的[常规 CI](https://github.com/lc-cn/onebots/actions/runs/34461338319)、[Docker linux/amd64 构建](https://github.com/lc-cn/onebots/actions/runs/34461338375)与 Cloudflare Pages 检查也已通过。
+- 基线整体验证 run [`34461333108`](https://github.com/lc-cn/onebots/actions/runs/34461333108) 已覆盖综合验收、Windows SCM、systemd、launchd 和全部框架互操作 job；同一提交的[常规 CI](https://github.com/lc-cn/onebots/actions/runs/34461338319)、[Docker linux/amd64 构建](https://github.com/lc-cn/onebots/actions/runs/34461338375)与 Cloudflare Pages 检查也已通过。Windows 空白安装器的成功、幂等、凭据隔离和失败保留路径已加入同一服务架构工作流；最终发布证据必须使用 PR 当前提交的实际结果，不能沿用基线结果。
 - GitHub 托管 runner 能证明原生服务安装、迁移、进程异常后的服务管理器冷启动恢复、停止和卸载，但没有执行宿主操作系统的物理重启。Docker 重启也不能替代这项证据。
 - Mock、协议工件、ICQQ 私有必需 peer 和真实框架进程的验收不能证明真实外部平台账号已成功登录。真实账号安装后登录、事件接收和协议输出仍是环境验收留项，不应在 CI 结果中推断为通过。
-- 工程实现和自动化验收已经闭合；同步仓库首页中的旧启动命令并完成最终发布审计后，才可进入 `master`。物理机重启和真实外部账号的未验证边界仍须保留在发布说明中。
+- 工程实现、自动化验收定义和仓库首页已闭合；最终发布审计通过后才可进入 `master`。物理机重启和真实外部账号的未验证边界仍须保留在发布说明中。

@@ -16,7 +16,7 @@ export const UPDATE_HELP = `onebots update [--data-dir 工作区] [--check]
 交互模式分别确认安装和激活；非交互安装请使用 control plan-update/install/installation/activate。
 
 onebots update --manager [--check] [--version 精确版本] [--artifacts 运行工件清单] [--yes] [--system]
-通过 CLI 升级本机常驻管理程序；只支持 Linux/macOS。--check 不下载或切换。
+通过 CLI 升级本机常驻管理程序；Windows 必须使用管理员终端与 --system。--check 不下载或切换。
 交互模式显示当前/目标版本及发布归档摘要后确认；非交互必须显式传入 --yes。
 结果未知时使用原操作 ID：候选阶段追加 --operation ID 离线核对候选并继续同一切换（--version 仅作一致性校验）；系统服务阶段用 recover 对账。
 管理程序使用独立不可变候选，不在原目录执行 npm install。Docker/HF 请替换镜像并保留数据卷。

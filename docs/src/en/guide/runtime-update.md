@@ -1,7 +1,7 @@
 # Update the gateway and manager
 
-::: warning Unreleased architecture branch
-This workflow applies to `codex/service-architecture`, not master. Native Linux and macOS installations can update the gateway runtime and the persistent manager separately. Docker and HF deployments update by replacing the image while preserving the data volume.
+::: tip Version boundary
+This workflow applies to releases containing the persistent manager. Native installations can update the gateway runtime and manager separately. Docker and HF deployments update by replacing the image while preserving the data volume.
 :::
 
 Keep the management service online and repair invalid configuration first. The gateway may remain stopped; activation preserves its desired state and does not enable accounts or protocols.
@@ -33,7 +33,7 @@ onebots control activate --data-dir <workspace> --generation <candidateId>
 
 ## Update the manager program
 
-The manager-update entry currently applies only to native Linux or macOS services already managed by OneBots. Windows has a native lifecycle implementation, but immutable manager-candidate updates have not completed real-machine acceptance there. Docker and HF update by replacing the image. On Linux or macOS, check first without downloading or switching:
+The manager-update entry applies to native Linux, macOS, or Windows services already managed by OneBots. Windows requires an elevated terminal and `--system`; Docker and HF update by replacing the image. Check first without downloading or switching:
 
 ```sh
 onebots update --manager --check
@@ -59,7 +59,7 @@ If the operation already entered the system-service transaction, reconcile that 
 onebots recover --operation <original-operation-id>
 ```
 
-Append `--system` for a system-wide service. Windows replaces its installed manager artifact according to its release instructions; Docker and HF replace the image. None of those three use the current `update --manager` entry.
+Append `--system` for a system-wide service. Windows managers are always system-wide, so the flag and an elevated terminal are required. Docker and HF replace the image instead of using `update --manager`.
 
 If a response is lost, query the original operation instead of creating another. Configuration or runtime changes invalidate the confirmation; refresh and review a new plan. Older releases, missing catalogs, or inconsistent package versions are rejected without silently downgrading.
 
