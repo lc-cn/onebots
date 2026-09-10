@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { IconEye, IconEyeOff, IconX } from '@tabler/icons-vue';
+import { computed, ref } from "vue";
+import { IconEye, IconEyeOff, IconX } from "@tabler/icons-vue";
 
 interface Props {
-    type?: 'text' | 'password';
+    id?: string;
+    type?: "text" | "password";
     placeholder?: string;
     disabled?: boolean;
     clearable?: boolean;
@@ -13,35 +14,37 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-    type: 'text',
-    placeholder: '',
+    id: undefined,
+    type: "text",
+    placeholder: "",
     disabled: false,
     clearable: false,
     maxlength: undefined,
-    error: '',
-    autocomplete: undefined
+    error: "",
+    autocomplete: undefined,
 });
 
-const model = defineModel<string>({ default: '' });
+const model = defineModel<string>({ default: "" });
 
 const showPassword = ref(false);
 
 const inputType = computed(() => {
-    if (props.type === 'password') return showPassword.value ? 'text' : 'password';
-    return 'text';
+    if (props.type === "password") return showPassword.value ? "text" : "password";
+    return "text";
 });
 
 const showClear = computed(() => props.clearable && !props.disabled && model.value.length > 0);
-const showToggle = computed(() => props.type === 'password');
+const showToggle = computed(() => props.type === "password");
 
 function clear() {
-    model.value = '';
+    model.value = "";
 }
 </script>
 
 <template>
     <div class="relative flex items-center">
         <input
+            :id="id"
             v-model="model"
             :type="inputType"
             :placeholder="placeholder"
@@ -52,7 +55,7 @@ function clear() {
             class="h-9 w-full rounded-control border bg-surface px-3 text-sm text-fg placeholder:text-fg-tertiary transition-opacity focus:shadow-[0_0_0_3px_var(--ring)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             :class="[
                 error ? 'border-danger focus:border-danger' : 'border-border focus:border-accent',
-                showClear || showToggle ? 'pr-9' : ''
+                showClear || showToggle ? 'pr-9' : '',
             ]" />
         <div
             v-if="showClear || showToggle"

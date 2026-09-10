@@ -341,16 +341,25 @@ try {
     await devtools.evaluate(`(() => {
         const input = document.querySelector("#pair-code");
         if (!(input instanceof HTMLInputElement)) throw new Error("找不到设备码输入框");
+        const form = input.closest("form.auth-form");
+        if (!(form instanceof HTMLFormElement)) throw new Error("找不到配对表单");
         input.value = ${JSON.stringify(bootstrapCode)};
         input.dispatchEvent(new Event("input", { bubbles: true }));
-        const form = input.closest("form");
-        if (!(form instanceof HTMLFormElement)) throw new Error("找不到配对表单");
         form.requestSubmit();
     })()`);
-    await waitFor(async () => {
-        const text = await devtools.evaluate("document.body.innerText");
-        return /管理服务\s*在线/.test(text) && /网关\s*运行中/.test(text) ? text : undefined;
-    }, "Web 配对及状态读取");
+    const gatewayIsRunning = () =>
+        devtools.evaluate(`(() => {
+            const pairingError = document.querySelector(".auth-form .feedback-error");
+            if (pairingError instanceof HTMLElement)
+                throw new Error("配对失败：" + pairingError.innerText.trim());
+            const overview = document.querySelector("#overview-title");
+            const manager = document.querySelector(".sidebar-status strong");
+            const gateway = document.querySelector(".runtime-copy h2");
+            return overview instanceof HTMLHeadingElement && overview.checkVisibility() &&
+                manager?.textContent?.trim() === "管理服务在线" &&
+                gateway?.textContent?.trim() === "运行中";
+        })()`);
+    await waitFor(gatewayIsRunning, "Web 配对及状态读取");
     assert.equal(
         await devtools.evaluate(`localStorage.getItem("onebots.control.token") !== null`),
         true,
@@ -367,6 +376,28 @@ try {
             button.click();
             return true;
         })()`);
+    const openWorkspace = async (label, headingId) => {
+        await devtools.evaluate(`(() => {
+            const expected = ${JSON.stringify(label)};
+            const navigation = document.querySelector('nav[aria-label="控制台导航"]');
+            if (!(navigation instanceof HTMLElement)) throw new Error("找不到控制台导航");
+            const button = [...navigation.querySelectorAll("button")].find(value =>
+                value.querySelector("strong")?.textContent?.trim() === expected,
+            );
+            if (!(button instanceof HTMLButtonElement) || button.disabled)
+                throw new Error(expected + "导航不可用");
+            button.click();
+            return true;
+        })()`);
+        await waitFor(
+            () =>
+                devtools.evaluate(`(() => {
+                    const heading = document.querySelector("#" + ${JSON.stringify(headingId)});
+                    return heading instanceof HTMLHeadingElement && heading.checkVisibility();
+                })()`),
+            `${label}工作区显示`,
+        );
+    };
     const setSelect = (label, value) =>
         devtools.evaluate(`(() => {
             const select = document.querySelector(
@@ -388,6 +419,7 @@ try {
             return input.value;
         })()`);
 
+    await openWorkspace("扩展版本", "extensions-title");
     await waitFor(
         () =>
             devtools.evaluate(`Boolean(
@@ -441,6 +473,7 @@ try {
     assert.equal(installed.manager.id, before.manager.id);
     assert.equal(installed.gateway.desired, "running");
 
+    await openWorkspace("账号与协议", "configuration-title");
     await clickButton("重新读取配置");
     await waitFor(
         () =>
@@ -486,11 +519,8 @@ try {
         "Web 配置应用",
         60_000,
     );
-    await waitFor(
-        async () => /网关\s*运行中/.test(await devtools.evaluate("document.body.innerText")),
-        "Web 配置应用后的网关状态",
-        60_000,
-    );
+    await openWorkspace("运行概览", "overview-title");
+    await waitFor(gatewayIsRunning, "Web 配置应用后的网关状态", 60_000);
 
     const protocolResult = await devtools.evaluate(`(async () => {
         const response = await fetch("/mock/installed-web/onebot/v11/get_login_info", {
