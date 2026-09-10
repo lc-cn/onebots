@@ -7,7 +7,7 @@ import type { ControlConfigurationService } from "./configuration-service.js";
 import { handleConfigurationRequest, isConfigurationPath } from "./configuration-api.js";
 import type { ConfigurationApplication } from "../configuration/configuration-application.js";
 import { gatewayDiagnosticStatus } from "./diagnostics.js";
-import type { GatewayController } from "./gateway-controller.js";
+import type { GatewayController, GatewayControllerState } from "./gateway-controller.js";
 import type { NodeGatewayDriver } from "./gateway-driver.js";
 import type { GenerationActivationController } from "./generation-activation.js";
 import type { createHostInstallation } from "./host-installation.js";
@@ -242,11 +242,14 @@ export function createControlRequestHandler(options: ControlRequestHandlerOption
                     }
                     const operation = await completeWindowsGatewayOperation(
                         async () => {
+                            const current = options.controller.status();
                             if (
-                                options.controller.status().recoveryRequired &&
-                                !options.driver.hasLiveChildren()
+                                requiresGatewayReconciliation(
+                                    current,
+                                    options.driver.hasLiveChildren(),
+                                )
                             ) {
-                                const prior = options.controller.status().instance;
+                                const prior = current.instance;
                                 if (prior?.pid && gatewayProcessExists(prior.pid))
                                     throw new Error("旧实例仍存在，拒绝重复启动");
                                 if (!prior)
@@ -287,4 +290,19 @@ export function createControlRequestHandler(options: ControlRequestHandlerOption
             else response.destroy();
         }
     };
+}
+
+/**
+ * recoveryRequired 也是正在执行启停效果时的临时闭锁状态。当前 manager 内尚有运行中操作时，
+ * 新请求应进入生命周期队列；只有冷启动恢复留下的未知状态才需要先核实旧进程。
+ */
+export function requiresGatewayReconciliation(
+    state: Pick<GatewayControllerState, "recoveryRequired" | "operations">,
+    hasLiveChildren: boolean,
+): boolean {
+    return (
+        state.recoveryRequired &&
+        !hasLiveChildren &&
+        !state.operations.some(operation => operation.status === "running")
+    );
 }
