@@ -99,8 +99,8 @@ assertLaunchdAbsent();
 assert.equal(pathAbsent(STATE_DIRECTORY), true, "固定 OneBots 服务状态目录路径已存在");
 assert.equal(
     execute("pnpm", ["--version"]).stdout,
-    "9.15.9",
-    "真实 launchd 验收必须使用 pnpm 9.15.9",
+    "10.34.5",
+    "真实 launchd 验收必须使用 pnpm 10.34.5",
 );
 
 const { LAUNCHD_LABEL } = await import(

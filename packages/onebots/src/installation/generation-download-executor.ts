@@ -94,7 +94,7 @@ export async function executeGenerationDownload(input: DownloadExecutionInput): 
     try {
         if (!input.manifest || typeof input.manifest !== "object" || Array.isArray(input.manifest))
             throw new Error();
-        if ((input.manifest as Record<string, unknown>).packageManager !== "pnpm@9.15.9")
+        if ((input.manifest as Record<string, unknown>).packageManager !== "pnpm@10.34.5")
             throw new Error();
         manifest = JSON.stringify(input.manifest, null, 2) + "\n";
         if (input.token && manifest.includes(input.token)) throw new Error();
@@ -273,7 +273,7 @@ async function runDownload(
                 failed = true;
             }
             if (cancelled) reject(new GenerationDownloadError("CANCELLED"));
-            else if (checkVersion && (failed || code !== 0 || version.trim() !== "9.15.9"))
+            else if (checkVersion && (failed || code !== 0 || version.trim() !== "10.34.5"))
                 reject(new GenerationDownloadError("PACKAGE_MANAGER_MISMATCH"));
             else if (failed || code !== 0) reject(new GenerationDownloadError("DOWNLOAD_FAILED"));
             else resolve();

@@ -3,7 +3,7 @@
 ## 环境要求
 
 - **Node.js**：>= 24
-- **pnpm**：>= 9.12.0；仓库锁定并推荐使用 9.15.9
+- **pnpm**：>= 10.34.5；仓库锁定并推荐使用 10.34.5
 - **操作系统**：Windows、macOS 或 Linux
 
 OneBots 使用 Node.js 24 提供的运行时能力。CLI 会在加载插件与平台 SDK 前检查版本；旧版本会直接退出并显示所需版本，避免安装完成后才出现底层模块错误。
@@ -24,7 +24,7 @@ npm --version
 从源码开发时推荐使用仓库锁定的版本：
 
 ```bash
-npm install --global pnpm@9.15.9
+npm install --global pnpm@10.34.5
 pnpm --version
 ```
 

@@ -27,7 +27,7 @@ export class GenerationDownloadError extends Error {
                 INVALID_INPUT: "候选下载输入无效，请重新创建安装计划",
                 UNSUPPORTED_EXECUTABLE:
                     "下载器不支持 shell 脚本入口，请使用 pnpm 可执行文件或 Node 与 pnpm.js 入口",
-                PACKAGE_MANAGER_MISMATCH: "下载器要求 pnpm 9.15.9，请配置受信任的对应版本入口",
+                PACKAGE_MANAGER_MISMATCH: "下载器要求 pnpm 10.34.5，请配置受信任的对应版本入口",
                 CANCELLED: "依赖下载已取消",
                 DOWNLOAD_FAILED: "依赖下载失败，请检查网络、仓库授权和依赖版本",
                 CLEANUP_FAILED: "下载临时文件清理失败，禁止继续验证或激活",

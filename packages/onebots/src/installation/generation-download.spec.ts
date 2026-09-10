@@ -93,7 +93,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 const args = process.argv.slice(2);
 if (args.includes('--version')) {
- process.stdout.write(${JSON.stringify(mode)} === 'wrong-version' ? '12.3.4' : '9.15.9');
+ process.stdout.write(${JSON.stringify(mode)} === 'wrong-version' ? '12.3.4' : '10.34.5');
  process.exit(0);
 }
 const fixtureRoot = path.dirname(process.argv[1]);
@@ -144,7 +144,7 @@ publishReport(report);
 }
 
 const manifest = {
-    packageManager: "pnpm@9.15.9",
+    packageManager: "pnpm@10.34.5",
     name: "onebots-candidate",
     private: true,
     type: "module",

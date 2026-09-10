@@ -852,8 +852,8 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1(ink@6.8.0(@types/react@19.2.17)(react@19.2.8))(react@19.2.8)(zod@4.3.6)
       pnpm:
-        specifier: 9.15.9
-        version: 9.15.9
+        specifier: 10.34.5
+        version: 10.34.5
       react:
         specifier: ^19.1.1
         version: 19.2.8
@@ -4402,8 +4402,8 @@ packages:
     resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
     engines: {node: '>=14.19.0'}
 
-  pnpm@9.15.9:
-    resolution: {integrity: sha512-aARhQYk8ZvrQHAeSMRKOmvuJ74fiaR1p5NQO7iKJiClf1GghgbrlW1hBjDolO95lpQXsfF+UA+zlzDzTfc8lMQ==}
+  pnpm@10.34.5:
+    resolution: {integrity: sha512-pO4F8vc2WCVb1qiYWcBlpFwopX2u+uLIk6Fo7itzFow3uR6D5X6mdlStA/AwMXRkMOi84442LgQmBfuKvIAZLg==}
     engines: {node: '>=18.12'}
     hasBin: true
 
@@ -8852,7 +8852,7 @@ snapshots:
 
   pngjs@7.0.0: {}
 
-  pnpm@9.15.9: {}
+  pnpm@10.34.5: {}
 
   points-on-curve@0.2.0: {}
 

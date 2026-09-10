@@ -47,7 +47,7 @@ export interface GenerationPeerRequirement {
 }
 
 export interface GenerationManifest {
-    packageManager: "pnpm@9.15.9";
+    packageManager: "pnpm@10.34.5";
     name: string;
     version: string;
     private: true;
@@ -177,7 +177,7 @@ export function createGenerationPlan(input: GenerationPlanInput): GenerationPlan
     )
         throw new Error("目标平台、架构或 Node ABI 无效");
     const manifest: GenerationManifest = {
-        packageManager: "pnpm@9.15.9",
+        packageManager: "pnpm@10.34.5",
         name: "onebots-gateway-generation",
         version: "0.0.0",
         private: true,

@@ -31,7 +31,7 @@ IM 平台原始事件 → Adapter（适配器）→ Account + id_map（统一 Co
 | 工具       | 要求                                                                                                           |
 | ---------- | -------------------------------------------------------------------------------------------------------------- |
 | Node.js    | **>= 24**（`package.json#engines`；`.node-version` / `.nvmrc` 推荐版本为 24，可用 `fnm use` / `nvm use` 切换） |
-| pnpm       | **>= 9.12.0**，锁定 `packageManager: pnpm@9.15.9`（Docker/CI 中用 corepack 激活该版本）                        |
+| pnpm       | **>= 10.34.5**，锁定 `packageManager: pnpm@10.34.5`（Docker/CI 中用 corepack 激活该版本）                        |
 | TypeScript | 5.9.3（通过 pnpm-workspace 的 `catalog:` 统一管理，子包 devDependencies 写 `"typescript": "catalog:"`）        |
 
 - 全仓库 **ESM**（各包 `package.json` 均为 `"type": "module"`），**禁止 CommonJS**。
@@ -212,7 +212,7 @@ chore: 构建/工具
 ## 发版与部署
 
 - **CI / 发版**：`.github/workflows/release.yml` — push 到 `master` 触发；流程为 install → build → test → changesets 版本 PR / npm 发布（npm OIDC 可信发布，无需 NPM_TOKEN）。
-- **Docker**：`.github/workflows/docker.yml` + 根目录多阶段 `Dockerfile`（node:24-alpine，corepack pnpm@9.15.9；构建时跳过 docs，`.dockerignore` 已排除 adapter-icqq）。镜像发布到 `ghcr.io/lc-cn/onebots`。
+- **Docker**：`.github/workflows/docker.yml` + 根目录多阶段 `Dockerfile`（node:24-alpine，corepack pnpm@10.34.5；构建时跳过 docs，`.dockerignore` 已排除 adapter-icqq）。镜像发布到 `ghcr.io/lc-cn/onebots`。
   - 运行：`docker run -d -p 6727:6727 -v $(pwd)/data:/data ghcr.io/lc-cn/onebots:master` —— **必须挂载 `/data`**，否则重启丢配置。
   - 另有 `Dockerfile.hf`（Hugging Face Spaces）与 `docker-compose.yml`、`deploy/1panel/`。
 - **文档**：`pnpm docs:build`（VitePress），线上为 <https://onebots.pages.dev>（Cloudflare Pages）。
