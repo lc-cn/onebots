@@ -8,6 +8,7 @@ vi.mock("./windows-service-security.js", () => ({
     inspectWindowsServiceDirectorySecurity: vi.fn(() => proof.acl),
     inspectWindowsServiceFileSecurity: vi.fn(() => proof.acl),
     secureWindowsServiceDirectory: vi.fn(() => proof.acl),
+    secureWindowsServiceFile: vi.fn(() => proof.acl),
 }));
 vi.mock("./manager-runtime/reader.js", () => ({
     readVerifiedManagerCandidate: vi.fn(() => proof.candidate),
