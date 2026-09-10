@@ -11,6 +11,15 @@ import type { ServiceHost } from "./service-host.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform } from "./service-platform.js";
 
+const windowsSecurity = vi.hoisted(() => ({
+    inspect: vi.fn(() => "windows-acl"),
+    secure: vi.fn(() => "windows-acl"),
+}));
+vi.mock("./windows-service-security.js", () => ({
+    inspectWindowsServiceFileSecurity: windowsSecurity.inspect,
+    secureWindowsServiceFile: windowsSecurity.secure,
+}));
+
 const roots: string[] = [];
 const plans: ManagerServiceInstallation[] = [];
 function prepare(spec: ManagerServiceSpec, host: ServiceHost): ManagerServiceInstallation {
@@ -19,6 +28,7 @@ function prepare(spec: ManagerServiceSpec, host: ServiceHost): ManagerServiceIns
     return plan;
 }
 afterEach(() => {
+    vi.clearAllMocks();
     vi.restoreAllMocks();
     for (const plan of plans.splice(0)) plan.dispose();
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
@@ -66,9 +76,13 @@ describe("新管理服务首次安装文件端口", () => {
         const plan = prepare(spec, host);
         const rename = vi.spyOn(fs, "renameSync");
         const link = vi.spyOn(fs, "linkSync");
+        const fchmod = vi.spyOn(fs, "fchmodSync");
         plan.apply();
         expect(rename).toHaveBeenCalledTimes(2);
         expect(link).not.toHaveBeenCalled();
+        expect(fchmod).not.toHaveBeenCalled();
+        expect(windowsSecurity.secure).toHaveBeenCalledTimes(2);
+        expect(windowsSecurity.inspect).toHaveBeenCalledTimes(2);
         expect(fs.existsSync(files.definition)).toBe(true);
         expect(fs.existsSync(files.metadata)).toBe(true);
     });

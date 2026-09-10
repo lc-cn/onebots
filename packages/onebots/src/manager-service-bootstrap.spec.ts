@@ -178,6 +178,7 @@ function windowsFixture() {
     });
     windowsSecurity.secureFile.mockReturnValue("acl-proof");
     windowsSecurity.inspectDirectory.mockReturnValue("acl-proof");
+    windowsSecurity.inspectFile.mockReturnValue("acl-proof");
     return { ...fixtureValue, host, files };
 }
 describe("immutable manager bootstrap binding", () => {

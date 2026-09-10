@@ -16,6 +16,7 @@ interface Candidate {
     path: string;
     bytes: Buffer;
     mode: number;
+    windows: boolean;
     owned?: { descriptor: number; dev: number; ino: number };
     windowsAclDigest?: string;
     verifyWindowsAcl?: () => boolean;
@@ -106,14 +107,11 @@ function equal(candidate: Candidate): boolean {
             stat.nlink !== 1 ||
             stat.dev !== candidate.owned.dev ||
             stat.ino !== candidate.owned.ino ||
-            (process.platform !== "win32" && (stat.mode & 0o7777) !== candidate.mode) ||
-            (process.platform !== "win32" && process.getuid && stat.uid !== process.getuid())
+            (!candidate.windows && (stat.mode & 0o7777) !== candidate.mode) ||
+            (!candidate.windows && process.getuid && stat.uid !== process.getuid())
         )
             return false;
-        if (
-            process.platform === "win32" &&
-            (!candidate.windowsAclDigest || !candidate.verifyWindowsAcl?.())
-        )
+        if (candidate.windows && (!candidate.windowsAclDigest || !candidate.verifyWindowsAcl?.()))
             return false;
         return new ConfigurationFile(candidate.path).readRaw().bytes.equals(candidate.bytes);
     } catch {
@@ -130,12 +128,13 @@ function publish(candidate: Candidate, host: ServiceHost): void {
     try {
         try {
             fs.writeFileSync(descriptor, candidate.bytes);
-            fs.fchmodSync(descriptor, candidate.mode);
+            // Windows 文件权限由下方 DACL 建立和复核；fchmod 在 Windows 不可用。
+            if (!candidate.windows) fs.fchmodSync(descriptor, candidate.mode);
             fs.fsyncSync(descriptor);
         } finally {
             fs.closeSync(descriptor);
         }
-        if (process.platform === "win32") {
+        if (candidate.windows) {
             candidate.windowsAclDigest = secureWindowsServiceFile(host, temporary);
             candidate.verifyWindowsAcl = () =>
                 inspectWindowsServiceFileSecurity(host, candidate.path) ===
@@ -155,11 +154,11 @@ function publish(candidate: Candidate, host: ServiceHost): void {
             throw fail();
         // Windows 的受保护 ProgramData 目录不保证普通硬链接发布可用；同卷 rename
         // 对已存在目标会失败，仍保持原缺失 CAS。POSIX 继续用 link 避免 rename 覆盖。
-        if (host.platform === "win32") fs.renameSync(temporary, candidate.path);
+        if (candidate.windows) fs.renameSync(temporary, candidate.path);
         else fs.linkSync(temporary, candidate.path);
         candidate.owned = { descriptor: anchor, dev: stat.dev, ino: stat.ino };
         anchor = undefined; // 已发布的候选由 rollback/dispose 释放，部分失败也保留证据。
-        if (host.platform !== "win32") fs.unlinkSync(temporary);
+        if (!candidate.windows) fs.unlinkSync(temporary);
         sync(directory);
     } finally {
         if (anchor !== undefined) fs.closeSync(anchor);
@@ -187,12 +186,14 @@ export function prepareManagerServiceInstallation(
         if (exists(file)) throw fail();
     }
     const content = renderInstalledManagerService(spec, host.platform, files.stateDir);
+    const windows = host.platform === "win32";
     const candidates: Candidate[] = [
-        { path: files.definition, bytes: Buffer.from(content), mode: 0o644 },
+        { path: files.definition, bytes: Buffer.from(content), mode: 0o644, windows },
         {
             path: files.metadata,
             bytes: Buffer.from(JSON.stringify(spec, null, 2) + "\n"),
             mode: 0o600,
+            windows,
         },
     ];
     let attempted = false;
