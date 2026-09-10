@@ -17,6 +17,7 @@ function fixture(state = "updates_available", answers = [["yes"], ["no"]]) {
                     packages: [],
                     peers: [],
                     recommendations: [],
+                    removed: { adapters: [], protocols: [], applications: [] },
                 },
             };
         else if (route === "/api/control/installations") throw new Error("lost response");

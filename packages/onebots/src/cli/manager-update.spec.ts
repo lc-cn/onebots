@@ -19,6 +19,7 @@ function fixture(state = "current") {
                               packages: [],
                               peers: [],
                               recommendations: [],
+                              removed: { adapters: [], protocols: [], applications: [] },
                           },
                       }
                     : {}),
