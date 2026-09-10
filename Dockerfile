@@ -5,7 +5,7 @@
 
 FROM node:24-alpine AS builder
 
-RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
+RUN corepack enable && corepack prepare pnpm@10.34.5 --activate
 WORKDIR /app
 
 # 复制依赖声明、工作空间配置与所有子包继承的 TypeScript 根配置
@@ -44,7 +44,7 @@ ENV COREPACK_HOME=/usr/local/share/corepack
 
 RUN apk add --no-cache su-exec \
   && corepack enable \
-  && corepack prepare pnpm@9.15.9 --activate \
+  && corepack prepare pnpm@10.34.5 --activate \
   && chown -R node:node "$COREPACK_HOME" \
   && mkdir -p /data \
   && chown -R node:node /data

@@ -85,8 +85,8 @@ assertSystemServiceAbsent();
 assert.equal(fs.existsSync(STATE_DIRECTORY), false, "固定 OneBots system state directory 已存在");
 assert.equal(
     execute("pnpm", ["--version"], { statuses: [0] }).stdout,
-    "9.15.9",
-    "真实 systemd 验收必须使用 pnpm 9.15.9",
+    "10.34.5",
+    "真实 systemd 验收必须使用 pnpm 10.34.5",
 );
 
 const temporary = fs.realpathSync(fs.mkdtempSync("/tmp/onebots-systemd-acceptance-"));

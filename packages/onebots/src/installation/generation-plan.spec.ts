@@ -34,7 +34,7 @@ describe("generation declaration plan", () => {
         source.host.sha256 = "a".repeat(64);
         source.extensions[0].peerDependencies["@icqqjs/icqq"] = "^1.2.3";
         const plan = createGenerationPlan(source);
-        expect(plan.manifest.packageManager).toBe("pnpm@9.15.9");
+        expect(plan.manifest.packageManager).toBe("pnpm@10.34.5");
         expect(plan.manifest.dependencies).toMatchObject({
             onebots: source.host.spec,
             "@onebots/core": "1.0.4",

@@ -20,7 +20,7 @@ async function fixture() {
     directories.push(repositoryRoot);
     await writeFile(
         join(repositoryRoot, "package.json"),
-        JSON.stringify({ private: true, packageManager: "pnpm@9.15.9" }),
+        JSON.stringify({ private: true, packageManager: "pnpm@10.34.5" }),
     );
     await writeFile(
         join(repositoryRoot, "pnpm-workspace.yaml"),

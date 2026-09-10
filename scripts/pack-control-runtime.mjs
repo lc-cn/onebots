@@ -51,7 +51,7 @@ export async function packControlRuntime({
         cwd: repositoryRoot,
         env: environment,
     });
-    if (version.trim() !== "9.15.9") throw new Error("运行工件必须使用 pnpm 9.15.9 打包");
+    if (version.trim() !== "10.34.5") throw new Error("运行工件必须使用 pnpm 10.34.5 打包");
     const staging = await mkdtemp(path.join(path.dirname(destination), ".control-runtime-pack-"));
     try {
         const manifest = { schemaVersion: 1, extensions: [] };

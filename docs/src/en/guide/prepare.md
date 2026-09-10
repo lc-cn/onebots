@@ -3,7 +3,7 @@
 ## System requirements
 
 - **Node.js**: >= 24
-- **pnpm**: >= 9.12.0; the repository pins and recommends 9.15.9
+- **pnpm**: >= 10.34.5; the repository pins and recommends 10.34.5
 - **Operating system**: Windows, macOS, or Linux
 
 OneBots uses runtime features provided by Node.js 24. The CLI checks the version before loading plugins or platform SDKs. An older runtime exits with the required version instead of failing later with a low-level module error.
@@ -24,7 +24,7 @@ npm --version
 Use the version pinned by the repository for source development:
 
 ```bash
-npm install --global pnpm@9.15.9
+npm install --global pnpm@10.34.5
 pnpm --version
 ```
 

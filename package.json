@@ -55,9 +55,9 @@
   },
   "engines": {
     "node": ">=24",
-    "pnpm": ">=9.12.0"
+    "pnpm": ">=10.34.5"
   },
-  "packageManager": "pnpm@9.15.9",
+  "packageManager": "pnpm@10.34.5",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lc-cn/onebots.git"
