@@ -1,12 +1,20 @@
 import http from "node:http";
 import { ControlClient, ControlRequestError, type ControlTransport } from "@onebots/core/control";
 import { controlSocket } from "../control/workspace.js";
-import { WindowsHostControlClient } from "../windows-host-control-client.js";
+import {
+    createWindowsNativeHostExchange,
+    WindowsHostControlClient,
+} from "../windows-host-control-client.js";
 import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
 
 export function createLocalControlTransport(workspace: string): ControlTransport {
     if (process.platform === "win32") {
-        const client = new WindowsHostControlClient(WINDOWS_HOST_PIPE_NAME);
+        // 服务控制 SID 只有最小 pipe 权限；libuv 会申请更宽的 GENERIC_READ/WRITE。
+        // 随包原生桥使用精确权限连接，且控制请求只经 stdin 传递。
+        const client = new WindowsHostControlClient(
+            WINDOWS_HOST_PIPE_NAME,
+            createWindowsNativeHostExchange(),
+        );
         return {
             async request<T>(method: "GET" | "POST", route: string, body?: unknown): Promise<T> {
                 const response = await client.request<T>(method, route, body);

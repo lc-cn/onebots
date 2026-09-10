@@ -42,6 +42,32 @@ func TestStatusPipeHasVerifiedSecurityAndServesState(t *testing.T) {
 	if !response.OK || response.State == nil || response.State.Manager.PID != 42 {
 		t.Fatalf("unexpected response: %#v", response)
 	}
+
+	output.Reset()
+	request := []byte(`{"version":2,"requestId":"control-client:1","operation":"status"}`)
+	if err := exchangeControlRequest(config.PipeName, 5*time.Second, bytes.NewReader(request), &output); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(output.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.OK || response.RequestID != "control-client:1" {
+		t.Fatalf("native exchange did not preserve the response binding: %#v", response)
+	}
+}
+
+func TestNativeExchangeRejectsServerOperationsAndRemoteNames(t *testing.T) {
+	publish := []byte(`{"version":2,"requestId":"publish:1","operation":"publish_status"}`)
+	if err := exchangeControlRequest(`\\.\pipe\unused`, time.Second, bytes.NewReader(publish), io.Discard); err == nil {
+		t.Fatal("native client exchange accepted a server-only operation")
+	}
+	status := []byte(`{"version":2,"requestId":"status:1","operation":"status"}`)
+	if err := exchangeControlRequest(`\\localhost\pipe\unused`, time.Second, bytes.NewReader(status), io.Discard); err == nil {
+		t.Fatal("native client exchange accepted a remote pipe name")
+	}
+	if err := exchangeControlRequest(`\\.\pipe\nested\unused`, time.Second, bytes.NewReader(status), io.Discard); err == nil {
+		t.Fatal("native client exchange accepted a nested pipe name")
+	}
 }
 
 func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {

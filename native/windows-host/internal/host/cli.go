@@ -95,6 +95,23 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		return 0
+	case "exchange":
+		set := flag.NewFlagSet("exchange", flag.ContinueOnError)
+		set.SetOutput(stderr)
+		pipeName := set.String("pipe", defaultPipeName, "local host control pipe")
+		timeout := set.Duration("timeout", 5*time.Second, "request timeout")
+		if err := set.Parse(args[1:]); err != nil {
+			return 2
+		}
+		if set.NArg() != 0 {
+			fmt.Fprintln(stderr, "exchange does not accept positional arguments")
+			return 2
+		}
+		if err := exchangeControlRequest(*pipeName, *timeout, os.Stdin, stdout); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
 	case "scm-control":
 		set := flag.NewFlagSet("scm-control", flag.ContinueOnError)
 		set.SetOutput(stderr)
@@ -144,7 +161,7 @@ func parseRunConfig(command string, args []string, output io.Writer) (Config, er
 }
 
 func printUsage(output io.Writer) {
-	fmt.Fprintln(output, "usage: onebots-windows-host <identity|service-run|console-run|status|scm-control|legacy-scm-inspect|legacy-reboot-control> [options]")
+	fmt.Fprintln(output, "usage: onebots-windows-host <identity|service-run|console-run|status|exchange|scm-control|legacy-scm-inspect|legacy-reboot-control> [options]")
 }
 
 func Main() {

@@ -1,5 +1,8 @@
 import net from "node:net";
 import { randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseWindowsNativeStatus, type WindowsNativeStatus } from "./service-platform-windows.js";
 
 const MAX_STATUS_BYTES = 64 * 1024;
@@ -33,6 +36,69 @@ export type WindowsPipeExchange = (
     request: Buffer,
     timeoutMs: number,
 ) => Promise<Buffer>;
+
+type WindowsNativeExchangeRunner = (
+    executable: string,
+    args: string[],
+    request: Buffer,
+    timeoutMs: number,
+) => Promise<Buffer>;
+
+export function windowsNativeHostExecutable(): string {
+    if (process.arch !== "x64" && process.arch !== "arm64")
+        throw new Error("当前 Windows 架构尚无管理服务宿主");
+    return path.join(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "native",
+        `win32-${process.arch}`,
+        "onebots-windows-host.exe",
+    );
+}
+
+export function createWindowsNativeHostExchange(
+    executable = windowsNativeHostExecutable(),
+    runner: WindowsNativeExchangeRunner = runWindowsNativeExchange,
+): WindowsPipeExchange {
+    return (pipeName, request, timeoutMs) =>
+        runner(
+            executable,
+            ["exchange", "--pipe", pipeName, "--timeout", `${timeoutMs}ms`],
+            request,
+            timeoutMs,
+        );
+}
+
+function runWindowsNativeExchange(
+    executable: string,
+    args: string[],
+    request: Buffer,
+    timeoutMs: number,
+): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+        const child = execFile(
+            executable,
+            args,
+            {
+                encoding: "buffer",
+                timeout: timeoutMs + 2000,
+                maxBuffer: MAX_CONTROL_RESULT_BYTES + 64 * 1024,
+                windowsHide: true,
+            },
+            (error, stdout, stderr) => {
+                if (error) {
+                    const detail = Buffer.isBuffer(stderr)
+                        ? stderr.toString("utf8").trim()
+                        : String(stderr).trim();
+                    reject(new Error(detail || "Windows 原生管理管道请求失败", { cause: error }));
+                    return;
+                }
+                resolve(Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout));
+            },
+        );
+        child.stdin?.once("error", error => reject(error));
+        child.stdin?.end(request);
+    });
+}
 
 function defaultExchange(pipeName: string, request: Buffer, timeoutMs: number): Promise<Buffer> {
     return new Promise((resolve, reject) => {

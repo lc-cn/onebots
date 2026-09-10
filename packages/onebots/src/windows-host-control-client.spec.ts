@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { WindowsHostControlClient } from "./windows-host-control-client.js";
+import {
+    createWindowsNativeHostExchange,
+    WindowsHostControlClient,
+} from "./windows-host-control-client.js";
 
 const pipe = "\\\\.\\pipe\\onebots-gateway-control";
 const publishedAt = new Date().toISOString();
@@ -14,6 +17,19 @@ const control = {
 };
 
 describe("Windows named pipe ControlClient边界", () => {
+    it("本地 CLI 通过随包原生桥以 stdin 传输请求", async () => {
+        const runner = vi.fn(async () => Buffer.from("response"));
+        const exchange = createWindowsNativeHostExchange("C:\\OneBots\\host.exe", runner);
+        const request = Buffer.from('{"version":2}\n');
+        await expect(exchange(pipe, request, 120_000)).resolves.toEqual(Buffer.from("response"));
+        expect(runner).toHaveBeenCalledWith(
+            "C:\\OneBots\\host.exe",
+            ["exchange", "--pipe", pipe, "--timeout", "120000ms"],
+            request,
+            120_000,
+        );
+    });
+
     it("发布闭合状态并校验响应requestId", async () => {
         const exchange = vi.fn(async (_pipe: string, bytes: Buffer) => {
             const request = JSON.parse(bytes.toString("utf8"));
