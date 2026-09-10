@@ -122,7 +122,9 @@ export async function installManagerServiceCommand(
         if (error instanceof ManagerBootstrapSetupError)
             return {
                 output:
-                    `管理服务首次安装失败：operationId=unavailable，bootstrapPhase=${error.bootstrapPhase}，code=${error.code}。` +
+                    `管理服务首次安装失败：operationId=unavailable，bootstrapPhase=${error.bootstrapPhase}，code=${error.code}` +
+                    (error.securityStage ? `，securityStage=${error.securityStage}` : "") +
+                    "。" +
                     "\n未下载候选或派发系统服务注册；请修复对应的本机前置条件后重试。",
                 exitCode: 1,
             };

@@ -32,6 +32,7 @@ import {
     inspectWindowsServiceDirectorySecurity,
     secureWindowsServiceDirectory,
     secureWindowsServiceFile,
+    WindowsServiceSecurityError,
 } from "./windows-service-security.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
 import {
@@ -115,19 +116,21 @@ async function bootstrapManagerServiceImpl(
     if (host.platform === "win32") {
         try {
             secureWindowsServiceDirectory(host, files.stateDir);
-        } catch {
+        } catch (error) {
             throw new ManagerBootstrapSetupError(
                 "windows-state-security",
                 "WINDOWS_STATE_ACL_FAILED",
+                error instanceof WindowsServiceSecurityError ? error.stage : "process",
             );
         }
         // Windows 空白工作区与服务状态使用同一最小 ACL；已存在但边界不同的目录拒绝接管。
         try {
             secureWindowsServiceDirectory(host, template.workspace);
-        } catch {
+        } catch (error) {
             throw new ManagerBootstrapSetupError(
                 "windows-workspace-security",
                 "WINDOWS_WORKSPACE_ACL_FAILED",
+                error instanceof WindowsServiceSecurityError ? error.stage : "process",
             );
         }
     }

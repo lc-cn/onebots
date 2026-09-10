@@ -5,12 +5,41 @@ import type { ServiceHost } from "./service-host.js";
 const SID = /^S-1-(?:[0-9]+-)+[0-9]+$/;
 const failure = () => new Error("Windows 服务状态目录 ACL 无法确认");
 
+export type WindowsServiceSecurityStage =
+    | "process"
+    | "ancestor"
+    | "acl-build"
+    | "create"
+    | "inspect"
+    | "verify";
+
+export class WindowsServiceSecurityError extends Error {
+    constructor(readonly stage: WindowsServiceSecurityStage) {
+        super("Windows 服务状态目录 ACL 无法确认");
+        this.name = "WindowsServiceSecurityError";
+    }
+}
+
 function encoded(script: string): string {
     return Buffer.from(script, "utf16le").toString("base64");
 }
 
 function parseProof(output: string): string {
     const value: unknown = JSON.parse(output.trim());
+    if (
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        Reflect.ownKeys(value).length === 2 &&
+        (value as Record<string, unknown>).secured === false &&
+        typeof (value as Record<string, unknown>).stage === "string" &&
+        ["ancestor", "acl-build", "create", "inspect", "verify"].includes(
+            (value as Record<string, string>).stage,
+        )
+    )
+        throw new WindowsServiceSecurityError(
+            (value as Record<string, WindowsServiceSecurityStage>).stage,
+        );
     if (
         !value ||
         typeof value !== "object" ||
@@ -48,36 +77,47 @@ export function secureWindowsServiceDirectory(host: ServiceHost, directory: stri
 $ErrorActionPreference='Stop'
 $p=${location}
 $sid=${sid}
+$stage='ancestor'
+try {
 $ancestor=[IO.Path]::GetDirectoryName($p)
 while($ancestor){
-  $parent=Get-Item -LiteralPath $ancestor -Force
-  if(-not $parent.PSIsContainer -or (($parent.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe ancestor'}
+  $parent=New-Object System.IO.DirectoryInfo($ancestor)
+  if(-not $parent.Exists -or (($parent.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe ancestor'}
   $next=[IO.Path]::GetDirectoryName($ancestor)
   if(-not $next -or $next -eq $ancestor){break}
   $ancestor=$next
 }
 
+$stage='acl-build'
 $acl=New-Object System.Security.AccessControl.DirectorySecurity
 $acl.SetAccessRuleProtection($true,$false)
 $inherit=[System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
 $prop=[System.Security.AccessControl.PropagationFlags]::None
 $allow=[System.Security.AccessControl.AccessControlType]::Allow
 foreach($identity in @($sid,'S-1-5-18')){
-  $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($identity,'FullControl',$inherit,$prop,$allow)
+  $principal=New-Object System.Security.Principal.SecurityIdentifier($identity)
+  $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($principal,'FullControl',$inherit,$prop,$allow)
   $acl.AddAccessRule($rule)|Out-Null
 }
 $acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($sid)))
-if(-not (Test-Path -LiteralPath $p)){[System.IO.Directory]::CreateDirectory($p,$acl)|Out-Null}
-$item=Get-Item -LiteralPath $p -Force
-if(-not $item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe path'}
-$check=Get-Acl -LiteralPath $p
-$rules=@($check.Access)
-$ids=@($rules|ForEach-Object{$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value}|Sort-Object -Unique)
+$stage='create'
+$item=New-Object System.IO.DirectoryInfo($p)
+if(-not $item.Exists){[System.IO.FileSystemAclExtensions]::CreateDirectory($acl,$p)|Out-Null}
+$stage='inspect'
+$item.Refresh()
+if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe path'}
+$check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+$rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
+$ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
 $owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
 $bad=@($rules|Where-Object{$_.IsInherited -or $_.AccessControlType -ne 'Allow' -or $_.InheritanceFlags -ne $inherit -or $_.PropagationFlags -ne $prop -or $_.FileSystemRights -ne [System.Security.AccessControl.FileSystemRights]::FullControl})
+$stage='verify'
 if(-not $check.AreAccessRulesProtected -or $owner -ne $sid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin @($sid,'S-1-5-18') -or $ids[1] -notin @($sid,'S-1-5-18') -or $bad.Count -ne 0){throw 'unsafe acl'}
-$encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($check.Sddl))
+$encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
 [Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
+} catch {
+  [Console]::Out.Write((@{secured=$false;stage=$stage}|ConvertTo-Json -Compress))
+}
 `;
     try {
         const output = host.exec(
@@ -86,8 +126,9 @@ $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($check.Sddl))
             { timeoutMs: 15_000 },
         );
         return parseProof(output);
-    } catch {
-        throw failure();
+    } catch (error) {
+        if (error instanceof WindowsServiceSecurityError) throw error;
+        throw new WindowsServiceSecurityError("process");
     }
 }
 
@@ -110,11 +151,11 @@ export function inspectWindowsServiceDirectorySecurity(
 $ErrorActionPreference='Stop'
 $p=${JSON.stringify(directory)}
 $sid=${JSON.stringify(host.windowsSid)}
-$item=Get-Item -LiteralPath $p -Force
-if(-not $item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe directory'}
-$check=Get-Acl -LiteralPath $p
-$rules=@($check.Access)
-$ids=@($rules|ForEach-Object{$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value}|Sort-Object -Unique)
+$item=New-Object System.IO.DirectoryInfo($p)
+if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe directory'}
+$check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+$rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
+$ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
 $owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
 $inherit=[System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
 $prop=[System.Security.AccessControl.PropagationFlags]::None
@@ -123,7 +164,7 @@ $inherited=@($rules|Where-Object{$_.IsInherited}).Count
 $legalInheritance=(-not $check.AreAccessRulesProtected -and $inherited -eq 2)
 $protectedExact=($check.AreAccessRulesProtected -and $inherited -eq 0)
 if((-not $legalInheritance -and -not $protectedExact) -or $owner -ne $sid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin @($sid,'S-1-5-18') -or $ids[1] -notin @($sid,'S-1-5-18') -or $bad.Count -ne 0){throw 'unsafe acl'}
-$encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($check.Sddl))
+$encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
 [Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
 `;
     try {
@@ -155,15 +196,15 @@ export function inspectWindowsServiceFileSecurity(host: ServiceHost, file: strin
 $ErrorActionPreference='Stop'
 $p=${JSON.stringify(file)}
 $sid=${JSON.stringify(host.windowsSid)}
-$item=Get-Item -LiteralPath $p -Force
-if($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe file'}
-$check=Get-Acl -LiteralPath $p
-$rules=@($check.Access)
-$ids=@($rules|ForEach-Object{$_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value}|Sort-Object -Unique)
+$item=New-Object System.IO.FileInfo($p)
+if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe file'}
+$check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+$rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
+$ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
 $owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
 $bad=@($rules|Where-Object{$_.AccessControlType -ne 'Allow' -or $_.FileSystemRights -ne [System.Security.AccessControl.FileSystemRights]::FullControl})
 if(-not $check.AreAccessRulesProtected -or $owner -ne $sid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin @($sid,'S-1-5-18') -or $ids[1] -notin @($sid,'S-1-5-18') -or $bad.Count -ne 0){throw 'unsafe acl'}
-$encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($check.Sddl))
+$encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
 [Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
 `;
     try {
@@ -195,17 +236,18 @@ export function secureWindowsServiceFile(host: ServiceHost, file: string): strin
 $ErrorActionPreference='Stop'
 $p=${JSON.stringify(file)}
 $sid=${JSON.stringify(host.windowsSid)}
-$item=Get-Item -LiteralPath $p -Force
-if($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe file'}
+$item=New-Object System.IO.FileInfo($p)
+if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe file'}
 $acl=New-Object System.Security.AccessControl.FileSecurity
 $acl.SetAccessRuleProtection($true,$false)
 $allow=[System.Security.AccessControl.AccessControlType]::Allow
 foreach($identity in @($sid,'S-1-5-18')){
-  $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($identity,'FullControl',$allow)
+  $principal=New-Object System.Security.Principal.SecurityIdentifier($identity)
+  $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($principal,'FullControl',$allow)
   $acl.AddAccessRule($rule)|Out-Null
 }
 $acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($sid)))
-[IO.File]::SetAccessControl($p,$acl)
+[System.IO.FileSystemAclExtensions]::SetAccessControl($item,$acl)
 `;
     try {
         host.exec(

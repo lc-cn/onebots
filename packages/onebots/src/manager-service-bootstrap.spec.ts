@@ -27,7 +27,8 @@ const windowsSecurity = vi.hoisted(() => ({
     inspectDirectory: vi.fn(),
     inspectFile: vi.fn(),
 }));
-vi.mock("./windows-service-security.js", () => ({
+vi.mock("./windows-service-security.js", async importOriginal => ({
+    ...(await importOriginal<typeof import("./windows-service-security.js")>()),
     secureWindowsServiceDirectory: windowsSecurity.secureDirectory,
     secureWindowsServiceFile: windowsSecurity.secureFile,
     inspectWindowsServiceDirectorySecurity: windowsSecurity.inspectDirectory,

@@ -47,6 +47,13 @@ export class ManagerBootstrapSetupError extends Error {
     constructor(
         readonly bootstrapPhase: ManagerBootstrapSetupPhase,
         readonly code: ManagerBootstrapSetupErrorCode,
+        readonly securityStage?:
+            | "process"
+            | "ancestor"
+            | "acl-build"
+            | "create"
+            | "inspect"
+            | "verify",
     ) {
         super("管理服务首次安装前置检查未完成");
         this.name = "ManagerBootstrapSetupError";

@@ -226,6 +226,19 @@ describe("首次管理服务安装CLI", () => {
         });
 
         vi.mocked(bootstrapManagerService).mockRejectedValue(
+            new ManagerBootstrapSetupError(
+                "windows-state-security",
+                "WINDOWS_STATE_ACL_FAILED",
+                "create",
+            ),
+        );
+        const aclSetup = await installManagerServiceCommand({ dataDir: root });
+        expect(aclSetup.output).toContain(
+            "bootstrapPhase=windows-state-security，code=WINDOWS_STATE_ACL_FAILED，securityStage=create",
+        );
+        expect(aclSetup.output).not.toContain(root);
+
+        vi.mocked(bootstrapManagerService).mockRejectedValue(
             new ManagerBootstrapCandidateError(
                 "candidate-install",
                 "failed",
