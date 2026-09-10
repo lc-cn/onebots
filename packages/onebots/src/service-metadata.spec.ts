@@ -147,6 +147,18 @@ describe("唯一服务元数据分类", () => {
         expect(readServiceMetadata(link)).toEqual({ kind: "invalid" });
         expect(readServiceMetadata(f.root)).toEqual({ kind: "invalid" });
     });
+    it("Windows 以 DACL 为权限边界，不把 NTFS 映射的 POSIX mode 当成拒绝依据", () => {
+        const f = fixture(manager());
+        fs.chmodSync(f.file, 0o666);
+        const originalPlatform = process.platform;
+        try {
+            Object.defineProperty(process, "platform", { value: "win32" });
+            expect(readServiceMetadata(f.file)).toEqual({ kind: "control", spec: manager() });
+        } finally {
+            Object.defineProperty(process, "platform", { value: originalPlatform });
+        }
+        expect(readServiceMetadata(f.file)).toEqual({ kind: "invalid" });
+    });
     it("祖先链接不能把缺失假装成正常missing", () => {
         const f = fixture();
         const link = path.join(f.root, "linkdir");

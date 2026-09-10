@@ -89,7 +89,9 @@ function safeFile(stat: fs.Stats): boolean {
         stat.isFile() &&
         !stat.isSymbolicLink() &&
         stat.nlink === 1 &&
-        [0o400, 0o600].includes(stat.mode & 0o7777) &&
+        // Windows 服务文件由受保护目录和精确 DACL 约束；NTFS 的 POSIX mode 映射
+        // 通常仍显示为 0666，不能用它否定安装事务已经建立的 Windows 权限边界。
+        (process.platform === "win32" || [0o400, 0o600].includes(stat.mode & 0o7777)) &&
         (!process.getuid || stat.uid === process.getuid())
     );
 }
