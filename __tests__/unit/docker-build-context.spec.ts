@@ -20,7 +20,7 @@ describe("Docker 构建上下文", () => {
             .split(/\r?\n/)
             .find(line => line.startsWith("RUN pnpm install"));
         expect(installation).toContain("--ignore-scripts");
-        expect(dockerfile).toContain("RUN pnpm prune --prod --ignore-scripts");
+        expect(dockerfile).toContain("RUN CI=true pnpm prune --prod --ignore-scripts");
         // esbuild/Rollup/Tailwind platform binaries are distributed as optional packages.
         expect(installation).not.toMatch(/--no-optional|--omit[= ]optional/);
     });
@@ -30,7 +30,7 @@ describe("Docker 构建上下文", () => {
             "RUN node scripts/pack-control-runtime.mjs /app/runtime-artifacts",
         );
         expect(pack).toBeGreaterThan(dockerfile.indexOf("RUN pnpm build:packages"));
-        expect(pack).toBeLessThan(dockerfile.indexOf("RUN pnpm prune --prod"));
+        expect(pack).toBeLessThan(dockerfile.indexOf("RUN CI=true pnpm prune --prod"));
         expect(dockerfile).toContain(
             "COPY scripts/pack-control-runtime.mjs ./scripts/pack-control-runtime.mjs",
         );
