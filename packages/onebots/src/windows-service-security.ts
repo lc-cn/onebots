@@ -102,11 +102,21 @@ foreach($identity in @($sid,'S-1-5-18')){
 $acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($sid)))
 $stage='create'
 $item=New-Object System.IO.DirectoryInfo($p)
-if(-not $item.Exists){[System.IO.FileSystemAclExtensions]::CreateDirectory($acl,$p)|Out-Null}
+if(-not $item.Exists){
+  if($PSVersionTable.PSEdition -eq 'Desktop'){
+    [System.IO.Directory]::CreateDirectory($p,$acl)|Out-Null
+  } elseif($PSVersionTable.PSEdition -eq 'Core'){
+    [System.IO.FileSystemAclExtensions]::CreateDirectory($acl,$p)|Out-Null
+  } else {throw 'unsupported powershell runtime'}
+}
 $stage='inspect'
 $item.Refresh()
 if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe path'}
-$check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+if($PSVersionTable.PSEdition -eq 'Desktop'){
+  $check=[System.IO.Directory]::GetAccessControl($p)
+} elseif($PSVersionTable.PSEdition -eq 'Core'){
+  $check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+} else {throw 'unsupported powershell runtime'}
 $rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
 $ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
 $owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
@@ -153,7 +163,11 @@ $p=${JSON.stringify(directory)}
 $sid=${JSON.stringify(host.windowsSid)}
 $item=New-Object System.IO.DirectoryInfo($p)
 if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe directory'}
-$check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+if($PSVersionTable.PSEdition -eq 'Desktop'){
+  $check=[System.IO.Directory]::GetAccessControl($p)
+} elseif($PSVersionTable.PSEdition -eq 'Core'){
+  $check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+} else {throw 'unsupported powershell runtime'}
 $rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
 $ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
 $owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
@@ -198,7 +212,11 @@ $p=${JSON.stringify(file)}
 $sid=${JSON.stringify(host.windowsSid)}
 $item=New-Object System.IO.FileInfo($p)
 if(-not $item.Exists -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe file'}
-$check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+if($PSVersionTable.PSEdition -eq 'Desktop'){
+  $check=[System.IO.File]::GetAccessControl($p)
+} elseif($PSVersionTable.PSEdition -eq 'Core'){
+  $check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
+} else {throw 'unsupported powershell runtime'}
 $rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
 $ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
 $owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
@@ -247,7 +265,11 @@ foreach($identity in @($sid,'S-1-5-18')){
   $acl.AddAccessRule($rule)|Out-Null
 }
 $acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($sid)))
-[System.IO.FileSystemAclExtensions]::SetAccessControl($item,$acl)
+if($PSVersionTable.PSEdition -eq 'Desktop'){
+  [System.IO.File]::SetAccessControl($p,$acl)
+} elseif($PSVersionTable.PSEdition -eq 'Core'){
+  [System.IO.FileSystemAclExtensions]::SetAccessControl($item,$acl)
+} else {throw 'unsupported powershell runtime'}
 `;
     try {
         host.exec(

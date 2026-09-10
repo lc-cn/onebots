@@ -47,7 +47,11 @@ describe("Windows 服务状态 ACL", () => {
         expect(script).toContain("$_.AccessControlType -ne 'Allow'");
         expect(script).toContain("$_.FileSystemRights -ne");
         expect(script).toContain("$_.InheritanceFlags -ne $inherit");
+        expect(script).toContain("$PSVersionTable.PSEdition -eq 'Desktop'");
+        expect(script).toContain("[System.IO.Directory]::CreateDirectory($p,$acl)");
+        expect(script).toContain("$PSVersionTable.PSEdition -eq 'Core'");
         expect(script).toContain("[System.IO.FileSystemAclExtensions]::CreateDirectory($acl,$p)");
+        expect(script).not.toContain("[System.IO.Directory]::CreateDirectory($p)|");
         expect(script).toContain(
             "$check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier])",
         );
@@ -116,6 +120,7 @@ describe("Windows 服务状态 ACL", () => {
             "base64",
         ).toString("utf16le");
         expect(secureScript).toContain("[System.IO.FileSystemAclExtensions]::SetAccessControl");
+        expect(secureScript).toContain("[System.IO.File]::SetAccessControl($p,$acl)");
         expect(secureScript).toContain(
             "$principal=New-Object System.Security.Principal.SecurityIdentifier($identity)",
         );
@@ -130,6 +135,7 @@ describe("Windows 服务状态 ACL", () => {
             (value.exec as ReturnType<typeof vi.fn>).mock.calls[0][1][4] as string,
             "base64",
         ).toString("utf16le");
+        expect(script).toContain("[System.IO.Directory]::GetAccessControl($p)");
         expect(script).toContain("[System.IO.FileSystemAclExtensions]::GetAccessControl($item)");
         expect(script).toContain("$legalInheritance");
         expect(script).not.toContain("SetAccessRuleProtection");
