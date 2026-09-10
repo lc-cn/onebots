@@ -28,6 +28,31 @@ export type ManagerBootstrapErrorCode =
     | "MANAGER_JOURNAL_FAILED"
     | "MANAGER_CLEANUP_FAILED";
 
+export type ManagerBootstrapSetupPhase =
+    | "windows-identity"
+    | "windows-state-security"
+    | "windows-workspace-security"
+    | "service-lock"
+    | "bootstrap-cycle";
+
+export type ManagerBootstrapSetupErrorCode =
+    | "WINDOWS_IDENTITY_UNAVAILABLE"
+    | "WINDOWS_STATE_ACL_FAILED"
+    | "WINDOWS_WORKSPACE_ACL_FAILED"
+    | "SERVICE_LOCK_FAILED"
+    | "BOOTSTRAP_CYCLE_FAILED";
+
+/** operationId 产生前的闭合诊断；不携带原始异常、路径或 SID。 */
+export class ManagerBootstrapSetupError extends Error {
+    constructor(
+        readonly bootstrapPhase: ManagerBootstrapSetupPhase,
+        readonly code: ManagerBootstrapSetupErrorCode,
+    ) {
+        super("管理服务首次安装前置检查未完成");
+        this.name = "ManagerBootstrapSetupError";
+    }
+}
+
 export class ManagerBootstrapStageError extends Error {
     constructor(
         readonly operationId: string,

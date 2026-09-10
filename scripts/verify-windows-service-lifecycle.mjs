@@ -133,7 +133,34 @@ function installationEvidence() {
             return [];
         }
     };
+    const bootstrapEntries = (() => {
+        try {
+            return fs
+                .readdirSync(path.join(stateDirectory, "manager-bootstrap-entries"))
+                .filter(file => file.endsWith(".json"))
+                .sort()
+                .map(file => {
+                    const value = JSON.parse(
+                        fs.readFileSync(
+                            path.join(stateDirectory, "manager-bootstrap-entries", file),
+                            "utf8",
+                        ),
+                    );
+                    return {
+                        id: typeof value.id === "string" ? value.id : "invalid",
+                        schemaVersion: value.schemaVersion === 1 ? 1 : "invalid",
+                        scope:
+                            value.service?.scope === "system" || value.service?.scope === "user"
+                                ? value.service.scope
+                                : "invalid",
+                    };
+                });
+        } catch {
+            return [];
+        }
+    })();
     return JSON.stringify({
+        bootstrapEntries,
         candidateOperations: operations(
             path.join(stateDirectory, "manager-artifacts", "operations"),
         ),

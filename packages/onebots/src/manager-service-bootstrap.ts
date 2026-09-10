@@ -37,6 +37,7 @@ import { createControlOperationObserver } from "./control/gateway-log.js";
 import {
     deriveManagerBootstrapStageError,
     ManagerBootstrapCandidateError,
+    ManagerBootstrapSetupError,
     ManagerBootstrapStageError,
     type ManagerBootstrapPhase,
 } from "./manager-bootstrap-error.js";
@@ -77,7 +78,12 @@ async function bootstrapManagerServiceImpl(
     host: ServiceHost,
     lockHeld: boolean,
 ) {
-    assertManagerServiceTransactionsSupported(host);
+    try {
+        assertManagerServiceTransactionsSupported(host);
+    } catch (error) {
+        if (host.platform !== "win32") throw error;
+        throw new ManagerBootstrapSetupError("windows-identity", "WINDOWS_IDENTITY_UNAVAILABLE");
+    }
     closedServiceObject(request, ["service", ...(Object.hasOwn(request, "id") ? ["id"] : [])]);
     closedServiceObject(request.service, [
         "schemaVersion",
@@ -107,13 +113,33 @@ async function bootstrapManagerServiceImpl(
         throw failure();
     const files = getServiceFiles(template.scope, host);
     if (host.platform === "win32") {
-        secureWindowsServiceDirectory(host, files.stateDir);
+        try {
+            secureWindowsServiceDirectory(host, files.stateDir);
+        } catch {
+            throw new ManagerBootstrapSetupError(
+                "windows-state-security",
+                "WINDOWS_STATE_ACL_FAILED",
+            );
+        }
         // Windows 空白工作区与服务状态使用同一最小 ACL；已存在但边界不同的目录拒绝接管。
-        secureWindowsServiceDirectory(host, template.workspace);
+        try {
+            secureWindowsServiceDirectory(host, template.workspace);
+        } catch {
+            throw new ManagerBootstrapSetupError(
+                "windows-workspace-security",
+                "WINDOWS_WORKSPACE_ACL_FAILED",
+            );
+        }
     }
-    const releaseService = lockHeld
-        ? () => undefined
-        : acquireServiceMigrationLock(files.stateDir, host);
+    let releaseService: () => void;
+    try {
+        releaseService = lockHeld
+            ? () => undefined
+            : acquireServiceMigrationLock(files.stateDir, host);
+    } catch (error) {
+        if (host.platform !== "win32") throw error;
+        throw new ManagerBootstrapSetupError("service-lock", "SERVICE_LOCK_FAILED");
+    }
     let releaseArtifacts: (() => void) | undefined;
     let installer: ManagerCandidateInstaller | undefined;
     let installerAbort: AbortController | undefined;
@@ -140,8 +166,31 @@ async function bootstrapManagerServiceImpl(
             fs.realpathSync(home) !== home
         )
             throw failure();
-        const id = request.id ?? selectManagerBootstrapCycle(template.scope, host);
+        let id: string;
+        try {
+            if (host.platform === "win32")
+                secureWindowsServiceDirectory(
+                    host,
+                    path.join(files.stateDir, "manager-operations"),
+                );
+            id = request.id ?? selectManagerBootstrapCycle(template.scope, host);
+        } catch (error) {
+            if (host.platform !== "win32") throw error;
+            throw new ManagerBootstrapSetupError("bootstrap-cycle", "BOOTSTRAP_CYCLE_FAILED");
+        }
         operationId = id;
+        const entriesDirectory = path.join(files.stateDir, "manager-bootstrap-entries");
+        if (host.platform === "win32") secureWindowsServiceDirectory(host, entriesDirectory);
+        const entries = new ServiceOperationStorage(entriesDirectory);
+        const entry = { schemaVersion: 1, id, service: template };
+        const entryName = `${id}.json`;
+        if (entries.has(entryName)) {
+            if (!isDeepStrictEqual(entries.read(entryName), entry)) throw failure();
+        } else {
+            entries.write(entryName, entry, true);
+            if (host.platform === "win32")
+                secureWindowsServiceFile(host, path.join(entriesDirectory, entryName));
+        }
         if (host.platform === "win32")
             secureWindowsServiceDirectory(host, path.join(home, ".control"));
         releaseArtifacts = acquireControlWorkspace(home, host);

@@ -12,6 +12,7 @@ import type { ManagerServiceSpec } from "../manager-service-spec.js";
 import type { ManagerServiceRecord } from "../manager-service-journal.js";
 import {
     ManagerBootstrapCandidateError,
+    ManagerBootstrapSetupError,
     ManagerBootstrapStageError,
 } from "../manager-bootstrap-error.js";
 
@@ -212,6 +213,17 @@ describe("首次管理服务安装CLI", () => {
         const failed = await installManagerServiceCommand({ dataDir: root });
         expect(failed.exitCode).toBe(1);
         expect(failed.output).not.toContain("private-secret");
+
+        vi.mocked(bootstrapManagerService).mockRejectedValue(
+            new ManagerBootstrapSetupError("service-lock", "SERVICE_LOCK_FAILED"),
+        );
+        const setup = await installManagerServiceCommand({ dataDir: root });
+        expect(setup).toEqual({
+            exitCode: 1,
+            output:
+                "管理服务首次安装失败：operationId=unavailable，bootstrapPhase=service-lock，code=SERVICE_LOCK_FAILED。\n" +
+                "未下载候选或派发系统服务注册；请修复对应的本机前置条件后重试。",
+        });
 
         vi.mocked(bootstrapManagerService).mockRejectedValue(
             new ManagerBootstrapCandidateError(

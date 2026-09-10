@@ -6,6 +6,7 @@ import { parseManagerServiceSpec } from "../manager-service-spec.js";
 import type { CommandResult } from "./command-application.js";
 import {
     ManagerBootstrapCandidateError,
+    ManagerBootstrapSetupError,
     ManagerBootstrapStageError,
 } from "../manager-bootstrap-error.js";
 
@@ -118,6 +119,13 @@ export async function installManagerServiceCommand(
             exitCode: 1,
         };
     } catch (error) {
+        if (error instanceof ManagerBootstrapSetupError)
+            return {
+                output:
+                    `管理服务首次安装失败：operationId=unavailable，bootstrapPhase=${error.bootstrapPhase}，code=${error.code}。` +
+                    "\n未下载候选或派发系统服务注册；请修复对应的本机前置条件后重试。",
+                exitCode: 1,
+            };
         if (error instanceof ManagerBootstrapCandidateError) {
             return {
                 output:

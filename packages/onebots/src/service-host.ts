@@ -19,12 +19,13 @@ export interface ServiceHost {
 }
 
 export function createDefaultServiceHost(): ServiceHost {
+    const windowsIdentity = process.platform === "win32" ? readWindowsIdentity() : undefined;
     return {
         platform: process.platform,
         homedir: os.homedir(),
         uid: typeof process.getuid === "function" ? process.getuid() : undefined,
-        isElevated: process.platform === "win32" ? windowsIsElevated() : undefined,
-        windowsSid: process.platform === "win32" ? windowsCurrentSid() : undefined,
+        isElevated: windowsIdentity?.elevated,
+        windowsSid: windowsIdentity?.sid,
         env: process.env,
         exec(file, args, options) {
             try {
@@ -50,32 +51,46 @@ export function createDefaultServiceHost(): ServiceHost {
     };
 }
 
-function windowsCurrentSid(): string | undefined {
+interface WindowsIdentityProof {
+    sid: string;
+    elevated: boolean;
+}
+
+/** 单次、限时读取当前 token；不依赖可能等待 Server 服务的 `net session`。 */
+function readWindowsIdentity(): WindowsIdentityProof | undefined {
     try {
+        const script = String.raw`
+$ErrorActionPreference='Stop'
+$identity=[System.Security.Principal.WindowsIdentity]::GetCurrent()
+$principal=New-Object System.Security.Principal.WindowsPrincipal($identity)
+$admin=[System.Security.Principal.WindowsBuiltInRole]::Administrator
+$value=@{sid=$identity.User.Value;elevated=$principal.IsInRole($admin)}|ConvertTo-Json -Compress
+[Console]::Out.Write($value)
+`;
         const output = execFileSync(
             "powershell.exe",
             [
                 "-NoLogo",
                 "-NoProfile",
                 "-NonInteractive",
-                "-Command",
-                "[System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value",
+                "-EncodedCommand",
+                Buffer.from(script, "utf16le").toString("base64"),
             ],
             { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 5000 },
         ).trim();
-        return /^S-1-(?:[0-9]+-)+[0-9]+$/.test(output) ? output : undefined;
+        const value: unknown = JSON.parse(output);
+        if (
+            !value ||
+            typeof value !== "object" ||
+            Array.isArray(value) ||
+            Reflect.ownKeys(value).length !== 2 ||
+            typeof (value as Record<string, unknown>).sid !== "string" ||
+            !/^S-1-(?:[0-9]+-)+[0-9]+$/.test((value as Record<string, string>).sid) ||
+            typeof (value as Record<string, unknown>).elevated !== "boolean"
+        )
+            return undefined;
+        return value as WindowsIdentityProof;
     } catch {
         return undefined;
-    }
-}
-
-function windowsIsElevated(): boolean {
-    try {
-        execFileSync("net.exe", ["session"], { stdio: "ignore" });
-        return true;
-    } catch (error) {
-        // net session 在非管理员会话中返回非零退出码。
-        void error;
-        return false;
     }
 }

@@ -17,6 +17,7 @@ import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform } from "./service-platform.js";
 import {
     ManagerBootstrapCandidateError,
+    ManagerBootstrapSetupError,
     ManagerBootstrapStageError,
 } from "./manager-bootstrap-error.js";
 
@@ -392,6 +393,87 @@ describe("immutable manager bootstrap binding", () => {
 });
 
 describe("Windows bootstrap stable diagnostics", () => {
+    it("classifies each operation-id preflight without exposing the original failure", async () => {
+        const identity = windowsFixture();
+        identity.host.isElevated = false;
+        await expect(
+            bootstrapManagerService(identity.request, identity.dependencies, identity.host),
+        ).rejects.toEqual(
+            new ManagerBootstrapSetupError("windows-identity", "WINDOWS_IDENTITY_UNAVAILABLE"),
+        );
+
+        const state = windowsFixture();
+        windowsSecurity.secureDirectory.mockImplementationOnce(() => {
+            throw new Error("private state path");
+        });
+        await expect(
+            bootstrapManagerService(state.request, state.dependencies, state.host),
+        ).rejects.toMatchObject({
+            bootstrapPhase: "windows-state-security",
+            code: "WINDOWS_STATE_ACL_FAILED",
+        });
+
+        const workspace = windowsFixture();
+        windowsSecurity.secureDirectory
+            .mockImplementationOnce((_host, directory: string) => {
+                fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+                return "acl-proof";
+            })
+            .mockImplementationOnce(() => {
+                throw new Error("private workspace path");
+            });
+        await expect(
+            bootstrapManagerService(workspace.request, workspace.dependencies, workspace.host),
+        ).rejects.toMatchObject({
+            bootstrapPhase: "windows-workspace-security",
+            code: "WINDOWS_WORKSPACE_ACL_FAILED",
+        });
+
+        const serviceLock = windowsFixture();
+        windowsSecurity.secureFile.mockImplementationOnce(() => {
+            throw new Error("private lock ACL");
+        });
+        await expect(
+            bootstrapManagerService(
+                serviceLock.request,
+                serviceLock.dependencies,
+                serviceLock.host,
+            ),
+        ).rejects.toMatchObject({
+            bootstrapPhase: "service-lock",
+            code: "SERVICE_LOCK_FAILED",
+        });
+
+        const cycle = windowsFixture();
+        const managerOperations = path.join(cycle.files.stateDir, "manager-operations");
+        fs.mkdirSync(cycle.files.stateDir, { recursive: true });
+        fs.writeFileSync(managerOperations, "preserved-invalid-entry");
+        await expect(
+            bootstrapManagerService(cycle.request, cycle.dependencies, cycle.host),
+        ).rejects.toMatchObject({
+            bootstrapPhase: "bootstrap-cycle",
+            code: "BOOTSTRAP_CYCLE_FAILED",
+        });
+        expect(fs.readFileSync(managerOperations, "utf8")).toBe("preserved-invalid-entry");
+    });
+
+    it("persists a closed bootstrap entry before candidate work starts", async () => {
+        const f = windowsFixture();
+        mock.install.mockRejectedValue(new Error("private installer path"));
+        await expect(
+            bootstrapManagerService(f.request, f.dependencies, f.host),
+        ).rejects.toBeInstanceOf(ManagerBootstrapStageError);
+        expect(
+            new ServiceOperationStorage(
+                path.join(f.files.stateDir, "manager-bootstrap-entries"),
+            ).read(`${f.request.id}.json`),
+        ).toEqual({
+            schemaVersion: 1,
+            id: f.request.id,
+            service: expect.objectContaining({ scope: "system", workspace: f.workspace }),
+        });
+    });
+
     it("classifies a failure before candidate verification without exposing the original error", async () => {
         const f = windowsFixture();
         mock.install.mockRejectedValue(new Error("private installer path"));
