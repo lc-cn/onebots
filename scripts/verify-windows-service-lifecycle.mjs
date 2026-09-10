@@ -183,11 +183,55 @@ function installationEvidence() {
                 .sort()
                 .flatMap(name => {
                     try {
-                        const value = JSON.parse(
-                            fs.readFileSync(path.join(root, name, "result.json"), "utf8"),
-                        );
-                        return value.failed === true && verificationStages.has(value.stage)
-                            ? [{ stage: value.stage }]
+                        const directory = path.join(root, name);
+                        let stage;
+                        const checkpoints = fs
+                            .readdirSync(directory)
+                            .filter(file => /^checkpoint-\d{2}-[a-z-]+\.json$/.test(file))
+                            .sort();
+                        if (checkpoints.length) {
+                            const value = JSON.parse(
+                                fs.readFileSync(path.join(directory, checkpoints.at(-1)), "utf8"),
+                            );
+                            if (value.schemaVersion === 1 && verificationStages.has(value.stage))
+                                stage = value.stage;
+                        }
+                        let failureStage;
+                        try {
+                            const value = JSON.parse(
+                                fs.readFileSync(path.join(directory, "result.json"), "utf8"),
+                            );
+                            if (value.failed === true && verificationStages.has(value.stage))
+                                failureStage = value.stage;
+                        } catch {
+                            // watchdog 终止时没有最终 result，checkpoint 仍是可信的固定阶段。
+                        }
+                        let reason;
+                        try {
+                            const value = JSON.parse(
+                                fs.readFileSync(
+                                    path.join(directory, "parent-failure.json"),
+                                    "utf8",
+                                ),
+                            );
+                            if (
+                                value.schemaVersion === 1 &&
+                                new Set([
+                                    "native-timeout",
+                                    "native-error",
+                                    "native-signal",
+                                    "native-exit",
+                                    "result-missing",
+                                    "result-invalid",
+                                    "worker-failed",
+                                ]).has(value.reason)
+                            )
+                                reason = value.reason;
+                        } catch {
+                            // 父进程诊断收据不存在时仍返回已验证的 worker 证据。
+                        }
+                        return stage || failureStage || reason
+                            ? [{ stage, failureStage, reason }]
                             : [];
                     } catch {
                         return [];

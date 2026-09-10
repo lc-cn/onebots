@@ -32,6 +32,44 @@ type CandidateVerificationStage =
     | "management-close"
     | "authentication-preserved";
 
+const verificationStages: readonly CandidateVerificationStage[] = [
+    "request",
+    "dependencies",
+    "package-identity",
+    "workspace",
+    "authentication",
+    "management-startup",
+    "management-state",
+    "web-page",
+    "web-asset",
+    "authentication-v2",
+    "anonymous-denied",
+    "management-close",
+    "authentication-preserved",
+];
+
+let checkpointDirectory: string | undefined;
+
+/**
+ * 每个阶段写一个 create-only 小文件。worker 被 native watchdog 终止时，最后一个完整文件仍能
+ * 证明挂起边界；文件名和内容都来自固定枚举，不包含候选路径、凭据或异常文本。
+ */
+function enterStage(stage: CandidateVerificationStage): CandidateVerificationStage {
+    if (checkpointDirectory) {
+        const ordinal = verificationStages.indexOf(stage);
+        if (ordinal < 0) throw new Error("candidate verification stage invalid");
+        fs.writeFileSync(
+            path.join(
+                checkpointDirectory,
+                `checkpoint-${String(ordinal).padStart(2, "0")}-${stage}.json`,
+            ),
+            JSON.stringify({ schemaVersion: 1, stage }),
+            { flag: "wx", mode: 0o600 },
+        );
+    }
+    return stage;
+}
+
 class CandidateVerificationFailure extends Error {
     constructor(readonly stage: CandidateVerificationStage) {
         super("candidate verification failed");
@@ -52,7 +90,7 @@ async function verify(
     ManagerCandidateVerification | { schemas: string; verification: ManagerCandidateVerification }
 > {
     let host: Awaited<ReturnType<typeof startControlHost>> | undefined;
-    let stage: CandidateVerificationStage = "dependencies";
+    let stage: CandidateVerificationStage = enterStage("dependencies");
     try {
         let schemas: string | undefined;
         if (input.plan) {
@@ -65,7 +103,7 @@ async function verify(
             );
             schemas = await verifyGenerationRuntime(input.root, input.plan);
         }
-        stage = "package-identity";
+        stage = enterStage("package-identity");
         const require = createRequire(path.join(input.root, "package.json"));
         const entry = fs.realpathSync(require.resolve("onebots"));
         if (!entry.startsWith(`${input.root}${path.sep}`)) throw new Error();
@@ -87,16 +125,16 @@ async function verify(
             manifest.dependencies?.["@onebots/core"] !== core.version
         )
             throw new Error();
-        stage = "workspace";
+        stage = enterStage("workspace");
         prepareServiceMigrationWorkspace(input.workspace, randomUUID(), "stopped");
         if (process.platform !== "win32") prepareServiceProcessOwnershipSeed(input.workspace);
-        stage = "authentication";
+        stage = enterStage("authentication");
         const authentication = prepareManagerAuthenticationProbe(input.workspace);
         process.chdir(input.workspace);
         const { startControlHost: start } = await import(
             pathToFileURL(path.join(lib, "control/host.js")).href
         );
-        stage = "management-startup";
+        stage = enterStage("management-startup");
         host = await start({
             workspace: input.workspace,
             runtimeRoot: input.root,
@@ -104,28 +142,28 @@ async function verify(
             port: 0,
             gatewayEntrypoint: path.join(input.workspace, "forbidden-gateway.js"),
         });
-        stage = "management-state";
+        stage = enterStage("management-state");
         const state = host.controller.status();
         if (state.actual !== "stopped" || state.desired !== "stopped" || state.instance)
             throw new Error();
         const address = host.server.address();
         if (!address || typeof address === "string") throw new Error();
         const origin = `http://127.0.0.1:${address.port}`;
-        stage = "web-page";
+        stage = enterStage("web-page");
         const page = await fetch(origin, { signal: AbortSignal.timeout(5000) });
         if (page.status !== 200 || !page.headers.get("content-type")?.includes("text/html"))
             throw new Error();
         const asset = (await page.text()).match(/src="(\/assets\/[^"\s]+\.js)"/)?.[1];
-        stage = "web-asset";
+        stage = enterStage("web-asset");
         if (
             !asset ||
             (await fetch(new URL(asset, origin), { signal: AbortSignal.timeout(5000) })).status !==
                 200
         )
             throw new Error();
-        stage = "authentication-v2";
+        stage = enterStage("authentication-v2");
         await authentication.verify(origin);
-        stage = "anonymous-denied";
+        stage = enterStage("anonymous-denied");
         const rejected = await fetch(`${origin}/api/control/gateway/start`, {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -136,10 +174,10 @@ async function verify(
             () => true,
         );
         if (!rejected || host.controller.status().actual !== "stopped") throw new Error();
-        stage = "management-close";
+        stage = enterStage("management-close");
         await host.close();
         host = undefined;
-        stage = "authentication-preserved";
+        stage = enterStage("authentication-preserved");
         authentication.assertPreserved();
         return schemas === undefined ? input.expected : { schemas, verification: input.expected };
     } catch {
@@ -160,6 +198,8 @@ const resultIndex = process.argv.indexOf("--result");
 if (requestIndex >= 0 || resultIndex >= 0) {
     if (requestIndex < 0 || resultIndex < 0 || process.argv.length !== 6) stop();
     try {
+        checkpointDirectory = path.dirname(process.argv[resultIndex + 1]);
+        enterStage("request");
         const input = JSON.parse(
             fs.readFileSync(process.argv[requestIndex + 1], "utf8"),
         ) as Request;

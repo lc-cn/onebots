@@ -189,6 +189,14 @@ function verifyWindowsManagerCandidate(
     const request = path.join(allocation, "request.json");
     const result = path.join(allocation, "result.json");
     let cleanup = false;
+    let parentFailure:
+        | "native-timeout"
+        | "native-error"
+        | "native-signal"
+        | "native-exit"
+        | "result-missing"
+        | "result-invalid"
+        | "worker-failed" = "native-error";
     try {
         secureWindowsServiceDirectory(host, allocation);
         fs.writeFileSync(
@@ -211,12 +219,40 @@ function verifyWindowsManagerCandidate(
             { stdio: "ignore", timeout: timeoutMs, windowsHide: true },
         );
         // console-run 将候选 worker 的正常退出视为 manager 离开并返回 1；此时 Job 已关闭。
-        if (execution.error || execution.signal || execution.status !== 1) throw new Error();
+        if (execution.error) {
+            parentFailure =
+                "code" in execution.error && execution.error.code === "ETIMEDOUT"
+                    ? "native-timeout"
+                    : "native-error";
+            throw new Error();
+        }
+        if (execution.signal) {
+            parentFailure = "native-signal";
+            throw new Error();
+        }
+        if (execution.status !== 1) {
+            parentFailure = "native-exit";
+            throw new Error();
+        }
+        if (!fs.existsSync(result)) {
+            parentFailure = "result-missing";
+            throw new Error();
+        }
+        parentFailure = "result-invalid";
         const resultStat = fs.statSync(result);
-        if (!resultStat.isFile() || resultStat.size > 2 * 1024 * 1024) throw new Error();
+        if (!resultStat.isFile() || resultStat.size > 2 * 1024 * 1024) {
+            parentFailure = "result-invalid";
+            throw new Error();
+        }
         const value: unknown = JSON.parse(fs.readFileSync(result, "utf8"));
-        if (isWindowsVerificationFailure(value)) throw new Error();
-        if (!isWindowsVerificationResult(value, expected)) throw new Error();
+        if (isWindowsVerificationFailure(value)) {
+            parentFailure = "worker-failed";
+            throw new Error();
+        }
+        if (!isWindowsVerificationResult(value, expected)) {
+            parentFailure = "result-invalid";
+            throw new Error();
+        }
         cleanup = true;
         const schemaFile = path.join(root, "schemas.json");
         const temporary = `${schemaFile}.${randomUUID()}.tmp`;
@@ -231,6 +267,15 @@ function verifyWindowsManagerCandidate(
             management: expected,
         };
     } catch {
+        try {
+            fs.writeFileSync(
+                path.join(allocation, "parent-failure.json"),
+                JSON.stringify({ schemaVersion: 1, reason: parentFailure }),
+                { flag: "wx", mode: 0o600 },
+            );
+        } catch {
+            // allocation 自身不可写时保留原失败；绝不以诊断收据覆盖验证结论。
+        }
         throw new Error("Windows 管理程序候选未通过 Job Object 隔离验证");
     } finally {
         // 只有 native host 已返回、Job 已关闭时才清理；超时/派发错误保留证据并 fail-close。

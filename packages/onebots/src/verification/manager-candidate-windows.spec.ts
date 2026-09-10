@@ -118,3 +118,51 @@ it("Windows worker 固定失败阶段保留在私有验证目录且不被当成�
         JSON.parse(fs.readFileSync(path.join(privateRoot, allocations[0], "result.json"), "utf8")),
     ).toEqual({ failed: true, stage: "management-startup" });
 });
+
+it("Windows native watchdog 超时保留父原因和 worker 最后完整阶段", async () => {
+    vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ob-manager-windows-timeout-"));
+    roots.push(root);
+    const candidate = path.join(root, "candidate");
+    const privateRoot = path.join(root, "private");
+    fs.mkdirSync(candidate);
+    const plan = createGenerationPlan({
+        host: { name: "onebots", version: "1.2.12", spec: "1.2.12" },
+        core: { name: "@onebots/core", version: "1.2.9", spec: "1.2.9" },
+        extensions: [],
+        selection: { adapters: [], protocols: [], applications: [] },
+    });
+    const originalStatSync = fs.statSync.bind(fs);
+    vi.spyOn(fs, "statSync").mockImplementation(file => {
+        if (String(file).endsWith("onebots-windows-host.exe"))
+            return { isFile: () => true, size: 100_001 } as fs.Stats;
+        return originalStatSync(file);
+    });
+    spawnSync.mockImplementation((_executable: string, args: string[]) => {
+        const result = args[args.indexOf("--result") + 2];
+        fs.writeFileSync(
+            path.join(path.dirname(result), "checkpoint-01-dependencies.json"),
+            JSON.stringify({ schemaVersion: 1, stage: "dependencies" }),
+        );
+        return {
+            status: null,
+            signal: "SIGTERM",
+            error: Object.assign(new Error("timed out"), { code: "ETIMEDOUT" }),
+        };
+    });
+
+    const { verifyManagerCandidateInstallation } = await import("./manager-candidate.js");
+    await expect(
+        verifyManagerCandidateInstallation(candidate, plan, { privateRoot, timeoutMs: 10 }),
+    ).rejects.toThrow("Windows 管理程序候选未通过 Job Object 隔离验证");
+    const allocation = path.join(privateRoot, fs.readdirSync(privateRoot)[0]);
+    expect(
+        JSON.parse(fs.readFileSync(path.join(allocation, "parent-failure.json"), "utf8")),
+    ).toEqual({ schemaVersion: 1, reason: "native-timeout" });
+    expect(
+        JSON.parse(
+            fs.readFileSync(path.join(allocation, "checkpoint-01-dependencies.json"), "utf8"),
+        ),
+    ).toEqual({ schemaVersion: 1, stage: "dependencies" });
+    expect(fs.existsSync(path.join(allocation, "result.json"))).toBe(false);
+});
