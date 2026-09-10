@@ -34,6 +34,7 @@ const origin = `http://127.0.0.1:${port}`;
 const service = "onebots-gateway";
 const localControlPipe = "\\\\.\\pipe\\onebots-gateway-control";
 let installed = false;
+let nativeHost;
 let installedDefinition, installedScmPathName;
 const npmCli = [
     process.env.npm_execpath,
@@ -340,7 +341,7 @@ async function lifecycleFailureEvidence(token) {
     }
     let nativeStatus;
     try {
-        nativeStatus = JSON.parse(run(host, ["status", "--pipe", localControlPipe]));
+        nativeStatus = JSON.parse(run(nativeHost, ["status", "--pipe", localControlPipe]));
     } catch (error) {
         nativeStatus = { readError: error?.message ?? "UNKNOWN" };
     }
@@ -399,7 +400,7 @@ try {
         { cwd: runtime },
     );
     const bin = path.join(runtime, "node_modules", "onebots", "lib", "bin.js");
-    const host = path.join(
+    nativeHost = path.join(
         runtime,
         "node_modules",
         "onebots",
@@ -408,7 +409,7 @@ try {
         `win32-${process.arch}`,
         "onebots-windows-host.exe",
     );
-    assert.ok(fs.statSync(host).size > 100_000);
+    assert.ok(fs.statSync(nativeHost).size > 100_000);
     const env = {
         ...process.env,
         ONEBOTS_RUNTIME_ARTIFACTS: path.join(artifacts, "manifest.json"),
@@ -445,12 +446,12 @@ try {
         throw new Error(`${error.message}; evidence=${installationEvidence()}`);
     }
     const ready = await eventually(() => request("/ready"));
-    const nativeReady = JSON.parse(run(host, ["status", "--pipe", localControlPipe]));
+    const nativeReady = JSON.parse(run(nativeHost, ["status", "--pipe", localControlPipe]));
     assert.equal(ready.application, "onebots");
     assert.equal(ready.instance_id, nativeReady.state.control.manager.id);
     assert.equal(ready.ready, true);
     const remotePipe = spawnSync(
-        host,
+        nativeHost,
         ["status", "--pipe", "\\\\localhost\\pipe\\onebots-gateway-control"],
         { cwd: runtime, encoding: "utf8", timeout: 10_000 },
     );
@@ -498,7 +499,7 @@ try {
         ),
         "gone",
     );
-    const nativeBefore = JSON.parse(run(host, ["status", "--pipe", localControlPipe]));
+    const nativeBefore = JSON.parse(run(nativeHost, ["status", "--pipe", localControlPipe]));
     const managerPid = nativeBefore.state.manager.pid;
     cli(bin, ["restart", "--system"]);
     const afterRestart = await eventually(async () => {

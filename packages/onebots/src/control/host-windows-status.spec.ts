@@ -61,7 +61,7 @@ describe("Windows原生宿主状态接线", () => {
                     pid: process.pid,
                 },
                 undefined,
-                expect.any(Function),
+                { onFailure: expect.any(Function) },
             );
             expect(publisher.publish).toHaveBeenCalledWith(
                 expect.objectContaining({ desired: "running" }),

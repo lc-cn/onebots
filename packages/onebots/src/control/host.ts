@@ -168,21 +168,23 @@ export async function startControlHost(options: ControlHostOptions) {
                 pid: process.pid,
             },
             undefined,
-            failure => {
-                try {
-                    appendControlLog(
-                        workspace,
-                        "operation",
-                        `${JSON.stringify({
-                            time: new Date().toISOString(),
-                            action: `windows-status.${failure.phase}`,
-                            status: "failed",
-                            code: failure.code,
-                        })}\n`,
-                    );
-                } catch {
-                    process.stderr.write("[onebots] Windows 状态失败诊断不可写\n");
-                }
+            {
+                onFailure: failure => {
+                    try {
+                        appendControlLog(
+                            workspace,
+                            "operation",
+                            `${JSON.stringify({
+                                time: new Date().toISOString(),
+                                action: `windows-status.${failure.phase}`,
+                                status: "failed",
+                                code: failure.code,
+                            })}\n`,
+                        );
+                    } catch {
+                        process.stderr.write("[onebots] Windows 状态失败诊断不可写\n");
+                    }
+                },
             },
         );
     const readVerified = (id: string) => {

@@ -225,7 +225,7 @@ describe("Windows manager状态发布", () => {
                     throw new WindowsHostControlError("state_mismatch");
                 }),
             },
-            failure,
+            { onFailure: failure },
         );
         await publisher.publish({ desired: "running", actual: "running" });
         await expect(publisher.invalidate()).rejects.toThrow("state_mismatch");
@@ -233,5 +233,46 @@ describe("Windows manager状态发布", () => {
             phase: "invalidate",
             code: "state_mismatch",
         });
+    });
+
+    it("默认发布客户端通过原生桥完成publish和invalidate", async () => {
+        const nativeExchange = vi.fn(async (_pipe: string, bytes: Buffer) => {
+            const request = JSON.parse(bytes.toString("utf8"));
+            const published = request.operation === "publish_status" ? request.control : undefined;
+            return Buffer.from(
+                JSON.stringify({
+                    version: 2,
+                    requestId: request.requestId,
+                    ok: true,
+                    state: {
+                        service: "running",
+                        manager: { state: "running", pid: manager.pid },
+                        startedAt: "2026-09-10T01:02:03Z",
+                        ...(published
+                            ? {
+                                  control: {
+                                      ...published,
+                                      publishedAt: new Date().toISOString(),
+                                  },
+                              }
+                            : {}),
+                    },
+                }),
+            );
+        });
+        const publisher = new WindowsManagerStatusPublisher(
+            "\\\\.\\pipe\\onebots-gateway-control",
+            manager,
+            undefined,
+            { nativeExchange },
+        );
+        await publisher.publish({ desired: "running", actual: "running" });
+        await publisher.invalidate();
+        expect(nativeExchange).toHaveBeenCalledTimes(2);
+        expect(
+            nativeExchange.mock.calls.map(
+                ([, bytes]) => JSON.parse(bytes.toString("utf8")).operation,
+            ),
+        ).toEqual(["publish_status", "invalidate_status"]);
     });
 });

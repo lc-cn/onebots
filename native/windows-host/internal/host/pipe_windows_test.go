@@ -56,10 +56,10 @@ func TestStatusPipeHasVerifiedSecurityAndServesState(t *testing.T) {
 	}
 }
 
-func TestNativeExchangeRejectsServerOperationsAndRemoteNames(t *testing.T) {
-	publish := []byte(`{"version":2,"requestId":"publish:1","operation":"publish_status"}`)
-	if err := exchangeControlRequest(`\\.\pipe\unused`, time.Second, bytes.NewReader(publish), io.Discard); err == nil {
-		t.Fatal("native client exchange accepted a server-only operation")
+func TestNativeExchangeRejectsUnknownOperationsAndRemoteNames(t *testing.T) {
+	unknown := []byte(`{"version":2,"requestId":"unknown:1","operation":"unknown"}`)
+	if err := exchangeControlRequest(`\\.\pipe\unused`, time.Second, bytes.NewReader(unknown), io.Discard); err == nil {
+		t.Fatal("native client exchange accepted an unknown operation")
 	}
 	status := []byte(`{"version":2,"requestId":"status:1","operation":"status"}`)
 	if err := exchangeControlRequest(`\\localhost\pipe\unused`, time.Second, bytes.NewReader(status), io.Discard); err == nil {
@@ -88,7 +88,7 @@ func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
 		Manager:  protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: managerPID},
 		Gateway:  protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
 	}
-	response := exchangePipeRequest(t, config.PipeName, protocol.Request{
+	response := nativeExchangePipeRequest(t, config.PipeName, protocol.Request{
 		Version: protocol.Version, RequestID: "publish:1", Operation: "publish_status", Control: &control,
 	})
 	if !response.OK || response.State == nil || response.State.Control == nil || response.State.Control.Manager.ID != control.Manager.ID {
@@ -104,14 +104,14 @@ func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
 	if response.State == nil || response.State.Control == nil || response.State.Control.Gateway != control.Gateway {
 		t.Fatalf("status reader did not observe published control state: %#v", response)
 	}
-	invalidate := exchangePipeRequest(t, config.PipeName, protocol.Request{
+	invalidate := nativeExchangePipeRequest(t, config.PipeName, protocol.Request{
 		Version: protocol.Version, RequestID: "invalidate:2", Operation: "invalidate_status", Manager: &control.Manager, Revision: 2,
 	})
 	if !invalidate.OK || invalidate.State == nil || invalidate.State.Control != nil {
 		t.Fatalf("invalidation did not clear control state: %#v", invalidate)
 	}
 	control.Revision = 3
-	republished := exchangePipeRequest(t, config.PipeName, protocol.Request{
+	republished := nativeExchangePipeRequest(t, config.PipeName, protocol.Request{
 		Version: protocol.Version, RequestID: "publish:3", Operation: "publish_status", Control: &control,
 	})
 	if !republished.OK || republished.State == nil || republished.State.Control == nil || republished.State.Control.Revision != 3 {
@@ -159,10 +159,13 @@ func TestPublishRequiresServiceSIDAndRunningManagerPID(t *testing.T) {
 		t.Fatal("control SID may not publish")
 	}
 	if !mayPublishControlStatus(pipeClientIdentity{sid: "S-1-5-18", pid: 42}, "S-1-5-18", 42) {
-		t.Fatal("exact service SID should publish")
+		t.Fatal("direct manager should publish")
 	}
-	if mayPublishControlStatus(pipeClientIdentity{sid: "S-1-5-18", pid: 41}, "S-1-5-18", 42) {
-		t.Fatal("same SID sibling process may not publish for manager")
+	if !mayPublishControlStatus(pipeClientIdentity{sid: "S-1-5-18", pid: 41, parentPID: 42}, "S-1-5-18", 42) {
+		t.Fatal("direct native bridge child should publish")
+	}
+	if mayPublishControlStatus(pipeClientIdentity{sid: "S-1-5-18", pid: 41, parentPID: 40}, "S-1-5-18", 42) {
+		t.Fatal("unrelated same-SID process may not publish for manager")
 	}
 	state := newStateStore(time.Now())
 	state.set("running", "running", 42)
@@ -203,6 +206,23 @@ func exchangePipeRequest(t *testing.T, pipeName string, request protocol.Request
 	}
 	response, err := protocol.DecodeResponse(message, request.RequestID)
 	if err != nil {
+		t.Fatal(err)
+	}
+	return response
+}
+
+func nativeExchangePipeRequest(t *testing.T, pipeName string, request protocol.Request) protocol.Response {
+	t.Helper()
+	message, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := exchangeControlRequest(pipeName, 5*time.Second, bytes.NewReader(message), &output); err != nil {
+		t.Fatal(err)
+	}
+	var response protocol.Response
+	if err := json.Unmarshal(output.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
 	return response

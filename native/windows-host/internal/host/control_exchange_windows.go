@@ -15,7 +15,7 @@ import (
 	"github.com/lc-cn/onebots/native/windows-host/internal/protocol"
 )
 
-// exchangeControlRequest is the narrow-rights bridge used by the Node CLI. libuv opens
+// exchangeControlRequest is the narrow-rights bridge used by Node clients. libuv opens
 // Windows named pipes with generic read/write rights, which intentionally exceed the
 // control SID's DACL. The native bridge keeps the pipe ACL minimal and accepts the
 // request only through bounded stdin, so secrets never appear in process arguments.
@@ -38,8 +38,8 @@ func exchangeControlRequest(pipeName string, timeout time.Duration, input io.Rea
 	if err != nil {
 		return fmt.Errorf("validate control request: %w", err)
 	}
-	if request.Operation != "status" && request.Operation != "control_request" {
-		return errors.New("exchange accepts only client control operations")
+	if request.Operation != "status" && request.Operation != "control_request" && request.Operation != "publish_status" && request.Operation != "invalidate_status" {
+		return errors.New("exchange operation is not supported")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

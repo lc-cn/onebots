@@ -1,8 +1,10 @@
 import { isDeepStrictEqual } from "node:util";
 import type { GatewayControllerState } from "./control/gateway-controller.js";
 import {
+    createWindowsNativeHostExchange,
     WindowsHostControlError,
     WindowsHostControlClient,
+    type WindowsPipeExchange,
     type WindowsPublishedControlStatus,
 } from "./windows-host-control-client.js";
 import type { WindowsNativeStatus } from "./service-platform-windows.js";
@@ -23,18 +25,33 @@ export interface WindowsPublisherFailure {
     code: string;
 }
 
+interface WindowsPublisherOptions {
+    nativeExchange?: WindowsPipeExchange;
+    onFailure?: (failure: WindowsPublisherFailure) => void;
+}
+
 /** 将已持久化的 manager/gateway 状态串行发布给受保护的原生宿主。 */
 export class WindowsManagerStatusPublisher {
     private queue: Promise<void> = Promise.resolve();
     private revision = 0;
     private invalidated = false;
+    private readonly client: WindowsStatusClient;
 
     constructor(
         pipeName: string,
         private readonly manager: WindowsPublishedControlStatus["manager"],
-        private readonly client: WindowsStatusClient = new WindowsHostControlClient(pipeName),
-        private readonly onFailure?: (failure: WindowsPublisherFailure) => void,
-    ) {}
+        client?: WindowsStatusClient,
+        private readonly options: WindowsPublisherOptions = {},
+    ) {
+        // Manager publications use the same bounded native bridge as local control. Node/libuv
+        // cannot reliably half-close the message-mode pipe after a write on Windows.
+        this.client =
+            client ??
+            new WindowsHostControlClient(
+                pipeName,
+                options.nativeExchange ?? createWindowsNativeHostExchange(),
+            );
+    }
 
     publish(gateway: Pick<GatewayControllerState, "desired" | "actual">): Promise<void> {
         if (this.invalidated) return this.queue;
@@ -129,7 +146,7 @@ export class WindowsManagerStatusPublisher {
 
     private reportFailure(phase: WindowsPublisherFailure["phase"], error: unknown): void {
         try {
-            this.onFailure?.({
+            this.options.onFailure?.({
                 phase,
                 code: error instanceof WindowsHostControlError ? error.code : "unconfirmed",
             });

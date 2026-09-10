@@ -41,8 +41,9 @@ type allowedPipeClients struct {
 }
 
 type pipeClientIdentity struct {
-	sid string
-	pid uint32
+	sid       string
+	pid       uint32
+	parentPID uint32
 }
 
 type statusPipe struct {
@@ -345,7 +346,8 @@ func (server *statusPipe) handle(connection net.Conn) {
 }
 
 func mayPublishControlStatus(client pipeClientIdentity, serviceSID string, managerPID uint32) bool {
-	return client.sid != "" && client.sid == serviceSID && client.pid != 0 && client.pid == managerPID
+	return client.sid != "" && client.sid == serviceSID && client.pid != 0 &&
+		(client.pid == managerPID || client.parentPID == managerPID)
 }
 
 func (server *statusPipe) authorize(connection net.Conn) (pipeClientIdentity, error) {
@@ -375,6 +377,10 @@ func (server *statusPipe) authorize(connection net.Conn) (pipeClientIdentity, er
 	if err != nil {
 		return pipeClientIdentity{}, fmt.Errorf("read pipe client SID: %w", err)
 	}
+	// The manager uses a bundled native bridge because libuv cannot reliably half-close
+	// this message-mode pipe. Only its direct child is equivalent to the manager; a CLI
+	// helper has the CLI as parent and remains unable to publish.
+	parentPID, _ := directParentProcessID(firstPID)
 	var secondPID uint32
 	if err := windows.GetNamedPipeClientProcessId(handle, &secondPID); err != nil {
 		return pipeClientIdentity{}, fmt.Errorf("re-read pipe client pid: %w", err)
@@ -386,7 +392,7 @@ func (server *statusPipe) authorize(connection net.Conn) (pipeClientIdentity, er
 	if clientSID != server.allowed.serviceSID && clientSID != server.allowed.controlSID && clientSID != "S-1-5-18" {
 		return pipeClientIdentity{}, fmt.Errorf("pipe client SID %s is not authorized", clientSID)
 	}
-	return pipeClientIdentity{sid: clientSID, pid: firstPID}, nil
+	return pipeClientIdentity{sid: clientSID, pid: firstPID, parentPID: parentPID}, nil
 }
 
 func (server *statusPipe) writeFailure(connection io.Writer, requestID, code, message string) {
