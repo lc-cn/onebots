@@ -42,8 +42,23 @@ function fixture() {
         }),
     };
     let active: string | null = null;
+    let selection = {
+        adapters: [] as string[],
+        protocols: [] as string[],
+        applications: [] as string[],
+    };
+    let configRevision = "a".repeat(64);
+    let document: Record<string, unknown> = {
+        plugins: { adapters: [], protocols: [], applications: [] },
+    };
     const options = {
         currentGenerationId: () => active,
+        currentSelection: () => structuredClone(selection),
+        currentConfigurationRevision: () => configRevision,
+        currentConfiguration: () => ({
+            revision: configRevision,
+            document: structuredClone(document),
+        }),
         directory,
         store,
         resolver,
@@ -100,6 +115,13 @@ function fixture() {
                     planDigest: plan.digest,
                 } as ReturnType<typeof store.readVerified>);
             }
+        },
+        setSelection: (value: typeof selection) => {
+            selection = structuredClone(value);
+        },
+        setConfiguration: (value: Record<string, unknown>, revision = "b".repeat(64)) => {
+            document = structuredClone(value);
+            configRevision = revision;
         },
     };
 }
@@ -195,6 +217,89 @@ describe("control installation service", () => {
             expect(fs.statSync(plans).mode & 0o777).toBe(0o700);
             expect(fs.statSync(path.join(plans, `${result.id}.json`)).mode & 0o777).toBe(0o600);
         }
+    });
+
+    it("移除先拒绝配置引用，再创建完整候选并绑定配置版本", async () => {
+        const test = fixture();
+        test.setSelection({ adapters: ["mock"], protocols: [], applications: ["zhin"] });
+        test.setConfiguration({
+            plugins: { adapters: ["mock"], protocols: [], applications: ["zhin"] },
+            "mock.account": {},
+        });
+        await expect(
+            test.service.plan({ adapters: [], protocols: [], applications: ["zhin"] }, null),
+        ).rejects.toThrow("仍被当前配置引用");
+        test.setConfiguration({
+            plugins: { adapters: [], protocols: [], applications: ["zhin"] },
+        });
+        const plan = await test.service.plan(
+            { adapters: [], protocols: [], applications: ["zhin"] },
+            null,
+        );
+        expect(plan.selection).toEqual({ adapters: [], protocols: [], applications: ["zhin"] });
+        expect(plan.removed).toEqual({ adapters: ["mock"], protocols: [], applications: [] });
+        test.setConfiguration(
+            { plugins: { adapters: [], protocols: [], applications: ["zhin"] } },
+            "c".repeat(64),
+        );
+        expect(() => test.service.install({ id: "stale-removal", planId: plan.id }, false)).toThrow(
+            "配置已发生变化",
+        );
+        expect(fs.readdirSync(path.join(test.directory, "installations"))).toEqual([]);
+    });
+
+    it("完整集合多选取消也走移除引用保护", async () => {
+        const test = fixture();
+        test.setSelection({ adapters: ["mock"], protocols: [], applications: [] });
+        test.setConfiguration({
+            plugins: { adapters: ["mock"], protocols: [], applications: [] },
+        });
+        await expect(test.service.plan(empty, null)).rejects.toThrow("仍被当前配置引用");
+        expect(fs.readdirSync(path.join(test.directory, "plans"))).toEqual([]);
+    });
+
+    it("移除安装和激活复核同一配置快照，不接受计划多删扩展", async () => {
+        const test = fixture();
+        test.setSelection({ adapters: ["mock"], protocols: [], applications: ["zhin"] });
+        test.setConfiguration({
+            plugins: { adapters: [], protocols: [], applications: ["zhin"] },
+        });
+        const plan = await test.service.plan(
+            { adapters: [], protocols: [], applications: ["zhin"] },
+            null,
+        );
+        const queued = {
+            schemaVersion: 1 as const,
+            id: "remove-operation",
+            planDigest: plan.planDigest,
+            phase: "queued" as const,
+            createdAt: new Date().toISOString(),
+        };
+        vi.spyOn(GenerationInstaller.prototype, "install").mockResolvedValue(queued);
+        const status = vi.spyOn(GenerationInstaller.prototype, "status").mockReturnValue(queued);
+        test.service.install({ id: queued.id, planId: plan.id }, false);
+        const verified = {
+            ...queued,
+            phase: "verified" as const,
+            candidateId: "candidate",
+        };
+        status.mockReturnValue(verified);
+        vi.spyOn(test.store, "readVerified").mockReturnValue({
+            id: "candidate",
+            operationId: queued.id,
+            planDigest: plan.planDigest,
+        } as ReturnType<typeof test.store.readVerified>);
+        await expect(test.service.activate("candidate")).rejects.toThrow("synthetic-secret");
+        expect(test.lifecycle.activate).toHaveBeenCalledWith("candidate", null, "b".repeat(64));
+
+        test.setSelection({
+            adapters: ["mock"],
+            protocols: ["onebot-v11"],
+            applications: ["zhin"],
+        });
+        expect(() =>
+            test.reopen().install({ id: "changed-base-selection", planId: plan.id }, false),
+        ).toThrow("移除计划与活动运行版本不一致");
     });
 
     it("计划rename中断不留下半成品，下次确认可正常完成并同步目录", async () => {

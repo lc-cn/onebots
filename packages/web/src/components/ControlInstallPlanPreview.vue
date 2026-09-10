@@ -10,17 +10,40 @@ defineProps<{
 }>();
 defineEmits<{ install: [] }>();
 const privateToken = defineModel<string>({ required: true });
+const removalLabels = (plan: ControlInstallPlan) => [
+    ...plan.removed.adapters.map(name => `适配器 ${name}`),
+    ...plan.removed.protocols.map(name => `协议 ${name}`),
+    ...plan.removed.applications.map(name => `框架 ${name}`),
+];
 </script>
 <template>
     <section class="border border-border rounded-panel p-4 space-y-4">
-        <h3 class="font-medium">{{ upgrade ? "确认网关升级计划" : "确认安装计划" }}</h3>
+        <h3 class="font-medium">
+            {{
+                upgrade
+                    ? "确认网关升级计划"
+                    : removalLabels(plan).length
+                      ? "确认扩展移除候选"
+                      : "确认安装计划"
+            }}
+        </h3>
         <p class="text-sm text-fg-secondary">
             {{
                 upgrade
                     ? "保留已安装平台、协议和框架；安装验证后仍需手动应用。"
-                    : "这是完整集合。取消勾选的依赖不会保留在新运行版本中。"
+                    : removalLabels(plan).length
+                      ? "当前活动目录不会被修改。新候选安装并验证后仍需手动应用；配置、账号和协议状态不会自动改变。"
+                      : "这是完整集合。安装验证后仍需手动应用。"
             }}
         </p>
+        <div
+            v-if="removalLabels(plan).length"
+            class="border border-danger/40 rounded-control p-3 text-sm text-danger">
+            <p class="font-medium">应用候选后移除：</p>
+            <ul class="mt-2 space-y-1">
+                <li v-for="item in removalLabels(plan)" :key="item">{{ item }}</li>
+            </ul>
+        </div>
         <ul class="text-sm space-y-1 break-all">
             <li v-for="item in plan.packages" :key="item.name">
                 {{ item.name }} <span class="text-fg-muted">{{ item.version }}</span>

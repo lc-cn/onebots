@@ -28,7 +28,7 @@ export async function runControlTui(
                     { value: "start", label: "启动网关" },
                     { value: "stop", label: "停止网关" },
                     { value: "restart", label: "重启网关" },
-                    { value: "install", label: "选择并安装依赖" },
+                    { value: "install", label: "安装或移除扩展" },
                     { value: "update", label: "升级网关运行版本" },
                     { value: "track", label: "查询已有安装任务" },
                     { value: "configure", label: "配置账号与协议" },

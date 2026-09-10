@@ -49,6 +49,11 @@ export async function runCli(argv = process.argv): Promise<void> {
             await runManagerMcp(invocation.argv.slice(3));
             return;
         }
+        if (invocation.kind === "cli" && invocation.argv[2] === "extensions") {
+            const { runManagerExtensions } = await import("./cli/manager-extensions.js");
+            process.exitCode = await runManagerExtensions(invocation.argv.slice(3));
+            return;
+        }
         if (invocation.kind === "cli" && invocation.argv[2] === "run") {
             const { runManagerForeground } = await import("./cli/manager-foreground.js");
             await runManagerForeground(invocation.argv.slice(3));

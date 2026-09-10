@@ -1,14 +1,10 @@
 import { activeInstallationResolver } from "./installation-active-resolver.js";
 import { ConfigurationConflictError } from "../configuration/configuration-store.js";
-import {
-    prepareInstallationUpdate,
-    type UpdateBase,
-    type UpdateConfirmation,
-} from "./installation-update.js";
+import { prepareInstallationUpdate, type UpdateBase } from "./installation-update.js";
 import type { ResolvedRelease } from "../installation/release-resolver.js";
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { GenerationInstaller } from "../installation/generation-installer.js";
 import { verifyGeneration } from "../installation/generation-verify.js";
 import { freezeGenerationArtifacts } from "../installation/generation-artifacts.js";
@@ -16,11 +12,7 @@ import {
     bundledRuntimeArtifacts,
     bundledPnpmExecutor,
 } from "../installation/bundled-runtime-artifacts.js";
-import {
-    createGenerationPlan,
-    type GenerationPlan,
-    type GenerationSelection,
-} from "../installation/generation-plan.js";
+import type { GenerationSelection } from "../installation/generation-plan.js";
 import {
     resolveGenerationPlan,
     type GenerationResolverConfig,
@@ -34,6 +26,13 @@ import { TRUSTED_EXTENSION_CATALOG } from "../trusted-extension-catalog.js";
 import { getExtensionPackageCatalogEntry } from "../extension-capability-catalog.js";
 import { listFrameworkProfiles } from "../framework-integration.js";
 import type { PersistedOperationObserver } from "../persisted-operation-observer.js";
+import {
+    assertExtensionsNotReferenced,
+    hasExtensionRemoval,
+    removedExtensions,
+    type ExtensionRemovalConfirmation,
+} from "./extension-removal.js";
+import { ControlInstallationPlanStore } from "./installation-plan-store.js";
 
 const BUILTIN_APPLICATIONS = listFrameworkProfiles()
     .filter(profile => String(profile.applicationStage) !== "planned")
@@ -58,24 +57,21 @@ export interface ControlInstallationOptions {
     currentGenerationId?(): string | null;
     currentSelection?(): GenerationSelection;
     currentConfigurationRevision?(): string;
+    currentConfiguration?(): { revision: string; document: Record<string, unknown> };
     resolveRelease?(): Promise<ResolvedRelease>;
     onOperation?: PersistedOperationObserver;
 }
 
 /** CLI/TUI/Web 共用的安装应用服务；HTTP 层仅认证、解析和传送结果。 */
 export class ControlInstallationService {
-    private readonly plans: string;
+    private readonly plans: ControlInstallationPlanStore;
     private readonly installer: GenerationInstaller;
     private readonly resolver: GenerationResolverConfig;
     private readonly cancellations = new Map<string, AbortController>();
     private closed = false;
 
     constructor(private readonly options: ControlInstallationOptions) {
-        this.plans = path.join(options.directory, "plans");
-        fs.mkdirSync(this.plans, { recursive: true, mode: 0o700 });
-        if (fs.lstatSync(this.plans).isSymbolicLink())
-            throw new Error("安装计划目录不能是符号链接");
-        fs.chmodSync(this.plans, 0o700);
+        this.plans = new ControlInstallationPlanStore(options.directory);
         this.resolver = options.resolver ?? bundledRuntimeArtifacts();
         const executor =
             options.pnpmExecutable || options.pnpmScript
@@ -126,8 +122,25 @@ export class ControlInstallationService {
     }
 
     async plan(selection: GenerationSelection, expectedGenerationId: string | null) {
+        return this.planSelection(selection, expectedGenerationId);
+    }
+
+    private async planSelection(
+        selection: GenerationSelection,
+        expectedGenerationId: string | null,
+    ) {
         if (this.closed) throw new Error("安装服务正在关闭");
         this.assertBase(expectedGenerationId);
+        selection = normalizeSelection(selection);
+        const removal = removedExtensions(this.currentSelection(), selection);
+        let removalConfirmation: ExtensionRemovalConfirmation | undefined;
+        if (hasExtensionRemoval(removal)) {
+            const snapshot = this.options.currentConfiguration?.();
+            if (!snapshot || !/^[a-f0-9]{64}$/.test(snapshot.revision))
+                throw new Error("当前配置引用无法确认，拒绝生成扩展移除计划");
+            assertExtensionsNotReferenced(removal, snapshot.document);
+            removalConfirmation = { selection: removal, configRevision: snapshot.revision };
+        }
         const resolver = await freezeGenerationArtifacts(
             activeInstallationResolver(this.options.store, expectedGenerationId, this.resolver),
             path.join(this.options.directory, "artifacts"),
@@ -135,7 +148,14 @@ export class ControlInstallationService {
         const { plan, recommendations } = await resolveGenerationPlan(selection, resolver);
         if (this.closed) throw new Error("安装服务正在关闭");
         this.assertBase(expectedGenerationId);
-        return this.confirmPlan(plan, expectedGenerationId, recommendations);
+        if (removalConfirmation) this.assertConfiguration(removalConfirmation.configRevision);
+        return this.plans.confirm(
+            plan,
+            expectedGenerationId,
+            recommendations,
+            undefined,
+            removalConfirmation,
+        );
     }
 
     async planUpdate(expected: UpdateBase) {
@@ -160,7 +180,7 @@ export class ControlInstallationService {
             ...preview,
             ...(result.state === "updates_available"
                 ? {
-                      installationPlan: this.confirmPlan(
+                      installationPlan: this.plans.confirm(
                           plan,
                           expected.generationId,
                           result.recommendations,
@@ -171,40 +191,6 @@ export class ControlInstallationService {
         };
     }
 
-    private confirmPlan(
-        plan: GenerationPlan,
-        expectedGenerationId: string | null,
-        recommendations: string[],
-        update?: UpdateConfirmation,
-    ) {
-        const confirmation = {
-            schemaVersion: 1 as const,
-            baseGenerationId: expectedGenerationId,
-            plan,
-            ...(update ? { update } : {}),
-        };
-        const id = digest(confirmation);
-        const file = this.planFile(id);
-        if (!fs.existsSync(file)) atomicWrite(file, confirmation);
-        else this.readPlan(id);
-        return {
-            id,
-            planDigest: plan.digest,
-            baseGenerationId: expectedGenerationId,
-            selection: plan.selection,
-            packages: [
-                plan.host,
-                plan.core,
-                ...plan.extensions.map(extension => ({
-                    name: extension.packageName,
-                    version: extension.version,
-                })),
-            ].map(artifact => ({ name: artifact.name, version: artifact.version })),
-            peers: plan.peerRequirements,
-            recommendations,
-        };
-    }
-
     install(request: { id: string; planId: string; token?: string }, allowCredentials: boolean) {
         if (this.closed) throw new Error("安装服务正在关闭");
         if (
@@ -212,7 +198,7 @@ export class ControlInstallationService {
             (typeof request.token !== "string" || request.token.length > 512 || !allowCredentials)
         )
             throw new Error("私有仓库授权仅接受本地控制连接或受保护的传输");
-        const confirmation = this.readPlan(request.planId);
+        const confirmation = this.plans.read(request.planId);
         const plan = confirmation.plan;
         const bindingFile = this.bindingFile(request.id);
         if (fs.existsSync(bindingFile)) {
@@ -234,6 +220,12 @@ export class ControlInstallationService {
         }
         this.assertBase(confirmation.baseGenerationId);
         if (confirmation.update) this.assertConfiguration(confirmation.update.configRevision);
+        if (confirmation.removal) {
+            this.assertConfiguration(confirmation.removal.configRevision);
+            const actual = removedExtensions(this.currentSelection(), plan.selection);
+            if (!sameSelection(actual, confirmation.removal.selection))
+                throw new Error("扩展移除计划与活动运行版本不一致，请重新确认");
+        }
         atomicWrite(bindingFile, {
             planId: request.planId,
             planDigest: plan.digest,
@@ -276,13 +268,11 @@ export class ControlInstallationService {
             binding.planDigest !== verified.planDigest
         )
             throw new Error("候选安装绑定无效");
-        const confirmation = this.readPlan(binding.planId);
-        return confirmation.update
-            ? this.options.lifecycle.activate(
-                  id,
-                  binding.baseGenerationId,
-                  confirmation.update.configRevision,
-              )
+        const confirmation = this.plans.read(binding.planId);
+        const configRevision =
+            confirmation.update?.configRevision ?? confirmation.removal?.configRevision;
+        return configRevision
+            ? this.options.lifecycle.activate(id, binding.baseGenerationId, configRevision)
             : this.options.lifecycle.activate(id, binding.baseGenerationId);
     }
 
@@ -290,12 +280,6 @@ export class ControlInstallationService {
         this.closed = true;
         for (const cancellation of this.cancellations.values()) cancellation.abort();
         await this.installer.close();
-    }
-
-    private planFile(id: string): string {
-        if (typeof id !== "string" || !/^[a-f0-9]{64}$/.test(id))
-            throw new Error("安装计划标识无效");
-        return path.join(this.plans, `${id}.json`);
     }
 
     private assertBase(expected: string | null): void {
@@ -310,6 +294,12 @@ export class ControlInstallationService {
             this.options.currentConfigurationRevision?.() !== expected
         )
             throw new ConfigurationConflictError();
+    }
+
+    private currentSelection(): GenerationSelection {
+        const selection = this.options.currentSelection?.();
+        if (!selection) return { adapters: [], protocols: [], applications: [] };
+        return normalizeSelection(selection);
     }
 
     private bindingFile(id: string): string {
@@ -331,7 +321,7 @@ export class ControlInstallationService {
             planDigest: string;
             baseGenerationId: string | null;
         };
-        const confirmation = this.readPlan(binding.planId);
+        const confirmation = this.plans.read(binding.planId);
         if (
             binding.planDigest !== confirmation.plan.digest ||
             binding.baseGenerationId !== confirmation.baseGenerationId
@@ -339,46 +329,32 @@ export class ControlInstallationService {
             throw new Error("安装绑定无效");
         return binding;
     }
+}
 
-    private readPlan(id: string): {
-        schemaVersion: 1;
-        baseGenerationId: string | null;
-        plan: GenerationPlan;
-        update?: UpdateConfirmation;
-    } {
-        const file = this.planFile(id);
-        try {
-            const input = readPrivate(file) as {
-                schemaVersion: 1;
-                baseGenerationId: string | null;
-                plan: GenerationPlan;
-                update?: UpdateConfirmation;
-            };
-            const plan = createGenerationPlan({ ...input.plan, target: input.plan });
-            if (
-                input.schemaVersion !== 1 ||
-                (input.update !== undefined &&
-                    (!input.update ||
-                        Object.keys(input.update).sort().join(",") !==
-                            "archiveSha256,configRevision" ||
-                        !/^[a-f0-9]{64}$/.test(input.update.configRevision) ||
-                        !/^[a-f0-9]{64}$/.test(input.update.archiveSha256))) ||
-                !(input.baseGenerationId === null || typeof input.baseGenerationId === "string") ||
-                digest(input) !== id ||
-                JSON.stringify(plan) !== JSON.stringify(input.plan)
-            )
-                throw new Error("安装计划已变化");
-            return input;
-        } catch {
-            // JSON/文件系统异常可能携带磁盘内容和路径，不向控制客户端转发。
-            throw new Error("安装计划不可读取或已变化，请重新确认");
-        }
+function normalizeSelection(selection: GenerationSelection): GenerationSelection {
+    const normalized = {} as GenerationSelection;
+    for (const type of ["adapters", "protocols", "applications"] as const) {
+        const values = selection[type];
+        if (
+            !Array.isArray(values) ||
+            values.length > 100 ||
+            values.some(value => typeof value !== "string" || !value || value.length > 128) ||
+            new Set(values).size !== values.length
+        )
+            throw new Error("扩展选择无效");
+        normalized[type] = [...values];
     }
+    return normalized;
 }
 
-function digest(value: unknown): string {
-    return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+function sameSelection(left: GenerationSelection, right: GenerationSelection): boolean {
+    return (["adapters", "protocols", "applications"] as const).every(
+        type =>
+            left[type].length === right[type].length &&
+            left[type].every(name => right[type].includes(name)),
+    );
 }
+
 function readPrivate(file: string): unknown {
     const stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 1024 * 1024)

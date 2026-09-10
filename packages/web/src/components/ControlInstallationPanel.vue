@@ -178,7 +178,8 @@ async function createPlan() {
         if (!disposed) plan.value = result;
     } catch {
         if (disposed) return;
-        error.value = "无法生成安装计划，请刷新目录后重新确认所选扩展。";
+        error.value =
+            "无法生成安装计划。若要取消已安装扩展，请先在配置管理中删除对应账号或协议引用、取消启用并应用配置，再刷新目录。";
         await loadCatalog();
     } finally {
         busy.value = false;
@@ -347,7 +348,7 @@ onUnmounted(() => {
             <div>
                 <h2 id="installation-heading" class="text-lg font-medium">安装、扩展与升级</h2>
                 <p class="text-sm text-fg-secondary mt-2">
-                    选择完整依赖集合。安装先验证，确认后再应用；不会自动创建账号或开启协议。
+                    选择完整依赖集合。取消勾选会创建不含该扩展的新候选；被账号或协议配置引用时会拒绝。安装先验证，确认后再应用。
                 </p>
             </div>
             <UiButton v-if="!tracking" :disabled="busy || !!updatePreview" @click="loadCatalog"

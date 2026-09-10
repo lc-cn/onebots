@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { ControlClient } from "@onebots/core/control";
 import type { TuiPrompt, PromptRequest } from "../tui/prompt.js";
-import { runControlInstallation, trackControlInstallation } from "./tui-installation.js";
+import {
+    confirmControlInstallation,
+    runControlInstallation,
+    trackControlInstallation,
+} from "./tui-installation.js";
 import { runControlTui } from "./tui.js";
 
 function prompt(answers: string[][]) {
@@ -29,6 +33,10 @@ const catalog = {
 };
 const plan = {
     id: "plan",
+    planDigest: "a".repeat(64),
+    baseGenerationId: "base",
+    selection: { adapters: ["icqq"], protocols: [], applications: ["zhin"] },
+    removed: { adapters: [], protocols: [], applications: [] },
     packages: [{ name: "@onebots/adapter-icqq", version: "1.0.0" }],
     peers: [{ packageName: "@icqqjs/icqq", range: "^1", requestedBy: "@onebots/adapter-icqq" }],
     recommendations: ["可按需启用协议"],
@@ -45,7 +53,11 @@ describe("统一控制 TUI", () => {
         const ui = prompt([["device"], ["quit"]]);
         const transport = client(() => ({ code: "new-device-code" }));
         await runControlTui(transport.client, { prompt: ui.ui });
-        expect(transport.request).toHaveBeenCalledExactlyOnceWith("POST", "/api/control/auth/device", {});
+        expect(transport.request).toHaveBeenCalledExactlyOnceWith(
+            "POST",
+            "/api/control/auth/device",
+            {},
+        );
         expect(ui.reports.join(" ")).toContain("不撤销已有设备");
     });
     it("取消计划不安装，默认集合来自catalog，框架不补选协议", async () => {
@@ -59,6 +71,17 @@ describe("统一控制 TUI", () => {
         });
         expect(transport.request).toHaveBeenCalledTimes(2);
         expect(ui.requests[3].detail).toContain("必需依赖");
+    });
+    it("移除候选明确显示删除项且仍单独确认激活", async () => {
+        const ui = prompt([["no"]]);
+        await confirmControlInstallation(client(() => ({})).client, ui.ui, {
+            ...plan,
+            selection: { adapters: [], protocols: [], applications: ["zhin"] },
+            removed: { adapters: ["icqq"], protocols: [], applications: [] },
+        });
+        expect(ui.requests[0].title).toContain("移除候选");
+        expect(ui.requests[0].detail).toContain("移除适配器：icqq");
+        expect(ui.requests[0].detail).toContain("不会原地删包");
     });
     it("提交响应丢失只查原ID；隐藏token不输出，验证后独立确认激活", async () => {
         const ui = prompt([["icqq"], [], ["zhin"], ["yes"], ["secret-token"], ["yes"]]);
@@ -83,10 +106,7 @@ describe("统一控制 TUI", () => {
             planId: "plan",
             token: "secret-token",
         });
-        expect(transport.request).toHaveBeenCalledWith(
-            "GET",
-            "/api/control/installations/same-id",
-        );
+        expect(transport.request).toHaveBeenCalledWith("GET", "/api/control/installations/same-id");
         expect(transport.request).toHaveBeenCalledWith(
             "POST",
             "/api/control/generations/candidate/activate",
@@ -118,6 +138,10 @@ describe("统一控制 TUI", () => {
                 : { status: "succeeded" },
         );
         await runControlTui(transport.client, { prompt: ui.ui, onConfigure });
+        expect(ui.requests[0].choices).toContainEqual({
+            value: "install",
+            label: "安装或移除扩展",
+        });
         expect(onConfigure).toHaveBeenCalledWith(transport.client, ui.ui);
         expect(transport.request.mock.calls.map(call => call[1])).toEqual([
             "/api/control/status",

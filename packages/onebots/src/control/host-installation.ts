@@ -34,6 +34,10 @@ export async function createHostInstallation(
             onOperation,
             currentGenerationId: () => lifecycle.status().active?.id ?? null,
             currentConfigurationRevision: () => source.read().revision,
+            currentConfiguration: () => {
+                const snapshot = source.read();
+                return { revision: snapshot.revision, document: snapshot.document };
+            },
             currentSelection: () => {
                 const active = lifecycle.activeGeneration();
                 return active

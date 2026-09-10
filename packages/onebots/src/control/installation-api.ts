@@ -2,6 +2,7 @@ import { GenerationConflictError } from "./generation-activation.js";
 import { ConfigurationConflictError } from "../configuration/configuration-store.js";
 import type { GenerationSelection } from "../installation/generation-plan.js";
 import type { ControlInstallationService } from "./installation-service.js";
+import { ExtensionRemovalConflictError } from "./extension-removal.js";
 
 export function isInstallationPath(pathname: string): boolean {
     return (
@@ -30,20 +31,27 @@ export async function handleInstallationRequest(
     } catch (error) {
         return {
             status:
-                error instanceof GenerationConflictError || error instanceof ConfigurationConflictError
+                error instanceof GenerationConflictError ||
+                error instanceof ConfigurationConflictError ||
+                error instanceof ExtensionRemovalConflictError
                     ? 409
                     : error instanceof InvalidRequest
                       ? 400
                       : 500,
             body: {
                 message:
-                    error instanceof ConfigurationConflictError
-                        ? "配置已变化，请刷新并重新确认升级计划"
-                        : error instanceof GenerationConflictError
-                        ? "运行版本已变化，请刷新并重新确认安装计划"
-                        : error instanceof InvalidRequest
-                          ? "安装请求无效"
-                          : "安装控制操作失败，请检查本地状态",
+                    error instanceof ExtensionRemovalConflictError
+                        ? error.message
+                        : error instanceof ConfigurationConflictError
+                          ? "配置已变化，请刷新并重新确认安装或升级计划"
+                          : error instanceof GenerationConflictError
+                            ? "运行版本已变化，请刷新并重新确认安装计划"
+                            : error instanceof InvalidRequest
+                              ? "安装请求无效"
+                              : "安装控制操作失败，请检查本地状态",
+                ...(error instanceof ExtensionRemovalConflictError
+                    ? { conflicts: error.conflicts }
+                    : {}),
             },
         };
     }

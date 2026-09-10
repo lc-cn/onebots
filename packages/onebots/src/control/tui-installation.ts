@@ -68,15 +68,30 @@ export async function confirmControlInstallation(
     plan: ControlInstallPlan,
     options: ControlInstallationTuiOptions = {},
 ): Promise<void> {
+    const removals = [
+        ...plan.removed.adapters.map(name => `移除适配器：${name}`),
+        ...plan.removed.protocols.map(name => `移除协议：${name}`),
+        ...plan.removed.applications.map(name => `移除框架：${name}`),
+    ];
     const detail = [
+        ...removals,
         ...plan.packages.map(item => `${item.name}@${item.version}`),
         ...plan.peers.map(
             item => `必需依赖：${item.packageName}@${item.range}（${item.requestedBy}）`,
         ),
         ...plan.recommendations.map(item => `建议：${item}`),
-        "依赖下载后仍须验证；激活另行确认，不自动启用平台账号或协议。",
+        removals.length
+            ? "当前活动版本不会原地删包；新候选验证完成且再次确认激活后才移除依赖。配置和账号不会被自动修改。"
+            : "依赖下载后仍须验证；激活另行确认，不自动启用平台账号或协议。",
     ].join("\n");
-    if (!(await confirmControlAction(prompt, "确认安装计划", detail))) return;
+    if (
+        !(await confirmControlAction(
+            prompt,
+            removals.length ? "确认创建扩展移除候选" : "确认安装计划",
+            detail,
+        ))
+    )
+        return;
     let token: string | undefined;
     if (
         plan.packages.some(item => item.name === "@onebots/adapter-icqq") ||

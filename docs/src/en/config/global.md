@@ -93,6 +93,8 @@ Protocol `access_token`, `token`, and signing-secret fields remain business conn
 
 `plugins` records the extensions in the active runtime version. An installation plan resolves the package and peer dependencies, verifies the candidate artifacts, and waits for explicit activation. Installing an extension does not connect a platform or enable a protocol automatically.
 
+Run `onebots extensions install --data-dir <workspace>` to open the complete dependency selection wizard. Before removing an extension, delete its accounts and protocol outlets from a configuration draft, remove it from the `plugins` selection, and apply that configuration. Then run `onebots extensions remove --adapter <name>`, `--protocol <name>`, or `--framework <name>`. Removal creates another complete immutable runtime version; it never deletes packages in the active directory. The dependency disappears from the active version only after the candidate is installed, verified, and explicitly activated. `--plan-only` only returns the plan.
+
 Web and TUI apply configuration through the same transaction. An invalid draft cannot replace active configuration. If runtime application fails, both the file and the runtime return to the previous revision. Host fields such as the port and database explicitly report that a restart is required.
 
 Before any platform connection, OneBots validates the complete configuration against schemas registered by the active extensions. Validation covers required platform credentials, field types, adapter and protocol references, account protocol outlets, and merged account and `general` values. Errors include the full path, such as `qq.my_bot.appid`.

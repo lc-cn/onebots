@@ -3,6 +3,10 @@ export * from "./control-logs.js";
 import { ControlVerificationClient } from "./control-verification.js";
 export * from "./control-verification.js";
 export { verificationJson, verificationRequest } from "./control-verification-json.js";
+import type { ControlDiagnostics } from "./control-diagnostics.js";
+export type { ControlDiagnostics } from "./control-diagnostics.js";
+import type { ControlOperation, ControlStatus } from "./control-status.js";
+export type { ControlOperation, ControlStatus } from "./control-status.js";
 import {
     messageDebugHistory,
     clearMessageDebug,
@@ -20,58 +24,27 @@ export {
     isControlMessageDebugSnapshot,
     isControlMessageDebugClearReceipt,
 } from "./control-message-debug.js";
-import { revokeControlSession, listControlSessions, type ControlSession } from "./control-sessions.js";
+import {
+    revokeControlSession,
+    listControlSessions,
+    type ControlSession,
+} from "./control-sessions.js";
 export type { ControlSession } from "./control-sessions.js";
-import type { ControlSendContext, ControlSendRequest, ControlSendOperation } from "./control-send.js";
-export type { ControlSendContext, ControlSendRequest, ControlSendOperation } from "./control-send.js";
-export { isControlSendContext, isControlSendRequest, isControlSendOperation } from "./control-send.js";
-/** 无服务器或插件依赖的控制契约，CLI/TUI/Web 共用此入口。 */
-export interface ControlStatus {
-    schemaVersion: 1;
-    manager: { id: string; version: string; pid?: number };
-    serviceMigration?: { pending: boolean; recoveryRequired: boolean };
-    processOwnership?: { available: boolean };
-    gateway: {
-        desired: "running" | "stopped";
-        actual: "starting" | "running" | "stopping" | "stopped" | "failed";
-        instance?: { id: string };
-        recoveryRequired: boolean;
-        error?: string;
-        operations: ControlOperation[];
-    };
-}
-
-export interface ControlDiagnostics {
-    schemaVersion: 1;
-    manager: { id: string; pid: number; version: string };
-    management: { host: string; port: number } | null;
-    gateway: Pick<ControlStatus["gateway"], "actual" | "desired" | "recoveryRequired">;
-    configuration: { state: "ready" | "damaged" | "unavailable"; recoveryRequired: boolean };
-    generation: { activeId: string | null; recoveryRequired: boolean };
-    storage: {
-        dataDirectory: "ready" | "creatable" | "invalid" | "unavailable";
-        database: "ready" | "creatable" | "invalid" | "unavailable";
-        publicStatic: "ready" | "disabled" | "invalid" | "unavailable";
-        databaseIntegrity: "not-checked";
-    };
-    extensions: {
-        receipt: "bundled" | "verified" | "invalid" | "unavailable";
-        selection: "ready" | "mismatch" | "unavailable";
-        registration: "verified" | "not-checked";
-    };
-    processOwnership: { available: boolean };
-    serviceMigration: { pending: boolean; recoveryRequired: boolean };
-}
-
-export interface ControlOperation {
-    id: string;
-    action: "start" | "stop" | "restart" | "shutdown" | "reconcile" | "suspend";
-    status: "running" | "succeeded" | "failed";
-    startedAt: string;
-    finishedAt?: string;
-    error?: string;
-}
-
+import type {
+    ControlSendContext,
+    ControlSendRequest,
+    ControlSendOperation,
+} from "./control-send.js";
+export type {
+    ControlSendContext,
+    ControlSendRequest,
+    ControlSendOperation,
+} from "./control-send.js";
+export {
+    isControlSendContext,
+    isControlSendRequest,
+    isControlSendOperation,
+} from "./control-send.js";
 export interface ControlTransport {
     request<T>(method: "GET" | "POST", route: string, body?: unknown): Promise<T>;
 }
@@ -139,6 +112,7 @@ export interface ControlInstallPlan {
     planDigest: string;
     baseGenerationId: string | null;
     selection: ControlExtensionSelection;
+    removed: ControlExtensionSelection;
     packages: Array<{ name: string; version: string }>;
     peers: Array<{ requestedBy: string; packageName: string; range: string }>;
     recommendations: string[];
@@ -371,7 +345,10 @@ export class ControlClient {
     }
 
     sendOperation(id: string): Promise<ControlSendOperation> {
-        return this.transport.request("GET", `/api/control/messages/operations/${encodeURIComponent(id)}`);
+        return this.transport.request(
+            "GET",
+            `/api/control/messages/operations/${encodeURIComponent(id)}`,
+        );
     }
 
     bootstrap(): Promise<{ code: string }> {
@@ -411,10 +388,14 @@ export class ControlClient {
                 }),
             ]);
             if (
-                !result || typeof result !== "object" || Array.isArray(result) ||
+                !result ||
+                typeof result !== "object" ||
+                Array.isArray(result) ||
                 Object.keys(result).length !== 1 ||
-                !("loggedOut" in result) || result.loggedOut !== true
-            ) throw new Error("会话撤销结果未确认");
+                !("loggedOut" in result) ||
+                result.loggedOut !== true
+            )
+                throw new Error("会话撤销结果未确认");
         } finally {
             if (timer !== undefined) clearTimeout(timer);
         }
@@ -483,8 +464,14 @@ export function createHttpControlTransport(
                 body: body === undefined ? undefined : JSON.stringify(body),
                 cache: "no-store",
                 redirect: "error",
-                signal: (method === "POST" && ["/api/control/auth/logout", "/api/control/auth/sessions/revoke"].includes(route)) || (method === "GET" && route === "/api/control/auth/sessions")
-                    ? AbortSignal.timeout(15_000) : undefined,
+                signal:
+                    (method === "POST" &&
+                        ["/api/control/auth/logout", "/api/control/auth/sessions/revoke"].includes(
+                            route,
+                        )) ||
+                    (method === "GET" && route === "/api/control/auth/sessions")
+                        ? AbortSignal.timeout(15_000)
+                        : undefined,
             });
             const data = await response.json();
             if (!response.ok)

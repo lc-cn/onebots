@@ -19,10 +19,22 @@ function fixture() {
     folders.push(directory);
     fs.writeFileSync(path.join(directory, "host.tgz"), "synthetic bytes");
     let active: string | null = null;
+    let installed = {
+        adapters: [] as string[],
+        protocols: [] as string[],
+        applications: [] as string[],
+    };
+    let document: Record<string, unknown> = {
+        plugins: { adapters: [], protocols: [], applications: [] },
+    };
     const service = new ControlInstallationService({
         currentGenerationId: () => active,
-        currentSelection: () => ({ adapters: [], protocols: [], applications: [] }),
+        currentSelection: () => structuredClone(installed),
         currentConfigurationRevision: () => "a".repeat(64),
+        currentConfiguration: () => ({
+            revision: "a".repeat(64),
+            document: structuredClone(document),
+        }),
         resolveRelease: async () => ({
             host: { name: "onebots", version: "1.2.13", spec: "1.2.13" },
             core: { name: "@onebots/core", version: "1.0.0", spec: "1.0.0" },
@@ -69,6 +81,12 @@ function fixture() {
         request,
         setActive: (id: string | null) => {
             active = id;
+        },
+        setInstalled: (value: typeof installed) => {
+            installed = structuredClone(value);
+        },
+        setDocument: (value: Record<string, unknown>) => {
+            document = structuredClone(value);
         },
     };
 }
@@ -117,6 +135,40 @@ describe("installation HTTP boundary", () => {
             body: { selection, recommendations: expect.any(Array) },
         });
         expect(fs.existsSync(path.join(test.directory, "config.yaml"))).toBe(false);
+    });
+
+    it("完整集合计划识别移除，并以409返回引用冲突", async () => {
+        const test = fixture();
+        test.setInstalled({ adapters: ["mock"], protocols: [], applications: ["zhin"] });
+        test.setDocument({
+            plugins: { adapters: ["mock"], protocols: [], applications: [] },
+            "mock.account": {},
+        });
+        const conflict = await test.request("/api/control/installations/plan", "POST", {
+            selection: { adapters: [], protocols: [], applications: ["zhin"] },
+            expectedGenerationId: null,
+        });
+        expect(conflict).toMatchObject({
+            status: 409,
+            body: {
+                message: expect.stringContaining("当前配置引用"),
+                conflicts: [{ type: "adapter", name: "mock" }],
+            },
+        });
+        test.setDocument({
+            plugins: { adapters: [], protocols: [], applications: [] },
+        });
+        const planned = await test.request("/api/control/installations/plan", "POST", {
+            selection: { adapters: [], protocols: [], applications: ["zhin"] },
+            expectedGenerationId: null,
+        });
+        expect(planned).toMatchObject({
+            status: 200,
+            body: {
+                selection: { adapters: [], protocols: [], applications: ["zhin"] },
+                removed: { adapters: ["mock"], protocols: [], applications: [] },
+            },
+        });
     });
 
     it("拒绝用户注入host/artifact/URL/执行器，不将它们转给安装器", async () => {

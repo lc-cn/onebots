@@ -16,6 +16,7 @@ const result: ControlUpdatePlan = {
         planDigest: "c".repeat(64),
         baseGenerationId: "active",
         selection: { adapters: ["mock", "icqq"], protocols: [], applications: ["zhin"] },
+        removed: { adapters: [], protocols: [], applications: [] },
         packages: [
             { name: "onebots", version: "1.2.13" },
             { name: "@onebots/core", version: "1.0.1" },
