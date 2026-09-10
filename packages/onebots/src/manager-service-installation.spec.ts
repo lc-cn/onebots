@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+    managerServiceAncestorPaths,
     prepareManagerServiceInstallation,
     type ManagerServiceInstallation,
 } from "./manager-service-installation.js";
@@ -62,6 +63,20 @@ function fixture(platform: "linux" | "darwin" = "darwin") {
     return { root, host, spec, files: getServiceFiles("user", host) };
 }
 describe("新管理服务首次安装文件端口", () => {
+    it("Windows drive 与 UNC 路径只枚举卷根后的祖先", () => {
+        expect(managerServiceAncestorPaths("C:\\ProgramData\\OneBots", "win32")).toEqual([
+            "C:\\ProgramData",
+            "C:\\ProgramData\\OneBots",
+        ]);
+        expect(managerServiceAncestorPaths("\\\\server\\share\\OneBots\\state", "win32")).toEqual([
+            "\\\\server\\share\\OneBots",
+            "\\\\server\\share\\OneBots\\state",
+        ]);
+        expect(managerServiceAncestorPaths("C:\\ProgramData\\OneBots", "win32")).not.toContain(
+            "C:\\C:",
+        );
+    });
+
     it("Windows 使用原子 rename 发布定义而不依赖硬链接", () => {
         const base = fixture();
         const host: ServiceHost = {

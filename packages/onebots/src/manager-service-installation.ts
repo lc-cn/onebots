@@ -52,13 +52,24 @@ function safePath(file: string): void {
     )
         throw fail();
 }
+/** 从卷根之后开始枚举，避免把 Windows 的 C: 或 UNC share 再拼回根路径。 */
+export function managerServiceAncestorPaths(
+    directory: string,
+    platform: NodeJS.Platform = process.platform,
+): string[] {
+    const paths = platform === "win32" ? path.win32 : path.posix;
+    const root = paths.parse(directory).root;
+    const relative = paths.relative(root, directory);
+    let current = root;
+    return relative
+        .split(paths.sep)
+        .filter(Boolean)
+        .map(part => (current = paths.join(current, part)));
+}
 /** 所有已存在祖先必须是普通目录；不沿符号链接创建服务文件。 */
 function parents(directory: string, create: boolean): void {
     safePath(directory);
-    const parts = directory.split(path.sep).filter(Boolean);
-    let current = path.parse(directory).root;
-    for (const part of parts) {
-        current = path.join(current, part);
+    for (const current of managerServiceAncestorPaths(directory)) {
         if (!exists(current)) {
             if (!create) continue;
             fs.mkdirSync(current, { mode: 0o700 });
