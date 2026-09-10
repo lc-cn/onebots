@@ -23,7 +23,7 @@ function fixture(mode = "ok") {
     fs.mkdirSync(bin);
     fs.writeFileSync(
         path.join(bin, "node.cmd"),
-        batch(`@echo off
+        batch(String.raw`@echo off
 if "%~1"=="-p" (
   echo 24
   exit /b 0
@@ -45,7 +45,7 @@ exit /b 0
     );
     fs.writeFileSync(
         path.join(bin, "npm.cmd"),
-        batch(`@echo off
+        batch(String.raw`@echo off
 echo npm %*>>"%ONEBOTS_TEST_LOG%"
 if defined NODE_AUTH_TOKEN exit /b 8
 if defined NPM_TOKEN exit /b 8
