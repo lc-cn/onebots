@@ -10,6 +10,18 @@ import {
     releaseServiceMigrationPending,
 } from "./service-migration-workspace.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
+import type { ServiceHost } from "./service-host.js";
+import {
+    inspectWindowsServiceDirectorySecurity,
+    inspectWindowsServiceFileSecurity,
+    secureWindowsServiceFile,
+} from "./windows-service-security.js";
+vi.mock("./windows-service-security.js", async importOriginal => ({
+    ...(await importOriginal<typeof import("./windows-service-security.js")>()),
+    inspectWindowsServiceDirectorySecurity: vi.fn(() => "a".repeat(64)),
+    inspectWindowsServiceFileSecurity: vi.fn(() => "b".repeat(64)),
+    secureWindowsServiceFile: vi.fn(() => "b".repeat(64)),
+}));
 const folders: string[] = [];
 afterEach(() => {
     vi.restoreAllMocks();
@@ -21,6 +33,26 @@ function fixture() {
     return root;
 }
 describe("migration owned workspace seed", () => {
+    it("Windows 首次初始化即用同一 ACL 契约创建锁，随后可安全重开", () => {
+        const root = fixture();
+        const host: ServiceHost = {
+            platform: "win32",
+            homedir: root,
+            env: {},
+            isElevated: true,
+            windowsSid: "S-1-5-21-100-200-300-1001",
+            exec: vi.fn(() => '{"secured":true,"sddl":"TzpTWVNURU0="}'),
+            spawn: vi.fn(async () => 0),
+        };
+        prepareServiceMigrationWorkspace(root, "windows-install", "running", host);
+        const release = acquireControlWorkspace(root, host);
+        release();
+        expect(inspectWindowsServiceDirectorySecurity).toHaveBeenCalled();
+        expect(secureWindowsServiceFile).toHaveBeenCalledOnce();
+        expect(inspectWindowsServiceFileSecurity).toHaveBeenCalledOnce();
+        expect(fs.existsSync(path.join(root, ".control/manager-lock.sqlite"))).toBe(true);
+    });
+
     it.each(["running", "stopped"] as const)(
         "persists %s desired and releases only matching pending under the caller lock",
         desired => {

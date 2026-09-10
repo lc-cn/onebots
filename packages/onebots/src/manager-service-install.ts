@@ -114,7 +114,7 @@ export async function installManagerServiceWhileLocked(
             // 共用一次性工作区初始化与维护门禁；已有工作区不重置、不修改认证。
             const created = !exists(path.join(spec.workspace, ".control"));
             if (created) {
-                prepareServiceMigrationWorkspace(spec.workspace, record.id, "running");
+                prepareServiceMigrationWorkspace(spec.workspace, record.id, "running", host);
                 const unlock = acquireControlWorkspace(spec.workspace, host);
                 try {
                     // Windows 的进程树身份由 SCM 宿主 Job Object 与受 ACL 保护的状态管道证明。
