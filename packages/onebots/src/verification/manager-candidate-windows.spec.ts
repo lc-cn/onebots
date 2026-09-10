@@ -12,14 +12,17 @@ vi.mock("../service-host.js", () => ({
     createDefaultServiceHost: () => ({ windowsSid: "S-1-5-18" }),
 }));
 vi.mock("../windows-service-security.js", () => ({
-    secureWindowsServiceDirectory: (_host: unknown, directory: string) =>
-        fs.mkdirSync(directory, { recursive: true }),
+    secureWindowsServiceDirectory: vi.fn((_host: unknown, directory: string) => {
+        // 真实 helper 会在 create 前拒绝缺失祖先；测试锁定相同的调用契约。
+        if (!fs.existsSync(path.dirname(directory))) throw new Error("missing secure ancestor");
+        if (!fs.existsSync(directory)) fs.mkdirSync(directory);
+    }),
 }));
 
 const roots: string[] = [];
 afterEach(() => {
     vi.restoreAllMocks();
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 

@@ -177,7 +177,8 @@ function verifyWindowsManagerCandidate(
     };
     const host = createDefaultServiceHost();
     const id = randomUUID();
-    const allocation = path.join(path.resolve(options.privateRoot), `windows-${id}`);
+    const privateRoot = path.resolve(options.privateRoot);
+    const allocation = path.join(privateRoot, `windows-${id}`);
     const worker = fileURLToPath(new URL("./manager-candidate-worker.js", import.meta.url));
     const nativeHost = path.resolve(
         import.meta.dirname,
@@ -199,6 +200,8 @@ function verifyWindowsManagerCandidate(
         | "worker-failed"
         | "schema-commit" = "native-error";
     try {
+        // ACL helper 有意拒绝缺失祖先；先建立受保护验证根，再建立本次唯一 allocation。
+        secureWindowsServiceDirectory(host, privateRoot);
         secureWindowsServiceDirectory(host, allocation);
         fs.writeFileSync(
             request,

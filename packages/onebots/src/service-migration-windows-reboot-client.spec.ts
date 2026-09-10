@@ -114,7 +114,7 @@ describe("Windows reboot receipt client", () => {
                 },
                 "inspect",
             ),
-        ).toThrow("响应无效");
+        ).toThrow("Windows 重启迁移收据无效");
     });
 
     it("derives only the packaged fixed-architecture native host path", () => {
