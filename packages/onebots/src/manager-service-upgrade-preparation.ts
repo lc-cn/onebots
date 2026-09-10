@@ -59,6 +59,8 @@ export type ManagerUpgradeCandidateRejectionCode =
     | "ARTIFACT_INPUT_INVALID"
     | "CANDIDATE_STORE_INVALID"
     | "OPERATION_CONFLICT"
+    | "ARTIFACT_INPUT_FAILED"
+    | "CANDIDATE_ALLOCATION_FAILED"
     | "DOWNLOAD_FAILED"
     | "VERIFICATION_FAILED"
     | "CANDIDATE_RECEIPT_INVALID"
@@ -72,6 +74,8 @@ const candidateRejectionCodes = new Set<ManagerUpgradeCandidateRejectionCode>([
     "ARTIFACT_INPUT_INVALID",
     "CANDIDATE_STORE_INVALID",
     "OPERATION_CONFLICT",
+    "ARTIFACT_INPUT_FAILED",
+    "CANDIDATE_ALLOCATION_FAILED",
     "DOWNLOAD_FAILED",
     "VERIFICATION_FAILED",
     "CANDIDATE_RECEIPT_INVALID",
@@ -268,7 +272,7 @@ export async function prepareManagerUpgradeCandidate(
                 root: path.join(home, "versions"),
                 ...(host.platform === "win32"
                     ? {
-                          secureCandidateDirectory: (candidateDirectory: string) =>
+                          createCandidateDirectory: (candidateDirectory: string) =>
                               secureWindowsServiceDirectory(host, candidateDirectory),
                       }
                     : {}),
@@ -297,8 +301,10 @@ export async function prepareManagerUpgradeCandidate(
         if (["interrupted", "downloading", "verifying"].includes(installed.phase)) throw unknown();
         if (installed.phase === "failed")
             throw failure(
-                installed.error === "DOWNLOAD_FAILED"
-                    ? "DOWNLOAD_FAILED"
+                installed.error === "ARTIFACT_INPUT_FAILED" ||
+                    installed.error === "CANDIDATE_ALLOCATION_FAILED" ||
+                    installed.error === "DOWNLOAD_FAILED"
+                    ? installed.error
                     : installed.error === "VERIFICATION_FAILED"
                       ? "VERIFICATION_FAILED"
                       : "CANDIDATE_INVALID",

@@ -347,7 +347,7 @@ describe("control installation service", () => {
         expect(test.service.install(request, true).id).toBe("install-1");
         await test.service.close();
         const operation = test.service.status("install-1");
-        expect(operation).toMatchObject({ phase: "failed", error: "DOWNLOAD_FAILED" });
+        expect(operation).toMatchObject({ phase: "failed", error: "ARTIFACT_INPUT_FAILED" });
         expect(JSON.stringify(operation)).not.toContain("synthetic-secret");
         const reopened = test.reopen();
         test.setActive("another-client-applied");

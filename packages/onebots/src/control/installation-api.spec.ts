@@ -222,7 +222,7 @@ describe("installation HTTP boundary", () => {
         await test.service.close();
         expect(await test.request("/api/control/installations/operation", "GET")).toMatchObject({
             status: 200,
-            body: { phase: "failed", error: "DOWNLOAD_FAILED" },
+            body: { phase: "failed", error: "ARTIFACT_INPUT_FAILED" },
         });
     });
 

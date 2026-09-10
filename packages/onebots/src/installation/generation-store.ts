@@ -55,8 +55,8 @@ export interface GenerationStoreOptions {
     root: string;
     /** 由控制服务提供；须与激活操作在同一个工作区锁内串行调用。 */
     isActive(id: string): boolean;
-    /** 系统级仓库可在写入任何候选字节前原子收紧新目录。 */
-    secureCandidateDirectory?(directory: string): void;
+    /** 系统级仓库可用受信 OS 原语原子创建新目录，避免先继承宽松 ACL 的窗口。 */
+    createCandidateDirectory?(directory: string): void;
 }
 
 interface CandidateRecord {
@@ -78,7 +78,7 @@ export class GenerationStore {
     private readonly root: string;
     private readonly storeId: string;
     private readonly isActive: (id: string) => boolean;
-    private readonly secureCandidateDirectory?: (directory: string) => void;
+    private readonly createCandidateDirectory?: (directory: string) => void;
 
     constructor(options: GenerationStoreOptions) {
         fs.mkdirSync(options.root, { recursive: true, mode: 0o700 });
@@ -86,7 +86,7 @@ export class GenerationStore {
         this.root = fs.realpathSync(options.root);
         fs.chmodSync(this.root, 0o700);
         this.isActive = options.isActive;
-        this.secureCandidateDirectory = options.secureCandidateDirectory;
+        this.createCandidateDirectory = options.createCandidateDirectory;
         const identityPath = path.join(this.root, "store.json");
         if (!exists(identityPath)) {
             writeAtomic(identityPath, { schemaVersion: 1, id: randomUUID() });
@@ -106,9 +106,11 @@ export class GenerationStore {
             throw new Error("候选版本计划无效");
         const id = randomUUID();
         const directory = path.join(this.root, id);
-        fs.mkdirSync(directory, { mode: 0o700 });
         try {
-            this.secureCandidateDirectory?.(directory);
+            if (this.createCandidateDirectory) this.createCandidateDirectory(directory);
+            else fs.mkdirSync(directory, { mode: 0o700 });
+            const stat = fs.lstatSync(directory);
+            if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error("候选版本目录无效");
         } catch (error) {
             fs.rmSync(directory, { recursive: true, force: true });
             throw error;

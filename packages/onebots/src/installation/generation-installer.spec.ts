@@ -77,6 +77,30 @@ describe("GenerationInstaller", () => {
         });
     });
 
+    it("候选原子创建失败与下载失败使用不同的固定诊断码", async () => {
+        const { root, plan, options, download } = fixture();
+        const installer = new GenerationInstaller({
+            ...options,
+            store: new GenerationStore({
+                root: path.join(root, "secured-generations"),
+                isActive: () => false,
+                createCandidateDirectory: () => {
+                    throw new Error("private ACL detail");
+                },
+            }),
+        });
+        const failed = await installer.install("allocation-failed", plan);
+        expect(failed).toMatchObject({
+            phase: "failed",
+            error: "CANDIDATE_ALLOCATION_FAILED",
+        });
+        expect(failed).not.toHaveProperty("candidateId");
+        expect(download).not.toHaveBeenCalled();
+        expect(
+            fs.readFileSync(path.join(root, "operations/allocation-failed.json"), "utf8"),
+        ).not.toContain("private ACL detail");
+    });
+
     it("最终持久状态投影不含安装计划或凭据，观察失败不改变结果", async () => {
         const { plan, options } = fixture();
         const onOperation = vi.fn(() => {

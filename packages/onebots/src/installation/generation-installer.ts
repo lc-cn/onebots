@@ -17,7 +17,12 @@ export interface GenerationInstallOperation {
     candidateId?: string;
     createdAt: string;
     finishedAt?: string;
-    error?: "DOWNLOAD_FAILED" | "VERIFICATION_FAILED" | "INTERRUPTED";
+    error?:
+        | "ARTIFACT_INPUT_FAILED"
+        | "CANDIDATE_ALLOCATION_FAILED"
+        | "DOWNLOAD_FAILED"
+        | "VERIFICATION_FAILED"
+        | "INTERRUPTED";
 }
 
 export interface GenerationInstallerOptions {
@@ -132,13 +137,19 @@ export class GenerationInstaller {
         options: { token?: string; signal?: AbortSignal },
     ): Promise<GenerationInstallOperation> {
         let current = operation;
-        let failureCode: "DOWNLOAD_FAILED" | "VERIFICATION_FAILED" = "DOWNLOAD_FAILED";
+        let failureCode:
+            | "ARTIFACT_INPUT_FAILED"
+            | "CANDIDATE_ALLOCATION_FAILED"
+            | "DOWNLOAD_FAILED"
+            | "VERIFICATION_FAILED" = "ARTIFACT_INPUT_FAILED";
         try {
             options.signal?.throwIfAborted();
             verifyLocalArtifacts(plan);
+            failureCode = "CANDIDATE_ALLOCATION_FAILED";
             const candidate = this.options.store.allocate(operation.id, plan.digest);
             current = { ...current, phase: "downloading", candidateId: candidate.id };
             this.save(current);
+            failureCode = "DOWNLOAD_FAILED";
             try {
                 await (this.options.download ?? downloadGeneration)({
                     directory: candidate.directory,
@@ -179,7 +190,7 @@ export class GenerationInstaller {
             this.save(current);
             this.observe(current);
             return current;
-        } catch (error) {
+        } catch {
             options.token = undefined;
             // A receipt may have committed before its final operation record failed to flush.
             let receiptExists = false;
@@ -285,6 +296,8 @@ function isOperation(value: unknown): value is GenerationInstallOperation {
             (typeof item.finishedAt === "string" &&
                 Number.isFinite(Date.parse(item.finishedAt)))) &&
         (item.error === undefined ||
+            item.error === "ARTIFACT_INPUT_FAILED" ||
+            item.error === "CANDIDATE_ALLOCATION_FAILED" ||
             item.error === "DOWNLOAD_FAILED" ||
             item.error === "VERIFICATION_FAILED" ||
             item.error === "INTERRUPTED")

@@ -161,9 +161,13 @@ function generationOperation(
             (typeof value.finishedAt !== "string" ||
                 !Number.isFinite(Date.parse(value.finishedAt)))) ||
         (value.error !== undefined &&
-            !["DOWNLOAD_FAILED", "VERIFICATION_FAILED", "INTERRUPTED"].includes(
-                String(value.error),
-            ))
+            ![
+                "ARTIFACT_INPUT_FAILED",
+                "CANDIDATE_ALLOCATION_FAILED",
+                "DOWNLOAD_FAILED",
+                "VERIFICATION_FAILED",
+                "INTERRUPTED",
+            ].includes(String(value.error)))
     )
         return null;
     return {

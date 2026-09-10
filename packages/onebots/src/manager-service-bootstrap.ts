@@ -244,7 +244,7 @@ async function bootstrapManagerServiceImpl(
                 root: path.join(home, "versions"),
                 ...(host.platform === "win32"
                     ? {
-                          secureCandidateDirectory: (directory: string) =>
+                          createCandidateDirectory: (directory: string) =>
                               secureWindowsServiceDirectory(host, directory),
                       }
                     : {}),

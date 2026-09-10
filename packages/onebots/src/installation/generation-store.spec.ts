@@ -71,12 +71,14 @@ describe("generation store", () => {
         const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-generation-security-"));
         folders.push(root);
         const secure = vi.fn((directory: string) => {
+            expect(fs.existsSync(directory)).toBe(false);
+            fs.mkdirSync(directory);
             expect(fs.readdirSync(directory)).toEqual([]);
         });
         const store = new GenerationStore({
             root,
             isActive: () => false,
-            secureCandidateDirectory: secure,
+            createCandidateDirectory: secure,
         });
         const candidate = store.allocate("operation-1", "a".repeat(64));
         expect(secure).toHaveBeenCalledOnce();
@@ -85,12 +87,24 @@ describe("generation store", () => {
         const rejected = new GenerationStore({
             root,
             isActive: () => false,
-            secureCandidateDirectory: () => {
+            createCandidateDirectory: () => {
                 throw new Error("unsafe boundary");
             },
         });
         expect(() => rejected.allocate("operation-2", "b".repeat(64))).toThrow("unsafe boundary");
         expect(fs.readdirSync(root).filter(name => name !== "store.json")).toEqual([candidate.id]);
+    });
+
+    it("原子目录创建器返回非目录或符号链接时不写入候选记录", () => {
+        const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-generation-create-"));
+        folders.push(root);
+        const store = new GenerationStore({
+            root,
+            isActive: () => false,
+            createCandidateDirectory: directory => fs.writeFileSync(directory, "unsafe"),
+        });
+        expect(() => store.allocate("operation-1", "a".repeat(64))).toThrow("候选版本目录无效");
+        expect(fs.readdirSync(root)).toEqual(["store.json"]);
     });
 
     it("分配唯一私有候选，下载文件不能自行成为已验证版本", () => {

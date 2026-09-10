@@ -39,7 +39,19 @@ function send(
         | GatewayMessageDebugReply
         | GatewayVerificationReply,
 ): void {
-    if (process.connected) process.send?.(message);
+    if (!process.connected || !process.send) return;
+    try {
+        process.send(message, error => {
+            // 父进程可在 connected 检查后立即关闭 IPC；这是正常停机，不应让网关崩溃。
+            if (error && (error as NodeJS.ErrnoException).code !== "ERR_IPC_CHANNEL_CLOSED") {
+                process.stderr.write("[onebots] 网关 IPC 发送失败\n");
+            }
+        });
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ERR_IPC_CHANNEL_CLOSED") {
+            process.stderr.write("[onebots] 网关 IPC 发送失败\n");
+        }
+    }
 }
 
 function failure(code: GatewayFailedMessage["code"], message: string): void {
