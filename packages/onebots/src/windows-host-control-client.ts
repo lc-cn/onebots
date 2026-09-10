@@ -37,6 +37,12 @@ export type WindowsPipeExchange = (
     timeoutMs: number,
 ) => Promise<Buffer>;
 
+export class WindowsHostControlError extends Error {
+    constructor(public readonly code: string) {
+        super(`Windows 管理管道请求失败 (${code})`);
+    }
+}
+
 type WindowsNativeExchangeRunner = (
     executable: string,
     args: string[],
@@ -217,11 +223,38 @@ export class WindowsHostControlClient {
         const response = await this.exchange(this.pipeName, requestBytes(request), this.timeoutMs);
         if (response.length > MAX_STATUS_BYTES)
             throw new Error("Windows 管理管道状态响应超过 64KiB");
+        throwHostFailure(response, request.requestId);
         const parsed = parseWindowsNativeStatus(response.toString("utf8"));
         if (parsed.requestId !== request.requestId)
             throw new Error("Windows 管理管道响应与请求不匹配");
         return parsed;
     }
+}
+
+function throwHostFailure(bytes: Buffer, requestId: string): void {
+    let value: unknown;
+    try {
+        value = JSON.parse(bytes.toString("utf8"));
+    } catch {
+        return;
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) return;
+    const response = value as Record<string, unknown>;
+    if (response.version !== 2 || response.requestId !== requestId || response.ok !== false) return;
+    const error = response.error;
+    if (!error || typeof error !== "object" || Array.isArray(error))
+        throw new Error("Windows 管理管道失败响应无效");
+    const fields = error as Record<string, unknown>;
+    if (
+        Reflect.ownKeys(fields).length !== 2 ||
+        typeof fields.code !== "string" ||
+        !/^[a-z][a-z0-9_]{0,63}$/u.test(fields.code) ||
+        typeof fields.message !== "string" ||
+        fields.message.length < 1 ||
+        fields.message.length > 512
+    )
+        throw new Error("Windows 管理管道失败响应无效");
+    throw new WindowsHostControlError(fields.code);
 }
 
 function parsePipeResponse(

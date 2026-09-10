@@ -53,11 +53,16 @@ describe("Windows原生宿主状态接线", () => {
                 windowsHostRpcPipe:
                     "\\\\.\\pipe\\onebots-manager-rpc-0123456789abcdef0123456789abcdef",
             });
-            expect(publisher.construct).toHaveBeenCalledWith(WINDOWS_HOST_PIPE_NAME, {
-                id: host.id,
-                version: expect.stringMatching(/^\d+\.\d+\.\d+/),
-                pid: process.pid,
-            });
+            expect(publisher.construct).toHaveBeenCalledWith(
+                WINDOWS_HOST_PIPE_NAME,
+                {
+                    id: host.id,
+                    version: expect.stringMatching(/^\d+\.\d+\.\d+/),
+                    pid: process.pid,
+                },
+                undefined,
+                expect.any(Function),
+            );
             expect(publisher.publish).toHaveBeenCalledWith(
                 expect.objectContaining({ desired: "running" }),
             );

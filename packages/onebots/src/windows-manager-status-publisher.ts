@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import type { GatewayControllerState } from "./control/gateway-controller.js";
 import {
+    WindowsHostControlError,
     WindowsHostControlClient,
     type WindowsPublishedControlStatus,
 } from "./windows-host-control-client.js";
@@ -17,6 +18,11 @@ interface WindowsStatusClient {
     ): ReturnType<WindowsHostControlClient["invalidate"]>;
 }
 
+export interface WindowsPublisherFailure {
+    phase: "publish" | "invalidate";
+    code: string;
+}
+
 /** 将已持久化的 manager/gateway 状态串行发布给受保护的原生宿主。 */
 export class WindowsManagerStatusPublisher {
     private queue: Promise<void> = Promise.resolve();
@@ -27,6 +33,7 @@ export class WindowsManagerStatusPublisher {
         pipeName: string,
         private readonly manager: WindowsPublishedControlStatus["manager"],
         private readonly client: WindowsStatusClient = new WindowsHostControlClient(pipeName),
+        private readonly onFailure?: (failure: WindowsPublisherFailure) => void,
     ) {}
 
     publish(gateway: Pick<GatewayControllerState, "desired" | "actual">): Promise<void> {
@@ -59,6 +66,7 @@ export class WindowsManagerStatusPublisher {
                 try {
                     this.assertPublished(observed?.state.control, control);
                 } catch {
+                    this.reportFailure("publish", error);
                     throw error;
                 }
             }
@@ -80,7 +88,10 @@ export class WindowsManagerStatusPublisher {
                 // Missing control state is already the required fail-closed result, including
                 // an accepted invalidation whose acknowledgement was lost.
                 const observed = await this.client.status().catch(() => undefined);
-                if (!observed || observed.state.control !== undefined) throw error;
+                if (!observed || observed.state.control !== undefined) {
+                    this.reportFailure("invalidate", error);
+                    throw error;
+                }
             }
         });
         this.queue = result.catch(() => undefined);
@@ -114,6 +125,17 @@ export class WindowsManagerStatusPublisher {
             )
         )
             throw new Error("Windows 原生宿主未确认当前管理状态");
+    }
+
+    private reportFailure(phase: WindowsPublisherFailure["phase"], error: unknown): void {
+        try {
+            this.onFailure?.({
+                phase,
+                code: error instanceof WindowsHostControlError ? error.code : "unconfirmed",
+            });
+        } catch {
+            // Diagnostics cannot change the lifecycle result.
+        }
     }
 }
 

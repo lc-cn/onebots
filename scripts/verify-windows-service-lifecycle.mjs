@@ -338,8 +338,15 @@ async function lifecycleFailureEvidence(token) {
     } catch (error) {
         gatewayState = { readError: error?.code ?? "UNKNOWN" };
     }
+    let nativeStatus;
+    try {
+        nativeStatus = JSON.parse(run(host, ["status", "--pipe", localControlPipe]));
+    } catch (error) {
+        nativeStatus = { readError: error?.message ?? "UNKNOWN" };
+    }
     return JSON.stringify({
         status,
+        nativeStatus,
         gatewayState,
         operationLog: diagnosticLog("operation"),
         gatewayLog: diagnosticLog("gateway"),

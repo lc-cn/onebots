@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WindowsNativeStatus } from "./service-platform-windows.js";
 import type { WindowsPublishedControlStatus } from "./windows-host-control-client.js";
+import { WindowsHostControlError } from "./windows-host-control-client.js";
 import {
     completeWindowsGatewayOperation,
     WindowsManagerStatusPublisher,
@@ -206,5 +207,31 @@ describe("Windows manager状态发布", () => {
         await publisher.publish({ desired: "running", actual: "running" });
         await expect(publisher.invalidate()).resolves.toBeUndefined();
         expect(status).toHaveBeenCalledOnce();
+    });
+
+    it("失效拒绝且旧状态仍存在时只报告固定宿主错误码", async () => {
+        const failure = vi.fn();
+        let current: WindowsPublishedControlStatus | undefined;
+        const publisher = new WindowsManagerStatusPublisher(
+            "\\\\.\\pipe\\onebots-gateway-control",
+            manager,
+            {
+                status: vi.fn(async () => response(current)),
+                publish: vi.fn(async control => {
+                    current = control;
+                    return response(control);
+                }),
+                invalidate: vi.fn(async () => {
+                    throw new WindowsHostControlError("state_mismatch");
+                }),
+            },
+            failure,
+        );
+        await publisher.publish({ desired: "running", actual: "running" });
+        await expect(publisher.invalidate()).rejects.toThrow("state_mismatch");
+        expect(failure).toHaveBeenCalledWith({
+            phase: "invalidate",
+            code: "state_mismatch",
+        });
     });
 });

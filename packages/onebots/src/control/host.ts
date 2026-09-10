@@ -1,4 +1,4 @@
-import { createControlLogWriter } from "./gateway-log.js";
+import { appendControlLog, createControlLogWriter } from "./gateway-log.js";
 import {
     createManagerUpgradeRelease,
     createManagerUpgradeIdentity,
@@ -160,11 +160,31 @@ export async function startControlHost(options: ControlHostOptions) {
         initialDesired: serviceMigrationStatus(workspace).pending ? "stopped" : "running",
     });
     if (options.windowsHostPipe)
-        publisher = new WindowsManagerStatusPublisher(options.windowsHostPipe, {
-            id,
-            version: packageMetadata.version,
-            pid: process.pid,
-        });
+        publisher = new WindowsManagerStatusPublisher(
+            options.windowsHostPipe,
+            {
+                id,
+                version: packageMetadata.version,
+                pid: process.pid,
+            },
+            undefined,
+            failure => {
+                try {
+                    appendControlLog(
+                        workspace,
+                        "operation",
+                        `${JSON.stringify({
+                            time: new Date().toISOString(),
+                            action: `windows-status.${failure.phase}`,
+                            status: "failed",
+                            code: failure.code,
+                        })}\n`,
+                    );
+                } catch {
+                    process.stderr.write("[onebots] Windows 状态失败诊断不可写\n");
+                }
+            },
+        );
     const readVerified = (id: string) => {
         if (!generations) throw new Error("运行版本仓库不可用");
         return generations.readVerified(id);

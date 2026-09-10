@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
     createWindowsNativeHostExchange,
+    WindowsHostControlError,
     WindowsHostControlClient,
 } from "./windows-host-control-client.js";
 
@@ -88,6 +89,26 @@ describe("Windows named pipe ControlClient边界", () => {
             (await new WindowsHostControlClient(pipe, exchange).invalidate(control.manager, 2))
                 .state.control,
         ).toBeUndefined();
+    });
+
+    it("保留原生宿主固定失败码且不暴露宿主错误正文", async () => {
+        const exchange = vi.fn(async (_pipe: string, bytes: Buffer) => {
+            const request = JSON.parse(bytes.toString("utf8"));
+            return Buffer.from(
+                JSON.stringify({
+                    version: 2,
+                    requestId: request.requestId,
+                    ok: false,
+                    error: { code: "state_mismatch", message: "private host detail" },
+                }),
+            );
+        });
+        const error = await new WindowsHostControlClient(pipe, exchange)
+            .invalidate(control.manager, 2)
+            .catch(error => error);
+        expect(error).toBeInstanceOf(WindowsHostControlError);
+        expect(error).toMatchObject({ code: "state_mismatch" });
+        expect(error.message).not.toContain("private host detail");
     });
 
     it("拒绝远程管道、超期配置、错配响应及超限状态", async () => {
