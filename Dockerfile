@@ -33,7 +33,9 @@ COPY scripts/pack-control-runtime.mjs ./scripts/pack-control-runtime.mjs
 RUN node scripts/pack-control-runtime.mjs /app/runtime-artifacts adapters/* protocols/*/protocol
 
 # 生产依赖（去掉 devDependencies 以减小镜像）
-RUN CI=true pnpm prune --prod --ignore-scripts
+# pnpm 10 的 prune 会移除 workspace 包之间的可解析链接；离线生产安装既裁剪
+# devDependencies，也按锁文件重建这些链接，确保运行镜像能加载 @onebots/core。
+RUN CI=true pnpm install --prod --offline --ignore-scripts
 
 # ---------- 运行阶段 ----------
 FROM node:24-alpine
