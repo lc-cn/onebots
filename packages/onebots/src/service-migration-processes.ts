@@ -123,12 +123,13 @@ function writeReceipt(control: string, value: Receipt, previous?: Receipt): void
 function gone(pid: number): boolean {
     return !gatewayProcessExists(pid);
 }
-function gatewayQuiet(control: string): boolean {
+function gatewayQuiet(control: string, allowRecoverableState = false): boolean {
     const state = json(path.join(control, "gateway.json"));
     if (
         state.schemaVersion !== 1 ||
         !["running", "stopped"].includes(String(state.desired)) ||
-        state.recoveryRequired !== false ||
+        (state.recoveryRequired !== false &&
+            (!allowRecoverableState || state.recoveryRequired !== true)) ||
         !["running", "stopped", "failed"].includes(String(state.actual)) ||
         !Array.isArray(state.operations) ||
         state.operations.some(
@@ -139,6 +140,9 @@ function gatewayQuiet(control: string): boolean {
         )
     )
         return false;
+    // 历史实例身份明确且进程/进程组均已消失时，新 manager 可先接管；host 随后必须先持久化
+    // reconcile 操作才能启动新网关。缺少实例身份仍属于未知结果，不允许自动恢复。
+    if (state.recoveryRequired === true && state.instance === undefined) return false;
     if (state.instance !== undefined) {
         const instance = state.instance as Record<string, unknown>;
         if (
@@ -196,7 +200,11 @@ async function workersQuiet(control: string): Promise<boolean> {
     }
     return true;
 }
-async function quiet(control: string, neverStarted = false): Promise<boolean> {
+async function quiet(
+    control: string,
+    neverStarted = false,
+    allowRecoverableGateway = false,
+): Promise<boolean> {
     if (neverStarted) {
         const state = json(path.join(control, "gateway.json"));
         if (
@@ -207,7 +215,7 @@ async function quiet(control: string, neverStarted = false): Promise<boolean> {
         )
             return false;
     }
-    return gatewayQuiet(control) && (await workersQuiet(control));
+    return gatewayQuiet(control, allowRecoverableGateway) && (await workersQuiet(control));
 }
 
 function neverStartedQuiet(control: string): boolean {
@@ -346,7 +354,14 @@ export async function claimServiceProcessOwnership(
                 !gone(previous.pid)
             )
                 return false;
-            if (!(await quiet(control, previous.phase === "never-started"))) return false;
+            if (
+                !(await quiet(
+                    control,
+                    previous.phase === "never-started",
+                    previous.phase !== "never-started",
+                ))
+            )
+                return false;
         }
         writeReceipt(
             control,

@@ -151,6 +151,66 @@ describe("管理服务迁移进程证明", () => {
         });
         expect(await verifyServiceMigrationProcesses(f.workspace)).toBe(false);
     });
+    it("旧manager和网关都已退出时允许host接管待对账状态", async () => {
+        const f = fixture(),
+            pid = await deadPid(),
+            managerId = randomUUID(),
+            nextManagerId = randomUUID();
+        fs.writeFileSync(
+            path.join(f.control, "process-ownership.json"),
+            JSON.stringify({
+                schemaVersion: 1,
+                hostname: os.hostname(),
+                phase: "active",
+                managerId,
+                pid,
+            }),
+            { mode: 0o600 },
+        );
+        const gateway = {
+            ...f.state,
+            desired: "running",
+            actual: "failed",
+            recoveryRequired: true,
+            instance: { id: randomUUID(), pid },
+            operations: [
+                {
+                    id: randomUUID(),
+                    action: "shutdown",
+                    status: "failed",
+                    startedAt: new Date().toISOString(),
+                    finishedAt: new Date().toISOString(),
+                },
+            ],
+        };
+        f.save(gateway);
+        const release = acquireControlWorkspace(f.workspace);
+        try {
+            expect(await claimServiceProcessOwnership(f.workspace, nextManagerId, false)).toBe(
+                true,
+            );
+        } finally {
+            release();
+        }
+        expect(
+            JSON.parse(fs.readFileSync(path.join(f.control, "process-ownership.json"), "utf8")),
+        ).toMatchObject({ phase: "active", managerId: nextManagerId, pid: process.pid });
+        expect(JSON.parse(fs.readFileSync(path.join(f.control, "gateway.json"), "utf8"))).toEqual(
+            gateway,
+        );
+    });
+    it("待对账状态缺少旧实例或旧实例仍存活时拒绝接管", async () => {
+        const f = fixture();
+        f.save({ ...f.state, actual: "failed", recoveryRequired: true });
+        expect(await claimServiceProcessOwnership(f.workspace, randomUUID(), false)).toBe(false);
+        f.save({
+            ...f.state,
+            actual: "failed",
+            recoveryRequired: true,
+            instance: { id: randomUUID(), pid: process.pid },
+        });
+        expect(await claimServiceProcessOwnership(f.workspace, randomUUID(), false)).toBe(false);
+    });
     it.each(["starting", "stopping", "unknown"])("不凭缺失PID放行 %s 网关", async actual => {
         const f = fixture();
         f.save({ ...f.state, actual, recoveryRequired: true });

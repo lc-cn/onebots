@@ -2,6 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import net from "node:net";
+import os from "node:os";
+import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { afterEach, describe, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { startControlHost } from "./host.js";
@@ -22,6 +26,12 @@ function workspace(): string {
     const directory = fs.mkdtempSync("/tmp/ob-host-");
     directories.push(directory);
     return directory;
+}
+
+async function deadPid(): Promise<number> {
+    const child = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+    await once(child, "exit");
+    return child.pid!;
 }
 
 async function start(root: string, entrypoint = gatewayEntrypoint, runtimeRoot?: string) {
@@ -185,6 +195,42 @@ describe("control host integration", () => {
             await expect(client.gateway(action)).rejects.toThrow("历史管理进程所有权不可确认");
         expect((await fetch(`${running.url}/ready`)).status).toBe(200);
         expect(fs.existsSync(path.join(root, ".control/process-ownership.json"))).toBe(false);
+    });
+    it("旧管理进程和网关都已退出时自动接管并完成网关对账", async () => {
+        const root = workspace();
+        const initial = await start(root);
+        await initial.host.close();
+        const pid = await deadPid();
+        const ownershipPath = path.join(root, ".control/process-ownership.json");
+        const ownership = JSON.parse(fs.readFileSync(ownershipPath, "utf8"));
+        fs.writeFileSync(
+            ownershipPath,
+            JSON.stringify({ ...ownership, phase: "active", hostname: os.hostname(), pid }),
+        );
+        const gatewayPath = path.join(root, ".control/gateway.json");
+        const gateway = JSON.parse(fs.readFileSync(gatewayPath, "utf8"));
+        fs.writeFileSync(
+            gatewayPath,
+            JSON.stringify({
+                ...gateway,
+                actual: "failed",
+                recoveryRequired: true,
+                instance: { id: randomUUID(), pid },
+                error: "前次网关结果未知",
+            }),
+        );
+
+        const reopened = await start(root);
+        const status = await reopened.local.status();
+        expect(status.processOwnership).toEqual({ available: true });
+        expect(status.gateway).toMatchObject({
+            desired: "running",
+            actual: "running",
+            recoveryRequired: false,
+        });
+        expect(status.gateway.instance?.pid).not.toBe(pid);
+        expect(status.gateway.operations.at(-2)?.action).toBe("reconcile");
+        expect(status.gateway.operations.at(-1)?.action).toBe("start");
     });
     it("配置应用记录损坏时保留管理端并拒绝启动，停止仍可执行", async () => {
         const root = workspace();
