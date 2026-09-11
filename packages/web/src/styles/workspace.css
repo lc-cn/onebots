@@ -144,8 +144,8 @@
         radial-gradient(circle at 100% 0, rgba(86, 177, 244, 0.14), transparent 22rem),
         linear-gradient(145deg, var(--surface) 48%, rgba(235, 229, 255, 0.36));
     box-shadow: var(--shadow);
-    -webkit-backdrop-filter: saturate(125%) blur(14px);
-    backdrop-filter: saturate(125%) blur(14px);
+    -webkit-backdrop-filter: saturate(140%) blur(22px);
+    backdrop-filter: saturate(140%) blur(22px);
 }
 .runtime-copy {
     padding: 1.75rem 1.85rem;
@@ -216,8 +216,8 @@
         var(--surface);
     color: var(--fg);
     padding: 1.65rem;
-    -webkit-backdrop-filter: saturate(125%) blur(14px);
-    backdrop-filter: saturate(125%) blur(14px);
+    -webkit-backdrop-filter: saturate(140%) blur(22px);
+    backdrop-filter: saturate(140%) blur(22px);
 }
 .onboarding-intro {
     display: grid;
@@ -282,8 +282,8 @@
     background: var(--surface);
     padding: 1.5rem;
     box-shadow: var(--shadow);
-    -webkit-backdrop-filter: saturate(120%) blur(12px);
-    backdrop-filter: saturate(120%) blur(12px);
+    -webkit-backdrop-filter: saturate(135%) blur(20px);
+    backdrop-filter: saturate(135%) blur(20px);
 }
 .section-heading {
     display: flex;
@@ -430,8 +430,8 @@
     background: var(--surface) !important;
     padding: 1.4rem !important;
     box-shadow: var(--shadow);
-    -webkit-backdrop-filter: saturate(120%) blur(12px);
-    backdrop-filter: saturate(120%) blur(12px);
+    -webkit-backdrop-filter: saturate(135%) blur(20px);
+    backdrop-filter: saturate(135%) blur(20px);
 }
 .panel-stack > section {
     border-top: 1px solid var(--border) !important;

@@ -9,8 +9,8 @@
     background: var(--surface);
     color: var(--fg);
     padding: clamp(1.25rem, 3vw, 2rem);
-    -webkit-backdrop-filter: saturate(120%) blur(12px);
-    backdrop-filter: saturate(120%) blur(12px);
+    -webkit-backdrop-filter: saturate(135%) blur(20px);
+    backdrop-filter: saturate(135%) blur(20px);
 }
 .setup-journey.complete {
     background: var(--surface);

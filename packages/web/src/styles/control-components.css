@@ -3,8 +3,8 @@
     border-radius: 0.85rem;
     background: var(--surface);
     padding: 1rem;
-    -webkit-backdrop-filter: saturate(120%) blur(12px);
-    backdrop-filter: saturate(120%) blur(12px);
+    -webkit-backdrop-filter: saturate(135%) blur(20px);
+    backdrop-filter: saturate(135%) blur(20px);
 }
 .adapter-catalog > legend {
     padding: 0 0.3rem;
@@ -65,7 +65,7 @@
 }
 .adapter-row {
     padding: 0.85rem 0.9rem;
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface) 55%, transparent);
 }
 .adapter-row + .adapter-row {
     border-top: 1px solid var(--border);
@@ -121,8 +121,8 @@
     background: var(--surface) !important;
     padding: 1.2rem !important;
     box-shadow: var(--shadow);
-    -webkit-backdrop-filter: saturate(120%) blur(12px);
-    backdrop-filter: saturate(120%) blur(12px);
+    -webkit-backdrop-filter: saturate(135%) blur(20px);
+    backdrop-filter: saturate(135%) blur(20px);
 }
 .diagnostic-panel-header {
     display: grid;

@@ -37,8 +37,8 @@
         border-bottom: 1px solid var(--border);
         background: var(--surface);
         padding: 0 1rem;
-        -webkit-backdrop-filter: saturate(130%) blur(16px);
-        backdrop-filter: saturate(130%) blur(16px);
+        -webkit-backdrop-filter: saturate(140%) blur(20px);
+        backdrop-filter: saturate(140%) blur(20px);
     }
     .mobile-nav {
         display: flex;
@@ -50,8 +50,8 @@
         padding: 0.55rem 1rem;
         overscroll-behavior-x: contain;
         scrollbar-width: thin;
-        -webkit-backdrop-filter: saturate(130%) blur(16px);
-        backdrop-filter: saturate(130%) blur(16px);
+        -webkit-backdrop-filter: saturate(140%) blur(20px);
+        backdrop-filter: saturate(140%) blur(20px);
     }
     .mobile-nav a {
         display: inline-flex;

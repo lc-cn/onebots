@@ -189,8 +189,8 @@
     background:
         radial-gradient(circle at 10% 8%, rgba(169, 143, 255, 0.25), transparent 13rem),
         linear-gradient(180deg, rgba(246, 241, 255, 0.62), rgba(234, 242, 255, 0.5));
-    -webkit-backdrop-filter: saturate(125%) blur(18px);
-    backdrop-filter: saturate(125%) blur(18px);
+    -webkit-backdrop-filter: saturate(135%) blur(22px);
+    backdrop-filter: saturate(135%) blur(22px);
     color: var(--sidebar-fg);
     padding: 0 0.75rem 0.75rem;
 }
@@ -368,8 +368,8 @@
     justify-content: space-between;
     border-bottom: 1px solid var(--border);
     background: color-mix(in srgb, var(--surface) 76%, transparent);
-    -webkit-backdrop-filter: saturate(135%) blur(16px);
-    backdrop-filter: saturate(135%) blur(16px);
+    -webkit-backdrop-filter: saturate(140%) blur(20px);
+    backdrop-filter: saturate(140%) blur(20px);
     padding: 0 clamp(1.5rem, 2vw, 2.25rem);
 }
 .workspace-crumb {
