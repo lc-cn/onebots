@@ -398,6 +398,18 @@ try {
             `${label}工作区显示`,
         );
     };
+    const openConfigurationStep = label =>
+        devtools.evaluate(`(() => {
+            const expected = ${JSON.stringify(label)};
+            const tabs = document.querySelector('[role="tablist"][aria-label="账号与协议配置步骤"]');
+            const tab = [...(tabs?.querySelectorAll('[role="tab"]') ?? [])].find(value =>
+                value.querySelector("strong")?.textContent?.trim() === expected,
+            );
+            if (!(tab instanceof HTMLButtonElement) || tab.disabled)
+                throw new Error(expected + "配置步骤不可用");
+            tab.click();
+            return true;
+        })()`);
     const setSelect = (label, value) =>
         devtools.evaluate(`(() => {
             const select = document.querySelector(
@@ -474,15 +486,15 @@ try {
     assert.equal(installed.gateway.desired, "running");
 
     await openWorkspace("账号与协议", "configuration-title");
-    await clickButton("重新读取配置");
+    await clickButton("重新读取");
     await waitFor(
         () =>
             devtools.evaluate(`Boolean([...document.querySelectorAll("button")].find(value =>
-                value.textContent?.trim() === "创建配置草稿" && !value.disabled,
+                value.textContent?.trim() === "开始配置" && !value.disabled,
             ))`),
         "Web 配置快照读取",
     );
-    await clickButton("创建配置草稿");
+    await clickButton("开始配置");
     await waitFor(
         () =>
             devtools.evaluate(`Boolean(
@@ -493,14 +505,15 @@ try {
     );
     assert.equal(await setSelect("平台适配器", "mock"), "mock");
     assert.equal(await setInput("账号标识", "installed-web"), "installed-web");
-    await clickButton("添加空账号");
+    await clickButton("创建账号");
     await waitFor(
         async () => /mock\.installed-web/.test(await devtools.evaluate("document.body.innerText")),
         "Web 添加 Mock 账号",
     );
+    await openConfigurationStep("协议出口");
     assert.equal(await setSelect("协议配置位置", "mock.installed-web"), "mock.installed-web");
     assert.equal(await setSelect("输出协议", "onebot.v11"), "onebot.v11");
-    await clickButton("添加配置");
+    await clickButton("添加到此作用域");
     await waitFor(
         async () =>
             /mock\.installed-web \/ onebot\.v11/.test(
@@ -510,10 +523,10 @@ try {
     );
     await clickButton("校验配置");
     await waitFor(
-        async () => /校验通过，尚未应用/.test(await devtools.evaluate("document.body.innerText")),
+        async () => /校验通过，可以应用/.test(await devtools.evaluate("document.body.innerText")),
         "Web 配置校验",
     );
-    await clickButton("应用已校验配置");
+    await clickButton("应用配置");
     await waitFor(
         async () => /应用成功/.test(await devtools.evaluate("document.body.innerText")),
         "Web 配置应用",

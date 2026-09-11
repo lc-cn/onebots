@@ -243,6 +243,28 @@ describe("GenerationInstaller", () => {
         expect(fs.existsSync(candidate.directory)).toBe(true);
     });
 
+    it("冷启动兼容旧版安装失败码，不让历史失败记录关闭安装服务", () => {
+        const { plan, options } = fixture();
+        fs.mkdirSync(options.operationsDirectory);
+        fs.writeFileSync(
+            path.join(options.operationsDirectory, "legacy-failure.json"),
+            JSON.stringify({
+                schemaVersion: 1,
+                id: "legacy-failure",
+                planDigest: plan.digest,
+                phase: "failed",
+                createdAt: "2026-09-09T04:11:29.077Z",
+                finishedAt: "2026-09-09T04:11:41.819Z",
+                error: "INSTALL_FAILED",
+            }),
+        );
+        const installer = new GenerationInstaller(options);
+        expect(installer.status("legacy-failure")).toMatchObject({
+            phase: "failed",
+            error: "INSTALL_FAILED",
+        });
+    });
+
     it("计划被篡改及幂等键复用在任何下载前拒绝", async () => {
         const { plan, options, download } = fixture();
         const installer = new GenerationInstaller(options);

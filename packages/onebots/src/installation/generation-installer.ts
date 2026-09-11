@@ -22,6 +22,7 @@ export interface GenerationInstallOperation {
         | "CANDIDATE_ALLOCATION_FAILED"
         | "DOWNLOAD_FAILED"
         | "VERIFICATION_FAILED"
+        | "INSTALL_FAILED"
         | "INTERRUPTED";
 }
 
@@ -300,6 +301,7 @@ function isOperation(value: unknown): value is GenerationInstallOperation {
             item.error === "CANDIDATE_ALLOCATION_FAILED" ||
             item.error === "DOWNLOAD_FAILED" ||
             item.error === "VERIFICATION_FAILED" ||
+            item.error === "INSTALL_FAILED" ||
             item.error === "INTERRUPTED")
     );
 }
