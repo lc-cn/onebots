@@ -5,11 +5,11 @@
 ## 1. 插件和配置
 
 ```bash
-onebots doctor -c config.yaml
+onebots doctor --data-dir /path/to/onebots-data
 onebots frameworks --framework <framework> --account <platform.account_id>
 ```
 
-确认 Adapter、Protocol、Application 都已加载，账号键严格为 `platform.account_id`，协议名称与生成方案一致。“module not found” 应通过安装对应包或修正 `-r/-p/-t` 名称解决。
+确认 Adapter、Protocol、Application 都在活动运行版本中，账号键严格为 `platform.account_id`，协议名称与生成方案一致。“module not found” 应在 Web 或 TUI 安装计划中选择对应扩展，验证并激活候选版本。
 
 ## 2. 监听和网络
 

@@ -5,9 +5,12 @@ import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import {
     allocatePort,
+    startManagedGateway,
     startProcess,
+    stopManagedGateway,
     stopProcess,
     waitForEvidence,
+    verifyFrameworkSend,
     waitForPort,
 } from "./interop-harness.mjs";
 
@@ -15,32 +18,20 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TOKEN = "onebots-kovi-interop-token";
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-kovi-interop-"));
 const evidencePath = path.join(temporaryDirectory, "evidence.json");
-const configPath = path.join(temporaryDirectory, "config.yaml");
 const children = [];
 
 try {
-    prepareWorkspacePlugins();
     const gatewayPort = await allocatePort();
-    fs.writeFileSync(configPath, renderConfig(gatewayPort), "utf8");
-    const gateway = startProcess(
-        process.execPath,
-        [
-            path.join(ROOT, "packages/onebots/lib/bin.js"),
-            "--service-runtime",
-            "run",
-            "-c",
-            configPath,
-            "-r",
-            "mock",
-            "-p",
-            "onebot-v11",
-        ],
-        {},
-        "OneBots",
-        temporaryDirectory,
-    );
-    children.push(gateway);
-    await waitForPort(gatewayPort, gateway, 15_000);
+    const gateway = await startManagedGateway({
+        root: ROOT,
+        workspace: temporaryDirectory,
+        gatewayPort,
+        configSource: renderConfig(gatewayPort),
+        protocolPackage: "onebot-v11",
+        protocolConfig: "onebot.v11",
+        framework: "kovi",
+        children,
+    });
     await assertWrongTokenRejected(gatewayPort);
 
     const kovi = startProcess(
@@ -59,27 +50,22 @@ try {
     children.push(kovi);
     const evidence = await waitForEvidence(evidencePath, [gateway, kovi], 120_000);
     assertEvidence(evidence);
+    await verifyFrameworkSend(gateway, evidence, {
+        gatewayPort,
+        framework: "kovi",
+        protocol: "onebot.v11",
+        token: TOKEN,
+    });
     process.stdout.write(
         `${JSON.stringify({ ok: true, framework: "kovi", frameworkVersion: "0.13.0", adapterVersion: "0.13.2", protocol: "onebot.v11", transport: "websocket-split", checks: ["auth-rejection", "handshake", "private-message", "get_login_info", "send_private_msg"] })}\n`,
     );
 } finally {
-    await Promise.all(children.reverse().map(stopProcess));
+    try {
+        await stopManagedGateway(children.find(item => item.control));
+    } finally {
+        await Promise.all(children.reverse().map(stopProcess));
+    }
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
-}
-
-function prepareWorkspacePlugins() {
-    const scope = path.join(temporaryDirectory, "node_modules", "@onebots");
-    fs.mkdirSync(scope, { recursive: true });
-    fs.symlinkSync(
-        path.join(ROOT, "adapters/adapter-mock"),
-        path.join(scope, "adapter-mock"),
-        "dir",
-    );
-    fs.symlinkSync(
-        path.join(ROOT, "protocols/onebot-v11/protocol"),
-        path.join(scope, "protocol-onebot-v11"),
-        "dir",
-    );
 }
 
 function renderConfig(port) {

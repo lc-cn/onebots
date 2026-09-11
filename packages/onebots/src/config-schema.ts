@@ -80,7 +80,7 @@ function pluginSelectionRule(type: PluginType, plugins: LoadedPluginInfo[]): Val
     return {
         type: "array",
         label: adapter ? "默认适配器插件" : "默认协议插件",
-        description: `${adapter ? "未传入 -r" : "未传入 -p"} 时加载；可从当前运行时选择，也可输入第三方插件短名或包名；修改后需要重启`,
+        description: `由管理端保存并在网关启动时加载；可从当前运行版本选择，也可输入第三方插件短名或包名；修改后需要显式应用并重启网关`,
         choices,
         allowCustomValues: true,
         ui: {

@@ -13,10 +13,6 @@ export const HF_RESTORE_ARTIFACTS = Object.freeze({
         targetPath: "/data/config.yaml",
         maxBytes: 1024 * 1024,
     }),
-    "extensions_backup.json": Object.freeze({
-        targetPath: "/data/extensions/hf-restore.json",
-        maxBytes: 1024 * 1024,
-    }),
 });
 
 export async function downloadHfRepositoryArtifact({

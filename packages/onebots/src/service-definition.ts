@@ -17,20 +17,6 @@ export interface ServiceSpec {
     workingDirectory: string;
 }
 
-export interface ServiceStatus {
-    installed: boolean;
-    running: boolean;
-    scope: ServiceScope;
-    detail: string;
-    /** 存在时表示 running 只是保守占位，进程管理器没有给出权威状态。 */
-    error?: string;
-}
-
-export interface ServiceCommandOptions {
-    follow?: boolean;
-    lines?: number;
-}
-
 export function buildServiceArgs(
     spec: ServiceSpec,
     command: ServiceRuntimeCommand = "run",
@@ -51,6 +37,12 @@ function systemdQuote(value: string): string {
     return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
 }
 
+function systemdWorkingDirectory(value: string): string {
+    if (/[\u0000-\u001f\u007f]/u.test(value)) throw new Error("systemd 工作目录含不可表示的字符");
+    // WorkingDirectory 不按 ExecStart argv 的规则去除引号；末尾 /. 同时保留尾随空白。
+    return value.replace(/%/g, "%%") + "/.";
+}
+
 function xmlEscape(value: string): string {
     return value
         .replace(/&/g, "&amp;")
@@ -60,7 +52,7 @@ function xmlEscape(value: string): string {
         .replace(/'/g, "&apos;");
 }
 
-export function renderSystemdUnit(spec: ServiceSpec): string {
+function renderSystemdUnitWithDirectory(spec: ServiceSpec, directory: string): string {
     const command = [spec.nodePath, ...buildServiceArgs(spec)].map(systemdQuote).join(" ");
     return `[Unit]
 Description=OneBots Bridge Service
@@ -69,7 +61,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=${systemdQuote(spec.workingDirectory)}
+WorkingDirectory=${directory}
 ExecStart=${command}
 Restart=on-failure
 RestartSec=5
@@ -79,6 +71,15 @@ KillSignal=SIGTERM
 [Install]
 WantedBy=${spec.scope === "system" ? "multi-user.target" : "default.target"}
 `;
+}
+
+export function renderSystemdUnit(spec: ServiceSpec): string {
+    return renderSystemdUnitWithDirectory(spec, systemdWorkingDirectory(spec.workingDirectory));
+}
+
+/** 仅用于逐字节识别已经写盘的历史定义，不得用于新安装或回退。 */
+export function renderHistoricalSystemdUnit(spec: ServiceSpec): string {
+    return renderSystemdUnitWithDirectory(spec, systemdQuote(spec.workingDirectory));
 }
 
 export function renderLaunchdPlist(

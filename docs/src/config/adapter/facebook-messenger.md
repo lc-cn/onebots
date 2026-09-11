@@ -1,11 +1,14 @@
 # Facebook Messenger 配置
 
-安装并加载适配器：
+## 安装
+
+在 Web 控制台打开「功能扩展」并选择对应适配器；也可以运行：
 
 ```bash
-pnpm add @onebots/adapter-facebook-messenger
-onebots -r facebook-messenger
+onebots ui --data-dir <workspace> --setup
 ```
+
+管理服务会将适配器及其必需的对等依赖安装到经过验证的不可变运行代。请勿在 OneBots 运行目录中直接执行包管理器安装命令。
 
 Web 配置页按凭据、接收、过滤、发送和高级选项分区。Webhook fields、canonical 事件和 permissions 都是可动态增减的选择列表，无需手写 JSON；敏感令牌不会作为普通文本展示。
 

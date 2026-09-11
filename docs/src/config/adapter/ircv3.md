@@ -2,10 +2,13 @@
 
 ## 安装
 
+在 Web 控制台打开「功能扩展」并选择对应适配器；也可以运行：
+
 ```bash
-pnpm add @onebots/adapter-ircv3
-onebots -r ircv3
+onebots ui --data-dir <workspace> --setup
 ```
+
+管理服务会将适配器及其必需的对等依赖安装到经过验证的不可变运行代。请勿在 OneBots 运行目录中直接执行包管理器安装命令。
 
 IRC 没有统一的机器人应用后台。请向所用网络确认 server、TLS 端口、账号注册方式、SASL 机制和 channel 权限。生产环境应使用 TLS；主动明文连接不会发送 server password 或 SASL password。
 

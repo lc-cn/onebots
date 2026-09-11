@@ -27,10 +27,6 @@ describe("HF repository restore download", () => {
                 targetPath: "/data/config.yaml",
                 maxBytes: 1024 * 1024,
             },
-            "extensions_backup.json": {
-                targetPath: "/data/extensions/hf-restore.json",
-                maxBytes: 1024 * 1024,
-            },
         });
         expect(Object.isFrozen(HF_RESTORE_ARTIFACTS)).toBe(true);
         expect(
@@ -100,18 +96,18 @@ describe("HF repository restore download", () => {
 
     it("stops a chunked response at the actual byte limit and cleans its temporary file", async () => {
         const root = temporaryDirectory();
-        const targetPath = path.join(root, "extensions.json");
+        const targetPath = path.join(root, "config.yaml");
         const fetcher = vi.fn<typeof fetch>(async () => responseFromChunks(["1234", "5"]));
 
         await expect(
             downloadHfRepositoryArtifact({
                 repoId: "owner/space",
-                artifact: "extensions_backup.json",
+                artifact: "config_backup.yaml",
                 targetPath,
                 maxBytes: 4,
                 fetcher,
             }),
-        ).rejects.toThrow("HF 恢复制品 extensions_backup.json 超过 4 字节 上限");
+        ).rejects.toThrow("HF 恢复制品 config_backup.yaml 超过 4 字节 上限");
         expect(fs.existsSync(targetPath)).toBe(false);
         expect(fs.readdirSync(root)).toEqual([]);
     });

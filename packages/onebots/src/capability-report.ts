@@ -162,7 +162,7 @@ export function formatAdapterCapabilityReport(
     const lines: string[] = [];
     if (isEvidenceReport(report)) lines.push(formatEvidenceScope(report));
     if (!report.adapters.length && !report.errors.length) {
-        lines.push("未选择适配器。请在 config.plugins.adapters 中配置，或通过 -r 指定。");
+        lines.push("未选择适配器。请通过 CLI、TUI 或 Web 扩展管理安装并选择适配器。");
         return lines.join("\n");
     }
     const labels: Record<CapabilityCategory, string> = {

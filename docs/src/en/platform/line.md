@@ -33,23 +33,16 @@ The Line adapter supports connecting to onebots service through the Line Messagi
   - Join/Leave group events
   - Member joined/left events
   - Postback events
-- ✅ **Proxy Support**
-  - HTTP/HTTPS proxy
-  - Proxy authentication support
 
 ## Installation
 
-```bash
-npm install @onebots/adapter-line
-# or
-pnpm add @onebots/adapter-line
-```
-
-For proxy support, install the optional dependency:
+Open **Extensions** in the Web console and select the adapter, or run:
 
 ```bash
-npm install https-proxy-agent
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 ## Configuration
 
@@ -61,15 +54,6 @@ line.your_bot_id:
   # Line platform configuration
   channel_access_token: 'your_channel_access_token'  # Channel Access Token, required
   channel_secret: 'your_channel_secret'              # Channel Secret, required
-  
-  # Optional configuration
-  webhook_path: '/line/your_bot_id/webhook'  # Custom webhook path
-  
-  # Proxy configuration (optional)
-  proxy:
-    url: 'http://127.0.0.1:7890'  # Proxy server address
-    username: 'proxy_user'        # Proxy username (optional)
-    password: 'proxy_pass'        # Proxy password (optional)
   
   # Protocol configuration
   onebot.v11:

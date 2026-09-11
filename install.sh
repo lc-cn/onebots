@@ -1,252 +1,131 @@
 #!/bin/sh
 set -eu
+umask 077
 
 ONEBOTS_HOME=${ONEBOTS_HOME:-"$HOME/.onebots"}
+case "$ONEBOTS_HOME" in /*) ;; *) printf '%s\n' '[OneBots] ONEBOTS_HOME 必须是绝对路径' >&2; exit 1 ;; esac
 RUNTIME_DIR="$ONEBOTS_HOME/runtime"
-CONFIG_FILE="$ONEBOTS_HOME/config.yaml"
 NODE_DIR="$ONEBOTS_HOME/node"
+MARKER="$ONEBOTS_HOME/.manager-installed"
+LOCK="$ONEBOTS_HOME/.install-lock"
 work_dir=""
-previous_onebots_version=""
-rollback_onebots=false
-
-say() {
-    printf '%s\n' "[OneBots] $*"
-}
-
-fail() {
-    printf '%s\n' "[OneBots] 安装失败：$*" >&2
-    exit 1
-}
-
+locked=false
+say() { printf '%s\n' "[OneBots] $*"; }
+fail() { say "安装未完成：$*；候选目录保留，请先核查，不会自动回滚或重新启动。" >&2; exit 1; }
 cleanup() {
     status=$?
     trap - EXIT HUP INT TERM
-    if [ "$rollback_onebots" = true ] && [ -n "$previous_onebots_version" ]; then
-        say "安装未通过依赖事务，正在恢复 OneBots ${previous_onebots_version}…"
-        if (
-            cd "$RUNTIME_DIR"
-            "$NPM_BIN" install --omit=dev "onebots@$previous_onebots_version"
-        ); then
-            restored_version=$(
-                ONEBOTS_PACKAGE_MANIFEST="$RUNTIME_DIR/node_modules/onebots/package.json" "$NODE_BIN" -p \
-                    'require(process.env.ONEBOTS_PACKAGE_MANIFEST).version ?? ""'
-            )
-            if [ "$restored_version" = "$previous_onebots_version" ]; then
-                if ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" \
-                    --service-runtime preflight -c "$CONFIG_FILE"; then
-                    say "已恢复升级前的 OneBots ${previous_onebots_version}，并通过隔离预检。"
-                else
-                    printf '%s\n' "[OneBots] 恢复失败：旧 OneBots 与恢复后的依赖未通过隔离预检" >&2
-                fi
-            else
-                printf '%s\n' "[OneBots] 恢复失败：期望 ${previous_onebots_version}，实际 ${restored_version:-未安装}" >&2
-            fi
-        else
-            printf '%s\n' "[OneBots] 恢复失败：无法重新安装 onebots@$previous_onebots_version" >&2
-        fi
-    fi
     [ -z "$work_dir" ] || rm -rf "$work_dir"
+    if [ "$locked" = true ]; then rmdir "$LOCK" || true; fi
     exit "$status"
 }
-
 trap cleanup EXIT
 trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-wait_for_service() {
-    attempt=1
-    last_status=""
-    while [ "$attempt" -le 15 ]; do
-        if last_status=$(ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" status 2>&1); then
-            printf '%s\n' "$last_status"
-            return 0
-        fi
-        if [ "$attempt" -lt 15 ]; then
-            sleep 1
-        fi
-        attempt=$((attempt + 1))
-    done
-    [ -z "$last_status" ] || printf '%s\n' "$last_status" >&2
-    return 1
-}
+[ ! -L "$ONEBOTS_HOME" ] || fail "安装目录不能是符号链接"
+if [ -f "$MARKER" ] && [ ! -L "$MARKER" ] && [ "$(cat "$MARKER")" = "onebots-manager-install-v1" ]; then
+    say "此目录已有安装成功的管理程序。未修改依赖或重启服务，请使用现有 CLI 管理。"
+    exit 0
+fi
+if [ -e "$ONEBOTS_HOME" ]; then
+    [ -d "$ONEBOTS_HOME" ] || fail "安装路径不是目录"
+    [ -z "$(ls -A "$ONEBOTS_HOME")" ] || fail "目录已有运行数据或未完成候选，原文件保持不变；旧服务请使用 onebots migrate"
+else
+    mkdir -p "$ONEBOTS_HOME"
+fi
+mkdir "$LOCK" 2>/dev/null || fail "另一安装进程已占用此目录"
+locked=true
 
-command -v curl >/dev/null 2>&1 || fail "需要 curl 下载运行环境"
-command -v tar >/dev/null 2>&1 || fail "需要 tar 解压运行环境"
-
-platform=$(uname -s)
-case "$platform" in
+case "$(uname -s)" in
     Linux) node_os=linux ;;
     Darwin) node_os=darwin ;;
-    *) fail "暂不支持 $platform；Windows 请在 PowerShell 中使用 npm 安装" ;;
+    *) fail "仅支持 Linux/macOS 原生服务" ;;
 esac
-
-machine=$(uname -m)
-case "$machine" in
+case "$(uname -m)" in
     x86_64|amd64) node_arch=x64 ;;
     arm64|aarch64) node_arch=arm64 ;;
-    *) fail "暂不支持处理器架构 $machine" ;;
+    *) fail "不支持此处理器架构" ;;
 esac
 
-node_usable=false
-if command -v node >/dev/null 2>&1; then
-    node_major=$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || printf '0')
-    if [ "$node_major" -ge 24 ]; then
-        node_usable=true
-        NODE_BIN=$(command -v node)
-    fi
+NODE_BIN=$(command -v node || true)
+node_major=0
+if [ -n "$NODE_BIN" ]; then
+    node_major=$(env -i PATH="$PATH" "$NODE_BIN" -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || printf '0')
 fi
-
-if [ "$node_usable" = false ]; then
-    say "未找到 Node.js 24，正在安装独立运行环境…"
+case "$node_major" in ''|*[!0-9]*) node_major=0 ;; esac
+if [ "$node_major" -lt 24 ]; then
+    command -v curl >/dev/null 2>&1 || fail "需要 curl 下载 Node.js"
+    command -v tar >/dev/null 2>&1 || fail "需要 tar 解压 Node.js"
+    [ ! -e "$NODE_DIR" ] && [ ! -L "$NODE_DIR" ] || fail "已有 Node.js 目录，拒绝覆盖"
     work_dir=$(mktemp -d "${TMPDIR:-/tmp}/onebots-install.XXXXXX")
     checksums="$work_dir/SHASUMS256.txt"
-    curl -fsSL "https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt" -o "$checksums"
+    say "正在下载并校验独立 Node.js 24 运行环境…"
+    env -i PATH="$PATH" curl -q --proto '=https' --tlsv1.2 -fsSL --max-time 120 https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt -o "$checksums"
     archive=$(awk -v suffix="-$node_os-$node_arch.tar.gz" '$2 ~ suffix "$" { print $2; exit }' "$checksums")
-    [ -n "$archive" ] || fail "Node.js 没有适用于 $node_os/$node_arch 的发行包"
-    curl -fL "https://nodejs.org/dist/latest-v24.x/$archive" -o "$work_dir/$archive"
-    expected=$(awk -v name="$archive" '$2 == name { print $1 }' "$checksums")
+    case "$archive" in node-v24.*-"$node_os"-"$node_arch".tar.gz) ;; *) fail "没有匹配的 Node.js 24 发行包" ;; esac
+    case "$archive" in *[!a-zA-Z0-9._-]*) fail "Node.js 发行包名称无效" ;; esac
+    env -i PATH="$PATH" curl -q --proto '=https' --tlsv1.2 -fsSL --max-time 300 "https://nodejs.org/dist/latest-v24.x/$archive" -o "$work_dir/$archive"
+    expected=$(awk -v name="$archive" '$2 == name { print $1; exit }' "$checksums")
     if command -v sha256sum >/dev/null 2>&1; then
         actual=$(sha256sum "$work_dir/$archive" | awk '{ print $1 }')
     else
         actual=$(shasum -a 256 "$work_dir/$archive" | awk '{ print $1 }')
     fi
     [ "$actual" = "$expected" ] || fail "Node.js 安装包校验失败"
-    rm -rf "$NODE_DIR"
-    mkdir -p "$NODE_DIR"
-    tar -xzf "$work_dir/$archive" -C "$NODE_DIR" --strip-components=1
+    mkdir "$NODE_DIR"
+    env -i PATH="$PATH" tar -xzf "$work_dir/$archive" -C "$NODE_DIR" --strip-components=1
     NODE_BIN="$NODE_DIR/bin/node"
 fi
+NPM_BIN="$(dirname "$NODE_BIN")/npm"
+[ -x "$NPM_BIN" ] || fail "选定 Node.js 环境缺少 npm"
+NODE_PATH_ENV="$(dirname "$NODE_BIN"):/usr/bin:/bin:/usr/sbin:/sbin"
 
-PATH="$(dirname "$NODE_BIN"):$PATH"
-export PATH
-
-NPM_BIN=$(dirname "$NODE_BIN")/npm
-[ -x "$NPM_BIN" ] || NPM_BIN=$(command -v npm || true)
-[ -n "$NPM_BIN" ] && [ -x "$NPM_BIN" ] || fail "Node.js 环境中未找到 npm"
-
-mkdir -p "$RUNTIME_DIR"
-config_exists=false
-if [ -f "$CONFIG_FILE" ]; then
-    config_exists=true
-fi
-if [ ! -f "$RUNTIME_DIR/package.json" ]; then
-    cat >"$RUNTIME_DIR/package.json" <<'EOF'
-{
-  "name": "onebots-managed-runtime",
-  "private": true,
-  "version": "1.0.0"
-}
-EOF
-fi
-
-ONEBOTS_PACKAGE_MANIFEST="$RUNTIME_DIR/node_modules/onebots/package.json"
-if [ "$config_exists" = true ] && [ -f "$ONEBOTS_PACKAGE_MANIFEST" ]; then
-    previous_onebots_version=$(
-        ONEBOTS_PACKAGE_MANIFEST="$ONEBOTS_PACKAGE_MANIFEST" "$NODE_BIN" -p \
-            'require(process.env.ONEBOTS_PACKAGE_MANIFEST).version ?? ""'
-    )
-    case "$previous_onebots_version" in
-        ""|*[!0-9A-Za-z.+_-]*) fail "现有 OneBots 版本无效，无法建立安全升级回滚点" ;;
-        *) rollback_onebots=true ;;
-    esac
-fi
-
-say "正在安装 OneBots 与匹配的 Web 管理端…"
-(
+# 新目录独占；npm 不读取用户 HOME、全局 npmrc、环境授权或旧 runtime。
+mkdir "$RUNTIME_DIR" "$ONEBOTS_HOME/.bootstrap" "$ONEBOTS_HOME/.bootstrap/home"
+printf '%s\n' '{"name":"onebots-manager-runtime","private":true,"version":"1.0.0"}' > "$RUNTIME_DIR/package.json"
+: > "$ONEBOTS_HOME/.bootstrap/user.npmrc"
+: > "$ONEBOTS_HOME/.bootstrap/global.npmrc"
+say "正在安装公开发布的 OneBots 管理程序…"
+if ! (
     cd "$RUNTIME_DIR"
-    "$NPM_BIN" install --omit=dev onebots@latest
-)
+    env -i PATH="$NODE_PATH_ENV" HOME="$ONEBOTS_HOME/.bootstrap/home" LANG=C \
+        NPM_CONFIG_USERCONFIG="$ONEBOTS_HOME/.bootstrap/user.npmrc" \
+        NPM_CONFIG_GLOBALCONFIG="$ONEBOTS_HOME/.bootstrap/global.npmrc" \
+        NPM_CONFIG_CACHE="$ONEBOTS_HOME/.bootstrap/cache" \
+        "$NPM_BIN" install --omit=dev --ignore-scripts --no-audit --no-fund --save-exact \
+        --registry=https://registry.npmjs.org onebots@latest
+); then fail "公开依赖安装失败"; fi
 
-ONEBOTS_BIN="$RUNTIME_DIR/node_modules/.bin/onebots"
-[ -x "$ONEBOTS_BIN" ] || fail "OneBots 命令安装不完整"
-
-CATALOG_FILE="$RUNTIME_DIR/node_modules/onebots/lib/extension-capability-catalog.json"
+PACKAGE_DIR="$RUNTIME_DIR/node_modules/onebots"
+ONEBOTS_BIN="$PACKAGE_DIR/lib/bin.js"
+for entry in "$ONEBOTS_BIN" "$PACKAGE_DIR/lib/control/host.js" "$PACKAGE_DIR/lib/gateway/entry.js"; do
+    [ -f "$entry" ] && [ -s "$entry" ] && [ ! -L "$entry" ] || fail "发布包缺少新管理架构工件，未执行旧 CLI"
+done
 WEB_ENTRY="$RUNTIME_DIR/node_modules/@onebots/web/dist/index.html"
-NESTED_WEB_ENTRY="$RUNTIME_DIR/node_modules/onebots/node_modules/@onebots/web/dist/index.html"
-[ -f "$CATALOG_FILE" ] || fail "OneBots 扩展版本目录缺失，无法选择匹配的默认协议"
-if [ ! -f "$WEB_ENTRY" ] && [ ! -f "$NESTED_WEB_ENTRY" ]; then
-    fail "与 OneBots 匹配的 Web 管理端产物缺失"
-fi
+NESTED_WEB_ENTRY="$PACKAGE_DIR/node_modules/@onebots/web/dist/index.html"
+if [ ! -s "$WEB_ENTRY" ] && [ ! -s "$NESTED_WEB_ENTRY" ]; then fail "发布包缺少 Web 管理端工件"; fi
 
-# 交互安装先收集所有扩展选择，再由 TUI 安装与验证；自动化流程保持可脚本化。
-if [ -t 0 ] && [ -t 1 ] && [ "${ONEBOTS_NONINTERACTIVE:-0}" != 1 ]; then
-    rollback_onebots=false
-    say "OneBots 主程序已就绪，进入适配器、协议和框架选择向导。"
-    (
-        cd "$RUNTIME_DIR"
-        ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" ui --setup -c "$CONFIG_FILE"
-    )
-    exit 0
-fi
-
-if [ "$config_exists" = false ]; then
-    protocol_version=$(
-        ONEBOTS_CATALOG_FILE="$CATALOG_FILE" "$NODE_BIN" -p \
-            'require(process.env.ONEBOTS_CATALOG_FILE).packages["@onebots/protocol-onebot-v11"]?.version ?? ""'
-    )
-    case "$protocol_version" in
-        ""|*[!0-9A-Za-z.+_-]*) fail "OneBots 扩展目录中的 OneBot v11 版本无效" ;;
-    esac
-    say "正在安装 OneBots 验证的 OneBot v11 协议版本 ${protocol_version}…"
-    (
-        cd "$RUNTIME_DIR"
-        "$NPM_BIN" install --omit=dev "@onebots/protocol-onebot-v11@$protocol_version"
-    )
-
-    PROTOCOL_MANIFEST="$RUNTIME_DIR/node_modules/@onebots/protocol-onebot-v11/package.json"
-    [ -f "$PROTOCOL_MANIFEST" ] || fail "默认 OneBot v11 协议安装不完整"
-    installed_protocol_version=$(
-        ONEBOTS_PROTOCOL_MANIFEST="$PROTOCOL_MANIFEST" "$NODE_BIN" -p \
-            'require(process.env.ONEBOTS_PROTOCOL_MANIFEST).version ?? ""'
-    )
-    [ "$installed_protocol_version" = "$protocol_version" ] ||
-        fail "默认 OneBot v11 协议版本校验失败：期望 ${protocol_version}，实际 ${installed_protocol_version:-未安装}"
-fi
-
-say "正在创建安全配置并安装用户级常驻服务…"
-(
+# install 只登记用户级管理服务；空白工作区由管理服务初始化，不预填业务配置。
+run_cli() (
     cd "$RUNTIME_DIR"
-    if [ "$config_exists" = false ]; then
-        ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" setup -c "$CONFIG_FILE" -p onebot-v11
-    else
-        say "检测到已有配置，保留账号、凭据和插件选择：$CONFIG_FILE"
-    fi
-    say "正在同步配置中已选扩展的验证版本…"
-    ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" update -c "$CONFIG_FILE" --yes --packages-only
+    env -u NODE_OPTIONS "$NODE_BIN" "$ONEBOTS_BIN" "$@"
 )
-rollback_onebots=false
-(
-    cd "$RUNTIME_DIR"
-    ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" install -c "$CONFIG_FILE"
-    if ! ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" restart; then
-        ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" start
-    fi
-    wait_for_service || fail "服务启动后未通过在线验证；请运行 onebots status 并检查服务日志"
-)
-
-if ! status_json=$(ONEBOTS_EXTENSION_ROOT="$RUNTIME_DIR" "$ONEBOTS_BIN" status --json); then
-    fail "服务虽已通过等待门禁，但无法取得最终状态证据"
-fi
-if ! management_url=$(
-    ONEBOTS_STATUS_JSON="$status_json" "$NODE_BIN" -p \
-        'const report = JSON.parse(process.env.ONEBOTS_STATUS_JSON); if (report.ok !== true || typeof report.target?.webUrl !== "string" || !report.target.webUrl) throw new Error("invalid status evidence"); report.target.webUrl' \
-        2>/dev/null
-); then
-    fail "最终状态证据缺少已验证的 Web 管理地址"
-fi
-
-say "安装完成。"
-say "管理地址：$management_url"
-if [ "$config_exists" = false ]; then
-    token=$(awk '$1 == "access_token:" { print $2; exit }' "$CONFIG_FILE" | tr -d "'\"")
-    if [ -n "$token" ]; then
-        say "首次登录鉴权码：$token"
-        say "请登录后立即保存到密码管理器；后续重复安装不会提取或显示已有鉴权码。"
-    else
-        say "请使用配置文件中的管理凭据登录：$CONFIG_FILE"
-    fi
-else
-    say "已保留现有管理凭据且未显示；如需登录，请从配置文件读取：$CONFIG_FILE"
-fi
-say "以后可直接在 Web 的“功能扩展”页面安装 Slack、Telegram 等平台。"
+say "正在登记并启动用户级管理服务…"
+run_cli install --data-dir "$ONEBOTS_HOME" || fail "系统服务安装失败"
+run_cli start || fail "系统服务启动结果未确认"
+STATUS_FILE="$ONEBOTS_HOME/.bootstrap/status.json"
+run_cli status --json > "$STATUS_FILE" || fail "系统服务状态检查失败"
+env -i PATH="$NODE_PATH_ENV" "$NODE_BIN" --input-type=module -e '
+import fs from "node:fs";
+try {
+    const state = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    if (state.schemaVersion !== 1 || state.installation !== "control" || state.manager?.state !== "running" || state.manager?.ipc !== "available" || state.serviceRecoveryRequired !== false || state.diagnostic !== null || state.gateway?.recoveryRequired !== false) process.exit(1);
+} catch { process.exit(1); }
+' "$STATUS_FILE" || fail "管理服务尚未确认运行，不能报告成功"
+printf '%s\n' 'onebots-manager-install-v1' > "$MARKER.tmp"
+mv "$MARKER.tmp" "$MARKER"
+say "管理服务已安装并确认运行。未安装平台或输出协议，未自动启动业务账号。"
+say "使用设备码配对：\"$NODE_BIN\" \"$ONEBOTS_BIN\" auth bootstrap --data-dir \"$ONEBOTS_HOME\""
+say "配置和管理：\"$NODE_BIN\" \"$ONEBOTS_BIN\" ui --data-dir \"$ONEBOTS_HOME\""

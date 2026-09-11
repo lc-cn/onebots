@@ -132,12 +132,7 @@ protocol:
 
 ## 🚀 使用示例
 
-### 启动服务
-
-```bash
-# 注册 ICQQ 适配器和 OneBot V11 协议
-onebots -r icqq -p onebot.v11
-```
+先安装并启动 OneBots 管理服务，再运行 `onebots ui`。在“安装运行版本”中选择 ICQQ 适配器及需要的输出协议；安装时按提示输入仅用于本次下载的 GitHub Packages `read:packages` 凭据，管理服务会同时安装必需的 `@icqqjs/*` peer。候选完成验证并显式激活后，在配置页填写 QQ 号、登录信息与签名服务，应用配置并启动网关。选择适配器本身不会自动登录账号或开启协议。
 
 ### 扫码登录
 

@@ -35,11 +35,13 @@ Kook（原开黑啦）适配器已完全实现，支持通过 Kook Bot API 接�
 
 ## 安装
 
+在 Web 控制台打开「功能扩展」并选择对应适配器；也可以运行：
+
 ```bash
-npm install @onebots/adapter-kook
-# 或
-pnpm add @onebots/adapter-kook
+onebots ui --data-dir <workspace> --setup
 ```
+
+管理服务会将适配器及其必需的对等依赖安装到经过验证的不可变运行代。请勿在 OneBots 运行目录中直接执行包管理器安装命令。
 
 ## 配置
 
@@ -91,7 +93,7 @@ kook.zhin:
 
 ```bash
 # 启动 onebots 服务，加载 Kook 适配器
-onebots -r kook -p onebot-v11 -p onebot-v12 -p satori-v1 -c config.yaml
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 ## 使用客户端SDK连接

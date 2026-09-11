@@ -33,7 +33,7 @@ qq.my-bot:
 AI Agent 通过 stdin/stdout 直接通信，无需网络配置：
 
 ```bash
-onebots mcp --config config.yaml --account qq/my-bot
+onebots mcp --data-dir /path/to/onebots-data --account qq/my-bot
 ```
 
 ### HTTP/SSE
@@ -52,7 +52,7 @@ onebots mcp --config config.yaml --account qq/my-bot
   "mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -63,7 +63,7 @@ onebots mcp --config config.yaml --account qq/my-bot
   "mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -74,7 +74,7 @@ onebots mcp --config config.yaml --account qq/my-bot
   "cline.mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }

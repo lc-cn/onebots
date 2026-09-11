@@ -2,12 +2,15 @@
 
 Milky is an open QQ bot protocol. OneBots implements its `event_type` envelope, message scenes, and `/api/{action}` action namespace through the shared Adapter capability layer.
 
-## Install and register
+## Install and enable
 
 ```bash
-pnpm add @onebots/protocol-milky-v1
-onebots -r icqq -p milky-v1 -c config.yaml
+onebots serve --data-dir /path/to/onebots-data
+onebots auth bootstrap --data-dir /path/to/onebots-data
+onebots ui --data-dir /path/to/onebots-data
 ```
+
+Select Milky v1 and the required platform adapter in the Web or TUI installation plan. Verify and activate the candidate runtime, then configure the account and start the gateway.
 
 For the client SDK:
 

@@ -47,6 +47,12 @@ const milkySchema: Schema = {
             schemes: ["http:", "https:"],
             fields: [
                 {
+                    key: "url",
+                    label: "Webhook URL",
+                    type: "string",
+                    placeholder: "https://example.com/webhook",
+                },
+                {
                     key: "access_token",
                     label: "Access Token",
                     sensitive: true,
@@ -79,6 +85,12 @@ const milkySchema: Schema = {
             addLabel: "添加连接",
             schemes: ["ws:", "wss:"],
             fields: [
+                {
+                    key: "url",
+                    label: "WebSocket URL",
+                    type: "string",
+                    placeholder: "wss://example.com/events",
+                },
                 {
                     key: "access_token",
                     label: "Access Token",

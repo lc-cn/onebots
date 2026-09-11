@@ -1,7 +1,7 @@
 {
   "name": "onebots",
   "version": "1.2.12",
-  "description": "OneBots 整合适配器和协议，提供HTTP/WebSocket服务",
+  "description": "OneBots 常驻管理服务、网关与统一 CLI/TUI/Web 控制台",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "node lib/bin.js",
-    "build": "rm -rf lib && rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json && cp -r src/config.sample.yaml lib/config.sample.yaml",
+    "build": "rm -rf lib && rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
     "clean": "rm -rf lib *.tsbuildinfo"
   },
   "engines": {
@@ -34,33 +34,38 @@
     "/lib/**/*.js",
     "/lib/**/*.d.ts",
     "/lib/**/*.json",
+    "/lib/native/win32-x64/onebots-windows-host.exe",
+    "/lib/native/win32-arm64/onebots-windows-host.exe",
     "!lib/**/*.spec.*",
     "!lib/**/*.test.*",
     "!lib/**/__tests__/**"
   ],
   "devDependencies": {
     "@types/koa": "^3.0.1",
-    "@types/koa-static": "^4.0.4",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.10",
+    "@types/semver": "^7.7.1",
+    "@types/ws": "^8.18.1",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "tsx": "latest",
     "typescript": "catalog:"
   },
   "dependencies": {
-    "@karinjs/node-pty": "^1.1.3",
     "@onebots/core": "workspace:*",
     "@onebots/web": "workspace:*",
     "ink": "^6.3.1",
     "js-yaml": "^4.3.1",
-    "koa-static": "^5.0.0",
     "pastel": "^4.0.1",
+    "pnpm": "10.34.5",
     "react": "^19.1.1",
-    "zod": "^4.1.12"
+    "semver": "^7.8.5",
+    "zod": "^4.1.12",
+    "ws": "^8.20.0"
   },
   "optionalDependencies": {
-    "node-windows": "^1.0.0-beta.8"
+    "@karinjs/node-pty": "^1.1.3",
+    "@karinjs/prebuild-install": "1.3.9"
   },
   "repository": {
     "type": "git",

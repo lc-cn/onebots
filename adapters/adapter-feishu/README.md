@@ -68,9 +68,7 @@ import { FeishuEndpoint } from '@onebots/adapter-feishu';
 
 ## 使用
 
-```bash
-onebots -r feishu
-```
+先安装并启动 OneBots 管理服务，再运行 `onebots ui`。在“安装运行版本”中选择飞书适配器及需要的输出协议，确认依赖、完成验证并显式激活候选版本；随后在配置页填写应用凭据与接收方式，应用配置并启动网关。选择适配器本身不会自动连接账号或开启协议。
 
 ## 功能
 

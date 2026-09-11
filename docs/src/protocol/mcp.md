@@ -6,20 +6,13 @@ MCP (Model Context Protocol) 是由 Anthropic 发布的开放协议，用于标�
 
 只需三步即可让 AI Agent 接入你的 IM 平台：
 
-**第一步：安装并配置**
+**第一步：启动管理服务并配置账号**
 
 ```bash
-npm install onebots @onebots/protocol-mcp-v1
+onebots serve --data-dir /path/to/onebots-data
 ```
 
-在 `config.yaml` 中为账号启用 MCP 协议：
-
-```yaml
-qq.my-bot:
-  appid: "your-appid"
-  secret: "your-secret"
-  mcp.v1: {}                    # 启用即可，所有选项都有默认值
-```
+通过 TUI 或 Web 的扩展安装和配置向导，选择平台适配器及 MCP 协议，填写账号并启用 `mcp.v1`，校验并应用配置。保持管理服务及网关运行；下面的 AI 客户端使用同一工作区。
 
 **第二步：配置 AI Agent**
 
@@ -30,7 +23,7 @@ qq.my-bot:
   "mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -50,8 +43,8 @@ qq.my-bot:
 ## 安装
 
 ```bash
-# 服务端协议插件（必需）
-npm install @onebots/protocol-mcp-v1
+# 连接管理服务，选择安装 MCP 及所需平台适配器
+onebots tui --data-dir /path/to/onebots-data
 
 # 客户端 SDK（仅编程调用时需要，AI Agent 无需安装）
 npm install @onebots/mcp-client
@@ -104,10 +97,10 @@ MCP 提供两种传输方式，适用于不同场景：
 通过 stdin/stdout 进行 JSON-RPC 通信。这是 Cursor、Claude Code 等 AI Agent 的标准连接方式，无需额外网络配置。
 
 ```bash
-onebots mcp --config config.yaml --account qq/my-bot
+onebots mcp --data-dir /path/to/onebots-data --account qq/my-bot
 ```
 
-stdio 命令会复用本次启动时已经通过注册契约验证的 MCP 插件入口，不会再相对于 `onebots` 包自身查找另一份依赖。因此 npm、pnpm 严格依赖布局和 workspace 成员目录都使用网关实际加载的同一版本。输入请求会按到达顺序处理；处理器异步失败时，有 `id` 的请求会收到 JSON-RPC `-32603` 内部错误，无 `id` 的通知不会收到响应，详细错误只写入 OneBots 日志，不会污染 stdout 协议流。若账号选择、协议配置或 stdio 导出校验失败，命令会先停止已经启动的账号、协议和监听器再返回错误；stdin 关闭时会等待已经接收的请求完成，重复关闭信号也只会触发一次停止。
+`onebots mcp` 通过工作区的私有控制连接访问已有管理服务，再由管理服务调用当前网关的 MCP 账号。请先运行 `onebots serve --data-dir /path/to/onebots-data`，在 TUI 或 Web 中安装平台适配器及 MCP 协议、配置账号并应用。命令不会安装依赖、加载账号或启动网关，也不会自动启用 MCP；存在多个 MCP 账号时必须指定 `--account 平台/账号`。请求按输入顺序执行，stdout 仅输出 JSON-RPC。正常关闭 stdin 会等待已接收请求处理并关闭自己的会话，不停止账号或网关；网关停止、重启或连接结果未知时退出，不自动重放工具调用。HTTP/SSE 的协议令牌与管理设备配对凭证相互独立。
 
 ::: tip 何时用 stdio
 本地开发、Cursor/Claude Code/Cline 等桌面 AI Agent 直连时使用。Agent 会自动启动该命令并通过管道通信。
@@ -138,7 +131,7 @@ OneBots 服务启动后自动暴露 HTTP 端点，适用于远程访问或 Web �
   "mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -149,7 +142,7 @@ OneBots 服务启动后自动暴露 HTTP 端点，适用于远程访问或 Web �
   "mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -160,7 +153,7 @@ OneBots 服务启动后自动暴露 HTTP 端点，适用于远程访问或 Web �
   "cline.mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -303,7 +296,7 @@ import { McpStdioClient } from '@onebots/mcp-client';
 
 const client = new McpStdioClient({
   command: 'onebots',
-  args: ['mcp', '--config', 'config.yaml', '--account', 'qq/my-bot'],
+  args: ['mcp', '--data-dir', '/path/to/onebots-data', '--account', 'qq/my-bot'],
 });
 
 await client.connect();

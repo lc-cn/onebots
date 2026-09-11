@@ -1,7 +1,7 @@
 # Framework troubleshooting
 
 ```bash
-onebots doctor -c config.yaml
+onebots doctor --data-dir /path/to/onebots-data
 onebots frameworks --framework <framework> --account <platform.account_id>
 ```
 

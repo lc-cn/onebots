@@ -2,12 +2,15 @@
 
 Milky 是面向 QQ 机器人的开放协议。OneBots 按 Milky 的 `event_type` 事件模型、消息场景和 `/api/{action}` 动作接口提供服务，并通过 Adapter 能力层映射到实际平台。
 
-## 安装与注册
+## 安装与启用
 
 ```bash
-pnpm add @onebots/protocol-milky-v1
-onebots -r icqq -p milky-v1 -c config.yaml
+onebots serve --data-dir /path/to/onebots-data
+onebots auth bootstrap --data-dir /path/to/onebots-data
+onebots ui --data-dir /path/to/onebots-data
 ```
+
+在 Web 或 TUI 安装计划中选择 Milky v1 与所需平台适配器，验证并激活候选版本，再配置账号并启动网关。
 
 SDK 客户端需要同时安装公共核心：
 

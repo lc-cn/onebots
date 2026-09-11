@@ -23,10 +23,12 @@ OneBot V12 improvements over V11:
 - [Events (Event)](/en/protocol/onebot-v12/event) - Event type documentation
 - [Message Segments (Segment)](/en/protocol/onebot-v12/segment) - Message segment format documentation
 
-## Installation
+## Enable the protocol
+
+Select OneBot V12 in the Web **Extensions** view or the TUI setup wizard. The manager installs the protocol and its required peers into a new immutable runtime generation, verifies it, and waits for explicit activation:
 
 ```bash
-npm install @onebots/protocol-onebot-v12
+onebots ui --data-dir /path/to/onebots-data --setup
 ```
 
 ## Configuration

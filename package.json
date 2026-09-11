@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm build:packages && pnpm build:rest",
-    "build:packages": "pnpm --filter='./packages/*' --workspace-concurrency=1 build",
-    "build:rest": "pnpm --filter='./protocols/*/*' --filter='./adapters/*' --filter=@onebots/docs --filter=onebots-dev build",
+    "build:packages": "pnpm --filter=@onebots/core --filter=imhelper --filter=@onebots/meta --filter=@onebots/web --filter=onebots --workspace-concurrency=1 build",
+    "build:rest": "pnpm --filter=\"@onebots/adapter-*\" --filter=\"@onebots/protocol-*\" --filter=\"@imhelper/*\" --filter=@onebots/mcp-client --filter=@onebots/docs --filter=onebots-dev build",
     "clean": "pnpm -r clean",
     "dev": "pnpm --filter=onebots-dev dev",
     "test:ws": "pnpm --filter=onebots-dev test:ws",
@@ -29,6 +29,11 @@
     "interop:langbot": "node scripts/interop-langbot.mjs",
     "interop:alicebot": "node scripts/interop-alicebot.mjs",
     "interop:kotori": "node scripts/interop-kotori.mjs",
+    "interop:control:guard": "node scripts/verify-interop-control-entrypoints.mjs",
+    "test:protocols:managed": "node scripts/verify-managed-protocol-transports.mjs",
+    "test:entries:installed": "node scripts/verify-installed-cli-tui.mjs",
+    "test:entries:web-installed": "node scripts/verify-installed-web.mjs",
+    "test:entries:cross-entry-race": "node scripts/verify-installed-cross-entry-race.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --check ./**/*.{ts,js}",
@@ -50,9 +55,9 @@
   },
   "engines": {
     "node": ">=24",
-    "pnpm": ">=9.12.0"
+    "pnpm": ">=10.34.5"
   },
-  "packageManager": "pnpm@9.15.9",
+  "packageManager": "pnpm@10.34.5",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lc-cn/onebots.git"

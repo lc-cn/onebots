@@ -1,197 +1,240 @@
-$ErrorActionPreference = "Stop"
-
-$OneBotsHome = if ($env:ONEBOTS_HOME) { $env:ONEBOTS_HOME } else { Join-Path $HOME ".onebots" }
-$RuntimeDir = Join-Path $OneBotsHome "runtime"
-$ConfigFile = Join-Path $OneBotsHome "config.yaml"
-$NodeDir = Join-Path $OneBotsHome "node"
+﻿$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 
 function Write-Step([string]$Message) {
     Write-Host "[OneBots] $Message"
 }
 
+function Fail-Install([string]$Message) {
+    throw "安装未完成：$Message；候选目录保留，请先核查，不会自动回滚或重新启动。"
+}
+
+function Test-ReparsePoint([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    $Item = Get-Item -LiteralPath $Path -Force
+    return ($Item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0
+}
+
+function Test-RegularArtifact([string]$Path) {
+    return (Test-Path -LiteralPath $Path -PathType Leaf) -and
+        -not (Test-ReparsePoint $Path) -and
+        (Get-Item -LiteralPath $Path).Length -gt 0
+}
+
+function Test-Administrator {
+    $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $Principal = New-Object Security.Principal.WindowsPrincipal($Identity)
+    return $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
 function Invoke-Checked([string]$FilePath, [string[]]$Arguments) {
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "命令执行失败（退出码 $LASTEXITCODE）：$FilePath $($Arguments -join ' ')"
+        Fail-Install "命令执行失败（退出码 $LASTEXITCODE）：$FilePath"
     }
 }
 
-function Wait-OneBotsReady([string]$OneBotsCommand) {
-    $LastStatus = @()
-    for ($Attempt = 1; $Attempt -le 15; $Attempt++) {
-        $LastStatus = @(& $OneBotsCommand status 2>&1)
-        if ($LASTEXITCODE -eq 0) {
-            if ($LastStatus.Count -gt 0) { Write-Host ($LastStatus -join [Environment]::NewLine) }
-            return
+function Invoke-IsolatedNpm([string]$NpmPath, [string[]]$Arguments, [string]$BootstrapRoot) {
+    $Saved = @{}
+    $Names = @(Get-ChildItem Env: | Where-Object {
+        $_.Name -match '(?i)(token|auth)' -or
+        $_.Name -match '(?i)^npm_config_' -or
+        $_.Name -eq 'NODE_OPTIONS'
+    } | ForEach-Object { $_.Name })
+    foreach ($Name in $Names) {
+        $Saved[$Name] = [Environment]::GetEnvironmentVariable($Name, "Process")
+        [Environment]::SetEnvironmentVariable($Name, $null, "Process")
+    }
+    foreach ($Name in @("HOME", "USERPROFILE", "NPM_CONFIG_USERCONFIG", "NPM_CONFIG_GLOBALCONFIG", "NPM_CONFIG_CACHE")) {
+        if (-not $Saved.ContainsKey($Name)) {
+            $Saved[$Name] = [Environment]::GetEnvironmentVariable($Name, "Process")
         }
-        if ($Attempt -lt 15) { Start-Sleep -Seconds 1 }
     }
-    $Evidence = if ($LastStatus.Count -gt 0) { $LastStatus -join [Environment]::NewLine } else { "服务尚未响应" }
-    throw "服务启动后未通过在线验证；请运行 onebots status 并检查服务日志。最后状态：$Evidence"
-}
-
-$NodeCommand = Get-Command node -ErrorAction SilentlyContinue
-$NodeUsable = $false
-if ($NodeCommand) {
-    $NodeMajor = [int]((& $NodeCommand.Source -p 'Number(process.versions.node.split(".")[0])'))
-    $NodeUsable = $NodeMajor -ge 24
-}
-
-if (-not $NodeUsable) {
-    Write-Step "未找到 Node.js 24，正在安装独立运行环境…"
-    $Architecture = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq "Arm64") { "arm64" } else { "x64" }
-    $ChecksumsUrl = "https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt"
-    $Checksums = (Invoke-WebRequest -UseBasicParsing $ChecksumsUrl).Content
-    $ArchiveLine = ($Checksums -split "`n" | Where-Object { $_ -match "node-v.+-win-$Architecture\.zip$" } | Select-Object -First 1)
-    if (-not $ArchiveLine) { throw "Node.js 没有适用于 Windows/$Architecture 的发行包" }
-    $Parts = $ArchiveLine.Trim() -split "\s+"
-    $ExpectedHash = $Parts[0]
-    $Archive = $Parts[1]
-    $Temporary = Join-Path ([System.IO.Path]::GetTempPath()) $Archive
-    Invoke-WebRequest -UseBasicParsing "https://nodejs.org/dist/latest-v24.x/$Archive" -OutFile $Temporary
-    $ActualHash = (Get-FileHash -Algorithm SHA256 $Temporary).Hash.ToLowerInvariant()
-    if ($ActualHash -ne $ExpectedHash.ToLowerInvariant()) { throw "Node.js 安装包校验失败" }
-    $ExtractRoot = Join-Path ([System.IO.Path]::GetTempPath()) "onebots-node-$PID"
-    Remove-Item $ExtractRoot -Recurse -Force -ErrorAction SilentlyContinue
-    Expand-Archive $Temporary $ExtractRoot -Force
-    Remove-Item $NodeDir -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item $NodeDir -ItemType Directory -Force | Out-Null
-    $Extracted = Get-ChildItem $ExtractRoot -Directory | Select-Object -First 1
-    Copy-Item (Join-Path $Extracted.FullName "*") $NodeDir -Recurse -Force
-    Remove-Item $ExtractRoot -Recurse -Force
-    Remove-Item $Temporary -Force
-    $NodePath = Join-Path $NodeDir "node.exe"
-} else {
-    $NodePath = $NodeCommand.Source
-}
-
-$NodeBin = Split-Path $NodePath
-$env:PATH = "$NodeBin;$env:PATH"
-$NpmPath = Join-Path $NodeBin "npm.cmd"
-if (-not (Test-Path $NpmPath)) { $NpmPath = (Get-Command npm.cmd).Source }
-
-New-Item $RuntimeDir -ItemType Directory -Force | Out-Null
-$Manifest = Join-Path $RuntimeDir "package.json"
-$ConfigExists = Test-Path $ConfigFile
-if (-not (Test-Path $Manifest)) {
-    '{"name":"onebots-managed-runtime","private":true,"version":"1.0.0"}' | Set-Content $Manifest -Encoding utf8
-}
-
-$OneBotsManifest = Join-Path $RuntimeDir "node_modules/onebots/package.json"
-$PreviousOneBotsVersion = ""
-$RollbackOneBots = $false
-if ($ConfigExists -and (Test-Path $OneBotsManifest)) {
-    $PreviousOneBotsVersion = (Get-Content $OneBotsManifest -Raw | ConvertFrom-Json).version
-    if (-not $PreviousOneBotsVersion -or $PreviousOneBotsVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z.+_-]*$') {
-        throw "现有 OneBots 版本无效，无法建立安全升级回滚点"
+    try {
+        $BootstrapHome = Join-Path $BootstrapRoot "home"
+        $env:HOME = $BootstrapHome
+        $env:USERPROFILE = $BootstrapHome
+        $env:NPM_CONFIG_USERCONFIG = Join-Path $BootstrapRoot "user.npmrc"
+        $env:NPM_CONFIG_GLOBALCONFIG = Join-Path $BootstrapRoot "global.npmrc"
+        $env:NPM_CONFIG_CACHE = Join-Path $BootstrapRoot "cache"
+        Invoke-Checked $NpmPath $Arguments
+    } finally {
+        foreach ($Entry in $Saved.GetEnumerator()) {
+            [Environment]::SetEnvironmentVariable($Entry.Key, $Entry.Value, "Process")
+        }
     }
-    $RollbackOneBots = $true
 }
 
-Write-Step "正在安装 OneBots 与匹配的 Web 管理端…"
-Push-Location $RuntimeDir
+$OneBotsHome = if ($env:ONEBOTS_HOME) { $env:ONEBOTS_HOME } else { Join-Path $HOME ".onebots" }
+if (-not [System.IO.Path]::IsPathRooted($OneBotsHome)) {
+    Write-Error "[OneBots] ONEBOTS_HOME 必须是绝对路径"
+    exit 1
+}
+$OneBotsHome = [System.IO.Path]::GetFullPath($OneBotsHome)
+$RuntimeDir = Join-Path $OneBotsHome "runtime"
+$NodeDir = Join-Path $OneBotsHome "node"
+$BootstrapRoot = Join-Path $OneBotsHome ".bootstrap"
+$Marker = Join-Path $OneBotsHome ".manager-installed"
+$Lock = Join-Path $OneBotsHome ".install-lock"
+$WorkDir = $null
+$Locked = $false
+$ExitCode = 0
+
 try {
-    Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "onebots@latest")
-    $OneBots = Join-Path $RuntimeDir "node_modules/.bin/onebots.cmd"
-    if (-not (Test-Path $OneBots)) { throw "OneBots 命令安装不完整" }
-
-    $CatalogFile = Join-Path $RuntimeDir "node_modules/onebots/lib/extension-capability-catalog.json"
-    $WebEntry = Join-Path $RuntimeDir "node_modules/@onebots/web/dist/index.html"
-    $NestedWebEntry = Join-Path $RuntimeDir "node_modules/onebots/node_modules/@onebots/web/dist/index.html"
-    if (-not (Test-Path $CatalogFile)) { throw "OneBots 扩展版本目录缺失，无法选择匹配的默认协议" }
-    if (-not (Test-Path $WebEntry) -and -not (Test-Path $NestedWebEntry)) {
-        throw "与 OneBots 匹配的 Web 管理端产物缺失"
+    if (-not (Test-Administrator)) {
+        Fail-Install "Windows 管理服务必须在管理员 PowerShell 中安装"
     }
-    if (-not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected -and $env:ONEBOTS_NONINTERACTIVE -ne "1") {
-        $RollbackOneBots = $false
-        $env:ONEBOTS_EXTENSION_ROOT = $RuntimeDir
-        Write-Step "OneBots 主程序已就绪，进入适配器、协议和框架选择向导。"
-        Invoke-Checked -FilePath $OneBots -Arguments @("ui", "--setup", "-c", $ConfigFile)
-        return
-    }
-
-    if (-not $ConfigExists) {
-        $Catalog = Get-Content $CatalogFile -Raw | ConvertFrom-Json
-        $ProtocolVersion = $Catalog.packages.'@onebots/protocol-onebot-v11'.version
-        if (-not $ProtocolVersion -or $ProtocolVersion -notmatch '^[0-9A-Za-z][0-9A-Za-z.+_-]*$') {
-            throw "OneBots 扩展目录中的 OneBot v11 版本无效"
-        }
-        Write-Step "正在安装 OneBots 验证的 OneBot v11 协议版本 $($ProtocolVersion)…"
-        Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "@onebots/protocol-onebot-v11@$ProtocolVersion")
-
-        $ProtocolManifest = Join-Path $RuntimeDir "node_modules/@onebots/protocol-onebot-v11/package.json"
-        if (-not (Test-Path $ProtocolManifest)) { throw "默认 OneBot v11 协议安装不完整" }
-        $InstalledProtocolVersion = (Get-Content $ProtocolManifest -Raw | ConvertFrom-Json).version
-        if ($InstalledProtocolVersion -ne $ProtocolVersion) {
-            throw "默认 OneBot v11 协议版本校验失败：期望 $($ProtocolVersion)，实际 $InstalledProtocolVersion"
+    if (Test-ReparsePoint $OneBotsHome) { Fail-Install "安装目录不能是重解析点" }
+    if ((Test-Path -LiteralPath $Marker -PathType Leaf) -and -not (Test-ReparsePoint $Marker)) {
+        if ((Get-Content -LiteralPath $Marker -Raw).Trim() -eq "onebots-manager-install-v1") {
+            Write-Step "此目录已有安装成功的管理程序。未修改依赖或重启服务，请使用现有 CLI 管理。"
+            exit 0
         }
     }
-
-    $env:ONEBOTS_EXTENSION_ROOT = $RuntimeDir
-    if (-not $ConfigExists) {
-        Invoke-Checked -FilePath $OneBots -Arguments @("setup", "-c", $ConfigFile, "-p", "onebot-v11")
+    if (Test-Path -LiteralPath $OneBotsHome) {
+        if (-not (Test-Path -LiteralPath $OneBotsHome -PathType Container)) {
+            Fail-Install "安装路径不是目录"
+        }
+        if (@(Get-ChildItem -LiteralPath $OneBotsHome -Force).Count -ne 0) {
+            Fail-Install "目录已有运行数据或未完成候选，原文件保持不变；旧服务请使用 onebots migrate"
+        }
     } else {
-        Write-Step "检测到已有配置，保留账号、凭据和插件选择：$ConfigFile"
+        New-Item -ItemType Directory -Path $OneBotsHome | Out-Null
     }
-    Write-Step "正在同步配置中已选扩展的验证版本…"
-    Invoke-Checked -FilePath $OneBots -Arguments @(
-        "update", "-c", $ConfigFile, "--yes", "--packages-only"
-    )
-    $RollbackOneBots = $false
-    Invoke-Checked -FilePath $OneBots -Arguments @("install", "-c", $ConfigFile)
-    & $OneBots restart
-    if ($LASTEXITCODE -ne 0) {
-        Invoke-Checked -FilePath $OneBots -Arguments @("start")
+    try {
+        New-Item -ItemType Directory -Path $Lock -ErrorAction Stop | Out-Null
+        $Locked = $true
+    } catch {
+        Fail-Install "另一安装进程已占用此目录"
     }
-    Wait-OneBotsReady -OneBotsCommand $OneBots
-    $StatusJson = @(& $OneBots status --json)
-    if ($LASTEXITCODE -ne 0) {
-        throw "服务虽已通过等待门禁，但无法取得最终状态证据"
-    }
-    $StatusReport = ($StatusJson -join [Environment]::NewLine) | ConvertFrom-Json
-    $ManagementUrl = [string]$StatusReport.target.webUrl
-    if (-not $StatusReport.ok -or -not $ManagementUrl) {
-        throw "最终状态证据缺少已验证的 Web 管理地址"
-    }
-} catch {
-    $InstallError = $_
-    if ($RollbackOneBots -and $PreviousOneBotsVersion) {
-        Write-Step "安装未通过依赖事务，正在恢复 OneBots $PreviousOneBotsVersion…"
-        try {
-            Invoke-Checked -FilePath $NpmPath -Arguments @("install", "--omit=dev", "onebots@$PreviousOneBotsVersion")
-            $RestoredVersion = (Get-Content $OneBotsManifest -Raw | ConvertFrom-Json).version
-            if ($RestoredVersion -ne $PreviousOneBotsVersion) {
-                throw "期望 $PreviousOneBotsVersion，实际 $RestoredVersion"
-            }
-            $env:ONEBOTS_EXTENSION_ROOT = $RuntimeDir
-            Invoke-Checked -FilePath $OneBots -Arguments @(
-                "--service-runtime", "preflight", "-c", $ConfigFile
-            )
-            Write-Step "已恢复升级前的 OneBots $PreviousOneBotsVersion，并通过隔离预检。"
-        } catch {
-            throw "安装失败：$($InstallError.Exception.Message)；OneBots 恢复失败：$($_.Exception.Message)"
+
+    $Architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+    $NodeArch = if ($Architecture -eq "X64") { "x64" } elseif ($Architecture -eq "Arm64") { "arm64" } else { Fail-Install "不支持此处理器架构" }
+    $NodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    $NodePath = $null
+    if ($NodeCommand) {
+        $NodeMajorText = @(& $NodeCommand.Source -p 'Number(process.versions.node.split(".")[0])' 2>$null)
+        if ($LASTEXITCODE -eq 0 -and ($NodeMajorText -join "").Trim() -match '^\d+$' -and [int](($NodeMajorText -join "").Trim()) -ge 24) {
+            $NodePath = $NodeCommand.Source
         }
     }
-    throw $InstallError
-} finally {
-    Pop-Location
-}
 
-$Token = ""
-foreach ($Line in Get-Content $ConfigFile) {
-    if (-not $ConfigExists) {
-        if ($Line -match '^access_token:\s*["'']?([^"'']+)["'']?') { $Token = $Matches[1].Trim() }
+    if (-not $NodePath) {
+        if (Test-Path -LiteralPath $NodeDir) { Fail-Install "已有 Node.js 目录，拒绝覆盖" }
+        $WorkDir = Join-Path ([System.IO.Path]::GetTempPath()) ("onebots-install-" + [Guid]::NewGuid().ToString("N"))
+        New-Item -ItemType Directory -Path $WorkDir | Out-Null
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Write-Step "正在下载并校验独立 Node.js 24 运行环境…"
+        $Checksums = (Invoke-WebRequest -UseBasicParsing -Uri "https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt" -TimeoutSec 120).Content
+        $Pattern = "^([0-9a-fA-F]{64})\s+(node-v24\.[0-9]+\.[0-9]+-win-$NodeArch\.zip)$"
+        $ExpectedHash = $null
+        $Archive = $null
+        foreach ($Line in ($Checksums -split "`n")) {
+            if ($Line.Trim() -match $Pattern) {
+                $ExpectedHash = $Matches[1].ToLowerInvariant()
+                $Archive = $Matches[2]
+                break
+            }
+        }
+        if (-not $ExpectedHash -or -not $Archive) { Fail-Install "没有匹配的 Node.js 24 发行包" }
+        $ArchivePath = Join-Path $WorkDir $Archive
+        Invoke-WebRequest -UseBasicParsing -Uri "https://nodejs.org/dist/latest-v24.x/$Archive" -OutFile $ArchivePath -TimeoutSec 300
+        $ActualHash = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($ActualHash -ne $ExpectedHash) { Fail-Install "Node.js 安装包校验失败" }
+        $ExtractRoot = Join-Path $WorkDir "node"
+        Expand-Archive -LiteralPath $ArchivePath -DestinationPath $ExtractRoot
+        $Extracted = @(Get-ChildItem -LiteralPath $ExtractRoot -Directory)
+        if ($Extracted.Count -ne 1) { Fail-Install "Node.js 安装包目录结构无效" }
+        New-Item -ItemType Directory -Path $NodeDir | Out-Null
+        Copy-Item -Path (Join-Path $Extracted[0].FullName "*") -Destination $NodeDir -Recurse
+        $NodePath = Join-Path $NodeDir "node.exe"
+    }
+
+    $NodeBin = Split-Path -Parent $NodePath
+    $NpmPath = Join-Path $NodeBin "npm.cmd"
+    if (-not (Test-Path -LiteralPath $NpmPath -PathType Leaf)) { Fail-Install "选定 Node.js 环境缺少 npm" }
+
+    New-Item -ItemType Directory -Path $RuntimeDir | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $BootstrapRoot "home") -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $RuntimeDir "package.json") -Encoding ASCII -Value '{"name":"onebots-manager-runtime","private":true,"version":"1.0.0"}'
+    Set-Content -LiteralPath (Join-Path $BootstrapRoot "user.npmrc") -Encoding ASCII -Value ""
+    Set-Content -LiteralPath (Join-Path $BootstrapRoot "global.npmrc") -Encoding ASCII -Value ""
+    Write-Step "正在安装公开发布的 OneBots 管理程序…"
+    Push-Location $RuntimeDir
+    try {
+        Invoke-IsolatedNpm $NpmPath @(
+            "install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--save-exact",
+            "--registry=https://registry.npmjs.org", "onebots@latest"
+        ) $BootstrapRoot
+    } finally {
+        Pop-Location
+    }
+
+    $PackageDir = Join-Path $RuntimeDir "node_modules/onebots"
+    $OneBotsBin = Join-Path $PackageDir "lib/bin.js"
+    foreach ($Entry in @(
+        $OneBotsBin,
+        (Join-Path $PackageDir "lib/control/host.js"),
+        (Join-Path $PackageDir "lib/gateway/entry.js"),
+        (Join-Path $PackageDir "lib/native/win32-$NodeArch/onebots-windows-host.exe")
+    )) {
+        if (-not (Test-RegularArtifact $Entry)) {
+            Fail-Install "发布包缺少新管理架构工件，未执行旧 CLI"
+        }
+    }
+    $WebEntry = Join-Path $RuntimeDir "node_modules/@onebots/web/dist/index.html"
+    $NestedWebEntry = Join-Path $PackageDir "node_modules/@onebots/web/dist/index.html"
+    if (-not (Test-RegularArtifact $WebEntry) -and -not (Test-RegularArtifact $NestedWebEntry)) {
+        Fail-Install "发布包缺少 Web 管理端工件"
+    }
+
+    $DownloadEnvironment = @(Get-ChildItem Env: | Where-Object {
+        $_.Name -match '(?i)(token|auth)' -or
+        $_.Name -match '(?i)^npm_config_' -or
+        $_.Name -eq 'NODE_OPTIONS'
+    } | ForEach-Object { $_.Name })
+    foreach ($Name in $DownloadEnvironment) {
+        [Environment]::SetEnvironmentVariable($Name, $null, "Process")
+    }
+    Write-Step "正在登记并启动用户级管理服务…"
+    Push-Location $RuntimeDir
+    try {
+        Invoke-Checked $NodePath @($OneBotsBin, "install", "--system", "--data-dir", $OneBotsHome)
+        Invoke-Checked $NodePath @($OneBotsBin, "start", "--system")
+        $StatusOutput = @(& $NodePath $OneBotsBin status --system --json 2>&1)
+        if ($LASTEXITCODE -ne 0) { Fail-Install "系统服务状态检查失败" }
+    } finally {
+        Pop-Location
+    }
+    try {
+        $Status = ($StatusOutput -join [Environment]::NewLine) | ConvertFrom-Json
+        if ($Status.schemaVersion -ne 1 -or $Status.installation -ne "control" -or
+            $Status.manager.state -ne "running" -or $Status.manager.ipc -ne "available" -or
+            $Status.serviceRecoveryRequired -ne $false -or $null -ne $Status.diagnostic -or
+            $Status.gateway.recoveryRequired -ne $false) {
+            Fail-Install "管理服务尚未确认运行，不能报告成功"
+        }
+    } catch {
+        if ($_.Exception.Message -like "安装未完成：*") { throw }
+        Fail-Install "管理服务状态证据无效，不能报告成功"
+    }
+
+    $MarkerTemporary = "$Marker.tmp"
+    Set-Content -LiteralPath $MarkerTemporary -Encoding ASCII -Value "onebots-manager-install-v1"
+    Move-Item -LiteralPath $MarkerTemporary -Destination $Marker
+    Write-Step "管理服务已安装并确认运行。未安装平台或输出协议，未自动启动业务账号。"
+    Write-Step "使用设备码配对：`"$NodePath`" `"$OneBotsBin`" auth bootstrap --data-dir `"$OneBotsHome`""
+    Write-Step "配置和管理：`"$NodePath`" `"$OneBotsBin`" ui --system --data-dir `"$OneBotsHome`""
+} catch {
+    [Console]::Error.WriteLine("[OneBots] $($_.Exception.Message)")
+    $ExitCode = 1
+} finally {
+    if ($WorkDir -and (Test-Path -LiteralPath $WorkDir)) {
+        Remove-Item -LiteralPath $WorkDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($Locked -and (Test-Path -LiteralPath $Lock -PathType Container)) {
+        Remove-Item -LiteralPath $Lock -Force -ErrorAction SilentlyContinue
     }
 }
 
-Write-Step "安装完成。"
-Write-Step "管理地址：$ManagementUrl"
-if (-not $ConfigExists -and $Token) {
-    Write-Step "首次登录鉴权码：$Token"
-    Write-Step "请登录后立即保存到密码管理器；后续重复安装不会提取或显示已有鉴权码。"
-} elseif ($ConfigExists) {
-    Write-Step "已保留现有管理凭据且未显示；如需登录，请从配置文件读取：$ConfigFile"
-} else {
-    Write-Step "请使用配置文件中的管理凭据登录：$ConfigFile"
-}
-Write-Step "以后可直接在 Web 的“功能扩展”页面安装 Slack、Telegram 等平台。"
+exit $ExitCode

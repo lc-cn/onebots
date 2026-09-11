@@ -37,6 +37,7 @@ export async function callMilkyAPI(config, api, params = {}) {
     const data = await response.json().catch(() => ({}));
     return { status: response.status, data: data && typeof data === 'object' ? data : {} };
   } catch (error) {
+    if (process.env.ONEBOTS_REQUIRE_SERVER === '1') throw error;
     return {
       status: 0,
       data: {},
@@ -58,6 +59,7 @@ export async function checkServerAvailable(baseUrl, timeout = 3000) {
     });
     return response.ok || response.status === 401;
   } catch (error) {
+    if (process.env.ONEBOTS_REQUIRE_SERVER === '1') throw error;
     return false;
   }
 }

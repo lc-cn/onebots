@@ -1,4 +1,4 @@
-import { App } from "onebots";
+import { registerProtocolDefaults } from "onebots";
 
 // OneBot V12 Protocol Configuration
 declare module "onebots" {
@@ -22,7 +22,7 @@ export namespace OneBotV12Config {
     }
 }
 
-App.registerGeneral("onebot.v12", {
+registerProtocolDefaults("onebot.v12", {
     use_http: true,
     use_ws: false,
     request_timeout: 15000,

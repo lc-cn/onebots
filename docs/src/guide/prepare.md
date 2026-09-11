@@ -3,7 +3,7 @@
 ## 环境要求
 
 - **Node.js**：>= 24
-- **pnpm**：>= 9.12.0；仓库锁定并推荐使用 9.15.9
+- **pnpm**：>= 10.34.5；仓库锁定并推荐使用 10.34.5
 - **操作系统**：Windows、macOS 或 Linux
 
 OneBots 使用 Node.js 24 提供的运行时能力。CLI 会在加载插件与平台 SDK 前检查版本；旧版本会直接退出并显示所需版本，避免安装完成后才出现底层模块错误。
@@ -24,11 +24,19 @@ npm --version
 从源码开发时推荐使用仓库锁定的版本：
 
 ```bash
-npm install --global pnpm@9.15.9
+npm install --global pnpm@10.34.5
 pnpm --version
 ```
 
 仅通过 npm 全局安装并运行 OneBots 时不要求 pnpm，参见[快速开始](./start.md)。满足运行时版本要求后，若部署检查仍失败，可执行 `onebots doctor` 获取配置、插件、权限与服务状态诊断。
+
+从源码安装 ICQQ 适配器时，需要把 GitHub Packages token 写入用户级 npm 配置；pnpm 10 不会展开仓库内 `.npmrc` 的认证变量：
+
+```bash
+pnpm config set --global '//npm.pkg.github.com/:_authToken' '${NODE_AUTH_TOKEN}'
+```
+
+产品中的 CLI、TUI 与 Web 安装流程会为单次私有依赖下载建立临时认证文件并在完成后清理，无需用户修改容器或工作区的 `.npmrc`。
 
 ## 准备平台账号
 

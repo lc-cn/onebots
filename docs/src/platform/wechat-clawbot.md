@@ -3,7 +3,7 @@
 微信 **扩展能力（iLink Bot HTTP）** 接入说明，与 **微信公众号**（`adapter-wechat`）、**企业微信**（`wecom`）、**微信客服**（`wecom-kf`）均为不同通道。
 
 - 包名：[`@onebots/adapter-wechat-clawbot`](https://github.com/lc-cn/onebots/tree/master/adapters/adapter-wechat-clawbot)
-- 平台标识 / `-r`：**`wechat-clawbot`**
+- 平台标识：**`wechat-clawbot`**
 - 官方产品页：[微信 iLink 智能体](https://ilinkai.weixin.qq.com)
 
 ## 与微信公众号适配器的区别
@@ -37,18 +37,16 @@ iLink 没有好友目录、撤回或历史查询接口；适配器不会用会�
 
 ## 快速开始
 
+在 Web“功能扩展”或 TUI 安装向导中选择 WeChat ClawBot。管理服务会安装适配器及必需 peer，验证新的不可变运行代后再由用户激活：
+
 ```bash
-pnpm add @onebots/adapter-wechat-clawbot
+onebots ui --data-dir /path/to/onebots-data --setup
 ```
 
 ```yaml
 wechat-clawbot.my_bot:
   receive_mode: polling # 或 manual
   outbound_text_format: markdown # plain（默认）或 markdown
-```
-
-```bash
-onebots -r wechat-clawbot -c config.yaml
 ```
 
 ## 参考

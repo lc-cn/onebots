@@ -23,10 +23,12 @@ OneBot V12 相比 V11 的改进：
 - [事件 (Event)](/protocol/onebot-v12/event) - 事件类型文档
 - [消息段 (Segment)](/protocol/onebot-v12/segment) - 消息段格式文档
 
-## 安装
+## 启用
+
+在 Web“功能扩展”或 TUI 安装向导中选择 OneBot V12。管理服务会把协议及必需 peer 安装到新的不可变运行代，验证后等待用户明确激活：
 
 ```bash
-npm install @onebots/protocol-onebot-v12
+onebots ui --data-dir /path/to/onebots-data --setup
 ```
 
 ## 配置

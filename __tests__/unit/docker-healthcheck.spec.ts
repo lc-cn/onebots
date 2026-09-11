@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
     checkReadiness,
     DOCKER_HEALTHCHECK_BODY_LIMIT_BYTES,
@@ -14,19 +17,47 @@ function jsonResponse(body: string, status = 200): Response {
 }
 
 describe("Docker healthcheck", () => {
-    it("resolves the configured port and normalized path", () => {
-        expect(readinessUrl({ port: 7000, path: "/gateway/" }, {})).toBe(
-            "http://127.0.0.1:7000/gateway/ready",
-        );
+    it("uses the manager PORT and root ready, ignoring legacy routing overrides", () => {
+        expect(readinessUrl({})).toBe("http://127.0.0.1:6727/ready");
         expect(
-            readinessUrl({ port: 7000, path: "ignored" }, { PORT: "7860", ONEBOTS_PATH: "hf" }),
-        ).toBe("http://127.0.0.1:7860/hf/ready");
-        expect(
-            readinessUrl(
-                { port: 7000, path: "ignored" },
-                { ONEBOTS_HEALTHCHECK_URL: "http://127.0.0.1:9000/custom-ready" },
-            ),
-        ).toBe("http://127.0.0.1:9000/custom-ready");
+            readinessUrl({
+                PORT: "7860",
+                ONEBOTS_PATH: "business",
+                ONEBOTS_HEALTHCHECK_URL: "http://other/custom",
+            }),
+        ).toBe("http://127.0.0.1:7860/ready");
+        for (const PORT of ["", "0", "65536", "invalid", "6727/path", "2.5"])
+            expect(() => readinessUrl({ PORT })).toThrow("管理端口无效");
+    });
+
+    it("never parses broken YAML or uses a business port/path as manager readiness", async () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-health-"));
+        try {
+            const file = path.join(directory, "config.yaml");
+            const fetcher = vi.fn(async (_url: string) =>
+                jsonResponse(
+                    JSON.stringify({
+                        ready: true,
+                        application: "onebots",
+                        version: DOCKER_EXPECTED_APPLICATION_VERSION,
+                        instance_id: "manager",
+                    }),
+                ),
+            );
+            for (const content of ["secret: [broken", "port: 7000\npath: /business\n"]) {
+                fs.writeFileSync(file, content);
+                await checkReadiness({
+                    env: { PORT: "7860", ONEBOTS_CONFIG_PATH: file, ONEBOTS_PATH: "/business" },
+                    fetcher,
+                });
+            }
+            expect(fetcher).toHaveBeenCalledTimes(2);
+            expect(
+                fetcher.mock.calls.every(call => call[0] === "http://127.0.0.1:7860/ready"),
+            ).toBe(true);
+        } finally {
+            fs.rmSync(directory, { recursive: true, force: true });
+        }
     });
 
     it("accepts only readiness evidence owned by a concrete OneBots instance", async () => {
@@ -44,12 +75,11 @@ describe("Docker healthcheck", () => {
         await expect(
             checkReadiness({
                 env: { PORT: "6727", ONEBOTS_PATH: "gateway" },
-                config: {},
                 fetcher,
             }),
         ).resolves.toBeUndefined();
         expect(fetcher).toHaveBeenCalledWith(
-            "http://127.0.0.1:6727/gateway/ready",
+            "http://127.0.0.1:6727/ready",
             expect.objectContaining({
                 cache: "no-store",
                 headers: { accept: "application/json" },
@@ -62,7 +92,6 @@ describe("Docker healthcheck", () => {
     it("fails on non-success status or an ambiguous success body", async () => {
         await expect(
             checkReadiness({
-                config: {},
                 env: {},
                 fetcher: async () => jsonResponse('{"ready":false}', 503),
             }),
@@ -70,7 +99,6 @@ describe("Docker healthcheck", () => {
 
         await expect(
             checkReadiness({
-                config: {},
                 env: {},
                 fetcher: async () => jsonResponse('{"status":"ok"}'),
             }),
@@ -78,7 +106,6 @@ describe("Docker healthcheck", () => {
 
         await expect(
             checkReadiness({
-                config: {},
                 env: {},
                 fetcher: async () =>
                     jsonResponse(
@@ -93,7 +120,6 @@ describe("Docker healthcheck", () => {
 
         await expect(
             checkReadiness({
-                config: {},
                 env: {},
                 fetcher: async () =>
                     jsonResponse(
@@ -111,7 +137,6 @@ describe("Docker healthcheck", () => {
 
         await expect(
             checkReadiness({
-                config: {},
                 env: {},
                 fetcher: async () =>
                     jsonResponse(
@@ -122,7 +147,6 @@ describe("Docker healthcheck", () => {
 
         await expect(
             checkReadiness({
-                config: {},
                 env: {},
                 fetcher: async () => jsonResponse("not-json"),
             }),
@@ -132,7 +156,6 @@ describe("Docker healthcheck", () => {
     it("rejects incorrect media and bounded-body violations", async () => {
         await expect(
             checkReadiness({
-                config: {},
                 env: {},
                 fetcher: async () => new Response("<html></html>", { status: 200 }),
             }),
@@ -140,7 +163,6 @@ describe("Docker healthcheck", () => {
 
         await expect(
             checkReadiness({
-                config: {},
                 env: {},
                 fetcher: async () =>
                     new Response(null, {
@@ -164,7 +186,6 @@ describe("Docker healthcheck", () => {
         });
         await expect(
             checkReadiness({
-                config: {},
                 env: {},
                 fetcher: async () =>
                     new Response(stream, {

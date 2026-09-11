@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 
-const { registerGeneral } = vi.hoisted(() => ({
-    registerGeneral: vi.fn(),
+const { registerProtocolDefaults } = vi.hoisted(() => ({
+    registerProtocolDefaults: vi.fn(),
 }));
 
 vi.mock("onebots", () => ({
-    App: { registerGeneral },
+    registerProtocolDefaults,
 }));
 
 await import("./config.js");
 
 describe("Satori V1 registered defaults", () => {
     it("does not replace the source adapter platform unless explicitly configured", () => {
-        expect(registerGeneral).toHaveBeenCalledOnce();
-        expect(registerGeneral).toHaveBeenCalledWith("satori.v1", {
+        expect(registerProtocolDefaults).toHaveBeenCalledOnce();
+        expect(registerProtocolDefaults).toHaveBeenCalledWith("satori.v1", {
             use_http: false,
             use_ws: true,
             webhooks: [],

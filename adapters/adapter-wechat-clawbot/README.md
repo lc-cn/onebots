@@ -70,18 +70,12 @@ await client.stopPolling();
 
 ## 安装与启动
 
-```bash
-pnpm add @onebots/adapter-wechat-clawbot
-```
+先安装并启动 OneBots 管理服务，再运行 `onebots ui`。在“安装运行版本”中选择微信 ClawBot 适配器及需要的输出协议，确认依赖、完成验证并显式激活候选版本；随后在配置页添加账号配置，应用配置并启动网关。不要向活动运行目录直接执行包管理器命令。
 
 ```yaml
 wechat-clawbot.my_bot:
   receive_mode: polling # 或 manual
   outbound_text_format: markdown # plain（默认）或 markdown
-```
-
-```bash
-onebots -r wechat-clawbot -c config.yaml
 ```
 
 ## 本地构建

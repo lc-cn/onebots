@@ -11,36 +11,30 @@ import {
     restoreHfDataArchive,
     validateHfArchiveListings,
 } from "../../scripts/hf-data-archive-restore.mjs";
-import {
-    HF_DATA_ARCHIVE_LIMIT_BYTES,
-    HF_DATA_ARCHIVE_TIMEOUT_MS,
-    HF_DATA_ENTRY_LIMIT,
-    HF_DATA_EXPANDED_LIMIT_BYTES,
-} from "../../packages/onebots/src/hf-backup.js";
 
 describe("HF data archive restore", () => {
     const temporaryDirectories: string[] = [];
 
     afterEach(() => {
+        vi.restoreAllMocks();
         for (const directory of temporaryDirectories.splice(0)) {
             fs.rmSync(directory, { recursive: true, force: true });
         }
     });
 
-    it("keeps backup and restore resource contracts aligned", () => {
-        expect(HF_ARCHIVE_COMPRESSED_LIMIT_BYTES).toBe(HF_DATA_ARCHIVE_LIMIT_BYTES);
-        expect(HF_ARCHIVE_EXPANDED_LIMIT_BYTES).toBe(HF_DATA_EXPANDED_LIMIT_BYTES);
-        expect(HF_ARCHIVE_ENTRY_LIMIT).toBe(HF_DATA_ENTRY_LIMIT);
-        expect(HF_ARCHIVE_PROCESS_TIMEOUT_MS).toBe(HF_DATA_ARCHIVE_TIMEOUT_MS);
+    it("keeps restore resource limits explicit and bounded", () => {
+        expect(HF_ARCHIVE_COMPRESSED_LIMIT_BYTES).toBe(15 * 1024 * 1024);
+        expect(HF_ARCHIVE_EXPANDED_LIMIT_BYTES).toBe(128 * 1024 * 1024);
+        expect(HF_ARCHIVE_ENTRY_LIMIT).toBe(10_000);
+        expect(HF_ARCHIVE_PROCESS_TIMEOUT_MS).toBe(30_000);
     });
 
-    it("validates in staging and overlays private regular files without deleting local state", () => {
+    it("restores only into an empty workspace with private regular files", () => {
         const fixture = createArchive({
             "config.yaml": "port: 7860\n",
             "static/asset.txt": "asset",
         });
         const targetRoot = temporaryDirectory("onebots-hf-target-");
-        fs.writeFileSync(path.join(targetRoot, "local.txt"), "preserved");
 
         expect(restoreHfDataArchive({ archivePath: fixture.archivePath, targetRoot })).toEqual({
             entries: 3,
@@ -49,7 +43,6 @@ describe("HF data archive restore", () => {
         });
         expect(fs.readFileSync(path.join(targetRoot, "config.yaml"), "utf8")).toBe("port: 7860\n");
         expect(fs.readFileSync(path.join(targetRoot, "static", "asset.txt"), "utf8")).toBe("asset");
-        expect(fs.readFileSync(path.join(targetRoot, "local.txt"), "utf8")).toBe("preserved");
         expect(fs.statSync(path.join(targetRoot, "config.yaml")).mode & 0o777).toBe(0o600);
         expect(fs.statSync(path.join(targetRoot, "static")).mode & 0o777).toBe(0o700);
         expect(stagingEntries(targetRoot)).toEqual([]);
@@ -89,7 +82,6 @@ describe("HF data archive restore", () => {
     it("rejects expanded data over the limit before overlaying any file", () => {
         const fixture = createArchive({ "config.yaml": "12345" });
         const targetRoot = temporaryDirectory("onebots-hf-target-");
-        fs.writeFileSync(path.join(targetRoot, "config.yaml"), "known-good");
 
         expect(() =>
             restoreHfDataArchive({
@@ -98,7 +90,7 @@ describe("HF data archive restore", () => {
                 expandedLimitBytes: 4,
             }),
         ).toThrow("HF 数据归档展开后超过 4 字节 上限");
-        expect(fs.readFileSync(path.join(targetRoot, "config.yaml"), "utf8")).toBe("known-good");
+        expect(fs.existsSync(path.join(targetRoot, "config.yaml"))).toBe(false);
         expect(stagingEntries(targetRoot)).toEqual([]);
     });
 
@@ -110,11 +102,59 @@ describe("HF data archive restore", () => {
 
         expect(() =>
             restoreHfDataArchive({ archivePath: fixture.archivePath, targetRoot }),
-        ).toThrow(`HF 数据归档目标类型冲突: ${path.join(targetRoot, "static")}`);
+        ).toThrow("HF 恢复仅允许空工作区");
         expect(fs.readFileSync(path.join(targetRoot, "config.yaml"), "utf8")).toBe("known-good");
         expect(fs.readFileSync(path.join(targetRoot, "static"), "utf8")).toBe("conflict");
     });
 
+    it.each([
+        ".control/gateway.json",
+        ".control/downloads/token",
+        "extensions/package.json",
+        "node_modules/pkg/index.js",
+        "data/node_modules/pkg",
+        ".npmrc",
+    ])("rejects nonportable runtime entry %s", entry => {
+        const fixture = createArchive({ [entry]: "secret" });
+        const targetRoot = temporaryDirectory("onebots-hf-target-");
+        expect(() =>
+            restoreHfDataArchive({ archivePath: fixture.archivePath, targetRoot }),
+        ).toThrow("不可移植");
+        expect(fs.readdirSync(targetRoot)).toEqual([]);
+    });
+    it("keeps incomplete marker on partial publication and blocks replay", () => {
+        const fixture = createArchive({
+            "config.yaml": "safe",
+            "data/account.db": "account-state",
+        });
+        const targetRoot = temporaryDirectory("onebots-hf-target-");
+        const link = fs.linkSync;
+        vi.spyOn(fs, "linkSync").mockImplementation((from, to) => {
+            if (String(to).endsWith("account.db")) throw new Error("disk failure");
+            link(from, to);
+        });
+        expect(() =>
+            restoreHfDataArchive({ archivePath: fixture.archivePath, targetRoot }),
+        ).toThrow("disk failure");
+        expect(fs.existsSync(path.join(targetRoot, ".hf-restore-incomplete"))).toBe(true);
+        expect(fs.readFileSync(path.join(targetRoot, "config.yaml"), "utf8")).toBe("safe");
+        expect(() =>
+            restoreHfDataArchive({ archivePath: fixture.archivePath, targetRoot }),
+        ).toThrow("空工作区");
+    });
+    it("restores account state and database without deleting business paths", () => {
+        const fixture = createArchive({
+            "data/icqq/session.json": "session",
+            "data/onebots.db": "sqlite",
+            "config.yaml": "plugins: {}",
+        });
+        const targetRoot = temporaryDirectory("onebots-hf-target-");
+        restoreHfDataArchive({ archivePath: fixture.archivePath, targetRoot });
+        expect(fs.readFileSync(path.join(targetRoot, "data/icqq/session.json"), "utf8")).toBe(
+            "session",
+        );
+        expect(fs.readFileSync(path.join(targetRoot, "data/onebots.db"), "utf8")).toBe("sqlite");
+    });
     it("rejects traversal paths and bounds every tar subprocess", () => {
         expect(() =>
             validateHfArchiveListings(

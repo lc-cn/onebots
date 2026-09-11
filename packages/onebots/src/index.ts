@@ -1,5 +1,4 @@
-// App exports
-export { App, createOnebots, defineConfig } from "./app.js";
+export { defineConfig, registerProtocolDefaults } from "./runtime-defaults.js";
 export { getAppConfigSchema } from "./config-schema.js";
 export {
     createFrameworkConnectionPlan,
@@ -173,11 +172,3 @@ export {
     // Config
     ConfigValidator,
 } from "@onebots/core";
-
-export * from "./installation.js";
-export { createLocalInstallationBackend } from "./installation-local.js";
-export {
-    createDockerRequestBackend,
-    readInstallationRequest,
-    writeInstallationRequest,
-} from "./installation-request.js";

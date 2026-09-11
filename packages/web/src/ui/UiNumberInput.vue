@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { IconMinus, IconPlus } from '@tabler/icons-vue';
+import { useAttrs } from "vue";
+import { IconMinus, IconPlus } from "@tabler/icons-vue";
+
+defineOptions({ inheritAttrs: false });
 
 interface Props {
     min?: number;
@@ -12,10 +15,11 @@ const props = withDefaults(defineProps<Props>(), {
     min: undefined,
     max: undefined,
     step: 1,
-    disabled: false
+    disabled: false,
 });
 
 const model = defineModel<number | undefined>({ default: undefined });
+const attrs = useAttrs();
 
 function clamp(value: number): number {
     let result = value;
@@ -32,7 +36,7 @@ function stepBy(direction: 1 | -1) {
 
 function onInput(event: Event) {
     const raw = (event.target as HTMLInputElement).value;
-    if (raw === '') {
+    if (raw === "") {
         model.value = undefined;
         return;
     }
@@ -42,7 +46,7 @@ function onInput(event: Event) {
 
 function onBlur(event: Event) {
     const raw = (event.target as HTMLInputElement).value;
-    if (raw === '') {
+    if (raw === "") {
         model.value = undefined;
         return;
     }
@@ -58,33 +62,32 @@ function onBlur(event: Event) {
 <template>
     <div class="relative flex items-center">
         <input
+            v-bind="attrs"
             :value="model"
             type="number"
             :min="min"
             :max="max"
             :step="step"
             :disabled="disabled"
-            class="ui-number-input h-9 w-full rounded-control border border-border bg-surface px-3 pr-14 text-sm text-fg transition-opacity focus:border-accent focus:shadow-[0_0_0_3px_var(--ring)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            class="ui-number-input h-9 w-full rounded-control border border-border bg-surface px-3 pr-16 text-sm text-fg transition-opacity focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_var(--ring)] disabled:cursor-not-allowed disabled:opacity-50"
             @input="onInput"
             @blur="onBlur" />
         <div class="absolute right-1 flex items-center gap-0.5">
             <button
                 type="button"
-                tabindex="-1"
                 aria-label="减少"
                 :disabled="disabled"
                 class="flex h-6 w-6 items-center justify-center rounded text-fg-tertiary transition-opacity hover:bg-surface-raised hover:text-fg-secondary disabled:cursor-not-allowed disabled:opacity-50"
                 @click="stepBy(-1)">
-                <IconMinus :size="14" />
+                <IconMinus :size="14" aria-hidden="true" />
             </button>
             <button
                 type="button"
-                tabindex="-1"
                 aria-label="增加"
                 :disabled="disabled"
                 class="flex h-6 w-6 items-center justify-center rounded text-fg-tertiary transition-opacity hover:bg-surface-raised hover:text-fg-secondary disabled:cursor-not-allowed disabled:opacity-50"
                 @click="stepBy(1)">
-                <IconPlus :size="14" />
+                <IconPlus :size="14" aria-hidden="true" />
             </button>
         </div>
     </div>

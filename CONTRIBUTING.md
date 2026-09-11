@@ -30,7 +30,7 @@
 | 工具 | 最低版本 | 推荐版本 |
 |------|---------|---------|
 | Node.js | **>= 24** | 与 `.node-version` 保持一致 |
-| pnpm | **>= 9.12.0** | **9.15.9**（项目锁定版本） |
+| pnpm | **>= 10.34.5** | **10.34.5**（项目锁定版本） |
 | TypeScript | 5.x | 5.x（参见 `catalog:`） |
 
 Node.js 版本要求见 `package.json#engines`，推荐本地开发版本见 `.node-version` / `.nvmrc`，可使用 `fnm use` / `nvm use` 切换。
@@ -393,7 +393,7 @@ feat(core): add rate limiter middleware
 fix(adapter-qq): handle empty message list in getGroupMessages
 refactor(onebots): split app.ts into route modules
 test(adapter-mock): add lifecycle and message tests
-chore: upgrade pnpm to 9.15.9
+chore: upgrade pnpm to 10.34.5
 docs: update architecture overview
 ```
 

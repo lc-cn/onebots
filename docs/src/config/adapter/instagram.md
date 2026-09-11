@@ -1,11 +1,14 @@
 # Instagram Messaging 配置
 
-安装并加载适配器：
+## 安装
+
+在 Web 控制台打开「功能扩展」并选择对应适配器；也可以运行：
 
 ```bash
-pnpm add @onebots/adapter-instagram
-onebots -r instagram
+onebots ui --data-dir <workspace> --setup
 ```
+
+管理服务会将适配器及其必需的对等依赖安装到经过验证的不可变运行代。请勿在 OneBots 运行目录中直接执行包管理器安装命令。
 
 本适配器只采用当前 Instagram Login 模型。创建 Meta App，启用 Business Login for Instagram，并申请当前权限 `instagram_business_basic` 与 `instagram_business_manage_messages`。不要填写 2025 年已弃用的 `business_*` 旧 scope，也不需要 Facebook Page Access Token。
 

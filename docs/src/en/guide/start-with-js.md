@@ -1,40 +1,47 @@
-# Start with `node ./index.js`
+# Use OneBots from a Node.js project
 
-::: tip
-Please ensure you have completed steps 1-3 in the [Getting Started](./start.md) section.
-:::
+OneBots runs as a standalone manager service and gateway process. Applications connect through a public protocol instead of constructing `App` or calling `createOnebots()`.
 
-## 1. Create `index.js` file in the project root directory and add the following content:
+## Install and start the manager
 
-```javascript
-const {App,createOnebots} = require('onebots')
+Node.js 24 or later is required.
 
-App.registerAdapter('icqq') // Comment this line if you don't need icqq
-App.registerAdapter('qq') // Comment this line if you don't need QQ official bot
-App.registerAdapter('dingtalk') // Comment this line if you don't need DingTalk bot
-App.registerAdapter('wechat') // Comment this line if you don't need WeChat bot
-
-createOnebots({
-    port: 5727, // Listening port (optional) 
-    username: 'admin', // Web panel login username (optional) 
-    password: '123456', // Web panel login password (optional) 
-    log_level: 'info', // Log output level (optional) 
-    [`icqq.147258369`]: { // icqq configuration (optional) 
-
-    },
-    ['qq.147258369']:{ // qq configuration (optional) 
-        
-    },
-    ['dingtalk.123456']:{ //dingtalk configuration (optional) 
-    },
-    ['wechat.123456']:{ //wechat configuration (optional) 
-    }
-}).start()
+```bash
+npm install --global onebots
+onebots serve --data-dir ./onebots-data
 ```
 
-## 2. Start
+On first use, issue a one-time pairing code on the machine that runs the manager:
 
-```shell
-node ./index.js
+```bash
+onebots auth bootstrap --data-dir ./onebots-data
 ```
 
+Open `http://127.0.0.1:6727` and enter the code. Later management requests use a revocable device session.
+
+## Install extensions and configure an account
+
+Use the Web console or TUI to create an installation plan. Select the platform adapters, output protocols, and framework extensions you need. The manager installs and verifies the complete dependency set before you explicitly activate the candidate runtime.
+
+```bash
+onebots ui --data-dir ./onebots-data
+```
+
+After activation, enter the platform account and protocol connection settings, validate and apply the configuration, then start the gateway. Stopping the gateway keeps the manager available.
+
+```bash
+onebots control start --data-dir ./onebots-data
+onebots control status --data-dir ./onebots-data
+```
+
+Protocol credentials such as OneBot, Milky, or MCP `access_token` values protect protocol connections. They are not manager login credentials.
+
+## Connect application code
+
+Connect through HTTP, WebSocket, Webhook, reverse WebSocket, SSE, or the SDK for the selected protocol. For example, a OneBot v11 HTTP API URL has this shape:
+
+```text
+POST http://127.0.0.1:6727/{platform}/{account_id}/onebot/v11/{action}
+```
+
+The OneBots manager owns installation, upgrades, configuration, and process lifecycle. For local automation, use the control client from `@onebots/core/control` instead of embedding the retired management host in the application process.

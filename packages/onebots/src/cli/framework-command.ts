@@ -80,7 +80,7 @@ function formatFrameworkProfileList(
             return `${profile.id.padEnd(9)} ${profile.protocol.padEnd(12)} ${profile.transport.padEnd(17)} ${profile.verification}${coverage}`;
         }),
         "",
-        "扩展运行时状态（experimental/legacy 均可通过 -t 激活）",
+        "扩展运行时状态（experimental/legacy 可通过扩展管理安装并显式应用）",
         ...ecosystem.map(
             entry =>
                 `${entry.id.padEnd(14)} ${entry.runtime.protocol.padEnd(12)} ${entry.runtime.transport.padEnd(17)} ${entry.runtime.stage}`,

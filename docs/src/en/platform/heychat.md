@@ -16,11 +16,13 @@ The Heychat (黑盒语音 / Heybox Chat) adapter connects to the official bot pl
 
 ## Installation
 
+Open **Extensions** in the Web console and select the adapter, or run:
+
 ```bash
-npm install @onebots/adapter-heychat
-# or
-pnpm add @onebots/adapter-heychat
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 ## Prerequisites
 
@@ -41,7 +43,7 @@ heychat.my_bot:
 ## Start
 
 ```bash
-onebots -r heychat -p onebot-v11 -c config.yaml
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 ## Limitations

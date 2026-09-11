@@ -13,7 +13,7 @@ export function createInfoActions(
         };
     return {
         get_login_info: async () => ({
-            user_id: context.adapter.resolveId(context.accountId).number,
+            user_id: context.adapter.resolveAccountId(context.accountId).number,
             nickname: context.accountId,
         }),
         get_stranger_info: async params => {

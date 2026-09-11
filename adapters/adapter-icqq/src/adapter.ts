@@ -10,6 +10,7 @@ import { icqqCapabilities } from "./capabilities.js";
 import { type ICQQProjectionContext } from "./events.js";
 import { wireICQQAccountEvents } from "./account-events.js";
 import { ICQQActionAdapter } from "./actions.js";
+import { parseICQQUin } from "./client-config.js";
 import type { ICQQConfig } from "./types.js";
 
 export class ICQQAdapter extends ICQQActionAdapter {
@@ -111,9 +112,13 @@ export class ICQQAdapter extends ICQQActionAdapter {
 
     private projectionContext(accountId: string): ICQQProjectionContext {
         return {
-            botId: this.createId(accountId),
+            botId: this.resolveAccountId(accountId),
             createId: value => this.createId(value),
         };
+    }
+
+    override resolveAccountId(accountId: string) {
+        return this.createId(parseICQQUin(accountId));
     }
 }
 

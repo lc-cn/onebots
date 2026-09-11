@@ -98,7 +98,7 @@ describe("OneBots CLI v2", () => {
         });
     });
 
-    it("separates the non-interactive system-service runtime", () => {
+    it("rejects the removed non-interactive system-service runtime", () => {
         expect(
             prepareCliInvocation([
                 "node",
@@ -109,30 +109,25 @@ describe("OneBots CLI v2", () => {
                 "config.yaml",
             ]),
         ).toEqual({
-            kind: "service-runtime",
-            argv: ["node", "onebots", "run", "-c", "config.yaml"],
+            kind: "invalid",
+            message: "--service-runtime 已移除；旧服务请先执行 onebots migrate",
         });
     });
 
-    it("rejects removed command namespaces before Pastel renders a route", () => {
-        expect(prepareCliInvocation(["node", "onebots", "gateway"])).toEqual({
+    it.each(["gateway", "service", "daemon", "config"])(
+        "rejects removed command namespace %s before Pastel renders a route",
+        command => {
+            expect(prepareCliInvocation(["node", "onebots", command])).toEqual({
+                kind: "unknown",
+                command,
+            });
+        },
+    );
+
+    it("rejects help for the removed config command instead of exposing legacy routes", () => {
+        expect(prepareCliInvocation(["node", "onebots", "config", "--help"])).toEqual({
             kind: "unknown",
-            command: "gateway",
-        });
-    });
-
-    it("moves shared options to the concrete config subroute", () => {
-        expect(
-            prepareCliInvocation(["node", "onebots", "-c", "config.yaml", "config", "get", "port"]),
-        ).toEqual({
-            kind: "cli",
-            argv: ["node", "onebots", "config", "get", "port", "-c", "config.yaml"],
-        });
-        expect(
-            prepareCliInvocation(["node", "onebots", "config", "get", "-r", "qq", "port"]),
-        ).toEqual({
-            kind: "cli",
-            argv: ["node", "onebots", "config", "get", "port", "-r", "qq"],
+            command: "config",
         });
     });
 

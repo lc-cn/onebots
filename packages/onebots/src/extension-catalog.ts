@@ -6,6 +6,14 @@ export interface ExtensionSetupStep {
     url?: string;
 }
 
+export interface ExtensionInstallRequirement {
+    kind: "registry-authentication";
+    title: string;
+    description: string;
+    scope: string;
+    permission: string;
+}
+
 export type ExtensionConfigurationTarget =
     | { kind: "account"; platform: string }
     | { kind: "protocol"; protocolKey: string };
@@ -19,6 +27,7 @@ export interface ExtensionCatalogEntry {
     packageName: string;
     configurationTarget: ExtensionConfigurationTarget;
     setup: ExtensionSetupStep[];
+    requirements: ExtensionInstallRequirement[];
 }
 
 const adapter = (
@@ -26,6 +35,7 @@ const adapter = (
     displayName: string,
     description: string,
     setup: ExtensionSetupStep[] = [],
+    requirements: ExtensionInstallRequirement[] = [],
 ): ExtensionCatalogEntry => ({
     id: `adapter:${name}`,
     type: "adapter",
@@ -35,6 +45,7 @@ const adapter = (
     packageName: `@onebots/adapter-${name}`,
     configurationTarget: { kind: "account", platform: name },
     setup,
+    requirements,
 });
 
 const protocol = (
@@ -56,6 +67,7 @@ const protocol = (
             description: "安装并重启后，在配置管理中为账号启用该协议并设置监听方式。",
         },
     ],
+    requirements: [],
 });
 
 const genericSetup: ExtensionSetupStep[] = [
@@ -74,6 +86,17 @@ const genericSetup: ExtensionSetupStep[] = [
 ];
 
 export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
+    adapter(
+        "mock",
+        "模拟平台（本地测试）",
+        "无需外部平台凭据，用于验证协议连接和本地开发。不会自动启用。",
+        [
+            {
+                title: "创建模拟账号",
+                description: "安装后添加 mock 账号，再按需要启用协议；不会连接真实聊天平台。",
+            },
+        ],
+    ),
     adapter(
         "instagram",
         "Instagram Messaging",
@@ -309,7 +332,15 @@ export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
     adapter("email", "电子邮件", "通过 IMAP/SMTP 收发消息。", genericSetup),
     adapter("zulip", "Zulip", "连接 Zulip Bot。", genericSetup),
     adapter("heychat", "黑盒语音", "连接黑盒语音机器人。", genericSetup),
-    adapter("icqq", "ICQQ", "通过 ICQQ 接入 QQ。", genericSetup),
+    adapter("icqq", "ICQQ", "通过 ICQQ 接入 QQ。", genericSetup, [
+        {
+            kind: "registry-authentication",
+            title: "GitHub Packages 下载授权",
+            description: "安装必需的 @icqqjs/icqq 时临时使用，不会写入运行版本或业务配置。",
+            scope: "@icqqjs",
+            permission: "read:packages",
+        },
+    ]),
     protocol("onebot-v11", "onebot.v11", "OneBot v11", "提供 OneBot v11 HTTP 与 WebSocket 接口。"),
     protocol("onebot-v12", "onebot.v12", "OneBot v12", "提供 OneBot v12 标准接口。"),
     protocol("satori-v1", "satori.v1", "Satori v1", "提供 Satori v1 协议接口。"),

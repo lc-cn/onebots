@@ -29,6 +29,10 @@ export function CommandRunner({ execute, pending, machineReadable = false }: Com
                 } else if (value.raw && value.output) {
                     process.stdout.write(`${value.output}\n`);
                     setResult({ ...value, output: undefined });
+                } else if (!stdout.isTTY && value.output) {
+                    // Ink 会按默认终端宽度折行；管道和脚本需要保留命令定义的原始行边界。
+                    stdout.write(`${value.output}\n`);
+                    setResult({ ...value, output: undefined });
                 } else {
                     setResult(value);
                 }
@@ -37,7 +41,7 @@ export function CommandRunner({ execute, pending, machineReadable = false }: Com
             .catch(reason => {
                 const normalized = reason instanceof Error ? reason : new Error(String(reason));
                 process.exitCode = normalized instanceof CliError ? normalized.exitCode : 1;
-                if (machineReadable) {
+                if (machineReadable || !stdout.isTTY) {
                     process.stderr.write(`[onebots] ${normalized.message}\n`);
                     setResult({});
                 } else {

@@ -32,11 +32,13 @@ Slack 适配器已完全实现，支持通过 Slack Bot API 接入 onebots 服�
 
 ## 安装
 
+在 Web 控制台打开「功能扩展」并选择对应适配器；也可以运行：
+
 ```bash
-npm install @onebots/adapter-slack
-# 或
-pnpm add @onebots/adapter-slack
+onebots ui --data-dir <workspace> --setup
 ```
+
+管理服务会将适配器及其必需的对等依赖安装到经过验证的不可变运行代。请勿在 OneBots 运行目录中直接执行包管理器安装命令。
 
 ## 配置
 
@@ -90,7 +92,7 @@ slack.your_bot_id:
 
 ```bash
 # 注册 Slack 适配器和 OneBot V11 协议
-onebots -r slack -p onebot.v11
+onebots ui --data-dir /path/to/onebots-data
 ```
 
 ### 客户端 SDK 使用

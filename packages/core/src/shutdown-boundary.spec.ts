@@ -8,6 +8,13 @@ import { BaseApp } from "./base-app.js";
 const originalConfigDir = BaseApp.configDir;
 const temporaryDirectories: string[] = [];
 
+class ShutdownTestAdapter extends Adapter {
+    constructor() {
+        super({ db: { create: vi.fn() } } as unknown as BaseApp, "mock");
+    }
+    createAccount(): never { throw new Error("测试不创建账号"); }
+}
+
 function createApp(): BaseApp {
     const directory = mkdtempSync(join(tmpdir(), "onebots-shutdown-boundary-"));
     temporaryDirectories.push(directory);
@@ -28,7 +35,7 @@ describe("core shutdown boundary", () => {
             throw new Error("first account failed");
         });
         const secondStop = vi.fn(async () => undefined);
-        const adapter = Object.create(Adapter.prototype) as Adapter;
+        const adapter = new ShutdownTestAdapter();
         adapter.accounts = new Map([
             ["first", { account_id: "first", stop: firstStop }],
             ["second", { account_id: "second", stop: secondStop }],

@@ -1,450 +1,220 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
-import { execFileSync } from "node:child_process";
-import { afterEach, describe, expect, it } from "vitest";
-
-const temporaryDirectories: string[] = [];
-const repositoryRoot = path.resolve(import.meta.dirname, "../../..");
-
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { createHash } from "node:crypto";
+import { execFileSync, spawnSync } from "node:child_process";
+import { afterEach, expect, it } from "vitest";
+const roots: string[] = [];
+const script = path.resolve(import.meta.dirname, "../../../install.sh");
 afterEach(() => {
-    for (const directory of temporaryDirectories.splice(0)) {
-        fs.rmSync(directory, { recursive: true, force: true });
-    }
+    for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
-
-function writeExecutable(file: string, content: string): void {
-    fs.writeFileSync(file, content, { encoding: "utf8", mode: 0o755 });
-}
-
-function createFakeRuntime() {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-installer-"));
-    temporaryDirectories.push(home);
-    const bin = path.join(home, "fake-bin");
-    const log = path.join(home, "commands.log");
-    const serviceMarker = path.join(home, "service-running");
-    const onebotsSource = path.join(home, "fake-onebots");
-    fs.mkdirSync(bin, { recursive: true });
-
-    writeExecutable(
-        path.join(bin, "node"),
+const quote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
+function fixture(mode = "ok") {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ob-install-script-"));
+    roots.push(root);
+    const bin = path.join(root, "bin"),
+        home = path.join(root, ".onebots"),
+        log = path.join(root, "commands");
+    fs.mkdirSync(bin);
+    const write = (name: string, value: string) =>
+        fs.writeFileSync(path.join(bin, name), value, { mode: 0o755 });
+    const cli = path.join(root, "fake-cli");
+    fs.writeFileSync(
+        cli,
         `#!/bin/sh
-if [ "$1" = "-p" ]; then
-    if [ -n "\${ONEBOTS_STATUS_JSON:-}" ]; then
-        case "$ONEBOTS_STATUS_JSON" in
-            *'"ok":true'*'"webUrl":"'*)
-                printf '%s\\n' "$ONEBOTS_STATUS_JSON" | \
-                    sed -n 's/.*"webUrl":"\\([^"]*\\)".*/\\1/p'
-                ;;
-            *) exit 2 ;;
-        esac
-    elif [ -n "\${ONEBOTS_CATALOG_FILE:-}" ]; then
-        printf '3.0.8\\n'
-    elif [ -n "\${ONEBOTS_PROTOCOL_MANIFEST:-}" ]; then
-        awk -F'"' '{ print $4; exit }' "$ONEBOTS_PROTOCOL_MANIFEST"
-    elif [ -n "\${ONEBOTS_PACKAGE_MANIFEST:-}" ]; then
-        sed -n 's/.*"version":"\\([^"]*\\)".*/\\1/p' "$ONEBOTS_PACKAGE_MANIFEST"
-    else
-        printf '24\\n'
-    fi
-    exit 0
-fi
-exit 2
-`,
-    );
-    writeExecutable(path.join(bin, "sleep"), "#!/bin/sh\nexit 0\n");
-    writeExecutable(
-        onebotsSource,
-        `#!/bin/sh
-printf 'onebots %s\\n' "$*" >> "$FAKE_COMMAND_LOG"
-command_name=$1
-shift
-case "$command_name" in
-    --service-runtime)
-        [ "$1" = "preflight" ] || exit 2
-        [ "\${FAKE_RESTORE_PREFLIGHT_FAIL:-0}" = "1" ] && exit 45
-        :
-        ;;
-    setup)
-        config_file=""
-        while [ "$#" -gt 0 ]; do
-            if [ "$1" = "-c" ]; then config_file=$2; shift 2; else shift; fi
-        done
-        mkdir -p "$(dirname "$config_file")"
-        cat > "$config_file" <<'EOF'
-access_token: first-token
-port: 6727
-path: /gateway
-plugins:
-  adapters: []
-  protocols: [onebot-v11]
-general: {}
-EOF
-        ;;
-    install) ;;
-    update)
-        if [ "\${FAKE_UPDATE_FAIL:-0}" = "1" ]; then exit 43; fi
-        :
-        ;;
-    restart)
-        [ -f "$FAKE_SERVICE_MARKER" ] || exit 1
-        ;;
-    start)
-        : > "$FAKE_SERVICE_MARKER"
-        ;;
-    status)
-        [ -f "$FAKE_SERVICE_MARKER" ] || exit 1
-        [ "\${FAKE_STATUS_FAIL:-0}" = "1" ] && exit 3
-        if [ "$1" = "--json" ]; then
-            [ "\${FAKE_STATUS_JSON_INVALID:-0}" = "1" ] && printf '{"ok":true,"target":{}}\\n' && exit 0
-            printf '{"schemaVersion":1,"ok":true,"target":{"baseUrl":"%s","webUrl":"%s"}}\\n' \
-                "\${FAKE_BASE_URL:-http://127.0.0.1:6727/gateway}" \
-                "\${FAKE_MANAGEMENT_URL:-http://127.0.0.1:6727}"
-        else
-            printf '运行中，已就绪\\n'
-        fi
-        ;;
-    *) exit 2 ;;
+[ "$PWD" = ${quote(path.join(home, "runtime"))} ] || exit 8
+printf 'cli %s\\n' "$*" >> ${quote(log)}
+case "$1" in
+ install) [ ${quote(mode)} != install-fail ] || exit 3 ;;
+ start) [ ${quote(mode)} != start-fail ] || exit 3 ;;
+ status)
+  [ ${quote(mode)} != status-fail ] || exit 3
+  if [ ${quote(mode)} = invalid-status ]; then printf '{}\\n'; else
+   printf '%s\\n' '{"schemaVersion":1,"installation":"control","manager":{"state":"running","ipc":"available"},"serviceRecoveryRequired":false,"diagnostic":null,"gateway":{"actual":"stopped","desired":"stopped","recoveryRequired":false}}'
+  fi ;;
+ *) exit 9 ;;
 esac
 `,
     );
-    writeExecutable(
-        path.join(bin, "npm"),
-        `#!/bin/sh
-printf 'npm %s\\n' "$*" >> "$FAKE_COMMAND_LOG"
-[ "\${FAKE_NPM_FAIL:-0}" = "1" ] && exit 42
-case "$*" in
-    *"onebots@latest"*)
-        mkdir -p node_modules/.bin node_modules/onebots/lib node_modules/@onebots/web/dist
-        cp "$FAKE_ONEBOTS_SOURCE" node_modules/.bin/onebots
-        chmod 755 node_modules/.bin/onebots
-        printf '{"name":"onebots","version":"2.0.0"}\\n' > node_modules/onebots/package.json
-        cat > node_modules/onebots/lib/extension-capability-catalog.json <<'EOF'
-{"schemaVersion":2,"packages":{"@onebots/protocol-onebot-v11":{"version":"3.0.8"}}}
-EOF
-        if [ "\${FAKE_WEB_MISSING:-0}" != "1" ]; then
-            : > node_modules/@onebots/web/dist/index.html
-        fi
-        ;;
-    *"onebots@"*)
-        package_spec=""
-        for argument in "$@"; do package_spec=$argument; done
-        requested_version=\${package_spec##*@}
-        if [ "\${FAKE_RESTORE_FAIL:-0}" = "1" ]; then exit 44; fi
-        mkdir -p node_modules/.bin node_modules/onebots
-        cp "$FAKE_ONEBOTS_SOURCE" node_modules/.bin/onebots
-        chmod 755 node_modules/.bin/onebots
-        printf '{"name":"onebots","version":"%s"}\\n' "$requested_version" > node_modules/onebots/package.json
-        ;;
-    *"@onebots/protocol-onebot-v11@"*)
-        package_spec=""
-        for argument in "$@"; do package_spec=$argument; done
-        requested_version=\${package_spec##*@}
-        installed_version=\${FAKE_PROTOCOL_VERSION_OVERRIDE:-$requested_version}
-        mkdir -p node_modules/@onebots/protocol-onebot-v11
-        printf '{"version":"%s"}\\n' "$installed_version" > \
-            node_modules/@onebots/protocol-onebot-v11/package.json
-        ;;
-esac
-`,
-    );
-    return { home, bin, log, serviceMarker, onebotsSource };
-}
-
-function runInstaller(
-    runtime: ReturnType<typeof createFakeRuntime>,
-    extraEnvironment: Record<string, string> = {},
-): string {
-    return execFileSync("/bin/sh", [path.join(repositoryRoot, "install.sh")], {
-        encoding: "utf8",
-        env: {
-            ...process.env,
-            HOME: runtime.home,
-            ONEBOTS_HOME: path.join(runtime.home, ".onebots"),
-            PATH: `${runtime.bin}:${process.env.PATH ?? ""}`,
-            FAKE_COMMAND_LOG: runtime.log,
-            FAKE_SERVICE_MARKER: runtime.serviceMarker,
-            FAKE_ONEBOTS_SOURCE: runtime.onebotsSource,
-            ...extraEnvironment,
-        },
-    });
-}
-
-describe("one-command installer", () => {
-    it("重复执行 POSIX 安装脚本时保留配置并切换运行服务", () => {
-        const runtime = createFakeRuntime();
-        const configPath = path.join(runtime.home, ".onebots", "config.yaml");
-
-        const firstOutput = runInstaller(runtime);
-
-        const firstCommands = fs.readFileSync(runtime.log, "utf8");
-        expect(firstOutput).toContain("首次登录鉴权码：first-token");
-        expect(firstOutput).toContain("管理地址：http://127.0.0.1:6727");
-        expect(firstCommands).toContain("npm install --omit=dev onebots@latest");
-        expect(firstCommands).toContain(
-            "npm install --omit=dev @onebots/protocol-onebot-v11@3.0.8",
-        );
-        expect(firstCommands).not.toContain("@onebots/web@latest");
-        expect(firstCommands).not.toContain("@onebots/protocol-onebot-v11@latest");
-        expect(firstCommands).toContain("onebots setup -c");
-        expect(firstCommands).not.toContain("setup --force");
-        expect(firstCommands).toContain(
-            "onebots update -c " + configPath + " --yes --packages-only",
-        );
-        expect(firstCommands).toContain("onebots install -c");
-        expect(firstCommands).toContain("onebots restart");
-        expect(firstCommands).toContain("onebots start");
-        expect(firstCommands).toContain("onebots status");
-
-        const customized = `access_token: preserved-token
-port: 7788
-path: /custom
-plugins:
-  adapters: [slack]
-  protocols: [milky-v1]
-slack.production:
-  token: preserved-secret
+    const node = (version: number) => `#!/bin/sh
+if [ "$1" = -p ]; then printf '${version}\\n'; exit 0; fi
+if [ "$1" = --input-type=module ]; then exec ${quote(process.execPath)} "$@"; fi
+exec /bin/sh "$@"
 `;
-        fs.writeFileSync(configPath, customized, "utf8");
-        fs.writeFileSync(runtime.log, "", "utf8");
-
-        const output = runInstaller(runtime, {
-            FAKE_BASE_URL: "http://127.0.0.1:7788/custom",
-            FAKE_MANAGEMENT_URL: "http://127.0.0.1:7788",
+    write("node", node(mode === "download" || mode === "bad-checksum" ? 18 : 24));
+    write(
+        "npm",
+        `#!/bin/sh
+printf 'npm %s\\n' "$*" >> ${quote(log)}
+[ -z "\${NODE_AUTH_TOKEN:-}\${NPM_TOKEN:-}\${TAR_OPTIONS:-}\${NODE_OPTIONS:-}" ] || exit 8
+[ "$HOME" = ${quote(path.join(home, ".bootstrap/home"))} ] || exit 8
+[ -f "$NPM_CONFIG_USERCONFIG" ] && [ -f "$NPM_CONFIG_GLOBALCONFIG" ] || exit 8
+[ ! -s "$NPM_CONFIG_USERCONFIG" ] && [ ! -s "$NPM_CONFIG_GLOBALCONFIG" ] || exit 8
+[ ${quote(mode)} != npm-fail ] || exit 3
+mkdir -p node_modules/onebots/lib/control node_modules/onebots/lib/gateway node_modules/@onebots/web/dist
+cp ${quote(cli)} node_modules/onebots/lib/bin.js
+if [ ${quote(mode)} != missing-host ]; then printf 'host' > node_modules/onebots/lib/control/host.js; fi
+if [ ${quote(mode)} != missing-gateway ]; then printf 'gateway' > node_modules/onebots/lib/gateway/entry.js; fi
+if [ ${quote(mode)} != missing-web ]; then printf '<html></html>' > node_modules/@onebots/web/dist/index.html; fi
+`,
+    );
+    const platform = process.platform === "darwin" ? "darwin" : "linux";
+    const arch = process.arch === "arm64" ? "arm64" : "x64";
+    const archiveName = `node-v24.4.0-${platform}-${arch}.tar.gz`;
+    if (mode === "download" || mode === "bad-checksum") {
+        const source = path.join(root, "download", archiveName.replace(/\.tar\.gz$/, ""), "bin");
+        fs.mkdirSync(source, { recursive: true });
+        fs.writeFileSync(path.join(source, "node"), node(24), { mode: 0o755 });
+        fs.copyFileSync(path.join(bin, "npm"), path.join(source, "npm"));
+        const archive = path.join(root, archiveName);
+        execFileSync("tar", [
+            "-czf",
+            archive,
+            "-C",
+            path.join(root, "download"),
+            archiveName.replace(/\.tar\.gz$/, ""),
+        ]);
+        const hash =
+            mode === "bad-checksum"
+                ? "0".repeat(64)
+                : createHash("sha256").update(fs.readFileSync(archive)).digest("hex");
+        fs.writeFileSync(path.join(root, "checksums"), `${hash}  ${archiveName}\n`);
+    }
+    write(
+        "curl",
+        `#!/bin/sh
+printf 'curl\\n' >> ${quote(log)}
+url=''; target=''
+while [ "$#" -gt 0 ]; do
+ case "$1" in https:*) url=$1 ;; -o) shift; target=$1 ;; esac
+ shift
+done
+case "$url" in
+ */SHASUMS256.txt) cp ${quote(path.join(root, "checksums"))} "$target" ;;
+ */${archiveName}) cp ${quote(path.join(root, archiveName))} "$target" ;;
+ *) exit 7 ;;
+esac
+`,
+    );
+    const run = () =>
+        spawnSync("/bin/sh", [script], {
+            encoding: "utf8",
+            env: {
+                ...process.env,
+                HOME: root,
+                ONEBOTS_HOME: home,
+                PATH: `${bin}:/usr/bin:/bin:/usr/sbin:/sbin`,
+                NODE_AUTH_TOKEN: "private-auth",
+                NPM_TOKEN: "private-npm",
+                NODE_OPTIONS: "",
+                TAR_OPTIONS: "",
+            },
         });
-
-        expect(fs.readFileSync(configPath, "utf8")).toBe(customized);
-        expect(output).toContain("检测到已有配置，保留账号、凭据和插件选择");
-        expect(output).toContain("已保留现有管理凭据且未显示");
-        expect(output).not.toContain("preserved-token");
-        expect(output).not.toContain("首次登录鉴权码：");
-        expect(output).toContain("管理地址：http://127.0.0.1:7788");
-        const secondCommands = fs.readFileSync(runtime.log, "utf8");
-        expect(secondCommands).not.toContain("onebots setup");
-        expect(secondCommands).toContain(
-            "onebots update -c " + configPath + " --yes --packages-only",
-        );
-        expect(secondCommands).not.toContain("@onebots/protocol-onebot-v11@");
-        expect(secondCommands).toContain("onebots install -c");
-        expect(secondCommands).toContain("onebots restart");
-        expect(secondCommands).not.toContain("onebots start");
-        expect(secondCommands).toContain("onebots status");
-        expect(secondCommands).toContain("onebots status --json");
-    });
-
-    it("PowerShell 安装脚本显式闭合原生命令失败并保留已有配置", () => {
-        const source = fs.readFileSync(path.join(repositoryRoot, "install.ps1"), "utf8");
-
-        expect(source).toContain("function Invoke-Checked");
-        expect(source).toContain("if ($LASTEXITCODE -ne 0)");
-        expect(source).toContain("if (-not $ConfigExists)");
-        expect(source).not.toContain("setup --force");
-        expect(source).toContain("& $OneBots restart");
-        expect(source).toContain('Invoke-Checked -FilePath $OneBots -Arguments @("start")');
-        expect(source).toContain("function Wait-OneBotsReady");
-        expect(source).toContain("Wait-OneBotsReady -OneBotsCommand $OneBots");
-        expect(source).toContain("& $OneBots status --json");
-        expect(source).toContain("$StatusReport.target.webUrl");
-        expect(source).toMatch(
-            /if \(-not \$ConfigExists\) \{\s+if \(\$Line -match '\^access_token/,
-        );
-        expect(source).toContain("if (-not $ConfigExists -and $Token)");
-        expect(source).toContain("已保留现有管理凭据且未显示");
-        expect(source).toContain('Arguments @("install", "--omit=dev", "onebots@latest")');
-        expect(source).toContain("$Catalog.packages.'@onebots/protocol-onebot-v11'.version");
-        expect(source).toContain('"@onebots/protocol-onebot-v11@$ProtocolVersion"');
-        expect(source).toContain('"update", "-c", $ConfigFile, "--yes", "--packages-only"');
-        expect(source).toContain('"onebots@$PreviousOneBotsVersion"');
-        expect(source).toContain('"--service-runtime", "preflight", "-c", $ConfigFile');
-        expect(source).toContain("已恢复升级前的 OneBots $PreviousOneBotsVersion，并通过隔离预检");
-        expect(source).toContain("if (-not $ConfigExists)");
-        expect(source).not.toContain('"@onebots/web@latest"');
-        expect(source).not.toContain('"@onebots/protocol-onebot-v11@latest"');
-    });
-
-    it("重复安装的依赖事务失败时恢复升级前主程序", () => {
-        const runtime = createFakeRuntime();
-        const onebotsManifest = path.join(
-            runtime.home,
-            ".onebots/runtime/node_modules/onebots/package.json",
-        );
-
-        runInstaller(runtime);
-        fs.writeFileSync(
-            onebotsManifest,
-            JSON.stringify({ name: "onebots", version: "1.2.3" }),
-            "utf8",
-        );
-        fs.writeFileSync(runtime.log, "", "utf8");
-
-        let output = "";
-        expect(() => {
-            try {
-                runInstaller(runtime, { FAKE_UPDATE_FAIL: "1" });
-            } catch (error) {
-                output = String((error as { stdout?: string }).stdout ?? "");
-                throw error;
-            }
-        }).toThrow();
-
-        expect(JSON.parse(fs.readFileSync(onebotsManifest, "utf8"))).toMatchObject({
-            name: "onebots",
-            version: "1.2.3",
-        });
-        expect(output).toContain("已恢复升级前的 OneBots 1.2.3，并通过隔离预检");
-        const commands = fs.readFileSync(runtime.log, "utf8");
-        expect(commands).toContain("npm install --omit=dev onebots@latest");
-        expect(commands).toContain("onebots update -c");
-        expect(commands).toContain("npm install --omit=dev onebots@1.2.3");
-        expect(commands).toContain(
-            "onebots --service-runtime preflight -c " +
-                path.join(runtime.home, ".onebots", "config.yaml"),
-        );
-        expect(commands).not.toContain("onebots install -c");
-        expect(commands).not.toContain("onebots restart");
-    });
-
-    it("恢复后的主程序与依赖无法启动时明确报告恢复未完成", () => {
-        const runtime = createFakeRuntime();
-        const onebotsManifest = path.join(
-            runtime.home,
-            ".onebots/runtime/node_modules/onebots/package.json",
-        );
-
-        runInstaller(runtime);
-        fs.writeFileSync(
-            onebotsManifest,
-            JSON.stringify({ name: "onebots", version: "1.2.3" }),
-            "utf8",
-        );
-        fs.writeFileSync(runtime.log, "", "utf8");
-
-        let stdout = "";
-        let stderr = "";
-        expect(() => {
-            try {
-                runInstaller(runtime, {
-                    FAKE_UPDATE_FAIL: "1",
-                    FAKE_RESTORE_PREFLIGHT_FAIL: "1",
-                });
-            } catch (error) {
-                stdout = String((error as { stdout?: string }).stdout ?? "");
-                stderr = String((error as { stderr?: string }).stderr ?? "");
-                throw error;
-            }
-        }).toThrow();
-
-        expect(stdout).not.toContain("已恢复升级前的 OneBots 1.2.3");
-        expect(stderr).toContain("恢复失败：旧 OneBots 与恢复后的依赖未通过隔离预检");
-        expect(JSON.parse(fs.readFileSync(onebotsManifest, "utf8"))).toMatchObject({
-            name: "onebots",
-            version: "1.2.3",
-        });
-        const commands = fs.readFileSync(runtime.log, "utf8");
-        expect(commands).toContain("onebots --service-runtime preflight -c");
-        expect(commands).not.toContain("onebots install -c");
-        expect(commands).not.toContain("onebots restart");
-    });
-
-    it("主程序恢复也失败时明确保留未恢复诊断", () => {
-        const runtime = createFakeRuntime();
-        const onebotsManifest = path.join(
-            runtime.home,
-            ".onebots/runtime/node_modules/onebots/package.json",
-        );
-
-        runInstaller(runtime);
-        fs.writeFileSync(
-            onebotsManifest,
-            JSON.stringify({ name: "onebots", version: "1.2.3" }),
-            "utf8",
-        );
-        fs.writeFileSync(runtime.log, "", "utf8");
-
-        let stderr = "";
-        expect(() => {
-            try {
-                runInstaller(runtime, { FAKE_UPDATE_FAIL: "1", FAKE_RESTORE_FAIL: "1" });
-            } catch (error) {
-                stderr = String((error as { stderr?: string }).stderr ?? "");
-                throw error;
-            }
-        }).toThrow();
-
-        expect(stderr).toContain("恢复失败：无法重新安装 onebots@1.2.3");
-        const commands = fs.readFileSync(runtime.log, "utf8");
-        expect(commands).toContain("npm install --omit=dev onebots@1.2.3");
-        expect(commands).not.toContain("onebots install -c");
-    });
-
-    it("Web 管理端产物缺失时不创建配置或安装服务", () => {
-        const runtime = createFakeRuntime();
-
-        expect(() => runInstaller(runtime, { FAKE_WEB_MISSING: "1" })).toThrow();
-
-        const commands = fs.readFileSync(runtime.log, "utf8");
-        expect(commands).toContain("npm install --omit=dev onebots@latest");
-        expect(commands).not.toContain("@onebots/protocol-onebot-v11@3.0.8");
-        expect(commands).not.toContain("onebots setup");
-        expect(commands).not.toContain("onebots install");
-    });
-
-    it("默认协议落盘版本与主包目录不一致时不创建配置或安装服务", () => {
-        const runtime = createFakeRuntime();
-
-        expect(() => runInstaller(runtime, { FAKE_PROTOCOL_VERSION_OVERRIDE: "9.9.9" })).toThrow();
-
-        const commands = fs.readFileSync(runtime.log, "utf8");
-        expect(commands).toContain("npm install --omit=dev @onebots/protocol-onebot-v11@3.0.8");
-        expect(commands).not.toContain("onebots setup");
-        expect(commands).not.toContain("onebots install");
-    });
-
-    it("在线状态始终失败时不会宣告安装完成", () => {
-        const runtime = createFakeRuntime();
-        let output = "";
-
-        try {
-            runInstaller(runtime, { FAKE_STATUS_FAIL: "1" });
-        } catch (error) {
-            output = String((error as { stdout?: string }).stdout ?? "");
-        }
-
-        expect(output).not.toContain("安装完成");
-        const commands = fs.readFileSync(runtime.log, "utf8");
-        expect(commands.match(/onebots status/g)).toHaveLength(15);
-    });
-
-    it("最终状态证据缺少管理地址时不会宣告安装完成", () => {
-        const runtime = createFakeRuntime();
-        let stdout = "";
-        let stderr = "";
-
-        expect(() => {
-            try {
-                runInstaller(runtime, { FAKE_STATUS_JSON_INVALID: "1" });
-            } catch (error) {
-                stdout = String((error as { stdout?: string }).stdout ?? "");
-                stderr = String((error as { stderr?: string }).stderr ?? "");
-                throw error;
-            }
-        }).toThrow();
-
-        expect(stdout).not.toContain("安装完成");
-        expect(stderr).toContain("最终状态证据缺少已验证的 Web 管理地址");
-        expect(fs.readFileSync(runtime.log, "utf8")).toContain("onebots status --json");
-    });
-
-    it("npm 失败时立即停止且不创建配置或安装服务", () => {
-        const runtime = createFakeRuntime();
-        const configPath = path.join(runtime.home, ".onebots", "config.yaml");
-
-        expect(() => runInstaller(runtime, { FAKE_NPM_FAIL: "1" })).toThrow();
-
-        expect(fs.existsSync(configPath)).toBe(false);
-        const commands = fs.readFileSync(runtime.log, "utf8");
-        expect(commands).toContain("npm install --omit=dev");
-        expect(commands).not.toContain("onebots setup");
-        expect(commands).not.toContain("onebots install");
-    });
+    return {
+        root,
+        home,
+        log,
+        run,
+        commands: () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8") : ""),
+    };
+}
+it("首次空白安装只装管理程序，安装/启动/只读状态确认后引导设备配对", () => {
+    const f = fixture();
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("管理服务已安装并确认运行");
+    expect(f.commands()).toContain("--registry=https://registry.npmjs.org onebots@latest");
+    expect(f.commands()).toContain(`cli install --data-dir ${f.home}`);
+    expect(f.commands()).toContain("cli start\ncli status --json");
+    expect(f.commands()).not.toMatch(
+        /cli (setup|update|auth|ui|restart)|service-runtime|preflight/,
+    );
+    expect(fs.existsSync(path.join(f.home, "config.yaml"))).toBe(false);
+    expect(result.stdout).toContain("auth bootstrap");
+    expect(result.stdout).toContain("ui --data-dir");
+    expect(result.stdout + result.stderr).not.toMatch(/private-auth|private-npm/);
+});
+it("成功重复执行不修改npm或重启", () => {
+    const f = fixture();
+    expect(f.run().status).toBe(0);
+    const before = f.commands();
+    const result = f.run();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("已有安装成功");
+    expect(f.commands()).toBe(before);
+});
+it.each(["config.yaml", "runtime", "node"])("旧%s保持不变，不执行依赖安装", entry => {
+    const f = fixture();
+    fs.mkdirSync(f.home);
+    const target = path.join(f.home, entry);
+    if (entry === "config.yaml") fs.writeFileSync(target, "private-existing-config");
+    else {
+        fs.mkdirSync(target);
+        fs.writeFileSync(path.join(target, "keep"), "old-runtime");
+    }
+    const before = fs.readdirSync(f.home);
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("migrate");
+    expect(f.commands()).toBe("");
+    expect(fs.readdirSync(f.home)).toEqual(before);
+    expect(
+        fs.readFileSync(entry === "config.yaml" ? target : path.join(target, "keep"), "utf8"),
+    ).toContain(entry === "config.yaml" ? "private-existing" : "old-runtime");
+});
+it.each(["missing-host", "missing-gateway", "missing-web"])(
+    "缺少新架构工件%s不执行CLI且保留候选",
+    mode => {
+        const f = fixture(mode);
+        const result = f.run();
+        expect(result.status).not.toBe(0);
+        expect(f.commands()).not.toContain("cli ");
+        expect(fs.existsSync(path.join(f.home, "runtime"))).toBe(true);
+        expect(fs.existsSync(path.join(f.home, ".manager-installed"))).toBe(false);
+    },
+);
+it.each(["npm-fail", "install-fail", "start-fail", "status-fail", "invalid-status"])(
+    "%s不宣告成功且不自动重试或回滚",
+    mode => {
+        const f = fixture(mode);
+        const result = f.run();
+        expect(result.status).not.toBe(0);
+        expect(result.stdout).not.toContain("管理服务已安装并确认运行");
+        expect(fs.existsSync(path.join(f.home, ".manager-installed"))).toBe(false);
+        const before = f.commands();
+        expect(f.run().status).not.toBe(0);
+        expect(f.commands()).toBe(before);
+    },
+);
+it("Node24下载经过摘要校验，测试完全使用合成文件而非网络", () => {
+    const f = fixture("download");
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    expect(f.commands().match(/curl/g)).toHaveLength(2);
+    expect(fs.existsSync(path.join(f.home, "node/bin/node"))).toBe(true);
+});
+it("Node摘要不匹配不安装npm且不创建node目录", () => {
+    const f = fixture("bad-checksum");
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("校验失败");
+    expect(f.commands()).not.toContain("npm ");
+    expect(fs.existsSync(path.join(f.home, "node"))).toBe(false);
+});
+it("既有安装锁和符号链接工作区均拒绝，不认领或清理他人目录", () => {
+    const locked = fixture();
+    fs.mkdirSync(locked.home);
+    fs.mkdirSync(path.join(locked.home, ".install-lock"));
+    expect(locked.run().status).not.toBe(0);
+    expect(fs.existsSync(path.join(locked.home, ".install-lock"))).toBe(true);
+    expect(locked.commands()).toBe("");
+    const linked = fixture();
+    const target = path.join(linked.root, "existing");
+    fs.mkdirSync(target);
+    fs.writeFileSync(path.join(target, "keep"), "existing-data");
+    fs.symlinkSync(target, linked.home);
+    expect(linked.run().status).not.toBe(0);
+    expect(fs.readdirSync(target)).toEqual(["keep"]);
+    expect(linked.commands()).toBe("");
 });

@@ -83,14 +83,20 @@ export class LifecycleManager extends EventEmitter {
     /**
      * 启动所有钩子
      */
-    async start(): Promise<void> {
+    async start(signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         this.emit("beforeStart");
+        signal?.throwIfAborted();
         for (const hook of this.hooks) {
+            signal?.throwIfAborted();
             if (hook.onStart) {
                 await hook.onStart();
+                signal?.throwIfAborted();
             }
         }
+        signal?.throwIfAborted();
         this.emit("afterStart");
+        signal?.throwIfAborted();
     }
 
     /**

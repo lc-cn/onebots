@@ -1,0 +1,141 @@
+.setup-journey {
+    display: grid;
+    grid-template-columns: minmax(17rem, 0.9fr) minmax(22rem, 1.25fr);
+    gap: clamp(1.5rem, 4vw, 3rem);
+    margin-block: 1rem 1.5rem;
+    border: 1px solid var(--border);
+    border-top: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    border-radius: 1rem;
+    background: var(--surface);
+    color: var(--fg);
+    padding: clamp(1.25rem, 3vw, 2rem);
+    -webkit-backdrop-filter: saturate(135%) blur(20px);
+    backdrop-filter: saturate(135%) blur(20px);
+}
+.setup-journey.complete {
+    background: var(--surface);
+    color: var(--fg);
+}
+.setup-journey-copy h2 {
+    margin-top: 0.45rem;
+    max-width: 32rem;
+    font-size: clamp(1.4rem, 2.4vw, 1.85rem);
+    font-weight: 610;
+    letter-spacing: -0.035em;
+    line-height: 1.12;
+}
+.setup-journey-copy > p:not(.setup-journey-stage) {
+    margin-top: 0.75rem;
+    max-width: 34rem;
+    color: var(--fg-secondary);
+    line-height: 1.65;
+}
+.setup-journey.complete .setup-journey-copy > p:not(.setup-journey-stage) {
+    color: var(--fg-secondary);
+}
+.setup-journey-copy > button {
+    margin-top: 1.35rem;
+}
+.setup-journey-steps {
+    align-self: center;
+}
+.setup-journey-steps li {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding: 0.8rem 0;
+    color: var(--fg-tertiary);
+}
+.setup-journey.complete .setup-journey-steps li {
+    border-color: var(--border);
+    color: var(--fg-secondary);
+}
+.setup-journey-steps li.current {
+    color: var(--fg);
+}
+.setup-journey-steps li.current .setup-step-mark {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border-color: transparent;
+    box-shadow: 0 4px 12px var(--accent-soft);
+}
+.setup-journey.complete .setup-journey-steps li.current {
+    color: var(--fg);
+}
+.setup-journey-steps li.current .setup-step-mark {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border-color: transparent;
+    box-shadow: 0 4px 12px var(--accent-soft);
+}
+.setup-step-mark {
+    display: grid;
+    width: 1.75rem;
+    height: 1.75rem;
+    place-items: center;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.6rem;
+    background: var(--surface-raised);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+}
+.setup-journey-steps li.complete .setup-step-mark {
+    border-color: var(--success);
+    background: var(--success);
+    color: var(--accent-fg);
+}
+.setup-journey-steps li > span:last-child {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+.setup-journey-steps strong {
+    color: inherit;
+    font-size: 0.82rem;
+    font-weight: 620;
+}
+.setup-journey-steps small {
+    margin-top: 0.15rem;
+    overflow: hidden;
+    color: inherit;
+    font-size: 0.72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.setup-journey.compact {
+    grid-template-columns: minmax(16rem, 0.75fr) minmax(24rem, 1.25fr);
+    gap: 2rem;
+    margin-top: 0;
+    padding: 1.35rem 1.5rem;
+}
+.setup-journey.compact .setup-journey-copy h2 {
+    font-size: 1.15rem;
+}
+.setup-journey.compact .setup-journey-copy > p:not(.setup-journey-stage) {
+    font-size: 0.78rem;
+}
+.setup-journey-stage {
+    color: var(--accent);
+    font-size: 0.7rem;
+    font-weight: 620;
+}
+.setup-journey.compact .setup-journey-copy > button {
+    margin-top: 0.9rem;
+}
+.setup-journey.compact .setup-journey-steps li {
+    padding: 0.55rem 0;
+}
+
+@media (max-width: 760px) {
+    .setup-journey,
+    .setup-journey.compact {
+        grid-template-columns: 1fr;
+        gap: 1.35rem;
+    }
+    .setup-journey-steps small {
+        white-space: normal;
+    }
+}

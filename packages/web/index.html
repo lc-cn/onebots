@@ -1,30 +1,44 @@
-<!DOCTYPE html>
-<html lang="zh-CN" class="dark">
-<head>
-    <meta charset="utf-8">
-    <meta name="referrer" content="no-referrer">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>onebots 管理平台</title>
-    <style>
-        html, body, #app {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }
-        body {
-            background: #fafafa;
-        }
-        html.dark body {
-            background: #0c0d0f;
-        }
-    </style>
-</head>
-<body>
-<noscript>
-    <strong>onebots 需要启用 JavaScript 才能正常运行，请启用后继续。</strong>
-</noscript>
-<div id="app"></div>
-<script type="module" src="/src/main.ts"></script>
-</body>
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="referrer" content="no-referrer" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+        <title>onebots 管理平台</title>
+        <script>
+            try {
+                const theme = localStorage.getItem("onebots.theme");
+                if (
+                    theme === "dark" ||
+                    (!theme && matchMedia("(prefers-color-scheme: dark)").matches)
+                ) {
+                    document.documentElement.classList.add("dark");
+                }
+            } catch {
+                // 存储不可用时使用浅色主题，应用加载后仍可手动切换。
+            }
+        </script>
+        <style>
+            html,
+            body,
+            #app {
+                width: 100%;
+                min-height: 100%;
+            }
+            body {
+                background: #fafafa;
+            }
+            html.dark body {
+                background: #0c0d0f;
+            }
+        </style>
+    </head>
+    <body>
+        <noscript>
+            <strong>onebots 需要启用 JavaScript 才能正常运行，请启用后继续。</strong>
+        </noscript>
+        <div id="app"></div>
+        <script type="module" src="/src/main.ts"></script>
+    </body>
 </html>

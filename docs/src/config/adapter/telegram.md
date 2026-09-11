@@ -87,13 +87,9 @@ Webhook 模式配置。
 - **必填**: ❌
 - **说明**: 代理密码（如需要）
 
-### 可选依赖
+### 代理运行依赖
 
-使用代理功能需要安装额外的依赖：
-
-```bash
-npm install https-proxy-agent
-```
+管理服务安装运行代时会一并提供代理传输依赖；不要在活动运行目录中手工执行包管理器命令。
 
 ## 配置示例
 
@@ -159,4 +155,3 @@ https://bot.example.com/telegram/my_bot/webhook
 
 - [适配器配置指南](/guide/adapter)
 - [Telegram 平台文档](/platform/telegram)
-

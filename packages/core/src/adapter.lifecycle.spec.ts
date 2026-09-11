@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { Adapter } from "./adapter.js";
+import type { BaseApp } from "./base-app.js";
 import type { Account } from "./account.js";
 import { UnsupportedCapabilityError } from "./errors.js";
 
@@ -41,6 +42,86 @@ describe("Adapter account startup isolation", () => {
         expect(error).toBeInstanceOf(AggregateError);
         expect((error as AggregateError).message).toBe("2 个 mock 账号启动失败");
         expect((error as AggregateError).errors).toEqual([firstError, secondError]);
+    });
+
+    it.each([false, true])("does not start queued accounts after stop (reject=%s)", async reject => {
+        const wait = deferred();
+        const first = account("first", async () => {
+            await wait.promise;
+            if (reject) throw new Error("late login failure");
+        });
+        const second = account("second");
+        const adapter = fakeAdapter([first, second]);
+        let settled = false;
+        const starting = adapter.start().finally(() => {
+            settled = true;
+        });
+        const result = expect(starting).rejects.toMatchObject({ name: "AbortError" });
+        await adapter.stop();
+        expect(second.start).not.toHaveBeenCalled();
+        expect(settled).toBe(false);
+        wait.resolve();
+        await result;
+        expect(second.start).not.toHaveBeenCalled();
+        expect(first.stop).toHaveBeenCalledOnce();
+        expect(second.stop).toHaveBeenCalledOnce();
+    });
+
+    it("keeps the startup batch cancelled even if stopping an account fails", async () => {
+        const wait = deferred();
+        const first = account("first", () => wait.promise);
+        const stopError = new Error("account stop failed");
+        vi.mocked(first.stop).mockRejectedValueOnce(stopError);
+        const second = account("second");
+        const adapter = fakeAdapter([first, second]);
+        const result = expect(adapter.start()).rejects.toMatchObject({ name: "AbortError" });
+        await expect(adapter.stop()).rejects.toBe(stopError);
+        expect(second.stop).toHaveBeenCalledOnce();
+        wait.resolve();
+        await result;
+        expect(second.start).not.toHaveBeenCalled();
+    });
+
+    it("stopping one account cancels its batch but not a separate account start", async () => {
+        const firstWait = deferred();
+        const secondWait = deferred();
+        const first = account("first", () => firstWait.promise);
+        const second = account("second", () => secondWait.promise);
+        const adapter = fakeAdapter([first, second]);
+        const firstResult = expect(adapter.start("first")).rejects.toMatchObject({ name: "AbortError" });
+        const secondResult = adapter.start("second");
+        await adapter.stop("first");
+        firstWait.resolve();
+        secondWait.resolve();
+        await firstResult;
+        await expect(secondResult).resolves.toBeUndefined();
+        expect(second.stop).not.toHaveBeenCalled();
+    });
+
+    it("stopping a queued account invalidates the containing full batch", async () => {
+        const wait = deferred();
+        const first = account("first", () => wait.promise);
+        const second = account("second");
+        const adapter = fakeAdapter([first, second]);
+        const result = expect(adapter.start()).rejects.toMatchObject({ name: "AbortError" });
+        await adapter.stop("second");
+        wait.resolve();
+        await result;
+        expect(second.start).not.toHaveBeenCalled();
+        expect(first.stop).not.toHaveBeenCalled();
+    });
+
+    it("a fresh start after stop is independent of the old pending batch", async () => {
+        const wait = deferred();
+        const first = account("first", () => wait.promise);
+        const second = account("second");
+        const adapter = fakeAdapter([first, second]);
+        const result = expect(adapter.start()).rejects.toMatchObject({ name: "AbortError" });
+        await adapter.stop();
+        await adapter.start("second");
+        wait.resolve();
+        await result;
+        expect(second.start).toHaveBeenCalledOnce();
     });
 
     it("fails closed when an adapter does not implement manual lifecycle control", async () => {
@@ -90,15 +171,31 @@ function account(
     return {
         account_id: accountId,
         start: vi.fn(startImplementation),
+        stop: vi.fn(async () => undefined),
     } as unknown as Account;
 }
 
+class TestAdapter extends Adapter {
+    constructor() {
+        const logger = { info: vi.fn(), error: vi.fn() };
+        super({ db: { create: vi.fn() }, getLogger: () => logger } as unknown as BaseApp, "mock");
+    }
+
+    createAccount(): never {
+        throw new Error("测试不创建账号");
+    }
+}
+
 function fakeAdapter(accounts: Account[]) {
-    return {
-        platform: "mock",
-        accounts: new Map(accounts.map(item => [String(item.account_id), item])),
-        logger: { info: vi.fn(), error: vi.fn() },
-    } as unknown as Adapter & {
-        logger: { info: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
-    };
+    const adapter = new TestAdapter();
+    adapter.accounts = new Map(accounts.map(item => [String(item.account_id), item]));
+    return adapter;
+}
+
+function deferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>(done => {
+        resolve = done;
+    });
+    return { promise, resolve };
 }

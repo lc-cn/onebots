@@ -1,20 +1,51 @@
-import { argument, option } from "pastel";
+import { argument } from "pastel";
 import { z } from "zod";
 import { CommandRunner } from "../cli/command-runner.js";
-import { sendMessage } from "../cli/command-application.js";
-import { runtimeOptions } from "../cli/command-options.js";
-
-export const description = "通过运行中的网关发送消息";
-export const options = runtimeOptions.extend({
-    target_type: z.enum(["private", "group", "channel"]).describe(option({ description: "目标类型", valueDescription: "type" })),
-    channel: z.string().describe(option({ description: "发信 bot，格式 platform.account_id", valueDescription: "channel" })),
-    url: z.string().optional().describe(option({ description: "网关 base URL", valueDescription: "baseUrl" })),
-});
+import { runManagerSend } from "../cli/manager-send.js";
+export const description = "经管理服务发送消息或查询原操作；不启动账号，不重发未知结果";
+export const options = z
+    .object({
+        dataDir: z.string().optional(),
+        account: z.string().optional(),
+        targetType: z.enum(["private", "group", "channel"]).optional(),
+        targetIdType: z.enum(["string", "number"]).optional(),
+        operationId: z.string().optional(),
+        json: z.boolean(),
+    })
+    .strict();
 export const args = z.tuple([
-    z.string().describe(argument({ name: "target_id" })),
-    z.string().describe(argument({ name: "message" })),
+    z
+        .string()
+        .optional()
+        .describe(argument({ name: "TARGET" })),
+    z
+        .string()
+        .optional()
+        .describe(argument({ name: "MESSAGE" })),
 ]);
-
-export default function SendCommand({ options: input, args: [targetId, message] }: { options: z.infer<typeof options>; args: z.infer<typeof args> }) {
-    return <CommandRunner execute={() => sendMessage(input, targetId, message)} />;
+export default function SendCommand({
+    options: input,
+    args: positional,
+}: {
+    options: z.infer<typeof options>;
+    args: z.infer<typeof args>;
+}) {
+    const flags = Object.entries(input).flatMap(([key, value]) =>
+        value === undefined || value === false
+            ? []
+            : key === "json"
+              ? ["--json"]
+              : [`--${key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}`, String(value)],
+    );
+    return (
+        <CommandRunner
+            execute={async () => ({
+                exitCode: await runManagerSend([
+                    ...flags,
+                    "--",
+                    ...positional.filter((value): value is string => value !== undefined),
+                ]),
+            })}
+        />
+    );
 }

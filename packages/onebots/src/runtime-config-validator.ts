@@ -112,14 +112,12 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
             );
         }
 
-        let loadedProtocolCount = 0;
         for (const [key, protocolValue] of Object.entries(accountConfig)) {
             const [protocol, version, ...extra] = key.split(".");
             if (!version || extra.length > 0) continue;
             if (!ProtocolRegistry.has(protocol, version)) {
                 continue;
             }
-            loadedProtocolCount++;
             const protocolSchema = schemas.protocols[key];
             if (!protocolSchema) {
                 issues.push({
@@ -140,12 +138,7 @@ export function validateRuntimeConfig(config: Record<string, unknown>): void {
             >;
             captureSchemaIssues(merged, protocolSchema, `${rootKey}.${key}`, issues);
         }
-        if (loadedProtocolCount === 0) {
-            issues.push({
-                path: rootKey,
-                message: "账号至少需要配置一个已加载的协议出口",
-            });
-        }
+        // 平台账号和协议出口独立选择；零出口是有效配置，不自动补开协议。
     }
 
     if (issues.length > 0) {

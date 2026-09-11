@@ -1,6 +1,7 @@
 /** OneBots CLI 进程入口的参数规范化 seam。 */
 
-const REMOVED_NAMESPACES = new Set(["gateway", "service", "daemon"]);
+const REMOVED_NAMESPACES = new Set(["gateway", "service", "daemon", "config"]);
+const MANAGEMENT_VALUE_OPTIONS = new Set(["--data-dir", "--host", "--port"]);
 
 const RUNTIME_OPTIONS = new Set([
     "-c",
@@ -15,7 +16,6 @@ const RUNTIME_OPTIONS = new Set([
 
 export type CliInvocation =
     | { kind: "cli"; argv: string[] }
-    | { kind: "service-runtime"; argv: string[] }
     | { kind: "unknown"; command: string }
     | { kind: "invalid"; message: string };
 
@@ -26,14 +26,6 @@ export type CliInvocation =
 export function prepareCliInvocation(argv: string[], interactive = false): CliInvocation {
     const invalidOption = findInvalidRuntimeOption(argv.slice(2));
     if (invalidOption) return { kind: "invalid", message: invalidOption };
-
-    const serviceRuntimeIndex = argv.indexOf("--service-runtime", 2);
-    if (serviceRuntimeIndex >= 0) {
-        return {
-            kind: "service-runtime",
-            argv: argv.filter((_, index) => index !== serviceRuntimeIndex),
-        };
-    }
 
     const firstPositional = findFirstPositional(argv);
     if (!firstPositional) {
@@ -72,6 +64,8 @@ export function prepareCliInvocation(argv: string[], interactive = false): CliIn
 function findInvalidRuntimeOption(tokens: string[]): string | undefined {
     for (let index = 0; index < tokens.length; index++) {
         const token = tokens[index];
+        if (token === "--service-runtime")
+            return "--service-runtime 已移除；旧服务请先执行 onebots migrate";
         if (RUNTIME_OPTIONS.has(token)) {
             const value = tokens[++index];
             if (value === undefined || value.startsWith("-")) return `${token} 缺少参数`;
@@ -85,7 +79,7 @@ function findInvalidRuntimeOption(tokens: string[]): string | undefined {
 function findFirstPositional(argv: string[]): { index: number; token: string } | undefined {
     for (let index = 2; index < argv.length; index++) {
         const token = argv[index];
-        if (RUNTIME_OPTIONS.has(token)) {
+        if (RUNTIME_OPTIONS.has(token) || MANAGEMENT_VALUE_OPTIONS.has(token)) {
             index++;
             continue;
         }
@@ -100,7 +94,7 @@ function splitRuntimeOptions(tokens: string[]): { runtime: string[]; remaining: 
     const remaining: string[] = [];
     for (let index = 0; index < tokens.length; index++) {
         const token = tokens[index];
-        if (RUNTIME_OPTIONS.has(token)) {
+        if (RUNTIME_OPTIONS.has(token) || MANAGEMENT_VALUE_OPTIONS.has(token)) {
             runtime.push(token);
             if (tokens[index + 1] !== undefined) runtime.push(tokens[++index]);
         } else if (isAttachedRuntimeOption(token)) {

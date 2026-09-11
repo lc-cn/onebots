@@ -1,11 +1,14 @@
 # Facebook Messenger configuration
 
-Install and load the adapter:
+## Installation
+
+Open **Extensions** in the Web console and select the adapter, or run:
 
 ```bash
-pnpm add @onebots/adapter-facebook-messenger
-onebots -r facebook-messenger
+onebots ui --data-dir <workspace> --setup
 ```
+
+The manager installs the adapter and its required peer dependencies into a verified immutable runtime generation. Do not run package-manager install commands directly in the OneBots runtime directory.
 
 The Web configuration page renders credentials, transport, filters, delivery, and advanced settings as separate sections. Webhook fields, canonical event types, and permissions are dynamic choice lists rather than hand-written JSON.
 

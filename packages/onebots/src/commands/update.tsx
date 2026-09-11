@@ -1,16 +1,49 @@
 import { option } from "pastel";
 import { z } from "zod";
 import { CommandRunner } from "../cli/command-runner.js";
-import { updatePackages } from "../cli/command-application.js";
-import { scopedRuntimeOptions } from "../cli/command-options.js";
+import { runManagerUpdate } from "../cli/manager-update.js";
 
-export const description = "检查并更新 OneBots 与已用插件";
-export const options = scopedRuntimeOptions.extend({
-    check: z.boolean().describe(option({ description: "仅检查可用更新（有更新时退出 2）" })),
-    yes: z.boolean().describe(option({ description: "非交互确认更新" })),
-    packagesOnly: z.boolean().describe(option({ description: "同步并预检依赖，不修改或重启服务" })),
-});
-
+export const description = "检查并升级网关运行版本，或安全切换本机常驻管理程序";
+export const options = z
+    .object({
+        dataDir: z
+            .string()
+            .optional()
+            .describe(option({ description: "管理服务工作区" })),
+        check: z.boolean().describe(option({ description: "只检查网关更新，有更新退出 2" })),
+        manager: z.boolean().describe(option({ description: "检查或升级本机常驻管理程序" })),
+        version: z
+            .string()
+            .optional()
+            .describe(option({ description: "管理程序精确目标版本" })),
+        yes: z.boolean().describe(option({ description: "非交互确认管理程序版本摘要" })),
+        system: z.boolean().describe(option({ description: "操作系统级管理服务" })),
+        operation: z
+            .string()
+            .optional()
+            .describe(option({ description: "查询原管理程序升级操作" })),
+        artifacts: z
+            .string()
+            .optional()
+            .describe(option({ description: "本地管理程序运行工件清单" })),
+    })
+    .strict();
 export default function UpdateCommand({ options: input }: { options: z.infer<typeof options> }) {
-    return <CommandRunner execute={() => updatePackages(input)} pending="正在检查更新…" />;
+    return (
+        <CommandRunner
+            execute={async () => ({
+                exitCode: await runManagerUpdate([
+                    ...(input.dataDir ? ["--data-dir", input.dataDir] : []),
+                    ...(input.check ? ["--check"] : []),
+                    ...(input.manager ? ["--manager"] : []),
+                    ...(input.version ? ["--version", input.version] : []),
+                    ...(input.yes ? ["--yes"] : []),
+                    ...(input.system ? ["--system"] : []),
+                    ...(input.operation ? ["--operation", input.operation] : []),
+                    ...(input.artifacts ? ["--artifacts", input.artifacts] : []),
+                ]),
+            })}
+            pending="正在检查网关运行版本…"
+        />
+    );
 }

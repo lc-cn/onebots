@@ -254,16 +254,23 @@ export class ProtocolRegistry {
         if (!factory) {
             throw new Error(`Protocol ${name}/${version} not registered`);
         }
-        const protocol = invokeExtensionFactoryWithRegistryBoundary(
-            `协议 ${name}/${version}`,
-            () =>
-                Protocol.isClassFactory(factory)
-                    ? new factory(adapter, account, config)
-                    : factory(adapter, account, config),
-            extensionRegistryBoundary,
-        );
-        assertProtocolFactoryContract(protocol, name, version, adapter, account);
-        return ApplicationRegistry.extend(protocol);
+        let protocol: Protocol | undefined;
+        const create = () => {
+            protocol = invokeExtensionFactoryWithRegistryBoundary(
+                `协议 ${name}/${version}`,
+                () =>
+                    Protocol.isClassFactory(factory)
+                        ? new factory(adapter, account, config)
+                        : factory(adapter, account, config),
+                extensionRegistryBoundary,
+            );
+            assertProtocolFactoryContract(protocol, name, version, adapter, account);
+            return ApplicationRegistry.extend(protocol);
+        };
+        const router = adapter.app.router;
+        return router
+            ? router.runWithProtocolReadiness(() => protocol?.lifecycleStatus === "ready", create)
+            : create();
     }
 
     /** 验证第三方账号没有绕过注册表注入、遗漏或替换协议实例。 */

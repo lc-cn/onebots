@@ -194,7 +194,7 @@ import { McpStdioClient } from '@onebots/mcp-client';
 
 const client = new McpStdioClient({
   command: 'onebots',
-  args: ['mcp', '--config', 'config.yaml', '--account', 'qq/my-bot'],
+  args: ['mcp', '--data-dir', '/path/to/onebots-data', '--account', 'qq/my-bot'],
 });
 
 await client.connect();

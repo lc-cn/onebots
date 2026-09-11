@@ -1,6 +1,6 @@
 import { ApplicationRegistry } from "@onebots/core";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadPlugins } from "./runtime.js";
+import { loadPlugins } from "./runtime-plugins.js";
 
 const promotedApplications = [
     "zhin",
@@ -23,7 +23,7 @@ describe("built-in framework Applications", () => {
     });
 
     it.each(promotedApplications)(
-        "loads and activates %s through the -t runtime path",
+        "loads and activates %s through the generation runtime path",
         async name => {
             await expect(loadPlugins([], [], [name])).resolves.toEqual([]);
             expect(ApplicationRegistry.getActiveNames()).toContain(name);

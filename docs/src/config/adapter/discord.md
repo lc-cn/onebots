@@ -59,19 +59,14 @@ discord.my_bot:
     # password: "pass"  # 可选
 ```
 
-### 可选依赖
+### 代理运行依赖
 
-使用代理功能需要安装额外的依赖：
-
-```bash
-# 推荐同时安装（WebSocket 使用 SOCKS5 更稳定）
-npm install https-proxy-agent socks-proxy-agent
-```
+管理服务安装运行代时会一并提供代理传输依赖；不要在活动运行目录中手工执行包管理器命令。
 
 | 依赖 | 用途 |
 |------|------|
-| `https-proxy-agent` | REST API 代理 |
-| `socks-proxy-agent` | WebSocket 代理（推荐） |
+| `https-proxy-agent` | REST API 代理，由 OneBots 运行时提供 |
+| `socks-proxy-agent` | WebSocket 代理，由 OneBots 运行时提供 |
 
 ::: tip 提示
 适配器会自动将 HTTP 代理转换为 SOCKS5 用于 WebSocket 连接，因为 SOCKS5 对长连接支持更好。确保你的代理软件（如 Clash）开启了混合端口。
@@ -148,4 +143,3 @@ discord.your_bot_id:
 - [Discord 平台说明](/platform/discord)
 - [适配器配置指南](/guide/adapter)
 - [客户端SDK使用指南](/guide/client-sdk)
-

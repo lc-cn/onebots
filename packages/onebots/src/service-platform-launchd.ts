@@ -1,0 +1,462 @@
+import { isLaunchdServiceMissing } from "./service-platform-presence.js";
+import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
+import { LAUNCHD_LABEL, type ServiceScope } from "./service-definition.js";
+import type { ServiceHost } from "./service-host.js";
+import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
+import {
+    LaunchdObservationChangedError,
+    type LaunchdProcessGeneration,
+    LaunchdTransitionError,
+    launchdProcessExists,
+    parseLaunchdFields,
+    parseLaunchdProcessGeneration,
+    rejectUnsafeLaunchdObservation as unavailable,
+} from "./service-platform-launchd-observation.js";
+
+export interface LaunchdServicePlatformOptions {
+    /** 仅上层持锁确认从未启动的新定义可提供；不能从 print 的缺失推断。 */
+    freshDefinition?: boolean;
+    /** 只能进行 signal 0 存活探测；注入边界供无宿主服务的测试使用。 */
+    processExists?(pid: number): boolean;
+    /** 新管理工作区的持久所有权证明；仅OS明确unloaded且已知进程组全退出时调用。 */
+    confirmUnloadedProcesses?(): Promise<boolean>;
+    now?(): number;
+    sleep?(milliseconds: number): Promise<void>;
+    stopTimeoutMs?: number;
+}
+/** 仅控制固定 OneBots 身份；不向历史 PID 发停止信号。旧实例缺少独立组证据时拒绝迁移。 */
+export class LaunchdServicePlatform implements ServicePlatform {
+    private readonly domain: string;
+    private readonly target: string;
+    private readonly exists: (pid: number) => boolean;
+    private readonly now: () => number;
+    private readonly sleep: (milliseconds: number) => Promise<void>;
+    private readonly timeout: number;
+    private readonly confirmUnloadedProcesses?: () => Promise<boolean>;
+    private readonly groups = new Set<number>();
+    private fresh: boolean;
+    private unprovenGroup = false;
+    constructor(
+        private readonly host: ServiceHost,
+        scope: ServiceScope,
+        private readonly expectedDefinitionPath: string,
+        options: LaunchdServicePlatformOptions = {},
+    ) {
+        if (
+            host.platform !== "darwin" ||
+            !["user", "system"].includes(scope) ||
+            !path.posix.isAbsolute(expectedDefinitionPath) ||
+            /[\u0000-\u001f\u007f]/.test(expectedDefinitionPath) ||
+            path.posix.normalize(expectedDefinitionPath) !== expectedDefinitionPath ||
+            path.posix.basename(expectedDefinitionPath) !== `${LAUNCHD_LABEL}.plist` ||
+            (scope === "user" && (!Number.isInteger(host.uid) || host.uid! < 0))
+        )
+            unavailable();
+        this.fresh = options.freshDefinition === true;
+        this.domain = scope === "system" ? "system" : `gui/${host.uid}`;
+        this.target = `${this.domain}/${LAUNCHD_LABEL}`;
+        this.exists = options.processExists ?? launchdProcessExists;
+        this.confirmUnloadedProcesses = options.confirmUnloadedProcesses;
+        this.now = options.now ?? Date.now;
+        this.sleep =
+            options.sleep ??
+            (milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)));
+        this.timeout = options.stopTimeoutMs ?? 120_000;
+        if (!Number.isInteger(this.timeout) || this.timeout < 1 || this.timeout > 300_000)
+            unavailable();
+    }
+    private exec(file: string, args: string[], deadline?: number): string {
+        const timeoutMs = deadline === undefined ? 5000 : Math.min(5000, deadline - this.now());
+        if (timeoutMs <= 0) unavailable();
+        return this.host.exec(file, args, { timeoutMs });
+    }
+    private command(args: string[], deadline?: number): string {
+        return this.exec("/bin/launchctl", args, deadline);
+    }
+    private fixedJobLoaded(deadline: number): boolean {
+        const data = this.loaded(deadline);
+        if (!data) return false;
+        if (data.get("path") !== this.expectedDefinitionPath) unavailable();
+        return true;
+    }
+    private bootout(deadline: number): void {
+        try {
+            this.command(["bootout", this.target], deadline);
+        } catch (error) {
+            // disable 与 bootout 之间 job 可以自行退出。固定 label 已经缺失时无需重派；
+            // 后续仍须以 unloaded 状态和持久进程所有权证明收口。
+            if (
+                !isLaunchdServiceMissing(
+                    error,
+                    this.domain === "system" ? "system" : "user",
+                    this.host.uid,
+                )
+            )
+                throw error;
+        }
+    }
+    private loaded(deadline?: number): Map<string, string> | null {
+        let output: string;
+        try {
+            output = this.command(["print", this.target], deadline);
+        } catch (error) {
+            if (
+                isLaunchdServiceMissing(
+                    error,
+                    this.domain === "system" ? "system" : "user",
+                    this.host.uid,
+                )
+            )
+                return null;
+            unavailable();
+        }
+        return parseLaunchdFields(output, this.target);
+    }
+    private enabled(deadline?: number): boolean {
+        const output = this.command(["print-disabled", this.domain], deadline);
+        if (
+            output.length > 262144 ||
+            !/^\s*disabled services = \{\s*\n/.test(output) ||
+            !/\n\s*\}\s*$/.test(output)
+        )
+            unavailable();
+        let override: boolean | undefined;
+        for (const line of output.trim().split("\n").slice(1, -1)) {
+            const match = /^\s*"([^"\r\n]+)" => (enabled|disabled|true|false)\s*$/.exec(line);
+            if (!match) unavailable();
+            if (match[1] !== LAUNCHD_LABEL) continue;
+            if (override !== undefined) unavailable();
+            override = match[2] === "enabled" || match[2] === "false";
+        }
+        // 没有 override 时，plist 的 Disabled 键才是默认值，不能猜测已启用。
+        const raw = this.exec(
+            "/usr/bin/plutil",
+            ["-convert", "json", "-o", "-", this.expectedDefinitionPath],
+            deadline,
+        );
+        if (raw.length > 262144) unavailable();
+        const definition: unknown = JSON.parse(raw);
+        if (!definition || typeof definition !== "object" || Array.isArray(definition))
+            unavailable();
+        const value = definition as Record<string, unknown>;
+        if (
+            value.Label !== LAUNCHD_LABEL ||
+            (value.Disabled !== undefined && typeof value.Disabled !== "boolean")
+        )
+            unavailable();
+        return override ?? value.Disabled !== true;
+    }
+    private generation(pid: number, deadline?: number): LaunchdProcessGeneration | null {
+        return parseLaunchdProcessGeneration(
+            this.exec("/bin/ps", ["-o", "pid=,pgid=,lstart=", "-p", String(pid)], deadline),
+            pid,
+        );
+    }
+    private groupsGone(): boolean {
+        if (this.unprovenGroup) return false;
+        if (!this.groups.size) return this.fresh;
+        let gone = true;
+        for (const group of this.groups) {
+            const leader = this.exists(group),
+                members = this.exists(-group);
+            if (leader || members) gone = false;
+        }
+        return gone;
+    }
+    private async unloadedQuiescent(enabled: boolean, deadline?: number): Promise<boolean> {
+        if (this.unprovenGroup || (this.groups.size > 0 && !this.groupsGone())) return false;
+        if (this.fresh || !this.confirmUnloadedProcesses) return this.groupsGone();
+        if ((await this.confirmUnloadedProcesses()) !== true) return false;
+        // 异步持久证据期间若OS加载状态或启用状态变化，不能拼接两个时点的证据。
+        if (this.loaded(deadline) !== null || this.enabled(deadline) !== enabled) unavailable();
+        return !this.unprovenGroup && (this.groups.size === 0 || this.groupsGone());
+    }
+    async inspect(): Promise<ServicePlatformState> {
+        try {
+            return await this.inspectWithin();
+        } catch {
+            return unavailable();
+        }
+    }
+    private async inspectWithin(deadline?: number): Promise<ServicePlatformState> {
+        try {
+            const enabled = this.enabled(deadline);
+            const data = this.loaded(deadline);
+            if (!data)
+                return {
+                    state: "stopped",
+                    running: false,
+                    enabled,
+                    loaded: false,
+                    definitionPath: this.expectedDefinitionPath,
+                    processId: null,
+                    identity: null,
+                    quiescent: await this.unloadedQuiescent(enabled, deadline),
+                };
+            this.fresh = false;
+            if (data.get("path") !== this.expectedDefinitionPath) unavailable();
+            const state = data.get("state");
+            if (state === "xpcproxy" || state === "SIGTERMed") throw new LaunchdTransitionError();
+            if (
+                !["running", "not running", "waiting", "exited", "crashed", "failed"].includes(
+                    state ?? "",
+                )
+            )
+                unavailable();
+            const exitCode = data.get("last exit code");
+            const numericExitCode = exitCode !== undefined && /^-?(0|[1-9][0-9]*)$/.test(exitCode);
+            // A newly bootstrapped launchd job reports this literal until its first exit.
+            // It is only coherent while that same job is running; stopped jobs still need a number.
+            if (
+                exitCode !== undefined &&
+                !(
+                    (exitCode === "(never exited)" && state === "running") ||
+                    (numericExitCode && Number.isSafeInteger(Number(exitCode)))
+                )
+            )
+                unavailable();
+            const observedState: ServicePlatformState["state"] =
+                state === "running"
+                    ? "running"
+                    : state === "crashed" ||
+                        state === "failed" ||
+                        (numericExitCode && Number(exitCode) !== 0)
+                      ? "failed"
+                      : state === "not running"
+                        ? "stopped"
+                        : "transitioning";
+            const rawPid = data.get("pid");
+            const pid = rawPid === undefined ? null : Number(rawPid);
+            if (
+                rawPid !== undefined &&
+                (!/^[1-9][0-9]*$/.test(rawPid) || !Number.isSafeInteger(pid) || pid! > 2147483647)
+            )
+                unavailable();
+            if ((state === "running") !== (pid !== null)) unavailable();
+            const generation = pid === null ? null : this.generation(pid, deadline);
+            if (generation) this.groups.add(generation.group);
+            if (pid !== null && !generation) this.unprovenGroup = true;
+            // ps 观察期间服务换代或状态变化，拒绝拼接两份不同实例的证据。
+            const after = this.loaded(deadline);
+            if (
+                !after ||
+                ["path", "state", "pid", "last exit code"].some(
+                    key => after.get(key) !== data.get(key),
+                )
+            )
+                throw new LaunchdObservationChangedError();
+            const confirmedGeneration = pid === null ? null : this.generation(pid, deadline);
+            if (!isDeepStrictEqual(generation, confirmedGeneration))
+                throw new LaunchdObservationChangedError();
+            return {
+                state: observedState,
+                running: pid !== null,
+                enabled,
+                loaded: true,
+                definitionPath: this.expectedDefinitionPath,
+                processId: pid,
+                identity: generation
+                    ? `${this.target}:pgid:${generation.group}:started:${generation.started}`
+                    : null,
+                quiescent: observedState === "stopped" && pid === null && this.groupsGone(),
+            };
+        } catch (error) {
+            if (
+                error instanceof LaunchdTransitionError ||
+                error instanceof LaunchdObservationChangedError
+            )
+                throw error;
+            unavailable();
+        }
+    }
+    private async actionable(deadline: number): Promise<ServicePlatformState> {
+        for (;;) {
+            try {
+                const state = await this.inspectWithin(deadline);
+                const coldLoaded =
+                    state.loaded &&
+                    !state.running &&
+                    state.processId === null &&
+                    !this.unprovenGroup &&
+                    Boolean(this.confirmUnloadedProcesses);
+                if (
+                    ["running", "stopped", "failed"].includes(state.state) &&
+                    (state.running ? Boolean(state.identity) : state.quiescent || coldLoaded)
+                )
+                    return state;
+            } catch (error) {
+                if (
+                    !(error instanceof LaunchdTransitionError) &&
+                    !(error instanceof LaunchdObservationChangedError)
+                )
+                    throw error;
+            }
+            if (this.now() >= deadline) unavailable();
+            await this.sleep(Math.min(100, deadline - this.now()));
+        }
+    }
+    private async stable(
+        deadline: number,
+        accepts: (state: ServicePlatformState) => boolean,
+    ): Promise<ServicePlatformState> {
+        for (;;) {
+            const first = await this.inspectWithin(deadline);
+            if (accepts(first)) {
+                const second = await this.inspectWithin(deadline);
+                if (accepts(second) && isDeepStrictEqual(first, second)) return second;
+            }
+            if (this.now() >= deadline) unavailable();
+            await this.sleep(Math.min(100, deadline - this.now()));
+        }
+    }
+    private async stableInstance(
+        deadline: number,
+        accepts: (state: ServicePlatformState) => boolean,
+    ): Promise<ServicePlatformState> {
+        for (;;) {
+            let first: ServicePlatformState;
+            try {
+                first = await this.inspectWithin(deadline);
+            } catch (error) {
+                // launchd may briefly expose an undocumented transition immediately after
+                // bootstrap. No additional effect is dispatched until a full stable identity
+                // can be read twice.
+                if (!(error instanceof LaunchdTransitionError)) throw error;
+                if (this.now() >= deadline) unavailable();
+                await this.sleep(Math.min(100, deadline - this.now()));
+                continue;
+            }
+            if (accepts(first)) {
+                const second = await this.inspectWithin(deadline);
+                if (accepts(second) && isDeepStrictEqual(first, second)) return second;
+                unavailable();
+            }
+            if (this.now() >= deadline) unavailable();
+            await this.sleep(Math.min(100, deadline - this.now()));
+        }
+    }
+    async quiesce(): Promise<void> {
+        try {
+            const deadline = this.now() + this.timeout;
+            // 管理升级/卸载已有独立的持久进程所有权证明，可以在故障候选持续换代时
+            // 直接控制固定 label；没有该证明的旧迁移仍须先绑定稳定进程代。
+            if (this.confirmUnloadedProcesses) this.fixedJobLoaded(deadline);
+            else await this.actionable(deadline);
+            this.command(["disable", this.target], deadline);
+            // disable 之后 launchd 可能持续完成已经排队的故障候选换代，不能等待某一代
+            // 连续两次稳定。重新核对固定 label 的定义路径后仅派发一次 bootout；最终仍以
+            // unloaded、已记录进程组和持久管理进程所有权证明收口。
+            if (this.enabled(deadline)) unavailable();
+            if (this.fixedJobLoaded(deadline)) this.bootout(deadline);
+            for (;;) {
+                let current: ServicePlatformState;
+                try {
+                    current = await this.inspectWithin(deadline);
+                } catch (error) {
+                    // A successful bootout can transiently report states such as SIGTERMed.
+                    // Keep waiting without issuing another bootout or accepting that state.
+                    if (!(error instanceof LaunchdTransitionError)) throw error;
+                    if (this.now() >= deadline) unavailable();
+                    await this.sleep(Math.min(100, deadline - this.now()));
+                    continue;
+                }
+                if (current.enabled || current.loaded || current.running) unavailable();
+                if (current.quiescent) return;
+                if (this.now() >= deadline) unavailable();
+                await this.sleep(Math.min(100, deadline - this.now()));
+            }
+        } catch {
+            unavailable();
+        }
+    }
+    async reload(enabled: boolean): Promise<ServicePlatformState> {
+        try {
+            if (typeof enabled !== "boolean") unavailable();
+            const deadline = this.now() + this.timeout;
+            const before = await this.inspectWithin(deadline);
+            if (
+                before.state !== "stopped" ||
+                before.running ||
+                before.loaded ||
+                !before.quiescent ||
+                before.definitionPath !== this.expectedDefinitionPath
+            )
+                unavailable();
+            this.command([enabled ? "enable" : "disable", this.target], deadline);
+            return await this.stable(
+                deadline,
+                state =>
+                    state.state === "stopped" &&
+                    !state.running &&
+                    !state.loaded &&
+                    state.quiescent &&
+                    state.enabled === enabled &&
+                    state.definitionPath === this.expectedDefinitionPath,
+            );
+        } catch {
+            return unavailable();
+        }
+    }
+    async start(expectedInitialState?: ServicePlatformState): Promise<ServicePlatformState> {
+        try {
+            const deadline = this.now() + this.timeout;
+            const before = await this.inspectWithin(deadline);
+            if (expectedInitialState && !isDeepStrictEqual(before, expectedInitialState))
+                unavailable();
+            if (before.running) {
+                if (!before.identity) unavailable();
+                return await this.stable(
+                    deadline,
+                    state =>
+                        state.state === "running" &&
+                        state.running &&
+                        state.loaded &&
+                        state.processId !== null &&
+                        state.identity !== null &&
+                        state.definitionPath === this.expectedDefinitionPath &&
+                        state.enabled === before.enabled &&
+                        state.processId === before.processId &&
+                        state.identity === before.identity,
+                );
+            }
+            if (before.loaded || !before.quiescent) unavailable();
+            // launchctl(1): disabled服务不能加载。上层starting-manager意图必须先持久化；
+            // 临时enable也属于该外部效果，失败不在这里盲重试或假装恢复原状态。
+            if (!before.enabled) {
+                this.command(["enable", this.target], deadline);
+                const enabled = await this.inspectWithin(deadline);
+                if (!enabled.enabled || enabled.loaded || !enabled.quiescent) unavailable();
+            }
+            this.fresh = false;
+            this.command(["bootstrap", this.domain, this.expectedDefinitionPath], deadline);
+            const started = await this.stableInstance(
+                deadline,
+                state =>
+                    state.state === "running" &&
+                    state.running &&
+                    state.loaded &&
+                    state.enabled &&
+                    state.processId !== null &&
+                    state.identity !== null &&
+                    state.definitionPath === this.expectedDefinitionPath,
+            );
+            if (!before.enabled) {
+                this.command(["disable", this.target], deadline);
+            }
+            return await this.stable(
+                deadline,
+                state =>
+                    state.state === "running" &&
+                    state.running &&
+                    state.loaded &&
+                    state.enabled === before.enabled &&
+                    state.processId === started.processId &&
+                    state.identity === started.identity &&
+                    state.definitionPath === this.expectedDefinitionPath,
+            );
+        } catch {
+            return unavailable();
+        }
+    }
+}

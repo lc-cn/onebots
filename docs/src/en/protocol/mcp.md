@@ -6,20 +6,13 @@ MCP (Model Context Protocol) is an open protocol by Anthropic for standardizing 
 
 Three steps to connect an AI Agent to your IM platform:
 
-**Step 1: Install and Configure**
+**Step 1: Start the manager and configure an account**
 
 ```bash
-npm install onebots @onebots/protocol-mcp-v1
+onebots serve --data-dir /path/to/onebots-data
 ```
 
-Enable MCP in `config.yaml`:
-
-```yaml
-qq.my-bot:
-  appid: "your-appid"
-  secret: "your-secret"
-  mcp.v1: {}                    # Enable with defaults
-```
+Use the TUI or Web installation and configuration workflows to select the platform adapter and MCP protocol, enter account settings, enable `mcp.v1`, validate, and apply. Keep the manager and gateway running. The AI client below connects to the same workspace.
 
 **Step 2: Configure Your AI Agent**
 
@@ -30,7 +23,7 @@ For Cursor, add to `~/.cursor/mcp.json`:
   "mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -50,8 +43,8 @@ Tell your AI: "Send a message to group 123456" — it will automatically call th
 ## Installation
 
 ```bash
-# Server plugin (required)
-npm install @onebots/protocol-mcp-v1
+# Connect to the manager and install MCP plus the required adapter
+onebots tui --data-dir /path/to/onebots-data
 
 # Client SDK (only for programmatic access — AI Agents don't need this)
 npm install @onebots/mcp-client
@@ -100,10 +93,10 @@ qq.my-bot:
 JSON-RPC over stdin/stdout. The standard connection method for desktop AI Agents — no network config needed.
 
 ```bash
-onebots mcp --config config.yaml --account qq/my-bot
+onebots mcp --data-dir /path/to/onebots-data --account qq/my-bot
 ```
 
-The stdio command reuses the exact MCP plugin entry that passed the registration contract during this startup. It does not resolve another copy relative to the `onebots` package, so npm projects, strict pnpm layouts, and workspace members all use the same version the gateway loaded. Requests are processed in arrival order. If a handler fails asynchronously, a request with an `id` receives JSON-RPC error `-32603`, while a notification without an `id` receives no response; details go to the OneBots log without contaminating the stdout protocol stream. If account selection, protocol configuration, or the stdio export check fails, the command stops the accounts, protocols, and listeners it already started before returning the error. Closing stdin waits for accepted requests to finish, and repeated close signals trigger only one stop.
+`onebots mcp` connects to the existing manager through the private workspace control socket. The manager forwards requests to an MCP account in the current gateway. First run `onebots serve --data-dir /path/to/onebots-data`, then use TUI or Web to install the platform adapter and MCP protocol, configure the account, and apply it. The command does not install dependencies, load accounts, start the gateway, or enable MCP. Select `--account platform/account` when multiple MCP accounts exist. Requests run in input order and stdout contains only JSON-RPC. Normal stdin closure drains accepted requests and closes only this session. A stopped or restarted gateway or an unknown connection outcome ends the session without replaying tool calls. HTTP/SSE protocol tokens remain separate from manager device pairing credentials.
 
 ### HTTP/SSE (Remote)
 
@@ -124,7 +117,7 @@ Flow: GET `/sse` → receive `endpoint` event → POST requests to that endpoint
   "mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -135,7 +128,7 @@ Flow: GET `/sse` → receive `endpoint` event → POST requests to that endpoint
   "mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -146,7 +139,7 @@ Flow: GET `/sse` → receive `endpoint` event → POST requests to that endpoint
   "cline.mcpServers": {
     "onebots": {
       "command": "npx",
-      "args": ["onebots", "mcp", "--config", "/path/to/config.yaml", "--account", "qq/my-bot"]
+      "args": ["onebots", "mcp", "--data-dir", "/path/to/onebots-data", "--account", "qq/my-bot"]
     }
   }
 }
@@ -271,7 +264,7 @@ import { McpStdioClient } from '@onebots/mcp-client';
 
 const client = new McpStdioClient({
   command: 'onebots',
-  args: ['mcp', '--config', 'config.yaml', '--account', 'qq/my-bot'],
+  args: ['mcp', '--data-dir', '/path/to/onebots-data', '--account', 'qq/my-bot'],
 });
 
 await client.connect();

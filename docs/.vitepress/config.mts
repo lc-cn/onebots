@@ -73,6 +73,18 @@ const baseConfig = defineConfig({
                 nav: [
                     { text: "开始", link: "/guide/start", activeMatch: "/guide/" },
                     {
+                        text: "本地管理",
+                        activeMatch: "/local/",
+                        items: [
+                            { text: "管理方式概览", link: "/local/" },
+                            { text: "首次安装与工作台", link: "/local/first-run" },
+                            { text: "CLI 命令索引", link: "/local/cli" },
+                            { text: "系统服务", link: "/local/service" },
+                            { text: "备份、升级与恢复", link: "/local/maintenance" },
+                            { text: "诊断与常见故障", link: "/local/troubleshooting" }
+                        ]
+                    },
+                    {
                         text: "配置",
                         items: [
                             { text: "全局配置", link: "/config/global" },
@@ -139,10 +151,21 @@ const baseConfig = defineConfig({
                     }
                 ],
                 sidebar: {
+                    "/local/": [
+                        { text: "管理方式概览", link: "/local/" },
+                        { text: "首次安装与工作台", link: "/local/first-run" },
+                        { text: "CLI 命令索引", link: "/local/cli" },
+                        { text: "系统服务", link: "/local/service" },
+                        { text: "备份、升级与恢复", link: "/local/maintenance" },
+                        { text: "诊断与常见故障", link: "/local/troubleshooting" }
+                    ],
                     "/guide/": [
                         { text: `准备工作`, link: "/guide/prepare" },
                         { text: `快速开始`, link: "/guide/start" },
                         { text: `OneBots 工作台`, link: "/guide/tui" },
+                        { text: `管理端登录与恢复`, link: "/guide/management-login" },
+                        { text: `账号登录验证`, link: "/guide/account-verification" },
+                        { text: `升级网关运行版本`, link: "/guide/runtime-update" },
                         { text: `Docker 私有扩展`, link: "/guide/docker-private-extensions" },
                         { text: `Docker 部署`, link: "/guide/docker" },
                         { text: `系统架构`, link: "/guide/architecture" },
@@ -311,6 +334,8 @@ const baseConfig = defineConfig({
                     "/en/guide/": [
                         { text: "Preparation", link: "/en/guide/prepare" },
                         { text: "Quick Start", link: "/en/guide/start" },
+                        { text: "Management Login", link: "/en/guide/management-login" },
+                        { text: "Gateway Runtime Updates", link: "/en/guide/runtime-update" },
                         { text: "Docker Deployment", link: "/en/guide/docker" },
                         { text: "Architecture", link: "/en/guide/architecture" },
                         { text: "Client SDK", link: "/en/guide/client-sdk" },

@@ -1,63 +1,73 @@
 @import "tailwindcss";
+@import "./shell.css";
+@import "./workspace.css";
+@import "./control-components.css";
+@import "./control-configuration.css";
+@import "./control-configuration-fields.css";
+@import "./setup-journey.css";
+@import "./terminal.css";
+@import "./console-polish.css";
+@import "./responsive.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ===== 设计令牌（运行时变量，.dark 下覆盖） ===== */
 :root {
-    --bg: #fafafa;
-    --surface: #ffffff;
-    --surface-raised: #f4f4f5;
-    --border: #e4e4e7;
-    --border-strong: #d4d4d8;
-    --fg: #18181b;
-    --fg-secondary: #52525b;
-    --fg-tertiary: #a1a1aa;
-
-    --accent: #059669;
-    --accent-hover: #047857;
+    color-scheme: light;
+    --bg: #f8f7ff;
+    --surface: rgba(255, 255, 255, 0.38);
+    --surface-raised: rgba(244, 243, 252, 0.26);
+    --surface-strong: rgba(235, 233, 248, 0.4);
+    --border: rgba(91, 77, 151, 0.14);
+    --border-strong: rgba(84, 70, 145, 0.24);
+    --fg: #1d1b2e;
+    --fg-secondary: #5c5a70;
+    --fg-tertiary: #9290a4;
+    --accent: #6757e8;
+    --accent-hover: #5543d8;
     --accent-fg: #ffffff;
-    --accent-soft: rgba(5, 150, 105, 0.1);
-
-    --success: #059669;
-    --success-soft: rgba(5, 150, 105, 0.1);
-    --warning: #d97706;
-    --warning-soft: rgba(217, 119, 6, 0.12);
-    --danger: #dc2626;
-    --danger-soft: rgba(220, 38, 38, 0.1);
-    --info: #0284c7;
-    --info-soft: rgba(2, 132, 199, 0.1);
-
-    --ring: rgba(5, 150, 105, 0.35);
+    --accent-soft: rgba(103, 87, 232, 0.1);
+    --success: #15966d;
+    --success-soft: rgba(21, 150, 109, 0.1);
+    --warning: #b66b0d;
+    --warning-soft: rgba(241, 157, 43, 0.12);
+    --danger: #d34863;
+    --danger-soft: rgba(211, 72, 99, 0.1);
+    --info: #2885c7;
+    --info-soft: rgba(40, 133, 199, 0.1);
+    --ring: rgba(103, 87, 232, 0.34);
+    --shadow:
+        0 1px 2px rgba(38, 32, 78, 0.04), 0 16px 40px rgba(99, 82, 180, 0.09),
+        0 0 0 1px rgba(255, 255, 255, 0.72) inset;
 }
 
 .dark {
-    --bg: #0c0d0f;
-    --surface: #141619;
-    --surface-raised: #1c1f24;
-    --border: #26292f;
-    --border-strong: #3a3e46;
-    --fg: #e4e4e7;
-    --fg-secondary: #a1a1aa;
-    --fg-tertiary: #63636b;
-
-    --accent: #10b981;
-    --accent-hover: #34d399;
-    --accent-fg: #06281c;
-    --accent-soft: rgba(16, 185, 129, 0.14);
-
-    --success: #34d399;
-    --success-soft: rgba(52, 211, 153, 0.14);
-    --warning: #fbbf24;
-    --warning-soft: rgba(251, 191, 36, 0.14);
-    --danger: #f87171;
-    --danger-soft: rgba(248, 113, 113, 0.14);
-    --info: #38bdf8;
-    --info-soft: rgba(56, 189, 248, 0.14);
-
-    --ring: rgba(16, 185, 129, 0.45);
+    color-scheme: dark;
+    --bg: #211d35;
+    --surface: rgba(49, 43, 73, 0.4);
+    --surface-raised: rgba(64, 56, 93, 0.28);
+    --surface-strong: rgba(76, 67, 108, 0.38);
+    --border: rgba(211, 204, 255, 0.14);
+    --border-strong: rgba(218, 211, 255, 0.24);
+    --fg: #f4f2fb;
+    --fg-secondary: #d0cce0;
+    --fg-tertiary: #aaa4bf;
+    --accent: #9a8cff;
+    --accent-hover: #b1a7ff;
+    --accent-fg: #171126;
+    --accent-soft: rgba(154, 140, 255, 0.14);
+    --success: #4ec997;
+    --success-soft: rgba(78, 201, 151, 0.12);
+    --warning: #e7ad53;
+    --warning-soft: rgba(231, 173, 83, 0.14);
+    --danger: #ef8580;
+    --danger-soft: rgba(239, 133, 128, 0.13);
+    --info: #68b4cb;
+    --info-soft: rgba(104, 180, 203, 0.13);
+    --ring: rgba(154, 140, 255, 0.42);
+    --shadow:
+        0 18px 50px rgba(19, 13, 41, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
 }
 
-/* ===== 映射为 Tailwind 工具类 ===== */
 @theme inline {
     --color-bg: var(--bg);
     --color-surface: var(--surface);
@@ -67,6 +77,7 @@
     --color-fg: var(--fg);
     --color-fg-secondary: var(--fg-secondary);
     --color-fg-tertiary: var(--fg-tertiary);
+    --color-fg-muted: var(--fg-tertiary);
     --color-accent: var(--accent);
     --color-accent-hover: var(--accent-hover);
     --color-accent-fg: var(--accent-fg);
@@ -80,32 +91,59 @@
     --color-info: var(--info);
     --color-info-soft: var(--info-soft);
     --color-ring: var(--ring);
-
-    --font-sans: "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
-        "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas,
-        "Courier New", monospace;
-
-    --radius-control: 0.5rem;
-    --radius-card: 0.75rem;
+    --font-sans:
+        "Geist Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --font-mono:
+        "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+    --radius-control: 0.65rem;
+    --radius-card: 1rem;
+    --radius-panel: 1rem;
 }
 
-/* ===== 基础样式 ===== */
-html,
-body,
-#app {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
+* {
+    box-sizing: border-box;
+}
+
+html {
+    background: var(--bg);
+    scroll-behavior: smooth;
 }
 
 body {
-    font-family: var(--font-sans);
+    min-width: 320px;
+    min-height: 100dvh;
+    margin: 0;
     background: var(--bg);
     color: var(--fg);
-    font-size: 14px;
+    font-family: var(--font-sans);
+    font-size: 14.5px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+code,
+pre {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+code {
+    border-radius: 0.32rem;
+    background: var(--surface-raised);
+    padding: 0.13rem 0.35rem;
+    font-size: 0.86em;
 }
 
 ::selection {
@@ -113,36 +151,109 @@ body {
     color: var(--fg);
 }
 
-/* 细滚动条 */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
 }
 ::-webkit-scrollbar-track {
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
+    border-radius: 999px;
     background: var(--border-strong);
-    border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
     background: var(--fg-tertiary);
 }
 
-/* 统一聚焦环 */
 :focus-visible {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
-    border-radius: var(--radius-control);
 }
 
-/* 过渡只动 transform/opacity；尊重减少动态偏好 */
-@media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
+.skip-link {
+    position: fixed;
+    left: 1rem;
+    top: 1rem;
+    z-index: 50;
+    transform: translateY(-5rem);
+    border-radius: var(--radius-control);
+    background: var(--fg);
+    color: var(--bg);
+    padding: 0.55rem 0.8rem;
+    transition: transform 160ms ease;
+}
+.skip-link:focus {
+    transform: translateY(0);
+}
+
+.brand-lockup {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    font-size: 1rem;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+}
+.brand-lockup > span:last-child small {
+    margin-left: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    opacity: 0.5;
+    text-transform: uppercase;
+}
+
+.brand-mark {
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: 0.7rem;
+    background: linear-gradient(145deg, #7969f4, #4c8df6);
+    color: #ffffff;
+    font-family: var(--font-mono);
+    font-size: 0.67rem;
+    font-weight: 750;
+    letter-spacing: -0.06em;
+    box-shadow: 0 8px 20px rgba(91, 78, 218, 0.24);
+}
+
+.icon-button {
+    display: inline-flex;
+    width: 2.25rem;
+    height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--fg-secondary);
+    transition:
+        background 160ms ease,
+        color 160ms ease,
+        transform 160ms ease;
+}
+.icon-button:hover {
+    background: var(--surface-raised);
+    color: var(--fg);
+}
+.icon-button:active {
+    transform: scale(0.96);
+}
+
+.ui-button.bg-accent {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: linear-gradient(135deg, #765ff1, #537ff1);
+    box-shadow: 0 7px 18px rgba(94, 75, 220, 0.22);
+}
+.ui-button.bg-accent:hover {
+    background: linear-gradient(135deg, #6750e4, #4171e8);
+    box-shadow: 0 9px 22px rgba(94, 75, 220, 0.28);
+}
+.ui-button.bg-accent:active {
+    transform: translateY(1px) scale(0.985);
 }
