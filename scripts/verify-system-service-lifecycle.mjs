@@ -398,13 +398,27 @@ async function linuxNodeCaptureState() {
     };
 }
 
+// 仅输出固定错误码与代码文件名，不暴露服务配置、环境、绝对路径或凭据。
+function migrationServiceErrors() {
+    try {
+        const output = execute("journalctl", ["-u", SERVICE, "-n", "160", "--no-pager", "-o", "cat"], { statuses: [0] }).stdout;
+        return {
+            codes: [...new Set(output.match(/\b(?:ERR_[A-Z_]+|EACCES|EPERM|ENOENT|EADDRINUSE|SQLITE_[A-Z_]+)\b/gu) ?? [])],
+            locations: [...new Set([...output.matchAll(/\/([a-z][a-z0-9-]*\.[cm]?js):([0-9]+)(?::[0-9]+)?/gu)].map(match => `${match[1]}:${match[2]}`))].slice(-20),
+            errorTypes: [...new Set(output.match(/\b(?:TypeError|SyntaxError|ReferenceError|RangeError|SystemError)\b/gu) ?? [])],
+        };
+    } catch {
+        return { unavailable: true };
+    }
+}
+
 async function invokeMigration(args) {
     const result = invokeCli(args, [0, 1]);
     if (result.status === 0) return result.stdout;
     const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
     const id = /操作 ([0-9a-f-]{36})：/iu.exec(text)?.[1];
     throw new Error(
-        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；捕获阶段=${JSON.stringify(id ? migrationCaptureState(id) : { operation: false })}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}`,
+        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；捕获阶段=${JSON.stringify(id ? migrationCaptureState(id) : { operation: false })}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}；服务错误=${JSON.stringify(migrationServiceErrors())}`,
     );
 }
 
