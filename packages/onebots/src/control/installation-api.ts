@@ -2,6 +2,7 @@ import { GenerationConflictError } from "./generation-activation.js";
 import { ConfigurationConflictError } from "../configuration/configuration-store.js";
 import type { GenerationSelection } from "../installation/generation-plan.js";
 import type { ControlInstallationService } from "./installation-service.js";
+import type { ControlInstallationCatalogReader } from "./installation-catalog.js";
 import { ExtensionRemovalConflictError } from "./extension-removal.js";
 
 export function isInstallationPath(pathname: string): boolean {
@@ -18,6 +19,7 @@ interface InstallationRequest {
     method?: string;
     body(): Promise<Record<string, unknown>>;
     service?: ControlInstallationService;
+    catalog?: Pick<ControlInstallationCatalogReader, "catalog">;
     allowCredentials: boolean;
 }
 
@@ -59,9 +61,13 @@ export async function handleInstallationRequest(
 
 async function handle(input: InstallationRequest): Promise<{ status: number; body: unknown }> {
     const { pathname, method, service } = input;
+    if (pathname === "/api/control/installations/catalog" && method === "GET") {
+        const catalog = input.catalog ?? service;
+        return catalog
+            ? { status: 200, body: catalog.catalog() }
+            : { status: 503, body: { message: "扩展能力目录不可用，请检查本地工作区" } };
+    }
     if (!service) return { status: 503, body: { message: "安装服务不可用，请检查本地工作区" } };
-    if (pathname === "/api/control/installations/catalog" && method === "GET")
-        return { status: 200, body: service.catalog() };
     if (pathname === "/api/control/updates/plan" && method === "POST") {
         const body = await bodyFields(input, ["expected"]);
         const expected = body.expected;

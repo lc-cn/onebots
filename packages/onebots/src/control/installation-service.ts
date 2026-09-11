@@ -1,5 +1,5 @@
-import { activeInstallationResolver } from "./installation-active-resolver.js";
 import { ConfigurationConflictError } from "../configuration/configuration-store.js";
+import { activeInstallationResolver } from "./installation-active-resolver.js";
 import { prepareInstallationUpdate, type UpdateBase } from "./installation-update.js";
 import type { ResolvedRelease } from "../installation/release-resolver.js";
 import fs from "node:fs";
@@ -22,14 +22,7 @@ import {
     GenerationConflictError,
     type GenerationActivationController,
 } from "./generation-activation.js";
-import { TRUSTED_EXTENSION_CATALOG } from "../trusted-extension-catalog.js";
-import {
-    getExtensionCapabilityCatalogEntry,
-    getExtensionPackageCatalogEntry,
-} from "../extension-capability-catalog.js";
-import { summarizeManifest } from "../capability-report.js";
 import type { ControlInstallationCatalog } from "@onebots/core/control";
-import { listFrameworkProfiles } from "../framework-integration.js";
 import type { PersistedOperationObserver } from "../persisted-operation-observer.js";
 import {
     assertExtensionsNotReferenced,
@@ -38,10 +31,7 @@ import {
     type ExtensionRemovalConfirmation,
 } from "./extension-removal.js";
 import { ControlInstallationPlanStore } from "./installation-plan-store.js";
-
-const BUILTIN_APPLICATIONS = listFrameworkProfiles()
-    .filter(profile => String(profile.applicationStage) !== "planned")
-    .map(profile => Object.freeze({ name: profile.id, displayName: profile.displayName }));
+import { ControlInstallationCatalogReader } from "./installation-catalog.js";
 
 export interface ControlInstallationOptions {
     directory: string;
@@ -64,12 +54,19 @@ export class ControlInstallationService {
     private readonly plans: ControlInstallationPlanStore;
     private readonly installer: GenerationInstaller;
     private readonly resolver: GenerationResolverConfig;
+    private readonly catalogReader: ControlInstallationCatalogReader;
     private readonly cancellations = new Map<string, AbortController>();
     private closed = false;
 
     constructor(private readonly options: ControlInstallationOptions) {
         this.plans = new ControlInstallationPlanStore(options.directory);
         this.resolver = options.resolver ?? bundledRuntimeArtifacts();
+        this.catalogReader = new ControlInstallationCatalogReader({
+            store: options.store,
+            resolver: this.resolver,
+            currentGenerationId: options.currentGenerationId,
+            currentSelection: options.currentSelection,
+        });
         const executor =
             options.pnpmExecutable || options.pnpmScript
                 ? {
@@ -88,68 +85,7 @@ export class ControlInstallationService {
 
     /** 只读宿主目录，不依赖账号配置或下载扩展的执行结果。 */
     catalog(): ControlInstallationCatalog {
-        const activeGenerationId = this.options.currentGenerationId?.() ?? null;
-        const resolver = activeInstallationResolver(
-            this.options.store,
-            activeGenerationId,
-            this.resolver,
-        );
-        const entries = (type: "adapter" | "protocol") =>
-            TRUSTED_EXTENSION_CATALOG.filter(entry => entry.type === type).flatMap(entry => {
-                const version = resolver.extensionVersions
-                    ? resolver.extensionVersions[entry.packageName]
-                    : getExtensionPackageCatalogEntry(entry.packageName)?.packageVersion;
-                return version
-                    ? [{ name: entry.name, displayName: entry.displayName, version }]
-                    : [];
-            });
-        const adapters = entries("adapter").map(adapter => {
-            const extension = TRUSTED_EXTENSION_CATALOG.find(
-                entry => entry.type === "adapter" && entry.name === adapter.name,
-            );
-            const capability = getExtensionCapabilityCatalogEntry(adapter.name);
-            const packageEntry = extension
-                ? getExtensionPackageCatalogEntry(extension.packageName)
-                : undefined;
-            if (!extension || !capability) {
-                throw new Error(`适配器目录缺少产品信息: ${adapter.name}`);
-            }
-            const versionMatched =
-                capability.packageVersion === adapter.version &&
-                packageEntry?.packageVersion === adapter.version;
-            return {
-                ...adapter,
-                description: extension.description,
-                packageName: extension.packageName,
-                setup: extension.setup.map(step => ({ ...step })),
-                requirements: extension.requirements.map(requirement => ({ ...requirement })),
-                ...(versionMatched
-                    ? {
-                          peerDependencies: Object.entries(packageEntry.peerDependencies ?? {}).map(
-                              ([packageName, range]) => ({ packageName, range }),
-                          ),
-                          capabilitySnapshot: {
-                              packageVersion: capability.packageVersion,
-                              summary: summarizeManifest(capability.manifest),
-                              manifest: structuredClone(capability.manifest),
-                          },
-                      }
-                    : {}),
-            };
-        });
-        return {
-            activeGenerationId,
-            selection: structuredClone(
-                this.options.currentSelection?.() ?? {
-                    adapters: [],
-                    protocols: [],
-                    applications: [],
-                },
-            ),
-            adapters,
-            protocols: entries("protocol"),
-            applications: BUILTIN_APPLICATIONS.map(application => ({ ...application })),
-        };
+        return this.catalogReader.catalog();
     }
 
     async plan(selection: GenerationSelection, expectedGenerationId: string | null) {

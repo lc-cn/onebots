@@ -391,7 +391,7 @@ export async function startControlHost(options: ControlHostOptions) {
         messageDebug.close();
         await activationVerification.close();
         await configuration?.close();
-        await installation?.close();
+        await installation?.service?.close();
         try {
             if (!storageError || driver.hasLiveChildren())
                 await completeWindowsGatewayOperation(

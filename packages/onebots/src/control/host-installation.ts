@@ -6,8 +6,15 @@ import { readGenerationPlan } from "../installation/generation-runtime.js";
 import { recoverDownloadCredentials } from "../installation/generation-download.js";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
 import { ControlInstallationService } from "./installation-service.js";
+import { ControlInstallationCatalogReader } from "./installation-catalog.js";
+import { bundledRuntimeArtifacts } from "../installation/bundled-runtime-artifacts.js";
 import { controlDirectory, prepareGatewayWorkspace } from "./workspace.js";
 import type { PersistedOperationObserver } from "../persisted-operation-observer.js";
+
+export interface HostInstallation {
+    catalog: ControlInstallationCatalogReader;
+    service?: ControlInstallationService;
+}
 
 /** 恢复安装边界后再开放安装/升级服务，所有基线均由当前管理宿主提供。 */
 export async function createHostInstallation(
@@ -17,36 +24,45 @@ export async function createHostInstallation(
     lifecycle: GenerationActivationController,
     ownershipAvailable: boolean,
     onOperation?: PersistedOperationObserver,
-): Promise<ControlInstallationService | undefined> {
+): Promise<HostInstallation | undefined> {
+    if (!generations) return undefined;
+    const currentGenerationId = () => lifecycle.status().active?.id ?? null;
+    const currentSelection = () => {
+        const active = lifecycle.activeGeneration();
+        return active
+            ? readGenerationPlan(active).selection
+            : prepareGatewayWorkspace(workspace, options.runtimeRoot).selection;
+    };
+    const catalog = new ControlInstallationCatalogReader({
+        store: generations,
+        resolver: options.installation?.resolver ?? bundledRuntimeArtifacts(),
+        currentGenerationId,
+        currentSelection,
+    });
     try {
         if (!ownershipAvailable) throw new Error("历史管理进程所有权不可确认");
         const recovered = await recoverDownloadCredentials(
             path.join(controlDirectory(workspace), "downloads"),
         );
         if (recovered.blocked.length) throw new Error("下载进程或凭据归属尚待核实");
-        if (!generations) return undefined;
         const source = new ConfigurationFile(path.join(workspace, "config.yaml"));
-        return new ControlInstallationService({
+        const service = new ControlInstallationService({
             ...options.installation,
             directory: controlDirectory(workspace),
             store: generations,
             lifecycle,
             onOperation,
-            currentGenerationId: () => lifecycle.status().active?.id ?? null,
+            currentGenerationId,
             currentConfigurationRevision: () => source.read().revision,
             currentConfiguration: () => {
                 const snapshot = source.read();
                 return { revision: snapshot.revision, document: snapshot.document };
             },
-            currentSelection: () => {
-                const active = lifecycle.activeGeneration();
-                return active
-                    ? readGenerationPlan(active).selection
-                    : prepareGatewayWorkspace(workspace, options.runtimeRoot).selection;
-            },
+            currentSelection,
         });
+        return { catalog, service };
     } catch {
         process.stderr.write("[onebots] 安装服务恢复未完成，保持管理端用于诊断\n");
-        return undefined;
+        return { catalog };
     }
 }

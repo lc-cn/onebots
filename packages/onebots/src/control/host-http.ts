@@ -10,7 +10,7 @@ import { gatewayDiagnosticStatus } from "./diagnostics.js";
 import type { GatewayController, GatewayControllerState } from "./gateway-controller.js";
 import type { NodeGatewayDriver } from "./gateway-driver.js";
 import type { GenerationActivationController } from "./generation-activation.js";
-import type { createHostInstallation } from "./host-installation.js";
+import type { HostInstallation } from "./host-installation.js";
 import type { createHostVerification } from "./host-verification.js";
 import { handleInstallationRequest, isInstallationPath } from "./installation-api.js";
 import type { ControlMcpService } from "./mcp-api.js";
@@ -48,7 +48,7 @@ interface ControlRequestHandlerOptions {
     controller: GatewayController;
     driver: NodeGatewayDriver;
     lifecycle: GenerationActivationController;
-    installation: Awaited<ReturnType<typeof createHostInstallation>>;
+    installation: HostInstallation | undefined;
     configuration: ControlConfigurationService | undefined;
     sending: ControlSendService | undefined;
     verification: ReturnType<typeof createHostVerification>;
@@ -154,7 +154,7 @@ export function createControlRequestHandler(options: ControlRequestHandlerOption
                         processOwnership: { available: options.ownershipAvailable },
                         serviceMigration: serviceMigrationStatus(options.workspace),
                         generation: options.lifecycle.status(),
-                        installationAvailable: Boolean(options.installation),
+                        installationAvailable: Boolean(options.installation?.catalog),
                         configuration: {
                             recoveryRequired:
                                 options.configurationStorageUnavailable() ||
@@ -208,7 +208,8 @@ export function createControlRequestHandler(options: ControlRequestHandlerOption
                         pathname,
                         method: request.method,
                         body: () => readBody(request),
-                        service: options.installation,
+                        service: options.installation?.service,
+                        catalog: options.installation?.catalog,
                         allowCredentials:
                             local ||
                             address === "127.0.0.1" ||

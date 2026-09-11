@@ -191,6 +191,11 @@ describe("control host integration", () => {
         const client = await pair(running);
         const status = await client.status();
         expect(status).toHaveProperty("processOwnership.available", false);
+        await expect(client.installationCatalog()).resolves.toMatchObject({
+            adapters: expect.any(Array),
+            protocols: expect.any(Array),
+            applications: expect.any(Array),
+        });
         for (const action of ["start", "stop", "restart"] as const)
             await expect(client.gateway(action)).rejects.toThrow("历史管理进程所有权不可确认");
         expect((await fetch(`${running.url}/ready`)).status).toBe(200);
