@@ -1,6 +1,6 @@
 import { statfs } from "node:fs/promises";
 import * as os from "node:os";
-import { Logger } from "@onebots/core";
+import { appendControlLog } from "./gateway-log.js";
 import type { ControlSystemStatus } from "@onebots/core/control";
 
 interface DiskStats {
@@ -20,9 +20,7 @@ export function createSafeSystemStatus(workspace: string) {
             sample ??= createSystemStatus(workspace);
             return sample();
         } catch (error) {
-            new Logger("onebots:control").error("无法读取运行环境资源", {
-                reason: error instanceof Error ? error.message : String(error),
-            });
+            reportResourceError(workspace, "无法读取运行环境资源", error);
             retryAt = Date.now() + 30_000;
             return undefined;
         }
@@ -77,9 +75,7 @@ export function createSystemStatus(
                 })
                 .catch((error: unknown) => {
                     // 不向浏览器泄露路径或底层错误；失败后按同一采样间隔重试。
-                    new Logger("onebots:control").error("无法读取工作区磁盘容量", {
-                        reason: error instanceof Error ? error.message : String(error),
-                    });
+                    reportResourceError(workspace, "无法读取工作区磁盘容量", error);
                     disk = { state: "unavailable", sampledAt: new Date(now()).toISOString() };
                 })
                 .finally(() => {
@@ -103,4 +99,31 @@ export function createSystemStatus(
             disk: { ...disk },
         };
     };
+}
+
+/** 资源观测复用管理服务日志，不加载网关内核及其传递依赖。 */
+function reportResourceError(workspace: string, message: string, error: unknown): void {
+    const code =
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        typeof error.code === "string" &&
+        /^[A-Z_]{2,40}$/.test(error.code)
+            ? error.code
+            : "UNAVAILABLE";
+    try {
+        appendControlLog(
+            workspace,
+            "manager",
+            `${JSON.stringify({
+                time: new Date().toISOString(),
+                level: "error",
+                message,
+                code,
+            })}\n`,
+        );
+    } catch {
+        // 日志目录本身不可用时仍保证观测失败不会打断管理状态请求。
+        process.stderr.write(`[onebots] ${message}（${code}）\n`);
+    }
 }

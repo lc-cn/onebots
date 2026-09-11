@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSystemStatus } from "./system-status.js";
 
+vi.mock("@onebots/core", () => {
+    throw new Error("管理服务资源采样不得加载网关内核");
+});
+
 const settle = () => new Promise(resolve => setImmediate(resolve));
 describe("system status", () => {
     it("does not block status, shares pending IO and caches filesystem capacity", async () => {
