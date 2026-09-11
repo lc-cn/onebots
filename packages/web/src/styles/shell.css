@@ -188,7 +188,7 @@
     border-right: 1px solid var(--sidebar-border);
     background:
         radial-gradient(circle at 10% 8%, rgba(169, 143, 255, 0.25), transparent 13rem),
-        linear-gradient(180deg, rgba(246, 241, 255, 0.62), rgba(234, 242, 255, 0.5));
+        linear-gradient(180deg, rgba(246, 241, 255, 0.38), rgba(234, 242, 255, 0.28));
     -webkit-backdrop-filter: saturate(135%) blur(22px);
     backdrop-filter: saturate(135%) blur(22px);
     color: var(--sidebar-fg);
@@ -201,7 +201,7 @@
     --sidebar-border: rgba(225, 217, 255, 0.13);
     background:
         radial-gradient(circle at 8% 6%, rgba(166, 126, 255, 0.28), transparent 14rem),
-        linear-gradient(180deg, rgba(59, 48, 91, 0.52), rgba(41, 48, 82, 0.38));
+        linear-gradient(180deg, rgba(59, 48, 91, 0.36), rgba(41, 48, 82, 0.26));
 }
 .sidebar-brand {
     height: 4rem;

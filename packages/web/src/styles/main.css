@@ -13,9 +13,9 @@
 :root {
     color-scheme: light;
     --bg: #f8f7ff;
-    --surface: rgba(255, 255, 255, 0.56);
-    --surface-raised: rgba(244, 243, 252, 0.42);
-    --surface-strong: rgba(235, 233, 248, 0.52);
+    --surface: rgba(255, 255, 255, 0.38);
+    --surface-raised: rgba(244, 243, 252, 0.26);
+    --surface-strong: rgba(235, 233, 248, 0.4);
     --border: rgba(91, 77, 151, 0.14);
     --border-strong: rgba(84, 70, 145, 0.24);
     --fg: #1d1b2e;
@@ -42,9 +42,9 @@
 .dark {
     color-scheme: dark;
     --bg: #211d35;
-    --surface: rgba(49, 43, 73, 0.58);
-    --surface-raised: rgba(64, 56, 93, 0.42);
-    --surface-strong: rgba(76, 67, 108, 0.5);
+    --surface: rgba(49, 43, 73, 0.4);
+    --surface-raised: rgba(64, 56, 93, 0.28);
+    --surface-strong: rgba(76, 67, 108, 0.38);
     --border: rgba(211, 204, 255, 0.14);
     --border-strong: rgba(218, 211, 255, 0.24);
     --fg: #f4f2fb;

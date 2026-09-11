@@ -175,13 +175,14 @@ async function initializeTerminal() {
         ]);
     if (disposed || terminal || !container.value) return;
     terminal = new XtermTerminal({
+        allowTransparency: true,
         cursorBlink: true,
         cursorStyle: "bar",
         fontFamily: '\"Geist Mono Variable\", ui-monospace, monospace',
         fontSize: 13,
         lineHeight: 1.35,
         scrollback: 5_000,
-        theme: { background: "#0d0d10", foreground: "#dedee3", cursor: "#8fb1ff" },
+        theme: { background: "#00000000", foreground: "#dedee3", cursor: "#8fb1ff" },
     });
     fit = new XtermFitAddon();
     terminal.loadAddon(fit);
