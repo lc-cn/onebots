@@ -1,5 +1,41 @@
 # @onebots/meta
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [58d4c61]
+- Updated dependencies [36e1b3e]
+- Updated dependencies [3a280a2]
+- Updated dependencies [d5e9665]
+- Updated dependencies [5d6d21c]
+- Updated dependencies [b6c04ed]
+- Updated dependencies [d5d5232]
+- Updated dependencies [4e53609]
+- Updated dependencies [a2d87f6]
+- Updated dependencies [a76adc6]
+- Updated dependencies [c5cea4c]
+- Updated dependencies [efae7f7]
+- Updated dependencies [f7268c9]
+- Updated dependencies [ac65da1]
+- Updated dependencies [11a16b6]
+- Updated dependencies [117e738]
+- Updated dependencies [a5470e3]
+- Updated dependencies [ef2fd01]
+- Updated dependencies [0e37065]
+- Updated dependencies [7c6a999]
+- Updated dependencies [2f16cb9]
+- Updated dependencies [5f12c34]
+- Updated dependencies [251534d]
+- Updated dependencies [4aeb871]
+- Updated dependencies [fe623c6]
+- Updated dependencies [f7bd842]
+- Updated dependencies [ea18435]
+- Updated dependencies [e15453c]
+- Updated dependencies [3db58f5]
+- Updated dependencies [f805e25]
+  - @onebots/core@1.2.10
+
 ## 0.1.4
 
 ### Patch Changes
