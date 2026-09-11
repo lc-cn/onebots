@@ -170,17 +170,34 @@
     overflow: hidden;
 }
 .sidebar {
+    --sidebar-fg: #342d58;
+    --sidebar-muted: rgba(52, 45, 88, 0.68);
+    --sidebar-faint: rgba(52, 45, 88, 0.44);
+    --sidebar-border: rgba(94, 76, 161, 0.14);
     display: flex;
     min-height: 0;
     flex-direction: column;
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
-    background: linear-gradient(180deg, #17132f 0%, #211944 58%, #151127 100%);
-    color: #f6f4ff;
+    border-right: 1px solid var(--sidebar-border);
+    background:
+        radial-gradient(circle at 10% 8%, rgba(169, 143, 255, 0.25), transparent 13rem),
+        linear-gradient(180deg, rgba(246, 241, 255, 0.96), rgba(234, 242, 255, 0.9));
+    -webkit-backdrop-filter: saturate(125%) blur(18px);
+    backdrop-filter: saturate(125%) blur(18px);
+    color: var(--sidebar-fg);
     padding: 0 0.75rem 0.75rem;
+}
+.dark .sidebar {
+    --sidebar-fg: #f5f2ff;
+    --sidebar-muted: rgba(242, 238, 255, 0.72);
+    --sidebar-faint: rgba(235, 230, 255, 0.48);
+    --sidebar-border: rgba(225, 217, 255, 0.13);
+    background:
+        radial-gradient(circle at 8% 6%, rgba(166, 126, 255, 0.28), transparent 14rem),
+        linear-gradient(180deg, rgba(59, 48, 91, 0.94), rgba(41, 48, 82, 0.9));
 }
 .sidebar-brand {
     height: 4rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--sidebar-border);
     padding: 0 0.65rem;
 }
 .sidebar-brand > div {
@@ -190,7 +207,7 @@
 }
 .sidebar-brand small,
 .sidebar-status small {
-    color: rgba(235, 231, 255, 0.5);
+    color: var(--sidebar-faint);
     font-size: 0.66rem;
     font-weight: 500;
 }
@@ -204,7 +221,7 @@
 }
 .nav-section-label {
     margin: 0.1rem 0.75rem 0.45rem;
-    color: rgba(235, 231, 255, 0.42);
+    color: var(--sidebar-faint);
     font-size: 0.65rem;
     font-weight: 600;
 }
@@ -217,7 +234,7 @@
     border: 1px solid transparent;
     border-radius: 0.45rem;
     background: transparent;
-    color: rgba(241, 238, 255, 0.7);
+    color: var(--sidebar-muted);
     padding: 0.65rem 0.75rem;
     text-align: left;
     text-decoration: none;
@@ -245,13 +262,13 @@
     color: currentColor;
 }
 .primary-nav a:hover {
-    background: rgba(255, 255, 255, 0.07);
-    color: #ffffff;
+    background: rgba(119, 94, 216, 0.09);
+    color: var(--sidebar-fg);
 }
 .primary-nav a.active {
-    border-color: rgba(255, 255, 255, 0.13);
-    background: rgba(255, 255, 255, 0.11);
-    color: #ffffff;
+    border-color: rgba(119, 94, 216, 0.18);
+    background: rgba(119, 94, 216, 0.13);
+    color: var(--sidebar-fg);
 }
 .primary-nav a.active > svg {
     color: #aea4ff;
@@ -284,7 +301,7 @@
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--sidebar-border);
     padding: 1rem 0.65rem;
 }
 .sidebar-status > span:last-child {
@@ -295,15 +312,15 @@
 .sidebar-actions {
     display: flex;
     justify-content: space-between;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--sidebar-border);
     padding: 0.8rem 0.3rem 0;
 }
 .sidebar .icon-button {
-    color: rgba(241, 238, 255, 0.68);
+    color: var(--sidebar-muted);
 }
 .sidebar .icon-button:hover {
-    background: rgba(255, 255, 255, 0.09);
-    color: #ffffff;
+    background: rgba(119, 94, 216, 0.12);
+    color: var(--sidebar-fg);
 }
 .status-dot {
     display: inline-block;
@@ -343,6 +360,8 @@
     justify-content: space-between;
     border-bottom: 1px solid var(--border);
     background: color-mix(in srgb, var(--surface) 92%, #eeeaff);
+    -webkit-backdrop-filter: saturate(135%) blur(16px);
+    backdrop-filter: saturate(135%) blur(16px);
     padding: 0 clamp(1.5rem, 2vw, 2.25rem);
 }
 .workspace-crumb {
@@ -385,8 +404,9 @@
     flex: 1;
     overflow-y: auto;
     background:
-        radial-gradient(circle at 18% -10%, rgba(118, 95, 239, 0.1), transparent 28rem),
-        radial-gradient(circle at 96% 12%, rgba(66, 173, 238, 0.09), transparent 25rem),
+        radial-gradient(circle at 18% -10%, rgba(146, 115, 255, 0.18), transparent 30rem),
+        radial-gradient(circle at 96% 12%, rgba(76, 193, 239, 0.16), transparent 28rem),
+        radial-gradient(circle at 72% 92%, rgba(244, 126, 180, 0.1), transparent 25rem),
         var(--bg);
 }
 .workspace {

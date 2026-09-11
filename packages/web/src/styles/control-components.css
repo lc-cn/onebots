@@ -119,6 +119,8 @@
     background: var(--surface) !important;
     padding: 1.2rem !important;
     box-shadow: var(--shadow);
+    -webkit-backdrop-filter: saturate(120%) blur(12px);
+    backdrop-filter: saturate(120%) blur(12px);
 }
 .diagnostic-panel-header {
     display: grid;
