@@ -1,4 +1,5 @@
 import type { AddressInfo } from "node:net";
+import { createSafeSystemStatus } from "./system-status.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { ControlAuth } from "./auth.js";
 import { handleControlAuthRequest } from "./auth-api.js";
@@ -71,6 +72,7 @@ interface ControlRequestHandlerOptions {
 }
 
 export function createControlRequestHandler(options: ControlRequestHandlerOptions) {
+    const systemStatus = createSafeSystemStatus(options.workspace);
     return async function handle(
         request: IncomingMessage,
         response: ServerResponse,
@@ -149,6 +151,7 @@ export function createControlRequestHandler(options: ControlRequestHandlerOption
                     const status = {
                         schemaVersion: 1,
                         manager: { ...options.manager },
+                        system: systemStatus(),
                         gateway,
                         accounts: gateway.instance
                             ? options.driver.accountStatuses(gateway.instance.id)

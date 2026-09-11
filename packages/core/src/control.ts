@@ -6,7 +6,7 @@ export { verificationJson, verificationRequest } from "./control-verification-js
 import type { ControlDiagnostics } from "./control-diagnostics.js";
 export type { ControlDiagnostics } from "./control-diagnostics.js";
 import type { ControlOperation, ControlStatus } from "./control-status.js";
-export type { ControlOperation, ControlStatus } from "./control-status.js";
+export type { ControlOperation, ControlStatus, ControlSystemStatus } from "./control-status.js";
 import {
     messageDebugHistory,
     clearMessageDebug,

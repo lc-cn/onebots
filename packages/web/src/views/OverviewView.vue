@@ -10,6 +10,7 @@ import {
     IconPlugConnected,
 } from "@tabler/icons-vue";
 import ControlSetupJourney from "../components/ControlSetupJourney.vue";
+import SystemOverview from "../components/SystemOverview.vue";
 import type { Workspace } from "../control-workspace.js";
 import type { ControlMutationBlock, SetupJourney } from "../control-product-state.js";
 import UiButton from "../ui/UiButton.vue";
@@ -254,6 +255,7 @@ function keepCommandFocus(event: KeyboardEvent) {
                     :journey="journey"
                     @select="emit('select', $event)" />
             </div>
+            <SystemOverview :system="state.system" />
             <div class="overview-grid">
                 <section class="account-strip">
                     <div class="section-heading">

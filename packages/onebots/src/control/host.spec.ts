@@ -106,6 +106,8 @@ describe("control host integration", () => {
             );
         const running = await start(root, gatewayEntrypoint, runtimeRoot);
         const client = await pair(running);
+        await expect.poll(async () => (await client.status()).system?.disk.state).toBe("ready");
+        expect((await client.status()).system?.nodeVersion).toBe(process.version);
         const snapshot = await client.configurationSnapshot();
         expect(snapshot.schemas.adapters).toHaveProperty("mock");
         const draft = await client.createConfigurationDraft(snapshot.base);
