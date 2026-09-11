@@ -1,6 +1,7 @@
 import {defineConfig} from "vite";
 import { createStyleImportPlugin } from "vite-plugin-style-import"
 export default defineConfig({
+    publicDir:'./public',
     resolve:{
         alias:{
             vue:'vue/dist/vue.esm-bundler.js'
