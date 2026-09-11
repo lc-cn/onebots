@@ -2,6 +2,8 @@
 @import "./shell.css";
 @import "./workspace.css";
 @import "./control-components.css";
+@import "./control-configuration.css";
+@import "./control-configuration-fields.css";
 @import "./setup-journey.css";
 @import "./responsive.css";
 

@@ -177,3 +177,48 @@
         transition-duration: 0.01ms !important;
     }
 }
+
+@media (max-width: 700px) {
+    .configuration-header,
+    .configuration-step-heading,
+    .configuration-start-card,
+    .configuration-action-bar,
+    .configuration-operation,
+    .configuration-object-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .configuration-step-heading > p {
+        text-align: left;
+    }
+    .configuration-steps {
+        display: flex;
+        overflow-x: auto;
+    }
+    .configuration-steps button {
+        min-width: 10.5rem;
+    }
+    .configuration-add-row,
+    .configuration-add-row.protocol,
+    .configuration-object-layout,
+    .configuration-review-summary,
+    .configuration-lifecycle,
+    .configuration-field-grid {
+        grid-template-columns: 1fr;
+    }
+    .configuration-object-list {
+        display: flex;
+        max-height: none;
+        overflow-x: auto;
+    }
+    .configuration-object-list button {
+        min-width: 10rem;
+    }
+    .configuration-scope-note {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+    }
+    .configuration-action-bar {
+        position: static;
+    }
+}

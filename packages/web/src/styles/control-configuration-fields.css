@@ -1,0 +1,94 @@
+.configuration-object-editor {
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 0.7rem;
+    overflow: hidden;
+}
+.configuration-object-toolbar {
+    align-items: center;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-inset);
+    font-size: 0.74rem;
+}
+.configuration-schema-group {
+    min-width: 0;
+}
+.configuration-schema-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+}
+.configuration-schema-heading h3 {
+    margin-top: 0.2rem;
+    font-size: 0.95rem;
+    font-weight: 620;
+}
+.configuration-notice {
+    margin: 0 1rem 0.7rem;
+    color: var(--warning);
+    font-size: 0.72rem;
+}
+.configuration-field-section {
+    padding: 1rem;
+    border-top: 1px solid var(--border);
+}
+.configuration-field-heading {
+    margin-bottom: 0.85rem;
+}
+.configuration-field-heading h4 {
+    font-size: 0.78rem;
+    font-weight: 620;
+}
+.configuration-field-heading p {
+    margin-top: 0.15rem;
+    color: var(--fg-tertiary);
+    font-size: 0.67rem;
+}
+.configuration-field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+.configuration-advanced {
+    border-top: 1px solid var(--border);
+    padding: 0.9rem 1rem;
+}
+.configuration-advanced summary {
+    cursor: pointer;
+    color: var(--fg-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.configuration-advanced summary span {
+    color: var(--fg-tertiary);
+    font-weight: 400;
+}
+.configuration-advanced[open] summary {
+    margin-bottom: 0.9rem;
+}
+.configuration-list-field {
+    display: grid;
+    gap: 0.5rem;
+    margin-bottom: 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.7rem;
+}
+.configuration-empty {
+    display: flex;
+    min-height: 10rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 1.5rem;
+    color: var(--fg-secondary);
+    text-align: center;
+}
+.configuration-empty strong {
+    color: var(--fg);
+    font-size: 0.86rem;
+}

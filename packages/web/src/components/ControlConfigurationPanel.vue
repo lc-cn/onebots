@@ -1,11 +1,25 @@
 <script setup lang="ts">
+import { computed, nextTick, ref, watch } from "vue";
+import {
+    IconAdjustments,
+    IconArrowRight,
+    IconCheck,
+    IconPlugConnected,
+    IconRobot,
+} from "@tabler/icons-vue";
 import type { ControlClient } from "@onebots/core/control";
 import UiButton from "../ui/UiButton.vue";
 import ControlConfigurationRepair from "./ControlConfigurationRepair.vue";
-import ControlConfigurationFields from "./ControlConfigurationFields.vue";
+import ControlConfigurationSections from "./ControlConfigurationSections.vue";
 import { useControlConfigurationPanel } from "./use-control-configuration-panel.js";
 import type { ControlMutationBlock } from "../control-product-state.js";
-import { watch } from "vue";
+import {
+    configurationGroupLayout,
+    configurationNextAction,
+    configurationWorkspaceForPath,
+    type ConfigurationWorkspace,
+} from "./control-configuration-layout.js";
+
 const props = defineProps<{ client: ControlClient; mutationBlock?: ControlMutationBlock }>();
 const emit = defineEmits<{ applied: []; dirtyChange: [dirty: boolean] }>();
 const {
@@ -48,6 +62,83 @@ const {
     change,
     mode,
 } = useControlConfigurationPanel(props.client, () => emit("applied"));
+
+const workspace = ref<ConfigurationWorkspace>("accounts");
+const workspaceTabs = ref<HTMLButtonElement[]>([]);
+const layout = computed(() => configurationGroupLayout(groups.value));
+const validationIssuePath = computed(() =>
+    validation.value?.valid === false ? validation.value.issues[0]?.path : undefined,
+);
+const pendingOperation = computed(
+    () =>
+        Boolean(tracking.value.operationId) &&
+        (!operation.value ||
+            operation.value.status === "running" ||
+            operation.value.recoveryRequired),
+);
+const nextAction = computed(() =>
+    configurationNextAction({
+        dirty: dirty.value,
+        validation:
+            validation.value?.valid === true
+                ? "valid"
+                : validation.value?.valid === false
+                  ? "invalid"
+                  : "missing",
+        operation: pendingOperation.value
+            ? "pending"
+            : tracking.value.operationId
+              ? "resolved"
+              : "none",
+        issueCount: validation.value?.issues.length,
+        issueWorkspace: validation.value?.issues[0]
+            ? configurationWorkspaceForPath(validation.value.issues[0].path, protocols.value)
+            : undefined,
+    }),
+);
+const structuralActionBlockReason = computed(() => {
+    if (props.mutationBlock) return `${props.mutationBlock.title}，结构修改暂不可用。`;
+    if (tracking.value.operationId) return "已有应用操作，请先在“确认应用”中处理。";
+    if (busy.value) return "正在处理上一项操作，请稍候。";
+    if (dirty.value) return "请先保存当前字段修改，再调整账号或协议结构。";
+    if (locked.value) return "当前配置来源不可用，结构修改保持只读。";
+    return "";
+});
+const nextActionDisabled = computed(() => {
+    if (nextAction.value.action === "query" || nextAction.value.action === "fix") return busy.value;
+    return busy.value || locked.value || Boolean(props.mutationBlock);
+});
+const workspaces = computed(() => [
+    {
+        id: "accounts" as const,
+        index: "01",
+        label: "平台账号",
+        detail: `${accounts.value.length} 个账号`,
+        icon: IconRobot,
+    },
+    {
+        id: "protocols" as const,
+        index: "02",
+        label: "协议出口",
+        detail: `${layout.value.protocols.length} 项配置`,
+        icon: IconPlugConnected,
+    },
+    {
+        id: "runtime" as const,
+        index: "03",
+        label: "运行设置",
+        detail: "服务与加载参数",
+        icon: IconAdjustments,
+    },
+    {
+        id: "review" as const,
+        index: "04",
+        label: "确认应用",
+        detail: nextAction.value.label,
+        icon: IconCheck,
+    },
+]);
+
 watch(dirty, value => emit("dirtyChange", value), { immediate: true, flush: "sync" });
 
 function reloadWithConfirmation() {
@@ -55,181 +146,280 @@ function reloadWithConfirmation() {
         return;
     void reload();
 }
+async function onWorkspaceKeydown(event: KeyboardEvent) {
+    const current = workspaces.value.findIndex(item => item.id === workspace.value);
+    let next = current;
+    if (event.key === "ArrowRight") next = (current + 1) % workspaces.value.length;
+    else if (event.key === "ArrowLeft")
+        next = (current - 1 + workspaces.value.length) % workspaces.value.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = workspaces.value.length - 1;
+    else return;
+    event.preventDefault();
+    workspace.value = workspaces.value[next].id;
+    await nextTick();
+    workspaceTabs.value[next]?.focus();
+}
+async function runNextAction() {
+    workspace.value = nextAction.value.workspace;
+    if (nextAction.value.action === "query") await query();
+    else if (nextAction.value.action === "save") await save();
+    else if (nextAction.value.action === "validate") await validate();
+    else if (nextAction.value.action === "apply") await apply();
+    else if (nextAction.value.action === "new-draft") await createFresh();
+    else if (nextAction.value.action === "fix" && validationIssuePath.value) {
+        await nextTick();
+        const key = JSON.stringify(validationIssuePath.value);
+        const field = Array.from(
+            document.querySelectorAll<HTMLElement>("[data-configuration-path]"),
+        ).find(element => element.dataset.configurationPath === key);
+        field?.scrollIntoView({ behavior: "smooth", block: "center" });
+        field?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
+    }
+}
 </script>
+
 <template>
-    <section class="border-t border-border pt-6 space-y-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
+    <section class="configuration-workspace">
+        <header class="configuration-header">
             <div>
-                <h2 class="text-lg font-medium">账号与运行配置</h2>
-                <p class="text-sm text-fg-secondary mt-1">
-                    先编辑草稿，再校验和应用。管理认证不属于运行配置。
-                </p>
+                <p class="configuration-kicker">CONFIGURATION DRAFT</p>
+                <h2>配置工作台</h2>
+                <p>按步骤完成账号、出口和运行参数；所有修改经过校验后才会生效。</p>
             </div>
             <UiButton :disabled="busy" @click="reloadWithConfirmation">{{
-                dirty ? "放弃本地修改并重读" : "重新读取配置"
+                dirty ? "放弃修改并重读" : "重新读取"
             }}</UiButton>
+        </header>
+
+        <div v-if="error" role="alert" class="configuration-banner danger">{{ error }}</div>
+        <div v-if="mutationBlock" role="alert" class="configuration-banner danger">
+            <strong>{{ mutationBlock.title }}</strong
+            ><span>配置保持只读；可以重新读取和查询已有操作。</span>
         </div>
-        <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
-        <p v-if="message" role="status" class="text-sm text-fg-secondary">{{ message }}</p>
-        <p v-if="mutationBlock" role="alert" class="text-sm text-danger">
-            {{ mutationBlock.title }}，配置保持只读；可以重新读取和查询已有操作。
-        </p>
         <ControlConfigurationRepair
             v-if="source?.state === 'damaged'"
             :source="source"
             :disabled="repairBlocked || !!mutationBlock"
             @confirm="repair" />
-        <p v-if="projection?.unknownPaths.length" class="text-sm text-amber-700">
-            存在无法安全展示的字段，已在服务端保留。此页面不会用空值覆盖它们。
-        </p>
+        <div v-if="projection?.unknownPaths.length" class="configuration-banner warning">
+            <strong>部分字段由服务端保护</strong
+            ><span>无法安全展示的内容会原样保留，本页面不会用空值覆盖。</span>
+        </div>
+        <p v-if="message" role="status" class="configuration-message">{{ message }}</p>
+
         <div
-            v-if="snapshot && (!draft || staleBase)"
-            class="rounded-xl border border-border p-4 flex items-center justify-between gap-3">
-            <p class="text-sm">读取到 {{ accounts.length }} 个账号。可创建草稿开始配置。</p>
+            v-if="snapshot && (!draft || staleBase) && !tracking.operationId"
+            class="configuration-start-card">
+            <div>
+                <p class="configuration-kicker">CURRENT SNAPSHOT</p>
+                <h3>当前有 {{ accounts.length }} 个平台账号</h3>
+                <p>创建草稿后才能编辑；创建动作不会改变正在运行的网关。</p>
+            </div>
             <UiButton
                 variant="primary"
                 :disabled="busy || !!mutationBlock"
                 @click="staleBase ? createFresh() : create()"
-                >{{ staleBase ? "读取当前配置并创建新草稿" : "创建配置草稿" }}</UiButton
+                >{{ staleBase ? "基于当前配置重建草稿" : "开始配置" }}</UiButton
             >
         </div>
+
         <template v-if="draft">
-            <p class="text-xs text-fg-tertiary">
-                草稿 {{ draft.id }} · {{ dirty ? "有本地修改尚未保存" : "已保存" }}
-            </p>
-            <fieldset
-                :disabled="locked || dirty || !!mutationBlock"
-                class="rounded-xl border border-border p-4 space-y-3">
-                <legend class="px-2 text-sm font-medium">平台账号</legend>
-                <div class="flex flex-wrap gap-2">
-                    <select
-                        v-model="platform"
-                        aria-label="平台适配器"
-                        class="rounded border border-border bg-surface px-3 py-2 text-sm">
-                        <option value="">选择已安装平台</option>
-                        <option v-for="name in adapters" :key="name" :value="name">
-                            {{ name }}
-                        </option>
-                    </select>
-                    <input
-                        v-model="accountId"
-                        aria-label="账号标识"
-                        placeholder="账号标识，保留原始字符串"
-                        class="rounded border border-border bg-surface px-3 py-2 text-sm" />
-                    <UiButton
-                        :disabled="locked || dirty || !platform || !accountId"
-                        @click="addAccount"
-                        >添加空账号</UiButton
-                    >
-                </div>
-                <p v-if="!adapters.length" class="text-sm text-fg-secondary">
-                    尚未安装平台，请先在扩展安装中选择所需适配器。
-                </p>
-                <ul class="space-y-2">
-                    <li
-                        v-for="key in accounts"
-                        :key="key"
-                        class="flex items-center justify-between gap-2 text-sm">
-                        <span>{{ key }}</span
-                        ><UiButton :disabled="locked || dirty" @click="removeAccount(key)"
-                            >从草稿删除</UiButton
-                        >
-                    </li>
-                </ul>
-            </fieldset>
-            <fieldset
-                :disabled="locked || dirty || !!mutationBlock"
-                class="rounded-xl border border-border p-4 space-y-3">
-                <legend class="px-2 text-sm font-medium">协议出口（可选）</legend>
-                <div class="flex flex-wrap gap-2">
-                    <select
-                        v-model="accountTarget"
-                        aria-label="协议配置位置"
-                        class="rounded border border-border bg-surface px-3 py-2 text-sm">
-                        <option value="">协议默认值</option>
-                        <option v-for="key in accounts" :key="key" :value="key">{{ key }}</option>
-                    </select>
-                    <select
-                        v-model="protocol"
-                        aria-label="输出协议"
-                        class="rounded border border-border bg-surface px-3 py-2 text-sm">
-                        <option value="">选择已安装协议</option>
-                        <option v-for="name in protocols" :key="name" :value="name">
-                            {{ name }}
-                        </option>
-                    </select>
-                    <UiButton :disabled="locked || dirty || !protocol" @click="setProtocol(true)"
-                        >添加配置</UiButton
-                    ><UiButton :disabled="locked || dirty || !protocol" @click="setProtocol(false)"
-                        >移除配置</UiButton
-                    >
-                </div>
-                <p class="text-xs text-fg-secondary">
-                    默认值不会自动为账号开启出口。账号协议需单独添加，应用后才生效。
-                </p>
-            </fieldset>
-            <ControlConfigurationFields
+            <div class="configuration-draft-status">
+                <span
+                    ><i :class="{ changed: dirty }"></i
+                    >{{ dirty ? "有本地修改" : "草稿已保存" }}</span
+                >
+                <code>{{ draft.id }}</code>
+            </div>
+
+            <nav
+                class="configuration-steps"
+                role="tablist"
+                aria-label="账号与协议配置步骤"
+                @keydown="onWorkspaceKeydown">
+                <button
+                    v-for="item in workspaces"
+                    ref="workspaceTabs"
+                    :id="`configuration-tab-${item.id}`"
+                    :key="item.id"
+                    type="button"
+                    role="tab"
+                    :aria-selected="workspace === item.id"
+                    :aria-controls="`configuration-panel-${item.id}`"
+                    :tabindex="workspace === item.id ? 0 : -1"
+                    :class="{ active: workspace === item.id }"
+                    @click="workspace = item.id">
+                    <span>{{ item.index }}</span
+                    ><component :is="item.icon" :size="18" aria-hidden="true" />
+                    <div>
+                        <strong>{{ item.label }}</strong
+                        ><small>{{ item.detail }}</small>
+                    </div>
+                </button>
+            </nav>
+
+            <ControlConfigurationSections
+                v-model:platform="platform"
+                v-model:account-id="accountId"
+                v-model:account-target="accountTarget"
+                v-model:protocol="protocol"
+                :workspace="workspace"
                 :groups="groups"
                 :values="values"
                 :modes="modes"
                 :secret-states="draft.secretStates"
+                :adapters="adapters"
+                :protocols="protocols"
+                :accounts="accounts"
+                :dirty="dirty"
                 :locked="locked || !!mutationBlock"
-                :list-locked="locked || dirty || !!mutationBlock"
+                :action-block-reason="structuralActionBlockReason"
+                :reveal-path="nextAction.action === 'fix' ? validationIssuePath : undefined"
+                @add-account="addAccount"
+                @remove-account="removeAccount"
+                @set-protocol="setProtocol"
                 @list="editList"
                 @change="change"
                 @mode="mode" />
-            <div class="flex flex-wrap gap-3">
-                <UiButton :disabled="locked || !dirty || !!mutationBlock" @click="save"
-                    >保存草稿</UiButton
-                >
-                <UiButton :disabled="locked || dirty || !!mutationBlock" @click="validate"
-                    >校验配置</UiButton
-                >
-                <UiButton
-                    variant="primary"
-                    :disabled="locked || dirty || !validation?.valid || !!mutationBlock"
-                    @click="apply"
-                    >应用已校验配置</UiButton
-                >
-            </div>
-            <div v-if="validation" role="status" class="text-sm">
-                <p>
-                    {{
-                        validation.valid
-                            ? "校验通过，尚未应用。应用时会保持原有启停意图。"
-                            : "校验未通过，请修改以下字段。"
-                    }}
-                </p>
-                <ul class="mt-2 space-y-1">
-                    <li v-for="(issue, index) in validation.issues" :key="index">
-                        {{ issue.path.join(" / ") || "配置" }}：{{ issue.message }}
+
+            <section
+                v-show="workspace === 'review'"
+                id="configuration-panel-review"
+                role="tabpanel"
+                aria-labelledby="configuration-tab-review"
+                class="configuration-step-panel review">
+                <header class="configuration-step-heading">
+                    <div>
+                        <span>步骤 4</span>
+                        <h3>校验并应用</h3>
+                    </div>
+                    <p>先保存浏览器中的字段修改，再校验完整配置，最后显式应用。</p>
+                </header>
+                <div class="configuration-review-summary">
+                    <div>
+                        <span>平台账号</span><strong>{{ accounts.length }}</strong
+                        ><small>{{ accounts.length ? "已建立平台身份" : "尚未配置账号" }}</small>
+                    </div>
+                    <div>
+                        <span>协议配置</span><strong>{{ layout.protocols.length }}</strong
+                        ><small>含全局默认与账号出口</small>
+                    </div>
+                    <div>
+                        <span>草稿状态</span
+                        ><strong>{{
+                            dirty ? "待保存" : validation?.valid ? "已通过" : "待校验"
+                        }}</strong
+                        ><small>应用前不会影响运行配置</small>
+                    </div>
+                </div>
+                <ol class="configuration-lifecycle" aria-label="配置提交状态">
+                    <li :class="{ active: dirty, complete: !dirty }">
+                        <span>1</span>
+                        <div><strong>保存草稿</strong><small>把本地字段写入服务端草稿</small></div>
                     </li>
-                </ul>
-            </div>
+                    <li
+                        :class="{
+                            active: !dirty && !validation?.valid,
+                            complete: !!validation?.valid,
+                            invalid: validation?.valid === false,
+                        }">
+                        <span>2</span>
+                        <div><strong>校验配置</strong><small>检查必填项和连接参数</small></div>
+                    </li>
+                    <li
+                        :class="{
+                            active: !!validation?.valid && !tracking.operationId,
+                            complete: operation?.status === 'succeeded',
+                        }">
+                        <span>3</span>
+                        <div><strong>应用版本</strong><small>保持网关原有启停意图</small></div>
+                    </li>
+                </ol>
+                <div
+                    v-if="validation"
+                    :role="validation.valid ? 'status' : 'alert'"
+                    :class="['configuration-validation', validation.valid ? 'success' : 'danger']">
+                    <strong>{{
+                        validation.valid
+                            ? "校验通过，可以应用"
+                            : `发现 ${validation.issues.length} 个问题`
+                    }}</strong>
+                    <p>
+                        {{
+                            validation.valid
+                                ? "应用会创建新的配置版本；网关原本停止时仍保持停止。"
+                                : "返回对应模块修正后，先保存草稿，再重新校验。"
+                        }}
+                    </p>
+                    <ul v-if="!validation.valid">
+                        <li v-for="(issue, index) in validation.issues" :key="index">
+                            {{ issue.path.join(" / ") || "配置" }}：{{ issue.message }}
+                        </li>
+                    </ul>
+                </div>
+                <div v-if="tracking.operationId" class="configuration-operation">
+                    <div>
+                        <span>应用操作</span><code>{{ tracking.operationId }}</code
+                        ><strong>{{
+                            operation?.status === "succeeded"
+                                ? "应用成功"
+                                : operation?.recoveryRequired
+                                  ? "需要人工对账"
+                                  : operation?.rolledBack
+                                    ? "应用失败，已恢复原配置"
+                                    : operation?.status === "running"
+                                      ? "正在应用"
+                                      : "应用结果待确认"
+                        }}</strong>
+                    </div>
+                    <div>
+                        <UiButton :disabled="busy" @click="query">查询原操作</UiButton
+                        ><UiButton
+                            v-if="
+                                operation &&
+                                operation.status !== 'running' &&
+                                !operation.recoveryRequired
+                            "
+                            :disabled="busy || !!mutationBlock"
+                            @click="createFresh"
+                            >基于当前配置新建草稿</UiButton
+                        >
+                    </div>
+                </div>
+            </section>
+
+            <footer class="configuration-action-bar">
+                <div>
+                    <span>下一步</span><strong>{{ nextAction.label }}</strong
+                    ><small>{{ nextAction.detail }}</small>
+                </div>
+                <UiButton variant="primary" :disabled="nextActionDisabled" @click="runNextAction"
+                    >{{ nextAction.label }}<IconArrowRight :size="16" aria-hidden="true"
+                /></UiButton>
+            </footer>
         </template>
-        <div
-            v-if="tracking.operationId"
-            class="rounded-xl border border-border p-4 space-y-3 text-sm">
-            <p>应用操作 {{ tracking.operationId }}</p>
-            <p>
-                {{
+        <div v-if="!draft && tracking.operationId" class="configuration-operation standalone">
+            <div>
+                <span>正在恢复应用操作</span><code>{{ tracking.operationId }}</code
+                ><strong>{{
                     operation?.status === "succeeded"
                         ? "应用成功"
                         : operation?.recoveryRequired
-                          ? "需要人工对账，已停止自动恢复"
+                          ? "需要人工对账"
                           : operation?.rolledBack
                             ? "应用失败，已恢复原配置"
                             : operation?.status === "running"
                               ? "正在应用"
                               : "应用结果待确认"
-                }}
-            </p>
+                }}</strong>
+            </div>
             <UiButton :disabled="busy" @click="query">查询原操作</UiButton>
             <UiButton
                 v-if="operation && operation.status !== 'running' && !operation.recoveryRequired"
                 :disabled="busy || !!mutationBlock"
                 @click="createFresh"
-                >读取当前配置并创建新草稿</UiButton
+                >基于当前配置新建草稿</UiButton
             >
         </div>
     </section>

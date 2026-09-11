@@ -1,0 +1,432 @@
+/* Configuration workspace */
+.panel-stack > .configuration-workspace {
+    padding: 0 !important;
+    overflow: hidden;
+}
+.configuration-header,
+.configuration-step-heading,
+.configuration-object-toolbar,
+.configuration-action-bar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+.configuration-header {
+    margin: 0 !important;
+    padding: 1.35rem;
+    border-bottom: 1px solid var(--border);
+}
+.configuration-header h2 {
+    margin-top: 0.25rem;
+}
+.configuration-header > div > p:last-child,
+.configuration-step-heading > p,
+.configuration-start-card p,
+.configuration-scope-note span,
+.configuration-empty span {
+    color: var(--fg-secondary);
+    font-size: 0.78rem;
+    line-height: 1.6;
+}
+.configuration-kicker,
+.configuration-step-heading > div > span,
+.configuration-action-bar > div > span,
+.configuration-schema-heading > span,
+.configuration-object-list button > span {
+    color: var(--fg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 650;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.configuration-message,
+.configuration-banner {
+    margin: 1rem 1.35rem 0;
+}
+.configuration-message {
+    color: var(--fg-secondary);
+    font-size: 0.75rem;
+}
+.configuration-banner {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.75rem;
+}
+.configuration-banner strong {
+    flex: none;
+}
+.configuration-banner.danger {
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+.configuration-banner.warning {
+    border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+    background: var(--warning-soft);
+    color: var(--fg);
+}
+.configuration-start-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 1.35rem;
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    background: var(--panel-inset);
+    padding: 1.1rem;
+}
+.configuration-start-card h3 {
+    margin: 0.25rem 0;
+    font-size: 1rem;
+    font-weight: 620;
+}
+.configuration-draft-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 1.35rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--fg-tertiary);
+    font-size: 0.66rem;
+}
+.configuration-draft-status > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+.configuration-draft-status i {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 50%;
+    background: var(--success);
+}
+.configuration-draft-status i.changed {
+    background: var(--warning);
+}
+.configuration-draft-status code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.configuration-steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    background: var(--panel-inset);
+    border-bottom: 1px solid var(--border);
+}
+.configuration-steps button {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.9rem 1rem;
+    border-bottom: 2px solid transparent;
+    color: var(--fg-secondary);
+    text-align: left;
+}
+.configuration-steps button + button {
+    border-left: 1px solid var(--border);
+}
+.configuration-steps button > span {
+    color: var(--fg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+}
+.configuration-steps button > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+.configuration-steps button strong {
+    color: var(--fg);
+    font-size: 0.76rem;
+    font-weight: 610;
+}
+.configuration-steps button small {
+    overflow: hidden;
+    margin-top: 0.08rem;
+    font-size: 0.64rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.configuration-steps button:hover {
+    background: var(--surface-raised);
+}
+.configuration-steps button.active {
+    border-bottom-color: var(--accent);
+    background: var(--surface);
+    color: var(--accent);
+}
+.configuration-step-panel {
+    min-height: 28rem;
+    padding: 1.35rem;
+}
+.configuration-step-heading {
+    align-items: end;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+.configuration-step-heading h3 {
+    margin-top: 0.2rem;
+    font-size: 1.15rem;
+    font-weight: 620;
+    letter-spacing: -0.02em;
+}
+.configuration-step-heading > p {
+    max-width: 31rem;
+    text-align: right;
+}
+.configuration-add-row {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
+    gap: 0.75rem;
+    align-items: end;
+    margin-top: 1rem;
+    border-radius: 0.7rem;
+    background: var(--panel-inset);
+    padding: 0.85rem;
+}
+.configuration-add-row.protocol {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+.configuration-add-row label {
+    display: grid;
+    gap: 0.35rem;
+    color: var(--fg-secondary);
+    font-size: 0.68rem;
+}
+.configuration-add-row input,
+.configuration-add-row select {
+    width: 100%;
+    min-height: 2.25rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.4rem;
+    background: var(--bg);
+    padding: 0.45rem 0.65rem;
+    color: var(--fg);
+    font-size: 0.78rem;
+}
+.configuration-add-row > div {
+    display: flex;
+    gap: 0.5rem;
+}
+.configuration-inline-hint {
+    margin-top: 0.5rem;
+    color: var(--warning);
+    font-size: 0.68rem;
+}
+.configuration-scope-note {
+    display: grid;
+    grid-template-columns: 7.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+    margin-top: 1rem;
+    border-left: 2px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 0.7rem 0.85rem;
+    font-size: 0.75rem;
+}
+.configuration-scope-note.neutral {
+    border-left-color: var(--border-strong);
+    background: var(--panel-inset);
+}
+.configuration-object-layout {
+    display: grid;
+    grid-template-columns: 13rem minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+    margin-top: 1rem;
+}
+.configuration-object-list {
+    display: grid;
+    gap: 0.4rem;
+    max-height: 35rem;
+    overflow-y: auto;
+}
+.configuration-object-list button {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.15rem;
+    border: 1px solid var(--border);
+    border-radius: 0.55rem;
+    padding: 0.7rem 0.8rem;
+    text-align: left;
+}
+.configuration-object-list button strong {
+    overflow: hidden;
+    font-size: 0.78rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.configuration-object-list button small {
+    color: var(--fg-tertiary);
+    font-size: 0.64rem;
+}
+.configuration-object-list button:hover {
+    background: var(--surface-raised);
+}
+.configuration-object-list button.active {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    background: var(--accent-soft);
+}
+.configuration-review-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin-top: 1rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 0.7rem;
+    background: var(--border);
+}
+.configuration-review-summary > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    background: var(--panel-inset);
+    padding: 0.9rem;
+}
+.configuration-review-summary span {
+    color: var(--fg-tertiary);
+    font-size: 0.64rem;
+}
+.configuration-review-summary strong {
+    font-size: 1rem;
+    font-weight: 620;
+}
+.configuration-review-summary small {
+    color: var(--fg-secondary);
+    font-size: 0.67rem;
+}
+.configuration-lifecycle {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.configuration-lifecycle li {
+    display: grid;
+    grid-template-columns: 1.7rem minmax(0, 1fr);
+    gap: 0.55rem;
+    opacity: 0.55;
+}
+.configuration-lifecycle li > span {
+    display: grid;
+    width: 1.7rem;
+    height: 1.7rem;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+}
+.configuration-lifecycle li > div {
+    display: flex;
+    flex-direction: column;
+}
+.configuration-lifecycle strong {
+    font-size: 0.75rem;
+}
+.configuration-lifecycle small {
+    margin-top: 0.15rem;
+    color: var(--fg-tertiary);
+    font-size: 0.64rem;
+}
+.configuration-lifecycle li.active,
+.configuration-lifecycle li.complete {
+    opacity: 1;
+}
+.configuration-lifecycle li.active > span {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-fg);
+}
+.configuration-lifecycle li.complete > span {
+    border-color: var(--success);
+    color: var(--success);
+}
+.configuration-lifecycle li.invalid {
+    opacity: 1;
+    color: var(--danger);
+}
+.configuration-lifecycle li.invalid > span {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+}
+.configuration-validation,
+.configuration-operation {
+    margin-top: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    padding: 0.85rem;
+    font-size: 0.74rem;
+}
+.configuration-validation p {
+    margin-top: 0.2rem;
+    color: var(--fg-secondary);
+}
+.configuration-validation ul {
+    margin-top: 0.6rem;
+    padding-left: 1.1rem;
+}
+.configuration-validation.success {
+    border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+    background: var(--success-soft);
+}
+.configuration-validation.danger {
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+    background: var(--danger-soft);
+}
+.configuration-operation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+.configuration-operation > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+}
+.configuration-operation code {
+    color: var(--fg-tertiary);
+}
+.configuration-operation.standalone {
+    margin: 1.35rem;
+}
+.configuration-action-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    align-items: center;
+    padding: 0.85rem 1.35rem;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    backdrop-filter: blur(12px);
+}
+.configuration-action-bar > div {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 0.1rem 0.55rem;
+}
+.configuration-action-bar > div > span {
+    grid-row: 1 / 3;
+    align-self: center;
+}
+.configuration-action-bar strong {
+    font-size: 0.78rem;
+}
+.configuration-action-bar small {
+    color: var(--fg-tertiary);
+    font-size: 0.65rem;
+}
