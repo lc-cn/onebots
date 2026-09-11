@@ -181,7 +181,7 @@ async function initializeTerminal() {
         fontSize: 13,
         lineHeight: 1.35,
         scrollback: 5_000,
-        theme: { background: "#101412", foreground: "#cad5cd", cursor: "#65bd91" },
+        theme: { background: "#0d0d10", foreground: "#dedee3", cursor: "#8fb1ff" },
     });
     fit = new XtermFitAddon();
     terminal.loadAddon(fit);

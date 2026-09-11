@@ -85,6 +85,9 @@
         min-width: 0;
         border: 0;
     }
+    .adapter-row:only-child {
+        grid-column: 1 / -1;
+    }
 }
 .adapter-capability-summary {
     display: flex;
@@ -302,21 +305,21 @@
 }
 .log-console {
     min-height: 22rem;
-    background: #101412;
-    color: #c7d8cd;
+    background: #0d0d10;
+    color: #dedee3;
 }
 .log-console-meta {
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-    border-bottom: 1px solid rgba(199, 216, 205, 0.12);
-    color: rgba(199, 216, 205, 0.56);
+    border-bottom: 1px solid rgba(222, 222, 227, 0.12);
+    color: rgba(222, 222, 227, 0.56);
     padding: 0.58rem 1rem;
     font-family: var(--font-mono);
     font-size: 0.62rem;
 }
 .log-console > p {
-    color: rgba(199, 216, 205, 0.66);
+    color: rgba(222, 222, 227, 0.66);
     padding: 1.2rem;
     font-size: 0.76rem;
 }
@@ -402,8 +405,8 @@
 .panel-grid pre {
     border: 1px solid var(--border);
     border-radius: 0.55rem;
-    background: #101412;
-    color: #c7d8cd;
+    background: #0d0d10;
+    color: #dedee3;
     padding: 0.9rem;
     font-size: 0.7rem;
     line-height: 1.65;

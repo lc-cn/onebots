@@ -97,9 +97,9 @@
     min-height: 28rem;
     flex: 1;
     overflow: hidden;
-    border: 1px solid #26322b;
+    border: 1px solid #29292f;
     border-radius: 0 0 0.45rem 0.45rem;
-    background: #101412;
+    background: #0d0d10;
     padding: 0.7rem;
 }
 
@@ -119,22 +119,22 @@
     display: grid;
     place-content: center;
     gap: 0.45rem;
-    color: #d7ded9;
+    color: #e4e4e7;
     padding: 2rem;
     text-align: center;
 }
 
 .terminal-unavailable p {
     max-width: 34rem;
-    color: #89978e;
+    color: #8b8b96;
     font-size: 0.78rem;
 }
 
 .terminal-unavailable code {
     width: max-content;
     margin: 0.3rem auto 0;
-    background: #1b241f;
-    color: #8dd0ac;
+    background: #1a1a1f;
+    color: #9fbcff;
 }
 
 .terminal-safety {

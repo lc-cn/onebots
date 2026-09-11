@@ -3,12 +3,12 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 2rem;
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
     border-bottom: 1px solid var(--border);
-    padding-bottom: 0.85rem;
+    padding-bottom: 1.15rem;
 }
 .page-heading h1 {
-    font-size: clamp(1.55rem, 2.5vw, 1.9rem);
+    font-size: clamp(1.7rem, 2.5vw, 2.1rem);
     font-weight: 650;
     letter-spacing: -0.035em;
     line-height: 1.15;
@@ -17,7 +17,7 @@
     max-width: 42rem;
     margin-top: 0.45rem;
     color: var(--fg-secondary);
-    font-size: 0.83rem;
+    font-size: 0.9rem;
     line-height: 1.55;
 }
 .page-heading > svg,
@@ -128,12 +128,12 @@
     grid-template-columns: minmax(15rem, 1fr) auto;
     overflow: hidden;
     border: 1px solid var(--border);
-    border-radius: 0.55rem;
+    border-radius: 0.75rem;
     background: var(--surface);
     box-shadow: none;
 }
 .runtime-copy {
-    padding: 1.45rem 1.6rem;
+    padding: 1.75rem 1.85rem;
 }
 .runtime-kicker {
     display: flex;
@@ -158,7 +158,7 @@
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
-    padding: 1.4rem 1.5rem;
+    padding: 1.7rem 1.75rem;
 }
 .runtime-metrics {
     display: grid;
@@ -172,7 +172,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.3rem;
+    padding: 1.05rem 1.5rem;
 }
 .runtime-metrics div + div {
     border-left: 1px solid var(--border);
@@ -193,11 +193,10 @@
     gap: 1.5rem 3rem;
     margin-top: 0;
     border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 0.35rem;
+    border-radius: 0.75rem;
     background: var(--surface);
     color: var(--fg);
-    padding: 1.5rem;
+    padding: 1.65rem;
 }
 .onboarding-intro {
     display: grid;
@@ -205,7 +204,7 @@
     gap: 1rem;
 }
 .onboarding-intro > span {
-    color: var(--accent);
+    color: var(--fg-tertiary);
     font-family: var(--font-mono);
 }
 .onboarding h2 {
@@ -251,17 +250,16 @@
 .overview-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(19rem, 0.9fr);
-    gap: 1px;
-    margin-top: 1rem;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: 0.55rem;
-    background: var(--border);
+    gap: 1rem;
+    margin-top: 1.25rem;
+    align-items: start;
 }
 .account-strip,
 .operation-timeline {
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
     background: var(--surface);
-    padding: 1.4rem;
+    padding: 1.5rem;
 }
 .section-heading {
     display: flex;
@@ -288,7 +286,7 @@
 }
 .empty-copy {
     display: grid;
-    min-height: 8rem;
+    min-height: 6rem;
     place-items: center;
     color: var(--fg-tertiary);
     text-align: center;
@@ -404,7 +402,7 @@
 .panel-grid > section,
 .access-layout > section {
     border: 1px solid var(--border) !important;
-    border-radius: 0.55rem !important;
+    border-radius: 0.75rem !important;
     background: var(--surface) !important;
     padding: 1.4rem !important;
     box-shadow: none;
