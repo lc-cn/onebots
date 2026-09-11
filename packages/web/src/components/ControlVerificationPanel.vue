@@ -49,7 +49,7 @@ const labels = {
         aria-labelledby="verification-title">
         <header class="diagnostic-panel-header">
             <div>
-                <p class="diagnostic-panel-kicker">ACTION REQUIRED</p>
+                <p class="diagnostic-panel-kicker">人工处理</p>
                 <h2 id="verification-title" class="text-lg font-medium">账号验证</h2>
             </div>
             <p>

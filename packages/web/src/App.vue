@@ -18,6 +18,7 @@ import ExtensionsView from "./views/ExtensionsView.vue";
 import OperationsView from "./views/OperationsView.vue";
 import OverviewView from "./views/OverviewView.vue";
 import PairingView from "./views/PairingView.vue";
+import TerminalView from "./views/TerminalView.vue";
 
 const token = ref(localStorage.getItem("onebots.control.token") ?? "");
 const code = ref("");
@@ -306,6 +307,12 @@ onUnmounted(() => {
             :gateway-instance-id="gatewayInstanceId"
             :active="activeWorkspace === 'activity'"
             :mutation-block="mutationBlock" />
+        <TerminalView
+            v-show="activeWorkspace === 'terminal'"
+            :token="token"
+            :manager-id="state?.manager.id"
+            :manager-version="state?.manager.version"
+            :active="activeWorkspace === 'terminal'" />
         <AccessView
             v-show="activeWorkspace === 'access'"
             :client="client"

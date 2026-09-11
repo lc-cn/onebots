@@ -45,6 +45,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.10",
     "@types/semver": "^7.7.1",
+    "@types/ws": "^8.18.1",
     "tsc-alias": "latest",
     "tsconfig-paths": "latest",
     "tsx": "latest",
@@ -59,7 +60,12 @@
     "pnpm": "10.34.5",
     "react": "^19.1.1",
     "semver": "^7.8.5",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "ws": "^8.20.0"
+  },
+  "optionalDependencies": {
+    "@karinjs/node-pty": "^1.1.3",
+    "@karinjs/prebuild-install": "1.3.9"
   },
   "repository": {
     "type": "git",

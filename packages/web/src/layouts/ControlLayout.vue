@@ -43,9 +43,10 @@ function navigate(event: MouseEvent, workspace: Workspace) {
         <aside class="sidebar">
             <div class="brand-lockup sidebar-brand">
                 <span class="brand-mark" aria-hidden="true">OB</span>
-                <div><strong>onebots</strong><small>control plane</small></div>
+                <div><strong>onebots</strong><small>管理控制台</small></div>
             </div>
             <nav class="primary-nav" aria-label="控制台导航">
+                <p class="nav-section-label">工作区</p>
                 <a
                     v-for="item in workspaceNavigation"
                     :key="item.id"
@@ -55,8 +56,7 @@ function navigate(event: MouseEvent, workspace: Workspace) {
                     @click="navigate($event, item.id)">
                     <component :is="item.icon" :size="19" aria-hidden="true" />
                     <span
-                        ><strong>{{ item.label }}</strong
-                        ><small>{{ item.hint }}</small></span
+                        ><strong>{{ item.label }}</strong></span
                     >
                     <em
                         v-if="item.id === 'activity' && pendingVerificationCount"
@@ -108,7 +108,7 @@ function navigate(event: MouseEvent, workspace: Workspace) {
         <div class="console-main">
             <header class="desktop-header">
                 <div class="workspace-crumb">
-                    <span>ONEBOTS</span><i>/</i><strong>{{ activeItem?.label }}</strong>
+                    <span>管理控制台</span><i>/</i><strong>{{ activeItem?.label }}</strong>
                 </div>
                 <div class="desktop-header-actions">
                     <span class="header-health" :class="{ failed: !!error }">

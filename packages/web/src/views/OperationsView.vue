@@ -14,12 +14,11 @@ defineProps<{
 </script>
 
 <template>
-    <section class="workspace-view" aria-labelledby="activity-title">
+    <section class="workspace-view operations-view" aria-labelledby="activity-title">
         <header class="page-heading">
             <div>
-                <p class="eyebrow">OPERATE & OBSERVE</p>
                 <h1 id="activity-title">运行与诊断</h1>
-                <p>处理需要人工介入的账号验证，检查消息流，并实时观察服务输出。</p>
+                <p>处理账号验证、检查消息链路，并查看管理服务与网关的实时输出。</p>
             </div>
         </header>
         <div class="operations-workbench">

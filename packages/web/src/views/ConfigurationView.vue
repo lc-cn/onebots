@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { ControlClient } from "@onebots/core/control";
-import { IconSettings } from "@tabler/icons-vue";
 import ControlConfigurationPanel from "../components/ControlConfigurationPanel.vue";
 import ControlSetupJourney from "../components/ControlSetupJourney.vue";
 import type { ControlMutationBlock, SetupJourney } from "../control-product-state.js";
@@ -22,11 +21,9 @@ const emit = defineEmits<{
     <section class="workspace-view" aria-labelledby="configuration-title">
         <header class="page-heading">
             <div>
-                <p class="eyebrow">ACCOUNTS & PROTOCOLS</p>
                 <h1 id="configuration-title">账号与协议</h1>
-                <p>编辑平台账号与协议出口草稿，校验后应用到工作区。</p>
+                <p>管理平台账号和协议出口。修改只写入草稿，确认应用后才影响网关。</p>
             </div>
-            <IconSettings :size="28" aria-hidden="true" />
         </header>
         <ControlSetupJourney
             v-if="journey.state !== 'running'"

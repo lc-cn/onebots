@@ -120,7 +120,6 @@ function keepCommandFocus(event: KeyboardEvent) {
     <section class="workspace-view" aria-labelledby="overview-title">
         <header class="page-heading">
             <div>
-                <p class="eyebrow">CONTROL PLANE</p>
                 <h1 id="overview-title">运行概览</h1>
                 <p>管理网关生命周期，并确认账号连接状态。</p>
             </div>
@@ -141,113 +140,114 @@ function keepCommandFocus(event: KeyboardEvent) {
             <div class="skeleton"></div>
         </div>
         <template v-else>
-            <section
-                ref="runtimeStatus"
-                class="runtime-hero"
-                tabindex="-1"
-                :class="`is-${state.gateway.actual}`">
-                <div class="runtime-copy">
-                    <p class="runtime-kicker">
-                        <span class="status-dot" :class="state.gateway.actual"></span> GATEWAY
-                    </p>
-                    <h2>{{ stateLabels[state.gateway.actual] }}</h2>
-                    <p>
-                        网关期望保持{{ state.gateway.desired === "running" ? "运行" : "停止" }}
-                        <template v-if="state.gateway.instance?.id">
-                            · 实例 {{ state.gateway.instance.id.slice(0, 8) }}</template
-                        >
-                    </p>
-                </div>
-                <div class="runtime-actions">
-                    <UiButton
-                        variant="primary"
-                        :loading="busy"
-                        :disabled="!!mutationBlock || state.gateway.actual === 'running'"
-                        @click="requestCommand('start')"
-                        >启动网关</UiButton
-                    >
-                    <UiButton
-                        :loading="busy"
-                        :disabled="!!mutationBlock || state.gateway.actual === 'stopped'"
-                        @click="requestCommand('stop')"
-                        >停止</UiButton
-                    >
-                    <UiButton
-                        variant="ghost"
-                        :loading="busy"
-                        :disabled="!!mutationBlock"
-                        @click="requestCommand('restart')"
-                        >重启</UiButton
-                    >
-                </div>
-                <div class="runtime-metrics">
-                    <div>
-                        <span>账号</span><strong>{{ accountItems.length }}</strong>
-                    </div>
-                    <div>
-                        <span>在线</span><strong>{{ onlineAccounts }}</strong>
-                    </div>
-                    <div>
-                        <span>管理进程</span><strong>{{ state.manager.pid ?? "—" }}</strong>
-                    </div>
-                </div>
-            </section>
-            <div
-                v-if="pendingCommand"
-                class="command-confirm-backdrop"
-                role="presentation"
-                @click.self="closeCommand">
+            <div class="overview-primary" :class="{ 'has-journey': journey.state !== 'running' }">
                 <section
-                    ref="commandDialog"
-                    class="command-confirm"
-                    role="dialog"
+                    ref="runtimeStatus"
+                    class="runtime-hero"
                     tabindex="-1"
-                    aria-modal="true"
-                    aria-labelledby="command-confirm-title"
-                    aria-describedby="command-confirm-detail"
-                    @keydown="keepCommandFocus">
-                    <div class="command-confirm-icon">
-                        <IconAlertTriangle :size="22" aria-hidden="true" />
-                    </div>
-                    <div>
-                        <h2 id="command-confirm-title">{{ commandImpact.title }}</h2>
-                        <p id="command-confirm-detail">{{ commandImpact.detail }}</p>
-                        <p v-if="accountItems.length" class="command-confirm-count">
-                            当前涉及 {{ accountItems.length }} 个账号，其中 {{ onlineAccounts }}
-                            个在线。
+                    :class="`is-${state.gateway.actual}`">
+                    <div class="runtime-copy">
+                        <p class="runtime-kicker">
+                            <span class="status-dot" :class="state.gateway.actual"></span> 网关状态
+                        </p>
+                        <h2>{{ stateLabels[state.gateway.actual] }}</h2>
+                        <p>
+                            网关期望保持{{ state.gateway.desired === "running" ? "运行" : "停止" }}
+                            <template v-if="state.gateway.instance?.id">
+                                · 实例 {{ state.gateway.instance.id.slice(0, 8) }}</template
+                            >
                         </p>
                     </div>
-                    <div class="command-confirm-actions">
-                        <UiButton @click="closeCommand">取消</UiButton>
-                        <UiButton variant="danger" @click="confirmCommand">{{
-                            commandImpact.confirm
-                        }}</UiButton>
+                    <div class="runtime-actions">
+                        <UiButton
+                            variant="primary"
+                            :loading="busy"
+                            :disabled="!!mutationBlock || state.gateway.actual === 'running'"
+                            @click="requestCommand('start')"
+                            >启动网关</UiButton
+                        >
+                        <UiButton
+                            :loading="busy"
+                            :disabled="!!mutationBlock || state.gateway.actual === 'stopped'"
+                            @click="requestCommand('stop')"
+                            >停止</UiButton
+                        >
+                        <UiButton
+                            variant="ghost"
+                            :loading="busy"
+                            :disabled="!!mutationBlock"
+                            @click="requestCommand('restart')"
+                            >重启</UiButton
+                        >
+                    </div>
+                    <div class="runtime-metrics">
+                        <div>
+                            <span>账号</span><strong>{{ accountItems.length }}</strong>
+                        </div>
+                        <div>
+                            <span>在线</span><strong>{{ onlineAccounts }}</strong>
+                        </div>
+                        <div>
+                            <span>管理进程</span><strong>{{ state.manager.pid ?? "—" }}</strong>
+                        </div>
                     </div>
                 </section>
+                <div
+                    v-if="pendingCommand"
+                    class="command-confirm-backdrop"
+                    role="presentation"
+                    @click.self="closeCommand">
+                    <section
+                        ref="commandDialog"
+                        class="command-confirm"
+                        role="dialog"
+                        tabindex="-1"
+                        aria-modal="true"
+                        aria-labelledby="command-confirm-title"
+                        aria-describedby="command-confirm-detail"
+                        @keydown="keepCommandFocus">
+                        <div class="command-confirm-icon">
+                            <IconAlertTriangle :size="22" aria-hidden="true" />
+                        </div>
+                        <div>
+                            <h2 id="command-confirm-title">{{ commandImpact.title }}</h2>
+                            <p id="command-confirm-detail">{{ commandImpact.detail }}</p>
+                            <p v-if="accountItems.length" class="command-confirm-count">
+                                当前涉及 {{ accountItems.length }} 个账号，其中 {{ onlineAccounts }}
+                                个在线。
+                            </p>
+                        </div>
+                        <div class="command-confirm-actions">
+                            <UiButton @click="closeCommand">取消</UiButton>
+                            <UiButton variant="danger" @click="confirmCommand">{{
+                                commandImpact.confirm
+                            }}</UiButton>
+                        </div>
+                    </section>
+                </div>
+                <div
+                    v-if="state.gateway.recoveryRequired"
+                    class="feedback feedback-error recovery-block">
+                    <IconAlertTriangle :size="20" aria-hidden="true" /><span
+                        ><strong>网关需要人工恢复</strong
+                        >请先查看最近操作与服务日志，确认上一操作结果后再继续。</span
+                    >
+                    <button type="button" @click="emit('select', 'activity')">查看诊断</button>
+                </div>
+                <div v-else-if="state.gateway.error" class="feedback feedback-error">
+                    <IconAlertTriangle :size="18" aria-hidden="true" /><span>{{
+                        state.gateway.error
+                    }}</span>
+                </div>
+                <ControlSetupJourney
+                    v-if="journey.state !== 'running'"
+                    :journey="journey"
+                    @select="emit('select', $event)" />
             </div>
-            <div
-                v-if="state.gateway.recoveryRequired"
-                class="feedback feedback-error recovery-block">
-                <IconAlertTriangle :size="20" aria-hidden="true" /><span
-                    ><strong>网关需要人工恢复</strong
-                    >请先查看最近操作与服务日志，确认上一操作结果后再继续。</span
-                >
-                <button type="button" @click="emit('select', 'activity')">查看诊断</button>
-            </div>
-            <div v-else-if="state.gateway.error" class="feedback feedback-error">
-                <IconAlertTriangle :size="18" aria-hidden="true" /><span>{{
-                    state.gateway.error
-                }}</span>
-            </div>
-            <ControlSetupJourney
-                v-if="journey.state !== 'running'"
-                :journey="journey"
-                @select="emit('select', $event)" />
             <div class="overview-grid">
                 <section class="account-strip">
                     <div class="section-heading">
                         <div>
-                            <p class="eyebrow">ACCOUNTS</p>
                             <h2>账号连接</h2>
                         </div>
                         <button type="button" @click="emit('select', 'configuration')">
@@ -280,7 +280,6 @@ function keepCommandFocus(event: KeyboardEvent) {
                 <section class="operation-timeline">
                     <div class="section-heading">
                         <div>
-                            <p class="eyebrow">ACTIVITY</p>
                             <h2>最近操作</h2>
                         </div>
                         <button type="button" @click="emit('select', 'activity')">

@@ -36,15 +36,19 @@ onebots ui --data-dir /path/to/data
 
 提交前会显示操作编号，请保留它。结果不明时选择“查询验证回执”，输入原编号；网关停止后仍可查询。调用成功不代表账号已经上线。完整说明见[账号登录验证](/guide/account-verification)。
 
-## 查看网关日志
+## 查看日志
 
-选择“查看网关日志”并确认后读取最近 64 KiB。Web 的“网关日志”面板也只在点击时读取，不自动刷新。网关已停止或启动失败时，管理服务仍可提供已有日志。
+工作台可以按来源读取管理服务、网关和控制操作日志；命令行入口如下：
 
 ```bash
-onebots control logs --data-dir /path/to/data
+onebots control logs --data-dir /path/to/data --source manager
+onebots control logs --data-dir /path/to/data --source gateway
+onebots control logs --data-dir /path/to/data --source operation
 ```
 
-日志可能包含平台凭据和消息，请先脱敏再分享。该入口不提供任意文件读取、清空日志或终端命令执行；管理服务自身的系统托管日志仍由本机服务日志入口查看。
+Web 的三个日志页签在激活时建立 SSE 连接，切换到其他页签或离开页面时断开。历史查询最多返回最近 64 KiB；网关已停止或启动失败时，管理服务仍可提供已有日志。
+
+日志可能包含平台凭据和消息，请先脱敏再分享。该入口不提供任意文件读取或清空日志；操作系统托管日志使用 `onebots logs` 查看。完整区别见[诊断与常见故障](/local/troubleshooting#日志分工)。
 
 ## 浏览器授权
 
@@ -73,3 +77,5 @@ docker exec -it <容器名> onebots ui --data-dir /data
 `--setup` 进入安装向导，`--configure` 进入配置草稿。旧 `-c/--config`、`--force/--reset`、`--web` 或系统服务范围参数不属于新工作台；迁移到管理服务工作区后使用 `--data-dir`。
 
 Docker 使用同一安装与配置能力，无需先运行宿主脚本，也不会在容器里安装 systemd。保护私有模块授权的方式见[Docker 私有扩展安装](/guide/docker-private-extensions)。
+
+CLI、系统服务和日常维护命令集中在[本地管理](/local/)栏目。

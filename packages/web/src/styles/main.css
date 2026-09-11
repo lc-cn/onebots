@@ -5,23 +5,24 @@
 @import "./control-configuration.css";
 @import "./control-configuration-fields.css";
 @import "./setup-journey.css";
+@import "./terminal.css";
 @import "./responsive.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
     color-scheme: light;
-    --bg: #f5f5f1;
+    --bg: #f4f5f2;
     --surface: #ffffff;
-    --surface-raised: #efefe9;
-    --surface-strong: #e7e7df;
-    --border: #dfdfd7;
-    --border-strong: #c8c9bf;
-    --fg: #171916;
-    --fg-secondary: #5c625b;
-    --fg-tertiary: #8e948c;
-    --accent: #087f5b;
-    --accent-hover: #066849;
+    --surface-raised: #eef0ec;
+    --surface-strong: #e4e7e1;
+    --border: #daddd6;
+    --border-strong: #bdc3ba;
+    --fg: #161916;
+    --fg-secondary: #565d56;
+    --fg-tertiary: #858d85;
+    --accent: #166a4b;
+    --accent-hover: #0e573c;
     --accent-fg: #ffffff;
     --accent-soft: rgba(8, 127, 91, 0.1);
     --success: #087f5b;
@@ -33,7 +34,7 @@
     --info: #256b82;
     --info-soft: rgba(37, 107, 130, 0.1);
     --ring: rgba(8, 127, 91, 0.32);
-    --shadow: 0 18px 50px rgba(37, 44, 34, 0.08);
+    --shadow: 0 12px 34px rgba(35, 45, 37, 0.07);
 }
 
 .dark {
@@ -180,14 +181,6 @@ code {
 }
 .skip-link:focus {
     transform: translateY(0);
-}
-
-.eyebrow {
-    color: var(--fg-tertiary);
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.14em;
 }
 
 .brand-lockup {

@@ -50,7 +50,7 @@ const revealsAdvanced = (group: ConfigurationFormGroup) =>
     <section v-for="group in groups" :key="group.key" class="configuration-schema-group">
         <header class="configuration-schema-heading">
             <div>
-                <p class="configuration-kicker">当前编辑对象</p>
+                <p class="configuration-kicker">配置项</p>
                 <h3>{{ group.title }}</h3>
             </div>
             <span>{{ visibleFields(group).length }} 个字段</span>

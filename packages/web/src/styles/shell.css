@@ -1,21 +1,21 @@
 .auth-shell {
     display: grid;
     min-height: 100dvh;
-    grid-template-columns: minmax(25rem, 0.78fr) minmax(34rem, 1.22fr);
+    grid-template-columns: minmax(24rem, 38rem) minmax(25rem, 32rem);
+    place-content: center;
+    padding: clamp(1.25rem, 4vw, 4rem);
     background: var(--bg);
 }
 
 .auth-story {
     position: relative;
     display: flex;
-    min-height: 100dvh;
+    min-height: min(42rem, calc(100dvh - 2.5rem));
     flex-direction: column;
     justify-content: space-between;
     overflow: hidden;
-    padding: clamp(2rem, 4vw, 4rem);
-    background:
-        radial-gradient(circle at 18% 76%, rgba(65, 176, 126, 0.2), transparent 34%),
-        linear-gradient(155deg, #10271e, #09140f 68%);
+    padding: clamp(2rem, 4vw, 3.25rem);
+    background: #102019;
     color: #f4f7f1;
 }
 
@@ -38,19 +38,22 @@
     z-index: 1;
 }
 .auth-story-copy {
-    max-width: 31rem;
-    padding: 3rem 0 2rem;
+    max-width: 27rem;
+    padding: 2.5rem 0 2rem;
 }
-.auth-story-copy .eyebrow {
+.auth-context {
     color: #79cba8;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
 }
 .auth-story-copy h1 {
-    margin: 1.2rem 0 1.4rem;
-    max-width: 9ch;
-    font-size: clamp(3.2rem, 5vw, 5.2rem);
-    font-weight: 590;
-    letter-spacing: -0.06em;
-    line-height: 0.96;
+    margin: 1rem 0 1.15rem;
+    max-width: 10ch;
+    font-size: clamp(2.65rem, 4vw, 3.8rem);
+    font-weight: 610;
+    letter-spacing: -0.055em;
+    line-height: 1;
     text-wrap: balance;
 }
 .auth-story-copy > p:last-child {
@@ -92,9 +95,9 @@
 .auth-panel {
     position: relative;
     display: grid;
-    min-height: 100dvh;
+    min-height: min(42rem, calc(100dvh - 2.5rem));
     place-items: center;
-    padding: 4rem clamp(2rem, 6vw, 6rem);
+    padding: 3rem clamp(2rem, 4vw, 3.5rem);
     background:
         linear-gradient(
             90deg,
@@ -110,10 +113,10 @@
     flex-direction: column;
     gap: 1.2rem;
     border: 1px solid var(--border);
-    border-radius: 1rem;
+    border-radius: 0.45rem;
     background: var(--surface);
     padding: clamp(1.75rem, 3vw, 2.5rem);
-    box-shadow: var(--shadow);
+    box-shadow: 0 14px 42px rgba(35, 45, 37, 0.09);
 }
 .auth-form h2 {
     margin-top: 1.8rem;
@@ -160,7 +163,7 @@
 .console-shell {
     display: grid;
     height: 100dvh;
-    grid-template-columns: 15rem minmax(0, 1fr);
+    grid-template-columns: 15.5rem minmax(0, 1fr);
     overflow: hidden;
 }
 .sidebar {
@@ -168,11 +171,13 @@
     min-height: 0;
     flex-direction: column;
     border-right: 1px solid var(--border);
-    background: var(--surface);
-    padding: 1rem;
+    background: #17211c;
+    color: #edf3ef;
+    padding: 0 0.85rem 0.85rem;
 }
 .sidebar-brand {
-    height: 3.5rem;
+    height: 4.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     padding: 0 0.55rem;
 }
 .sidebar-brand > div {
@@ -182,19 +187,23 @@
 }
 .sidebar-brand small,
 .sidebar-status small {
-    color: var(--fg-tertiary);
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
+    color: rgba(237, 243, 239, 0.46);
+    font-size: 0.66rem;
     font-weight: 500;
-    letter-spacing: 0.05em;
 }
 
 .primary-nav {
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: 0.3rem;
-    padding-top: 1.5rem;
+    gap: 0.15rem;
+    padding-top: 1.1rem;
+}
+.nav-section-label {
+    margin: 0.1rem 0.75rem 0.45rem;
+    color: rgba(237, 243, 239, 0.35);
+    font-size: 0.65rem;
+    font-weight: 600;
 }
 .primary-nav a {
     display: grid;
@@ -203,10 +212,11 @@
     gap: 0.65rem;
     align-items: center;
     border: 0;
-    border-radius: 0.65rem;
+    border-left: 2px solid transparent;
+    border-radius: 0.25rem;
     background: transparent;
-    color: var(--fg-secondary);
-    padding: 0.72rem 0.75rem;
+    color: rgba(237, 243, 239, 0.68);
+    padding: 0.68rem 0.75rem;
     text-align: left;
     text-decoration: none;
     transition:
@@ -233,13 +243,13 @@
     color: currentColor;
 }
 .primary-nav a:hover {
-    background: var(--surface-raised);
-    color: var(--fg);
-    transform: translateX(2px);
+    background: rgba(255, 255, 255, 0.055);
+    color: #ffffff;
 }
 .primary-nav a.active {
-    background: var(--fg);
-    color: var(--bg);
+    border-left-color: #65bd91;
+    background: rgba(255, 255, 255, 0.09);
+    color: #ffffff;
 }
 .primary-nav a span {
     display: flex;
@@ -250,20 +260,11 @@
     font-size: 0.84rem;
     font-weight: 570;
 }
-.primary-nav a small {
-    margin-top: 0.08rem;
-    overflow: hidden;
-    opacity: 0.62;
-    font-size: 0.68rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 .sidebar-status {
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding: 1rem 0.65rem;
 }
 .sidebar-status > span:last-child {
@@ -274,8 +275,15 @@
 .sidebar-actions {
     display: flex;
     justify-content: space-between;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding: 0.8rem 0.3rem 0;
+}
+.sidebar .icon-button {
+    color: rgba(237, 243, 239, 0.62);
+}
+.sidebar .icon-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
 }
 .status-dot {
     display: inline-block;
@@ -309,13 +317,13 @@
 }
 .desktop-header {
     display: flex;
-    height: 3.75rem;
+    height: 4.25rem;
     flex: none;
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface) 92%, transparent);
-    padding: 0 1.5rem;
+    background: var(--surface);
+    padding: 0 2rem;
 }
 .workspace-crumb {
     display: flex;
@@ -326,10 +334,8 @@
 .workspace-crumb span,
 .workspace-crumb i {
     color: var(--fg-tertiary);
-    font-family: var(--font-mono);
-    font-size: 0.64rem;
+    font-size: 0.7rem;
     font-style: normal;
-    letter-spacing: 0.08em;
 }
 .workspace-crumb strong {
     font-weight: 580;
@@ -361,10 +367,9 @@
     background: var(--bg);
 }
 .workspace {
-    width: min(100%, 88rem);
+    width: 100%;
     min-height: 100%;
-    margin: 0 auto;
-    padding: clamp(1.75rem, 3vw, 3.25rem);
+    padding: clamp(1.25rem, 2vw, 2rem) clamp(1.25rem, 2.25vw, 2.5rem) 2rem;
 }
 .workspace-view {
     animation: enter 240ms cubic-bezier(0.2, 0.8, 0.2, 1);

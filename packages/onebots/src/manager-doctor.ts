@@ -28,6 +28,7 @@ export interface ManagerDoctorDependencies {
     inspectService?: typeof inspectManagerServiceStatus;
     inspectDiagnostics?: (workspace: string) => Promise<ControlDiagnostics>;
     probe?: (state: ControlDiagnostics) => Promise<ManagerDoctorCheck[]>;
+    inspectTerminal?: () => Promise<boolean>;
 }
 export async function runManagerDoctor(
     options: ManagerDoctorOptions,
@@ -58,6 +59,24 @@ export async function runManagerDoctor(
         "node",
         Number(process.versions.node.split(".")[0]) >= 24 ? "pass" : "fail",
         "OneBots 需要 Node.js 24 或更新版本。",
+    );
+    const nodeMajor = Number(process.versions.node.split(".")[0]);
+    let terminalAvailable = false;
+    if (nodeMajor === 24) {
+        try {
+            terminalAvailable = await (dependencies.inspectTerminal ?? inspectTerminal)();
+        } catch {
+            terminalAvailable = false;
+        }
+    }
+    add(
+        "local-terminal",
+        terminalAvailable ? "pass" : "warn",
+        terminalAvailable
+            ? "Node 24 原生终端组件可加载；终端仍只允许从本机已授权设备打开。"
+            : nodeMajor === 24
+              ? "原生终端组件未安装或无法加载；仅终端降级，管理服务与网关不受影响。"
+              : "原生终端当前只支持 Node 24；管理服务与网关仍可正常使用。",
     );
     const target = resolveManagerDoctorTarget(options, host);
     if (target.kind === "unavailable") {
@@ -241,4 +260,9 @@ export async function runManagerDoctor(
         add("manager", "fail", "管理诊断不可达或响应无效；未回退旧登录和插件加载路径。");
     }
     return result();
+}
+
+async function inspectTerminal(): Promise<boolean> {
+    const pty = await import("@karinjs/node-pty");
+    return typeof pty.spawn === "function";
 }

@@ -59,7 +59,7 @@ function navigateTabs(event: KeyboardEvent, index: number): void {
     <section class="live-logs-panel" aria-labelledby="service-logs-title">
         <header class="live-logs-header">
             <div>
-                <p class="diagnostic-panel-kicker">LIVE OUTPUT</p>
+                <p class="diagnostic-panel-kicker">实时输出</p>
                 <h2 id="service-logs-title"><IconTerminal2 :size="19" />服务日志</h2>
                 <p>进入页面即连接当前日志源，切换标签或离开页面时连接会自动关闭。</p>
             </div>

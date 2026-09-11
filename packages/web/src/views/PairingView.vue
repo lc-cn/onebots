@@ -16,7 +16,7 @@ const emit = defineEmits<{ pair: []; toggleTheme: [] }>();
                 <span>onebots <small>control</small></span>
             </div>
             <div class="auth-story-copy">
-                <p class="eyebrow">SELF-HOSTED IM CONTROL PLANE</p>
+                <p class="auth-context">本地部署 · 设备授权</p>
                 <h1 id="auth-title">运行你的<br />消息网关</h1>
                 <p>在一个本地控制面中管理平台账号、协议出口与网关生命周期。</p>
             </div>

@@ -47,3 +47,5 @@ Windows 的 SCM 原生宿主、命名管道、访问控制、首次引导和服�
 从已安装的新架构 CLI 执行 `onebots install --data-dir <工作区>` 安装用户级服务，之后执行 `onebots start`。首次服务安装不会启动网关账号或改写业务配置；已有旧服务应先迁移，不能用首次安装覆盖。
 
 系统托管维护管理服务；CLI、TUI 和 Web 通过同一控制接口管理独立网关。Linux systemd、macOS launchd 和 Windows SCM 的原生生命周期、旧服务迁移、故障回退和 patch 升级均已通过对应平台 CI。完整机器重启和真实业务账号恢复仍需部署环境验收。
+
+继续阅读[首次安装与工作台](/local/first-run)和[系统服务](/local/service)，按运行方式完成扩展选择、账号配置和日常启停。

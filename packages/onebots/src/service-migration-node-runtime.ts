@@ -36,7 +36,10 @@ async function inspect(
         cwd: path.dirname(file),
         env: { PATH: "/usr/bin:/bin" },
         encoding: "utf8",
-        timeout: 10_000,
+        // macOS may spend tens of seconds validating a freshly copied universal binary before
+        // its first launch. Keep the probe bounded, but do not reject an otherwise valid retained
+        // runtime merely because Gatekeeper has not cached that path yet.
+        timeout: 60_000,
         maxBuffer: 4096,
     });
     const result = closedServiceObject(JSON.parse(stdout), ["version", "platform", "arch"]);

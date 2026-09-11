@@ -38,7 +38,7 @@ onUnmounted(() => controller.dispose());
         class="message-debug-panel border border-border rounded-panel p-6 bg-surface space-y-4">
         <header class="diagnostic-panel-header">
             <div>
-                <p class="diagnostic-panel-kicker">TRAFFIC INSPECTOR</p>
+                <p class="diagnostic-panel-kicker">消息链路</p>
                 <h2 class="text-lg font-medium">消息调试</h2>
             </div>
             <p>按需读取当前网关最近 300 条双向消息，并按平台、账号或协议定位链路问题。</p>

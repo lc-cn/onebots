@@ -81,6 +81,16 @@
     }
 }
 
+@media (max-width: 1120px) and (min-width: 901px) {
+    .overview-primary.has-journey {
+        grid-template-columns: 1fr;
+    }
+
+    .operations-workbench {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 640px) {
     .auth-story {
         min-height: 19rem;
@@ -121,6 +131,9 @@
         display: none;
     }
     .runtime-hero {
+        grid-template-columns: 1fr;
+    }
+    .overview-primary.has-journey {
         grid-template-columns: 1fr;
     }
     .runtime-actions {

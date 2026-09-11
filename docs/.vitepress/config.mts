@@ -73,6 +73,18 @@ const baseConfig = defineConfig({
                 nav: [
                     { text: "开始", link: "/guide/start", activeMatch: "/guide/" },
                     {
+                        text: "本地管理",
+                        activeMatch: "/local/",
+                        items: [
+                            { text: "管理方式概览", link: "/local/" },
+                            { text: "首次安装与工作台", link: "/local/first-run" },
+                            { text: "CLI 命令索引", link: "/local/cli" },
+                            { text: "系统服务", link: "/local/service" },
+                            { text: "备份、升级与恢复", link: "/local/maintenance" },
+                            { text: "诊断与常见故障", link: "/local/troubleshooting" }
+                        ]
+                    },
+                    {
                         text: "配置",
                         items: [
                             { text: "全局配置", link: "/config/global" },
@@ -139,6 +151,14 @@ const baseConfig = defineConfig({
                     }
                 ],
                 sidebar: {
+                    "/local/": [
+                        { text: "管理方式概览", link: "/local/" },
+                        { text: "首次安装与工作台", link: "/local/first-run" },
+                        { text: "CLI 命令索引", link: "/local/cli" },
+                        { text: "系统服务", link: "/local/service" },
+                        { text: "备份、升级与恢复", link: "/local/maintenance" },
+                        { text: "诊断与常见故障", link: "/local/troubleshooting" }
+                    ],
                     "/guide/": [
                         { text: `准备工作`, link: "/guide/prepare" },
                         { text: `快速开始`, link: "/guide/start" },

@@ -53,6 +53,7 @@ import {
 import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
 import { connectWindowsManagerRPC } from "../windows-manager-rpc.js";
 import { createControlRequestHandler } from "./host-http.js";
+import { ControlTerminalService } from "./terminal-service.js";
 export type { ControlHostOptions } from "./host-options.js";
 export async function startControlHost(options: ControlHostOptions) {
     if (
@@ -297,6 +298,16 @@ export async function startControlHost(options: ControlHostOptions) {
         forward: (instanceId, action) => driver.messageDebug(instanceId, action),
     });
     const messageDebugHttp = new ControlMessageDebugHttp(messageDebug, auth);
+    const terminal = new ControlTerminalService({
+        workspace,
+        manager: { id, version: packageMetadata.version },
+        available: () =>
+            !closed &&
+            authAvailable &&
+            ownershipAvailable &&
+            !storageError &&
+            !serviceMigrationStatus(workspace).pending,
+    });
     let server: http.Server;
     const handle = createControlRequestHandler({
         workspace,
@@ -324,6 +335,7 @@ export async function startControlHost(options: ControlHostOptions) {
         releaseUpgrade,
         upgradeIdentity,
         publisher,
+        terminal,
         activeAddress,
         respondSnapshot,
         serverAddress: () => server.address(),
@@ -347,6 +359,7 @@ export async function startControlHost(options: ControlHostOptions) {
     local.keepAliveTimeout = 0;
     server.on("upgrade", (req, socket, head) => {
         try {
+            if (terminal.handleUpgrade(req, socket, head)) return;
             if (new URL(req.url ?? "/", "http://localhost").pathname.startsWith("/api/")) {
                 socket.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
                 return;
@@ -387,6 +400,7 @@ export async function startControlHost(options: ControlHostOptions) {
         if (windowsRpcReconnect) clearTimeout(windowsRpcReconnect);
         if (windowsStatusHeartbeat) clearInterval(windowsStatusHeartbeat);
         messageDebugHttp.close();
+        terminal.close();
         const verificationClosed = verification.close();
         messageDebug.close();
         await activationVerification.close();

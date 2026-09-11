@@ -35,7 +35,7 @@ describe.skipIf(process.platform !== "darwin")("保留旧 Node 运行时", () =>
         const executable = path.join(receipt.tree.root, "node");
         fs.chmodSync(executable, 0o600);
         await expect(verifyLegacyNodeRuntime(receipt)).rejects.toThrow();
-    }, 60_000);
+    }, 180_000);
     it("非原生可执行文件不能通过静态检查或被运行", async () => {
         const test = fixture();
         const marker = path.join(test.root, "executed");

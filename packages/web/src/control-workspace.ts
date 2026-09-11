@@ -4,10 +4,17 @@ import {
     IconLayoutDashboard,
     IconPackage,
     IconSettings,
+    IconTerminal2,
     type Icon,
 } from "@tabler/icons-vue";
 
-export type Workspace = "overview" | "extensions" | "configuration" | "activity" | "access";
+export type Workspace =
+    | "overview"
+    | "extensions"
+    | "configuration"
+    | "activity"
+    | "terminal"
+    | "access";
 
 export interface WorkspaceNavigationItem {
     id: Workspace;
@@ -21,6 +28,7 @@ export const workspaceNavigation: WorkspaceNavigationItem[] = [
     { id: "extensions", label: "安装与扩展", hint: "选择平台、协议与框架", icon: IconPackage },
     { id: "configuration", label: "账号与协议", hint: "管理账号与协议出口", icon: IconSettings },
     { id: "activity", label: "运行与诊断", hint: "验证、消息和日志", icon: IconActivity },
+    { id: "terminal", label: "本地终端", hint: "管理工作区命令", icon: IconTerminal2 },
     { id: "access", label: "设备与访问", hint: "管理已授权设备", icon: IconKey },
 ];
 

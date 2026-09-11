@@ -57,7 +57,7 @@ const descriptions: Record<
         :class="{ compact, complete: journey.state === 'running' }"
         :aria-labelledby="headingId">
         <div class="setup-journey-copy">
-            <p class="eyebrow">{{ descriptions[journey.state].eyebrow }}</p>
+            <p class="setup-journey-stage">{{ descriptions[journey.state].eyebrow }}</p>
             <h2 :id="headingId">{{ descriptions[journey.state].title }}</h2>
             <p>{{ descriptions[journey.state].body }}</p>
             <UiButton

@@ -1,0 +1,165 @@
+.terminal-workspace {
+    display: flex;
+    min-height: calc(100dvh - 10rem);
+    flex-direction: column;
+}
+
+.terminal-state {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: 0.3rem;
+    color: var(--fg-secondary);
+    padding: 0.38rem 0.6rem;
+    font-size: 0.7rem;
+}
+
+.terminal-state i {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 50%;
+    background: var(--fg-tertiary);
+}
+
+.terminal-state.ready {
+    color: var(--success);
+}
+
+.terminal-state.ready i {
+    background: var(--success);
+}
+
+.terminal-state.checking i,
+.terminal-state.connecting i {
+    background: var(--warning);
+    animation: terminal-pulse 1.2s ease-in-out infinite;
+}
+
+.terminal-state.error,
+.terminal-state.unavailable {
+    color: var(--danger);
+}
+
+.terminal-state.error i,
+.terminal-state.unavailable i {
+    background: var(--danger);
+}
+
+@keyframes terminal-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+
+.terminal-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    border-radius: 0.45rem 0.45rem 0 0;
+    background: var(--surface);
+    padding: 0.75rem 0.85rem;
+}
+
+.terminal-toolbar > div:first-child {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+.terminal-toolbar > div:first-child > span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.terminal-toolbar strong {
+    overflow: hidden;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 550;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.terminal-toolbar small,
+.terminal-session-count {
+    color: var(--fg-tertiary);
+    font-size: 0.66rem;
+}
+
+.terminal-frame {
+    position: relative;
+    min-height: 28rem;
+    flex: 1;
+    overflow: hidden;
+    border: 1px solid #26322b;
+    border-radius: 0 0 0.45rem 0.45rem;
+    background: #101412;
+    padding: 0.7rem;
+}
+
+.terminal-canvas {
+    width: 100%;
+    height: 100%;
+    min-height: 27rem;
+}
+
+.terminal-frame.disabled .terminal-canvas {
+    opacity: 0.2;
+}
+
+.terminal-unavailable {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    gap: 0.45rem;
+    color: #d7ded9;
+    padding: 2rem;
+    text-align: center;
+}
+
+.terminal-unavailable p {
+    max-width: 34rem;
+    color: #89978e;
+    font-size: 0.78rem;
+}
+
+.terminal-unavailable code {
+    width: max-content;
+    margin: 0.3rem auto 0;
+    background: #1b241f;
+    color: #8dd0ac;
+}
+
+.terminal-safety {
+    margin-top: 0.65rem;
+    color: var(--fg-tertiary);
+    font-size: 0.68rem;
+}
+
+@media (max-width: 640px) {
+    .terminal-workspace {
+        min-height: calc(100dvh - 9rem);
+    }
+    .terminal-toolbar {
+        flex-wrap: wrap;
+    }
+    .terminal-toolbar > div:first-child {
+        flex-basis: 100%;
+    }
+    .terminal-session-count {
+        margin-right: auto;
+    }
+    .terminal-frame {
+        min-height: 24rem;
+    }
+    .terminal-canvas {
+        min-height: 23rem;
+    }
+}

@@ -9,13 +9,13 @@ import { describe, expect, test } from "vitest";
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 describe("Docker 构建上下文", () => {
-    test("标准镜像不再安装旧终端原生依赖，同时保留平台可选构建依赖", async () => {
+    test("标准镜像把本地终端保持为可降级能力，同时保留平台可选构建依赖", async () => {
         const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
         const metadata = JSON.parse(
             await readFile(resolve(repositoryRoot, "packages/onebots/package.json"), "utf8"),
         );
         expect(metadata.dependencies).not.toHaveProperty("@karinjs/node-pty");
-        expect(metadata.optionalDependencies ?? {}).not.toHaveProperty("@karinjs/node-pty");
+        expect(metadata.optionalDependencies ?? {}).toHaveProperty("@karinjs/node-pty");
         const installation = dockerfile
             .split(/\r?\n/)
             .find(line => line.startsWith("RUN pnpm install"));

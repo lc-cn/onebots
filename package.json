@@ -132,6 +132,7 @@
       "vitepress>@vitejs/plugin-vue": "^6.0.8"
     },
     "onlyBuiltDependencies": [
+      "@karinjs/node-pty",
       "esbuild",
       "protobufjs"
     ]

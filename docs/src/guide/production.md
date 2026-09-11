@@ -116,6 +116,10 @@ onebots recover --operation <operation-id>
 
 ## 相关文档
 
+- [本地管理](/local/)
+- [系统服务](/local/service)
+- [备份、升级与恢复](/local/maintenance)
+- [CLI 命令索引](/local/cli)
 - [全局配置](/config/global)
 - [Docker 部署](/guide/docker)
 - [故障排查](/troubleshooting/)

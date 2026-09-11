@@ -111,28 +111,24 @@ const nextActionDisabled = computed(() => {
 const workspaces = computed(() => [
     {
         id: "accounts" as const,
-        index: "01",
         label: "平台账号",
         detail: `${accounts.value.length} 个账号`,
         icon: IconRobot,
     },
     {
         id: "protocols" as const,
-        index: "02",
         label: "协议出口",
         detail: `${layout.value.protocols.length} 项配置`,
         icon: IconPlugConnected,
     },
     {
         id: "runtime" as const,
-        index: "03",
         label: "运行设置",
         detail: "服务与加载参数",
         icon: IconAdjustments,
     },
     {
         id: "review" as const,
-        index: "04",
         label: "确认应用",
         detail: nextAction.value.label,
         icon: IconCheck,
@@ -183,9 +179,8 @@ async function runNextAction() {
     <section class="configuration-workspace">
         <header class="configuration-header">
             <div>
-                <p class="configuration-kicker">CONFIGURATION DRAFT</p>
-                <h2>配置工作台</h2>
-                <p>按步骤完成账号、出口和运行参数；所有修改经过校验后才会生效。</p>
+                <h2>配置草稿</h2>
+                <p>先编辑配置，再依次保存、校验和应用。运行中的版本不会被直接覆盖。</p>
             </div>
             <UiButton :disabled="busy" @click="reloadWithConfirmation">{{
                 dirty ? "放弃修改并重读" : "重新读取"
@@ -212,7 +207,6 @@ async function runNextAction() {
             v-if="snapshot && (!draft || staleBase) && !tracking.operationId"
             class="configuration-start-card">
             <div>
-                <p class="configuration-kicker">CURRENT SNAPSHOT</p>
                 <h3>当前有 {{ accounts.length }} 个平台账号</h3>
                 <p>创建草稿后才能编辑；创建动作不会改变正在运行的网关。</p>
             </div>
@@ -250,8 +244,7 @@ async function runNextAction() {
                     :tabindex="workspace === item.id ? 0 : -1"
                     :class="{ active: workspace === item.id }"
                     @click="workspace = item.id">
-                    <span>{{ item.index }}</span
-                    ><component :is="item.icon" :size="18" aria-hidden="true" />
+                    <component :is="item.icon" :size="18" aria-hidden="true" />
                     <div>
                         <strong>{{ item.label }}</strong
                         ><small>{{ item.detail }}</small>

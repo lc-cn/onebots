@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { ControlClient } from "@onebots/core/control";
-import { IconKey } from "@tabler/icons-vue";
 import ControlSessionsPanel from "../components/ControlSessionsPanel.vue";
 import UiButton from "../ui/UiButton.vue";
 
@@ -12,11 +11,9 @@ const emit = defineEmits<{ logout: []; reconnect: []; revokedSelf: [] }>();
     <section class="workspace-view" aria-labelledby="access-title">
         <header class="page-heading">
             <div>
-                <p class="eyebrow">TRUSTED DEVICES</p>
                 <h1 id="access-title">设备与访问</h1>
                 <p>查看当前授权设备，撤销不再使用的管理会话。</p>
             </div>
-            <IconKey :size="28" aria-hidden="true" />
         </header>
         <div class="access-layout">
             <ControlSessionsPanel

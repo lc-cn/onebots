@@ -32,6 +32,8 @@ import { gatewayProcessExists } from "./workspace.js";
 import { readBody, jsonResponse as json } from "./http-utils.js";
 import { serveControlWeb } from "./web-assets.js";
 import { proxyGatewayHttp, type GatewayProxyAddress } from "./proxy.js";
+import type { ControlTerminalService } from "./terminal-service.js";
+import { handleTerminalHttp, isTerminalHttpPath } from "./terminal-http.js";
 
 interface ControlRequestHandlerOptions {
     workspace: string;
@@ -57,6 +59,7 @@ interface ControlRequestHandlerOptions {
     releaseUpgrade: ReturnType<typeof createManagerUpgradeRelease>;
     upgradeIdentity: ReturnType<typeof createManagerUpgradeIdentity>;
     publisher: WindowsManagerStatusPublisher | undefined;
+    terminal: ControlTerminalService;
     activeAddress: () => GatewayProxyAddress | undefined;
     respondSnapshot: (
         response: ServerResponse,
@@ -188,6 +191,10 @@ export function createControlRequestHandler(options: ControlRequestHandlerOption
                     )
                 )
                     return;
+                if (isTerminalHttpPath(pathname)) {
+                    handleTerminalHttp(options.terminal, request, response, pathname, local);
+                    return;
+                }
                 if (await options.verification.handle(request, response, pathname, local)) return;
                 if (await options.messageDebugHttp.handle(request, response, pathname, local))
                     return;

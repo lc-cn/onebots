@@ -37,27 +37,21 @@ function unselect(name: string) {
 </script>
 
 <template>
-    <fieldset
-        :disabled="disabled"
-        class="border border-border rounded-panel p-4 bg-surface space-y-4">
-        <legend class="px-1 text-sm font-medium">平台适配器</legend>
-        <div class="flex flex-wrap items-end justify-between gap-3">
-            <label class="block min-w-64 flex-1 space-y-1.5 text-sm">
-                <span class="text-fg-secondary">搜索平台、能力或依赖</span>
+    <fieldset :disabled="disabled" class="adapter-catalog">
+        <legend>平台适配器</legend>
+        <div class="adapter-catalog-toolbar">
+            <label>
+                <span>搜索平台、能力或依赖</span>
                 <input
                     v-model="query"
                     type="search"
                     placeholder="例如 Telegram、send_message、read:packages"
-                    class="w-full rounded-control border border-border bg-bg px-3 py-2" />
+                    class="adapter-catalog-search" />
             </label>
-            <p class="text-xs text-fg-muted">
-                共 {{ entries.length }} 个适配器，无需先创建 Bot 即可浏览
-            </p>
+            <p>共 {{ entries.length }} 个适配器，无需先创建 Bot 即可浏览</p>
         </div>
 
-        <div
-            v-if="selectedEntries.length"
-            class="rounded-control border border-border bg-surface-raised p-3">
+        <div v-if="selectedEntries.length" class="adapter-catalog-selected">
             <p class="text-xs font-medium text-fg-secondary">
                 已选 {{ selectedEntries.length }} 个平台
             </p>
@@ -66,7 +60,7 @@ function unselect(name: string) {
                     v-for="entry in selectedEntries"
                     :key="entry.name"
                     type="button"
-                    class="rounded-full border border-border bg-surface px-2.5 py-1 text-xs hover:border-accent"
+                    class="adapter-selected-item"
                     :aria-label="`取消选择 ${entry.displayName}`"
                     @click="unselect(entry.name)">
                     {{ entry.displayName }} ×
@@ -74,17 +68,14 @@ function unselect(name: string) {
             </div>
         </div>
 
-        <div v-if="groups.length" class="space-y-5">
-            <section v-for="group in groups" :key="group.key" class="space-y-3">
+        <div v-if="groups.length" class="adapter-catalog-groups">
+            <section v-for="group in groups" :key="group.key" class="adapter-group">
                 <header>
                     <h3 class="text-sm font-medium">{{ group.label }}</h3>
                     <p class="mt-1 text-xs text-fg-muted">{{ group.description }}</p>
                 </header>
-                <div class="grid gap-3 lg:grid-cols-2">
-                    <article
-                        v-for="entry in group.entries"
-                        :key="entry.name"
-                        class="rounded-control border border-border bg-surface-raised p-3.5">
+                <div class="adapter-list">
+                    <article v-for="entry in group.entries" :key="entry.name" class="adapter-row">
                         <label
                             :for="`adapter-${entry.name}`"
                             class="flex min-h-11 cursor-pointer items-start gap-3">
@@ -105,22 +96,22 @@ function unselect(name: string) {
                                 <p class="mt-1.5 text-xs leading-5 text-fg-secondary">
                                     {{ entry.description || "此管理服务未提供适配器说明。" }}
                                 </p>
-                                <div class="mt-3 flex flex-wrap gap-1.5">
+                                <div class="adapter-capability-summary">
                                     <span
                                         v-for="category in categories"
                                         :key="category.key"
-                                        class="rounded-full border border-border px-2 py-0.5 text-[0.68rem] text-fg-secondary">
+                                        class="adapter-capability-value">
                                         {{ category.label }}
                                         {{ supportedCount(entry, category.key) ?? "—" }}
                                     </span>
                                     <span
                                         v-if="entry.peerDependencies?.length"
-                                        class="rounded-full border border-border px-2 py-0.5 text-[0.68rem] text-fg-secondary">
+                                        class="adapter-capability-value">
                                         必需依赖 {{ entry.peerDependencies.length }}
                                     </span>
                                     <span
                                         v-if="entry.requirements?.length"
-                                        class="rounded-full border border-warning/40 px-2 py-0.5 text-[0.68rem] text-warning">
+                                        class="adapter-capability-value warning">
                                         需下载授权
                                     </span>
                                 </div>

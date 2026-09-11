@@ -1,51 +1,110 @@
-.workflow-rail {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin-bottom: 1rem;
-    overflow: hidden;
+.adapter-catalog {
     border: 1px solid var(--border);
-    border-radius: 0.8rem;
+    border-radius: 0.4rem;
     background: var(--surface);
+    padding: 1rem;
 }
-.workflow-rail li {
-    display: grid;
-    min-width: 0;
-    grid-template-columns: 2rem minmax(0, 1fr);
-    gap: 0.65rem;
-    align-items: center;
-    padding: 0.85rem 1rem;
+.adapter-catalog > legend {
+    padding: 0 0.3rem;
+    font-size: 0.82rem;
+    font-weight: 620;
 }
-.workflow-rail li + li {
-    border-left: 1px solid var(--border);
-}
-.workflow-rail li > span {
-    color: var(--accent);
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    font-weight: 650;
-}
-.workflow-rail li > div {
+.adapter-catalog-toolbar {
     display: flex;
-    min-width: 0;
-    flex-direction: column;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--border);
 }
-.workflow-rail strong {
-    font-size: 0.77rem;
-    font-weight: 590;
+.adapter-catalog-toolbar > label {
+    display: grid;
+    min-width: 16rem;
+    flex: 1;
+    gap: 0.35rem;
+    color: var(--fg-secondary);
+    font-size: 0.72rem;
 }
-.workflow-rail small {
-    margin-top: 0.1rem;
-    overflow: hidden;
+.adapter-catalog-toolbar > p {
     color: var(--fg-tertiary);
     font-size: 0.68rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+}
+.adapter-catalog-search {
+    width: 100%;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.3rem;
+    background: var(--bg);
+    padding: 0.55rem 0.7rem;
+}
+.adapter-catalog-selected {
+    margin-top: 0.8rem;
+    border-left: 2px solid var(--accent);
+    background: var(--surface-raised);
+    padding: 0.7rem 0.8rem;
+}
+.adapter-selected-item {
+    border: 0;
+    border-bottom: 1px solid var(--border-strong);
+    color: var(--fg-secondary);
+    padding: 0.25rem 0;
+    font-size: 0.72rem;
+}
+.adapter-catalog-groups {
+    display: grid;
+    gap: 1.25rem;
+    margin-top: 1rem;
+}
+.adapter-group > header {
+    margin-bottom: 0.55rem;
+}
+.adapter-list {
+    border: 1px solid var(--border);
+    border-radius: 0.35rem;
+}
+.adapter-row {
+    padding: 0.85rem 0.9rem;
+    background: var(--surface);
+}
+.adapter-row + .adapter-row {
+    border-top: 1px solid var(--border);
+}
+.adapter-row:has(input:checked) {
+    box-shadow: inset 3px 0 0 var(--accent);
+    background: var(--accent-soft);
+}
+@media (min-width: 1400px) {
+    .adapter-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1px;
+        border: 0;
+        background: var(--border);
+    }
+    .adapter-row,
+    .adapter-row + .adapter-row {
+        min-width: 0;
+        border: 0;
+    }
+}
+.adapter-capability-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.55rem;
+}
+.adapter-capability-value {
+    color: var(--fg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+}
+.adapter-capability-value.warning {
+    color: var(--warning);
 }
 .operations-workbench {
     --panel-inset: color-mix(in srgb, var(--surface-raised) 72%, var(--surface));
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1.25rem;
+    grid-template-columns: minmax(19rem, 0.82fr) minmax(26rem, 1.18fr);
+    gap: 1rem;
     align-items: start;
     margin-bottom: 1.25rem;
 }
@@ -53,9 +112,9 @@
 .live-logs-panel {
     min-width: 0;
     border: 1px solid var(--border) !important;
-    border-radius: 0.8rem !important;
+    border-radius: 0.45rem !important;
     background: var(--surface) !important;
-    padding: 1.35rem !important;
+    padding: 1.2rem !important;
 }
 .diagnostic-panel-header {
     display: grid;
@@ -76,10 +135,9 @@
 }
 .diagnostic-panel-kicker {
     color: var(--fg-tertiary);
-    font-family: var(--font-mono);
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     font-weight: 650;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.01em;
 }
 .diagnostic-toolbar {
     display: flex;
@@ -95,7 +153,7 @@
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.65rem;
-    border-radius: 0.65rem;
+    border-radius: 0.3rem;
     background: var(--panel-inset);
     padding: 0.8rem;
     font-size: 0.75rem;
@@ -114,6 +172,29 @@
     gap: 0;
     overflow: hidden;
     padding: 0 !important;
+}
+
+@media (min-width: 901px) {
+    .operations-view {
+        display: grid;
+        height: calc(100dvh - 8.25rem);
+        min-height: 0;
+        grid-template-rows: auto auto minmax(18rem, 1fr);
+    }
+    .operations-view .live-logs-panel {
+        min-height: 0;
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+    }
+    .operations-view .log-console {
+        display: grid;
+        min-height: 0;
+        grid-template-rows: auto minmax(0, 1fr);
+        overflow: hidden;
+    }
+    .operations-view .log-console pre {
+        min-height: 0;
+        max-height: none;
+    }
 }
 .live-logs-header {
     display: flex;
@@ -142,7 +223,7 @@
     align-items: center;
     gap: 0.42rem;
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 0.3rem;
     color: var(--fg-secondary);
     padding: 0.34rem 0.62rem;
     font-family: var(--font-mono);
@@ -339,13 +420,6 @@
 }
 
 @media (max-width: 700px) {
-    .workflow-rail {
-        grid-template-columns: 1fr;
-    }
-    .workflow-rail li + li {
-        border-top: 1px solid var(--border);
-        border-left: 0;
-    }
     .operations-workbench,
     .message-filter-grid {
         grid-template-columns: 1fr;

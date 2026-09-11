@@ -83,7 +83,8 @@ function fixture() {
             { id: "web", status: "pass", message: "管理端可用" },
         ],
     );
-    const deps = { inspectDiagnostics, inspectService, probe };
+    const inspectTerminal = vi.fn(async () => true);
+    const deps = { inspectDiagnostics, inspectService, probe, inspectTerminal };
     function service() {
         const files = getServiceFiles("user", host);
         fs.mkdirSync(files.stateDir, { recursive: true, mode: 0o700 });
@@ -106,6 +107,15 @@ function fixture() {
     return { root, workspace, host, diagnostics, deps, service };
 }
 describe("manager doctor read-only diagnostics", () => {
+    it("原生终端缺失只给出可操作警告，不把管理服务误报为失败", async () => {
+        const f = fixture();
+        f.deps.inspectTerminal.mockResolvedValue(false);
+        const report = await runManagerDoctor({ dataDir: f.workspace }, f.host, f.deps);
+        expect(report.exitCode).toBe(0);
+        expect(report.checks).toContainEqual(
+            expect.objectContaining({ id: "local-terminal", status: "warn" }),
+        );
+    });
     it("an empty uninitialized database is not an unverified existing database", async () => {
         const f = fixture();
         const report = await runManagerDoctor(
