@@ -16,9 +16,9 @@
     overflow: hidden;
     padding: clamp(2rem, 4vw, 3.25rem);
     background:
-        radial-gradient(circle at 18% 16%, rgba(124, 98, 255, 0.45), transparent 20rem),
-        radial-gradient(circle at 92% 80%, rgba(37, 190, 220, 0.3), transparent 24rem),
-        #151128;
+        linear-gradient(145deg, rgba(25, 20, 51, 0.74), rgba(31, 39, 75, 0.58)),
+        radial-gradient(circle at 18% 16%, rgba(124, 98, 255, 0.32), transparent 20rem),
+        url("../assets/anime-sea-background.webp") center / cover no-repeat;
     color: #f4f4f5;
 }
 
@@ -168,6 +168,14 @@
     height: 100dvh;
     grid-template-columns: 16rem minmax(0, 1fr);
     overflow: hidden;
+    background:
+        linear-gradient(135deg, rgba(246, 244, 255, 0.26), rgba(236, 246, 255, 0.42)),
+        url("../assets/anime-sea-background.webp") center / cover no-repeat fixed;
+}
+.dark .console-shell {
+    background:
+        linear-gradient(135deg, rgba(28, 23, 50, 0.2), rgba(30, 32, 65, 0.34)),
+        url("../assets/anime-sea-background.webp") center / cover no-repeat fixed;
 }
 .sidebar {
     --sidebar-fg: #342d58;
@@ -180,7 +188,7 @@
     border-right: 1px solid var(--sidebar-border);
     background:
         radial-gradient(circle at 10% 8%, rgba(169, 143, 255, 0.25), transparent 13rem),
-        linear-gradient(180deg, rgba(246, 241, 255, 0.96), rgba(234, 242, 255, 0.9));
+        linear-gradient(180deg, rgba(246, 241, 255, 0.62), rgba(234, 242, 255, 0.5));
     -webkit-backdrop-filter: saturate(125%) blur(18px);
     backdrop-filter: saturate(125%) blur(18px);
     color: var(--sidebar-fg);
@@ -193,7 +201,7 @@
     --sidebar-border: rgba(225, 217, 255, 0.13);
     background:
         radial-gradient(circle at 8% 6%, rgba(166, 126, 255, 0.28), transparent 14rem),
-        linear-gradient(180deg, rgba(59, 48, 91, 0.94), rgba(41, 48, 82, 0.9));
+        linear-gradient(180deg, rgba(59, 48, 91, 0.52), rgba(41, 48, 82, 0.38));
 }
 .sidebar-brand {
     height: 4rem;
@@ -359,7 +367,7 @@
     align-items: center;
     justify-content: space-between;
     border-bottom: 1px solid var(--border);
-    background: color-mix(in srgb, var(--surface) 92%, #eeeaff);
+    background: color-mix(in srgb, var(--surface) 76%, transparent);
     -webkit-backdrop-filter: saturate(135%) blur(16px);
     backdrop-filter: saturate(135%) blur(16px);
     padding: 0 clamp(1.5rem, 2vw, 2.25rem);
@@ -404,10 +412,14 @@
     flex: 1;
     overflow-y: auto;
     background:
-        radial-gradient(circle at 18% -10%, rgba(146, 115, 255, 0.18), transparent 30rem),
-        radial-gradient(circle at 96% 12%, rgba(76, 193, 239, 0.16), transparent 28rem),
-        radial-gradient(circle at 72% 92%, rgba(244, 126, 180, 0.1), transparent 25rem),
-        var(--bg);
+        linear-gradient(135deg, rgba(248, 247, 255, 0.2), rgba(244, 248, 255, 0.42)),
+        radial-gradient(circle at 18% -10%, rgba(146, 115, 255, 0.16), transparent 30rem),
+        radial-gradient(circle at 96% 12%, rgba(76, 193, 239, 0.12), transparent 28rem);
+}
+.dark .workspace-scroll {
+    background:
+        linear-gradient(135deg, rgba(32, 27, 55, 0.12), rgba(34, 34, 65, 0.25)),
+        radial-gradient(circle at 18% -10%, rgba(146, 115, 255, 0.12), transparent 30rem);
 }
 .workspace {
     width: 100%;

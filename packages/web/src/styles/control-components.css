@@ -3,6 +3,8 @@
     border-radius: 0.85rem;
     background: var(--surface);
     padding: 1rem;
+    -webkit-backdrop-filter: saturate(120%) blur(12px);
+    backdrop-filter: saturate(120%) blur(12px);
 }
 .adapter-catalog > legend {
     padding: 0 0.3rem;

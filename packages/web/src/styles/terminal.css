@@ -61,6 +61,8 @@
     border-radius: 0.45rem 0.45rem 0 0;
     background: var(--surface);
     padding: 0.75rem 0.85rem;
+    -webkit-backdrop-filter: saturate(120%) blur(12px);
+    backdrop-filter: saturate(120%) blur(12px);
 }
 
 .terminal-toolbar > div:first-child {

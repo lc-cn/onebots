@@ -13,9 +13,9 @@
 :root {
     color-scheme: light;
     --bg: #f8f7ff;
-    --surface: rgba(255, 255, 255, 0.82);
-    --surface-raised: rgba(241, 240, 251, 0.78);
-    --surface-strong: rgba(229, 228, 244, 0.82);
+    --surface: rgba(255, 255, 255, 0.7);
+    --surface-raised: rgba(244, 243, 252, 0.58);
+    --surface-strong: rgba(235, 233, 248, 0.65);
     --border: rgba(91, 77, 151, 0.14);
     --border-strong: rgba(84, 70, 145, 0.24);
     --fg: #1d1b2e;
@@ -42,14 +42,14 @@
 .dark {
     color-scheme: dark;
     --bg: #211d35;
-    --surface: rgba(49, 43, 73, 0.78);
-    --surface-raised: rgba(64, 56, 93, 0.68);
-    --surface-strong: rgba(76, 67, 108, 0.72);
+    --surface: rgba(49, 43, 73, 0.68);
+    --surface-raised: rgba(64, 56, 93, 0.55);
+    --surface-strong: rgba(76, 67, 108, 0.6);
     --border: rgba(211, 204, 255, 0.14);
     --border-strong: rgba(218, 211, 255, 0.24);
     --fg: #f4f2fb;
-    --fg-secondary: #b2aec4;
-    --fg-tertiary: #77728e;
+    --fg-secondary: #d0cce0;
+    --fg-tertiary: #aaa4bf;
     --accent: #9a8cff;
     --accent-hover: #b1a7ff;
     --accent-fg: #171126;
