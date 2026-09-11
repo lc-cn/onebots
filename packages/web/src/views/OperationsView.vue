@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { ControlClient } from "@onebots/core/control";
-import { IconBell, IconBug, IconFileText } from "@tabler/icons-vue";
 import ControlLogsPanel from "../components/ControlLogsPanel.vue";
 import ControlMessageDebugPanel from "../components/ControlMessageDebugPanel.vue";
 import ControlVerificationPanel from "../components/ControlVerificationPanel.vue";
@@ -20,25 +19,20 @@ defineProps<{
             <div>
                 <p class="eyebrow">OPERATE & OBSERVE</p>
                 <h1 id="activity-title">运行与诊断</h1>
-                <p>处理账号验证、检查消息流，并读取管理服务与网关日志。</p>
-            </div>
-            <div class="heading-icons">
-                <IconBell :size="22" /><IconBug :size="22" /><IconFileText :size="22" />
+                <p>处理需要人工介入的账号验证，检查消息流，并实时观察服务输出。</p>
             </div>
         </header>
-        <div class="operations-summary">
-            <span><strong>验证</strong><small>处理平台登录挑战</small></span>
-            <span><strong>消息</strong><small>按需采集与筛选事件</small></span>
-            <span><strong>日志</strong><small>读取管理服务与网关输出</small></span>
-        </div>
-        <div class="panel-grid">
+        <div class="operations-workbench">
             <ControlVerificationPanel
                 :client="client"
                 :gateway-instance-id="gatewayInstanceId"
                 :active="active"
                 :mutation-block="mutationBlock" />
-            <ControlMessageDebugPanel :client="client" :gateway-instance-id="gatewayInstanceId" />
-            <ControlLogsPanel :client="client" />
+            <ControlMessageDebugPanel
+                :client="client"
+                :gateway-instance-id="gatewayInstanceId"
+                :active="active" />
         </div>
+        <ControlLogsPanel :client="client" :active="active" />
     </section>
 </template>

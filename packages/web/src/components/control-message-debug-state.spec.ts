@@ -18,13 +18,11 @@ const snapshot = (gatewayInstanceId = "first", seq = 1): ControlMessageDebugSnap
 function fixture() {
     const client = {
         messageDebugHistory: vi.fn().mockResolvedValue(snapshot()),
-        clearMessageDebug: vi
-            .fn()
-            .mockResolvedValue({
-                gatewayInstanceId: "first",
-                clearedCount: 1,
-                clearedThroughSeq: 1,
-            }),
+        clearMessageDebug: vi.fn().mockResolvedValue({
+            gatewayInstanceId: "first",
+            clearedCount: 1,
+            clearedThroughSeq: 1,
+        }),
     };
     const view = messageDebugView();
     const controller = new MessageDebugController(client, view);
@@ -55,6 +53,20 @@ describe("message debug view lifecycle", () => {
         expect(f.client.messageDebugHistory).toHaveBeenCalledTimes(2);
         f.controller.setAutomatic(false);
         await vi.advanceTimersByTimeAsync(5000);
+        expect(f.client.messageDebugHistory).toHaveBeenCalledTimes(2);
+        f.controller.dispose();
+    });
+    it("pauses automatic reads while the activity page is hidden", async () => {
+        vi.useFakeTimers();
+        const f = fixture();
+        f.controller.setAutomatic(true);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(f.client.messageDebugHistory).toHaveBeenCalledTimes(1);
+        f.controller.setActive(false);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(f.client.messageDebugHistory).toHaveBeenCalledTimes(1);
+        f.controller.setActive(true);
+        await vi.advanceTimersByTimeAsync(0);
         expect(f.client.messageDebugHistory).toHaveBeenCalledTimes(2);
         f.controller.dispose();
     });

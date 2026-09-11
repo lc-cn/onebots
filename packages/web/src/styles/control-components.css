@@ -24,19 +24,16 @@
     font-size: 0.68rem;
     font-weight: 650;
 }
-.workflow-rail li > div,
-.operations-summary > span {
+.workflow-rail li > div {
     display: flex;
     min-width: 0;
     flex-direction: column;
 }
-.workflow-rail strong,
-.operations-summary strong {
+.workflow-rail strong {
     font-size: 0.77rem;
     font-weight: 590;
 }
-.workflow-rail small,
-.operations-summary small {
+.workflow-rail small {
     margin-top: 0.1rem;
     overflow: hidden;
     color: var(--fg-tertiary);
@@ -44,19 +41,226 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.operations-summary {
+.operations-workbench {
+    --panel-inset: color-mix(in srgb, var(--surface-raised) 72%, var(--surface));
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    margin-bottom: 1rem;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: 0.8rem;
-    background: var(--border);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: start;
+    margin-bottom: 1.25rem;
 }
-.operations-summary > span {
+.operations-workbench > section,
+.live-logs-panel {
+    min-width: 0;
+    border: 1px solid var(--border) !important;
+    border-radius: 0.8rem !important;
+    background: var(--surface) !important;
+    padding: 1.35rem !important;
+}
+.diagnostic-panel-header {
+    display: grid;
+    gap: 0.7rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+.diagnostic-panel-header > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.diagnostic-panel-header > p {
+    max-width: 40rem;
+    color: var(--fg-secondary);
+    font-size: 0.79rem;
+    line-height: 1.65;
+}
+.diagnostic-panel-kicker {
+    color: var(--fg-tertiary);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 650;
+    letter-spacing: 0.1em;
+}
+.diagnostic-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+}
+.diagnostic-toolbar > span {
+    color: var(--fg-tertiary);
+    font-size: 0.72rem;
+}
+.message-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+    border-radius: 0.65rem;
+    background: var(--panel-inset);
+    padding: 0.8rem;
+    font-size: 0.75rem;
+}
+.message-filter-grid label {
+    color: var(--fg-secondary);
+}
+.message-filter-grid input,
+.message-filter-grid select {
+    margin-top: 0.3rem;
+    border-color: var(--border-strong) !important;
+    background: var(--bg) !important;
+}
+.live-logs-panel {
+    display: grid;
+    gap: 0;
+    overflow: hidden;
+    padding: 0 !important;
+}
+.live-logs-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.35rem 1.35rem 1.1rem;
+}
+.live-logs-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.3rem;
+    font-size: 1.15rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+.live-logs-header > div > p:last-child {
+    margin-top: 0.35rem;
+    color: var(--fg-secondary);
+    font-size: 0.79rem;
+}
+.log-stream-status {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.42rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--fg-secondary);
+    padding: 0.34rem 0.62rem;
+    font-family: var(--font-mono);
+    font-size: 0.64rem;
+}
+.log-stream-status i {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 50%;
+    background: var(--fg-tertiary);
+}
+.log-stream-status.connecting i {
+    background: var(--warning);
+    animation: log-pulse 1.2s ease-in-out infinite;
+}
+.log-stream-status.live {
+    border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+    color: var(--success);
+}
+.log-stream-status.live i {
+    background: var(--success);
+    box-shadow: 0 0 0 3px var(--success-soft);
+}
+.log-stream-status.error {
+    color: var(--danger);
+}
+.log-stream-status.error i {
+    background: var(--danger);
+}
+@keyframes log-pulse {
+    50% {
+        opacity: 0.35;
+    }
+}
+.log-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-block: 1px solid var(--border);
+    background: var(--surface-raised);
+}
+.log-tabs button {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.08rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--fg-secondary);
+    padding: 0.78rem 1rem 0.7rem;
+    text-align: left;
+}
+.log-tabs button + button {
+    border-left: 1px solid var(--border);
+}
+.log-tabs button:hover {
+    background: color-mix(in srgb, var(--surface) 55%, transparent);
+    color: var(--fg);
+}
+.log-tabs button[aria-selected="true"] {
+    border-bottom-color: var(--accent);
     background: var(--surface);
-    padding: 0.75rem 1rem;
+    color: var(--fg);
+}
+.log-tabs button span {
+    font-size: 0.79rem;
+    font-weight: 620;
+}
+.log-tabs button small {
+    overflow: hidden;
+    color: var(--fg-tertiary);
+    font-size: 0.66rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.log-console {
+    min-height: 22rem;
+    background: #101412;
+    color: #c7d8cd;
+}
+.log-console-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid rgba(199, 216, 205, 0.12);
+    color: rgba(199, 216, 205, 0.56);
+    padding: 0.58rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+}
+.log-console > p {
+    color: rgba(199, 216, 205, 0.66);
+    padding: 1.2rem;
+    font-size: 0.76rem;
+}
+.log-console pre {
+    max-height: 34rem;
+    overflow: auto;
+    margin: 0;
+    padding: 1rem 1.1rem 1.25rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.7rem;
+    line-height: 1.65;
+}
+.log-stream-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--danger) !important;
+}
+.log-safety-note {
+    border-top: 1px solid var(--border);
+    color: var(--fg-tertiary);
+    padding: 0.72rem 1.35rem;
+    font-size: 0.68rem;
 }
 
 .panel-stack,
@@ -135,12 +339,30 @@
 }
 
 @media (max-width: 700px) {
-    .workflow-rail,
-    .operations-summary {
+    .workflow-rail {
         grid-template-columns: 1fr;
     }
     .workflow-rail li + li {
         border-top: 1px solid var(--border);
         border-left: 0;
+    }
+    .operations-workbench,
+    .message-filter-grid {
+        grid-template-columns: 1fr;
+    }
+    .log-tabs {
+        display: flex;
+        overflow-x: auto;
+    }
+    .log-tabs button {
+        min-width: 10rem;
+    }
+    .live-logs-header,
+    .log-stream-error {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .log-console {
+        min-height: 18rem;
     }
 }

@@ -48,6 +48,8 @@ export {
 } from "./control-send.js";
 export interface ControlTransport {
     request<T>(method: "GET" | "POST", route: string, body?: unknown): Promise<T>;
+    /** Optional long-lived byte stream used by read-only control subscriptions. */
+    stream?(route: string, signal: AbortSignal): Promise<ReadableStream<Uint8Array>>;
 }
 
 export class ControlRequestError extends Error {
@@ -523,6 +525,36 @@ export function createHttpControlTransport(
                     data?.message ?? `控制请求失败 (${response.status})`,
                 );
             return data as T;
+        },
+        async stream(route: string, signal: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+            const response = await fetcher(`${baseUrl.replace(/\/$/, "")}${route}`, {
+                method: "GET",
+                headers: { Authorization: `Bearer ${token()}` },
+                cache: "no-store",
+                redirect: "error",
+                signal,
+            });
+            if (!response.ok || !response.body) {
+                let message = `控制请求失败 (${response.status})`;
+                try {
+                    const data: unknown = await response.json();
+                    if (
+                        data &&
+                        typeof data === "object" &&
+                        "message" in data &&
+                        typeof data.message === "string"
+                    )
+                        message = data.message;
+                } catch {
+                    // 非 JSON 错误响应只返回固定状态，不暴露服务端正文。
+                }
+                throw new ControlRequestError(response.status, message);
+            }
+            if (!(response.headers.get("content-type") ?? "").startsWith("text/event-stream")) {
+                await response.body.cancel();
+                throw new ControlRequestError(response.status, "控制流响应格式无效");
+            }
+            return response.body;
         },
     };
 }

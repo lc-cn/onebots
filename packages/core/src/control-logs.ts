@@ -16,6 +16,10 @@ export interface ControlLogQuery {
     cursor?: string;
 }
 
+export interface ControlLogStreamOptions {
+    signal?: AbortSignal;
+}
+
 export interface ControlLogBatch {
     schemaVersion: 1;
     source: ControlLogSource;
@@ -124,6 +128,67 @@ export class ControlLogClient {
             return { ...result, text: sanitizeLogText(result.text) };
         } catch {
             throw new Error("无法读取服务日志，请检查管理会话和服务状态。");
+        }
+    }
+    async *stream(
+        query: ControlLogQuery,
+        options: ControlLogStreamOptions = {},
+    ): AsyncGenerator<ControlLogBatch, void, void> {
+        if (
+            !controlLogSources.includes(query.source) ||
+            (query.cursor !== undefined && !isControlLogCursor(query.cursor))
+        )
+            throw new Error("日志查询参数无效。");
+        if (!this.transport.stream) throw new Error("当前控制连接不支持服务日志流。");
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        options.signal?.addEventListener("abort", abort, { once: true });
+        if (options.signal?.aborted) controller.abort();
+        let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+        try {
+            const parameters = new URLSearchParams({ source: query.source });
+            if (query.cursor) parameters.set("cursor", query.cursor);
+            const body = await this.transport.stream(
+                `/api/control/logs/stream?${parameters.toString()}`,
+                controller.signal,
+            );
+            reader = body.getReader();
+            const decoder = new TextDecoder();
+            let pending = "";
+            for (;;) {
+                const chunk = await reader.read();
+                if (chunk.done) break;
+                pending += decoder.decode(chunk.value, { stream: true });
+                if (pending.length > 196_608) throw new Error("invalid");
+                for (;;) {
+                    const boundary = pending.search(/\r?\n\r?\n/u);
+                    if (boundary < 0) break;
+                    const separator = pending.slice(boundary).match(/^\r?\n\r?\n/u)?.[0] ?? "\n\n";
+                    const frame = pending.slice(0, boundary);
+                    pending = pending.slice(boundary + separator.length);
+                    const lines = frame.split(/\r?\n/u);
+                    if (lines[0] !== "event: logs" || lines.length !== 2)
+                        throw new Error("invalid");
+                    const encoded = /^data: (.+)$/u.exec(lines[1] ?? "")?.[1];
+                    if (!encoded) throw new Error("invalid");
+                    const value: unknown = JSON.parse(encoded);
+                    if (!isControlLogBatch(value) || value.source !== query.source)
+                        throw new Error("invalid");
+                    yield { ...value, text: sanitizeLogText(value.text) };
+                }
+            }
+            if (pending + decoder.decode()) throw new Error("invalid");
+        } catch {
+            if (controller.signal.aborted) return;
+            throw new Error("服务日志流已断开，请检查管理会话和服务状态。");
+        } finally {
+            options.signal?.removeEventListener("abort", abort);
+            controller.abort();
+            try {
+                await reader?.cancel();
+            } catch {
+                // 关闭中的响应可能已释放 reader。
+            }
         }
     }
     async gateway(): Promise<ControlLogSnapshot> {

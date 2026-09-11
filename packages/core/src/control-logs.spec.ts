@@ -5,6 +5,7 @@ import {
     isControlLogSnapshot,
     sanitizeLogText,
 } from "./control-logs.js";
+import { createHttpControlTransport } from "./control.js";
 const snapshot = { source: "gateway", text: "hello", truncated: false, exists: true };
 describe("control logs", () => {
     it("accepts only the fixed bounded snapshot without getters or extra keys", () => {
@@ -92,5 +93,65 @@ describe("control logs", () => {
         request.mockResolvedValue({ ...snapshot, text: "a".repeat(65537) });
         await expect(new ControlLogClient({ request }).gateway()).rejects.not.toThrow("secret");
         expect(request).toHaveBeenCalledTimes(2);
+    });
+    it("parses bounded SSE batches and cancels the underlying stream when iteration stops", async () => {
+        const cancelled = vi.fn();
+        const bytes = new TextEncoder().encode(
+            'event: logs\ndata: {"schemaVersion":1,"source":"manager","text":"\\u001b[31mready","cursor":"0123456789abcdef.5","truncated":false,"exists":true,"reset":false}\n\n',
+        );
+        const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+                controller.enqueue(bytes.subarray(0, 17));
+                controller.enqueue(bytes.subarray(17));
+            },
+            cancel: cancelled,
+        });
+        let streamSignal: AbortSignal | undefined;
+        const stream = vi.fn(async (_route: string, signal: AbortSignal) => {
+            streamSignal = signal;
+            return body;
+        });
+        const client = new ControlLogClient({ request: vi.fn(), stream });
+        const subscription = client.stream({ source: "manager" });
+        expect(await subscription.next()).toEqual({
+            done: false,
+            value: {
+                schemaVersion: 1,
+                source: "manager",
+                text: "ready",
+                cursor: "0123456789abcdef.5",
+                truncated: false,
+                exists: true,
+                reset: false,
+            },
+        });
+        await subscription.return();
+        expect(stream).toHaveBeenCalledWith(
+            "/api/control/logs/stream?source=manager",
+            expect.any(AbortSignal),
+        );
+        expect(streamSignal?.aborted).toBe(true);
+        expect(cancelled).toHaveBeenCalledTimes(1);
+    });
+    it("HTTP stream passes bearer authentication and caller cancellation to fetch", async () => {
+        const body = new ReadableStream<Uint8Array>();
+        const fetcher = vi
+            .fn<typeof fetch>()
+            .mockResolvedValue(
+                new Response(body, { headers: { "Content-Type": "text/event-stream" } }),
+            );
+        const transport = createHttpControlTransport("http://localhost/", () => "session", fetcher);
+        const controller = new AbortController();
+        await transport.stream!("/api/control/logs/stream?source=gateway", controller.signal);
+        expect(fetcher).toHaveBeenCalledWith(
+            "http://localhost/api/control/logs/stream?source=gateway",
+            expect.objectContaining({
+                method: "GET",
+                headers: { Authorization: "Bearer session" },
+                signal: controller.signal,
+            }),
+        );
+        controller.abort();
+        expect(fetcher.mock.calls[0][1]?.signal?.aborted).toBe(true);
     });
 });

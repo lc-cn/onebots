@@ -47,17 +47,25 @@ const labels = {
     <section
         class="verification-panel space-y-4 rounded-panel border border-border bg-surface p-6"
         aria-labelledby="verification-title">
-        <h2 id="verification-title" class="text-lg font-medium">账号登录验证</h2>
-        <p class="text-sm text-fg-secondary">
-            按平台提示完成验证。答案仅用于本次提交；浏览器只保存操作编号。不要清除记录来绕过未知结果。
-        </p>
+        <header class="diagnostic-panel-header">
+            <div>
+                <p class="diagnostic-panel-kicker">ACTION REQUIRED</p>
+                <h2 id="verification-title" class="text-lg font-medium">账号验证</h2>
+            </div>
+            <p>
+                在这里处理平台发起的二维码、短信或确认挑战。答案只用于本次提交，浏览器仅保存操作编号。
+            </p>
+        </header>
         <p v-if="mutationBlock" role="alert" class="text-sm text-danger">
             {{ mutationBlock.title }}，验证请求保持只读；仍可刷新挑战和查询既有回执。
         </p>
         <p v-if="view.error" role="alert" class="text-danger">{{ view.error }}</p>
-        <UiButton :disabled="view.busy || !gatewayInstanceId" @click="controller.refresh()"
-            >刷新验证请求</UiButton
-        >
+        <div class="diagnostic-toolbar">
+            <UiButton :disabled="view.busy || !gatewayInstanceId" @click="controller.refresh()">{{
+                view.busy ? "刷新中…" : "刷新验证请求"
+            }}</UiButton>
+            <span>不会重复提交已有挑战</span>
+        </div>
         <p v-if="!gatewayInstanceId" class="text-sm text-fg-secondary">
             网关不可用，仍可查询下方已有操作回执。
         </p>

@@ -4,7 +4,7 @@ import type { ControlClient } from "@onebots/core/control";
 import UiButton from "../ui/UiButton.vue";
 import { MessageDebugController, messageDebugView } from "./control-message-debug-state";
 
-const props = defineProps<{ client: ControlClient; gatewayInstanceId?: string }>();
+const props = defineProps<{ client: ControlClient; gatewayInstanceId?: string; active: boolean }>();
 // 快照整体替换；不递归代理任意深度的 JSON 消息。
 const view = shallowReactive(messageDebugView());
 const controller = new MessageDebugController(props.client, view);
@@ -23,9 +23,10 @@ const entries = computed(() =>
     ),
 );
 watch(
-    () => props.gatewayInstanceId,
-    instanceId => {
+    [() => props.active, () => props.gatewayInstanceId],
+    ([active, instanceId]) => {
         controller.setGateway(instanceId);
+        controller.setActive(active);
     },
     { immediate: true },
 );
@@ -33,12 +34,16 @@ onUnmounted(() => controller.dispose());
 </script>
 
 <template>
-    <section class="border border-border rounded-panel p-6 bg-surface space-y-4">
-        <h2 class="text-lg font-medium">消息调试</h2>
-        <p class="text-sm text-fg-secondary">
-            查看当前网关最近 300 条双向消息。消息可能包含敏感信息；默认不自动读取。
-        </p>
-        <div class="flex flex-wrap gap-3 items-center">
+    <section
+        class="message-debug-panel border border-border rounded-panel p-6 bg-surface space-y-4">
+        <header class="diagnostic-panel-header">
+            <div>
+                <p class="diagnostic-panel-kicker">TRAFFIC INSPECTOR</p>
+                <h2 class="text-lg font-medium">消息调试</h2>
+            </div>
+            <p>按需读取当前网关最近 300 条双向消息，并按平台、账号或协议定位链路问题。</p>
+        </header>
+        <div class="diagnostic-toolbar">
             <UiButton
                 :disabled="!gatewayInstanceId || view.loading || view.clearing"
                 @click="controller.refresh()"
@@ -65,7 +70,7 @@ onUnmounted(() => controller.dispose());
         <p v-if="view.loading || view.clearing" role="status" class="text-sm text-fg-secondary">
             {{ view.clearing ? "正在清空…" : "正在读取…" }}
         </p>
-        <div class="grid sm:grid-cols-2 gap-3 text-sm">
+        <div class="message-filter-grid">
             <label
                 >方向
                 <select

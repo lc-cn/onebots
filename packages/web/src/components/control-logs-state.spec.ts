@@ -1,78 +1,117 @@
 import { describe, expect, it, vi } from "vitest";
+import type {
+    ControlLogBatch,
+    ControlLogQuery,
+    ControlLogStreamOptions,
+} from "@onebots/core/control";
 import { LogController, logView } from "./control-logs-state";
-const snapshot = {
-    schemaVersion: 1 as const,
-    source: "gateway" as const,
-    text: "secret",
+
+const batch = (source: ControlLogQuery["source"], text = "line\n"): ControlLogBatch => ({
+    schemaVersion: 1,
+    source,
+    text,
     exists: true,
     truncated: false,
     cursor: "0123456789abcdef.6",
     reset: false,
-};
-describe("manual unified log view", () => {
-    it("reads only manually, strips escapes and clears previous content on failure", async () => {
-        const query = vi.fn().mockResolvedValue({ ...snapshot, text: "\x1b[2Jsecret" });
-        const view = logView();
-        const controller = new LogController({ logs: { query } }, view);
-        expect(query).not.toHaveBeenCalled();
-        await controller.refresh();
-        expect(query).toHaveBeenCalledWith({ source: "gateway" });
-        expect(view.snapshot?.text).toBe("secret");
-        query.mockRejectedValue(new Error("credential leak"));
-        const pending = controller.refresh();
-        expect(view.snapshot).toBeUndefined();
-        await pending;
-        expect(view.error).not.toContain("credential");
-        expect(view.snapshot).toBeUndefined();
+});
+
+function liveStream(
+    calls: Array<{ query: ControlLogQuery; signal: AbortSignal }>,
+    text = "line\n",
+) {
+    return vi.fn(async function* (query: ControlLogQuery, options: ControlLogStreamOptions = {}) {
+        const signal = options.signal ?? new AbortController().signal;
+        calls.push({ query, signal });
+        yield batch(query.source, text);
+        await new Promise<void>(resolve => signal.addEventListener("abort", () => resolve()));
     });
-    it("suppresses duplicate reads and discards late results after client changes", async () => {
-        let finish!: (value: typeof snapshot) => void;
-        const query = vi.fn().mockReturnValue(
-            new Promise(resolve => {
-                finish = resolve;
-            }),
-        );
+}
+
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+describe("live unified log view", () => {
+    it("connects only while active and physically aborts when the page is hidden", async () => {
+        const calls: Array<{ query: ControlLogQuery; signal: AbortSignal }> = [];
+        const stream = liveStream(calls);
         const view = logView();
-        const controller = new LogController({ logs: { query } }, view);
-        const pending = controller.refresh();
-        await controller.refresh();
-        expect(query).toHaveBeenCalledTimes(1);
-        const next = vi.fn().mockResolvedValue({ ...snapshot, text: "new device" });
-        controller.setClient({ logs: { query: next } });
-        expect(next).not.toHaveBeenCalled();
-        finish(snapshot);
-        await pending;
-        expect(view.snapshot).toBeUndefined();
-        await controller.refresh();
-        expect(view.snapshot?.text).toBe("new device");
+        const controller = new LogController({ logs: { stream } }, view);
+        expect(stream).not.toHaveBeenCalled();
+        controller.setActive(true);
+        await settle();
+        expect(calls[0].query).toEqual({ source: "gateway" });
+        expect(view.sources.gateway.status).toBe("live");
+        controller.setActive(false);
+        expect(calls[0].signal.aborted).toBe(true);
+        expect(view.sources.gateway.status).toBe("paused");
         controller.dispose();
-        expect(view.snapshot).toBeUndefined();
-        await controller.refresh();
-        expect(next).toHaveBeenCalledTimes(1);
     });
-    it("discards in-flight content when authorization view is unmounted", async () => {
-        let finish!: (value: typeof snapshot) => void;
-        const query = vi.fn().mockReturnValue(
-            new Promise(resolve => {
-                finish = resolve;
-            }),
-        );
+
+    it("aborts the previous tab before connecting the selected source", async () => {
+        const calls: Array<{ query: ControlLogQuery; signal: AbortSignal }> = [];
         const view = logView();
-        const controller = new LogController({ logs: { query } }, view);
-        const pending = controller.refresh();
+        const controller = new LogController({ logs: { stream: liveStream(calls) } }, view);
+        controller.setActive(true);
+        await settle();
+        controller.setSource("manager");
+        await settle();
+        expect(calls[0].signal.aborted).toBe(true);
+        expect(calls[1].query).toEqual({ source: "manager" });
+        expect(view.sources.gateway.snapshot?.text).toBe("line\n");
+        expect(view.sources.manager.snapshot?.text).toBe("line\n");
         controller.dispose();
-        finish(snapshot);
-        await pending;
-        expect(view).toEqual(logView());
     });
-    it("clears prior content when the operator changes sources", async () => {
-        const query = vi.fn().mockResolvedValue(snapshot);
+
+    it("resumes a visited tab from its opaque cursor and sanitizes appended text", async () => {
+        const calls: Array<{ query: ControlLogQuery; signal: AbortSignal }> = [];
         const view = logView();
-        const controller = new LogController({ logs: { query } }, view);
-        await controller.refresh();
-        controller.setSource("operation");
-        expect(view.snapshot).toBeUndefined();
-        await controller.refresh();
-        expect(query).toHaveBeenLastCalledWith({ source: "operation" });
+        const controller = new LogController(
+            { logs: { stream: liveStream(calls, "\u001b[2Jsecret\n") } },
+            view,
+        );
+        controller.setActive(true);
+        await settle();
+        controller.setSource("manager");
+        await settle();
+        controller.setSource("gateway");
+        await settle();
+        expect(calls[2].query).toEqual({
+            source: "gateway",
+            cursor: "0123456789abcdef.6",
+        });
+        expect(view.sources.gateway.snapshot?.text).toBe("secret\nsecret\n");
+        controller.dispose();
+    });
+
+    it("keeps failures on the current tab and reconnects only on retry", async () => {
+        const stream = vi.fn(async function* () {
+            throw new Error("credential leak");
+        });
+        const view = logView();
+        const controller = new LogController({ logs: { stream } }, view);
+        controller.setActive(true);
+        await settle();
+        expect(view.sources.gateway.status).toBe("error");
+        expect(view.sources.gateway.error).not.toContain("credential");
+        controller.retry();
+        await settle();
+        expect(stream).toHaveBeenCalledTimes(2);
+        controller.dispose();
+    });
+
+    it("clears all sensitive snapshots when the client changes or the view is disposed", async () => {
+        const firstCalls: Array<{ query: ControlLogQuery; signal: AbortSignal }> = [];
+        const nextCalls: Array<{ query: ControlLogQuery; signal: AbortSignal }> = [];
+        const view = logView();
+        const controller = new LogController({ logs: { stream: liveStream(firstCalls) } }, view);
+        controller.setActive(true);
+        await settle();
+        controller.setClient({ logs: { stream: liveStream(nextCalls, "next\n") } });
+        await settle();
+        expect(firstCalls[0].signal.aborted).toBe(true);
+        expect(view.sources.gateway.snapshot?.text).toBe("next\n");
+        controller.dispose();
+        expect(nextCalls[0].signal.aborted).toBe(true);
+        expect(view.sources.gateway.snapshot).toBeUndefined();
     });
 });

@@ -23,6 +23,7 @@ export const messageDebugView = (): MessageDebugView => ({
 export class MessageDebugController {
     private revision = 0;
     private disposed = false;
+    private active = true;
     private inFlight = false;
     private clearedThrough = 0;
     private timer: ReturnType<typeof setTimeout> | undefined;
@@ -40,6 +41,18 @@ export class MessageDebugController {
         this.view.error = "";
         this.clearedThrough = 0;
     }
+    setActive(active: boolean): void {
+        if (this.disposed || this.active === active) return;
+        this.active = active;
+        this.cancelTimer();
+        if (!active) {
+            this.revision++;
+            this.view.loading = false;
+            this.view.clearing = false;
+            return;
+        }
+        if (this.view.automatic) void this.refresh();
+    }
     setAutomatic(enabled: boolean): void {
         if (this.disposed) return;
         this.view.automatic = enabled;
@@ -51,13 +64,13 @@ export class MessageDebugController {
         this.timer = undefined;
     }
     private schedule(): void {
-        if (!this.disposed && this.view.automatic) {
+        if (!this.disposed && this.active && this.view.automatic) {
             this.cancelTimer();
             this.timer = setTimeout(() => void this.refresh(), 1000);
         }
     }
     async refresh(): Promise<void> {
-        if (this.disposed || this.inFlight) return;
+        if (this.disposed || !this.active || this.inFlight) return;
         this.cancelTimer();
         const instanceId = this.view.instanceId;
         if (!instanceId) {
@@ -88,7 +101,8 @@ export class MessageDebugController {
     }
     async clear(): Promise<void> {
         const instanceId = this.view.instanceId;
-        if (this.disposed || this.inFlight || !instanceId || !this.view.available) return;
+        if (this.disposed || !this.active || this.inFlight || !instanceId || !this.view.available)
+            return;
         this.cancelTimer();
         const revision = this.revision;
         this.inFlight = true;
