@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { afterEach, expect, it } from "vitest";
 const roots: string[] = [];
-const script = path.resolve(import.meta.dirname, "../../../install.sh");
+const script = path.resolve(import.meta.dirname, "../../../docs/public/install.sh");
 afterEach(() => {
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });

@@ -419,6 +419,8 @@ const baseConfig = defineConfig({
     },
     
     vite: {
+        // srcDir 是 docs/src，静态安装脚本统一存放在 docs/public。
+        publicDir: "./public",
         optimizeDeps: {
             include: ['dayjs', 'element-plus', 'mermaid', 'd3-sankey'],
             esbuildOptions: {

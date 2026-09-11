@@ -34,6 +34,23 @@ node packages/onebots/lib/bin.js ui --data-dir ./workspace
 
 ## 首次引导脚本
 
+脚本由文档站直接提供：[Linux/macOS 安装脚本](/install.sh) · [Windows 安装脚本](/install.ps1)。无需克隆仓库。
+
+Linux/macOS，在普通用户终端中执行：
+
+```sh
+curl -fsSL https://onebots.pages.dev/install.sh -o install.sh && sh install.sh
+```
+
+Windows，在**管理员 PowerShell** 中下载，确认下载成功后执行：
+
+```powershell
+Invoke-WebRequest https://onebots.pages.dev/install.ps1 -OutFile install.ps1 -ErrorAction Stop
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+可以先查看下载的脚本再执行。Windows 的 `Bypass` 仅作用于本次 PowerShell 进程，不修改系统执行策略。脚本默认使用用户目录下的 `.onebots`，已有安装请按升级或迁移流程处理。
+
 `install.sh` 用于 Linux/macOS 首次安装，安装主程序和匹配 Web 产物后调用管理服务的用户级安装、启动与状态命令。它不选择默认协议、不生成虚构账号、不输出长期凭据。Windows 使用具有相同边界的 `install.ps1`，并额外校验随包 SCM 原生宿主。
 
 **脚本从公开 npm 下载程序，只有发布包含新管理服务的版本后才能完成安装。** 缺少新架构产物时会保留候选目录并明确失败，不运行旧 CLI。当前工作流会在 GitHub 托管的 Ubuntu 和 macOS runner 上，使用源码打包产物执行真实 systemd 系统级、launchd 用户级生命周期、旧服务迁移与管理进程异常退出恢复验收。只有对应任务通过才构成平台证据；这不等同于公开 npm 已发布。

@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 if (process.platform !== "win32") throw new Error("Windows bootstrap acceptance requires win32");
 
 const repository = path.resolve(import.meta.dirname, "..");
-const script = path.join(repository, "install.ps1");
+const script = path.join(repository, "docs/public/install.ps1");
 const roots = [];
 
 function batch(value) {

@@ -426,7 +426,20 @@ onebots logs
 
 默认安装用户级服务；加 `--system` 操作系统级服务。已有旧版服务先运行 `onebots migrate`，不要覆盖原服务定义。
 
-Linux/macOS 也可在空目录使用仓库中的 `install.sh` 完成首次引导；Windows 请在管理员 PowerShell 中运行 `install.ps1`，Windows 管理服务固定为系统级。脚本只安装并确认管理端，不会预填平台、协议、框架或账号。
+也可直接从文档站下载首次安装脚本，无需克隆仓库：
+
+```sh
+curl -fsSL https://onebots.pages.dev/install.sh -o install.sh && sh install.sh
+```
+
+Windows 请在管理员 PowerShell 中下载，确认成功后执行：
+
+```powershell
+Invoke-WebRequest https://onebots.pages.dev/install.ps1 -OutFile install.ps1 -ErrorAction Stop
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+可先检查下载的脚本再执行；`Bypass` 仅影响本次 PowerShell 进程。脚本只安装并确认管理端，不会预填平台、协议、框架或账号；Windows 管理服务固定为系统级。脚本源码统一位于 `docs/public`。首次安装仍要求公开 npm 已发布包含新管理服务的版本，详见[快速开始](https://onebots.pages.dev/guide/start)。
 
 ### 方式 C：源码开发
 
