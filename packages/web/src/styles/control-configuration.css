@@ -2,6 +2,7 @@
 .panel-stack > .configuration-workspace {
     padding: 0 !important;
     overflow: hidden;
+    border-color: color-mix(in srgb, var(--accent) 15%, var(--border)) !important;
 }
 .configuration-header,
 .configuration-step-heading,

@@ -12,46 +12,48 @@
 
 :root {
     color-scheme: light;
-    --bg: #f7f7f8;
+    --bg: #f6f7fc;
     --surface: #ffffff;
-    --surface-raised: #f1f2f4;
-    --surface-strong: #e8e9ec;
-    --border: #e2e3e7;
-    --border-strong: #cfd1d7;
-    --fg: #18181b;
-    --fg-secondary: #52525b;
-    --fg-tertiary: #8b8b96;
-    --accent: #18181b;
-    --accent-hover: #303036;
+    --surface-raised: #f1f2fa;
+    --surface-strong: #e7e9f5;
+    --border: #e2e4ef;
+    --border-strong: #cbd0e2;
+    --fg: #1d1b2e;
+    --fg-secondary: #5c5a70;
+    --fg-tertiary: #9290a4;
+    --accent: #6757e8;
+    --accent-hover: #5543d8;
     --accent-fg: #ffffff;
-    --accent-soft: rgba(24, 24, 27, 0.07);
-    --success: #16835d;
-    --success-soft: rgba(22, 131, 93, 0.09);
-    --warning: #a15c07;
-    --warning-soft: rgba(161, 92, 7, 0.09);
-    --danger: #c33d3d;
-    --danger-soft: rgba(195, 61, 61, 0.08);
-    --info: #2c6eaa;
-    --info-soft: rgba(44, 110, 170, 0.09);
-    --ring: rgba(37, 99, 235, 0.3);
-    --shadow: 0 12px 36px rgba(24, 24, 27, 0.07);
+    --accent-soft: rgba(103, 87, 232, 0.1);
+    --success: #15966d;
+    --success-soft: rgba(21, 150, 109, 0.1);
+    --warning: #b66b0d;
+    --warning-soft: rgba(241, 157, 43, 0.12);
+    --danger: #d34863;
+    --danger-soft: rgba(211, 72, 99, 0.1);
+    --info: #2885c7;
+    --info-soft: rgba(40, 133, 199, 0.1);
+    --ring: rgba(103, 87, 232, 0.34);
+    --shadow:
+        0 1px 2px rgba(38, 32, 78, 0.05), 0 16px 38px rgba(82, 65, 168, 0.1),
+        0 0 0 1px rgba(255, 255, 255, 0.55) inset;
 }
 
 .dark {
     color-scheme: dark;
-    --bg: #0b0b0d;
-    --surface: #111114;
-    --surface-raised: #19191d;
-    --surface-strong: #222227;
-    --border: #29292f;
-    --border-strong: #3b3b43;
-    --fg: #f2f2f3;
-    --fg-secondary: #aaaab4;
-    --fg-tertiary: #71717c;
-    --accent: #f2f2f3;
-    --accent-hover: #ffffff;
-    --accent-fg: #111114;
-    --accent-soft: rgba(242, 242, 243, 0.09);
+    --bg: #0d0b17;
+    --surface: #151222;
+    --surface-raised: #1e1a30;
+    --surface-strong: #292440;
+    --border: #312b49;
+    --border-strong: #494165;
+    --fg: #f4f2fb;
+    --fg-secondary: #b2aec4;
+    --fg-tertiary: #77728e;
+    --accent: #9a8cff;
+    --accent-hover: #b1a7ff;
+    --accent-fg: #171126;
+    --accent-soft: rgba(154, 140, 255, 0.14);
     --success: #4ec997;
     --success-soft: rgba(78, 201, 151, 0.12);
     --warning: #e7ad53;
@@ -60,8 +62,8 @@
     --danger-soft: rgba(239, 133, 128, 0.13);
     --info: #68b4cb;
     --info-soft: rgba(104, 180, 203, 0.13);
-    --ring: rgba(107, 150, 248, 0.38);
-    --shadow: 0 22px 60px rgba(0, 0, 0, 0.24);
+    --ring: rgba(154, 140, 255, 0.42);
+    --shadow: 0 18px 55px rgba(0, 0, 0, 0.3);
 }
 
 @theme inline {
@@ -92,9 +94,9 @@
         "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     --font-mono:
         "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
-    --radius-control: 0.5rem;
-    --radius-card: 0.875rem;
-    --radius-panel: 0.875rem;
+    --radius-control: 0.65rem;
+    --radius-card: 1rem;
+    --radius-panel: 1rem;
 }
 
 * {
@@ -207,15 +209,15 @@ code {
     height: 2.25rem;
     align-items: center;
     justify-content: center;
-    border: 1px solid var(--fg);
-    border-radius: 0.45rem;
-    background: var(--fg);
-    color: var(--surface);
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: 0.7rem;
+    background: linear-gradient(145deg, #7969f4, #4c8df6);
+    color: #ffffff;
     font-family: var(--font-mono);
     font-size: 0.67rem;
     font-weight: 750;
     letter-spacing: -0.06em;
-    box-shadow: none;
+    box-shadow: 0 8px 20px rgba(91, 78, 218, 0.24);
 }
 
 .icon-button {
@@ -239,4 +241,17 @@ code {
 }
 .icon-button:active {
     transform: scale(0.96);
+}
+
+.ui-button.bg-accent {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: linear-gradient(135deg, #765ff1, #537ff1);
+    box-shadow: 0 7px 18px rgba(94, 75, 220, 0.22);
+}
+.ui-button.bg-accent:hover {
+    background: linear-gradient(135deg, #6750e4, #4171e8);
+    box-shadow: 0 9px 22px rgba(94, 75, 220, 0.28);
+}
+.ui-button.bg-accent:active {
+    transform: translateY(1px) scale(0.985);
 }

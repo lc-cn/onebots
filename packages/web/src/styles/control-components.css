@@ -1,6 +1,6 @@
 .adapter-catalog {
     border: 1px solid var(--border);
-    border-radius: 0.4rem;
+    border-radius: 0.85rem;
     background: var(--surface);
     padding: 1rem;
 }
@@ -70,7 +70,7 @@
 }
 .adapter-row:has(input:checked) {
     box-shadow: inset 3px 0 0 var(--accent);
-    background: var(--accent-soft);
+    background: linear-gradient(90deg, var(--accent-soft), var(--surface));
 }
 @media (min-width: 1400px) {
     .adapter-list {
@@ -115,9 +115,10 @@
 .live-logs-panel {
     min-width: 0;
     border: 1px solid var(--border) !important;
-    border-radius: 0.45rem !important;
+    border-radius: 1rem !important;
     background: var(--surface) !important;
     padding: 1.2rem !important;
+    box-shadow: var(--shadow);
 }
 .diagnostic-panel-header {
     display: grid;
