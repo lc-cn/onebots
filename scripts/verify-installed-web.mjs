@@ -5,6 +5,7 @@
  * observes the same manager workspace; it never performs a product mutation for this fixture.
  */
 import assert from "node:assert/strict";
+import { waitForBrowserPort } from "./browser-startup.mjs";
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -307,21 +308,9 @@ try {
             `--user-data-dir=${browserProfile}`,
             "about:blank",
         ],
-        { stdio: "ignore" },
+        { stdio: ["ignore", "ignore", "pipe"] },
     );
-    const browserFailed = new Promise((_, reject) =>
-        browser.once("error", error => reject(new Error(`浏览器启动失败：${error.message}`))),
-    );
-    const activePort = path.join(browserProfile, "DevToolsActivePort");
-    const [debugPort] = (
-        await Promise.race([
-            waitFor(
-                () => (fs.existsSync(activePort) ? fs.readFileSync(activePort, "utf8") : undefined),
-                "浏览器调试端口启动",
-            ),
-            browserFailed,
-        ])
-    ).split("\n");
+    const debugPort = await waitForBrowserPort(browser, browserProfile);
     const targets = await waitFor(async () => {
         const response = await fetch(`http://127.0.0.1:${debugPort}/json/list`);
         if (!response.ok) return undefined;
