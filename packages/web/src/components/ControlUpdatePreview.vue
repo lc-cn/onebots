@@ -13,19 +13,19 @@ defineEmits<{ leave: [] }>();
             使用已安装的完整依赖清单，包括尚未启用的扩展；不修改账号或协议配置。
         </p>
         <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
+            <table class="update-comparison w-full text-left text-sm">
                 <thead>
                     <tr>
-                        <th class="py-2">依赖</th>
-                        <th>当前版本</th>
-                        <th>目标版本</th>
+                        <th scope="col" class="py-2">依赖</th>
+                        <th scope="col">当前版本</th>
+                        <th scope="col">目标版本</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="item in preview.packages" :key="item.name">
                         <td class="py-1 pr-4 break-all">{{ item.name }}</td>
                         <td class="pr-4">{{ item.current ?? "未安装" }}</td>
-                        <td>{{ item.target }}</td>
+                        <td><span :class="{ 'version-change': item.current !== item.target }">{{ item.target }}</span></td>
                     </tr>
                 </tbody>
             </table>

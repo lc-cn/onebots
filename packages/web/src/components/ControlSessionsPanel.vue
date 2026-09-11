@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import type { ControlClient, ControlSession } from "@onebots/core/control";
+import { IconDeviceDesktop, IconKey } from "@tabler/icons-vue";
 import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{ client: ControlClient; configurationDirty?: boolean }>();
@@ -76,17 +77,14 @@ onUnmounted(() => {
 <template>
     <section class="border border-border rounded-panel p-6 bg-surface space-y-4">
         <div class="flex items-center justify-between gap-3">
-            <h2 class="text-lg font-medium">设备会话</h2>
+            <h2 class="panel-title">
+                <IconDeviceDesktop :size="21" aria-hidden="true" />已授权设备
+                <span class="count-badge">{{ loaded ? sessions.length : "—" }}</span>
+            </h2>
             <UiButton :disabled="busy" @click="refresh">刷新</UiButton>
         </div>
         <p class="text-sm text-fg-secondary">
             每次授权创建独立会话，有效期为 30 天，使用或重启不会延期。会话编号不是登录凭据。
-        </p>
-        <p class="text-sm text-fg-secondary">
-            授权新设备：在管理服务所在机器运行
-            <code class="break-all">onebots auth device --data-dir &lt;工作区&gt;</code>， 将 5
-            分钟内有效的一次性设备码填入新设备登录页；已有设备保持登录。
-            <code>auth recover</code> 的恢复码兑换成功后会撤销所有旧设备，请仅在需要恢复访问时使用。
         </p>
         <p v-if="error" role="alert" class="text-sm text-danger">{{ error }}</p>
         <p v-if="message" role="status" class="text-sm text-fg-secondary">{{ message }}</p>
@@ -96,19 +94,48 @@ onUnmounted(() => {
         <p v-else-if="loaded && !sessions.length" class="text-sm text-fg-secondary">
             没有有效设备会话。
         </p>
-        <ul v-if="sessions.length" class="divide-y divide-border">
-            <li v-for="session in sessions" :key="session.id" class="py-3 space-y-2">
-                <div class="flex items-center justify-between gap-3">
-                    <p class="text-sm font-medium">
-                        {{ shortId(session.id) }}{{ session.current ? " · 当前设备" : "" }}
-                    </p>
-                    <UiButton :disabled="busy" @click="selected = session">撤销</UiButton>
+        <ul v-if="sessions.length" class="session-list">
+            <li
+                v-for="session in sessions"
+                :key="session.id"
+                class="session-row"
+                :class="{ current: session.current }">
+                <span class="session-device-icon"
+                    ><IconDeviceDesktop :size="22" aria-hidden="true"
+                /></span>
+                <div class="session-identity">
+                    <strong>{{ session.current ? "当前浏览器" : "已授权会话" }}</strong>
+                    <code>{{ shortId(session.id) }}</code>
                 </div>
-                <p class="text-xs text-fg-secondary">
-                    授权：{{ date(session.issuedAt) }} · 到期：{{ date(session.expiresAt) }}
-                </p>
+                <dl class="session-dates">
+                    <div>
+                        <dt>授权时间</dt>
+                        <dd>{{ date(session.issuedAt) }}</dd>
+                    </div>
+                    <div>
+                        <dt>有效期至</dt>
+                        <dd>{{ date(session.expiresAt) }}</dd>
+                    </div>
+                </dl>
+                <UiButton
+                    variant="ghost"
+                    :disabled="busy"
+                    :aria-label="`撤销会话 ${shortId(session.id)}`"
+                    @click="selected = session"
+                    >撤销访问</UiButton
+                >
             </li>
         </ul>
+        <details class="access-help">
+            <summary><IconKey :size="18" aria-hidden="true" />连接新设备与恢复访问</summary>
+            <p class="text-sm text-fg-secondary">
+                授权新设备：在管理服务所在机器运行
+                <code class="break-all">onebots auth device --data-dir &lt;工作区&gt;</code>， 将 5
+                分钟内有效的一次性设备码填入新设备登录页；已有设备保持登录。
+                <code>auth recover</code>
+                的恢复码兑换成功后会撤销所有旧设备，请仅在需要恢复访问时使用。
+            </p>
+        </details>
         <div v-if="selected" class="border border-border rounded-control p-4 space-y-3">
             <p class="text-sm">
                 确认撤销 {{ shortId(selected.id) }}{{ selected.current ? "（当前设备）" : "" }}？

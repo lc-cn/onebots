@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
 import type { ControlOperation, ControlStatus } from "@onebots/core/control";
-import { IconAlertTriangle, IconChevronRight } from "@tabler/icons-vue";
+import {
+    IconAlertTriangle,
+    IconChevronRight,
+    IconUsers,
+    IconActivity,
+    IconServer,
+    IconPlugConnected,
+} from "@tabler/icons-vue";
 import ControlSetupJourney from "../components/ControlSetupJourney.vue";
 import type { Workspace } from "../control-workspace.js";
 import type { ControlMutationBlock, SetupJourney } from "../control-product-state.js";
@@ -182,13 +189,16 @@ function keepCommandFocus(event: KeyboardEvent) {
                     </div>
                     <div class="runtime-metrics">
                         <div>
-                            <span>账号</span><strong>{{ accountItems.length }}</strong>
+                            <span><IconUsers :size="18" aria-hidden="true" />账号总数</span
+                            ><strong>{{ accountItems.length }}</strong>
                         </div>
                         <div>
-                            <span>在线</span><strong>{{ onlineAccounts }}</strong>
+                            <span><IconActivity :size="18" aria-hidden="true" />在线账号</span
+                            ><strong>{{ onlineAccounts }}</strong>
                         </div>
                         <div>
-                            <span>管理进程</span><strong>{{ state.manager.pid ?? "—" }}</strong>
+                            <span><IconServer :size="18" aria-hidden="true" />管理进程</span
+                            ><strong>{{ state.manager.pid ?? "—" }}</strong>
                         </div>
                     </div>
                 </section>
@@ -257,7 +267,14 @@ function keepCommandFocus(event: KeyboardEvent) {
                     <p v-if="state.accounts?.available === false" class="empty-copy">
                         网关未提供账号摘要。启动网关后可查看运行状态。
                     </p>
-                    <p v-else-if="!accountItems.length" class="empty-copy">尚未配置平台账号。</p>
+                    <div v-else-if="!accountItems.length" class="composed-empty">
+                        <IconPlugConnected :size="28" aria-hidden="true" />
+                        <strong>连接你的第一个账号</strong>
+                        <p>安装平台适配器后，填写账号信息即可开始接收消息。</p>
+                        <UiButton @click="emit('select', 'configuration')"
+                            >配置账号<IconChevronRight :size="16" aria-hidden="true"
+                        /></UiButton>
+                    </div>
                     <ul v-else class="account-list">
                         <li
                             v-for="account in accountItems"

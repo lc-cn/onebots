@@ -332,7 +332,7 @@ onUnmounted(() => {
 });
 </script>
 <template>
-    <section class="border-t border-border pt-6 space-y-5" aria-labelledby="installation-heading">
+    <section class="installation-panel border-t border-border pt-6 space-y-5" aria-labelledby="installation-heading">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h2 id="installation-heading" class="text-lg font-medium">安装、扩展与升级</h2>
@@ -379,13 +379,13 @@ onUnmounted(() => {
                     v-for="section in sections.slice(1)"
                     :key="section.key"
                     :disabled="busy || !selectionKnown || !!mutationBlock"
-                    class="border border-border rounded-panel p-4 bg-surface">
+                    class="extension-choice-group border border-border rounded-panel p-4 bg-surface">
                     <legend class="px-1 text-sm font-medium">{{ section.label }}</legend>
-                    <div class="space-y-3 max-h-64 overflow-y-auto pt-1">
+                    <div class="extension-choice-list">
                         <label
                             v-for="entry in catalog[section.key]"
                             :key="entry.name"
-                            class="flex min-h-11 items-center gap-2 text-sm cursor-pointer">
+                            class="extension-choice">
                             <input
                                 v-model="selected[section.key]"
                                 type="checkbox"

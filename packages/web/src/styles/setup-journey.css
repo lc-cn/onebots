@@ -4,8 +4,8 @@
     gap: clamp(1.5rem, 4vw, 3rem);
     margin-block: 1rem 1.5rem;
     border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 0.4rem;
+    border-top: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    border-radius: 1rem;
     background: var(--surface);
     color: var(--fg);
     padding: clamp(1.25rem, 3vw, 2rem);
@@ -55,16 +55,29 @@
 .setup-journey-steps li.current {
     color: var(--fg);
 }
+.setup-journey-steps li.current .setup-step-mark {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border-color: transparent;
+    box-shadow: 0 4px 12px var(--accent-soft);
+}
 .setup-journey.complete .setup-journey-steps li.current {
     color: var(--fg);
+}
+.setup-journey-steps li.current .setup-step-mark {
+    background: var(--accent);
+    color: var(--accent-fg);
+    border-color: transparent;
+    box-shadow: 0 4px 12px var(--accent-soft);
 }
 .setup-step-mark {
     display: grid;
     width: 1.75rem;
     height: 1.75rem;
     place-items: center;
-    border: 1px solid currentColor;
-    border-radius: 0.28rem;
+    border: 1px solid var(--border-strong);
+    border-radius: 0.6rem;
+    background: var(--surface-raised);
     font-family: var(--font-mono);
     font-size: 0.7rem;
 }

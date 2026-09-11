@@ -86,6 +86,9 @@ function unselect(name: string) {
                                 :value="entry.name"
                                 :aria-label="`选择 ${entry.displayName}`"
                                 class="mt-1 accent-accent" />
+                            <span class="adapter-monogram" aria-hidden="true">{{
+                                entry.displayName.slice(0, 2)
+                            }}</span>
                             <div class="min-w-0 flex-1">
                                 <div class="flex flex-wrap items-baseline justify-between gap-2">
                                     <h4 class="text-sm font-medium">{{ entry.displayName }}</h4>

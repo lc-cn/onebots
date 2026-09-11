@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, shallowReactive, ref, watch } from "vue";
 import type { ControlClient } from "@onebots/core/control";
+import { IconMessages } from "@tabler/icons-vue";
 import UiButton from "../ui/UiButton.vue";
 import { MessageDebugController, messageDebugView } from "./control-message-debug-state";
 
@@ -39,7 +40,9 @@ onUnmounted(() => controller.dispose());
         <header class="diagnostic-panel-header">
             <div>
                 <p class="diagnostic-panel-kicker">消息链路</p>
-                <h2 class="text-lg font-medium">消息调试</h2>
+                <h2 class="text-lg font-medium">
+                    <IconMessages :size="22" aria-hidden="true" />消息调试
+                </h2>
             </div>
             <p>按需读取当前网关最近 300 条双向消息，并按平台、账号或协议定位链路问题。</p>
         </header>

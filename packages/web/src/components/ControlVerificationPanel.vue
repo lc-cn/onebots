@@ -2,6 +2,7 @@
 import { onUnmounted, reactive, watch } from "vue";
 import { controlVerificationOutcome, type ControlClient } from "@onebots/core/control";
 import ControlVerificationCode from "./ControlVerificationCode.vue";
+import { IconCircleCheck, IconFingerprint } from "@tabler/icons-vue";
 import UiButton from "../ui/UiButton.vue";
 import type { ControlMutationBlock } from "../control-product-state.js";
 import {
@@ -50,7 +51,9 @@ const labels = {
         <header class="diagnostic-panel-header">
             <div>
                 <p class="diagnostic-panel-kicker">人工处理</p>
-                <h2 id="verification-title" class="text-lg font-medium">账号验证</h2>
+                <h2 id="verification-title" class="text-lg font-medium">
+                    <IconFingerprint :size="22" aria-hidden="true" />账号验证
+                </h2>
             </div>
             <p>
                 在这里处理平台发起的二维码、短信或确认挑战。答案只用于本次提交，浏览器仅保存操作编号。
@@ -72,7 +75,11 @@ const labels = {
         <p v-if="controller.uncertain" role="status" class="text-sm text-danger">
             有尚未确认的操作，已禁止新提交和短信请求。请查询原回执；未知结果不能自动解锁。
         </p>
-        <p v-if="view.snapshot && !view.snapshot.challenges.length" role="status">
+        <p
+            v-if="view.snapshot && !view.snapshot.challenges.length"
+            role="status"
+            class="verification-empty">
+            <IconCircleCheck :size="22" aria-hidden="true" />
             当前没有待处理验证。
         </p>
         <article

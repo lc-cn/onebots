@@ -6,6 +6,7 @@
 @import "./control-configuration-fields.css";
 @import "./setup-journey.css";
 @import "./terminal.css";
+@import "./console-polish.css";
 @import "./responsive.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
