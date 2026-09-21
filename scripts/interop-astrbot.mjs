@@ -81,7 +81,7 @@ async function assertPythonDependencies() {
         PYTHON,
         [
             "-c",
-            "from importlib.metadata import version; assert version('AstrBot') == '4.28.0b1'; assert version('aiocqhttp') == '1.4.4'",
+            "from versions import installed_versions; installed_versions()",
         ],
         {},
         "AstrBot dependency probe",
