@@ -1,7 +1,7 @@
 import asyncio
 import json
 import os
-from importlib.metadata import version
+from versions import installed_versions
 from pathlib import Path
 
 from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_platform_adapter import (
@@ -16,6 +16,7 @@ EVIDENCE_FILE = Path(os.environ["ONEBOTS_INTEROP_EVIDENCE"])
 
 
 async def main() -> None:
+    versions = installed_versions()
     events: asyncio.Queue = asyncio.Queue()
     adapter = AiocqhttpAdapter(
         {
@@ -44,8 +45,8 @@ async def main() -> None:
         )
         evidence = {
             "framework": "astrbot",
-            "frameworkVersion": version("AstrBot"),
-            "adapterVersion": version("aiocqhttp"),
+            "frameworkVersion": versions["AstrBot"],
+            "adapterVersion": versions["aiocqhttp"],
             "event": {
                 "postType": raw_event.get("post_type"),
                 "messageType": raw_event.get("message_type"),

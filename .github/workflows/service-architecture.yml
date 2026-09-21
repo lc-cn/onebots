@@ -178,6 +178,7 @@ jobs:
       - name: Verify heavy Python frameworks
         if: matrix.group == 'python-heavy'
         run: |
+          interop/astrbot/.venv/bin/python -m unittest discover -s interop/astrbot -p test_versions.py
           pnpm interop:astrbot
           pnpm interop:langbot
       - name: Verify native frameworks
