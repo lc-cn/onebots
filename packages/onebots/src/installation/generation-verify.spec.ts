@@ -207,7 +207,12 @@ await new Promise(() => {});
                 for (let attempt = 0; !fs.existsSync(pidFile) && attempt < 200; attempt++)
                     await new Promise(resolve => setTimeout(resolve, 10));
                 pids = JSON.parse(fs.readFileSync(pidFile, "utf8"));
-                expect(pids && [pids.helper, pids.worker].every(pid => Number.isSafeInteger(pid) && pid > 0)).toBe(true);
+                expect(
+                    pids &&
+                        [pids.helper, pids.worker].every(
+                            pid => Number.isSafeInteger(pid) && pid > 0,
+                        ),
+                ).toBe(true);
                 const owners = fs.readdirSync(privateRoot);
                 expect(owners).toHaveLength(1);
                 const owner = JSON.parse(
@@ -280,7 +285,9 @@ await new Promise(() => {});
                 for (let attempt = 0; !fs.existsSync(pidFile) && attempt < 100; attempt++)
                     await new Promise(resolve => setTimeout(resolve, 10));
                 pid = Number(fs.readFileSync(pidFile, "utf8"));
-                expect(Number.isSafeInteger(pid) && pid > 0, "helper PID必须完整且为正整数").toBe(true);
+                expect(Number.isSafeInteger(pid) && pid > 0, "helper PID必须完整且为正整数").toBe(
+                    true,
+                );
                 if (mode === "abort") cancellation.abort();
                 expect(await pending).toBeInstanceOf(Error);
                 expect(fs.readdirSync(path.join(test.directory, "owners"))).toEqual([]);
@@ -538,3 +545,22 @@ fs.renameSync(${JSON.stringify(pidFile + ".tmp")}, ${JSON.stringify(pidFile)});
         expect(fs.existsSync(path.join(test.directory, "schemas.json"))).toBe(false);
     });
 });
+
+it.each(["1.0.0", "2.0.0"])(
+    "verifies the host's original Web requirement with installed %s",
+    async version => {
+        const test = fixture();
+        const file = path.join(test.host, "package.json");
+        const host = JSON.parse(fs.readFileSync(file, "utf8"));
+        host.dependencies["@onebots/web"] = "1.0.0";
+        fs.writeFileSync(file, JSON.stringify(host));
+        test.writePackage("@onebots/web", { version });
+        const plan = createGenerationPlan({
+            ...test.plan,
+            web: { name: "@onebots/web", version, spec: version },
+        });
+        if (version === "1.0.0")
+            await expect(verifyGeneration(test.directory, plan)).resolves.toBeDefined();
+        else await expect(verifyGeneration(test.directory, plan)).rejects.toThrow();
+    },
+);

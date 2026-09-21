@@ -58,6 +58,7 @@ export async function packControlRuntime({
         for (const [key, folder, expectedName] of [
             ["core", "core", "@onebots/core"],
             ["host", "onebots", "onebots"],
+            ["web", "web", "@onebots/web"],
         ]) {
             const directory = path.join(repositoryRoot, "packages", folder);
             manifest[key] = await packPackage(
@@ -69,7 +70,7 @@ export async function packControlRuntime({
                 environment,
             );
         }
-        const names = new Set([manifest.host.name, manifest.core.name]);
+        const names = new Set([manifest.host.name, manifest.core.name, manifest.web.name]);
         const trustedRoot = await realpath(repositoryRoot);
         if (!Array.isArray(extensionDirectories) || extensionDirectories.length > 64)
             throw new Error("附带扩展目录无效");
@@ -112,21 +113,16 @@ export async function packControlRuntime({
     }
 }
 
-async function packPackage(
-    directory,
-    expectedName,
-    staging,
-    command,
-    commandPrefix,
-    environment,
-) {
+async function packPackage(directory, expectedName, staging, command, commandPrefix, environment) {
     const source = JSON.parse(await readFile(path.join(directory, "package.json"), "utf8"));
     if (
         source.name !== expectedName ||
         !/^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/.test(source.version)
     )
         throw new Error("运行工件的包名或版本无效");
-    await access(path.join(directory, "lib/index.js"));
+    await access(
+        path.join(directory, source.name === "@onebots/web" ? "dist/index.html" : "lib/index.js"),
+    );
     if (source.name === "onebots") await access(path.join(directory, "lib/gateway/entry.js"));
     const before = new Set(await readdir(staging));
     await execute(command, [...commandPrefix, "pack", "--pack-destination", staging], {
@@ -191,7 +187,11 @@ async function verifyArchive(tarball, source) {
         }
     }
     if (
-        !listing.split(/\r?\n/).includes("package/lib/index.js") ||
+        !listing
+            .split(/\r?\n/)
+            .includes(
+                source.name === "@onebots/web" ? "package/dist/index.html" : "package/lib/index.js",
+            ) ||
         (source.name === "onebots" &&
             !listing.split(/\r?\n/).includes("package/lib/gateway/entry.js"))
     )
@@ -223,7 +223,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
             outputDirectory: process.argv[2] ?? path.join(repository, "runtime-artifacts"),
             extensionDirectories: process.argv.slice(3),
         });
-        process.stdout.write("[onebots] 已生成 core 和 onebots 运行工件\n");
+        process.stdout.write("[onebots] 已生成 core、onebots 和 Web 运行工件\n");
     } catch {
         process.stderr.write("[onebots] 运行工件打包失败，请确认 pnpm 版本与构建产物\n");
         process.exitCode = 1;

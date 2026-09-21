@@ -266,7 +266,7 @@ export class GenerationInstaller {
 }
 
 function verifyLocalArtifacts(plan: GenerationPlan): void {
-    for (const artifact of [plan.host, plan.core, ...plan.extensions]) {
+    for (const artifact of [plan.host, plan.core, ...(plan.web ? [plan.web] : []), ...plan.extensions]) {
         if (!artifact.spec.startsWith("file:")) continue;
         const file = artifact.spec.slice(5);
         const stat = fs.lstatSync(file);

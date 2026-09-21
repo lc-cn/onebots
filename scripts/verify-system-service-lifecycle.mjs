@@ -142,7 +142,7 @@ execute("tar", [
     previousStaging,
     "package",
 ]);
-for (const entry of [manifest.core, ...manifest.extensions])
+for (const entry of [manifest.core, ...(manifest.web ? [manifest.web] : []), ...manifest.extensions])
     fs.copyFileSync(path.join(artifacts, entry.file), path.join(previousArtifacts, entry.file));
 const previousManifest = {
     ...manifest,

@@ -58,6 +58,7 @@ export async function verifyGenerationRuntime(
     for (const expected of [
         plan.host,
         plan.core,
+        ...(plan.web ? [plan.web] : []),
         ...plan.extensions.map(extension => ({
             name: extension.packageName,
             version: extension.version,
@@ -69,6 +70,21 @@ export async function verifyGenerationRuntime(
         if (found.name !== name || found.version !== expected.version) throw new Error("version");
         if (name === "onebots" || name === "@onebots/core") hosts.set(name, file);
         pending.push(file);
+    }
+    if (plan.web) {
+        const hostManifest = manifest(hosts.get("onebots")!);
+        const range = hostManifest.dependencies?.["@onebots/web"];
+        if (
+            typeof range !== "string" ||
+            !semver.validRange(range) ||
+            !semver.satisfies(plan.web.version, range)
+        )
+            throw new Error("web dependency version");
+        if (
+            resolveManifest(root, "@onebots/web", hosts.get("onebots")!) !==
+            resolveManifest(root, "@onebots/web", from)
+        )
+            throw new Error("duplicate web");
     }
     const visited = new Set<string>();
     for (const peer of plan.peerRequirements) {

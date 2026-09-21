@@ -396,6 +396,7 @@ try {
             "--no-fund",
             path.join(artifacts, manifest.core.file),
             path.join(artifacts, manifest.host.file),
+            path.join(artifacts, manifest.web.file),
         ],
         { cwd: runtime },
     );

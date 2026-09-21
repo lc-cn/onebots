@@ -56,6 +56,7 @@ export class ControlInstallationPlanStore {
             packages: [
                 plan.host,
                 plan.core,
+                ...(plan.web ? [plan.web] : []),
                 ...plan.extensions.map(extension => ({
                     name: extension.packageName,
                     version: extension.version,

@@ -39,6 +39,7 @@ export function activeInstallationResolver(
         return {
             host: plan.host,
             core: plan.core,
+            web: plan.web,
             target: plan,
             extensionVersions: release.extensionVersions,
             fetchMetadata: bundled.fetchMetadata,

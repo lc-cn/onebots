@@ -45,16 +45,18 @@ export function loadRuntimeArtifacts(
         };
         const host = artifact(record.host, expected.host);
         const core = artifact(record.core, expected.core);
+        const web = record.web === undefined ? undefined : artifact(record.web);
+        if (web && web.name !== "@onebots/web") throw new Error();
         const entries = record.extensions ?? [];
         if (!Array.isArray(entries) || entries.length > 64) throw new Error();
         const artifacts: Record<string, GenerationArtifact> = {};
         for (const entry of entries) {
             const value = artifact(entry);
-            if ([host.name, core.name].includes(value.name) || artifacts[value.name])
+            if ([host.name, core.name, "@onebots/web"].includes(value.name) || artifacts[value.name])
                 throw new Error();
             artifacts[value.name] = value;
         }
-        return { host, core, artifacts };
+        return { host, core, ...(web ? { web } : {}), artifacts };
     } catch {
         throw new Error("随产品提供的运行工件无效，请检查镜像或重新安装管理服务");
     }
