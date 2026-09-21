@@ -19,7 +19,7 @@ export function preparePreviousPatchArtifacts({ temporary, artifacts, manifest, 
     fs.writeFileSync(packageFile, `${JSON.stringify(packageJson, null, 2)}\n`, { mode: 0o600 });
     const hostFile = `onebots-${previousVersion}.tgz`;
     execute("tar", ["-czf", path.join(directory, hostFile), "-C", staging, "package"]);
-    for (const entry of [manifest.core, ...manifest.extensions])
+    for (const entry of [manifest.core, ...(manifest.web ? [manifest.web] : []), ...manifest.extensions])
         fs.copyFileSync(path.join(artifacts, entry.file), path.join(directory, entry.file));
     const previousManifest = {
         ...manifest,

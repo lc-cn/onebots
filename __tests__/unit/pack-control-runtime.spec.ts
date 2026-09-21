@@ -29,6 +29,7 @@ async function fixture() {
     for (const [directory, name, version] of [
         ["core", "@onebots/core", "4.5.6"],
         ["onebots", "onebots", "7.8.9"],
+        ["web", "@onebots/web", "99.0.1"],
     ]) {
         const root = join(repositoryRoot, "packages", directory);
         await mkdir(join(root, "lib/gateway"), { recursive: true });
@@ -38,12 +39,17 @@ async function fixture() {
                 name,
                 version,
                 type: "module",
-                files: ["lib"],
+                files: directory === "web" ? ["dist"] : ["lib"],
                 main: "lib/index.js",
-                dependencies: directory === "onebots" ? { "@onebots/core": "workspace:*" } : {},
+                dependencies:
+                    directory === "onebots"
+                        ? { "@onebots/core": "workspace:*", "@onebots/web": "workspace:*" }
+                        : {},
                 devDependencies: { typescript: "catalog:" },
             }),
         );
+        await mkdir(join(root, "dist"), { recursive: true });
+        await writeFile(join(root, "dist/index.html"), "<!doctype html><title>Web</title>");
         await writeFile(join(root, "lib/index.js"), "export {};");
         await writeFile(join(root, "lib/gateway/entry.js"), "export {};");
         await writeFile(join(root, "config.yaml"), "token: SYNTHETIC_PACK_SECRET");
@@ -55,6 +61,7 @@ async function fixture() {
     const modules = join(repositoryRoot, "packages/onebots/node_modules/@onebots");
     await mkdir(modules, { recursive: true });
     await symlink(join(repositoryRoot, "packages/core"), join(modules, "core"), "junction");
+    await symlink(join(repositoryRoot, "packages/web"), join(modules, "web"), "junction");
     await symlink(
         join(process.cwd(), "packages/onebots/node_modules/pnpm"),
         join(repositoryRoot, "packages/onebots/node_modules/pnpm"),
@@ -64,13 +71,14 @@ async function fixture() {
 }
 
 describe("build-time control runtime artifacts", () => {
-    it("packs only the two hosts with translated dependencies, relocatable metadata and matching digests", async () => {
+    it("packs the hosts and unpublished Web with translated dependencies, relocatable metadata and matching digests", async () => {
         const options = await fixture();
         const manifest = await packControlRuntime(options);
         expect(manifest).toMatchObject({
             schemaVersion: 1,
             host: { name: "onebots", version: "7.8.9" },
             core: { name: "@onebots/core", version: "4.5.6" },
+            web: { name: "@onebots/web", version: "99.0.1" },
             extensions: [],
         });
         expect(Object.keys(manifest).sort()).toEqual([
@@ -78,11 +86,12 @@ describe("build-time control runtime artifacts", () => {
             "extensions",
             "host",
             "schemaVersion",
+            "web",
         ]);
         expect((await readdir(options.outputDirectory)).sort()).toEqual(
-            ["manifest.json", manifest.host.file, manifest.core.file].sort(),
+            ["manifest.json", manifest.host.file, manifest.core.file, manifest.web.file].sort(),
         );
-        for (const artifact of [manifest.host, manifest.core]) {
+        for (const artifact of [manifest.host, manifest.core, manifest.web]) {
             expect(Object.keys(artifact).sort()).toEqual(["file", "name", "sha256", "version"]);
             expect(artifact.file).not.toMatch(/[\\/]/);
             const tarball = join(options.outputDirectory, artifact.file);
@@ -101,8 +110,12 @@ describe("build-time control runtime artifacts", () => {
             expect(content).not.toMatch(/workspace:|catalog:|SYNTHETIC_PACK_SECRET/);
             const metadata = JSON.parse(content);
             expect(metadata.devDependencies.typescript).toBe("5.9.3");
-            if (artifact.name === "onebots")
+            if (artifact.name === "onebots") {
                 expect(metadata.dependencies["@onebots/core"]).toBe("4.5.6");
+                expect(metadata.dependencies["@onebots/web"]).toBe("99.0.1");
+            }
+            if (artifact.name === "@onebots/web")
+                expect(listing).toContain("package/dist/index.html");
         }
         const serialized = await readFile(join(options.outputDirectory, "manifest.json"), "utf8");
         expect(JSON.parse(serialized)).toEqual(manifest);
@@ -162,7 +175,13 @@ describe("build-time control runtime artifacts", () => {
         expect(Object.keys(extension).sort()).toEqual(["file", "name", "sha256", "version"]);
         expect(extension.file).not.toMatch(/[\\/]/);
         expect((await readdir(options.outputDirectory)).sort()).toEqual(
-            ["manifest.json", manifest.host.file, manifest.core.file, extension.file].sort(),
+            [
+                "manifest.json",
+                manifest.host.file,
+                manifest.core.file,
+                manifest.web.file,
+                extension.file,
+            ].sort(),
         );
 
         const tarball = join(options.outputDirectory, extension.file);

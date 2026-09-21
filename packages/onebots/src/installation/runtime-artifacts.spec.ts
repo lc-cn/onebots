@@ -106,3 +106,28 @@ it("拒绝混用另一版本宿主、目录越界和软链接，错误不泄漏�
         /^随产品提供的运行工件无效，请检查镜像或重新安装管理服务$/,
     );
 });
+
+it("loads relocated Web artifacts separately from selectable extensions", () => {
+    const test = fixture();
+    fs.writeFileSync(path.join(test.root, "web.tgz"), "web");
+    const web = {
+        name: "@onebots/web",
+        version: "99.0.1",
+        file: "web.tgz",
+        sha256: "d".repeat(64),
+    };
+    fs.writeFileSync(test.file, JSON.stringify({ ...test.manifest, web }));
+    const result = loadRuntimeArtifacts(test.file, expected);
+    expect(result.web).toEqual({
+        name: web.name,
+        version: web.version,
+        spec: `file:${test.root}/web.tgz`,
+        sha256: web.sha256,
+    });
+    expect(result.artifacts).toEqual({});
+    fs.writeFileSync(
+        test.file,
+        JSON.stringify({ ...test.manifest, web: { ...web, name: "other" } }),
+    );
+    expect(() => loadRuntimeArtifacts(test.file, expected)).toThrow("运行工件无效");
+});

@@ -27,6 +27,7 @@ const BUILTIN_FRAMEWORKS = new Map(
 export interface GenerationResolverConfig {
     host: GenerationArtifact;
     core: GenerationArtifact;
+    web?: GenerationArtifact;
     target?: GenerationTarget;
     /** 仅由已验证目标发布目录提供，不接受 HTTP 直接注入版本表。 */
     extensionVersions?: Readonly<Record<string, string>>;
@@ -132,6 +133,7 @@ export async function resolveGenerationPlan(
         plan: createGenerationPlan({
             host: config.host,
             core: config.core,
+            web: config.web,
             target: config.target,
             selection,
             extensions,

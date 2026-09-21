@@ -34,6 +34,8 @@ export interface GenerationTarget {
 export interface GenerationPlanInput {
     host: GenerationArtifact;
     core: GenerationArtifact;
+    /** 随宿主提供的 Web 工件；旧的已发布运行版本可继续从 registry 解析。 */
+    web?: GenerationArtifact;
     extensions: GenerationExtension[];
     selection: GenerationSelection;
     target?: GenerationTarget;
@@ -60,6 +62,8 @@ export interface GenerationPlan extends GenerationTarget {
     schemaVersion: 1;
     host: GenerationArtifact;
     core: GenerationArtifact;
+    /** 随宿主提供的 Web 工件；旧的已发布运行版本可继续从 registry 解析。 */
+    web?: GenerationArtifact;
     extensions: GenerationExtension[];
     selection: GenerationSelection;
     dependencies: Record<string, string>;
@@ -73,6 +77,8 @@ export interface GenerationPlan extends GenerationTarget {
 export function createGenerationPlan(input: GenerationPlanInput): GenerationPlan {
     const host = artifact(input.host);
     const core = artifact(input.core);
+    const web = input.web === undefined ? undefined : artifact(input.web);
+    if (web && web.name !== "@onebots/web") throw new Error("Web 工件身份无效");
     if (host.name !== "onebots" || core.name !== "@onebots/core")
         throw new Error("运行版本必须明确包含 onebots 和 @onebots/core 工件");
     const selection: GenerationSelection = {
@@ -93,6 +99,7 @@ export function createGenerationPlan(input: GenerationPlanInput): GenerationPlan
     const packages = new Map<string, GenerationArtifact>([
         [host.name, host],
         [core.name, core],
+        ...(web ? [[web.name, web] as const] : []),
     ]);
     const extensions: GenerationExtension[] = [];
     const peerRequirements: GenerationPeerRequirement[] = [];
@@ -183,12 +190,19 @@ export function createGenerationPlan(input: GenerationPlanInput): GenerationPlan
         private: true,
         type: "module",
         dependencies: { ...sortedDependencies },
-        pnpm: { overrides: sortedRecord({ onebots: host.spec, "@onebots/core": core.spec }) },
+        pnpm: {
+            overrides: sortedRecord({
+                onebots: host.spec,
+                "@onebots/core": core.spec,
+                ...(web ? { "@onebots/web": web.spec } : {}),
+            }),
+        },
     };
     const plan = {
         schemaVersion: 1 as const,
         host,
         core,
+        ...(web ? { web } : {}),
         extensions,
         selection,
         platform: target.platform,

@@ -294,3 +294,24 @@ describe("GenerationInstaller", () => {
         await expect(installer.install("closed", plan)).rejects.toThrow();
     });
 });
+
+it("rejects a changed bundled Web archive before starting the downloader", async () => {
+    const { root, plan, options, download } = fixture();
+    const file = path.join(root, "web.tgz");
+    fs.writeFileSync(file, "changed archive");
+    const withWeb = createGenerationPlan({
+        ...plan,
+        web: {
+            name: "@onebots/web",
+            version: "99.0.1",
+            spec: `file:${file}`,
+            sha256: "a".repeat(64),
+        },
+    });
+    const installer = new GenerationInstaller(options);
+    await expect(installer.install("tampered-web", withWeb)).resolves.toMatchObject({
+        phase: "failed",
+        error: "ARTIFACT_INPUT_FAILED",
+    });
+    expect(download).not.toHaveBeenCalled();
+});

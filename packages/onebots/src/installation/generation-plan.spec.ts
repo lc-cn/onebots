@@ -204,3 +204,23 @@ describe("generation declaration plan", () => {
         expect(JSON.stringify(createGenerationPlan(source))).not.toContain("private-test-secret");
     });
 });
+
+it("freezes unpublished Web alongside the host and preserves the digest on reload", () => {
+    const source = input();
+    source.web = {
+        name: "@onebots/web",
+        version: "99.0.1",
+        spec: "file:/tmp/web.tgz",
+        sha256: "b".repeat(64),
+    };
+    const plan = createGenerationPlan(source);
+    expect(plan.manifest.dependencies["@onebots/web"]).toBe(source.web.spec);
+    expect(plan.manifest.pnpm.overrides["@onebots/web"]).toBe(source.web.spec);
+    expect(createGenerationPlan({ ...plan, target: plan }).digest).toBe(plan.digest);
+    expect(
+        createGenerationPlan({ ...source, web: { ...source.web, sha256: "c".repeat(64) } }).digest,
+    ).not.toBe(plan.digest);
+    expect(() =>
+        createGenerationPlan({ ...source, web: { ...source.web, name: "other" } }),
+    ).toThrow("Web 工件身份无效");
+});
