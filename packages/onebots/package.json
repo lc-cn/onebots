@@ -1,6 +1,6 @@
 {
   "name": "onebots",
-  "version": "1.2.12",
+  "version": "1.2.13",
   "description": "OneBots 常驻管理服务、网关与统一 CLI/TUI/Web 控制台",
   "type": "module",
   "main": "lib/index.js",
