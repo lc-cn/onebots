@@ -1,6 +1,6 @@
 {
     "name": "@onebots/web",
-    "version": "1.0.17",
+    "version": "1.0.18",
     "description": "IMHelper Web 管理界面",
     "type": "module",
     "files": [
