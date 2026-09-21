@@ -1,3 +1,4 @@
+import { readArtifactMetadata } from "./artifact-metadata.js";
 import semver from "semver";
 import { TRUSTED_EXTENSION_CATALOG } from "../trusted-extension-catalog.js";
 import { getExtensionPackageCatalogEntry } from "../extension-capability-catalog.js";
@@ -107,7 +108,9 @@ export async function resolveGenerationPlan(
             throw new Error("受信扩展工件必须与宿主目录的精确版本一致");
         let metadata: unknown;
         try {
-            metadata = await metadataFetcher(entry.packageName, entry.version);
+            metadata = !config.fetchMetadata && artifact.spec.startsWith("file:")
+                ? await readArtifactMetadata(artifact)
+                : await metadataFetcher(entry.packageName, entry.version);
         } catch {
             throw new Error(METADATA_FAILURE);
         }
