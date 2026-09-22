@@ -153,3 +153,12 @@ describe("freeze local generation artifacts", () => {
         await expect(freezeGenerationArtifacts(config, cache)).rejects.toThrow("私有常规目录");
     });
 });
+
+it("freezes Web bytes before the original bundled archive disappears", async () => {
+    const f = await fixture();
+    f.config.web = { ...f.config.host, name: "@onebots/web" };
+    const frozen = await freezeGenerationArtifacts(f.config, f.cache);
+    await rm(f.source);
+    expect(await readFile(frozen.web!.spec.slice(5))).toEqual(f.contents);
+    expect(frozen.web!.spec).not.toBe(f.config.web.spec);
+});

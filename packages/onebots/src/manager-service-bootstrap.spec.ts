@@ -738,3 +738,14 @@ it.each(["intent.json", "candidate.json"])(
         expect(journal.read(installed.id)).toEqual(interrupted);
     },
 );
+
+it("preserves bundled Web in the first manager installation plan", async () => {
+    const f = fixture();
+    const web = { name: "@onebots/web", version: "99.0.1", spec: "99.0.1" };
+    await bootstrapManagerService(
+        f.request,
+        { ...f.dependencies, artifacts: { ...f.dependencies.artifacts, web } },
+        f.host,
+    );
+    expect(mock.install.mock.calls[0][1].web).toEqual(web);
+});

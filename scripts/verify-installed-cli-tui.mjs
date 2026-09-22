@@ -102,6 +102,9 @@ try {
     const coreArtifact = (({ file: _file, manifest: _manifest, ...artifact }) => artifact)(
         artifacts.get("@onebots/core"),
     );
+    const webArtifact = (({ file: _file, manifest: _manifest, ...artifact }) => artifact)(
+        artifacts.get("@onebots/web"),
+    );
     safeToRemove = false;
     host = await startControlHost({
         workspace,
@@ -113,6 +116,7 @@ try {
             resolver: {
                 host: hostArtifact,
                 core: coreArtifact,
+                web: webArtifact,
                 extensionVersions: Object.fromEntries(
                     Object.entries(resolverArtifacts).map(([name, artifact]) => [
                         name,
@@ -190,7 +194,7 @@ try {
         if (["verified", "failed", "interrupted"].includes(installation.phase)) break;
         await new Promise(resolve => setTimeout(resolve, 250));
     }
-    assert.equal(installation?.phase, "verified");
+    assert.equal(installation?.phase, "verified", `安装未通过：${installation?.error ?? installation?.phase}`);
     assert.ok(installation.candidateId);
     assert.equal(
         (await json(["control", "activate", ...data, "--generation", installation.candidateId]))

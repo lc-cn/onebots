@@ -39,7 +39,7 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
         };
         const plan = createGenerationPlan({
             host: artifact("onebots", "onebots"),
-            core: artifact("@onebots/core", "onebots-core"),
+            web: artifact("@onebots/web", "onebots-web"), core: artifact("@onebots/core", "onebots-core"),
             extensions: [],
             selection: { adapters: [], protocols: [], applications: [] },
         });
