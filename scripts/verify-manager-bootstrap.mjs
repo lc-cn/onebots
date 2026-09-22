@@ -49,7 +49,7 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     const request = { id: "initial-install", service: { schemaVersion: 1, runtimeKind: "control",
         scope: "user", workspace, nodePath: process.execPath, host: "127.0.0.1", port: 6727 } };
     const dependencies = { platform, assertAbsent: () => {}, artifacts: {
-        host: artifact("onebots", "onebots"), core: artifact("@onebots/core", "onebots-core"),
+        host: artifact("onebots", "onebots"), web: artifact("@onebots/web", "onebots-web"), core: artifact("@onebots/core", "onebots-core"),
     } };
     const result = await bootstrapManagerService({ service: request.service }, dependencies, host);
     assert.equal(result.status, "succeeded");

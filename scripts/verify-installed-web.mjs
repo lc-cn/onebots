@@ -236,6 +236,7 @@ try {
             resolver: {
                 host: publicArtifact("onebots"),
                 core: publicArtifact("@onebots/core"),
+                web: publicArtifact("@onebots/web"),
                 extensionVersions: Object.fromEntries(
                     Object.entries(resolverArtifacts).map(([name, artifact]) => [
                         name,

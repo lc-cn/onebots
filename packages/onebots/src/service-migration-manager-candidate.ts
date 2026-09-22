@@ -18,7 +18,7 @@ import type { ServiceMigrationBackup } from "./service-migration-types.js";
 
 export interface ServiceMigrationManagerCandidateDependencies {
     /** 仅来自可信产品配置，不能接受管理请求传入任意包地址。 */
-    artifacts: { host: GenerationArtifact; core: GenerationArtifact };
+    artifacts: { host: GenerationArtifact; core: GenerationArtifact; web?: GenerationArtifact };
     download?: ManagerCandidateInstallerOptions["download"];
 }
 const failure = () => new Error("迁移管理候选尚未验证，请保留原操作和工件，禁止重新安装或覆盖");
@@ -62,6 +62,7 @@ export async function prepareServiceMigrationManagerCandidate(
         const plan = createGenerationPlan({
             host: frozen.host,
             core: frozen.core,
+            web: frozen.web,
             extensions: [],
             selection: { adapters: [], protocols: [], applications: [] },
         });

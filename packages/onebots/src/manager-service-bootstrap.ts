@@ -49,7 +49,7 @@ export interface ManagerBootstrapRequest {
 }
 export interface ManagerBootstrapDependencies extends ManagerServiceInstallDependencies {
     /** 仅可信产品工件配置；不能来自 Web 请求中的 URL 或包名。 */
-    artifacts: { host: GenerationArtifact; core: GenerationArtifact };
+    artifacts: { host: GenerationArtifact; core: GenerationArtifact; web?: GenerationArtifact };
     download?: ManagerCandidateInstallerOptions["download"];
 }
 const failure = () =>
@@ -204,6 +204,7 @@ async function bootstrapManagerServiceImpl(
         const plan = createGenerationPlan({
             host: frozen.host,
             core: frozen.core,
+            web: frozen.web,
             extensions: [],
             selection: { adapters: [], protocols: [], applications: [] },
         });

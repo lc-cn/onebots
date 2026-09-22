@@ -250,3 +250,13 @@ it("refuses modified candidate receipt without overwriting evidence", async () =
     expect(fs.readFileSync(file, "utf8")).toBe(content);
     expect(mock.install).toHaveBeenCalledTimes(1);
 });
+
+it("preserves bundled Web in the migrated manager plan", async () => {
+    const f = fixture();
+    const web = { name: "@onebots/web", version: "99.0.1", spec: "99.0.1" };
+    await prepareServiceMigrationManagerCandidate(f.backup, f.state, f.id, {
+        ...f.dependencies,
+        artifacts: { ...f.dependencies.artifacts, web },
+    });
+    expect(mock.install.mock.calls[0][1].web).toEqual(web);
+});

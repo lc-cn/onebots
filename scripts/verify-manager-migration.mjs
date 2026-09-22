@@ -72,7 +72,7 @@ export async function verifyManagerMigration(runtime, archives, temporary) {
         const file = path.join(archives, `${prefix}-${version}.tgz`);
         return { name, version, spec: `file:${file}`, sha256: createHash("sha256").update(fs.readFileSync(file)).digest("hex") };
     };
-    const dependencies = { artifacts: { host: artifact("onebots", "onebots"), core: artifact("@onebots/core", "onebots-core") } };
+    const dependencies = { artifacts: { host: artifact("onebots", "onebots"), web: artifact("@onebots/web", "onebots-web"), core: artifact("@onebots/core", "onebots-core") } };
     const id = randomUUID();
     let releaseArtifacts;
     let selected;

@@ -58,6 +58,7 @@ export async function freezeGenerationArtifacts(
         };
         const host = await freeze(config.host);
         const core = await freeze(config.core);
+        const web = config.web ? await freeze(config.web) : undefined;
         const artifacts: Record<string, GenerationArtifact> | undefined = config.artifacts
             ? {}
             : undefined;
@@ -65,7 +66,13 @@ export async function freezeGenerationArtifacts(
             for (const [name, artifact] of Object.entries(config.artifacts!))
                 artifacts[name] = await freeze(artifact);
         }
-        return { ...config, host, core, ...(artifacts ? { artifacts } : {}) };
+        return {
+            ...config,
+            host,
+            core,
+            ...(web ? { web } : {}),
+            ...(artifacts ? { artifacts } : {}),
+        };
     } catch (error) {
         if (error instanceof ArtifactFreezeError) throw error;
         // fs errors include local paths; keep diagnostics crossing the control API path-free.
