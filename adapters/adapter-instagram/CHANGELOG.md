@@ -1,5 +1,12 @@
 # @onebots/adapter-instagram
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [12f6492]
+  - onebots@1.2.14
+
 ## 0.1.5
 
 ### Patch Changes
