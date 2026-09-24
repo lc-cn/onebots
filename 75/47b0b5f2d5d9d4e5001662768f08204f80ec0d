@@ -1,0 +1,48 @@
+packages/web/src/components/ControlConnectionsPanel.vue
+  s_efe26f87c3b074::t_78b00bc9ba3593 213
+  s_efe26f87c3b074::t_069d11e222c8fb 1-12,14-44,48-87,90-115,118-149,153-158,161-164,169-212
+  s_efe26f87c3b074::t_b591d0409fa302 13,45-47,88-89,116-117,150-152,159-160,165-168
+.changeset/guide-web-protocol-connections.md
+  s_efe26f87c3b074::t_7467f57aae0b75 1-2,5-6
+  s_efe26f87c3b074::t_74de1ffcc14a4a 3-4,7
+protocols/milky-v1/protocol/src/index.ts
+  s_efe26f87c3b074::t_74de1ffcc14a4a 35-46
+packages/web/src/App.vue
+  s_efe26f87c3b074::t_7cbbc6cb8a7f1a 309-311
+  s_efe26f87c3b074::t_b68193db87586c 312
+packages/web/src/views/OperationsView.vue
+  s_efe26f87c3b074::t_f2684bc6f78d3f 16
+  s_efe26f87c3b074::t_b591d0409fa302 95-98,162-165
+  s_efe26f87c3b074::t_3ff011ead634e4 2,51-57
+  s_efe26f87c3b074::t_7cbbc6cb8a7f1a 3-9,14,21-22,24-50,58-70,78,81-94,99-111,115,117-123,127-135,139-161,166-208
+protocols/satori-v1/protocol/src/index.ts
+  s_efe26f87c3b074::t_74de1ffcc14a4a 14-25
+packages/web/src/styles/control-connections.css
+  s_efe26f87c3b074::t_78b00bc9ba3593 1-276
+packages/web/src/components/control-connections.ts
+  s_efe26f87c3b074::t_b591d0409fa302 41,119,174-176,201,204-205,207-208
+  s_efe26f87c3b074::t_4e4610ecda5576 1-40,42-118,120-173,177-200,202-203,206,209-228
+packages/web/src/views/OverviewView.vue
+  s_efe26f87c3b074::t_3ff011ead634e4 171-177,180
+packages/web/src/components/control-connections.spec.ts
+  s_efe26f87c3b074::t_74de1ffcc14a4a 11-12,23-30,54-63
+  s_efe26f87c3b074::t_881ed56f485669 3
+  s_efe26f87c3b074::t_4e4610ecda5576 1-2,4-10,13-22,31-33,35-53,64-91
+  s_efe26f87c3b074::t_b591d0409fa302 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7547b0b5f2d5d9d4e5001662768f08204f80ec0d",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
