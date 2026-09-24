@@ -306,7 +306,10 @@ onUnmounted(() => {
             :client="client"
             :gateway-instance-id="gatewayInstanceId"
             :active="activeWorkspace === 'activity'"
-            :mutation-block="mutationBlock" />
+            :mutation-block="mutationBlock"
+            :configuration="configurationSnapshot"
+            :status="state"
+            @select="selectWorkspace" />
         <TerminalView
             v-show="activeWorkspace === 'terminal'"
             :token="token"

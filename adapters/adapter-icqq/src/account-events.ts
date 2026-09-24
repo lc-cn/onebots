@@ -132,10 +132,12 @@ export function wireICQQAccountEvents(
     });
     bot.on("auth", (event: ICQQAuthEvent) => {
         clearStatusCards();
-        context.logger.warn("ICQQ 需要身份验证", event);
+        context.logger.warn("ICQQ 需要身份验证，请前往 Web 管理端处理");
         const blocks: Adapter.VerificationBlock[] = [];
-        if (event.url) blocks.push({ type: "link", url: event.url, label: event.url });
+        if (event.url) blocks.push({ type: "link", url: event.url, label: "前往身份验证页面" });
         blocks.push({ type: "text", content: "请完成身份验证后继续登录" });
+        const device = authDeviceBlock(event.device);
+        if (device) blocks.push(device);
         emit("verification:request", {
             platform: "icqq",
             account_id: accountId,
@@ -184,6 +186,34 @@ export function wireICQQAccountEvents(
             account.status = AccountStatus.OffLine;
         }
     });
+}
+
+const AUTH_DEVICE_FIELDS = [
+    "guid",
+    "qimei",
+    "qimei36",
+    "subappid",
+    "platform",
+    "brand",
+    "model",
+    "bssid",
+    "devInfo",
+    "sysVersion",
+] as const;
+
+function authDeviceBlock(
+    device: ICQQAuthEvent["device"] | undefined,
+): Adapter.VerificationBlock | undefined {
+    if (!device || typeof device !== "object") return undefined;
+    const rows = AUTH_DEVICE_FIELDS.flatMap(key => {
+        const value: unknown = device[key];
+        return typeof value === "string" ? [`${key}: ${value || "（空）"}`] : [];
+    });
+    if (!rows.length) return undefined;
+    return {
+        type: "text",
+        content: ["设备信息（验证页面可能需要）", ...rows].join("\n"),
+    };
 }
 
 function wireProjectedEvents(

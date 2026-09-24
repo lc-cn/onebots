@@ -32,8 +32,18 @@ import { executeMilkyDirectoryAction, MILKY_DIRECTORY_ACTIONS } from "./director
 import { createMilkySignature, verifyMilkyToken } from "./auth.js";
 
 const milkySchema: Schema = {
-    use_http: { type: "boolean", label: "启用 HTTP", ui: { section: "transport" } },
-    use_ws: { type: "boolean", label: "启用 WebSocket", ui: { section: "transport" } },
+    use_http: {
+        type: "boolean",
+        default: true,
+        label: "启用 HTTP",
+        ui: { section: "transport" },
+    },
+    use_ws: {
+        type: "boolean",
+        default: false,
+        label: "启用 WebSocket",
+        ui: { section: "transport" },
+    },
     http_reverse: {
         type: "array",
         default: [],

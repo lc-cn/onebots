@@ -1,0 +1,276 @@
+.connection-panel {
+    display: grid;
+    gap: 1.15rem;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+}
+.connection-heading h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0.15rem 0 0.45rem;
+    font-size: 1.12rem;
+    font-weight: 650;
+}
+.connection-heading p:last-child {
+    max-width: 66ch;
+    margin: 0;
+    color: var(--fg-secondary);
+}
+.connection-flow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.7rem;
+    margin: 0;
+    padding: 1rem;
+    list-style: none;
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+}
+.connection-flow li:not([aria-hidden]) {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 0.55rem;
+    align-items: center;
+}
+.connection-flow li > span,
+.connection-steps li > span {
+    display: inline-flex;
+    width: 1.6rem;
+    height: 1.6rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font: 650 0.75rem var(--font-mono);
+}
+.connection-flow small {
+    grid-column: 2;
+    color: var(--fg-tertiary);
+}
+.connection-flow li[aria-hidden] {
+    color: var(--fg-tertiary);
+}
+.connection-origin {
+    display: grid;
+    grid-template-columns: minmax(13rem, 0.65fr) minmax(18rem, 1fr);
+    gap: 1rem;
+    align-items: center;
+}
+.connection-origin span {
+    display: grid;
+}
+.connection-origin small {
+    color: var(--fg-secondary);
+    font-weight: 400;
+}
+.connection-origin input {
+    min-width: 0;
+    padding: 0.72rem 0.85rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--fg);
+    font-family: var(--font-mono);
+}
+.connection-list {
+    display: grid;
+    gap: 1rem;
+}
+.connection-card {
+    display: grid;
+    gap: 1rem;
+    padding: 1.15rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    background: var(--surface-raised);
+}
+.connection-card > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+.connection-card header p,
+.connection-card header h3,
+.connection-card header span {
+    margin: 0;
+}
+.connection-card header p {
+    color: var(--accent);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+.connection-card header h3 {
+    margin-top: 0.12rem;
+    font-size: 1.05rem;
+}
+.connection-card header span {
+    color: var(--fg-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+}
+.connection-card header em {
+    padding: 0.28rem 0.55rem;
+    border-radius: var(--radius-control);
+    background: var(--surface-strong);
+    color: var(--fg-secondary);
+    font-size: 0.75rem;
+    font-style: normal;
+    white-space: nowrap;
+}
+.connection-card header em.online {
+    background: var(--success-soft);
+    color: var(--success);
+}
+.connection-card header em.offline {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+.connection-steps {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.connection-steps li {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--fg-secondary);
+}
+.connection-steps li > span {
+    width: 1.35rem;
+    height: 1.35rem;
+    flex: 0 0 auto;
+}
+.endpoint-list {
+    display: grid;
+    gap: 0.65rem;
+}
+.endpoint-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+}
+.endpoint-copy {
+    display: grid;
+    min-width: 0;
+    gap: 0.22rem;
+}
+.endpoint-copy > span {
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+.endpoint-copy code {
+    overflow-x: auto;
+    padding: 0;
+    background: transparent;
+    color: var(--fg);
+    white-space: nowrap;
+}
+.endpoint-copy small,
+.reverse-summary small {
+    color: var(--fg-tertiary);
+}
+.copy-endpoint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--fg);
+    transition:
+        transform 160ms ease,
+        border-color 160ms ease;
+}
+.copy-endpoint:hover {
+    border-color: var(--accent);
+}
+.copy-endpoint:active {
+    transform: scale(0.97);
+}
+.reverse-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+.reverse-summary span {
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-control);
+    background: var(--info-soft);
+    color: var(--info);
+    font-size: 0.76rem;
+}
+.reverse-summary small {
+    flex-basis: 100%;
+}
+.auth-summary,
+.connection-warning,
+.connection-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0.65rem 0.75rem;
+    border-radius: var(--radius-control);
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+.auth-summary.configured {
+    background: var(--success-soft);
+    color: var(--success);
+}
+.connection-note {
+    background: var(--info-soft);
+    color: var(--info);
+}
+.connection-empty {
+    display: grid;
+    justify-items: start;
+    gap: 0.45rem;
+    padding: 1.2rem;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-card);
+}
+.connection-empty p {
+    margin: 0;
+    color: var(--fg-secondary);
+}
+.connection-empty-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 0.4rem;
+}
+@media (max-width: 720px) {
+    .connection-flow {
+        grid-template-columns: 1fr;
+    }
+    .connection-flow li[aria-hidden] {
+        display: none;
+    }
+    .connection-origin {
+        grid-template-columns: 1fr;
+    }
+    .endpoint-row {
+        grid-template-columns: 1fr;
+    }
+    .copy-endpoint {
+        justify-content: center;
+    }
+}
