@@ -36,8 +36,22 @@ export interface ICQQQRCodeEvent {
     image: Buffer;
 }
 
-/** 身份验证事件；额外字段由 ICQQ 版本决定并原样保留。 */
+/** 身份验证页面要求使用的设备信息。 */
+export interface ICQQAuthDevice {
+    guid: string;
+    qimei: string;
+    qimei36: string;
+    subappid: string;
+    platform: string;
+    brand: string;
+    model: string;
+    bssid: string;
+    devInfo: string;
+    sysVersion: string;
+}
+
+/** 身份验证事件。 */
 export interface ICQQAuthEvent {
-    url?: string;
-    [key: string]: unknown;
+    url: string;
+    device: ICQQAuthDevice;
 }
