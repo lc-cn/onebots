@@ -168,9 +168,16 @@ function keepCommandFocus(event: KeyboardEvent) {
                     </div>
                     <div class="runtime-actions">
                         <UiButton
+                            v-if="state.gateway.actual === 'running'"
+                            variant="primary"
+                            @click="emit('select', 'activity')">
+                            <IconPlugConnected :size="17" aria-hidden="true" />连接下游
+                        </UiButton>
+                        <UiButton
+                            v-else
                             variant="primary"
                             :loading="busy"
-                            :disabled="!!mutationBlock || state.gateway.actual === 'running'"
+                            :disabled="!!mutationBlock"
                             @click="requestCommand('start')"
                             >启动网关</UiButton
                         >
