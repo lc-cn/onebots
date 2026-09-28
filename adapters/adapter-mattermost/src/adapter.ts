@@ -157,6 +157,16 @@ export class MattermostAdapter extends MattermostResourceAdapter {
             ),
         );
         client.on("error", error => this.logger.error("Mattermost 事件管线异常", error));
+        client.on("connected", () => {
+            account.status = AccountStatus.Online;
+        });
+        client.on("disconnected", () => {
+            account.status = AccountStatus.OffLine;
+            this.emit("connection:disconnected", {
+                platform: "mattermost",
+                account_id: String(account.account_id),
+            });
+        });
         account.on("start", async signal => {
             try {
                 await client.start(signal);

@@ -6,9 +6,9 @@ defineEmits<{ leave: [] }>();
 </script>
 <template>
     <section class="border border-border rounded-panel p-4 space-y-3" aria-live="polite">
-        <h3 class="font-medium">
+        <h2 class="font-medium">
             {{ preview.state === "current" ? "当前网关已是最新发布组合" : "可升级的网关运行版本" }}
-        </h3>
+        </h2>
         <p class="text-sm text-fg-secondary">
             使用已安装的完整依赖清单，包括尚未启用的扩展；不修改账号或协议配置。
         </p>
@@ -25,7 +25,11 @@ defineEmits<{ leave: [] }>();
                     <tr v-for="item in preview.packages" :key="item.name">
                         <td class="py-1 pr-4 break-all">{{ item.name }}</td>
                         <td class="pr-4">{{ item.current ?? "未安装" }}</td>
-                        <td><span :class="{ 'version-change': item.current !== item.target }">{{ item.target }}</span></td>
+                        <td>
+                            <span :class="{ 'version-change': item.current !== item.target }">{{
+                                item.target
+                            }}</span>
+                        </td>
                     </tr>
                 </tbody>
             </table>

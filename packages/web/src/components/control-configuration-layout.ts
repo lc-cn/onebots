@@ -2,6 +2,15 @@ import type { ConfigurationFormGroup } from "./control-configuration-form.js";
 import type { SchemaFieldDef } from "./config/types.js";
 
 export type ConfigurationWorkspace = "accounts" | "protocols" | "runtime" | "review";
+export type ConfigurationScope = Exclude<ConfigurationWorkspace, "review">;
+export interface ConfigurationNavigationTarget {
+    platform: string;
+    accountId: string;
+    /** 空字符串表示添加协议，未提供表示编辑账号。 */
+    protocolKey?: string;
+    action?: "remove";
+    revision: number;
+}
 export type ConfigurationAction = "save" | "validate" | "apply" | "query" | "new-draft" | "fix";
 
 export interface ConfigurationGroupLayout {

@@ -14,6 +14,7 @@ describe("Google Chat canonical 事件投影", () => {
         expect(event).toMatchObject({
             type: "message",
             message_type: "direct",
+            scene_id: { string: "spaces/DM" },
             message_id: { string: "spaces/DM/messages/one" },
             message: [{ type: "text", data: { text: "hello" } }],
             raw_event: { type: "MESSAGE" },

@@ -73,7 +73,12 @@ export class GoogleChatAdapter extends Adapter<GoogleChatClient, "google-chat"> 
             `/v1/${requireSpaceName(params.scene_id.string)}/messages`,
             { body: compileGoogleChatMessage(params.message) },
         );
-        return { message_id: this.createId(parseCreatedMessageName(response)) };
+        return {
+            message_id: this.createId(parseCreatedMessageName(response)),
+            ...(params.scene_type === "direct"
+                ? { scene: { scene_type: "direct" as const, scene_id: params.scene_id } }
+                : {}),
+        };
     }
 
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {

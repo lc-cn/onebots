@@ -54,6 +54,8 @@ import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
 import { connectWindowsManagerRPC } from "../windows-manager-rpc.js";
 import { createControlRequestHandler } from "./host-http.js";
 import { ControlTerminalService } from "./terminal-service.js";
+import { ControlNotificationService } from "./notification-service.js";
+import { ChatHistoryStore } from "../chat-history-store.js";
 export type { ControlHostOptions } from "./host-options.js";
 export async function startControlHost(options: ControlHostOptions) {
     if (
@@ -91,6 +93,41 @@ export async function startControlHost(options: ControlHostOptions) {
         ? true
         : await claimServiceProcessOwnership(workspace, id, freshWorkspace);
     const controlLogs = createControlLogWriter(workspace, id);
+    let notifications: ControlNotificationService | undefined;
+    let chatHistory: ChatHistoryStore | undefined;
+    try {
+        chatHistory = new ChatHistoryStore(
+            path.join(workspace, "data", "chat-history.db"),
+            error => {
+                try {
+                    appendControlLog(
+                        workspace,
+                        "manager",
+                        `${JSON.stringify({ time: new Date().toISOString(), level: "error", event: "chat_history_prune_failed", message: String(error) })}\n`,
+                    );
+                } catch {
+                    process.stderr.write("[onebots] 聊天历史过期清理失败，管理日志不可写\n");
+                }
+            },
+        );
+    } catch {
+        process.stderr.write("[onebots] 聊天历史存储不可用，请检查工作区\n");
+    }
+    try {
+        notifications = new ControlNotificationService(
+            path.join(controlDirectory(workspace), "notifications"),
+        );
+    } catch {
+        process.stderr.write("[onebots] 通知存储不可用，通知功能已停用，请检查工作区\n");
+    }
+    const observeOperation = (operation: Parameters<typeof controlLogs.operation>[0]) => {
+        controlLogs.operation(operation);
+        try {
+            notifications?.observeOperation(operation);
+        } catch {
+            process.stderr.write("[onebots] 通知事件持久化失败\n");
+        }
+    };
     let auth: ControlAuth | undefined;
     let authAvailable = true;
     let storageError = !ownershipAvailable || serviceMigrationStatus(workspace).recoveryRequired;
@@ -131,6 +168,13 @@ export async function startControlHost(options: ControlHostOptions) {
             };
         },
         onExit: (instanceId, error) => {
+            if (error) {
+                try {
+                    notifications?.gatewayExited();
+                } catch {
+                    process.stderr.write("[onebots] 网关退出告警持久化失败\n");
+                }
+            }
             void controller
                 .observeExit(instanceId, error)
                 .then(() => publishWindowsStatus())
@@ -139,6 +183,13 @@ export async function startControlHost(options: ControlHostOptions) {
                         "[onebots] 网关退出状态无法持久化或发布，请检查工作区存储\n",
                     );
                 });
+        },
+        onDisconnect: account => {
+            try {
+                notifications?.observeDisconnect(account);
+            } catch {
+                process.stderr.write("[onebots] 账号连接中断告警持久化失败\n");
+            }
         },
     });
     let publisher: WindowsManagerStatusPublisher | undefined;
@@ -155,7 +206,7 @@ export async function startControlHost(options: ControlHostOptions) {
         statePath: path.join(controlDirectory(workspace), "gateway.json"),
         driver,
         onOperation: operation => {
-            controlLogs.operation(operation);
+            observeOperation(operation);
             void publishWindowsStatus();
         },
         initialDesired: serviceMigrationStatus(workspace).pending ? "stopped" : "running",
@@ -203,7 +254,7 @@ export async function startControlHost(options: ControlHostOptions) {
         configurationRecoveryRequired: () =>
             configurationStorageUnavailable ||
             Boolean(configurationApplication?.health().recoveryRequired),
-        onOperation: controlLogs.operation,
+        onOperation: observeOperation,
     });
     const upgradeIdentity = createManagerUpgradeIdentity(id, import.meta.url);
     const releaseUpgrade = createManagerUpgradeRelease(
@@ -221,7 +272,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 path.join(controlDirectory(workspace), "configuration/recovery"),
             ),
             lifecycle,
-            onOperation: controlLogs.operation,
+            onOperation: observeOperation,
         });
         if (generations && ownershipAvailable)
             configuration = new ControlConfigurationService({
@@ -242,7 +293,7 @@ export async function startControlHost(options: ControlHostOptions) {
         generations,
         lifecycle,
         ownershipAvailable,
-        controlLogs.operation,
+        observeOperation,
     );
     const sockets = new Set<Duplex>();
     let closed = false;
@@ -274,7 +325,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 return instanceId ? driver.sendContext(instanceId) : undefined;
             },
             forward: request => driver.send(request.expected.gatewayInstanceId, request),
-            onOperation: controlLogs.operation,
+            onOperation: observeOperation,
         });
     } catch {
         process.stderr.write("[onebots] 发送操作记录不可用，管理端保留用于诊断\n");
@@ -285,7 +336,7 @@ export async function startControlHost(options: ControlHostOptions) {
         driver,
         lifecycle,
         currentGateway,
-        onOperation: controlLogs.operation,
+        onOperation: observeOperation,
         available: () =>
             !closed &&
             !storageError &&
@@ -293,11 +344,40 @@ export async function startControlHost(options: ControlHostOptions) {
             !configurationStorageUnavailable &&
             !configurationApplication?.health().recoveryRequired,
     });
+    notifications?.setChallengeResolver(async challengeId => {
+        const snapshot = await verification.service.snapshot();
+        return snapshot.challenges.find(challenge => challenge.id === challengeId);
+    });
     const messageDebug = new ControlMessageDebugService({
         currentInstance: currentGateway,
         forward: (instanceId, action) => driver.messageDebug(instanceId, action),
     });
     const messageDebugHttp = new ControlMessageDebugHttp(messageDebug, auth);
+    let notificationPolling = false;
+    const notificationTimer = setInterval(() => {
+        if (!notifications || notificationPolling || closed) return;
+        notificationPolling = true;
+        void (async () => {
+            try {
+                const instanceId = currentGateway();
+                const status = instanceId
+                    ? driver.accountStatuses(instanceId)
+                    : { available: false, items: [] };
+                // 运行中的网关暂时没有状态快照时不能推断全部账号离线；无实例才是已停止。
+                if (!instanceId || status.available)
+                    notifications?.observeAccounts(status.available ? status.items : []);
+                if (instanceId) {
+                    const snapshot = await verification.service.snapshot();
+                    notifications?.observeChallenges(snapshot.challenges);
+                }
+            } catch {
+                // 网关切换时快照短暂不可用；下次轮询继续，不能影响管理服务。
+            } finally {
+                notificationPolling = false;
+            }
+        })();
+    }, 2_000);
+    notificationTimer.unref();
     const terminal = new ControlTerminalService({
         workspace,
         manager: { id, version: packageMetadata.version },
@@ -329,6 +409,14 @@ export async function startControlHost(options: ControlHostOptions) {
         installation,
         configuration,
         sending,
+        chatHistory,
+        accountExplore: {
+            context: () => {
+                const instanceId = currentGateway();
+                return instanceId ? driver.sendContext(instanceId) : undefined;
+            },
+            explore: request => driver.exploreAccount(request.expected.gatewayInstanceId, request),
+        },
         verification,
         messageDebugHttp,
         mcp,
@@ -336,6 +424,7 @@ export async function startControlHost(options: ControlHostOptions) {
         upgradeIdentity,
         publisher,
         terminal,
+        notifications,
         activeAddress,
         respondSnapshot,
         serverAddress: () => server.address(),
@@ -399,7 +488,10 @@ export async function startControlHost(options: ControlHostOptions) {
         windowsRpcClosed = true;
         if (windowsRpcReconnect) clearTimeout(windowsRpcReconnect);
         if (windowsStatusHeartbeat) clearInterval(windowsStatusHeartbeat);
+        clearInterval(notificationTimer);
+        const notificationsClosed = notifications?.close();
         messageDebugHttp.close();
+        chatHistory?.close();
         terminal.close();
         const verificationClosed = verification.close();
         messageDebug.close();
@@ -425,6 +517,7 @@ export async function startControlHost(options: ControlHostOptions) {
         }
         await publisher?.flush();
         await sending?.close();
+        await notificationsClosed;
         await verificationClosed;
         for (const socket of sockets) socket.destroy();
         await Promise.all(

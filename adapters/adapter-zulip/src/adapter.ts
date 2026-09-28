@@ -54,7 +54,18 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
                   to: parseDirectRecipients(source),
                   content,
               });
-        return { message_id: this.createId(response.id) };
+        const recipients = stream ? [] : parseDirectRecipients(source);
+        return {
+            message_id: this.createId(response.id),
+            ...(recipients.length > 1
+                ? {
+                      scene: {
+                          scene_type: "direct" as const,
+                          scene_id: this.createId(recipients.join(",")),
+                      },
+                  }
+                : {}),
+        };
     }
 
     /** 删除一条 Zulip 消息。 */
@@ -321,6 +332,10 @@ export class ZulipAdapter extends Adapter<ZulipClient, "zulip"> {
         });
         client.on("disconnected", error => {
             account.status = AccountStatus.OffLine;
+            this.emit("connection:disconnected", {
+                platform: "zulip",
+                account_id: String(account.account_id),
+            });
             this.logger.warn(`Zulip Event Queue 暂时断开: ${error.message}`);
         });
         client.on("client_error", error => this.logger.error("Zulip 客户端错误", error));

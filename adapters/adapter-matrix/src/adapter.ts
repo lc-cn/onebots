@@ -63,7 +63,12 @@ export class MatrixAdapter extends Adapter<MatrixClient, "matrix"> {
             throw new MatrixError("Matrix 未返回消息事件 ID", {
                 code: "MATRIX_EMPTY_SEND_RESPONSE",
             });
-        return { message_id: this.createId(firstEventId) };
+        return {
+            message_id: this.createId(firstEventId),
+            ...(params.scene_type === "direct"
+                ? { scene: { scene_type: "direct" as const, scene_id: params.scene_id } }
+                : {}),
+        };
     }
 
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {

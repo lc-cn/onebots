@@ -36,6 +36,9 @@ export function projectQQMessage<TEvent extends QQMessageProjectionInput>(
         bot_id: context.botId,
         type: "message",
         message_type: scene,
+        ...(scene === "direct" && event.guildId
+            ? { scene_id: context.createId(event.guildId) }
+            : {}),
         sender: { id: context.createId(event.senderId), name: event.senderName },
         group:
             scene === "group" && groupId

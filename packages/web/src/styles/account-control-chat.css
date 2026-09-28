@@ -1,0 +1,189 @@
+.account-control-history {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+}
+.account-control-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    overflow-y: auto;
+    height: 100%;
+    padding: 1.2rem;
+    background: color-mix(in srgb, var(--surface) 88%, var(--surface-raised));
+}
+.account-control-jump-latest {
+    position: absolute;
+    right: 1rem;
+    bottom: 1rem;
+    min-height: 2.2rem;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--accent);
+    box-shadow: var(--shadow);
+    font-size: var(--type-label);
+    font-weight: 650;
+}
+.account-control-jump-latest:hover {
+    background: var(--surface-strong);
+}
+.account-control-skeleton {
+    display: grid;
+    gap: 0.7rem;
+    margin-top: auto;
+    max-width: 70%;
+}
+.account-control-skeleton span {
+    display: block;
+    width: 65%;
+    height: 2.8rem;
+    border-radius: var(--radius-control);
+    background: var(--surface-strong);
+    animation: account-control-pulse 1.5s ease-in-out infinite alternate;
+}
+.account-control-skeleton span:nth-child(2) {
+    width: 85%;
+}
+.account-control-skeleton span:nth-child(3) {
+    width: 55%;
+}
+@keyframes account-control-pulse {
+    to {
+        opacity: 0.55;
+    }
+}
+.account-control-placeholder {
+    align-self: center;
+    margin: auto;
+    max-width: 17rem;
+    text-align: center;
+    color: var(--fg-secondary);
+    line-height: 1.6;
+}
+.account-control-older {
+    align-self: center;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font-size: var(--type-label);
+}
+.account-control-message {
+    max-width: min(78%, 34rem);
+    align-self: flex-start;
+}
+.account-control-message.outbound {
+    align-self: flex-end;
+}
+.account-control-message > div {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+    color: var(--fg-secondary);
+    font-size: 0.7rem;
+}
+.account-control-message > div > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.account-control-message.outbound > div {
+    justify-content: flex-end;
+}
+.account-control-message p {
+    padding: 0.7rem 0.9rem;
+    border-radius: 0.2rem 0.9rem 0.9rem 0.9rem;
+    background: var(--surface);
+    color: var(--fg);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--fg) 9%, transparent);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+    font-size: var(--type-label);
+}
+.account-control-message.outbound p {
+    border-radius: 0.9rem 0.2rem 0.9rem 0.9rem;
+    background: var(--accent-soft);
+}
+.account-control-composer {
+    display: grid;
+    gap: 0.45rem;
+    padding: 0.85rem 1rem;
+    border-top: 1px solid var(--border);
+}
+.account-control-composer label {
+    color: var(--fg-secondary);
+    font-size: 0.72rem;
+}
+.account-control-capability-pending {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+.account-control-composer textarea {
+    resize: vertical;
+    min-height: 4rem;
+    max-height: 12rem;
+    width: 100%;
+    padding: 0.6rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--fg);
+    font-size: var(--type-label);
+}
+.account-control-compose-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.account-control-compose-actions span {
+    color: var(--fg-secondary);
+    font-size: 0.72rem;
+}
+.account-control-send-state {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    color: var(--warning);
+    font-size: var(--type-label);
+}
+.account-control-send-state > button:not(.ui-button) {
+    border: 0;
+    background: transparent;
+    color: var(--fg-secondary);
+    text-decoration: underline;
+}
+.account-control-send-state .ui-button[aria-disabled="true"] {
+    opacity: 0.6;
+    cursor: progress;
+}
+.account-control-abandon-confirm {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-control);
+    background: var(--warning-soft);
+}
+.account-control-abandon-confirm span {
+    flex: 1 1 100%;
+    color: var(--fg);
+}
+.account-control-abandon-confirm button {
+    border: 0;
+    background: transparent;
+    color: var(--fg-secondary);
+    font-size: var(--type-label);
+    text-decoration: underline;
+}
+.account-control-abandon-confirm button:last-child {
+    color: var(--danger);
+}

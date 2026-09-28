@@ -37,21 +37,8 @@ watch(
 );
 onUnmounted(() => controller.dispose());
 
-function selectTab(source: ControlLogSource): void {
+function selectSource(source: ControlLogSource): void {
     controller.setSource(source);
-}
-
-function navigateTabs(event: KeyboardEvent, index: number): void {
-    let next = index;
-    if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
-    else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = tabs.length - 1;
-    else return;
-    event.preventDefault();
-    selectTab(tabs[next].source);
-    const list = (event.currentTarget as HTMLElement).parentElement;
-    list?.querySelectorAll<HTMLButtonElement>("[role=tab]")[next]?.focus();
 }
 </script>
 
@@ -61,35 +48,33 @@ function navigateTabs(event: KeyboardEvent, index: number): void {
             <div>
                 <p class="diagnostic-panel-kicker">实时输出</p>
                 <h2 id="service-logs-title"><IconTerminal2 :size="19" />服务日志</h2>
-                <p>进入页面即连接当前日志源，切换标签或离开页面时连接会自动关闭。</p>
+                <p>进入页面即连接当前日志源，切换来源或离开页面时连接会自动关闭。</p>
             </div>
             <span class="log-stream-status" :class="current.status" role="status">
                 <i aria-hidden="true"></i>{{ statusLabel }}
             </span>
         </header>
 
-        <div class="log-tabs" role="tablist" aria-label="服务日志来源">
-            <button
-                v-for="(tab, index) in tabs"
-                :id="`log-tab-${tab.source}`"
-                :key="tab.source"
-                type="button"
-                role="tab"
-                :aria-selected="view.source === tab.source"
-                :aria-controls="`log-panel-${tab.source}`"
-                :tabindex="view.source === tab.source ? 0 : -1"
-                @click="selectTab(tab.source)"
-                @keydown="navigateTabs($event, index)">
-                <span>{{ tab.label }}</span>
-                <small>{{ tab.description }}</small>
-            </button>
+        <div class="log-source-toolbar">
+            <label for="log-source-select">日志来源</label>
+            <select
+                id="log-source-select"
+                :value="view.source"
+                @change="
+                    selectSource(($event.target as HTMLSelectElement).value as ControlLogSource)
+                ">
+                <option v-for="tab in tabs" :key="tab.source" :value="tab.source">
+                    {{ tab.label }}
+                </option>
+            </select>
+            <span>{{ currentTab.description }}</span>
         </div>
 
         <div
             :id="`log-panel-${view.source}`"
             class="log-console"
-            role="tabpanel"
-            :aria-labelledby="`log-tab-${view.source}`">
+            role="region"
+            :aria-label="`${currentTab.label}日志`">
             <div class="log-console-meta">
                 <span>{{ currentTab.label }}日志</span>
                 <span>最多保留最近 256 KiB</span>

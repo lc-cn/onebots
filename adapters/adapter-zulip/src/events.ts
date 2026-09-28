@@ -193,6 +193,9 @@ function projectMessage(
         ...base(event, context, message.timestamp * 1000),
         type: "message",
         message_type: isStream ? "group" : directRecipientIds.length > 1 ? "direct" : "private",
+        ...(directRecipientIds.length > 1
+            ? { scene_id: context.createId(directRecipientIds.join(",")) }
+            : {}),
         sender: {
             id: context.createId(message.sender_id),
             name: message.sender_full_name,

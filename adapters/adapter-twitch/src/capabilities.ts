@@ -53,9 +53,10 @@ const platformActions = definePlatformActionCapabilities(TWITCH_PLATFORM_ACTIONS
 /** Twitch Helix、EventSub WebSocket/Webhook 与平台资源的真实能力边界。 */
 export const twitchCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: permission([
-            "user:write:chat + user:bot（频道）或 user:manage:whispers（私信）",
-        ]),
+        send_message: {
+            ...permission(["user:write:chat + user:bot（频道）或 user:manage:whispers（私信）"]),
+            scenes: ["private", "channel", "direct"],
+        },
         delete_message: permission(["moderator:manage:chat_messages"]),
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },

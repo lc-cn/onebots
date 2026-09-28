@@ -279,7 +279,13 @@ export class Ircv3Adapter extends Adapter<Ircv3Client, "ircv3"> {
             account.status = AccountStatus.OffLine;
         });
         client.on("disconnected", () => {
-            if (client.receiveMode === "connection") account.status = AccountStatus.Pending;
+            if (client.receiveMode === "connection") {
+                account.status = AccountStatus.Pending;
+                this.emit("connection:disconnected", {
+                    platform: "ircv3",
+                    account_id: String(account.account_id),
+                });
+            }
         });
         client.on("connected", () => {
             account.status = AccountStatus.Online;

@@ -7,7 +7,7 @@
     "types": "lib/index.d.ts",
     "scripts": {
         "build": "tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
-        "clean": "rm -rf lib *.tsbuildinfo"
+        "clean": "node ../../scripts/clean-package.mjs lib"
     },
     "keywords": [
         "onebots",

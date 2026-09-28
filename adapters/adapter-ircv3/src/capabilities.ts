@@ -34,7 +34,7 @@ const platformActions = definePlatformActionCapabilities(IRCV3_PLATFORM_ACTIONS,
 /** Modern IRC 核心、稳定 IRCv3 扩展与 socket/manual 接入的静态能力上界。 */
 export const ircv3Capabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: { support: "native", scenes: ["channel", "direct"] },
+        send_message: { support: "native", scenes: ["private", "channel", "direct"] },
         get_message_history: contextual(
             "需要显式请求 WIP draft/chathistory，并协商 batch、message-tags、server-time 与 CHATHISTORY ISUPPORT",
         ),

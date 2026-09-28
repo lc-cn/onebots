@@ -7,7 +7,11 @@ import { writeCliOutput } from "../cli-output.js";
 import { runConfigurationCommand } from "./configuration-command.js";
 import { runVerificationCommand } from "./verification-command.js";
 import { parseServeOptions, SERVE_HELP } from "./serve-options.js";
-import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
+import {
+    ControlClient,
+    ControlRequestError,
+    createHttpControlTransport,
+} from "@onebots/core/control";
 
 /** 新控制入口只在独立架构分支启用，所有启停调用同一客户端。 */
 export async function runControlCommand(argv: string[]): Promise<boolean> {
@@ -44,7 +48,9 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
     if (command === "serve") {
         const host = await startControlHost(serve!);
         writeCliOutput(
-            `[onebots] 管理服务已启动；首次配对请运行 onebots auth bootstrap --data-dir ${workspace}`,
+            process.platform === "win32" && !serve!.windowsHostPipe
+                ? "[onebots] 管理服务已启动（Windows 前台模式）；此模式没有本地认证管道。首次配对请在启动前设置 ONEBOTS_BOOTSTRAP_CODE，或通过安装脚本启动系统服务。"
+                : `[onebots] 管理服务已启动；首次配对请运行 onebots auth bootstrap --data-dir ${workspace}`,
         );
         let stopping = false;
         for (const signal of ["SIGINT", "SIGTERM"] as const)
@@ -86,12 +92,22 @@ export async function runControlCommand(argv: string[]): Promise<boolean> {
             );
         if (options.length !== 1 && !(options.length === 3 && options[1] === "--data-dir"))
             throw new Error("认证命令只接受 --data-dir 工作区，不接受凭证参数");
-        const result =
-            action === "recover"
-                ? await client.recoverAuthentication()
-                : action === "device"
-                  ? await client.authorizeDevice()
-                  : await client.bootstrap();
+        let result: { code: string };
+        try {
+            result =
+                action === "recover"
+                    ? await client.recoverAuthentication()
+                    : action === "device"
+                      ? await client.authorizeDevice()
+                      : await client.bootstrap();
+        } catch (error) {
+            if (process.platform === "win32" && !(error instanceof ControlRequestError))
+                throw new Error(
+                    "Windows 本地授权需要已启动的原生系统服务；前台 serve 没有管理管道。开发环境可在启动前设置一次性 ONEBOTS_BOOTSTRAP_CODE 或 ONEBOTS_RECOVERY_CODE，详见管理端登录文档。",
+                    { cause: error },
+                );
+            throw error;
+        }
         writeCliOutput(result.code);
         return true;
     }

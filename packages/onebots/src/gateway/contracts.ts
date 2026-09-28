@@ -24,7 +24,7 @@ export interface GatewayStopMessage extends GatewayIdentity {
 export interface GatewayReadyMessage extends GatewayIdentity {
     /** 私有管理传输已可用；不代表全部账号在线或协议已完成启动。 */
     type: "gateway.ready";
-    capabilities?: Array<"mcp" | "send" | "message-debug" | "verification">;
+    capabilities?: Array<"mcp" | "send" | "message-debug" | "verification" | "account-explore">;
     configVersion: string;
     dependencyVersion: string;
     address: { host: "127.0.0.1"; port: number };
@@ -42,14 +42,42 @@ export interface GatewayAccountStatusMessage extends GatewayIdentity {
         platform: string;
         accountId: string;
         status: "pending" | "online" | "offline";
+        avatarUrl?: string;
+        platformIconUrl?: string;
+        protocols?: Array<{
+            name: string;
+            version: string;
+            status: "pending" | "starting" | "ready" | "stopping" | "stopped" | "failed";
+        }>;
     }>;
+}
+
+export interface GatewayDisconnectMessage extends GatewayIdentity {
+    type: "gateway.account-disconnected";
+    platform: string;
+    accountId: string;
 }
 
 export type GatewayParentMessage = GatewayStartMessage | GatewayStopMessage;
 export type GatewayChildMessage =
     | GatewayReadyMessage
     | GatewayFailedMessage
-    | GatewayAccountStatusMessage;
+    | GatewayAccountStatusMessage
+    | GatewayDisconnectMessage;
+
+export function isGatewayDisconnectMessage(value: unknown): value is GatewayDisconnectMessage {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const message = value as Record<string, unknown>;
+    return (
+        message.type === "gateway.account-disconnected" &&
+        message.protocolVersion === GATEWAY_PROTOCOL_VERSION &&
+        isIdentifier(message.controlInstanceId) &&
+        isIdentifier(message.gatewayInstanceId) &&
+        safeDisplayIdentifier(message.platform) &&
+        safeDisplayIdentifier(message.accountId) &&
+        Object.keys(message).length === 5
+    );
+}
 
 export function isGatewayAccountStatusMessage(
     value: unknown,
@@ -68,12 +96,57 @@ export function isGatewayAccountStatusMessage(
         if (!account || typeof account !== "object" || Array.isArray(account)) return false;
         const item = account as Record<string, unknown>;
         return (
-            Object.keys(item).length === 3 &&
+            Object.keys(item).every(key =>
+                [
+                    "platform",
+                    "accountId",
+                    "status",
+                    "protocols",
+                    "avatarUrl",
+                    "platformIconUrl",
+                ].includes(key),
+            ) &&
             safeDisplayIdentifier(item.platform) &&
             safeDisplayIdentifier(item.accountId) &&
-            isAccountStatus(item.status)
+            isAccountStatus(item.status) &&
+            (item.avatarUrl === undefined || safeAccountImageUrl(item.avatarUrl)) &&
+            (item.platformIconUrl === undefined || safeAccountImageUrl(item.platformIconUrl)) &&
+            (item.protocols === undefined ||
+                (Array.isArray(item.protocols) &&
+                    item.protocols.length <= 100 &&
+                    item.protocols.every(protocol => {
+                        if (!protocol || typeof protocol !== "object" || Array.isArray(protocol))
+                            return false;
+                        const value = protocol as Record<string, unknown>;
+                        return (
+                            Object.keys(value).length === 3 &&
+                            safeDisplayIdentifier(value.name) &&
+                            safeDisplayIdentifier(value.version) &&
+                            typeof value.status === "string" &&
+                            [
+                                "pending",
+                                "starting",
+                                "ready",
+                                "stopping",
+                                "stopped",
+                                "failed",
+                            ].includes(value.status)
+                        );
+                    })))
         );
     });
+}
+
+/** 平台头像可能用查询参数标识账号或签名，但不得包含 URL 用户信息。 */
+export function safeAccountImageUrl(value: unknown): value is string {
+    if (typeof value !== "string" || value.length > 2048 || /[\p{Cc}\p{Cf}]/u.test(value))
+        return false;
+    try {
+        const url = new URL(value);
+        return url.protocol === "https:" && !url.username && !url.password && !url.hash;
+    } catch {
+        return false;
+    }
 }
 
 export function isGatewayParentMessage(value: unknown): value is GatewayParentMessage {

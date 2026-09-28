@@ -1,36 +1,18 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import type {
-    ControlClient,
-    ControlConfigurationSnapshot,
-    ControlStatus,
-} from "@onebots/core/control";
-import { IconMessages, IconPlugConnected, IconTerminal2 } from "@tabler/icons-vue";
-import ControlConnectionsPanel from "../components/ControlConnectionsPanel.vue";
+import type { ControlClient } from "@onebots/core/control";
+import { IconMessages, IconTerminal2 } from "@tabler/icons-vue";
 import ControlLogsPanel from "../components/ControlLogsPanel.vue";
 import ControlMessageDebugPanel from "../components/ControlMessageDebugPanel.vue";
-import ControlVerificationPanel from "../components/ControlVerificationPanel.vue";
-import type { ControlMutationBlock } from "../control-product-state.js";
-import type { Workspace } from "../control-workspace.js";
 
 const props = defineProps<{
     client: ControlClient;
     gatewayInstanceId?: string;
     active: boolean;
-    mutationBlock?: ControlMutationBlock;
-    configuration?: ControlConfigurationSnapshot;
-    status?: ControlStatus;
 }>();
-const emit = defineEmits<{ select: [workspace: Workspace] }>();
-type OperationsTab = "connect" | "messages" | "logs";
-const selectedTab = ref<OperationsTab>("connect");
+type OperationsTab = "messages" | "logs";
+const selectedTab = ref<OperationsTab>("logs");
 const tabs = [
-    {
-        id: "connect" as const,
-        label: "接入与验证",
-        description: "复制协议地址，处理账号登录",
-        icon: IconPlugConnected,
-    },
     {
         id: "messages" as const,
         label: "消息调试",
@@ -52,7 +34,7 @@ function selectTab(tab: OperationsTab) {
 watch(
     () => props.active,
     active => {
-        if (active) selectedTab.value = "connect";
+        if (active) selectedTab.value = "logs";
     },
 );
 
@@ -74,12 +56,11 @@ function navigateTabs(event: KeyboardEvent, index: number) {
     <section class="workspace-view operations-view" aria-labelledby="activity-title">
         <header class="page-heading">
             <div>
-                <h1 id="activity-title">运行与诊断</h1>
-                <p>先完成下游接入，再按消息链路和运行日志逐层排查问题。</p>
+                <h1 id="activity-title">日志 / 调试</h1>
             </div>
         </header>
 
-        <nav class="operations-tabs" role="tablist" aria-label="运行与诊断功能">
+        <nav class="operations-tabs" role="tablist" aria-label="日志与调试">
             <button
                 v-for="(tab, index) in tabs"
                 :id="`operations-tab-${tab.id}`"
@@ -99,22 +80,6 @@ function navigateTabs(event: KeyboardEvent, index: number) {
             </button>
         </nav>
 
-        <div
-            v-show="selectedTab === 'connect'"
-            id="operations-panel-connect"
-            class="operations-tab-panel"
-            role="tabpanel"
-            aria-labelledby="operations-tab-connect">
-            <ControlConnectionsPanel
-                :configuration="configuration"
-                :status="status"
-                @select="emit('select', $event)" />
-            <ControlVerificationPanel
-                :client="client"
-                :gateway-instance-id="gatewayInstanceId"
-                :active="active && selectedTab === 'connect'"
-                :mutation-block="mutationBlock" />
-        </div>
         <div
             v-show="selectedTab === 'messages'"
             id="operations-panel-messages"
@@ -140,7 +105,7 @@ function navigateTabs(event: KeyboardEvent, index: number) {
 <style scoped>
 .operations-tabs {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.65rem;
     margin-bottom: 1rem;
     padding: 0.35rem;

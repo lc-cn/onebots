@@ -60,6 +60,11 @@ export function createTelegramAccount(
     );
     bot.on("transport_state", state => {
         account.status = state === "connected" ? AccountStatus.Online : AccountStatus.OffLine;
+        if (state === "reconnecting")
+            adapter.emit("connection:disconnected", {
+                platform: "telegram",
+                account_id: String(account.account_id),
+            });
         if (state === "connected") syncIdentity();
         adapter.logger.info(`Telegram Bot ${config.account_id} polling 状态: ${state}`);
     });

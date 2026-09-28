@@ -171,4 +171,5 @@ export {
     initTokenManager,
     // Config
     ConfigValidator,
+    sendAccountMessage,
 } from "@onebots/core";

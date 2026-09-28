@@ -19,6 +19,7 @@ describe("Mattermost capability contract", () => {
             expect(mattermostCapabilities.actions[action], action).toBeDefined();
         }
         expect(mattermostCapabilities.actions.send_message?.scenes).toEqual([
+            "private",
             "direct",
             "group",
             "channel",

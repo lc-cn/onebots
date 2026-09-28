@@ -1,4 +1,4 @@
-import { requireNonEmptyStringParam, requirePositiveIntegerParam } from "onebots";
+import { requireNonEmptyStringParam, requirePositiveIntegerParam, sendAccountMessage } from "onebots";
 import type { CommonTypes } from "onebots";
 import type { OneBotV11ActionContext, OneBotV11ActionHandler, OneBotV11Params } from "./types.js";
 
@@ -15,7 +15,7 @@ export function createMessageActions(
             message: string | CommonTypes.Segment[];
             auto_escape?: boolean;
         };
-        const result = await context.adapter.sendMessage(context.accountId, {
+        const result = await sendAccountMessage(context.adapter, context.accountId, {
             scene_type: "private",
             scene_id: context.resolveId(user_id),
             message: context.parseMessage(message, auto_escape),
@@ -33,7 +33,7 @@ export function createMessageActions(
             message: string | CommonTypes.Segment[];
             auto_escape?: boolean;
         };
-        const result = await context.adapter.sendMessage(context.accountId, {
+        const result = await sendAccountMessage(context.adapter, context.accountId, {
             scene_type: "group",
             scene_id: context.resolveId(group_id),
             message: context.parseMessage(message, auto_escape),
@@ -68,7 +68,7 @@ export function createMessageActions(
                 ? requirePositiveIntegerParam(params, "user_id")
                 : requirePositiveIntegerParam(params, "group_id"),
         );
-        const result = await context.adapter.sendMessage(context.accountId, {
+        const result = await sendAccountMessage(context.adapter, context.accountId, {
             scene_type: sceneType,
             scene_id: sceneId,
             message: [forward as CommonTypes.Segment],

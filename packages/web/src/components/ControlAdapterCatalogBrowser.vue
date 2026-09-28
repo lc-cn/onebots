@@ -1,13 +1,50 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import type { ControlAdapterCatalogEntry } from "@onebots/core/control";
-import { groupAdapterCatalog, selectedAdapterEntries } from "./control-adapter-catalog.js";
+import {
+    filterAdapterCatalog,
+    groupAdapterCatalog,
+    previewAdapterCatalogGroups,
+    selectedAdapterEntries,
+    type AdapterCatalogFilter,
+    type AdapterCatalogGroupKey,
+} from "./control-adapter-catalog.js";
 
-const props = defineProps<{ entries: ControlAdapterCatalogEntry[]; disabled?: boolean }>();
+const props = defineProps<{
+    entries: ControlAdapterCatalogEntry[];
+    installed?: string[];
+    disabled?: boolean;
+}>();
 const selected = defineModel<string[]>({ required: true });
 const query = ref("");
-const groups = computed(() => groupAdapterCatalog(props.entries, query.value));
+const filter = ref<AdapterCatalogFilter>("all");
+const installedCount = computed(
+    () => props.entries.filter(entry => props.installed?.includes(entry.name)).length,
+);
+const filteredEntries = computed(() =>
+    filterAdapterCatalog(props.entries, props.installed ?? [], filter.value),
+);
+const groups = computed(() => groupAdapterCatalog(filteredEntries.value, query.value));
+const expandedGroups = ref(new Set<AdapterCatalogGroupKey>());
+const displayedGroups = computed(() =>
+    previewAdapterCatalogGroups(
+        groups.value,
+        selected.value,
+        props.installed ?? [],
+        query.value.trim() ? new Set(groups.value.map(group => group.key)) : expandedGroups.value,
+    ),
+);
 const selectedEntries = computed(() => selectedAdapterEntries(props.entries, selected.value));
+const filters: Array<{ id: AdapterCatalogFilter; label: string }> = [
+    { id: "all", label: "全部" },
+    { id: "installed", label: "已安装" },
+    { id: "not-installed", label: "未安装" },
+];
+function filterCount(id: AdapterCatalogFilter): number {
+    if (id === "installed") return installedCount.value;
+    if (id === "not-installed") return props.entries.length - installedCount.value;
+    return props.entries.length;
+}
 const categories = [
     { key: "actions", label: "动作" },
     { key: "events", label: "事件" },
@@ -34,10 +71,22 @@ function supportedCount(
 function unselect(name: string) {
     selected.value = selected.value.filter(selectedName => selectedName !== name);
 }
+
+function toggleGroup(key: AdapterCatalogGroupKey) {
+    const next = new Set(expandedGroups.value);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    expandedGroups.value = next;
+}
+
+function resetBrowse() {
+    query.value = "";
+    filter.value = "all";
+}
 </script>
 
 <template>
-    <fieldset :disabled="disabled" class="adapter-catalog">
+    <fieldset class="adapter-catalog">
         <legend>平台适配器</legend>
         <div class="adapter-catalog-toolbar">
             <label>
@@ -45,10 +94,23 @@ function unselect(name: string) {
                 <input
                     v-model="query"
                     type="search"
-                    placeholder="例如 Telegram、send_message、read:packages"
+                    name="adapter-search"
+                    autocomplete="off"
+                    placeholder="例如 Telegram、send_message…"
                     class="adapter-catalog-search" />
             </label>
             <p>共 {{ entries.length }} 个适配器，无需先创建 Bot 即可浏览</p>
+        </div>
+        <div class="adapter-catalog-filters" role="group" aria-label="按安装状态筛选平台">
+            <button
+                v-for="item in filters"
+                :key="item.id"
+                type="button"
+                :aria-pressed="filter === item.id"
+                :class="{ active: filter === item.id }"
+                @click="filter = item.id">
+                {{ item.label }} <span>{{ filterCount(item.id) }}</span>
+            </button>
         </div>
 
         <div v-if="selectedEntries.length" class="adapter-catalog-selected">
@@ -61,6 +123,7 @@ function unselect(name: string) {
                     :key="entry.name"
                     type="button"
                     class="adapter-selected-item"
+                    :disabled="disabled"
                     :aria-label="`取消选择 ${entry.displayName}`"
                     @click="unselect(entry.name)">
                     {{ entry.displayName }} ×
@@ -69,9 +132,9 @@ function unselect(name: string) {
         </div>
 
         <div v-if="groups.length" class="adapter-catalog-groups">
-            <section v-for="group in groups" :key="group.key" class="adapter-group">
+            <section v-for="group in displayedGroups" :key="group.key" class="adapter-group">
                 <header>
-                    <h3 class="text-sm font-medium">{{ group.label }}</h3>
+                    <h2 class="text-sm font-medium">{{ group.label }}</h2>
                     <p class="mt-1 text-xs text-fg-muted">{{ group.description }}</p>
                 </header>
                 <div class="adapter-list">
@@ -83,6 +146,7 @@ function unselect(name: string) {
                                 :id="`adapter-${entry.name}`"
                                 v-model="selected"
                                 type="checkbox"
+                                :disabled="disabled"
                                 :value="entry.name"
                                 :aria-label="`选择 ${entry.displayName}`"
                                 class="mt-1 accent-accent" />
@@ -91,9 +155,14 @@ function unselect(name: string) {
                             }}</span>
                             <div class="min-w-0 flex-1">
                                 <div class="flex flex-wrap items-baseline justify-between gap-2">
-                                    <h4 class="text-sm font-medium">{{ entry.displayName }}</h4>
+                                    <h3 class="text-sm font-medium">{{ entry.displayName }}</h3>
                                     <span class="font-mono text-[0.68rem] text-fg-muted"
-                                        >{{ entry.name }} · v{{ entry.version }}</span
+                                        >{{
+                                            props.installed?.includes(entry.name)
+                                                ? "当前安装"
+                                                : "目录"
+                                        }}
+                                        v{{ entry.version }}</span
                                     >
                                 </div>
                                 <p class="mt-1.5 text-xs leading-5 text-fg-secondary">
@@ -126,7 +195,7 @@ function unselect(name: string) {
                             </summary>
                             <div class="mt-3 space-y-4">
                                 <section v-if="entry.requirements?.length" class="space-y-2">
-                                    <h5 class="font-medium">下载要求</h5>
+                                    <h4 class="font-medium">下载要求</h4>
                                     <div
                                         v-for="requirement in entry.requirements"
                                         :key="requirement.scope"
@@ -141,7 +210,7 @@ function unselect(name: string) {
                                     </div>
                                 </section>
                                 <section v-if="entry.peerDependencies?.length" class="space-y-2">
-                                    <h5 class="font-medium">随适配器一并安装</h5>
+                                    <h4 class="font-medium">随适配器一并安装</h4>
                                     <p
                                         v-for="peer in entry.peerDependencies"
                                         :key="peer.packageName"
@@ -150,7 +219,7 @@ function unselect(name: string) {
                                     </p>
                                 </section>
                                 <section v-if="entry.setup?.length" class="space-y-2">
-                                    <h5 class="font-medium">平台准备</h5>
+                                    <h4 class="font-medium">平台准备</h4>
                                     <ol class="space-y-2">
                                         <li
                                             v-for="(step, index) in entry.setup"
@@ -178,10 +247,10 @@ function unselect(name: string) {
                                         v-for="category in categories"
                                         :key="category.key"
                                         class="min-w-0">
-                                        <h5 class="font-medium">
+                                        <h4 class="font-medium">
                                             {{ category.label }} ·
                                             {{ supportedCount(entry, category.key) }}
-                                        </h5>
+                                        </h4>
                                         <p
                                             class="mt-1 break-words font-mono leading-5 text-fg-muted">
                                             {{
@@ -204,13 +273,40 @@ function unselect(name: string) {
                         </details>
                     </article>
                 </div>
+                <button
+                    v-if="!query.trim() && (group.hiddenCount || expandedGroups.has(group.key))"
+                    type="button"
+                    class="adapter-group-toggle"
+                    :aria-expanded="expandedGroups.has(group.key)"
+                    @click="toggleGroup(group.key)">
+                    {{
+                        expandedGroups.has(group.key)
+                            ? "收起列表"
+                            : `显示其余 ${group.hiddenCount} 个`
+                    }}
+                </button>
             </section>
         </div>
-        <p
+        <div
             v-else
             class="rounded-control border border-dashed border-border p-5 text-center text-sm text-fg-muted">
-            没有匹配的适配器，请尝试平台名、能力名或依赖名。
-        </p>
+            <p>
+                {{
+                    query.trim()
+                        ? "没有匹配的平台，请换个名称或能力关键词。"
+                        : filter === "installed"
+                          ? "尚未安装平台，可以查看未安装的平台。"
+                          : "当前分类没有平台。"
+                }}
+            </p>
+            <button
+                v-if="query.trim() || filter !== 'all'"
+                type="button"
+                class="mt-3 min-h-11 rounded-control border border-border-strong px-4 text-fg"
+                @click="resetBrowse">
+                查看全部平台
+            </button>
+        </div>
         <p
             v-if="selected.some(name => !entries.some(entry => entry.name === name))"
             class="text-xs text-danger">

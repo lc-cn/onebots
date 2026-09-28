@@ -6,7 +6,12 @@ export { verificationJson, verificationRequest } from "./control-verification-js
 import type { ControlDiagnostics } from "./control-diagnostics.js";
 export type { ControlDiagnostics } from "./control-diagnostics.js";
 import type { ControlOperation, ControlStatus } from "./control-status.js";
-export type { ControlOperation, ControlStatus, ControlSystemStatus } from "./control-status.js";
+export type {
+    ControlAccountStatus,
+    ControlOperation,
+    ControlStatus,
+    ControlSystemStatus,
+} from "./control-status.js";
 import {
     messageDebugHistory,
     clearMessageDebug,
@@ -28,13 +33,44 @@ import {
     revokeControlSession,
     listControlSessions,
     type ControlSession,
+    type ControlSessionPolicy,
 } from "./control-sessions.js";
-export type { ControlSession } from "./control-sessions.js";
+export type { ControlSession, ControlSessionPolicy } from "./control-sessions.js";
 import type {
     ControlSendContext,
     ControlSendRequest,
     ControlSendOperation,
 } from "./control-send.js";
+import type {
+    ControlChatConversation,
+    ControlChatHistoryQuery,
+    ControlChatHistoryPage,
+    ControlChatHistorySettings,
+} from "./control-chat-history.js";
+import type {
+    ControlAccountExploreRequest,
+    ControlAccountExploreResult,
+} from "./control-account-explore.js";
+export type {
+    ControlAccountExploreRequest,
+    ControlAccountExploreResult,
+    ControlAccountItem,
+    ControlAccountItemKind,
+    ControlAccountExploreAction,
+} from "./control-account-explore.js";
+export {
+    CONTROL_ACCOUNT_EXPLORE_ITEM_LIMIT,
+    CONTROL_ACCOUNT_EXPLORE_RESULT_LENGTH_LIMIT,
+    isControlAccountExploreRequest,
+    isControlAccountExploreResult,
+} from "./control-account-explore.js";
+export type {
+    ControlChatConversation,
+    ControlChatHistoryQuery,
+    ControlChatHistoryPage,
+    ControlChatHistorySettings,
+    ControlChatMessage,
+} from "./control-chat-history.js";
 import type { AdapterCapabilityManifest } from "./adapter-capability.js";
 export type {
     ControlSendContext,
@@ -164,6 +200,8 @@ export interface ControlAdapterCatalogEntry {
     name: string;
     displayName: string;
     version: string;
+    /** 管理服务常驻提供的品牌图标；网关未启动时也可用于账号卡片。 */
+    iconUrl?: string;
     /** 以下产品信息由支持富目录的管理服务提供；旧服务仍可返回基础三字段条目。 */
     description?: string;
     packageName?: string;
@@ -396,6 +434,49 @@ export class ControlClient {
         );
     }
 
+    chatHistory(query: ControlChatHistoryQuery): Promise<ControlChatHistoryPage> {
+        const params = new URLSearchParams({
+            platform: query.platform,
+            accountId: query.accountId,
+            sceneType: query.sceneType,
+            sceneId: query.sceneId,
+        });
+        if (query.before !== undefined) params.set("before", String(query.before));
+        if (query.guildId !== undefined) params.set("guildId", query.guildId);
+        return this.transport.request("GET", `/api/control/accounts/history?${params}`);
+    }
+
+    chatConversations(
+        platform: string,
+        accountId: string,
+        before?: number,
+    ): Promise<{ conversations: ControlChatConversation[]; hasMore: boolean }> {
+        const params = new URLSearchParams({ platform, accountId });
+        if (before !== undefined) params.set("before", String(before));
+        return this.transport.request(
+            "GET",
+            `/api/control/accounts/history/conversations?${params}`,
+        );
+    }
+
+    exploreAccount(request: ControlAccountExploreRequest): Promise<ControlAccountExploreResult> {
+        return this.transport.request("POST", "/api/control/accounts/explore", request);
+    }
+
+    chatHistorySettings(): Promise<ControlChatHistorySettings> {
+        return this.transport.request("GET", "/api/control/accounts/history/settings");
+    }
+
+    updateChatHistorySettings(
+        settings: ControlChatHistorySettings,
+    ): Promise<ControlChatHistorySettings> {
+        return this.transport.request("POST", "/api/control/accounts/history/settings", settings);
+    }
+
+    clearChatHistory(): Promise<{ deleted: number }> {
+        return this.transport.request("POST", "/api/control/accounts/history/clear", {});
+    }
+
     bootstrap(): Promise<{ code: string }> {
         return this.transport.request("POST", "/api/control/auth/bootstrap", {});
     }
@@ -408,6 +489,23 @@ export class ControlClient {
     /** 本机签发追加设备码，不撤销其他浏览器。 */
     authorizeDevice(): Promise<{ code: string }> {
         return this.transport.request("POST", "/api/control/auth/device", {});
+    }
+
+    /** 已登录浏览器签发一次性设备码；只在本次响应中返回明文。 */
+    authorizeWebDevice(): Promise<{ code: string; expiresAt: number }> {
+        return this.transport.request("POST", "/api/control/auth/sessions/device", {});
+    }
+
+    sessionPolicy(): Promise<ControlSessionPolicy> {
+        return this.transport.request("GET", "/api/control/auth/sessions/policy");
+    }
+
+    updateSessionPolicy(policy: ControlSessionPolicy): Promise<ControlSessionPolicy> {
+        return this.transport.request("POST", "/api/control/auth/sessions/policy", policy);
+    }
+
+    renewSession(): Promise<{ session: ControlSession }> {
+        return this.transport.request("POST", "/api/control/auth/sessions/renew", {});
     }
 
     sessions(): Promise<{ sessions: ControlSession[] }> {
@@ -510,11 +608,8 @@ export function createHttpControlTransport(
                 cache: "no-store",
                 redirect: "error",
                 signal:
-                    (method === "POST" &&
-                        ["/api/control/auth/logout", "/api/control/auth/sessions/revoke"].includes(
-                            route,
-                        )) ||
-                    (method === "GET" && route === "/api/control/auth/sessions")
+                    route.startsWith("/api/control/auth/sessions") ||
+                    (method === "POST" && route === "/api/control/auth/logout")
                         ? AbortSignal.timeout(15_000)
                         : undefined,
             });

@@ -1,0 +1,58 @@
+.account-control-context {
+    display: grid;
+    grid-template-rows: minmax(12rem, 0.42fr) minmax(0, 0.58fr);
+    border-left: 1px solid var(--border);
+}
+.account-control-context.single-section {
+    grid-template-rows: minmax(0, 1fr);
+}
+.account-control-context section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 1rem;
+}
+.account-control-context section + section {
+    border-top: 1px solid var(--border);
+}
+.account-control-context h2 {
+    margin-bottom: 0.9rem;
+    font-size: var(--type-label);
+    font-weight: 680;
+}
+.account-control-context [tabindex="-1"]:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+.account-control-detail {
+    display: grid;
+    gap: 0.45rem;
+    overflow-wrap: anywhere;
+    font-size: var(--type-label);
+}
+.account-control-detail small {
+    color: var(--fg-secondary);
+    font-family: var(--font-mono);
+}
+.account-control-members {
+    display: grid;
+    gap: 0;
+}
+.account-control-members li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--type-label);
+}
+.account-control-members small {
+    color: var(--fg-secondary);
+    text-align: right;
+}
+.account-control-members li > span,
+.account-control-members li > small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}

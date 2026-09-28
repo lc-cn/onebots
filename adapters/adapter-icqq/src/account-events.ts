@@ -97,6 +97,7 @@ export function wireICQQAccountEvents(
         const message = event.message || "网络连接中断";
         context.logger.warn(`ICQQ Bot 网络离线（将自动重连）: ${message}`);
         account.status = AccountStatus.Pending;
+        emit("connection:disconnected", { platform: "icqq", account_id: accountId });
     });
     bot.on("heartbeat_error", (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);

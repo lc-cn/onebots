@@ -1,4 +1,4 @@
-import { type Adapter, requireNonEmptyStringParam, requirePositiveIntegerParam } from "onebots";
+import { type Adapter, requireNonEmptyStringParam, requirePositiveIntegerParam, sendAccountMessage } from "onebots";
 import { projectMilkyIncomingMessage } from "./message-entities.js";
 import { compileMilkySegments, projectMilkySegments } from "./message-segments.js";
 import type { Milky } from "./types.js";
@@ -53,7 +53,7 @@ async function sendMessage(
     params: Record<string, unknown>,
 ): Promise<Milky.SendMessageResult> {
     const sceneKey = scene === "private" ? "user_id" : "group_id";
-    const result = await adapter.sendMessage(accountId, {
+    const result = await sendAccountMessage(adapter, accountId, {
         scene_type: scene,
         scene_id: adapter.resolveId(requirePositiveIntegerParam(params, sceneKey)),
         message: compileMilkySegments(

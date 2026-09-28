@@ -64,6 +64,9 @@ function projectRoomMessage(
             ...base(envelope, context),
             type: "message",
             message_type: envelope.is_direct ? "direct" : "group",
+            ...(envelope.is_direct && envelope.room_id
+                ? { scene_id: context.createId(envelope.room_id) }
+                : {}),
             sender: { id: context.createId(sender) },
             group: envelope.is_direct ? undefined : roomInfo,
             message_id: context.createId(event.event_id || eventKey(envelope)),
@@ -92,6 +95,9 @@ function projectSticker(
         ...base(envelope, context),
         type: "message",
         message_type: envelope.is_direct ? "direct" : "group",
+        ...(envelope.is_direct && envelope.room_id
+            ? { scene_id: context.createId(envelope.room_id) }
+            : {}),
         sender: { id: context.createId(event.sender || "@unknown:matrix") },
         group: envelope.is_direct ? undefined : room(envelope, context),
         message_id: context.createId(event.event_id || eventKey(envelope)),
@@ -285,9 +291,13 @@ function base(
     envelope: MatrixEventEnvelope,
     context: MatrixProjectionContext,
 ): CommonEvent.Base<MatrixRawEvent> {
+    const timestamp = envelope.event.origin_server_ts;
     return {
         id: context.createId(`event:${envelope.event.event_id || eventKey(envelope)}`),
-        timestamp: envelope.event.origin_server_ts || 0,
+        timestamp:
+            typeof timestamp === "number" && Number.isFinite(timestamp) && timestamp > 0
+                ? timestamp
+                : Date.now(),
         type: "custom",
         platform: "matrix",
         bot_id: context.botId,

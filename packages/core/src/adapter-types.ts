@@ -71,6 +71,8 @@ declare module "./adapter.js" {
         }
         export interface SendMessageResult {
             message_id: CommonTypes.Id;
+            /** 平台确认的规范化会话身份；仅在与入站事件可一致匹配时提供。 */
+            scene?: Pick<SendMessageParams, "scene_type" | "scene_id" | "guild_id">;
         }
         export interface DeleteMessageParams {
             message_id: CommonTypes.Id;

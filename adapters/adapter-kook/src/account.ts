@@ -30,6 +30,11 @@ export function createKookAccount(
     });
     bot.on("close", () => {
         account.status = AccountStatus.OffLine;
+        if (bot.receiveMode === "gateway")
+            adapter.emit("connection:disconnected", {
+                platform: "kook",
+                account_id: String(account.account_id),
+            });
     });
     bot.on("reconnecting", ({ attempt, delay }: { attempt: number; delay: number }) => {
         adapter.logger.warn(`KOOK Gateway 将在 ${delay}ms 后进行第 ${attempt} 次重连`);

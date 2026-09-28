@@ -1,0 +1,49 @@
+.system-history-settings {
+    max-width: 48rem;
+}
+.system-history-form {
+    display: grid;
+    gap: 1.1rem;
+    margin-top: 1rem;
+    padding: 1.3rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+}
+.system-history-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+}
+.system-history-toggle input {
+    margin-top: 0.3rem;
+    accent-color: var(--accent);
+}
+.system-history-toggle span {
+    display: grid;
+    gap: 0.25rem;
+}
+.system-history-toggle small {
+    color: var(--fg-secondary);
+    font-size: var(--type-label);
+}
+.system-history-retention {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    font-size: var(--type-label);
+}
+.system-history-retention input {
+    width: 7rem;
+    min-height: 2.4rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--fg);
+}
+.system-history-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}

@@ -163,6 +163,7 @@ function messageEvent(
         ...base(envelope, context),
         type: "message",
         message_type: direct ? "direct" : "group",
+        ...(direct && space.name ? { scene_id: context.createId(space.name) } : {}),
         message_id: context.createId(message.name),
         sender: {
             id: context.createId(sender.name),

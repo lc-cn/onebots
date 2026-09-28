@@ -113,7 +113,7 @@ try {
     $NodeCommand = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     $NodePath = $null
     if ($NodeCommand) {
-        $NodeMajorText = @(& $NodeCommand.Source -p 'Number(process.versions.node.split(".")[0])' 2>$null)
+        $NodeMajorText = @(& $NodeCommand.Source -p 'parseInt(process.versions.node, 10)' 2>$null)
         if ($LASTEXITCODE -eq 0 -and ($NodeMajorText -join "").Trim() -match '^\d+$' -and [int](($NodeMajorText -join "").Trim()) -ge 24) {
             $NodePath = $NodeCommand.Source
         }

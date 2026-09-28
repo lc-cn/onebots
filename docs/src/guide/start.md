@@ -4,7 +4,7 @@
 本文适用于包含常驻管理服务的 OneBots 版本。旧安装应先执行迁移，不要混用旧入口、旧脚本和新管理运行时。
 :::
 
-## 从源码启动管理端
+## 从源码启动管理端（Linux/macOS）
 
 使用 Node.js 24 及仓库指定的 pnpm。在仓库根目录执行：
 
@@ -21,6 +21,19 @@ node packages/onebots/lib/bin.js auth bootstrap --data-dir ./workspace
 ```
 
 访问管理地址（默认 `http://127.0.0.1:6727`），输入设备码。配对后使用会话登录，不使用旧用户名密码或手工配置的管理 `access_token`。详见[管理端登录与恢复](/guide/management-login)。
+
+Windows 的普通 PowerShell/CMD 不提供 `rm`；本仓库构建脚本使用 Node.js 清理产物，无需 Git Bash。Windows 前台 `serve` 可用于本地 Web 开发，但它不会创建仅供 SCM 系统服务使用的受保护管理管道，因此不能再运行 `auth bootstrap`。在**全新工作区**首次前台启动时，可在 PowerShell 中生成一次性部署码并复制到剪贴板：
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm build
+$code = node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.stdout.write(randomBytes(32).toString('base64url'))"
+$env:ONEBOTS_BOOTSTRAP_CODE = $code
+$code | Set-Clipboard
+node packages/onebots/lib/bin.js serve --data-dir .\workspace
+```
+
+然后打开管理地址，从剪贴板粘贴配对码（5 分钟内、仅一次）。不要把码发到聊天、提交到仓库或放在命令参数中。已授权浏览器可在「系统 → 设备与访问」给新设备生成码；凭据丢失时才使用全新的 `ONEBOTS_RECOVERY_CODE` 重启前台进程进行恢复。前台模式的本地 CLI/TUI 管理管道不可用，正式 Windows 部署请使用下方安装脚本创建 SCM 服务。不要对已有工作区重复设置初始化码。
 
 在 Web 安装面板选择平台适配器、输出协议和框架，核对完整安装清单后确认。私有模块的下载授权只用于本次安装；必需 peer 一起安装并验证。验证通过后单独激活运行版本，再填写平台账号与协议配置。安装依赖不会自动启用平台连接。
 
@@ -57,7 +70,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 重复执行已完成的安装不会更新程序或重启服务。发现旧配置、旧运行目录或未完成安装时不会覆盖，请先核查状态并使用迁移/恢复流程。管理程序升级使用 `onebots update --manager`，不能通过重复执行安装脚本完成；网关运行版本则由管理端统一升级。详见[升级网关与管理程序](/guide/runtime-update)。
 
-Windows 的 SCM 原生宿主、命名管道、访问控制、首次引导和服务生命周期已纳入 Windows 实机 CI。请在管理员 PowerShell 中运行 `install.ps1`；脚本只接受空安装目录，隔离公开包下载环境，验证管理端、网关与原生宿主工件后才调用统一 CLI 安装系统服务。失败会保留候选证据，不自动回滚或重派系统动作。
+Windows 的 SCM 原生宿主、命名管道、访问控制、首次引导和服务生命周期已纳入 Windows 实机 CI。请在管理员 PowerShell 中运行 `install.ps1`；脚本只接受空安装目录，隔离公开包下载环境，验证管理端、网关与原生宿主工件后才调用统一 CLI 安装系统服务。它安装公开 npm 版本，**不会**安装当前未发布的源码改动。失败会保留候选证据，不自动回滚或重派系统动作。
 
 ## 系统托管
 

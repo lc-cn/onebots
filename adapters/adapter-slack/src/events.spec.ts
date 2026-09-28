@@ -63,6 +63,7 @@ describe("projectSlackEvent", () => {
         };
         expect(projectSlackEvent(mpim, { event: mpim }, context)).toMatchObject({
             message_type: "direct",
+            scene_id: { string: "G1" },
             group: { channel_id: { string: "G1" } },
         });
 

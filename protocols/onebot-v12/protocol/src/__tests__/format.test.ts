@@ -29,6 +29,11 @@ vi.mock("onebots", () => {
         Adapter: class {},
         CommonEvent: {},
         CommonTypes: {},
+        sendAccountMessage: (
+            adapter: { sendMessage: (id: string, params: unknown) => Promise<unknown> },
+            id: string,
+            params: unknown,
+        ) => adapter.sendMessage(id, params),
         requirePositiveIntegerParam: (params: Record<string, unknown>, key: string) => {
             const value = Number(params[key]);
             if (!Number.isSafeInteger(value) || value <= 0) throw new TypeError("invalid id");

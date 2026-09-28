@@ -1,12 +1,17 @@
 import type { ControlAdapterCatalogEntry } from "@onebots/core/control";
 
 export type AdapterCatalogGroupKey = "local" | "platform" | "private";
+export type AdapterCatalogFilter = "all" | "installed" | "not-installed";
 
 export interface AdapterCatalogGroup {
     key: AdapterCatalogGroupKey;
     label: string;
     description: string;
     entries: ControlAdapterCatalogEntry[];
+}
+
+export interface AdapterCatalogPreview extends AdapterCatalogGroup {
+    hiddenCount: number;
 }
 
 const GROUPS: ReadonlyArray<Omit<AdapterCatalogGroup, "entries">> = [
@@ -27,6 +32,11 @@ const GROUPS: ReadonlyArray<Omit<AdapterCatalogGroup, "entries">> = [
     },
 ];
 
+// 新用户先看到常见接入平台；目录仍完整可搜索，已装和已选项优先于推荐。
+const DISCOVERY_ORDER = new Map(
+    ["qq", "wechat", "wecom", "dingtalk", "feishu", "telegram"].map((name, index) => [name, index]),
+);
+
 export function groupAdapterCatalog(
     entries: readonly ControlAdapterCatalogEntry[],
     query: string,
@@ -41,12 +51,45 @@ export function groupAdapterCatalog(
     })).filter(group => group.entries.length > 0);
 }
 
+/** 只筛选目录展示，不改动完整安装选择。 */
+export function filterAdapterCatalog(
+    entries: readonly ControlAdapterCatalogEntry[],
+    installedNames: readonly string[],
+    filter: AdapterCatalogFilter,
+): ControlAdapterCatalogEntry[] {
+    if (filter === "all") return [...entries];
+    const installed = new Set(installedNames);
+    return entries.filter(entry => installed.has(entry.name) === (filter === "installed"));
+}
+
 export function selectedAdapterEntries(
     entries: readonly ControlAdapterCatalogEntry[],
     selectedNames: readonly string[],
 ): ControlAdapterCatalogEntry[] {
     const selected = new Set(selectedNames);
     return entries.filter(entry => selected.has(entry.name));
+}
+
+/** 默认只展示少量候选；已安装和已选平台始终可见，避免折叠后失去操作上下文。 */
+export function previewAdapterCatalogGroups(
+    groups: readonly AdapterCatalogGroup[],
+    selectedNames: readonly string[],
+    installedNames: readonly string[],
+    expandedKeys: ReadonlySet<AdapterCatalogGroupKey>,
+    previewSize = 6,
+): AdapterCatalogPreview[] {
+    const pinned = new Set([...selectedNames, ...installedNames]);
+    return groups.map(group => {
+        const ordered = [...group.entries].sort((left, right) => {
+            const leftRank = pinned.has(left.name) ? -1 : (DISCOVERY_ORDER.get(left.name) ?? 99);
+            const rightRank = pinned.has(right.name) ? -1 : (DISCOVERY_ORDER.get(right.name) ?? 99);
+            return leftRank - rightRank;
+        });
+        const entries = expandedKeys.has(group.key)
+            ? ordered
+            : ordered.filter((entry, index) => index < previewSize || pinned.has(entry.name));
+        return { ...group, entries, hiddenCount: group.entries.length - entries.length };
+    });
 }
 
 function groupFor(entry: ControlAdapterCatalogEntry): AdapterCatalogGroupKey {

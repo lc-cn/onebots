@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRecipients } from "./entities.js";
+import { canonicalEmailScene, parseRecipients } from "./entities.js";
 
 describe("email recipients", () => {
     it("按大小写不敏感方式去重但保留原始地址", () => {
@@ -12,5 +12,14 @@ describe("email recipients", () => {
     it("拒绝非法或空收件人", () => {
         expect(() => parseRecipients("invalid")).toThrow("无效的邮件收件人");
         expect(() => parseRecipients(" ")).toThrow("无效的邮件收件人");
+    });
+
+    it("多人会话身份不受收件顺序与大小写影响", () => {
+        expect(canonicalEmailScene(["Bob@Example.com", "alice@example.com"])).toBe(
+            "alice@example.com,bob@example.com",
+        );
+        expect(canonicalEmailScene(["ALICE@example.com", "bob@example.com"])).toBe(
+            "alice@example.com,bob@example.com",
+        );
     });
 });

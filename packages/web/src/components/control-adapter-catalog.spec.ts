@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ControlAdapterCatalogEntry } from "@onebots/core/control";
-import { groupAdapterCatalog, selectedAdapterEntries } from "./control-adapter-catalog.js";
+import {
+    filterAdapterCatalog,
+    groupAdapterCatalog,
+    previewAdapterCatalogGroups,
+    selectedAdapterEntries,
+} from "./control-adapter-catalog.js";
 
 const adapter = (
     name: string,
@@ -72,6 +77,63 @@ describe("adapter capability catalog presentation", () => {
         expect(
             selectedAdapterEntries(entries, ["icqq", "missing", "mock"]).map(item => item.name),
         ).toEqual(["mock", "icqq"]);
+    });
+
+    it("安装状态筛选不改动选择集合，也不将目录外安装项误算成可见卡片", () => {
+        expect(
+            filterAdapterCatalog(entries, ["telegram", "missing"], "installed").map(
+                item => item.name,
+            ),
+        ).toEqual(["telegram"]);
+        expect(
+            filterAdapterCatalog(entries, ["telegram", "missing"], "not-installed").map(
+                item => item.name,
+            ),
+        ).toEqual(["mock", "icqq"]);
+        expect(filterAdapterCatalog(entries, ["telegram"], "all")).toHaveLength(3);
+    });
+
+    it("长目录渐进展示，已装和已选项即使排在后面也保持可见", () => {
+        const many = Array.from({ length: 9 }, (_, index) => adapter(`platform-${index}`));
+        const grouped = groupAdapterCatalog(many, "");
+        const preview = previewAdapterCatalogGroups(
+            grouped,
+            ["platform-8"],
+            ["platform-7"],
+            new Set(),
+            3,
+        );
+        expect(preview[0].entries.map(entry => entry.name)).toEqual([
+            "platform-7",
+            "platform-8",
+            "platform-0",
+        ]);
+        expect(preview[0].hiddenCount).toBe(6);
+        expect(
+            previewAdapterCatalogGroups(grouped, [], [], new Set(["platform"]), 3)[0].entries,
+        ).toHaveLength(9);
+    });
+
+    it("首次浏览把常用平台放在前面，不按扩展包注册顺序暴露冷门项", () => {
+        const entries = [
+            adapter("instagram"),
+            adapter("matrix"),
+            adapter("telegram"),
+            adapter("qq"),
+            adapter("discord"),
+        ];
+        const preview = previewAdapterCatalogGroups(
+            groupAdapterCatalog(entries, ""),
+            [],
+            [],
+            new Set(),
+            3,
+        );
+        expect(preview[0].entries.map(entry => entry.name)).toEqual([
+            "qq",
+            "telegram",
+            "instagram",
+        ]);
     });
 
     it("兼容旧服务返回的基础三字段目录", () => {

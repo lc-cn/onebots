@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { SchemaFieldDef } from "./config/types.js";
-import SchemaField from "./SchemaField.vue";
-import { configurationSecret, type ConfigurationFormGroup } from "./control-configuration-form.js";
+import ConfigurationFieldRow from "./ConfigurationFieldRow.vue";
+import type { ConfigurationFormGroup } from "./control-configuration-form.js";
 import UiButton from "../ui/UiButton.vue";
 import { isSchemaFieldVisible } from "./config/utils.js";
 import { configurationFieldTier } from "./control-configuration-layout.js";
@@ -19,7 +19,6 @@ const emit = defineEmits<{
     mode: [field: SchemaFieldDef, value: string];
     list: [path: string[], action: "append" | "remove", index?: number];
 }>();
-const secret = (field: SchemaFieldDef) => configurationSecret(field, props.secretStates);
 const visibleFields = (group: ConfigurationFormGroup) =>
     group.fields.filter(field => isSchemaFieldVisible(field, props.values));
 const primaryFields = (group: ConfigurationFormGroup) =>
@@ -70,44 +69,16 @@ const revealsAdvanced = (group: ConfigurationFormGroup) =>
                 <p>优先完成这些字段，再按需调整其余选项。</p>
             </div>
             <div class="configuration-field-grid">
-                <div
+                <ConfigurationFieldRow
                     v-for="field in unsectionedPrimaryFields(group)"
                     :key="field.key"
-                    :data-configuration-path="JSON.stringify(field.path)"
-                    class="space-y-2">
-                    <template v-if="secret(field)">
-                        <label class="block text-sm"
-                            >{{ field.label }}
-                            <span class="text-xs text-fg-tertiary">{{
-                                secret(field)?.configured ? "已设置" : "未设置"
-                            }}</span></label
-                        >
-                        <select
-                            :value="modes[field.key] ?? 'keep'"
-                            :disabled="locked"
-                            :aria-label="`${field.label} 修改方式`"
-                            class="rounded border border-border bg-surface px-3 py-2 text-sm"
-                            @change="
-                                emit('mode', field, ($event.target as HTMLSelectElement).value)
-                            ">
-                            <option value="keep">保留</option>
-                            <option value="set">替换</option>
-                            <option value="clear">清除</option>
-                        </select>
-                        <SchemaField
-                            v-if="modes[field.key] === 'set'"
-                            :field="{ ...field, rule: { ...field.rule, sensitive: true } }"
-                            :model-value="values[field.key]"
-                            :disabled="locked"
-                            @update:model-value="emit('change', field, $event)" />
-                    </template>
-                    <SchemaField
-                        v-else
-                        :field="field"
-                        :model-value="values[field.key]"
-                        :disabled="locked"
-                        @update:model-value="emit('change', field, $event)" />
-                </div>
+                    :field="field"
+                    :value="values[field.key]"
+                    :mode="modes[field.key]"
+                    :secret-states="secretStates"
+                    :locked="locked"
+                    @change="(field, value) => emit('change', field, value)"
+                    @mode="(field, value) => emit('mode', field, value)" />
             </div>
         </div>
         <section
@@ -121,44 +92,16 @@ const revealsAdvanced = (group: ConfigurationFormGroup) =>
                 <p>{{ section.detail }}</p>
             </div>
             <div class="configuration-field-grid">
-                <div
+                <ConfigurationFieldRow
                     v-for="field in sectionFields(group, section.key)"
                     :key="field.key"
-                    :data-configuration-path="JSON.stringify(field.path)"
-                    class="space-y-2">
-                    <template v-if="secret(field)">
-                        <label class="block text-sm"
-                            >{{ field.label }}
-                            <span class="text-xs text-fg-tertiary">{{
-                                secret(field)?.configured ? "已设置" : "未设置"
-                            }}</span></label
-                        >
-                        <select
-                            :value="modes[field.key] ?? 'keep'"
-                            :disabled="locked"
-                            :aria-label="`${field.label} 修改方式`"
-                            class="rounded border border-border bg-surface px-3 py-2 text-sm"
-                            @change="
-                                emit('mode', field, ($event.target as HTMLSelectElement).value)
-                            ">
-                            <option value="keep">保留</option>
-                            <option value="set">替换</option>
-                            <option value="clear">清除</option>
-                        </select>
-                        <SchemaField
-                            v-if="modes[field.key] === 'set'"
-                            :field="{ ...field, rule: { ...field.rule, sensitive: true } }"
-                            :model-value="values[field.key]"
-                            :disabled="locked"
-                            @update:model-value="emit('change', field, $event)" />
-                    </template>
-                    <SchemaField
-                        v-else
-                        :field="field"
-                        :model-value="values[field.key]"
-                        :disabled="locked"
-                        @update:model-value="emit('change', field, $event)" />
-                </div>
+                    :field="field"
+                    :value="values[field.key]"
+                    :mode="modes[field.key]"
+                    :secret-states="secretStates"
+                    :locked="locked"
+                    @change="(field, value) => emit('change', field, value)"
+                    @mode="(field, value) => emit('mode', field, value)" />
             </div>
         </section>
         <details
@@ -197,44 +140,16 @@ const revealsAdvanced = (group: ConfigurationFormGroup) =>
                 </p>
             </div>
             <div class="configuration-field-grid">
-                <div
+                <ConfigurationFieldRow
                     v-for="field in advancedFields(group)"
                     :key="field.key"
-                    :data-configuration-path="JSON.stringify(field.path)"
-                    class="space-y-2">
-                    <template v-if="secret(field)">
-                        <label class="block text-sm"
-                            >{{ field.label }}
-                            <span class="text-xs text-fg-tertiary">{{
-                                secret(field)?.configured ? "已设置" : "未设置"
-                            }}</span></label
-                        >
-                        <select
-                            :value="modes[field.key] ?? 'keep'"
-                            :disabled="locked"
-                            :aria-label="`${field.label} 修改方式`"
-                            class="rounded border border-border bg-surface px-3 py-2 text-sm"
-                            @change="
-                                emit('mode', field, ($event.target as HTMLSelectElement).value)
-                            ">
-                            <option value="keep">保留</option>
-                            <option value="set">替换</option>
-                            <option value="clear">清除</option>
-                        </select>
-                        <SchemaField
-                            v-if="modes[field.key] === 'set'"
-                            :field="{ ...field, rule: { ...field.rule, sensitive: true } }"
-                            :model-value="values[field.key]"
-                            :disabled="locked"
-                            @update:model-value="emit('change', field, $event)" />
-                    </template>
-                    <SchemaField
-                        v-else
-                        :field="field"
-                        :model-value="values[field.key]"
-                        :disabled="locked"
-                        @update:model-value="emit('change', field, $event)" />
-                </div>
+                    :field="field"
+                    :value="values[field.key]"
+                    :mode="modes[field.key]"
+                    :secret-states="secretStates"
+                    :locked="locked"
+                    @change="(field, value) => emit('change', field, value)"
+                    @mode="(field, value) => emit('mode', field, value)" />
             </div>
         </details>
         <p v-if="!visibleFields(group).length && !group.lists.length" class="configuration-empty">

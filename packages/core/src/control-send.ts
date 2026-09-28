@@ -8,8 +8,10 @@ export interface ControlSendRequest {
     id: string;
     expected: ControlSendContext;
     account: string;
-    targetType: "private" | "group" | "channel";
+    targetType: "private" | "direct" | "group" | "channel";
     targetId: string | number;
+    /** 频道所属服务器/工作区；部分平台发送频道消息必须提供。 */
+    guildId?: string | number;
     message: string;
 }
 
@@ -87,7 +89,19 @@ export function isControlSendOperation(value: unknown): value is ControlSendOper
 
 /** 保留数字与字符串的区别，不把数字形字符串、前导零或账号后缀强制转换。 */
 export function isControlSendRequest(value: unknown): value is ControlSendRequest {
-    if (!closed(value, ["id", "expected", "account", "targetType", "targetId", "message"]))
+    if (
+        !closed(value, [
+            "id",
+            "expected",
+            "account",
+            "targetType",
+            "targetId",
+            "message",
+            ...(value && typeof value === "object" && Object.hasOwn(value, "guildId")
+                ? ["guildId"]
+                : []),
+        ])
+    )
         return false;
     if (!uuid(value.id) || !isControlSendContext(value.expected)) return false;
     if (
@@ -100,7 +114,7 @@ export function isControlSendRequest(value: unknown): value is ControlSendReques
         return false;
     if (
         typeof value.targetType !== "string" ||
-        !["private", "group", "channel"].includes(value.targetType)
+        !["private", "direct", "group", "channel"].includes(value.targetType)
     )
         return false;
     if (typeof value.targetId === "number") {
@@ -112,6 +126,18 @@ export function isControlSendRequest(value: unknown): value is ControlSendReques
         /[\u0000-\u001f\u007f]/.test(value.targetId)
     )
         return false;
+    if (value.guildId !== undefined) {
+        if (value.targetType !== "channel") return false;
+        if (typeof value.guildId === "number") {
+            if (!Number.isSafeInteger(value.guildId) || value.guildId < 0) return false;
+        } else if (
+            typeof value.guildId !== "string" ||
+            !value.guildId ||
+            value.guildId.length > 4096 ||
+            /[\u0000-\u001f\u007f]/.test(value.guildId)
+        )
+            return false;
+    }
     if (typeof value.message !== "string" || !value.message) return false;
     const encoder = new TextEncoder();
     return (

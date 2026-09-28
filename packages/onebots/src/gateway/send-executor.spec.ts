@@ -11,6 +11,11 @@ function fixture() {
     const sendMessage = vi.fn(async () => ({ message_id: { string: "001/message", number: 456 } }));
     const adapter = {
         accounts: new Map([["account/with/slash", { status: "online" }]]),
+        describeCapabilities: vi.fn(() => ({
+            actions: {
+                send_message: { support: "native", scenes: ["private", "direct"] },
+            },
+        })),
         resolveId,
         sendMessage,
     };
@@ -45,6 +50,33 @@ it("preserves string and number ID inputs, literal text and returned ID projecti
         });
         expect(result).toEqual({ outcome: "succeeded", result: { messageId: "001/message" } });
     }
+});
+it("passes a direct scene through to adapters that require it", async () => {
+    const f = fixture();
+    expect(await f.executor.send({ ...f.request(), targetType: "direct" })).toEqual({
+        outcome: "succeeded",
+        result: { messageId: "001/message" },
+    });
+    expect(f.sendMessage).toHaveBeenCalledWith(
+        "account/with/slash",
+        expect.objectContaining({ scene_type: "direct" }),
+    );
+});
+it("rejects scenes not declared by the active adapter before calling its SDK", async () => {
+    const f = fixture();
+    f.adapter.describeCapabilities.mockReturnValue({
+        actions: { send_message: { support: "native", scenes: ["direct"] } },
+    });
+    expect(await f.executor.send(f.request())).toEqual({ outcome: "rejected" });
+    expect(await f.executor.send({ ...f.request(), targetType: "direct" })).toMatchObject({
+        outcome: "succeeded",
+    });
+    expect(f.sendMessage).toHaveBeenCalledOnce();
+    f.adapter.describeCapabilities.mockImplementation(() => {
+        throw new Error("capabilities unavailable");
+    });
+    expect(await f.executor.send(f.request())).toEqual({ outcome: "rejected" });
+    expect(f.sendMessage).toHaveBeenCalledOnce();
 });
 it("mismatch and missing/offline accounts are rejected before dispatch", async () => {
     const f = fixture(),

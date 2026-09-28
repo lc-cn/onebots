@@ -49,7 +49,12 @@ export class QQAdapter extends Adapter<QQClient, "qq"> {
         const messageId = await sendQQMessage(this.client(uin), params, value =>
             String(this.resolveId(value).source),
         );
-        return { message_id: this.createId(messageId) };
+        return {
+            message_id: this.createId(messageId),
+            ...(params.scene_type === "direct"
+                ? { scene: { scene_type: "direct" as const, scene_id: params.scene_id } }
+                : {}),
+        };
     }
 
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {

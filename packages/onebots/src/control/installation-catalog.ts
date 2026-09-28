@@ -58,6 +58,7 @@ export class ControlInstallationCatalogReader {
             return {
                 ...adapter,
                 description: extension.description,
+                iconUrl: extension.iconUrl,
                 packageName: extension.packageName,
                 setup: extension.setup.map(step => ({ ...step })),
                 requirements: extension.requirements.map(requirement => ({ ...requirement })),

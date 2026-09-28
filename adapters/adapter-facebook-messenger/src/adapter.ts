@@ -242,9 +242,9 @@ export class FacebookMessengerAdapter extends Adapter<
     }
 
     private assertDirect(scene: CommonTypes.Scene): void {
-        if (scene !== "direct") {
+        if (scene !== "direct" && scene !== "private") {
             throw FacebookMessengerError.invalid(
-                "Facebook Messenger 只支持 Page 与 PSID 的一对一 direct 会话",
+                "Facebook Messenger 只支持 Page 与 PSID 的一对一会话",
             );
         }
     }

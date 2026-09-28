@@ -209,9 +209,9 @@ export class InstagramAdapter extends Adapter<InstagramClient, "instagram"> {
     }
 
     private assertDirect(scene: CommonTypes.Scene): void {
-        if (scene !== "direct") {
+        if (scene !== "direct" && scene !== "private") {
             throw InstagramError.invalid(
-                "Instagram Messaging 只支持 Professional Account 与 IGSID 的一对一 direct 会话",
+                "Instagram Messaging 只支持 Professional Account 与 IGSID 的一对一会话",
             );
         }
     }

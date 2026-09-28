@@ -23,12 +23,44 @@ export interface ExtensionCatalogEntry {
     type: ExtensionType;
     name: string;
     displayName: string;
+    iconUrl?: string;
     description: string;
     packageName: string;
     configurationTarget: ExtensionConfigurationTarget;
     setup: ExtensionSetupStep[];
     requirements: ExtensionInstallRequirement[];
 }
+
+/** 管理服务不加载适配器代码，因此在产品目录保留离线可用的品牌图标。 */
+const adapterIconUrls: Record<string, string> = {
+    mock: "https://via.placeholder.com/100?text=Mock",
+    instagram: "https://static.cdninstagram.com/rsrc.php/v4/yR/r/lam-fZmwmvn.png",
+    "facebook-messenger": "https://static.xx.fbcdn.net/rsrc.php/yd/r/hlvibnBVrEb.svg",
+    "google-chat": "https://ssl.gstatic.com/workspace/favicon/chat.ico",
+    matrix: "https://matrix.org/favicon.ico",
+    mattermost: "https://mattermost.com/wp-content/uploads/2022/02/icon.png",
+    twitch: "https://assets.twitch.tv/assets/favicon-32-e29e246c157142c94346.png",
+    ircv3: "https://ircv3.net/favicon.ico",
+    slack: "https://slack.com/favicon.ico",
+    telegram: "https://telegram.org/favicon.ico",
+    qq: "https://q.qq.com/favicon.ico",
+    discord:
+        "https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a6a49cf127bf92de1e2_icon_clyde_blurple_RGB.png",
+    dingtalk: "https://open.dingtalk.com/favicon.ico",
+    feishu: "https://open.feishu.cn/favicon.ico",
+    kook: "https://www.kookapp.cn/favicon.ico",
+    teams: "https://teams.microsoft.com/favicon.ico",
+    wecom: "https://work.weixin.qq.com/favicon.ico",
+    "wecom-kf": "https://work.weixin.qq.com/favicon.ico",
+    wechat: "https://res.wx.qq.com/a/wx_fed/assets/res/OTE0YTAw.png",
+    "wechat-clawbot": "https://res.wx.qq.com/a/wx_fed/assets/res/OTE0YTAw.png",
+    whatsapp: "https://static.whatsapp.net/rsrc.php/v3/yz/r/ujTY9i_Jhs7.png",
+    line: "https://line.me/favicon.ico",
+    email: "https://www.google.com/s2/favicons?domain=mail.google.com&sz=64",
+    zulip: "https://zulip.com/static/images/logo/zulip-icon-circle.png",
+    heychat: "https://chat.xiaoheihe.cn/favicon.ico",
+    icqq: "https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png",
+};
 
 const adapter = (
     name: string,
@@ -41,6 +73,7 @@ const adapter = (
     type: "adapter",
     name,
     displayName,
+    iconUrl: adapterIconUrls[name],
     description,
     packageName: `@onebots/adapter-${name}`,
     configurationTarget: { kind: "account", platform: name },

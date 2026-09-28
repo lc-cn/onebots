@@ -8,8 +8,9 @@ export default defineConfig({
         port: 6728,
         proxy: {
             "/api": {
-                target: "http://localhost:6727",
-                changeOrigin: true,
+                target: "http://127.0.0.1:6727",
+                // 保留浏览器访问的 Host，使控制接口的同源检查仍然有效。
+                changeOrigin: false,
             },
         },
     },

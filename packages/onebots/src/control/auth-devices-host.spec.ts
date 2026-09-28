@@ -23,7 +23,8 @@ it("本机追加设备不挤掉旧设备，逐设备撤销跨重启保持，恢�
     const first = await client().pair((await local.bootstrap()).code);
     await expect(client().authorizeDevice()).rejects.toThrow();
     await expect(client(first.token).authorizeDevice()).rejects.toThrow();
-    const device = await local.authorizeDevice();
+    const device = await client(first.token).authorizeWebDevice();
+    expect(device.expiresAt).toBeGreaterThan(Date.now());
     const second = await client().pair(device.code);
     await expect(client().pair(device.code)).rejects.toThrow();
     await expect(client(first.token).status()).resolves.toHaveProperty("manager");
@@ -33,6 +34,10 @@ it("本机追加设备不挤掉旧设备，逐设备撤销跨重启保持，恢�
     expect(listed.sessions).toHaveLength(2);
     expect(listed.sessions.filter(session => session.current)).toHaveLength(1);
     expect(JSON.stringify(listed)).not.toContain(first.token);
+    expect(await client(first.token).sessionPolicy()).toEqual({ durationDays: 30, autoRenew: true });
+    expect(await client(first.token).updateSessionPolicy({ durationDays: 90, autoRenew: true })).toEqual({ durationDays: 90, autoRenew: true });
+    const renewed = await client(first.token).renewSession();
+    expect(renewed.session.expiresAt).toBeGreaterThan(Date.now() + 89 * 24 * 60 * 60 * 1000);
     for (const session of listed.sessions)
         expect(Object.keys(session).sort()).toEqual(["current", "expiresAt", "id", "issuedAt"]);
     const other = listed.sessions.find(session => !session.current)!;

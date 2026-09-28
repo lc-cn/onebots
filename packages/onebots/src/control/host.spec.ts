@@ -152,7 +152,16 @@ describe("control host integration", () => {
             .poll(async () => (await client.status()).accounts)
             .toEqual({
                 available: true,
-                items: [{ platform: "mock", accountId: "003.with.dot", status: "online" }],
+                items: [
+                    {
+                        platform: "mock",
+                        accountId: "003.with.dot",
+                        status: "online",
+                        avatarUrl: "https://via.placeholder.com/100",
+                        platformIconUrl: "https://via.placeholder.com/100?text=Mock",
+                        protocols: [{ name: "onebot", version: "v11", status: "ready" }],
+                    },
+                ],
             });
     });
     it("空白工作区通过统一HTTP客户端完成草稿校验应用，保持停止意图", async () => {

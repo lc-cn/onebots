@@ -1,4 +1,4 @@
-import type { Account, Adapter, CommonTypes } from "onebots";
+import { sendAccountMessage, type Account, type Adapter, type CommonTypes } from "onebots";
 import type { SatoriChannelRouteRegistry } from "./channel-routes.js";
 import { Satori } from "./types.js";
 
@@ -48,7 +48,7 @@ export class SatoriMessageActions {
 
         const route = this.channelRoutes.resolve(channel_id);
 
-        const result = await this.adapter.sendMessage(this.account.account_id, {
+        const result = await sendAccountMessage(this.adapter, this.account.account_id, {
             scene_type: route.scene_type,
             scene_id: this.adapter.resolveId(route.scene_id),
             guild_id: route.guild_id ? this.adapter.resolveId(route.guild_id) : undefined,

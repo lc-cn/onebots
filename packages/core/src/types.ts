@@ -111,6 +111,8 @@ export namespace CommonEvent {
     export interface Message<TRawEvent = unknown> extends Base<TRawEvent> {
         type: "message";
         message_type: MessageScene;
+        /** 可选的规范化会话 ID；direct 房间或多人私信不能用发言人 ID 代替。 */
+        scene_id?: CommonTypes.Id;
         /** Sender information */
         sender: CommonTypes.User;
         /** Group information (for group/channel messages) */

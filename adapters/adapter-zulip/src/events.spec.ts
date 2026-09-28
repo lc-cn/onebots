@@ -154,6 +154,7 @@ describe("Zulip 事件投影", () => {
         expect(event).toMatchObject({
             type: "message",
             message_type: "direct",
+            scene_id: { string: "2,3" },
             extensions: { zulip: { scene_id: "2,3" } },
         });
     });

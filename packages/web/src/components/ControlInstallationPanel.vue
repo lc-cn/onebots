@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { IconRefresh } from "@tabler/icons-vue";
 import type {
     ControlClient,
     ControlExtensionSelection,
@@ -9,16 +10,22 @@ import type {
     ControlUpdatePlan,
 } from "@onebots/core/control";
 import UiButton from "../ui/UiButton.vue";
+import UiInfoTip from "../ui/UiInfoTip.vue";
 import ControlAdapterCatalogBrowser from "./ControlAdapterCatalogBrowser.vue";
 import ControlInstallPlanPreview from "./ControlInstallPlanPreview.vue";
 import ControlUpdatePreview from "./ControlUpdatePreview.vue";
 import type { ControlMutationBlock } from "../control-product-state.js";
+import type { ExtensionCategory } from "../control-workspace.js";
 import {
     createControlUpdateCheck,
     boundedControlRequest as bounded,
 } from "./control-update-check.js";
-const props = defineProps<{ client: ControlClient; mutationBlock?: ControlMutationBlock }>();
-const emit = defineEmits<{ applied: [] }>();
+const props = defineProps<{
+    client: ControlClient;
+    mutationBlock?: ControlMutationBlock;
+    category: ExtensionCategory;
+}>();
+const emit = defineEmits<{ applied: []; categoryChange: [category: ExtensionCategory] }>();
 type Catalog = ControlInstallationCatalog;
 type Tracking = Pick<ControlInstallOperation, "id" | "planDigest"> & {
     planId: string;
@@ -55,11 +62,16 @@ const privateNeeded = computed(
 const secureTransport =
     location.protocol === "https:" ||
     ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
-const sections = [
-    { key: "adapters", label: "平台适配器" },
-    { key: "protocols", label: "输出协议" },
-    { key: "applications", label: "框架扩展" },
+const categories = [
+    { key: "platform", label: "平台" },
+    { key: "protocol", label: "协议" },
+    { key: "framework", label: "框架" },
 ] as const;
+const secondarySection = computed(() =>
+    props.category === "protocol"
+        ? { key: "protocols" as const, label: "协议" }
+        : { key: "applications" as const, label: "框架" },
+);
 const phaseLabels = {
     queued: "等待安装",
     downloading: "下载依赖",
@@ -95,7 +107,7 @@ const updateCheck = createControlUpdateCheck({
     fail: reason => {
         error.value =
             reason === "damaged"
-                ? "当前配置已损坏，请先在配置管理中修复，再检查升级。"
+                ? "当前配置已损坏，请先在系统运行设置中修复，再检查升级。"
                 : "无法确认网关升级计划。请检查网络、安装收据和当前配置后重试；当前运行版本未改变。";
     },
     end: () => {
@@ -173,7 +185,7 @@ async function createPlan() {
     } catch {
         if (disposed) return;
         error.value =
-            "无法生成安装计划。若要取消已安装扩展，请先在配置管理中删除对应账号或协议引用、取消启用并应用配置，再刷新目录。";
+            "无法生成安装计划。若要取消已安装扩展，请先在账号或协议页删除相关配置并保存，再刷新目录。";
         await loadCatalog();
     } finally {
         busy.value = false;
@@ -332,23 +344,38 @@ onUnmounted(() => {
 });
 </script>
 <template>
-    <section class="installation-panel border-t border-border pt-6 space-y-5" aria-labelledby="installation-heading">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <h2 id="installation-heading" class="text-lg font-medium">安装、扩展与升级</h2>
-                <p class="text-sm text-fg-secondary mt-2">
-                    选择完整依赖集合。取消勾选会创建不含该扩展的新候选；被账号或协议配置引用时会拒绝。安装先验证，确认后再应用。
-                </p>
-            </div>
-            <UiButton v-if="!tracking" :disabled="busy || !!updatePreview" @click="loadCatalog"
-                >刷新目录</UiButton
+    <section
+        class="installation-panel border-t border-border pt-6 space-y-5"
+        aria-labelledby="installation-heading">
+        <header class="extension-description">
+            <h1 id="installation-heading" class="text-lg font-medium">扩展</h1>
+            <UiInfoTip
+                label="扩展安装说明"
+                text="选择需要的平台、协议或框架扩展后先确认计划。检查更新只读取版本信息，不会自动安装。" />
+        </header>
+        <div class="workspace-action-bar" role="toolbar" aria-label="扩展操作">
+            <span class="workspace-action-context">{{
+                tracking ? "安装操作进行中" : "选择并确认扩展"
+            }}</span>
+            <UiButton
+                class="workspace-action-refresh"
+                aria-label="刷新扩展目录"
+                v-if="!tracking"
+                :disabled="busy || !!updatePreview"
+                @click="loadCatalog"
+                ><IconRefresh :size="16" aria-hidden="true" /><span>刷新目录</span></UiButton
             >
-        </div>
-        <div v-if="!tracking" class="flex flex-wrap items-center gap-3">
-            <UiButton :disabled="busy || !!mutationBlock" @click="updateCheck.run"
-                >检查网关升级</UiButton
+            <UiButton v-if="!tracking" :disabled="busy || !!mutationBlock" @click="updateCheck.run"
+                >检查更新</UiButton
             >
-            <p class="text-sm text-fg-secondary">只升级网关运行版本，不升级管理服务或 CLI。</p>
+            <UiButton
+                v-if="!tracking && !updatePreview"
+                variant="primary"
+                :loading="busy"
+                :disabled="!selectionKnown || !!mutationBlock"
+                @click="createPlan"
+                >确认选择</UiButton
+            >
         </div>
         <p v-if="busy && updateCheck.isRunning()" role="status" class="text-sm text-fg-secondary">
             正在读取并验证发布目录，最多等待两分钟。此步骤不会安装或应用运行版本。
@@ -368,60 +395,89 @@ onUnmounted(() => {
             class="border border-border rounded-control p-3 text-sm text-fg-secondary">
             服务端尚未提供当前完整依赖集合。为避免覆盖已安装扩展，暂不允许生成计划，请刷新或升级管理服务。
         </p>
+        <div class="extension-category-tabs" role="group" aria-label="扩展分类">
+            <button
+                v-for="item in categories"
+                :key="item.key"
+                type="button"
+                :aria-pressed="category === item.key"
+                :class="{ active: category === item.key }"
+                @click="emit('categoryChange', item.key)">
+                {{ item.label }}
+            </button>
+        </div>
         <div v-if="catalog && !tracking && !updatePreview" class="space-y-5">
             <ControlAdapterCatalogBrowser
+                v-if="category === 'platform'"
                 v-model="selected.adapters"
                 :entries="catalog.adapters"
+                :installed="catalog.selection.adapters"
                 :disabled="busy || !selectionKnown || !!mutationBlock" />
 
-            <div class="grid gap-4 sm:grid-cols-2">
-                <fieldset
-                    v-for="section in sections.slice(1)"
-                    :key="section.key"
-                    :disabled="busy || !selectionKnown || !!mutationBlock"
+            <div v-else class="extension-secondary-sections">
+                <section
                     class="extension-choice-group border border-border rounded-panel p-4 bg-surface">
-                    <legend class="px-1 text-sm font-medium">{{ section.label }}</legend>
-                    <div class="extension-choice-list">
+                    <h2>
+                        {{ secondarySection.label }}
+                        <span>{{ selected[secondarySection.key].length }} 项已选</span>
+                    </h2>
+                    <fieldset
+                        :disabled="busy || !selectionKnown || !!mutationBlock"
+                        class="extension-choice-cards">
                         <label
-                            v-for="entry in catalog[section.key]"
+                            v-for="entry in catalog[secondarySection.key]"
                             :key="entry.name"
-                            class="extension-choice">
+                            class="extension-choice-card"
+                            :class="{
+                                selected: selected[secondarySection.key].includes(entry.name),
+                            }">
                             <input
-                                v-model="selected[section.key]"
+                                v-model="selected[secondarySection.key]"
                                 type="checkbox"
                                 :value="entry.name"
                                 class="mt-1 accent-accent" />
-                            <span
-                                >{{ entry.displayName
-                                }}<span class="block text-xs text-fg-muted">{{
-                                    entry.name
-                                }}</span></span
-                            >
+                            <span class="extension-choice-copy">
+                                <strong>{{ entry.displayName }}</strong>
+                                <small>{{ entry.name }}</small>
+                                <small v-if="'version' in entry"
+                                    >{{
+                                        catalog.selection[secondarySection.key].includes(entry.name)
+                                            ? "当前安装版本"
+                                            : "目录版本"
+                                    }}
+                                    v{{ entry.version }}</small
+                                >
+                                <small v-else>内置支持，无独立版本</small>
+                            </span>
+                            <em>{{
+                                catalog.selection[secondarySection.key].includes(entry.name)
+                                    ? "已安装"
+                                    : selected[secondarySection.key].includes(entry.name)
+                                      ? "待安装"
+                                      : "未安装"
+                            }}</em>
                         </label>
-                        <p v-if="!catalog[section.key].length" class="text-sm text-fg-muted">
+                        <p
+                            v-if="!catalog[secondarySection.key].length"
+                            class="text-sm text-fg-muted">
                             暂无可选项
                         </p>
-                    </div>
+                    </fieldset>
                     <p
                         v-if="
-                            selected[section.key].some(
-                                name => !catalog![section.key].some(entry => entry.name === name),
+                            selected[secondarySection.key].some(
+                                name =>
+                                    !catalog![secondarySection.key].some(
+                                        entry => entry.name === name,
+                                    ),
                             )
                         "
                         class="text-xs text-danger mt-3">
                         当前集合含目录外扩展，已保留选择；请先由管理员核查。
                     </p>
-                </fieldset>
+                </section>
             </div>
         </div>
-        <UiButton
-            v-if="!tracking && !updatePreview"
-            variant="primary"
-            :loading="busy"
-            :disabled="!selectionKnown || !!mutationBlock"
-            @click="createPlan"
-            >查看安装计划</UiButton
-        >
         <ControlInstallPlanPreview
             v-if="plan && !tracking"
             v-model="privateToken"
