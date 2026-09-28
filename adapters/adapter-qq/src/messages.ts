@@ -71,9 +71,24 @@ export function compileMessage(
                         "一条 QQ 消息只能包含一个 reply 消息段",
                         "QQ_DUPLICATE_REPLY",
                     );
-                replyId = resolveId(
-                    requiredIdentifier(data.message_id ?? data.id, "reply 消息缺少 message_id/id"),
+                const identifier = requiredIdentifier(
+                    data.message_id ?? data.id,
+                    "reply 消息缺少 message_id/id",
                 );
+                // OneBot V11 的数值 message_id 可能经 JSON 客户端作为字符串回传。
+                // 按数字列反查映射，才能取回腾讯签发的原始 msg_id。
+                let mappedId = identifier;
+                if (typeof identifier === "string" && /^\d+$/u.test(identifier)) {
+                    const numericId = Number(identifier);
+                    if (!Number.isSafeInteger(numericId)) {
+                        throw QQApiError.invalid(
+                            "reply 消息 ID 超出安全整数范围",
+                            "QQ_REPLY_ID_UNSAFE",
+                        );
+                    }
+                    mappedId = numericId;
+                }
+                replyId = resolveId(mappedId);
                 break;
             }
             case "image":

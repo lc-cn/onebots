@@ -17,6 +17,7 @@ COPY adapters ./adapters
 COPY protocols ./protocols
 COPY docs ./docs
 COPY development ./development
+COPY scripts/clean-package.mjs ./scripts/clean-package.mjs
 
 # .dockerignore 已排除 adapters/adapter-icqq，但 development 仍声明了该 workspace 依赖；
 # 安装前从 package.json 去掉，否则 pnpm 会报 workspace 包找不到。

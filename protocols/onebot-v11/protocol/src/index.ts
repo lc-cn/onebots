@@ -137,6 +137,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
         });
         this.transport = new OneBotV11Transport({
             accountId: account.account_id,
+            selfId: () => this.selfId(),
             path: this.path,
             config: this.config,
             router: this.router,
@@ -150,6 +151,10 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     }
     get db() {
         return this.adapter.app.db;
+    }
+
+    private selfId(): number {
+        return this.adapter.resolveAccountId(this.account.account_id).number;
     }
 
     /**
@@ -234,7 +239,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     format(event: string, payload: Record<string, unknown>): Record<string, unknown> {
         return {
             time: Math.floor(Date.now() / 1000),
-            self_id: this.adapter.resolveAccountId(this.account.account_id).number,
+            self_id: this.selfId(),
             post_type: event,
             ...payload,
         };
@@ -273,7 +278,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
         try {
             const base = {
                 time: Math.floor(event.timestamp / 1000),
-                self_id: this.adapter.resolveAccountId(this.account.account_id).number,
+                self_id: this.selfId(),
             };
 
             if (event.type === "message") {

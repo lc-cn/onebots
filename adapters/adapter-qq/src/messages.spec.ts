@@ -49,6 +49,25 @@ describe("QQ 消息编译", () => {
         });
     });
 
+    it("将客户端回传的数值型字符串回复 ID 还原为 QQ 原始消息 ID", () => {
+        const resolveId = vi.fn((value: unknown) =>
+            value === 87654321098 ? "ROBOT1.0_original-message" : "unexpected-id",
+        );
+
+        const result = compileMessage([{ type: "reply", data: { id: "87654321098" } }], resolveId);
+
+        expect(result.replyId).toBe("ROBOT1.0_original-message");
+    });
+
+    it("拒绝超出安全整数范围的回复 ID，避免错查并污染映射", () => {
+        const resolveId = vi.fn(() => "unexpected-id");
+
+        expect(() =>
+            compileMessage([{ type: "reply", data: { id: "9007199254740993" } }], resolveId),
+        ).toThrowError(/安全整数/u);
+        expect(resolveId).not.toHaveBeenCalled();
+    });
+
     it("拒绝重复回复与互相覆盖的富消息段", () => {
         expect(() =>
             compileMessage([
