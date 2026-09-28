@@ -1,5 +1,30 @@
 # onebots-dev
 
+## 1.1.33
+
+### Patch Changes
+
+- Updated dependencies [ec79a17]
+  - @onebots/adapter-icqq@3.0.17
+  - onebots@1.2.16
+  - @onebots/adapter-dingtalk@3.0.16
+  - @onebots/adapter-discord@3.0.16
+  - @onebots/adapter-feishu@3.0.16
+  - @onebots/adapter-heychat@4.0.15
+  - @onebots/adapter-kook@3.0.16
+  - @onebots/adapter-qq@3.0.18
+  - @onebots/adapter-slack@3.0.16
+  - @onebots/adapter-teams@3.0.16
+  - @onebots/adapter-telegram@3.0.16
+  - @onebots/adapter-wechat@3.0.16
+  - @onebots/adapter-wechat-clawbot@3.0.16
+  - @onebots/adapter-wecom@3.0.16
+  - @onebots/adapter-wecom-kf@2.0.16
+  - @onebots/protocol-milky-v1@3.0.16
+  - @onebots/protocol-onebot-v11@3.0.16
+  - @onebots/protocol-onebot-v12@3.0.16
+  - @onebots/protocol-satori-v1@3.0.16
+
 ## 1.1.32
 
 ### Patch Changes
