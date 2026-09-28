@@ -2,4 +2,4 @@
 "@onebots/adapter-icqq": patch
 ---
 
-将 ICQQ `system.login.auth` 事件中的验证链接和设备信息推送到 Web 验证面板，引导用户完成身份验证后继续登录。
+为 ICQQ 已有的 Web 身份验证待办补充设备信息摘要，并以清晰的验证页面标签替代原始链接文本。
