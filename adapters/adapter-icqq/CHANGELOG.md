@@ -1,5 +1,23 @@
 # @onebots/adapter-icqq
 
+## 3.0.16
+
+### Patch Changes
+
+- abe58b0: 为 ICQQ 已有的 Web 身份验证待办补充设备信息摘要，并以清晰的验证页面标签替代原始链接文本。
+- abe58b0: 在常驻管理服务增加独立的通知规则、持久投递与 Webhook、SMTP 邮件和 Bark 渠道；Web 管理台提供动态配置、测试和重试，并为平台连接中断增加明确事件上报。
+- abe58b0: 统一 Web 连接指引与运行时的协议配置合并和 HTTP 路径规则，修正部分数据请求失败时的状态展示，并放宽 ICQQ 登录验证事件的可选字段类型。
+- abe58b0: 修复 Windows 原生 Shell 下的构建清理命令，补齐文档站安装脚本产物，并明确 Windows 前台管理端的配对方式。
+- Updated dependencies [abe58b0]
+- Updated dependencies [d6ea4d3]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+  - onebots@1.2.15
+
 ## 3.0.15
 
 ### Patch Changes

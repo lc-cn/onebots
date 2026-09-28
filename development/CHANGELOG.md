@@ -1,5 +1,43 @@
 # onebots-dev
 
+## 1.1.32
+
+### Patch Changes
+
+- Updated dependencies [abe58b0]
+- Updated dependencies [d6ea4d3]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+  - onebots@1.2.15
+  - @onebots/protocol-milky-v1@3.0.15
+  - @onebots/protocol-onebot-v11@3.0.15
+  - @onebots/protocol-onebot-v12@3.0.15
+  - @onebots/protocol-satori-v1@3.0.15
+  - @onebots/adapter-slack@3.0.15
+  - @onebots/adapter-qq@3.0.17
+  - @onebots/adapter-icqq@3.0.16
+  - @onebots/adapter-discord@3.0.15
+  - @onebots/adapter-kook@3.0.15
+  - @onebots/adapter-heychat@4.0.14
+  - @onebots/adapter-telegram@3.0.15
+  - imhelper@1.0.10
+  - @onebots/adapter-dingtalk@3.0.15
+  - @onebots/adapter-feishu@3.0.15
+  - @onebots/adapter-teams@3.0.15
+  - @onebots/adapter-wechat@3.0.15
+  - @onebots/adapter-wechat-clawbot@3.0.15
+  - @onebots/adapter-wecom@3.0.15
+  - @onebots/adapter-wecom-kf@2.0.15
+  - @imhelper/onebot-v11@1.0.10
+  - @imhelper/onebot-v12@1.0.10
+
 ## 1.1.31
 
 ### Patch Changes
