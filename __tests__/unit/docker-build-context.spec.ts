@@ -20,9 +20,7 @@ describe("Docker 构建上下文", () => {
             .split(/\r?\n/)
             .find(line => line.startsWith("RUN pnpm install"));
         expect(installation).toContain("--ignore-scripts");
-        expect(dockerfile).toContain(
-            "RUN CI=true pnpm install --prod --offline --ignore-scripts",
-        );
+        expect(dockerfile).toContain("RUN CI=true pnpm install --prod --offline --ignore-scripts");
         // esbuild/Rollup/Tailwind platform binaries are distributed as optional packages.
         expect(installation).not.toMatch(/--no-optional|--omit[= ]optional/);
     });
@@ -59,6 +57,17 @@ describe("Docker 构建上下文", () => {
 
         expect(rootConfigCopy).toBeGreaterThanOrEqual(0);
         expect(workspaceBuild).toBeGreaterThan(rootConfigCopy);
+    });
+
+    test("在构建工作空间前复制各包共用的清理脚本", async () => {
+        const dockerfile = await readFile(resolve(repositoryRoot, "Dockerfile"), "utf8");
+        const helperCopy = dockerfile.indexOf(
+            "COPY scripts/clean-package.mjs ./scripts/clean-package.mjs",
+        );
+        const workspaceBuild = dockerfile.indexOf("RUN pnpm build:packages");
+
+        expect(helperCopy).toBeGreaterThanOrEqual(0);
+        expect(helperCopy).toBeLessThan(workspaceBuild);
     });
 
     test("运行镜像包含独立管理服务的健康检查", async () => {

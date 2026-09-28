@@ -5,7 +5,8 @@ export const SERVE_HELP = `onebots serve [--data-dir 工作区] [--host 监听�
 启动常驻管理服务，网关由控制客户端独立管理。
 默认工作区为当前目录，监听 127.0.0.1:6727。
 平台、协议和框架通过安装及配置界面选择，不接受 -r/-p/-t。
-首次连接：onebots auth bootstrap --data-dir <工作区>`;
+首次连接：onebots auth bootstrap --data-dir <工作区>
+Windows 前台 serve 不提供受保护的本地认证管道；开发时可用一次性部署码配对，正式运行请安装系统服务。`;
 
 export function parseServeOptions(args: string[], env = process.env) {
     if (args.length === 1 && ["--help", "-h"].includes(args[0])) return null;

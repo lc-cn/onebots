@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
-import type { ControlOperation, ControlStatus } from "@onebots/core/control";
+import type {
+    ControlConfigurationSnapshot,
+    ControlOperation,
+    ControlStatus,
+} from "@onebots/core/control";
 import {
     IconAlertTriangle,
     IconChevronRight,
@@ -9,10 +13,16 @@ import {
     IconServer,
     IconPlugConnected,
 } from "@tabler/icons-vue";
-import ControlSetupJourney from "../components/ControlSetupJourney.vue";
 import SystemOverview from "../components/SystemOverview.vue";
+import { buildControlConnectionGuides } from "../components/control-connections.js";
+import { notificationStatusLabel, type NotificationSnapshot } from "../notification-model.js";
 import type { Workspace } from "../control-workspace.js";
-import type { ControlMutationBlock, SetupJourney } from "../control-product-state.js";
+import {
+    controlAttention,
+    type AttentionAction,
+    type ControlMutationBlock,
+    type SetupJourney,
+} from "../control-product-state.js";
 import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
@@ -22,10 +32,15 @@ const props = defineProps<{
     stale: boolean;
     journey: SetupJourney;
     mutationBlock?: ControlMutationBlock;
+    configuration?: ControlConfigurationSnapshot;
+    notificationSnapshot?: NotificationSnapshot;
+    pendingVerificationCount?: number;
 }>();
 const emit = defineEmits<{
     command: [action: "start" | "stop" | "restart"];
     select: [workspace: Workspace];
+    connections: [];
+    notifications: [section?: "channels" | "history"];
 }>();
 const stateLabels: Record<ControlStatus["gateway"]["actual"], string> = {
     starting: "正在启动",
@@ -47,12 +62,60 @@ const operationStatusLabels: Record<ControlOperation["status"], string> = {
     succeeded: "已完成",
     failed: "失败",
 };
+const attentionWorkspaces: Record<
+    Exclude<AttentionAction, "notification-history" | "notification-setup">,
+    Workspace
+> = {
+    diagnostics: "activity",
+    verification: "todo",
+    accounts: "accounts",
+    "account-configuration": "accounts",
+    "protocol-configuration": "protocols",
+    extensions: "extensions",
+};
 const accountItems = computed(() => props.state?.accounts?.items ?? []);
 const onlineAccounts = computed(
     () => accountItems.value.filter(account => account.status === "online").length,
 );
 const recentOperations = computed(() =>
     [...(props.state?.gateway.operations ?? [])].reverse().slice(0, 6),
+);
+const configuredOutlets = computed(
+    () => buildControlConnectionGuides(props.configuration, window.location.origin).length,
+);
+const runtimeProtocols = computed(() => accountItems.value.flatMap(item => item.protocols ?? []));
+const readyProtocols = computed(
+    () => runtimeProtocols.value.filter(protocol => protocol.status === "ready").length,
+);
+const protocolSummary = computed(() => {
+    if (!props.state?.accounts?.available) return "状态未知";
+    if (!runtimeProtocols.value.length) return configuredOutlets.value ? "状态待确认" : "未配置";
+    return `${readyProtocols.value} / ${runtimeProtocols.value.length} 已就绪`;
+});
+const notificationSummary = computed(() => notificationStatusLabel(props.notificationSnapshot));
+const attention = computed(() =>
+    controlAttention(
+        props.state,
+        props.journey,
+        props.notificationSnapshot,
+        props.pendingVerificationCount,
+    ),
+);
+const visibleAttention = computed(() => attention.value.slice(0, 3));
+const remainingAttention = computed(() => attention.value.slice(3));
+const showAttention = computed(
+    () =>
+        attention.value.length > 0 &&
+        !(
+            attention.value.length === 1 &&
+            (props.journey.state === "needs-extensions" ||
+                props.journey.state === "needs-configuration")
+        ),
+);
+const attentionHeading = computed(() =>
+    attention.value.every(item => item.action === "notification-setup")
+        ? "建议下一步"
+        : "需要你处理",
 );
 const pendingCommand = ref<"stop" | "restart">();
 const commandDialog = ref<HTMLElement>();
@@ -122,14 +185,19 @@ function keepCommandFocus(event: KeyboardEvent) {
         first.focus();
     }
 }
+
+function openAttention(action: AttentionAction) {
+    if (action === "notification-history") emit("notifications", "history");
+    else if (action === "notification-setup") emit("notifications", "channels");
+    else emit("select", attentionWorkspaces[action]);
+}
 </script>
 
 <template>
     <section class="workspace-view" aria-labelledby="overview-title">
         <header class="page-heading">
             <div>
-                <h1 id="overview-title">运行概览</h1>
-                <p>管理网关生命周期，并确认账号连接状态。</p>
+                <h1 id="overview-title">概览</h1>
             </div>
             <span class="manager-identity" :class="{ stale }" :title="state?.manager.id">
                 {{ stale ? "缓存状态" : "状态更新" }}
@@ -148,59 +216,105 @@ function keepCommandFocus(event: KeyboardEvent) {
             <div class="skeleton"></div>
         </div>
         <template v-else>
-            <div class="overview-primary" :class="{ 'has-journey': journey.state !== 'running' }">
+            <div class="overview-primary">
                 <section
                     ref="runtimeStatus"
                     class="runtime-hero"
                     tabindex="-1"
-                    :class="`is-${state.gateway.actual}`">
+                    :class="[
+                        `is-${state.gateway.actual}`,
+                        {
+                            'needs-attention':
+                                !!pendingVerificationCount || state.gateway.actual === 'failed',
+                        },
+                    ]">
                     <div class="runtime-copy">
                         <p class="runtime-kicker">
-                            <span class="status-dot" :class="state.gateway.actual"></span> 网关状态
+                            <span class="status-dot" :class="state.gateway.actual"></span> 服务状态
                         </p>
                         <h2>{{ stateLabels[state.gateway.actual] }}</h2>
-                        <p>
-                            网关期望保持{{ state.gateway.desired === "running" ? "运行" : "停止" }}
-                            <template v-if="state.gateway.instance?.id">
-                                · 实例 {{ state.gateway.instance.id.slice(0, 8) }}</template
-                            >
-                        </p>
                     </div>
                     <div class="runtime-actions">
                         <UiButton
+                            v-if="pendingVerificationCount"
+                            variant="primary"
+                            @click="emit('select', 'todo')"
+                            >处理 {{ pendingVerificationCount }} 项验证</UiButton
+                        >
+                        <UiButton
+                            v-else-if="
+                                journey.state === 'needs-extensions' ||
+                                journey.state === 'needs-configuration'
+                            "
+                            variant="primary"
+                            @click="emit('select', journey.nextWorkspace)"
+                            >{{ journey.nextLabel }}</UiButton
+                        >
+                        <UiButton
+                            v-else-if="state.gateway.actual === 'running' && !onlineAccounts"
+                            variant="primary"
+                            @click="emit('select', 'accounts')"
+                            >检查账号连接</UiButton
+                        >
+                        <UiButton
+                            v-else-if="state.gateway.actual === 'running' && !readyProtocols"
+                            variant="primary"
+                            @click="emit('select', 'protocols')"
+                            >检查协议配置</UiButton
+                        >
+                        <UiButton
+                            v-else-if="state.gateway.actual === 'running'"
+                            variant="primary"
+                            @click="emit('connections')">
+                            <IconPlugConnected :size="17" aria-hidden="true" />连接下游
+                        </UiButton>
+                        <UiButton
+                            v-else
                             variant="primary"
                             :loading="busy"
-                            :disabled="!!mutationBlock || state.gateway.actual === 'running'"
+                            :disabled="!!mutationBlock"
                             @click="requestCommand('start')"
-                            >启动网关</UiButton
+                            >启动服务</UiButton
                         >
                         <UiButton
                             :loading="busy"
                             :disabled="!!mutationBlock || state.gateway.actual === 'stopped'"
                             @click="requestCommand('stop')"
-                            >停止</UiButton
+                            >停止服务</UiButton
                         >
                         <UiButton
                             variant="ghost"
                             :loading="busy"
                             :disabled="!!mutationBlock"
                             @click="requestCommand('restart')"
-                            >重启</UiButton
+                            >重启服务</UiButton
                         >
                     </div>
                     <div class="runtime-metrics">
-                        <div>
-                            <span><IconUsers :size="18" aria-hidden="true" />账号总数</span
-                            ><strong>{{ accountItems.length }}</strong>
-                        </div>
-                        <div>
-                            <span><IconActivity :size="18" aria-hidden="true" />在线账号</span
-                            ><strong>{{ onlineAccounts }}</strong>
-                        </div>
-                        <div>
-                            <span><IconServer :size="18" aria-hidden="true" />管理进程</span
-                            ><strong>{{ state.manager.pid ?? "—" }}</strong>
-                        </div>
+                        <button type="button" @click="emit('select', 'accounts')">
+                            <span><IconUsers :size="18" aria-hidden="true" />账号在线</span
+                            ><strong>{{ onlineAccounts }} / {{ accountItems.length }}</strong>
+                        </button>
+                        <button type="button" @click="emit('select', 'protocols')">
+                            <span><IconActivity :size="18" aria-hidden="true" />协议连接</span
+                            ><strong>{{ protocolSummary }}</strong>
+                        </button>
+                        <button
+                            type="button"
+                            @click="
+                                emit(
+                                    'notifications',
+                                    notificationSnapshot?.droppedDeliveries ||
+                                        notificationSnapshot?.deliveries.some(
+                                            item => item.status === 'failed',
+                                        )
+                                        ? 'history'
+                                        : 'channels',
+                                )
+                            ">
+                            <span><IconServer :size="18" aria-hidden="true" />通知</span
+                            ><strong>{{ notificationSummary }}</strong>
+                        </button>
                     </div>
                 </section>
                 <div
@@ -250,76 +364,69 @@ function keepCommandFocus(event: KeyboardEvent) {
                         state.gateway.error
                     }}</span>
                 </div>
-                <ControlSetupJourney
-                    v-if="journey.state !== 'running'"
-                    :journey="journey"
-                    @select="emit('select', $event)" />
             </div>
-            <SystemOverview :system="state.system" />
-            <div class="overview-grid">
-                <section class="account-strip">
-                    <div class="section-heading">
-                        <div>
-                            <h2>账号连接</h2>
-                        </div>
-                        <button type="button" @click="emit('select', 'configuration')">
-                            管理配置 <IconChevronRight :size="15" aria-hidden="true" />
-                        </button>
-                    </div>
-                    <p v-if="state.accounts?.available === false" class="empty-copy">
-                        网关未提供账号摘要。启动网关后可查看运行状态。
-                    </p>
-                    <div v-else-if="!accountItems.length" class="composed-empty">
-                        <IconPlugConnected :size="28" aria-hidden="true" />
-                        <strong>连接你的第一个账号</strong>
-                        <p>安装平台适配器后，填写账号信息即可开始接收消息。</p>
-                        <UiButton @click="emit('select', 'configuration')"
-                            >配置账号<IconChevronRight :size="16" aria-hidden="true"
-                        /></UiButton>
-                    </div>
-                    <ul v-else class="account-list">
-                        <li
-                            v-for="account in accountItems"
-                            :key="`${account.platform}:${account.accountId}`">
-                            <span class="account-icon">{{
-                                account.platform.slice(0, 2).toUpperCase()
-                            }}</span>
+            <section
+                v-if="showAttention"
+                class="overview-attention"
+                aria-labelledby="attention-title">
+                <div class="section-heading">
+                    <h2 id="attention-title">{{ attentionHeading }}</h2>
+                    <span>{{ attention.length }} 项</span>
+                </div>
+                <div class="overview-attention-list">
+                    <button
+                        v-for="item in visibleAttention"
+                        :key="item.action"
+                        type="button"
+                        @click="openAttention(item.action)">
+                        <span
+                            ><strong>{{ item.title }}</strong
+                            ><small>{{ item.detail }}</small></span
+                        >
+                        <IconChevronRight :size="17" aria-hidden="true" />
+                    </button>
+                </div>
+                <details v-if="remainingAttention.length" class="overview-attention-more">
+                    <summary>查看其余 {{ remainingAttention.length }} 项</summary>
+                    <div class="overview-attention-list">
+                        <button
+                            v-for="item in remainingAttention"
+                            :key="item.action"
+                            type="button"
+                            @click="openAttention(item.action)">
                             <span
-                                ><strong>{{ account.accountId }}</strong
-                                ><small>{{ account.platform }}</small></span
+                                ><strong>{{ item.title }}</strong
+                                ><small>{{ item.detail }}</small></span
                             >
-                            <em :class="account.status">{{
-                                { online: "在线", offline: "离线", pending: "连接中" }[
-                                    account.status
-                                ]
-                            }}</em>
-                        </li>
-                    </ul>
-                </section>
-                <section class="operation-timeline">
-                    <div class="section-heading">
-                        <div>
-                            <h2>最近操作</h2>
-                        </div>
-                        <button type="button" @click="emit('select', 'activity')">
-                            打开诊断 <IconChevronRight :size="15" aria-hidden="true" />
+                            <IconChevronRight :size="17" aria-hidden="true" />
                         </button>
                     </div>
-                    <p v-if="!recentOperations.length" class="empty-copy">还没有网关操作记录。</p>
-                    <ol v-else>
-                        <li v-for="operation in recentOperations" :key="operation.id">
-                            <span class="timeline-mark" :class="operation.status"></span>
-                            <div>
-                                <strong>{{ operationLabels[operation.action] }}</strong
-                                ><small>{{ new Date(operation.startedAt).toLocaleString() }}</small>
-                            </div>
-                            <em :class="operation.status">{{
-                                operationStatusLabels[operation.status]
-                            }}</em>
-                        </li>
-                    </ol>
-                </section>
-            </div>
+                </details>
+            </section>
+            <SystemOverview :system="state.system" />
+            <section class="operation-timeline overview-operations">
+                <div class="section-heading">
+                    <div>
+                        <h2>最近操作</h2>
+                    </div>
+                    <button type="button" @click="emit('select', 'activity')">
+                        打开诊断 <IconChevronRight :size="15" aria-hidden="true" />
+                    </button>
+                </div>
+                <p v-if="!recentOperations.length" class="empty-copy">还没有网关操作记录。</p>
+                <ol v-else>
+                    <li v-for="operation in recentOperations" :key="operation.id">
+                        <span class="timeline-mark" :class="operation.status"></span>
+                        <div>
+                            <strong>{{ operationLabels[operation.action] }}</strong
+                            ><small>{{ new Date(operation.startedAt).toLocaleString() }}</small>
+                        </div>
+                        <em :class="operation.status">{{
+                            operationStatusLabels[operation.status]
+                        }}</em>
+                    </li>
+                </ol>
+            </section>
         </template>
     </section>
 </template>

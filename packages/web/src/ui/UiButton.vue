@@ -3,7 +3,7 @@ import { computed } from "vue";
 import UiSpinner from "./UiSpinner.vue";
 
 interface Props {
-    /** 按钮样式变体 */
+    /** primary 仅用于当前任务主操作；secondary 为常规操作；ghost 为低优先级；danger 为破坏性操作。 */
     variant?: "primary" | "secondary" | "ghost" | "danger";
     /** 尺寸 */
     size?: "sm" | "md";
@@ -32,7 +32,7 @@ const variantClass = computed(() => {
         case "ghost":
             return "bg-transparent text-fg-secondary hover:bg-surface-raised hover:text-fg";
         case "danger":
-            return "bg-danger text-white hover:brightness-110";
+            return "ui-button-danger";
         case "secondary":
         default:
             return "bg-surface border border-border text-fg hover:bg-surface-raised";

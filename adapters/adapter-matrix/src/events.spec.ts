@@ -22,6 +22,41 @@ const envelope = (
 });
 
 describe("Matrix canonical 事件投影", () => {
+    it.each([undefined, 0, -1])(
+        "缺失或非正平台时间使用接收时间，不投影为 1970 年: %s",
+        timestamp => {
+            const before = Date.now();
+            const [event] = projectMatrixEvent(
+                envelope(
+                    "m.room.message",
+                    { msgtype: "m.text", body: "hello" },
+                    {
+                        origin_server_ts: timestamp,
+                    },
+                ),
+                context,
+            );
+            expect(event.timestamp).toBeGreaterThanOrEqual(before);
+            expect(event.timestamp).toBeLessThanOrEqual(Date.now());
+        },
+    );
+
+    it("direct 房间使用房间 ID，而不是发言人 ID 作为会话身份", () => {
+        const [event] = projectMatrixEvent(
+            {
+                ...envelope("m.room.message", { msgtype: "m.text", body: "hello" }),
+                is_direct: true,
+            },
+            context,
+        );
+        expect(event).toMatchObject({
+            type: "message",
+            message_type: "direct",
+            scene_id: { string: "!room:hs" },
+            sender: { id: { string: "@alice:hs" } },
+        });
+    });
+
     it("投影文本、富文本与线程关系且保留原始事件", () => {
         const [event] = projectMatrixEvent(
             envelope("m.room.message", {

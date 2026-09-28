@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "vitepress build",
+    "build": "vitepress build && node ../scripts/verify-docs-install-artifacts.mjs",
     "preview": "vitepress preview",
-    "clean": "rm -rf dist .vitepress/cache",
+    "clean": "node ../scripts/clean-package.mjs docs",
     "sync-versions": "node scripts/sync-versions.js"
   },
   "keywords": [

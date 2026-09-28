@@ -7,8 +7,8 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "start": "node .",
-    "build": "rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
-    "clean": "rm -rf lib *.tsbuildinfo"
+    "build": "node ../../scripts/clean-package.mjs ts && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "node ../../scripts/clean-package.mjs lib"
   },
   "engines": {
     "node": ">=24"
@@ -29,6 +29,14 @@
     "./control": {
       "types": "./lib/control.d.ts",
       "import": "./lib/control.js"
+    },
+    "./config-merge": {
+      "types": "./lib/config-merge.d.ts",
+      "import": "./lib/config-merge.js"
+    },
+    "./gateway-path": {
+      "types": "./lib/gateway-path.d.ts",
+      "import": "./lib/gateway-path.js"
     }
   },
   "keywords": [

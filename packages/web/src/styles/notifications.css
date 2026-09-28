@@ -1,0 +1,164 @@
+.notifications-view {
+    max-width: 1120px;
+}
+.notifications-view .page-heading h1 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.notification-actions,
+.notification-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+.notification-stack {
+    display: grid;
+    gap: 1rem;
+}
+.notification-section-picker {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 1.2rem 0;
+    color: var(--fg-secondary);
+    font-size: var(--type-label);
+}
+.notification-section-picker select {
+    min-height: 2.5rem;
+    min-width: 10rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    background: var(--surface);
+    color: var(--fg);
+    padding: 0.4rem 0.65rem;
+}
+.notification-card {
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--bg) 94%, var(--fg));
+}
+.notification-empty-state {
+    display: grid;
+    justify-items: start;
+    gap: 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: color-mix(in srgb, var(--bg) 94%, var(--fg));
+    padding: clamp(1.25rem, 3vw, 2rem);
+}
+.notification-empty-state h3 {
+    font-size: var(--type-section);
+    font-weight: 650;
+}
+.notification-empty-state p {
+    max-width: 55ch;
+    color: var(--fg-secondary);
+    line-height: 1.55;
+}
+.notification-rule > summary {
+    cursor: pointer;
+    font-weight: 650;
+}
+.notification-rule > summary span {
+    margin-left: 0.5rem;
+    color: var(--fg-secondary);
+    font-size: 0.78rem;
+    font-weight: 400;
+}
+.notification-rule-fields {
+    border-top: 1px solid var(--border);
+    margin-top: 1rem;
+    padding-top: 1rem;
+}
+.notification-card h2,
+.notification-card h3 {
+    margin: 0 0 0.6rem;
+}
+.notification-card h3 {
+    margin-top: 1rem;
+    font-size: 0.95rem;
+}
+.notification-help {
+    margin: 0.35rem 0 0.8rem;
+    color: var(--fg-secondary);
+}
+.notification-action-hint {
+    color: var(--fg-secondary);
+    font-size: 0.78rem;
+}
+.notification-field {
+    display: grid;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1;
+    font-weight: 600;
+}
+.notification-field small {
+    font-weight: 400;
+    color: var(--fg-secondary);
+}
+.notification-field input,
+.notification-field select,
+.notification-row > input {
+    width: 100%;
+    min-height: 40px;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: inherit;
+    background: var(--surface);
+}
+.notification-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.3rem 0;
+}
+.notification-grid,
+.notification-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 0.8rem;
+    margin: 0.6rem 0 1rem;
+}
+.notification-item {
+    border-top: 1px solid var(--border);
+    padding: 0.7rem 0;
+}
+.notification-item summary {
+    cursor: pointer;
+    font-weight: 650;
+}
+.notification-item summary span {
+    margin-left: 0.5rem;
+    color: var(--fg-secondary);
+    font-weight: 400;
+}
+.notification-item[open] > summary {
+    margin-bottom: 1rem;
+}
+.notification-item .notification-row {
+    margin: 0.8rem 0;
+}
+.notification-error,
+.notification-notice {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin: 0.75rem 0;
+}
+.notification-error {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+.notification-notice {
+    background: var(--success-soft);
+    color: var(--success);
+}
+.notification-delivery p {
+    margin: 0.4rem 0;
+    color: var(--fg-secondary);
+}

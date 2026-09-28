@@ -1241,6 +1241,7 @@
             ],
             "note": "收件人须在标准 24 小时消息窗口内，或调用方须使用获准的 MESSAGE_TAG",
             "scenes": [
+              "private",
               "direct"
             ]
           },
@@ -3422,6 +3423,7 @@
             ],
             "note": "仅可联系已主动开启会话的用户，并受标准消息窗口约束",
             "scenes": [
+              "private",
               "direct"
             ]
           },
@@ -3757,6 +3759,7 @@
           "send_message": {
             "support": "native",
             "scenes": [
+              "private",
               "channel",
               "direct"
             ]
@@ -5790,6 +5793,7 @@
           "send_message": {
             "support": "native",
             "scenes": [
+              "private",
               "direct",
               "group",
               "channel"
@@ -8467,6 +8471,11 @@
             "availability": "permission",
             "permissions": [
               "user:write:chat + user:bot（频道）或 user:manage:whispers（私信）"
+            ],
+            "scenes": [
+              "private",
+              "channel",
+              "direct"
             ]
           },
           "delete_message": {

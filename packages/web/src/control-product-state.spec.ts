@@ -4,7 +4,13 @@ import type {
     ControlInstallationCatalog,
     ControlStatus,
 } from "@onebots/core/control";
-import { controlMutationBlock, setupJourney, workspaceReadiness } from "./control-product-state.js";
+import type { NotificationSnapshot } from "./notification-model.js";
+import {
+    controlAttention,
+    controlMutationBlock,
+    setupJourney,
+    workspaceReadiness,
+} from "./control-product-state.js";
 
 const selection = { adapters: [], protocols: [], applications: [] };
 const catalog = (
@@ -39,6 +45,121 @@ const status = (override: Partial<ControlStatus> = {}): ControlStatus => ({
     ...override,
 });
 
+const notifications = (override: Partial<NotificationSnapshot> = {}): NotificationSnapshot => ({
+    config: {
+        schemaVersion: 1,
+        externalUrl: "",
+        smtpProfiles: [],
+        recipientGroups: [],
+        channels: [],
+        rules: [],
+    },
+    deliveries: [],
+    droppedDeliveries: 0,
+    ...override,
+});
+
+describe("controlAttention", () => {
+    it("仅在有确定事实时引导首次配置，不将未知通知状态视为缺失", () => {
+        const journey = setupJourney(catalog(), configuration(), status());
+        expect(
+            controlAttention(undefined, journey, undefined, undefined).map(item => item.action),
+        ).toEqual(["extensions"]);
+        expect(
+            controlAttention(status(), setupJourney(undefined, undefined, status()), undefined, 0),
+        ).toEqual([]);
+    });
+
+    it("网关启动失败与通知队列溢出可直达诊断和投递记录", () => {
+        const failed = status({
+            gateway: {
+                desired: "running",
+                actual: "failed",
+                recoveryRequired: false,
+                operations: [],
+            },
+        });
+        const journey = setupJourney(catalog(), configuration(), failed);
+        expect(
+            controlAttention(failed, journey, notifications({ droppedDeliveries: 3 }), 0).map(
+                item => item.action,
+            ),
+        ).toEqual(["diagnostics", "notification-history", "extensions"]);
+    });
+
+    it("关联验证、投递失败、账号和协议故障，并为已运行但未配置通知的用户给出入口", () => {
+        const running = status({
+            gateway: {
+                desired: "running",
+                actual: "running",
+                recoveryRequired: false,
+                operations: [],
+            },
+            accounts: {
+                available: true,
+                items: [
+                    {
+                        platform: "mock",
+                        accountId: "10000",
+                        status: "offline",
+                        protocols: [{ name: "onebot", version: "v11", status: "failed" }],
+                    },
+                ],
+            },
+        });
+        const journey = setupJourney(
+            catalog({
+                selection: { adapters: ["mock"], protocols: ["onebot-v11"], applications: [] },
+            }),
+            configuration({
+                document: { "mock.10000": { "onebot.v11": {} } },
+                schemas: { protocols: { "onebot.v11": {} } },
+            }),
+            running,
+        );
+        const snapshot = notifications({
+            deliveries: [
+                {
+                    id: "delivery",
+                    channelId: "channel",
+                    status: "failed",
+                    attempts: 1,
+                    createdAt: "2026-09-26T00:00:00Z",
+                    events: [],
+                },
+            ],
+        });
+        expect(controlAttention(running, journey, snapshot, 2).map(item => item.action)).toEqual([
+            "verification",
+            "notification-history",
+            "accounts",
+            "protocol-configuration",
+            "notification-setup",
+        ]);
+        snapshot.config.channels.push({
+            id: "channel",
+            name: "暂停的渠道",
+            type: "webhook",
+            enabled: false,
+            includeChallengeLink: false,
+            url: "https://example.com/events",
+            allowPrivateNetwork: false,
+            auth: { type: "none" },
+        });
+        snapshot.config.rules.push({
+            id: "rule",
+            name: "暂停的规则",
+            enabled: false,
+            events: ["gateway.failed"],
+            accounts: "all",
+            channelIds: ["channel"],
+        });
+        expect(
+            controlAttention(running, journey, snapshot, 2).map(item => item.action),
+        ).not.toContain("notification-setup");
+    });
+});
+
 describe("workspaceReadiness", () => {
     it("only declares a workspace empty from both authoritative snapshots", () => {
         expect(workspaceReadiness(undefined, configuration())).toBe("loading");
@@ -70,7 +191,7 @@ describe("setupJourney", () => {
         });
         const needsAccount = setupJourney(installed, configuration(), status());
         expect(needsAccount.state).toBe("needs-configuration");
-        expect(needsAccount.nextWorkspace).toBe("configuration");
+        expect(needsAccount.nextWorkspace).toBe("accounts");
         expect(needsAccount.counts).toEqual({
             adapters: 1,
             protocols: 1,
@@ -78,7 +199,32 @@ describe("setupJourney", () => {
             accounts: 0,
         });
 
-        const configured = configuration({ document: { "mock.10000": { token: "redacted" } } });
+        const accountOnly = configuration({
+            document: { "mock.10000": { token: "redacted" } },
+            schemas: { protocols: { "onebot.v11": {} } },
+        });
+        const needsProtocol = setupJourney(installed, accountOnly, status());
+        expect(needsProtocol.state).toBe("needs-configuration");
+        expect(needsProtocol.nextWorkspace).toBe("protocols");
+        expect(needsProtocol.nextLabel).toBe("为账号配置协议出口");
+        expect(controlAttention(status(), needsProtocol, undefined, 0)[0]?.action).toBe(
+            "protocol-configuration",
+        );
+        expect(needsProtocol.steps[1].status).toBe("current");
+
+        const globalOnly = configuration({
+            document: {
+                general: { "onebot.v11": { use_http: true } },
+                "mock.10000": { token: "redacted" },
+            },
+            schemas: { protocols: { "onebot.v11": {} } },
+        });
+        expect(setupJourney(installed, globalOnly, status()).state).toBe("needs-configuration");
+
+        const configured = configuration({
+            document: { "mock.10000": { token: "redacted", "onebot.v11": {} } },
+            schemas: { protocols: { "onebot.v11": {} } },
+        });
         expect(setupJourney(installed, configured, status()).state).toBe("ready-to-start");
         expect(
             setupJourney(

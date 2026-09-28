@@ -35,6 +35,11 @@ export function createSlackAccount(
     });
     bot.on("transport_state", state => {
         account.status = state === "connected" ? AccountStatus.Online : AccountStatus.OffLine;
+        if (state === "disconnected")
+            adapter.emit("connection:disconnected", {
+                platform: "slack",
+                account_id: String(account.account_id),
+            });
         adapter.logger.info(`Slack Bot ${config.account_id} Socket Mode 状态: ${state}`);
     });
     bot.on("event", async (event: SlackEvent, envelope: SlackWebhookBody) => {

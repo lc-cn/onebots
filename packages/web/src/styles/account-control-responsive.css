@@ -1,0 +1,464 @@
+@media (prefers-reduced-motion: reduce) {
+    .account-control-category button,
+    .account-control-contact {
+        transition: none;
+    }
+    .account-control-skeleton span {
+        animation: none;
+    }
+}
+@media (max-width: 1100px) {
+    .account-control-grid {
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+    }
+    .account-control-grid.status-unconfirmed {
+        height: auto;
+    }
+    .account-control-grid.has-selection,
+    .account-control-grid.has-selection.has-context {
+        grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
+    }
+    .account-control-contacts,
+    .account-control-conversation {
+        height: min(76dvh, 58rem);
+        min-height: 32rem;
+    }
+    .account-control-context {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: none;
+        border-left: 0;
+        border-top: 1px solid var(--border);
+        max-height: 15rem;
+        background: var(--surface-raised);
+    }
+    .account-control-context.single-section {
+        grid-template-columns: 1fr;
+    }
+    .account-control-context section + section {
+        border-top: 0;
+        border-left: 1px solid var(--border);
+    }
+}
+@media (min-width: 701px) and (max-width: 900px) {
+    .account-control-contacts,
+    .account-control-conversation {
+        min-height: min(32rem, calc(100dvh - 15rem));
+        height: min(76dvh, calc(100dvh - 15rem), 58rem);
+    }
+}
+@media (max-width: 700px) {
+    .account-control-contacts-dialog {
+        position: fixed;
+        inset: auto 0 0;
+        width: 100%;
+        max-width: 100%;
+        height: min(88dvh, 48rem);
+        max-height: 88dvh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        background: var(--surface-raised);
+        color: var(--fg);
+        box-shadow: 0 -1rem 3rem rgb(0 0 0 / 0.18);
+    }
+    .account-control-contacts-dialog::backdrop {
+        background: rgb(0 0 0 / 0.4);
+    }
+    .account-control-contacts-dialog[open] {
+        display: flex;
+        flex-direction: column;
+    }
+    .account-control-contacts-sheet-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex: none;
+        min-height: 3.5rem;
+        padding: 0.7rem 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .account-control-contacts-sheet-head button {
+        min-height: 2.5rem;
+        border: 0;
+        background: transparent;
+        color: var(--accent);
+        cursor: pointer;
+    }
+    .account-control-contacts-dialog .account-control-contacts {
+        flex: 1 1 auto;
+        height: auto;
+        min-height: 0;
+        border: 0;
+    }
+    .account-control-category {
+        display: none;
+    }
+    .account-control-list-head {
+        min-height: 3.15rem;
+        padding: 0.35rem 0.65rem;
+    }
+    .account-control-list-head .account-control-category-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        min-height: 2.5rem;
+        padding: 0.3rem 0.55rem;
+        border-radius: var(--radius-control);
+        color: var(--fg);
+        font-weight: 650;
+        cursor: pointer;
+    }
+    .account-control-list-head .account-control-category-trigger:hover {
+        background: var(--surface-strong);
+    }
+    .account-control-list-head > button:first-child:not(.account-control-category-trigger) {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .account-control-category-dialog {
+        position: fixed;
+        inset: auto 0 0;
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        max-height: 82dvh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        background: var(--surface);
+        color: var(--fg);
+        box-shadow: 0 -1rem 3rem rgb(0 0 0 / 0.18);
+    }
+    .account-control-category-dialog:not([open]) {
+        display: none;
+    }
+    .account-control-category-dialog::backdrop {
+        background: rgb(0 0 0 / 0.4);
+    }
+    .account-control-category-sheet {
+        max-height: 82dvh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-bottom: max(0.7rem, env(safe-area-inset-bottom));
+    }
+    .account-control-category-sheet-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 3.5rem;
+        padding: 0.7rem 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .account-control-category-sheet-head button {
+        min-height: 2.5rem;
+        border: 0;
+        background: transparent;
+        color: var(--accent);
+    }
+    .account-control-category-options {
+        display: grid;
+        gap: 0.15rem;
+        padding: 0.55rem;
+    }
+    .account-control-category-options button {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 3rem;
+        padding: 0.6rem 0.75rem;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--fg);
+        text-align: left;
+    }
+    .account-control-category-options button:hover,
+    .account-control-category-options button[aria-current="true"] {
+        background: var(--accent-soft);
+        color: var(--accent);
+    }
+    .account-control-category-options span {
+        font-size: var(--type-caption);
+    }
+    .account-control-actions-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.5rem;
+        min-width: 2.5rem;
+        padding: 0.3rem;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-control);
+        background: var(--surface-raised);
+        color: var(--fg);
+        font-size: var(--type-label);
+        cursor: pointer;
+    }
+    .account-control-refresh {
+        display: none;
+    }
+    .account-control-conversation-head > .account-control-history-setting {
+        display: none;
+    }
+    .account-control-actions-dialog,
+    .account-control-manual-dialog {
+        position: fixed;
+        inset: auto 0 0;
+        width: 100%;
+        max-width: 100%;
+        max-height: 82dvh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+        background: var(--surface);
+        color: var(--fg);
+        box-shadow: 0 -1rem 3rem rgb(0 0 0 / 0.18);
+    }
+    .account-control-actions-dialog::backdrop,
+    .account-control-manual-dialog::backdrop {
+        background: rgb(0 0 0 / 0.4);
+    }
+    .account-control-actions-sheet {
+        max-height: 82dvh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    .account-control-actions-sheet-head,
+    .account-control-manual-sheet-head {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 3.5rem;
+        padding: 0.7rem 1rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+    }
+    .account-control-actions-sheet-head button,
+    .account-control-manual-sheet-head button {
+        min-height: 2.5rem;
+        border: 0;
+        background: transparent;
+        color: var(--accent);
+        cursor: pointer;
+    }
+    .account-control-actions-list {
+        display: grid;
+        gap: 0.15rem;
+        padding: 0.55rem;
+    }
+    .account-control-actions-list button {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        min-height: 2.75rem;
+        padding: 0.55rem 0.7rem;
+        border: 0;
+        border-radius: var(--radius-control);
+        background: transparent;
+        color: var(--fg);
+        text-align: left;
+        cursor: pointer;
+    }
+    .account-control-actions-list button:hover {
+        background: var(--surface-strong);
+    }
+    .account-control-actions-list button[aria-disabled="true"] {
+        opacity: 0.6;
+        cursor: progress;
+    }
+    .account-control-actions-dialog .account-control-context {
+        display: block;
+        max-height: none;
+        border: 0;
+    }
+    .account-control-actions-dialog .account-control-context section {
+        max-height: none;
+        overflow: visible;
+    }
+    .account-control-manual {
+        display: none;
+    }
+    .account-control-manual-trigger {
+        display: block;
+        min-height: 2.75rem;
+        margin: 0.6rem;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-control);
+        background: var(--surface);
+        color: var(--accent);
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .account-control-manual-sheet {
+        display: grid;
+        gap: 0.85rem;
+        max-height: 82dvh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 0 1rem max(1rem, env(safe-area-inset-bottom));
+    }
+    .account-control-manual-sheet-head {
+        margin: 0 -1rem;
+    }
+    .account-control-manual-sheet label {
+        font-size: var(--type-label);
+        font-weight: 600;
+    }
+    .account-control-manual-sheet input {
+        width: 100%;
+        min-height: 2.75rem;
+        padding: 0.55rem 0.7rem;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-control);
+        background: var(--surface-raised);
+        color: var(--fg);
+    }
+    .account-control-mobile-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-basis: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--accent);
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .account-control-header {
+        min-height: 3.5rem;
+        gap: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+    .account-control-identity {
+        gap: 0.5rem;
+    }
+    .account-control-conversation-head {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        min-height: 3.5rem;
+        gap: 0.45rem;
+        padding: 0.5rem 0.75rem;
+    }
+    .account-control-conversation-head > .account-control-history-error {
+        grid-column: 1 / -1;
+        min-width: 0;
+    }
+    .account-control-mobile-back {
+        flex-basis: auto;
+        flex: none;
+        font-size: 0;
+        min-width: 2.5rem;
+        min-height: 2.5rem;
+    }
+    .account-control-mobile-back svg {
+        width: 20px;
+        height: 20px;
+    }
+    .account-control-conversation-head h2 {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--type-body);
+    }
+    .account-control-compose-actions span {
+        display: none;
+    }
+    .account-control-composer {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+        padding: 0.6rem 0.75rem max(0.6rem, env(safe-area-inset-bottom));
+    }
+    .account-control-composer > .account-control-hint,
+    .account-control-composer > .account-control-capability-pending,
+    .account-control-send-state {
+        grid-column: 1 / -1;
+    }
+    .account-control-composer label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+    }
+    .account-control-composer textarea {
+        height: 3rem;
+        min-height: 3rem;
+        max-height: 7rem;
+        resize: vertical;
+    }
+    .account-control-compose-actions {
+        align-items: stretch;
+    }
+    .account-control-compose-actions .ui-button {
+        min-height: 3rem;
+        white-space: nowrap;
+    }
+    .account-control-grid {
+        display: flex;
+        flex-direction: column;
+    }
+    .account-control-contacts {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        height: max(20rem, calc(100dvh - 11.5rem));
+        min-height: 20rem;
+        max-height: none;
+    }
+    .account-control-grid:not(.has-selection) .account-control-contacts {
+        min-height: 20rem;
+    }
+    .account-control-grid.has-selection .account-control-contacts,
+    .account-control-grid:not(.has-selection) .account-control-conversation,
+    .account-control-grid > .account-control-context {
+        display: none;
+    }
+    .account-control-list {
+        flex: 1 1 auto;
+        min-height: 5rem;
+    }
+    .account-control-conversation {
+        min-height: 20rem;
+        height: max(20rem, calc(100dvh - 11.5rem));
+    }
+    .account-control-grid.status-unconfirmed .account-control-contacts,
+    .account-control-grid.status-unconfirmed .account-control-conversation {
+        height: max(20rem, calc(100dvh - 15rem));
+    }
+    .account-control-context section + section {
+        border-left: 0;
+        border-top: 1px solid var(--border);
+    }
+}
+@media (min-width: 701px) {
+    .account-control-contacts-dialog {
+        display: none;
+    }
+    .account-control-list-head:not(.has-guild) {
+        display: none;
+    }
+    .account-control-mobile-back,
+    .account-control-actions-trigger,
+    .account-control-actions-dialog,
+    .account-control-manual-trigger,
+    .account-control-manual-dialog {
+        display: none;
+    }
+}

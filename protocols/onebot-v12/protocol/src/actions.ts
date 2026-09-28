@@ -1,6 +1,7 @@
 import {
     requireBooleanParam,
     requireNonEmptyStringParam,
+    sendAccountMessage,
     type Adapter,
     type CommonTypes,
 } from "onebots";
@@ -49,7 +50,7 @@ export class OneBotV12ActionService {
                 } else {
                     throw new Error("Invalid message parameters");
                 }
-                const result = await adapter.sendMessage(accountId, {
+                const result = await sendAccountMessage(adapter, accountId, {
                     scene_type: sceneType,
                     scene_id: adapter.resolveId(sceneId),
                     ...(detail_type === "channel" && guild_id

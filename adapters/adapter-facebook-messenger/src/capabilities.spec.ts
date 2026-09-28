@@ -18,6 +18,7 @@ describe("Facebook Messenger 动态能力", () => {
     it("只有显式声明 permissions 时才静态收敛动作", () => {
         const unknown = describeFacebookMessengerCapabilities({});
         expect(unknown.actions.send_message?.support).toBe("native");
+        expect(unknown.actions.send_message?.scenes).toEqual(["private", "direct"]);
         const declared = describeFacebookMessengerCapabilities({
             declared_permissions: ["pages_messaging"],
         });

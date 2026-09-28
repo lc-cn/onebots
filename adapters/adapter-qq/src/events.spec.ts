@@ -95,6 +95,7 @@ describe("QQ 事件投影", () => {
             ),
         ).toMatchObject({
             message_type: "direct",
+            scene_id: { string: "dm-guild-1" },
             sender: { id: { string: "u1" } },
             extensions: { qq: { guild_id: "dm-guild-1" } },
         });

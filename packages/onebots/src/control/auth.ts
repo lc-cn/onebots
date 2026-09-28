@@ -1,13 +1,20 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import { digest, matches, HASH } from "./auth-crypto.js";
+import {
+    ATTEMPT_LIMIT,
+    DEFAULT_SESSION_POLICY,
+    SESSION_DAY,
+    SESSION_TTL,
+    validSessionPolicy,
+    type SessionPolicy,
+} from "./auth-policy.js";
+import { validState } from "./auth-state-validation.js";
 
 const FAILURE = "控制认证失败";
 const BOOTSTRAP_TTL = 5 * 60 * 1000;
-const SESSION_TTL = 30 * 24 * 60 * 60 * 1000;
 const ATTEMPT_WINDOW = 60 * 1000;
-const ATTEMPT_LIMIT = 5;
-const HASH = /^[a-f0-9]{64}$/;
 
 export interface ControlAuthOptions {
     statePath: string;
@@ -26,9 +33,10 @@ interface StoredSession {
     hash: string;
     issuedAt: number;
     expiresAt: number;
+    renewedAt?: number;
 }
 
-interface AuthState {
+export interface AuthState {
     version: 2;
     paired: boolean;
     deploymentBootstrap: { hash: string; expiresAt: number } | null;
@@ -40,6 +48,7 @@ interface AuthState {
     issuance: { startedAt: number; count: number };
     device: { hash: string; expiresAt: number } | null;
     sessions: StoredSession[];
+    sessionPolicy?: SessionPolicy;
     attempts: { startedAt: number; count: number };
 }
 
@@ -125,6 +134,52 @@ export class ControlAuth {
         return this.issue(state, "device");
     }
 
+    /** 已授权浏览器可签发一次性追加设备码；验权与签发共用同一状态快照。 */
+    issueDeviceForSession(token: string): { code: string; expiresAt: number } {
+        const state = this.read();
+        if (!this.currentSession(state, token)) throw new Error(FAILURE);
+        const code = this.issue(state, "device");
+        return { code, expiresAt: state.device!.expiresAt };
+    }
+
+    sessionPolicy(token: string): SessionPolicy {
+        const state = this.read();
+        if (!this.currentSession(state, token)) throw new Error(FAILURE);
+        return state.sessionPolicy ?? DEFAULT_SESSION_POLICY;
+    }
+
+    setSessionPolicy(token: string, policy: unknown): SessionPolicy {
+        if (!validSessionPolicy(policy)) throw new Error("会话策略无效");
+        const state = this.read();
+        if (!this.currentSession(state, token)) throw new Error(FAILURE);
+        state.sessionPolicy = policy;
+        this.write(state);
+        return policy;
+    }
+
+    renewSession(token: string): ControlSession {
+        const state = this.read();
+        const session = this.currentSession(state, token);
+        if (!session) throw new Error(FAILURE);
+        const now = this.now();
+        const duration = (state.sessionPolicy ?? DEFAULT_SESSION_POLICY).durationDays * SESSION_DAY;
+        // 活跃会话只在接近到期或策略变更后落盘，避免轮询触发频繁写入。
+        if (
+            session.expiresAt - now <= duration / 2 ||
+            session.expiresAt - (session.renewedAt ?? session.issuedAt) !== duration
+        ) {
+            session.renewedAt = now;
+            session.expiresAt = now + duration;
+            this.write(state);
+        }
+        return {
+            id: session.id,
+            issuedAt: session.issuedAt,
+            expiresAt: session.expiresAt,
+            current: true,
+        };
+    }
+
     private issue(state: AuthState, kind: "bootstrap" | "recovery" | "device"): string {
         const now = this.now();
         if (now >= state.issuance.startedAt + ATTEMPT_WINDOW)
@@ -179,7 +234,9 @@ export class ControlAuth {
             id: randomBytes(16).toString("hex"),
             hash: digest(token),
             issuedAt: now,
-            expiresAt: now + SESSION_TTL,
+            renewedAt: now,
+            expiresAt:
+                now + (state.sessionPolicy ?? DEFAULT_SESSION_POLICY).durationDays * SESSION_DAY,
         });
         this.write(state);
         return { token, revoked };
@@ -296,6 +353,7 @@ export class ControlAuth {
                     issuance: { startedAt: this.now(), count: 0 },
                     device: null,
                     sessions: [],
+                    sessionPolicy: DEFAULT_SESSION_POLICY,
                     attempts: { startedAt: this.now(), count: 0 },
                 };
             }
@@ -346,18 +404,6 @@ export class ControlAuth {
     }
 }
 
-function digest(value: string): string {
-    return createHash("sha256").update(value).digest("hex");
-}
-
-function matches(value: string, hash: string): boolean {
-    return (
-        typeof value === "string" &&
-        value.length <= 128 &&
-        timingSafeEqual(Buffer.from(digest(value), "hex"), Buffer.from(hash, "hex"))
-    );
-}
-
 function record(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -383,89 +429,4 @@ function validLegacySession(value: Record<string, unknown>): boolean {
             return false;
     }
     return true;
-}
-
-function validState(value: unknown): value is AuthState {
-    if (
-        !record(value) ||
-        value.version !== 2 ||
-        typeof value.paired !== "boolean" ||
-        Object.hasOwn(value, "sessionHash") ||
-        Object.hasOwn(value, "sessionLifetime")
-    )
-        return false;
-    if (
-        !Array.isArray(value.sessions) ||
-        value.sessions.length > 16 ||
-        value.sessions.some(
-            session =>
-                !record(session) ||
-                typeof session.id !== "string" ||
-                !/^[a-f0-9]{32}$/.test(session.id) ||
-                !validLegacySession({ sessionHash: session.hash, sessionLifetime: session }) ||
-                session.hash === null,
-        ) ||
-        new Set(value.sessions.map(session => session.id)).size !== value.sessions.length ||
-        new Set(value.sessions.map(session => session.hash)).size !== value.sessions.length
-    )
-        return false;
-    for (const challenge of [
-        value.bootstrap,
-        value.recovery,
-        value.device,
-        value.deploymentBootstrap,
-        value.deploymentRecovery,
-    ]) {
-        if (challenge === null) continue;
-        if (
-            !record(challenge) ||
-            typeof challenge.hash !== "string" ||
-            !HASH.test(challenge.hash) ||
-            typeof challenge.expiresAt !== "number" ||
-            !Number.isSafeInteger(challenge.expiresAt)
-        )
-            return false;
-    }
-    for (const [history, challenge] of [
-        [value.deploymentBootstrapHistory, value.deploymentBootstrap],
-        [value.deploymentRecoveryHistory, value.deploymentRecovery],
-    ]) {
-        if (
-            !Array.isArray(history) ||
-            history.length > 16 ||
-            history.some(hash => typeof hash !== "string" || !HASH.test(hash)) ||
-            new Set(history).size !== history.length ||
-            (challenge !== null && (!record(challenge) || !history.includes(challenge.hash)))
-        )
-            return false;
-    }
-    const bootstrapHistory = value.deploymentBootstrapHistory;
-    const recoveryHistory = value.deploymentRecoveryHistory;
-    if (
-        !Array.isArray(bootstrapHistory) ||
-        !Array.isArray(recoveryHistory) ||
-        bootstrapHistory.some(hash => recoveryHistory.includes(hash)) ||
-        (!value.paired && (value.deploymentRecovery !== null || recoveryHistory.length > 0))
-    )
-        return false;
-    if (value.paired ? value.bootstrap !== null : value.sessions.length !== 0) return false;
-    if (!value.paired && (value.recovery !== null || value.device !== null)) return false;
-    if (
-        !record(value.issuance) ||
-        !Number.isSafeInteger(value.issuance.startedAt) ||
-        !Number.isInteger(value.issuance.count) ||
-        typeof value.issuance.count !== "number" ||
-        value.issuance.count < 0 ||
-        value.issuance.count > ATTEMPT_LIMIT
-    )
-        return false;
-    return (
-        record(value.attempts) &&
-        typeof value.attempts.startedAt === "number" &&
-        Number.isSafeInteger(value.attempts.startedAt) &&
-        typeof value.attempts.count === "number" &&
-        Number.isInteger(value.attempts.count) &&
-        value.attempts.count >= 0 &&
-        value.attempts.count <= ATTEMPT_LIMIT
-    );
 }

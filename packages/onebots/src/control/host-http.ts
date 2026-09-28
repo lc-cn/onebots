@@ -24,6 +24,9 @@ import type {
 import { handleServiceMigrationRequest, serviceMigrationStatus } from "./service-migration-api.js";
 import type { ControlSendService } from "./send-service.js";
 import { respondControlSend } from "./send-http.js";
+import { respondControlChatHistory } from "./chat-history-http.js";
+import { respondControlAccountExplore, type AccountExploreSource } from "./account-explore-http.js";
+import type { ChatHistoryStore } from "../chat-history-store.js";
 import { respondControlLogs } from "./logs-http.js";
 import {
     completeWindowsGatewayOperation,
@@ -35,6 +38,8 @@ import { serveControlWeb } from "./web-assets.js";
 import { proxyGatewayHttp, type GatewayProxyAddress } from "./proxy.js";
 import type { ControlTerminalService } from "./terminal-service.js";
 import { handleTerminalHttp, isTerminalHttpPath } from "./terminal-http.js";
+import { respondControlNotifications } from "./notification-http.js";
+import type { ControlNotificationService } from "./notification-service.js";
 
 interface ControlRequestHandlerOptions {
     workspace: string;
@@ -54,6 +59,8 @@ interface ControlRequestHandlerOptions {
     installation: HostInstallation | undefined;
     configuration: ControlConfigurationService | undefined;
     sending: ControlSendService | undefined;
+    chatHistory: ChatHistoryStore | undefined;
+    accountExplore: AccountExploreSource;
     verification: ReturnType<typeof createHostVerification>;
     messageDebugHttp: ControlMessageDebugHttp;
     mcp: ControlMcpService;
@@ -61,6 +68,7 @@ interface ControlRequestHandlerOptions {
     upgradeIdentity: ReturnType<typeof createManagerUpgradeIdentity>;
     publisher: WindowsManagerStatusPublisher | undefined;
     terminal: ControlTerminalService;
+    notifications: ControlNotificationService | undefined;
     activeAddress: () => GatewayProxyAddress | undefined;
     respondSnapshot: (
         response: ServerResponse,
@@ -172,6 +180,37 @@ export function createControlRequestHandler(options: ControlRequestHandlerOption
                     options.respondSnapshot(response, pathname, status, options.serverAddress());
                     return;
                 }
+                if (
+                    await respondControlNotifications(
+                        options.notifications,
+                        request,
+                        response,
+                        pathname,
+                    )
+                )
+                    return;
+                if (
+                    await respondControlAccountExplore(
+                        options.accountExplore,
+                        request,
+                        response,
+                        pathname,
+                        local,
+                        options.auth,
+                    )
+                )
+                    return;
+                if (
+                    await respondControlChatHistory(
+                        options.chatHistory,
+                        request,
+                        response,
+                        pathname,
+                        local,
+                        options.auth,
+                    )
+                )
+                    return;
                 if (
                     await respondControlSend(
                         options.sending,

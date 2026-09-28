@@ -18,6 +18,10 @@ export function createHeychatAccount(
     });
     bot.on("disconnected", details => {
         account.status = AccountStatus.Pending;
+        adapter.emit("connection:disconnected", {
+            platform: "heychat",
+            account_id: String(account.account_id),
+        });
         adapter.logger.warn(`黑盒语音 Bot ${config.account_id} 连接中断`, details);
     });
     bot.on("reconnecting", ({ attempt, delay }) => {

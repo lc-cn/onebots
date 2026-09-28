@@ -16,6 +16,7 @@ interface TransportLogger {
 
 export interface OneBotV11TransportContext {
     readonly accountId: string;
+    readonly selfId: () => number;
     readonly path: string;
     readonly config: OneBotV11Config.Config;
     readonly router: Router;
@@ -197,7 +198,7 @@ export class OneBotV11Transport {
             const headers: Record<string, string> = {
                 "Content-Type": "application/json",
                 "User-Agent": "OneBot/11",
-                "X-Self-ID": context.accountId,
+                "X-Self-ID": String(context.selfId()),
             };
             if (context.config.access_token) {
                 headers.Authorization = `Bearer ${context.config.access_token}`;
@@ -227,7 +228,7 @@ export class OneBotV11Transport {
         const endpoint = new URL(url);
         const headers: Record<string, string> = {
             "User-Agent": "OneBot/11",
-            "X-Self-ID": context.accountId,
+            "X-Self-ID": String(context.selfId()),
             "X-Client-Role": "Universal",
         };
         if (context.config.access_token) {

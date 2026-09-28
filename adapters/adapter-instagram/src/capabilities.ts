@@ -56,7 +56,7 @@ const platformActions = definePlatformActionCapabilities(INSTAGRAM_PLATFORM_ACTI
 /** Instagram Login 当前稳定接口的真实边界；Instagram Messaging 不支持群聊。 */
 export const instagramCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: { ...messaging, scenes: ["direct"] },
+        send_message: { ...messaging, scenes: ["private", "direct"] },
         get_message: { ...conversations, scenes: ["direct"] },
         get_message_history: { ...conversations, scenes: ["direct"] },
         get_login_info: basic,

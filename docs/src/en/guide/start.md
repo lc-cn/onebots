@@ -4,7 +4,7 @@
 This guide applies to OneBots versions that include the persistent manager. Migrate legacy installations first; do not combine legacy entrypoints or installers with the new managed runtime.
 :::
 
-## Start from source
+## Start from source (Linux/macOS)
 
 Use Node.js 24 and the repository's pinned pnpm version. From the repository root:
 
@@ -21,6 +21,19 @@ node packages/onebots/lib/bin.js auth bootstrap --data-dir ./workspace
 ```
 
 Open the management address (default `http://127.0.0.1:6727`) and enter the code. Management authentication uses pairing and sessions, not legacy username/password or a manually configured management token. See [login and recovery](/en/guide/management-login).
+
+On Windows, repository builds use Node.js for cleanup, so PowerShell/CMD does not need Git Bash. A foreground `serve` is suitable for local Web development, but it does not create the protected management pipe used by the SCM service; `auth bootstrap` cannot connect to that foreground process. For a **new workspace**, use a one-time deployment code in PowerShell:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm build
+$code = node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.stdout.write(randomBytes(32).toString('base64url'))"
+$env:ONEBOTS_BOOTSTRAP_CODE = $code
+$code | Set-Clipboard
+node packages/onebots/lib/bin.js serve --data-dir .\workspace
+```
+
+Open the manager URL and paste the code within five minutes. Do not share it in chats, commit it, or pass it as a CLI argument. An authorized Web browser can generate codes for additional devices in **System → Devices & Access**. If all sessions are lost, restart with a fresh `ONEBOTS_RECOVERY_CODE` instead. The local CLI/TUI control pipe is unavailable in Windows foreground mode; use the installer below for a production SCM service. Do not reuse an initial code for an already paired workspace.
 
 Select adapters, protocols and frameworks in the Web installation panel. Confirm the complete dependency list; private download authorization is used only for that installation, and required peers are installed and verified together. Activate the verified runtime separately, then configure accounts and protocol connections. Installing packages does not enable connections.
 
@@ -52,6 +65,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 You can inspect the downloaded script before executing it. `Bypass` applies only to this PowerShell process, without changing the system execution policy. Installers default to `.onebots` in your user directory; use the upgrade or migration workflow for existing installations.
 
 `install.sh` handles first-time Linux/macOS bootstrap: it installs the manager and matching Web assets, then delegates user-service installation, startup and status checks to the CLI. It does not select a default protocol or print permanent credentials. Windows uses `install.ps1` with the same boundary and additionally verifies the bundled native SCM host.
+
+The installer downloads the published npm package; it does **not** install unpublished changes in your local checkout.
 
 **The script downloads from public npm and requires a published package containing the new architecture.** Missing management artifacts cause a clear failure while preserving the candidate directory; the legacy CLI is not executed. The workflow uses packages built from source to exercise real system-level systemd and user-level launchd lifecycle, legacy migration, and manager crash recovery on GitHub-hosted Ubuntu and macOS runners. Only a passing platform job is acceptance evidence. This does not mean that the architecture has been published to npm.
 

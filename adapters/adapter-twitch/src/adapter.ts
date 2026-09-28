@@ -251,6 +251,16 @@ export class TwitchAdapter extends Adapter<TwitchClient, "twitch"> {
             ),
         );
         client.on("error", error => this.logger.error("Twitch 事件管线异常", error));
+        client.on("connected", () => {
+            account.status = AccountStatus.Online;
+        });
+        client.on("disconnected", () => {
+            account.status = AccountStatus.OffLine;
+            this.emit("connection:disconnected", {
+                platform: "twitch",
+                account_id: String(account.account_id),
+            });
+        });
         this.httpHost.mount(account.account_id, client);
         account.on("start", async (signal: AbortSignal) => {
             try {

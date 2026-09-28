@@ -11,6 +11,7 @@ describe("extension configuration targets", () => {
                 kind: "account",
                 platform: entry.name,
             });
+            expect(entry.iconUrl, entry.name).toMatch(/^https:\/\//);
         }
     });
 

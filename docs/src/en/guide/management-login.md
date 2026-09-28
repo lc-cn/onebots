@@ -10,6 +10,8 @@ The Web console uses device pairing. A short-lived code authorizes the browser, 
 
 Start the management service, then run on its machine:
 
+This command requires the local control socket on Linux/macOS, a Docker container, or the Windows SCM service. Windows foreground `serve` does not create a local management pipe; use the one-time deployment-code flow in the [Windows source setup](/en/guide/start).
+
 ```bash
 onebots auth bootstrap --data-dir /path/to/data
 # Docker: replace onebots with your container name
@@ -20,9 +22,9 @@ Enter the code on the console pairing page within five minutes. It is single-use
 
 ## Add devices and manage sessions
 
-Run `onebots auth device --data-dir /path/to/data` on the manager host (or through `docker exec`) and enter the single-use code in the new browser within five minutes. The TUI also provides an authorize-new-browser action. Adding a device keeps existing sessions valid.
+In an authorized Web console, open **System → Devices & Access** and select **Generate device code**. Enter the single-use code in the new browser within five minutes. It is shown only for this visit; leaving the page, expiry, or generating another code hides or replaces it. Alternatively, run `onebots auth device --data-dir /path/to/data` on the manager host (or through `docker exec`), or use the TUI authorize-new-browser action. Adding a device keeps existing sessions valid.
 
-The console lists session IDs, authorization and expiry times, and the current device. Revoke individual sessions after confirmation. Up to 16 active sessions are supported. Sessions expire 30 days after authorization; requests and restarts do not extend this deadline. Session IDs are not credentials.
+The console lists session IDs, authorization and expiry times, and the current device. Revoke individual sessions after confirmation. Up to 16 active sessions are supported. Choose a 30-, 90-, or 365-day session lifetime (30 days by default). With automatic renewal enabled, an active browser checks periodically and renews its own still-valid session only when the deadline approaches or the policy changes. Closing the browser or allowing a session to expire does not renew it in the background. You can also check renewal manually. Saving a changed lifetime immediately updates the current browser, not other devices. Session IDs are not credentials; pairing codes remain short-lived and single-use.
 
 Legacy sessions without an issuance time require authorization again; sessions with an existing deadline retain it. After the authentication store is upgraded, do not downgrade to a manager that cannot read the multi-device format or restore old authentication files to revive revoked credentials.
 

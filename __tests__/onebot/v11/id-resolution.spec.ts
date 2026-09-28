@@ -25,6 +25,11 @@ vi.mock("onebots", () => {
         Adapter: class {},
         CommonEvent: {},
         CommonTypes: {},
+        sendAccountMessage: (
+            adapter: { sendMessage: (id: string, params: unknown) => Promise<unknown> },
+            id: string,
+            params: unknown,
+        ) => adapter.sendMessage(id, params),
     };
 });
 

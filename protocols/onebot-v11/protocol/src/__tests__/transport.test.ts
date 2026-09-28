@@ -1,10 +1,63 @@
-import { EventEmitter } from "node:events";
-import WebSocket from "ws";
+import { EventEmitter, once } from "node:events";
+import type { AddressInfo } from "node:net";
+import WebSocket, { WebSocketServer } from "ws";
 import { describe, expect, test, vi } from "vitest";
 import type { OneBotV11Config } from "../config.js";
 import { OneBotV11Transport } from "../transport.js";
 
 describe("OneBot V11 transport lifecycle", () => {
+    test("反向 WS 握手身份与发出的事件 self_id 相同", async () => {
+        const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+        await once(server, "listening");
+        const port = (server.address() as AddressInfo).port;
+        const received = new Promise<{
+            header: string | undefined;
+            event: Record<string, unknown>;
+        }>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error("反向 WS 未发送生命周期事件")), 3000);
+            server.once("connection", (socket, request) => {
+                socket.once("message", data => {
+                    clearTimeout(timeout);
+                    resolve({
+                        header: request.headers["x-self-id"] as string | undefined,
+                        event: JSON.parse(data.toString()) as Record<string, unknown>,
+                    });
+                });
+            });
+        });
+        const emitter = new EventEmitter();
+        const transport = new OneBotV11Transport({
+            accountId: "1234567890",
+            selfId: () => 9876543210,
+            path: "/qq/1234567890/onebot/v11",
+            config: {
+                protocol: "onebot",
+                version: "v11",
+                use_http: false,
+                use_ws: false,
+                http_reverse: [],
+                ws_reverse: [`ws://127.0.0.1:${port}`],
+            } as OneBotV11Config.Config,
+            router: {} as never,
+            logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+            apply: vi.fn(),
+            format: (event, payload) => ({ post_type: event, self_id: 9876543210, ...payload }),
+            onDispatch: listener => emitter.on("dispatch", listener),
+            offDispatch: listener => emitter.off("dispatch", listener),
+            dispatchEmitter: emitter,
+        });
+
+        try {
+            transport.start();
+            const { header, event } = await received;
+            expect(header).toBe(String(event.self_id));
+        } finally {
+            transport.stop();
+            for (const socket of server.clients) socket.terminate();
+            await new Promise<void>(resolve => server.close(() => resolve()));
+        }
+    });
+
     test("registers universal and split-role WebSocket routes", async () => {
         const emitter = new EventEmitter();
         const servers = new Map<string, EventEmitter>();
@@ -18,6 +71,7 @@ describe("OneBot V11 transport lifecycle", () => {
         };
         const transport = new OneBotV11Transport({
             accountId: "bot",
+            selfId: () => 12345678,
             path: "/mock/bot/onebot/v11",
             config: {
                 protocol: "onebot",
@@ -81,6 +135,7 @@ describe("OneBot V11 transport lifecycle", () => {
         const emitter = new EventEmitter();
         const transport = new OneBotV11Transport({
             accountId: "bot",
+            selfId: () => 12345678,
             path: "/mock/bot/onebot/v11",
             config: {
                 protocol: "onebot",

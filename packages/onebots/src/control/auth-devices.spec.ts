@@ -98,6 +98,46 @@ it("追加设备码五分钟过期，签发及兑换共用限流", () => {
     expect(() => f.reopen().pair(fresh)).toThrow();
 });
 
+it("会话策略跨重启保持，续期仅延长当前设备且撤销后不可续期", () => {
+    const f = fixture();
+    const first = f.auth.pair(f.auth.issueBootstrap());
+    const second = f.auth.pair(f.auth.issueDevice());
+    expect(f.auth.sessionPolicy(first)).toEqual({ durationDays: 30, autoRenew: true });
+    expect(f.auth.setSessionPolicy(first, { durationDays: 365, autoRenew: true })).toEqual({
+        durationDays: 365,
+        autoRenew: true,
+    });
+    expect(f.reopen().sessionPolicy(second).durationDays).toBe(365);
+    const otherExpiry = f.auth.sessions(first).find(session => !session.current)!.expiresAt;
+    f.advance(60_000);
+    const renewed = f.auth.renewSession(first);
+    expect(renewed.expiresAt - f.auth.sessions(first)[0].issuedAt).toBeGreaterThan(
+        30 * 24 * 60 * 60 * 1000,
+    );
+    expect(
+        f
+            .reopen()
+            .sessions(second)
+            .find(session => session.current)!.expiresAt,
+    ).toBe(otherExpiry);
+    const third = f.auth.pair(f.auth.issueDevice());
+    expect(f.auth.sessions(third)[2].expiresAt - f.auth.sessions(third)[2].issuedAt).toBe(
+        365 * 24 * 60 * 60 * 1000,
+    );
+    f.auth.revoke(first);
+    expect(() => f.auth.renewSession(first)).toThrow();
+});
+
+it("无效会话策略不写入，已过期会话不能续期或签发设备码", () => {
+    const f = fixture();
+    const token = f.auth.pair(f.auth.issueBootstrap());
+    expect(() => f.auth.setSessionPolicy(token, { durationDays: 999, autoRenew: true })).toThrow();
+    expect(f.reopen().sessionPolicy(token).durationDays).toBe(30);
+    f.advance(30 * 24 * 60 * 60 * 1000);
+    expect(() => f.auth.renewSession(token)).toThrow();
+    expect(() => f.auth.issueDeviceForSession(token)).toThrow();
+});
+
 it("最多 16 会话，清理过期设备后可追加且不延长存活会话", () => {
     const f = fixture();
     const first = f.auth.pair(f.auth.issueBootstrap());

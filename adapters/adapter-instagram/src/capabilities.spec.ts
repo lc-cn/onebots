@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { describeInstagramCapabilities, instagramCapabilities } from "./capabilities.js";
 
 describe("Instagram capabilities", () => {
-    it("全局清单只声明 direct scene，并公开真实平台特性", () => {
-        expect(instagramCapabilities.actions.send_message?.scenes).toEqual(["direct"]);
+    it("一对一发送按用户 ID 支持 private 与 direct，并公开真实平台特性", () => {
+        expect(instagramCapabilities.actions.send_message?.scenes).toEqual(["private", "direct"]);
         expect(instagramCapabilities.events.message?.scenes).toEqual(["direct"]);
         expect(instagramCapabilities.actions.send_instagram_human_agent).toMatchObject({
             support: "native",

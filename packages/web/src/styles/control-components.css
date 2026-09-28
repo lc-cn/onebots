@@ -38,6 +38,44 @@
     background: var(--bg);
     padding: 0.55rem 0.7rem;
 }
+.adapter-catalog-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.85rem;
+}
+.adapter-catalog-filters button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2.75rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    color: var(--fg-secondary);
+    padding: 0.4rem 0.7rem;
+    font-size: var(--type-label);
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease;
+}
+.adapter-catalog-filters button:hover {
+    background: var(--surface-raised);
+    color: var(--fg);
+}
+.adapter-catalog-filters button.active {
+    border-color: var(--border-strong);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 650;
+}
+.adapter-catalog-filters button:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+.adapter-catalog-filters span {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
 .adapter-catalog-selected {
     margin-top: 0.8rem;
     border-left: 2px solid var(--accent);
@@ -65,12 +103,36 @@
     align-items: start;
     gap: 0.85rem;
 }
+.adapter-group-toggle {
+    display: block;
+    width: 100%;
+    min-height: 2.75rem;
+    margin-top: 0.75rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
+    color: var(--accent);
+    font-size: var(--type-label);
+    font-weight: 600;
+    transition:
+        background-color 160ms ease,
+        border-color 160ms ease;
+}
+.adapter-group-toggle:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+.adapter-group-toggle:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
 .adapter-row {
     min-width: 0;
     border: 1px solid var(--border);
     border-radius: 0.9rem;
     padding: 1rem;
-    transition: border-color 160ms ease, background 160ms ease;
+    transition:
+        border-color 160ms ease,
+        background 160ms ease;
     background: color-mix(in srgb, var(--surface) 55%, transparent);
 }
 .adapter-row:hover {
@@ -257,47 +319,32 @@
         opacity: 0.35;
     }
 }
-.log-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+.log-source-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
     border-block: 1px solid var(--border);
     background: var(--surface-raised);
+    padding: 0.65rem 1rem;
 }
-.log-tabs button {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.08rem;
-    border: 0;
-    border-bottom: 2px solid transparent;
-    background: transparent;
+.log-source-toolbar label {
     color: var(--fg-secondary);
-    padding: 0.78rem 1rem 0.7rem;
-    text-align: left;
+    font-size: var(--type-label);
+    font-weight: 600;
 }
-.log-tabs button + button {
-    border-left: 1px solid var(--border);
-}
-.log-tabs button:hover {
-    background: color-mix(in srgb, var(--surface) 55%, transparent);
-    color: var(--fg);
-}
-.log-tabs button[aria-selected="true"] {
-    border-bottom-color: var(--accent);
+.log-source-toolbar select {
+    min-height: 2.5rem;
+    min-width: 9rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-control);
     background: var(--surface);
     color: var(--fg);
+    padding: 0.4rem 0.65rem;
 }
-.log-tabs button span {
-    font-size: 0.79rem;
-    font-weight: 620;
-}
-.log-tabs button small {
-    overflow: hidden;
-    color: var(--fg-tertiary);
-    font-size: 0.66rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.log-source-toolbar span {
+    color: var(--fg-secondary);
+    font-size: var(--type-caption);
 }
 .log-console {
     min-height: 22rem;
@@ -420,13 +467,6 @@
     .operations-workbench,
     .message-filter-grid {
         grid-template-columns: 1fr;
-    }
-    .log-tabs {
-        display: flex;
-        overflow-x: auto;
-    }
-    .log-tabs button {
-        min-width: 10rem;
     }
     .live-logs-header,
     .log-stream-error {

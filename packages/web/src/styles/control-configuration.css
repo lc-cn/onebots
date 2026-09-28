@@ -1,7 +1,7 @@
 /* Configuration workspace */
 .panel-stack > .configuration-workspace {
     padding: 0 !important;
-    overflow: hidden;
+    overflow: visible;
     border-color: color-mix(in srgb, var(--accent) 15%, var(--border)) !important;
 }
 .configuration-header,
@@ -16,10 +16,21 @@
 .configuration-header {
     margin: 0 !important;
     padding: 1.15rem 1.25rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 0;
+}
+.configuration-header-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.configuration-workspace > .workspace-action-bar {
+    margin: 0 1rem 1rem;
 }
 .configuration-header h2 {
     margin-top: 0.25rem;
+}
+.configuration-owner-target:not(:empty) {
+    margin-top: 1.25rem;
 }
 .configuration-header > div > p:last-child,
 .configuration-step-heading > p,
@@ -81,7 +92,7 @@
     background: var(--panel-inset);
     padding: 1.1rem;
 }
-.configuration-start-card h3 {
+.configuration-start-card h2 {
     margin: 0.25rem 0;
     font-size: 1rem;
     font-weight: 620;
@@ -114,51 +125,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-.configuration-steps {
-    display: flex;
-    gap: 1.5rem;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 1.25rem;
-}
-.configuration-steps button {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: 0.45rem;
-    padding: 0.82rem 0;
-    border-bottom: 2px solid transparent;
-    color: var(--fg-secondary);
-    text-align: left;
-}
-.configuration-steps button + button {
-    border-left: 0;
-}
-.configuration-steps button:last-child {
-    margin-left: auto;
-}
-.configuration-steps button > div {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-}
-.configuration-steps button strong {
-    color: var(--fg);
-    font-size: 0.76rem;
-    font-weight: 610;
-}
-.configuration-steps button small {
-    display: none;
-}
-.configuration-steps button:hover {
-    background: transparent;
-    color: var(--fg);
-}
-.configuration-steps button.active {
-    border-bottom-color: var(--accent);
-    background: transparent;
-    color: var(--accent);
 }
 .configuration-step-panel {
     min-height: 26rem;
@@ -197,6 +163,15 @@
     gap: 0.35rem;
     color: var(--fg-secondary);
     font-size: 0.68rem;
+}
+.configuration-add-row > .configuration-scope-field {
+    display: grid;
+    gap: 0.35rem;
+}
+.configuration-scope-field > div {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
 }
 .configuration-add-row input,
 .configuration-add-row select {
@@ -280,90 +255,6 @@
     box-shadow: inset 3px 0 0 var(--accent);
     background: var(--surface-raised);
 }
-.configuration-review-summary {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1px;
-    margin-top: 1rem;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: 0.35rem;
-    background: var(--border);
-}
-.configuration-review-summary > div {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    background: var(--panel-inset);
-    padding: 0.9rem;
-}
-.configuration-review-summary span {
-    color: var(--fg-tertiary);
-    font-size: 0.64rem;
-}
-.configuration-review-summary strong {
-    font-size: 1rem;
-    font-weight: 620;
-}
-.configuration-review-summary small {
-    color: var(--fg-secondary);
-    font-size: 0.67rem;
-}
-.configuration-lifecycle {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-top: 1rem;
-}
-.configuration-lifecycle li {
-    display: grid;
-    grid-template-columns: 1.7rem minmax(0, 1fr);
-    gap: 0.55rem;
-    opacity: 0.55;
-}
-.configuration-lifecycle li > span {
-    display: grid;
-    width: 1.7rem;
-    height: 1.7rem;
-    place-items: center;
-    border: 1px solid var(--border);
-    border-radius: 0.25rem;
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-}
-.configuration-lifecycle li > div {
-    display: flex;
-    flex-direction: column;
-}
-.configuration-lifecycle strong {
-    font-size: 0.75rem;
-}
-.configuration-lifecycle small {
-    margin-top: 0.15rem;
-    color: var(--fg-tertiary);
-    font-size: 0.64rem;
-}
-.configuration-lifecycle li.active,
-.configuration-lifecycle li.complete {
-    opacity: 1;
-}
-.configuration-lifecycle li.active > span {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: var(--accent-fg);
-}
-.configuration-lifecycle li.complete > span {
-    border-color: var(--success);
-    color: var(--success);
-}
-.configuration-lifecycle li.invalid {
-    opacity: 1;
-    color: var(--danger);
-}
-.configuration-lifecycle li.invalid > span {
-    border-color: var(--danger);
-    background: var(--danger-soft);
-}
 .configuration-validation,
 .configuration-operation {
     margin-top: 1rem;
@@ -371,10 +262,6 @@
     border-radius: 0.35rem;
     padding: 0.85rem;
     font-size: 0.74rem;
-}
-.configuration-validation p {
-    margin-top: 0.2rem;
-    color: var(--fg-secondary);
 }
 .configuration-validation ul {
     margin-top: 0.6rem;

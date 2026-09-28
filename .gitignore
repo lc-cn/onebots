@@ -15,7 +15,7 @@ onebots.log
 /docs/.vitepress/.temp
 # Dependencies
 node_modules
-
+**/.control/
 # Build outputs
 **/lib
 **/dist

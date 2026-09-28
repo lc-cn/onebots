@@ -9,7 +9,7 @@ import {
 } from "onebots";
 import { emailCapabilities } from "./capabilities.js";
 import { EmailClient } from "./client.js";
-import { parseRecipients, toMessageInfo } from "./entities.js";
+import { canonicalEmailScene, parseRecipients, toMessageInfo } from "./entities.js";
 import { EmailError } from "./errors.js";
 import { projectEmailEvent } from "./events.js";
 import { compileEmailMessage, createEmailSendOptions } from "./messages.js";
@@ -38,7 +38,17 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
                 compiled,
             ),
         );
-        return { message_id: this.createId(result.message_id) };
+        return {
+            message_id: this.createId(result.message_id),
+            ...(recipients.length > 1
+                ? {
+                      scene: {
+                          scene_type: "direct" as const,
+                          scene_id: this.createId(canonicalEmailScene(recipients)),
+                      },
+                  }
+                : {}),
+        };
     }
 
     /** 删除 IMAP 邮箱中的原始邮件；邮件协议不提供 SMTP 撤回。 */
@@ -165,6 +175,10 @@ export class EmailAdapter extends Adapter<EmailClient, "email"> {
         });
         client.on("disconnected", error => {
             this.logger.warn(`邮件账号 ${account.account_id} 的 IMAP 暂时断开: ${error.message}`);
+            this.emit("connection:disconnected", {
+                platform: "email",
+                account_id: String(account.account_id),
+            });
         });
         client.on("client_error", error => {
             this.logger.error(`邮件账号 ${account.account_id} 错误`, error);

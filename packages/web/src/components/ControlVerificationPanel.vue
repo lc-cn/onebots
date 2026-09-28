@@ -45,19 +45,18 @@ const labels = {
 </script>
 
 <template>
-    <section
-        class="verification-panel space-y-4 rounded-panel border border-border bg-surface p-6"
-        aria-labelledby="verification-title">
+    <section class="verification-panel todo-panel space-y-4" aria-labelledby="verification-title">
         <header class="diagnostic-panel-header">
             <div>
-                <p class="diagnostic-panel-kicker">人工处理</p>
+                <p class="diagnostic-panel-kicker">账号待办</p>
                 <h2 id="verification-title" class="text-lg font-medium">
-                    <IconFingerprint :size="22" aria-hidden="true" />账号验证
+                    <IconFingerprint :size="22" aria-hidden="true" />{{
+                        view.snapshot?.challenges.length
+                            ? `${view.snapshot.challenges.length} 项需要你处理`
+                            : "账号验证"
+                    }}
                 </h2>
             </div>
-            <p>
-                在这里处理平台发起的二维码、短信或确认挑战。答案只用于本次提交，浏览器仅保存操作编号。
-            </p>
         </header>
         <p v-if="mutationBlock" role="alert" class="text-sm text-danger">
             {{ mutationBlock.title }}，验证请求保持只读；仍可刷新挑战和查询既有回执。
@@ -67,7 +66,6 @@ const labels = {
             <UiButton :disabled="view.busy || !gatewayInstanceId" @click="controller.refresh()">{{
                 view.busy ? "刷新中…" : "刷新验证请求"
             }}</UiButton>
-            <span>不会重复提交已有挑战</span>
         </div>
         <p v-if="!gatewayInstanceId" class="text-sm text-fg-secondary">
             网关不可用，仍可查询下方已有操作回执。
@@ -85,9 +83,9 @@ const labels = {
         <article
             v-for="challenge in view.snapshot?.challenges ?? []"
             :key="challenge.id"
-            class="border-t border-border pt-4 space-y-3">
+            class="todo-challenge space-y-3">
             <h3 class="font-medium">
-                {{ challenge.request.platform }} / {{ challenge.request.account_id }}
+                {{ challenge.request.platform }} · {{ challenge.request.account_id }}
             </h3>
             <p class="whitespace-pre-wrap break-words">{{ challenge.request.hint }}</p>
             <p class="text-xs text-fg-muted">
@@ -166,6 +164,7 @@ const labels = {
                         challenge.request.confirmable ||
                         challenge.request.options?.blocks?.some(block => block.type === 'input')
                     "
+                    variant="primary"
                     :disabled="view.busy || !view.ready || controller.uncertain || !!mutationBlock"
                     @click="controller.submit(challenge.id, 'submit')"
                     >{{ challenge.request.confirmLabel || "提交验证" }}</UiButton
@@ -185,11 +184,12 @@ const labels = {
                 >
             </div>
         </article>
-        <div
+        <details
             v-if="view.ids.length"
+            :open="controller.uncertain"
             class="verification-receipts space-y-3 border-t border-border pt-4"
             aria-live="polite">
-            <h3 class="font-medium">验证操作回执</h3>
+            <summary class="font-medium">查看验证操作记录（{{ view.ids.length }}）</summary>
             <p class="text-sm text-fg-secondary">
                 核对只读取原网关结果，不会重新验证。仅原网关存活且有确定结果才能解锁；网关退出或结果缺失仍保留未知。停止网关后可明确接受未知风险，只解除阻塞，不代表成功。
             </p>
@@ -279,6 +279,6 @@ const labels = {
                     原回执为未知；{{ view.receipts[id].resolution?.confirmedAt }} 已核对网关结果。
                 </p>
             </div>
-        </div>
+        </details>
     </section>
 </template>

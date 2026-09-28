@@ -1,4 +1,4 @@
-import type { Adapter, CommonTypes } from "onebots";
+import { sendAccountMessage, type Adapter, type CommonTypes } from "onebots";
 import { AUXILIARY_TOOL_REGISTRY } from "./auxiliary-tools.js";
 import type { ToolEntry } from "./tool-registry.js";
 import type { McpTool, McpToolCallResult } from "./types.js";
@@ -32,7 +32,7 @@ const TOOL_REGISTRY: Record<string, ToolEntry> = {
             required: ["scene_type", "scene_id", "message"],
         },
         async handler(adapter, uin, args) {
-            const result = await adapter.sendMessage(uin, {
+            const result = await sendAccountMessage(adapter, uin, {
                 scene_type: String(args.scene_type) as CommonTypes.Scene,
                 scene_id: adapter.resolveId(String(args.scene_id)),
                 message: [{ type: "text", data: { text: String(args.message ?? "") } }],

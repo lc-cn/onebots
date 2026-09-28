@@ -28,6 +28,7 @@ describe("email event projection", () => {
         expect(email.id).toBe("<message@example.com>");
         expect(email.in_reply_to).toBe("<parent@example.com>");
         expect(event.message_type).toBe("direct");
+        expect(event.scene_id?.string).toBe("alice@example.com,bob@example.com,carol@example.com");
         expect(event.message_id.string).toBe("<message@example.com>");
         expect(event.sender.id.string).toBe("alice@example.com");
         expect(event.extensions?.email).toMatchObject({ uid: 42, mailbox: "INBOX" });

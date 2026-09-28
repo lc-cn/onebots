@@ -2,6 +2,7 @@ import { CommonEvent, type CommonTypes } from "onebots";
 import { simpleParser, type ParsedMail } from "mailparser";
 import { EmailError } from "./errors.js";
 import { createImapMessageId } from "./message-id.js";
+import { canonicalEmailScene } from "./entities.js";
 import type { EmailAddress, EmailMessage } from "./types.js";
 
 export interface EmailProjectionContext {
@@ -60,7 +61,7 @@ export function projectEmailEvent(
     context: EmailProjectionContext,
 ): CommonEvent.Message<EmailMessage> {
     const recipients = replyRecipients(email, context.ownAddress);
-    const sceneId = recipients.join(",");
+    const sceneId = canonicalEmailScene(recipients);
     const segments: CommonTypes.Segment[] = [];
     if (email.text) segments.push({ type: "text", data: { text: email.text } });
     if (email.html) segments.push({ type: "email_html", data: { html: email.html } });
@@ -85,6 +86,7 @@ export function projectEmailEvent(
         bot_id: context.accountId,
         type: "message",
         message_type: recipients.length > 1 ? "direct" : "private",
+        ...(recipients.length > 1 ? { scene_id: context.createId(sceneId) } : {}),
         sender: {
             id: context.createId(email.from.address),
             name: email.from.name || email.from.address,

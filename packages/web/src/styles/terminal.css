@@ -3,6 +3,14 @@
     min-height: calc(100dvh - 10rem);
     flex-direction: column;
 }
+.terminal-back {
+    margin-bottom: 0.45rem;
+    color: var(--fg-secondary);
+    font-size: var(--type-label);
+}
+.terminal-back:hover {
+    color: var(--accent);
+}
 
 .terminal-state {
     display: inline-flex;

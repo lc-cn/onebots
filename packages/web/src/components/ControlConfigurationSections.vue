@@ -3,12 +3,14 @@ import { computed, ref, watch } from "vue";
 import type { ControlConfigurationProjection } from "@onebots/core/control";
 import type { SchemaFieldDef } from "./config/types.js";
 import UiButton from "../ui/UiButton.vue";
+import UiInfoTip from "../ui/UiInfoTip.vue";
 import ControlConfigurationFields from "./ControlConfigurationFields.vue";
 import type { ConfigurationFormGroup } from "./control-configuration-form.js";
 import {
     configurationGroupIdentity,
     configurationGroupLayout,
     configuredProtocolNames,
+    type ConfigurationNavigationTarget,
     type ConfigurationWorkspace,
 } from "./control-configuration-layout.js";
 
@@ -25,12 +27,14 @@ const props = defineProps<{
     locked: boolean;
     actionBlockReason?: string;
     revealPath?: string[];
+    navigationTarget?: ConfigurationNavigationTarget;
 }>();
 const platform = defineModel<string>("platform", { required: true });
 const accountId = defineModel<string>("accountId", { required: true });
 const accountTarget = defineModel<string>("accountTarget", { required: true });
 const protocol = defineModel<string>("protocol", { required: true });
 const emit = defineEmits<{
+    selectExtensions: [];
     addAccount: [];
     removeAccount: [key: string];
     setProtocol: [enabled: boolean];
@@ -44,6 +48,8 @@ const activeAccountKey = ref("");
 const activeProtocolKey = ref("");
 const pendingAccountTitle = ref("");
 const pendingProtocol = ref<{ target: string; name: string }>();
+const protocolTargetChosen = ref(false);
+let appliedNavigationRevision = 0;
 const activeAccount = computed(
     () =>
         layout.value.accounts.find(group => group.key === activeAccountKey.value) ??
@@ -53,6 +59,16 @@ const activeProtocol = computed(
     () =>
         layout.value.protocols.find(group => group.key === activeProtocolKey.value) ??
         layout.value.protocols[0],
+);
+
+watch(
+    () => props.accounts.join("\n"),
+    () => {
+        // 首次进入优先配置真实账号出口；显式选择全局默认值后不再自动改动。
+        if (!protocolTargetChosen.value && !accountTarget.value && props.accounts.length)
+            accountTarget.value = props.accounts[0] ?? "";
+    },
+    { immediate: true },
 );
 
 watch(
@@ -66,6 +82,32 @@ watch(
             pendingAccountTitle.value = "";
         } else if (!layout.value.accounts.some(group => group.key === activeAccountKey.value))
             activeAccountKey.value = layout.value.accounts[0]?.key ?? "";
+    },
+    { immediate: true },
+);
+watch(
+    () => [
+        props.navigationTarget?.revision,
+        layout.value.accounts.map(group => group.key).join("\n"),
+    ],
+    () => {
+        const target = props.navigationTarget;
+        if (!target || target.revision === appliedNavigationRevision) return;
+        if (target.platform) platform.value = target.platform;
+        if (target.protocolKey !== undefined) protocol.value = target.protocolKey;
+        if (!target.platform || !target.accountId) {
+            if (target.platform) appliedNavigationRevision = target.revision;
+            return;
+        }
+        const accountKey = `${target.platform}.${target.accountId}`;
+        if (!layout.value.accounts.some(group => group.key === JSON.stringify([accountKey])))
+            return;
+        activeAccountKey.value = JSON.stringify([accountKey]);
+        accountTarget.value = accountKey;
+        if (target.protocolKey) {
+            activeProtocolKey.value = JSON.stringify([accountKey, target.protocolKey]);
+        }
+        appliedNavigationRevision = target.revision;
     },
     { immediate: true },
 );
@@ -138,25 +180,29 @@ function forwardMode(field: SchemaFieldDef, value: string) {
     <section
         v-show="workspace === 'accounts'"
         id="configuration-panel-accounts"
-        role="tabpanel"
-        aria-labelledby="configuration-tab-accounts"
+        aria-label="账号配置"
         class="configuration-step-panel">
         <header class="configuration-step-heading">
             <div>
-                <span>步骤 1</span>
                 <h3>接入平台账号</h3>
             </div>
             <p>先创建平台身份，再填写该平台要求的凭据和连接参数。</p>
         </header>
         <div class="configuration-add-row">
             <label
-                >平台<select v-model="platform" aria-label="平台适配器">
+                >平台<select v-model="platform" name="account-platform" aria-label="平台适配器">
                     <option value="">选择已安装平台</option>
                     <option v-for="name in adapters" :key="name" :value="name">{{ name }}</option>
                 </select></label
             >
             <label
-                >账号标识<input v-model="accountId" aria-label="账号标识" placeholder="例如 my_bot"
+                >账号标识<input
+                    v-model="accountId"
+                    name="account-id"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="账号标识"
+                    placeholder="例如 my_bot…"
             /></label>
             <UiButton
                 variant="primary"
@@ -174,7 +220,7 @@ function forwardMode(field: SchemaFieldDef, value: string) {
         </p>
         <div v-if="!adapters.length" class="configuration-empty">
             <strong>还没有可用的平台适配器</strong
-            ><span>请先到“安装与扩展”安装平台，再回来创建账号。</span>
+            ><UiButton variant="primary" @click="emit('selectExtensions')">去安装平台</UiButton>
         </div>
         <div class="configuration-object-layout">
             <aside
@@ -235,31 +281,32 @@ function forwardMode(field: SchemaFieldDef, value: string) {
     <section
         v-show="workspace === 'protocols'"
         id="configuration-panel-protocols"
-        role="tabpanel"
-        aria-labelledby="configuration-tab-protocols"
+        aria-label="协议配置"
         class="configuration-step-panel">
         <header class="configuration-step-heading">
             <div>
-                <span>步骤 2</span>
                 <h3>配置协议出口</h3>
             </div>
             <p>决定下游框架如何连接 OneBots，并为全局或单个账号设置参数。</p>
         </header>
-        <div class="configuration-scope-note">
-            <strong>作用域说明</strong
-            ><span
-                >全局默认值只提供可继承参数，不会自动替账号开启出口。要输出账号事件，请为具体账号添加协议。</span
-            >
-        </div>
         <div class="configuration-add-row protocol">
-            <label
-                >配置作用域<select v-model="accountTarget" aria-label="协议配置位置">
+            <div class="configuration-scope-field">
+                <div>
+                    <label for="configuration-protocol-target">配置作用域</label>
+                    <UiInfoTip
+                        label="配置作用域说明"
+                        text="全局默认值只提供可继承参数，不会自动为账号开启协议出口。要输出账号事件，请选择具体账号。" />
+                </div>
+                <select
+                    id="configuration-protocol-target"
+                    v-model="accountTarget"
+                    @change="protocolTargetChosen = true">
                     <option value="">全局默认值</option>
                     <option v-for="key in accounts" :key="key" :value="key">
                         账号 · {{ key }}
                     </option>
-                </select></label
-            >
+                </select>
+            </div>
             <label
                 >输出协议<select v-model="protocol" aria-label="输出协议">
                     <option value="">选择已安装协议</option>
@@ -274,7 +321,7 @@ function forwardMode(field: SchemaFieldDef, value: string) {
                     "
                     :disabled="locked || dirty || !protocol"
                     @click="configureProtocol(true)"
-                    >添加到此作用域</UiButton
+                    >{{ accountTarget ? "为账号添加出口" : "设置全局默认值" }}</UiButton
                 >
             </div>
         </div>
@@ -285,7 +332,8 @@ function forwardMode(field: SchemaFieldDef, value: string) {
             {{ actionBlockReason }}
         </p>
         <div v-if="!protocols.length" class="configuration-empty">
-            <strong>还没有可用的输出协议</strong><span>请先到“安装与扩展”安装协议。</span>
+            <strong>还没有可用的输出协议</strong>
+            <UiButton variant="primary" @click="emit('selectExtensions')">去安装协议</UiButton>
         </div>
         <div class="configuration-object-layout">
             <aside
@@ -352,13 +400,11 @@ function forwardMode(field: SchemaFieldDef, value: string) {
     <section
         v-show="workspace === 'runtime'"
         id="configuration-panel-runtime"
-        role="tabpanel"
-        aria-labelledby="configuration-tab-runtime"
+        aria-label="运行设置"
         class="configuration-step-panel">
         <header class="configuration-step-heading">
             <div>
-                <span>步骤 3</span>
-                <h3>检查运行设置</h3>
+                <h3>服务运行参数</h3>
             </div>
             <p>这些参数影响整个网关。首次接入通常可以保留默认值。</p>
         </header>

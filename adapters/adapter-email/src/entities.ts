@@ -21,7 +21,7 @@ export function toMessageInfo(
         sender: {
             scene_type: event.message_type,
             sender_id: createId(email.from.address),
-            scene_id: createId(recipients.join(",")),
+            scene_id: createId(canonicalEmailScene(recipients)),
             sender_name: email.from.name || email.from.address,
             scene_name: email.subject,
         },
@@ -46,6 +46,14 @@ export function parseRecipients(value: string): string[] {
         });
     }
     return recipients;
+}
+
+/** 邮件地址大小写与收件顺序不应改变同一多人会话的身份。 */
+export function canonicalEmailScene(recipients: readonly string[]): string {
+    return recipients
+        .map(address => address.toLowerCase())
+        .sort()
+        .join(",");
 }
 
 function isEmailAddress(value: string): boolean {

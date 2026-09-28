@@ -4,6 +4,32 @@ import { describe, expect, it, vi } from "vitest";
 import { wireICQQClientEvents } from "./client-events.js";
 
 describe("ICQQ 客户端事件桥接", () => {
+    it("完整桥接 system.login.auth 的链接与设备信息", () => {
+        const emitter = new EventEmitter();
+        const client = Object.assign(emitter, { uin: 10000, nickname: "Bot" }) as unknown as Client;
+        const sink = { emit: vi.fn(), online: vi.fn(), offline: vi.fn() };
+        const event = {
+            url: "https://accounts.example.test/verify",
+            device: {
+                guid: "0011223344556677",
+                qimei: "qimei-value",
+                qimei36: "qimei36-value",
+                subappid: "537200000",
+                platform: "AndroidPad",
+                brand: "OneBots",
+                model: "Virtual Device",
+                bssid: "",
+                devInfo: "OneBots Virtual Device",
+                sysVersion: "35",
+            },
+        };
+        wireICQQClientEvents(client, sink);
+
+        emitter.emit("system.login.auth", event);
+
+        expect(sink.emit).toHaveBeenCalledWith("auth", event);
+    });
+
     it("保留完整原生消息元素与群发送者语义", () => {
         const emitter = new EventEmitter();
         const client = Object.assign(emitter, { uin: 10000, nickname: "Bot" }) as unknown as Client;

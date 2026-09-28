@@ -85,6 +85,25 @@ describe("ZulipAdapter", () => {
         expect(result.message_id.string).toBe("99");
     });
 
+    it("多人私聊发送后返回稳定排序的 direct 会话 ID", async () => {
+        const account = adapter.createAccount(config);
+        adapter.accounts.set(config.account_id, account);
+        vi.spyOn(account.client, "sendMessage").mockResolvedValue({
+            result: "success",
+            msg: "",
+            id: 100,
+        });
+        const result = await adapter.sendMessage(config.account_id, {
+            scene_type: "direct",
+            scene_id: adapter.createId("3,2"),
+            message: [{ type: "text", data: { text: "你好" } }],
+        });
+        expect(result.scene).toMatchObject({
+            scene_type: "direct",
+            scene_id: { string: "2,3" },
+        });
+    });
+
     it("事件投影与状态使用认证后的真实 Bot ID", async () => {
         const account = adapter.createAccount(config);
         adapter.accounts.set(config.account_id, account);

@@ -3,13 +3,22 @@ import type { ControlClient } from "@onebots/core/control";
 import ControlSessionsPanel from "../components/ControlSessionsPanel.vue";
 import UiButton from "../ui/UiButton.vue";
 
-defineProps<{ client: ControlClient; busy: boolean; configurationDirty: boolean }>();
+defineProps<{
+    client: ControlClient;
+    busy: boolean;
+    configurationDirty: boolean;
+    embedded?: boolean;
+    active?: boolean;
+}>();
 const emit = defineEmits<{ logout: []; reconnect: []; revokedSelf: [] }>();
 </script>
 
 <template>
-    <section class="workspace-view" aria-labelledby="access-title">
-        <header class="page-heading">
+    <section
+        :class="{ 'workspace-view': !embedded }"
+        :aria-labelledby="embedded ? undefined : 'access-title'"
+        :aria-label="embedded ? '设备与访问' : undefined">
+        <header v-if="!embedded" class="page-heading">
             <div>
                 <h1 id="access-title">设备与访问</h1>
                 <p>查看当前授权设备，撤销不再使用的管理会话。</p>
@@ -18,6 +27,7 @@ const emit = defineEmits<{ logout: []; reconnect: []; revokedSelf: [] }>();
         <div class="access-layout">
             <ControlSessionsPanel
                 :client="client"
+                :active="active"
                 :configuration-dirty="configurationDirty"
                 @revoked-self="emit('revokedSelf')" />
             <aside>

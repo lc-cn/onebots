@@ -19,7 +19,7 @@ const removalLabels = (plan: ControlInstallPlan) => [
 </script>
 <template>
     <section class="border border-border rounded-panel p-4 space-y-4">
-        <h3 class="font-medium">
+        <h2 class="font-medium">
             {{
                 upgrade
                     ? "确认网关升级计划"
@@ -27,7 +27,7 @@ const removalLabels = (plan: ControlInstallPlan) => [
                       ? "确认扩展移除候选"
                       : "确认安装计划"
             }}
-        </h3>
+        </h2>
         <p class="text-sm text-fg-secondary">
             {{
                 upgrade

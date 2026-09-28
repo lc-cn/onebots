@@ -89,7 +89,7 @@ const platformActions = definePlatformActionCapabilities(
 /** Messenger Platform 当前稳定接口的真实能力边界；仅存在一对一 PSID 会话。 */
 export const facebookMessengerCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: { ...messaging, scenes: ["direct"] },
+        send_message: { ...messaging, scenes: ["private", "direct"] },
         get_message: { ...conversations, scenes: ["direct"] },
         get_message_history: { ...conversations, scenes: ["direct"] },
         mark_message_as_read: { ...messaging, scenes: ["direct"] },

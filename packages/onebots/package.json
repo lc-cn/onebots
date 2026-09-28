@@ -10,8 +10,8 @@
   },
   "scripts": {
     "start": "node lib/bin.js",
-    "build": "rm -rf lib && rm -f *.tsbuildinfo && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
-    "clean": "rm -rf lib *.tsbuildinfo"
+    "build": "node ../../scripts/clean-package.mjs lib && tsc --project tsconfig.json && tsc-alias -p tsconfig.json",
+    "clean": "node ../../scripts/clean-package.mjs lib"
   },
   "engines": {
     "node": ">=24"
@@ -43,6 +43,7 @@
   "devDependencies": {
     "@types/koa": "^3.0.1",
     "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.1.10",
     "@types/semver": "^7.7.1",
     "@types/ws": "^8.18.1",
@@ -56,6 +57,7 @@
     "@onebots/web": "workspace:*",
     "ink": "^6.3.1",
     "js-yaml": "^4.3.1",
+    "nodemailer": "^9.0.5",
     "pastel": "^4.0.1",
     "pnpm": "10.34.5",
     "react": "^19.1.1",

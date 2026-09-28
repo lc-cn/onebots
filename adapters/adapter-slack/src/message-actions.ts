@@ -26,7 +26,18 @@ export abstract class SlackMessageActions extends SlackAdapterBase {
             );
         }
         bot.rememberMessage(result.ts, channelId, options.thread_ts);
-        return { message_id: this.createId(result.ts) };
+        const sentChannel = result.channel || channelId;
+        return {
+            message_id: this.createId(result.ts),
+            ...(params.scene_type === "direct" && sentChannel.startsWith("G")
+                ? {
+                      scene: {
+                          scene_type: "direct" as const,
+                          scene_id: this.createId(sentChannel),
+                      },
+                  }
+                : {}),
+        };
     }
 
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {

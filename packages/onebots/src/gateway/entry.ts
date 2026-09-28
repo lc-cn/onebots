@@ -1,4 +1,7 @@
 import { GatewaySendExecutor } from "./send-executor.js";
+import { GatewayAccountExploreExecutor } from "./account-explore-executor.js";
+import { handleGatewayAccountExplore } from "./account-explore-ipc.js";
+import type { GatewayAccountExploreReply } from "./account-explore-contracts.js";
 import { GatewayVerificationExecutor } from "./verification-executor.js";
 import { handleGatewayVerification } from "./verification-ipc.js";
 import type { GatewayVerificationReply } from "./verification-contracts.js";
@@ -17,6 +20,8 @@ import { parseRuntimeConfig, validateRuntimeConfig } from "../runtime-config-val
 import { GatewayApp } from "./app.js";
 import {
     isGatewayAccountStatusMessage,
+    safeAccountImageUrl,
+    isGatewayDisconnectMessage,
     isGatewayParentMessage,
     type GatewayStartMessage,
     type GatewayChildMessage,
@@ -28,6 +33,7 @@ let app: GatewayApp | undefined;
 let stopping = false;
 let mcpSessions: GatewayMcpSessions | undefined;
 let sendExecutor: GatewaySendExecutor | undefined;
+let accountExploreExecutor: GatewayAccountExploreExecutor | undefined;
 let verificationExecutor: GatewayVerificationExecutor | undefined;
 let accountStatusTimer: NodeJS.Timeout | undefined;
 
@@ -36,6 +42,7 @@ function send(
         | GatewayChildMessage
         | GatewayMcpReply
         | GatewaySendReply
+        | GatewayAccountExploreReply
         | GatewayMessageDebugReply
         | GatewayVerificationReply,
 ): void {
@@ -72,6 +79,7 @@ async function stop(timeoutMs = 15_000): Promise<void> {
     if (accountStatusTimer) clearInterval(accountStatusTimer);
     verificationExecutor?.close();
     sendExecutor?.close();
+    accountExploreExecutor?.close();
     sendExecutor = undefined;
     mcpSessions?.close();
     mcpSessions = undefined;
@@ -99,9 +107,28 @@ function publishAccountStatus(): void {
             platform: String(account.platform),
             accountId: String(account.account_id),
             status: account.status,
+            ...(safeAccountImageUrl(account.avatar) ? { avatarUrl: account.avatar } : {}),
+            ...(safeAccountImageUrl(account.adapter.icon)
+                ? { platformIconUrl: account.adapter.icon }
+                : {}),
+            protocols: account.protocols.map(protocol => ({
+                name: protocol.name,
+                version: protocol.version,
+                status: protocol.lifecycleStatus,
+            })),
         })),
     };
     if (isGatewayAccountStatusMessage(message)) send(message);
+    for (const account of app.drainDisconnects()) {
+        const disconnected = {
+            type: "gateway.account-disconnected" as const,
+            protocolVersion: 1 as const,
+            controlInstanceId: startMessage.controlInstanceId,
+            gatewayInstanceId: startMessage.gatewayInstanceId,
+            ...account,
+        };
+        if (isGatewayDisconnectMessage(disconnected)) send(disconnected);
+    }
 }
 
 async function start(message: GatewayStartMessage): Promise<void> {
@@ -136,13 +163,17 @@ async function start(message: GatewayStartMessage): Promise<void> {
             gatewayInstanceId: message.gatewayInstanceId,
             configVersion: message.configVersion,
         });
+        accountExploreExecutor = new GatewayAccountExploreExecutor(app, {
+            gatewayInstanceId: message.gatewayInstanceId,
+            configVersion: message.configVersion,
+        });
         verificationExecutor = new GatewayVerificationExecutor(app, app.verification, {
             gatewayInstanceId: message.gatewayInstanceId,
             configVersion: message.configVersion,
         });
         send({
             type: "gateway.ready",
-            capabilities: ["mcp", "send", "message-debug", "verification"],
+            capabilities: ["mcp", "send", "message-debug", "verification", "account-explore"],
             protocolVersion: 1,
             controlInstanceId: message.controlInstanceId,
             gatewayInstanceId: message.gatewayInstanceId,
@@ -162,6 +193,7 @@ async function start(message: GatewayStartMessage): Promise<void> {
         stopping = true;
         verificationExecutor?.close();
         sendExecutor?.close();
+        accountExploreExecutor?.close();
         mcpSessions?.close();
         failure("START_FAILED", "网关启动失败，请检查配置与依赖版本");
         process.stderr.write("[onebots] 网关启动失败，请检查配置与依赖版本\n");
@@ -191,6 +223,8 @@ for (const name of Object.keys(process.env)) {
 }
 const handshakeTimer = setTimeout(() => process.exit(1), 30_000);
 process.on("message", value => {
+    if (handleGatewayAccountExplore(value, startMessage, stopping ? undefined : accountExploreExecutor, send))
+        return;
     if (
         handleGatewayVerification(
             value,

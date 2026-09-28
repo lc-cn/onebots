@@ -18,6 +18,7 @@ const props = defineProps<{
     managerVersion?: string;
     active: boolean;
 }>();
+const emit = defineEmits<{ back: [] }>();
 
 type ConnectionState = "checking" | "connecting" | "ready" | "unavailable" | "closed" | "error";
 const container = ref<HTMLElement>();
@@ -233,8 +234,10 @@ onUnmounted(() => {
     <section class="workspace-view terminal-workspace" aria-labelledby="terminal-title">
         <header class="page-heading">
             <div>
+                <button type="button" class="terminal-back" @click="emit('back')">
+                    ← 系统 · 高级工具
+                </button>
                 <h1 id="terminal-title">本地终端</h1>
-                <p>在 OneBots 工作区中运行维护命令。每次进入页面都会创建新的独占会话。</p>
             </div>
             <span class="terminal-state" :class="state"><i></i>{{ stateLabel[state] }}</span>
         </header>

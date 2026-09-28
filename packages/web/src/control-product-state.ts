@@ -3,6 +3,7 @@ import type {
     ControlInstallationCatalog,
     ControlStatus,
 } from "@onebots/core/control";
+import type { NotificationSnapshot } from "./notification-model.js";
 
 export type WorkspaceReadiness = "loading" | "empty" | "configured" | "unavailable";
 
@@ -24,7 +25,7 @@ export interface SetupJourneyStep {
 
 export interface SetupJourney {
     state: SetupJourneyState;
-    nextWorkspace: "extensions" | "configuration" | "overview" | "activity";
+    nextWorkspace: "extensions" | "accounts" | "protocols" | "overview" | "activity";
     nextLabel: string;
     counts: {
         adapters: number;
@@ -49,10 +50,20 @@ export function setupJourney(
         applications: selection?.applications.length ?? 0,
         accounts: 0,
     };
+    let hasAccountProtocol = false;
     if (selection && configuration) {
-        counts.accounts = Object.keys(configuration.document).filter(key =>
+        const protocolNames = Object.keys(configuration.schemas.protocols ?? {});
+        const accounts = Object.entries(configuration.document).filter(([key]) =>
             selection.adapters.some(adapter => key.startsWith(`${adapter}.`)),
-        ).length;
+        );
+        counts.accounts = accounts.length;
+        hasAccountProtocol = accounts.some(
+            ([, value]) =>
+                value !== null &&
+                typeof value === "object" &&
+                !Array.isArray(value) &&
+                protocolNames.some(protocol => Object.hasOwn(value, protocol)),
+        );
     }
 
     let state: SetupJourneyState;
@@ -60,12 +71,12 @@ export function setupJourney(
     else if (!catalog || !configuration || !status) state = "loading";
     else if (status.gateway.recoveryRequired) state = "recovery";
     else if (!counts.adapters || !counts.protocols) state = "needs-extensions";
-    else if (!counts.accounts) state = "needs-configuration";
+    else if (!counts.accounts || !hasAccountProtocol) state = "needs-configuration";
     else if (status.gateway.actual !== "running") state = "ready-to-start";
     else state = "running";
 
     const extensionComplete = counts.adapters > 0 && counts.protocols > 0;
-    const configurationComplete = extensionComplete && counts.accounts > 0;
+    const configurationComplete = extensionComplete && counts.accounts > 0 && hasAccountProtocol;
     const gatewayComplete = state === "running";
     const stepStatus = (complete: boolean, current: boolean): SetupJourneyStep["status"] =>
         complete ? "complete" : current ? "current" : "pending";
@@ -76,7 +87,9 @@ export function setupJourney(
             state === "needs-extensions"
                 ? "extensions"
                 : state === "needs-configuration"
-                  ? "configuration"
+                  ? counts.accounts
+                      ? "protocols"
+                      : "accounts"
                   : state === "recovery"
                     ? "activity"
                     : "overview",
@@ -84,7 +97,9 @@ export function setupJourney(
             state === "needs-extensions"
                 ? "选择平台与协议"
                 : state === "needs-configuration"
-                  ? "配置第一个账号"
+                  ? counts.accounts
+                      ? "为账号配置协议出口"
+                      : "配置第一个账号"
                   : state === "ready-to-start"
                     ? "检查并启动网关"
                     : state === "recovery"
@@ -106,7 +121,9 @@ export function setupJourney(
                 id: "configuration",
                 label: "配置连接",
                 detail: counts.accounts
-                    ? `${counts.accounts} 个平台账号已配置`
+                    ? hasAccountProtocol
+                        ? `${counts.accounts} 个平台账号已配置，协议出口已添加`
+                        : `${counts.accounts} 个平台账号已配置，仍需添加协议出口`
                     : "填写账号凭据与协议连接参数",
                 status: stepStatus(configurationComplete, state === "needs-configuration"),
             },
@@ -152,6 +169,103 @@ export interface ControlMutationBlock {
     kind: "service-recovery" | "service-migration" | "process-ownership";
     title: string;
     detail: string;
+}
+
+export type AttentionAction =
+    | "diagnostics"
+    | "verification"
+    | "notification-history"
+    | "notification-setup"
+    | "accounts"
+    | "account-configuration"
+    | "protocol-configuration"
+    | "extensions";
+
+export interface AttentionItem {
+    action: AttentionAction;
+    title: string;
+    detail: string;
+}
+
+/** 只根据已确认的状态给出下一步，不把加载失败或未知状态误报为故障。 */
+export function controlAttention(
+    status: ControlStatus | undefined,
+    journey: SetupJourney,
+    notifications: NotificationSnapshot | undefined,
+    pendingVerificationCount: number | undefined,
+): AttentionItem[] {
+    const items: AttentionItem[] = [];
+    if (status?.gateway.recoveryRequired || status?.gateway.actual === "failed")
+        items.push({
+            action: "diagnostics",
+            title: status.gateway.recoveryRequired ? "网关需要恢复" : "网关启动失败",
+            detail: "核对最近操作与服务日志",
+        });
+    if (pendingVerificationCount)
+        items.push({
+            action: "verification",
+            title: `${pendingVerificationCount} 项账号验证待处理`,
+            detail: "打开待办完成登录交互",
+        });
+    if (notifications) {
+        const failed = notifications.deliveries.filter(item => item.status === "failed").length;
+        if (failed || notifications.droppedDeliveries)
+            items.push({
+                action: "notification-history",
+                title: failed ? `${failed} 条通知投递失败` : "通知队列曾溢出",
+                detail: "查看投递记录与渠道故障",
+            });
+    }
+    if (status?.gateway.actual === "running" && status.accounts?.available) {
+        const offline = status.accounts.items.filter(item => item.status === "offline").length;
+        if (offline)
+            items.push({
+                action: "accounts",
+                title: `${offline} 个账号离线`,
+                detail: "查看账号与协议状态",
+            });
+        const failedProtocols = status.accounts.items.reduce(
+            (count, account) =>
+                count +
+                (account.protocols?.filter(protocol => protocol.status === "failed").length ?? 0),
+            0,
+        );
+        if (failedProtocols)
+            items.push({
+                action: "protocol-configuration",
+                title: `${failedProtocols} 个协议出口失败`,
+                detail: "检查协议配置与运行状态",
+            });
+    }
+    if (journey.state === "needs-extensions" || journey.state === "needs-configuration")
+        items.push({
+            action:
+                journey.state === "needs-extensions"
+                    ? "extensions"
+                    : journey.nextWorkspace === "protocols"
+                      ? "protocol-configuration"
+                      : "account-configuration",
+            title: journey.nextLabel,
+            detail: journey.state === "needs-extensions" ? "继续准备接入能力" : "完成账号连接设置",
+        });
+    if (journey.state === "running" && notifications) {
+        // 暂停规则或渠道是用户选择，不当作首次配置缺失反复催促。
+        const configuredChannels = new Set(
+            notifications.config.channels.map(channel => channel.id),
+        );
+        if (
+            !notifications.config.rules.some(
+                rule =>
+                    rule.events.length && rule.channelIds.some(id => configuredChannels.has(id)),
+            )
+        )
+            items.push({
+                action: "notification-setup",
+                title: "设置故障通知",
+                detail: "选择接收渠道和告警事件",
+            });
+    }
+    return items;
 }
 
 export function controlMutationBlock(

@@ -5,7 +5,7 @@ export interface ControlStatus {
     system?: ControlSystemStatus;
     serviceMigration?: { pending: boolean; recoveryRequired: boolean };
     processOwnership?: { available: boolean };
-    /** 来自当前网关进程的最小账号摘要；不包含配置、昵称、凭据或平台 SDK 数据。 */
+    /** 来自当前网关进程的最小账号摘要；不包含配置、昵称或凭据。 */
     accounts?: {
         available: boolean;
         items: ControlAccountStatus[];
@@ -52,6 +52,15 @@ export interface ControlAccountStatus {
     platform: string;
     accountId: string;
     status: "pending" | "online" | "offline";
+    /** 仅允许 HTTPS 图片地址；缺失时使用平台图标或文字标识。 */
+    avatarUrl?: string;
+    platformIconUrl?: string;
+    /** 来自当前账号的协议生命周期；不是外部网络连通性检测。 */
+    protocols?: Array<{
+        name: string;
+        version: string;
+        status: "pending" | "starting" | "ready" | "stopping" | "stopped" | "failed";
+    }>;
 }
 
 export interface ControlOperation {

@@ -124,7 +124,7 @@ const platformActions = definePlatformActionCapabilities(MATTERMOST_PLATFORM_ACT
 /** Mattermost REST v4、WebSocket 与平台资源的真实能力边界。 */
 export const mattermostCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: { support: "native", scenes: ["direct", "group", "channel"] },
+        send_message: { support: "native", scenes: ["private", "direct", "group", "channel"] },
         delete_message: permission,
         get_message: { support: "native" },
         get_message_history: { support: "native" },

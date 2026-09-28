@@ -4,19 +4,26 @@
 @import "./control-components.css";
 @import "./control-configuration.css";
 @import "./control-configuration-fields.css";
-@import "./setup-journey.css";
 @import "./terminal.css";
 @import "./console-polish.css";
 @import "./responsive.css";
+@import "./notifications.css";
+@import "./accounts.css";
+@import "./account-control.css";
+@import "./account-control-chat.css";
+@import "./account-control-detail.css";
+@import "./account-control-responsive.css";
+@import "./chat-history-settings.css";
+@import "./product-flow.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
     color-scheme: light;
     --bg: #f8f7ff;
-    --surface: rgba(255, 255, 255, 0.38);
-    --surface-raised: rgba(244, 243, 252, 0.26);
-    --surface-strong: rgba(235, 233, 248, 0.4);
+    --surface: rgba(255, 255, 255, 0.84);
+    --surface-raised: rgba(248, 247, 253, 0.92);
+    --surface-strong: rgba(235, 233, 248, 0.9);
     --border: rgba(91, 77, 151, 0.14);
     --border-strong: rgba(84, 70, 145, 0.24);
     --fg: #1d1b2e;
@@ -32,9 +39,19 @@
     --warning-soft: rgba(241, 157, 43, 0.12);
     --danger: #d34863;
     --danger-soft: rgba(211, 72, 99, 0.1);
+    --danger-button: #b83250;
+    --danger-button-hover: #9f2541;
+    --danger-button-fg: #ffffff;
     --info: #2885c7;
     --info-soft: rgba(40, 133, 199, 0.1);
     --ring: rgba(103, 87, 232, 0.34);
+    /* 内容层级：辅助信息 < 字段 < 正文 < 分组 < 页面 < 关键状态。 */
+    --type-caption: 0.75rem;
+    --type-label: 0.8125rem;
+    --type-body: 0.9375rem;
+    --type-section: 1.25rem;
+    --type-page: clamp(1.65rem, 2.5vw, 2rem);
+    --type-focus: clamp(2rem, 3.5vw, 2.7rem);
     --shadow:
         0 1px 2px rgba(38, 32, 78, 0.04), 0 16px 40px rgba(99, 82, 180, 0.09),
         0 0 0 1px rgba(255, 255, 255, 0.72) inset;
@@ -43,9 +60,9 @@
 .dark {
     color-scheme: dark;
     --bg: #211d35;
-    --surface: rgba(49, 43, 73, 0.4);
-    --surface-raised: rgba(64, 56, 93, 0.28);
-    --surface-strong: rgba(76, 67, 108, 0.38);
+    --surface: rgba(42, 37, 64, 0.88);
+    --surface-raised: rgba(58, 51, 84, 0.92);
+    --surface-strong: rgba(70, 61, 101, 0.9);
     --border: rgba(211, 204, 255, 0.14);
     --border-strong: rgba(218, 211, 255, 0.24);
     --fg: #f4f2fb;
@@ -61,11 +78,13 @@
     --warning-soft: rgba(231, 173, 83, 0.14);
     --danger: #ef8580;
     --danger-soft: rgba(239, 133, 128, 0.13);
+    --danger-button: #ef8580;
+    --danger-button-hover: #ffa19b;
+    --danger-button-fg: #171126;
     --info: #68b4cb;
     --info-soft: rgba(104, 180, 203, 0.13);
     --ring: rgba(154, 140, 255, 0.42);
-    --shadow:
-        0 18px 50px rgba(19, 13, 41, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    --shadow: 0 18px 50px rgba(19, 13, 41, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
 }
 
 @theme inline {
@@ -117,7 +136,7 @@ body {
     background: var(--bg);
     color: var(--fg);
     font-family: var(--font-sans);
-    font-size: 14.5px;
+    font-size: var(--type-body);
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
 }
@@ -246,14 +265,22 @@ code {
 }
 
 .ui-button.bg-accent {
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: linear-gradient(135deg, #765ff1, #537ff1);
-    box-shadow: 0 7px 18px rgba(94, 75, 220, 0.22);
+    border: 1px solid color-mix(in srgb, var(--accent) 86%, var(--fg));
+    background: var(--accent);
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 .ui-button.bg-accent:hover {
-    background: linear-gradient(135deg, #6750e4, #4171e8);
-    box-shadow: 0 9px 22px rgba(94, 75, 220, 0.28);
+    background: var(--accent-hover);
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .ui-button.bg-accent:active {
     transform: translateY(1px) scale(0.985);
+}
+
+.ui-button-danger {
+    background: var(--danger-button);
+    color: var(--danger-button-fg);
+}
+.ui-button-danger:hover {
+    background: var(--danger-button-hover);
 }

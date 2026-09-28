@@ -411,6 +411,7 @@
     min-height: 0;
     flex: 1;
     overflow-y: auto;
+    scroll-padding-top: 5rem;
     background:
         linear-gradient(135deg, rgba(248, 247, 255, 0.2), rgba(244, 248, 255, 0.42)),
         radial-gradient(circle at 18% -10%, rgba(146, 115, 255, 0.16), transparent 30rem),

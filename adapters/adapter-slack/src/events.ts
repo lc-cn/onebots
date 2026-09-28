@@ -174,6 +174,7 @@ function projectMessage(
         ...base(envelope, event, context),
         type: "message",
         message_type: scene,
+        ...(scene === "direct" && channel ? { scene_id: context.createId(channel) } : {}),
         sender,
         group: scene === "private" ? undefined : projectGroup(channel, context, envelope.team_id),
         message_id: context.createId(event.ts ?? event.event_ts),

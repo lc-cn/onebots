@@ -50,6 +50,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
     const protocol = ref("");
     let timer: ReturnType<typeof setTimeout> | undefined;
     let disposed = false;
+    let lastAppliedOperationId: string | undefined;
     const projection = computed(() => draft.value ?? snapshot.value);
     const adapters = computed(() => Object.keys(schemaRecord(schemas.value.adapters)));
     const protocols = computed(() => Object.keys(schemaRecord(schemas.value.protocols)));
@@ -110,7 +111,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
         else changed.value.add(field.key);
         validation.value = undefined;
     }
-    async function reloadSource(resume: boolean) {
+    async function reloadSource(resume: boolean, announce = true) {
         busy.value = true;
         error.value = "";
         try {
@@ -128,7 +129,9 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
                 ? "检测到配置语法损坏；只有明确确认后才会创建修复草稿。"
                 : result.draftUnavailable
                   ? "原草稿暂不可读取；保留原操作标识，可查看当前配置。"
-                  : "已重新读取。此前未保存到草稿的本地修改已放弃。";
+                  : announce
+                    ? "已刷新配置。"
+                    : "";
         } catch {
             source.value = undefined;
             snapshot.value = undefined;
@@ -142,7 +145,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
         await reloadSource(true);
     }
     async function createFresh() {
-        await reloadSource(false);
+        await reloadSource(false, false);
         if (snapshot.value) await create();
     }
     async function repair(confirmed: boolean) {
@@ -181,7 +184,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
             operation.value = undefined;
             staleBase.value = false;
             sourceUnavailable.value = false;
-            message.value = "草稿已创建。保存草稿不会影响正在运行的账号。";
+            message.value = "";
         } catch {
             error.value = "创建草稿失败或版本已变化，请重新读取配置。";
         } finally {
@@ -210,7 +213,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
         for (const field of fields.value) if (secret(field)) values.value[field.key] = undefined;
         try {
             adopt(await bounded(client.editConfigurationDraft(draft.value.id, request)));
-            message.value = "草稿已保存，尚未应用。";
+            message.value = "";
             return true;
         } catch {
             error.value = "保存未确认或版本冲突。请重读草稿核对；不会自动覆盖或重复提交。";
@@ -253,6 +256,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
                     }),
                 ),
             );
+            message.value = "账号已从草稿移除，点击保存后生效。";
         } catch {
             error.value = "删除未确认，请重读草稿核对。";
         } finally {
@@ -274,6 +278,9 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
                     }),
                 ),
             );
+            message.value = enabled
+                ? "协议已加入草稿，点击保存后生效。"
+                : "协议已从草稿移除，点击保存后生效。";
         } catch {
             error.value = "协议修改未确认，请重读草稿核对。";
         } finally {
@@ -301,7 +308,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
             busy.value = false;
         }
     }
-    async function validate() {
+    async function validate(): Promise<ControlConfigurationValidation | undefined> {
         if (!draft.value || dirty.value) return;
         busy.value = true;
         error.value = "";
@@ -309,8 +316,10 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
             validation.value = await bounded(
                 client.validateConfigurationDraft(draft.value.id, draft.value.revision),
             );
+            return validation.value;
         } catch {
             error.value = "校验未完成或版本已变化，请重读草稿后再校验。";
+            return undefined;
         } finally {
             busy.value = false;
         }
@@ -328,8 +337,17 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
             operation.value = result;
             if (result.status === "running" && !disposed) timer = setTimeout(query, 2000);
             if (result.status === "succeeded") {
-                message.value = "配置已应用。网关原本停止时仍保持停止。";
-                onApplied();
+                if (lastAppliedOperationId !== result.id) {
+                    lastAppliedOperationId = result.id;
+                    onApplied();
+                }
+                // 保留服务端原操作作为事实，浏览器自动准备下一次编辑，无须用户管理草稿。
+                await createFresh();
+                if (draft.value && !tracking.value.operationId)
+                    message.value = "设置已保存并生效。";
+                else
+                    message.value =
+                        "设置已保存并生效，但暂未准备好下一次编辑；请查询原操作或重新读取配置。";
             }
         } catch {
             error.value = "暂时无法确认应用结果。请查询原操作，不要重新创建应用请求。";
@@ -387,7 +405,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
         } catch {
             error.value = "浏览器恢复记录不可读取，不会自动提交操作。";
         }
-        await reload();
+        await reloadSource(true, false);
         if (tracking.value.operationId) await query();
     });
     onUnmounted(() => {

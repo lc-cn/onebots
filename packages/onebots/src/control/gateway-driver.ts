@@ -16,7 +16,13 @@ import {
     isControlSendContext,
     type ControlSendContext,
     type ControlSendRequest,
+    type ControlAccountExploreRequest,
+    type ControlAccountExploreResult,
 } from "@onebots/core/control";
+import {
+    isGatewayAccountExploreRequest,
+    isGatewayAccountExploreReply,
+} from "../gateway/account-explore-contracts.js";
 import { GatewayMcpClient } from "./gateway-mcp-client.js";
 import type { GatewayMcpRequest, GatewayMcpResult } from "../gateway/mcp-contracts.js";
 import { waitForProcessGroupExit } from "../process-group-exit.js";
@@ -27,6 +33,8 @@ import { join } from "node:path";
 import {
     GATEWAY_PROTOCOL_VERSION,
     isGatewayAccountStatusMessage,
+    isGatewayDisconnectMessage,
+    type GatewayAccountStatusMessage,
     type GatewayReadyMessage,
     type GatewayStartMessage,
 } from "../gateway/contracts.js";
@@ -50,6 +58,7 @@ export interface NodeGatewayDriverOptions {
     controlInstanceId: string;
     prepare(): Promise<GatewayPreparation>;
     onExit(instanceId: string, error?: string): void;
+    onDisconnect?(account: { platform: string; accountId: string }): void;
     startupTimeoutMs?: number;
     stopTimeoutMs?: number;
 }
@@ -64,12 +73,9 @@ interface ManagedChild {
     requests?: GatewayRequestClient;
     sendContext?: ControlSendContext;
     messageDebug?: boolean;
+    accountExplore?: boolean;
     verificationConfig?: string;
-    accounts?: Array<{
-        platform: string;
-        accountId: string;
-        status: "pending" | "online" | "offline";
-    }>;
+    accounts?: GatewayAccountStatusMessage["accounts"];
 }
 
 /** This is process lifecycle isolation, not a security sandbox for hostile plugins. */
@@ -144,6 +150,7 @@ export class NodeGatewayDriver implements GatewayDriver {
                 throw new Error("发送网关上下文无效");
             managed.requests = new GatewayRequestClient(child);
             managed.messageDebug = ready.capabilities?.includes("message-debug") ?? false;
+            managed.accountExplore = ready.capabilities?.includes("account-explore") ?? false;
             if (ready.capabilities?.includes("verification"))
                 managed.verificationConfig = prepared.configVersion;
             if (ready.capabilities?.includes("send"))
@@ -233,6 +240,48 @@ export class NodeGatewayDriver implements GatewayDriver {
                 timeout: "消息发送超时，结果未知，请勿自动重试",
                 send: "发送通信中断，结果未知，请勿自动重试",
                 closed: "发送网关已关闭，结果未知，请勿自动重试",
+            },
+        });
+    }
+
+    exploreAccount(
+        instanceId: string,
+        request: ControlAccountExploreRequest,
+    ): Promise<ControlAccountExploreResult> {
+        const managed = this.children.get(instanceId);
+        const context = this.sendContext(instanceId);
+        if (!managed?.accountExplore || !managed.requests || !context ||
+            request.expected.gatewayInstanceId !== context.gatewayInstanceId ||
+            request.expected.configVersion !== context.configVersion)
+            return Promise.reject(new GatewayRequestError("rejected", "账号查询网关不可用"));
+        const identity = {
+            protocolVersion: 1 as const,
+            controlInstanceId: this.options.controlInstanceId,
+            gatewayInstanceId: instanceId,
+        };
+        return managed.requests.request({
+            encode: requestId => {
+                const message = { ...identity, type: "gateway.account-explore" as const, requestId, request };
+                if (!isGatewayAccountExploreRequest(message)) throw new Error("账号查询请求无效");
+                return message;
+            },
+            decode: (value, requestId) => {
+                if (!isGatewayAccountExploreReply(value) || value.requestId !== requestId ||
+                    value.controlInstanceId !== identity.controlInstanceId ||
+                    value.gatewayInstanceId !== instanceId) return;
+                if (value.outcome === "succeeded" && (
+                    value.result?.expected.configVersion !== context.configVersion ||
+                    value.result?.account !== request.account ||
+                    value.result?.action !== request.action
+                )) return;
+                return value.outcome === "succeeded"
+                    ? { ok: true, result: value.result! }
+                    : { ok: false, error: new GatewayRequestError("rejected", "账号查询被网关拒绝") };
+            },
+            errors: {
+                unavailable: "账号查询网关不可用", limit: "未完成网关请求已达上限",
+                invalid: "账号查询请求无效", timeout: "账号查询超时",
+                send: "账号查询通信中断", closed: "账号查询网关已关闭",
             },
         });
     }
@@ -348,6 +397,17 @@ export class NodeGatewayDriver implements GatewayDriver {
                 value.gatewayInstanceId === id
             )
                 managed.accounts = structuredClone(value.accounts);
+            if (
+                isGatewayDisconnectMessage(value) &&
+                value.controlInstanceId === this.options.controlInstanceId &&
+                value.gatewayInstanceId === id &&
+                !managed.stopping &&
+                !managed.exited
+            )
+                this.options.onDisconnect?.({
+                    platform: value.platform,
+                    accountId: value.accountId,
+                });
         });
         // Keep an error listener even after handshake so late IPC errors are not unhandled.
         let processError: string | undefined;
@@ -496,14 +556,15 @@ function isReady(value: unknown, start: GatewayStartMessage): value is GatewayRe
         message.dependencyVersion === start.dependencyVersion &&
         (message.capabilities === undefined ||
             (Array.isArray(message.capabilities) &&
-                message.capabilities.length <= 4 &&
+                message.capabilities.length <= 5 &&
                 new Set(message.capabilities).size === message.capabilities.length &&
                 message.capabilities.every(
                     value =>
                         value === "mcp" ||
                         value === "send" ||
                         value === "message-debug" ||
-                        value === "verification",
+                        value === "verification" ||
+                        value === "account-explore",
                 ))) &&
         message.address?.host === "127.0.0.1" &&
         Number.isInteger(message.address.port) &&

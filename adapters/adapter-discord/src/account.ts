@@ -67,6 +67,11 @@ export function createDiscordAccount(
     });
     bot.on("reconnecting", () => {
         account.status = AccountStatus.OffLine;
+        if (bot.getReceiveMode() === "gateway")
+            adapter.emit("connection:disconnected", {
+                platform: "discord",
+                account_id: String(account.account_id),
+            });
     });
     bot.on("resumed", () => {
         account.status = AccountStatus.Online;

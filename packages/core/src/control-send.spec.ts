@@ -15,6 +15,9 @@ function request(): ControlSendRequest {
 }
 
 describe("send control contract", () => {
+    it("accepts direct as a first-class adapter scene", () => {
+        expect(isControlSendRequest({ ...request(), targetType: "direct" })).toBe(true);
+    });
     it("preserves numeric and original string IDs without coercion", () => {
         for (const id of [123, "123", "00123", "room/member"]) {
             const value = { ...request(), targetId: id };
