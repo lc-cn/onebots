@@ -36,6 +36,12 @@ interface CgroupKillHandle {
     kill(): Promise<void>;
     close(): Promise<void>;
 }
+/** 两次 systemctl 快照跨越了实例换代；不能合并证据，停服可重新完整观测。 */
+class SnapshotChanged extends Error {
+    constructor() {
+        super("无法安全确认 systemd 服务状态");
+    }
+}
 function unavailable(): never {
     throw new Error("无法安全确认 systemd 服务状态");
 }
@@ -277,7 +283,8 @@ export class SystemdServicePlatform implements ServicePlatform {
                 empty = events === null || !populated(events);
                 // 读取内核证据期间发生换代不能把两个实例的观察拼成一份证明。
                 const after = this.show(deadline);
-                if (PROPERTIES.some(key => properties[key] !== after[key])) unavailable();
+                if (PROPERTIES.some(key => properties[key] !== after[key]))
+                    throw new SnapshotChanged();
             } else if (properties.ActiveState === "inactive" && !main && !control) {
                 empty = true;
             }
@@ -299,8 +306,20 @@ export class SystemdServicePlatform implements ServicePlatform {
                 quiescent: !running && !main && !control && empty,
                 controlGroup: properties.ControlGroup || null,
             };
-        } catch {
+        } catch (error) {
+            if (error instanceof SnapshotChanged) throw error;
             unavailable();
+        }
+    }
+    private async inspectForQuiesce(deadline: number) {
+        for (;;) {
+            try {
+                return await this.inspectDetailedWithin(deadline);
+            } catch (error) {
+                if (!(error instanceof SnapshotChanged)) throw error;
+                if (this.now() >= deadline) unavailable();
+                await this.sleep(Math.min(50, deadline - this.now()));
+            }
         }
     }
     private async stable(
@@ -352,7 +371,7 @@ export class SystemdServicePlatform implements ServicePlatform {
         const startedAt = this.now();
         const deadline = startedAt + this.timeout;
         const forceAt = startedAt + this.forceKillAfter;
-        const before = await this.inspectDetailedWithin(deadline);
+        const before = await this.inspectForQuiesce(deadline);
         if (!before.loaded) {
             if (!before.quiescent) unavailable();
             return;
@@ -364,7 +383,7 @@ export class SystemdServicePlatform implements ServicePlatform {
         this.command(["stop", "--no-block", "--", UNIT], deadline);
         let forced = false;
         for (;;) {
-            const current = await this.inspectDetailedWithin(deadline);
+            const current = await this.inspectForQuiesce(deadline);
             // disable/stop 针对固定 unit；故障候选可能在两个命令之间被 systemd 自动换代。
             // inspectDetailedWithin 仍逐次核验精确定义路径与 cgroup，调用方也持服务锁并核验文件，
             // 因此不能把同一 unit 的新 InvocationID 误判成外部替换而放弃静止。
@@ -380,7 +399,7 @@ export class SystemdServicePlatform implements ServicePlatform {
                 // 的 cgroup.kill，避免同名 unit 换代时误杀新实例。写入结果仍不是完成证明。
                 if (!current.identity || !current.controlGroup) unavailable();
                 this.command(["stop", "--no-block", "--", UNIT], deadline);
-                const target = await this.inspectDetailedWithin(deadline);
+                const target = await this.inspectForQuiesce(deadline);
                 if (target.quiescent) return;
                 if (
                     target.enabled ||
@@ -393,7 +412,7 @@ export class SystemdServicePlatform implements ServicePlatform {
                     handle = await this.openCgroupKill(cgroupKillFile(target.controlGroup));
                     // 路径校验与 open 之间旧 cgroup 仍可能消失并被同名新实例复用；持有文件
                     // 描述符后再核验一次，确保即将写入的内核对象仍属于目标实例。
-                    const bound = await this.inspectDetailedWithin(deadline);
+                    const bound = await this.inspectForQuiesce(deadline);
                     if (bound.quiescent) return;
                     if (
                         bound.enabled ||
@@ -413,7 +432,7 @@ export class SystemdServicePlatform implements ServicePlatform {
                             unavailable();
                         }
                 }
-                const after = await this.inspectDetailedWithin(deadline);
+                const after = await this.inspectForQuiesce(deadline);
                 if (
                     !after.quiescent &&
                     (after.identity !== target.identity ||

@@ -399,6 +399,44 @@ describe("systemd服务平台边界", () => {
             quiescent: true,
         });
     });
+    it("回退停服读取 cgroup 时故障候选换代，重新取完整快照后继续停同一固定 unit", async () => {
+        const f = fixture();
+        f.readFile.mockImplementationOnce(async () => {
+            f.state({ InvocationID: "b".repeat(32), MainPID: "456" });
+            return "populated 1\n";
+        });
+        f.sleep.mockImplementation(async ms => {
+            f.advance(ms);
+            f.state({
+                UnitFileState: "disabled",
+                ActiveState: "inactive",
+                SubState: "dead",
+                MainPID: "0",
+                ControlPID: "0",
+                ControlGroup: "",
+                InvocationID: "",
+            });
+        });
+        await f.platform.quiesce();
+        expect(await f.platform.inspect()).toMatchObject({
+            state: "stopped",
+            enabled: false,
+            running: false,
+            quiescent: true,
+        });
+    });
+    it("持续换代超过停服期限时拒绝派发任何系统动作", async () => {
+        const f = fixture();
+        let generation = 0;
+        f.readFile.mockImplementation(async () => {
+            generation++;
+            f.state({ InvocationID: generation.toString(16).padStart(32, "0") });
+            return "populated 1\n";
+        });
+        await expect(f.platform.quiesce()).rejects.toThrow("无法安全确认 systemd 服务状态");
+        expect(f.exec.mock.calls.flatMap(call => call[1])).not.toContain("disable");
+        expect(f.exec.mock.calls.flatMap(call => call[1])).not.toContain("stop");
+    });
     it("disable 后定义路径变化仍拒绝继续控制", async () => {
         const f = fixture();
         const original = f.host.exec;

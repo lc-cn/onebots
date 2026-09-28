@@ -1130,8 +1130,15 @@ try {
         ]).stdout;
     } catch (error) {
         const record = JSON.parse(fs.readFileSync(interruptedUpgrade.file, "utf8"));
+        let osState = "unavailable";
+        try {
+            // 只输出固定 systemd 属性，不把服务环境、配置或候选路径带入 CI 日志。
+            osState = systemdState().replace(/\s+/gu, " ").trim();
+        } catch {
+            // CLI 回退失败仍是主错误；诊断不可用不能遮蔽持久阶段。
+        }
         throw new Error(
-            `升级回退失败，持久阶段为 ${String(record.phase)}，状态为 ${String(record.status)}，恢复门禁为 ${String(record.recoveryRequired)}`,
+            `升级回退失败，持久阶段为 ${String(record.phase)}，状态为 ${String(record.status)}，恢复门禁为 ${String(record.recoveryRequired)}；OS 状态：${osState}`,
             { cause: error },
         );
     }
