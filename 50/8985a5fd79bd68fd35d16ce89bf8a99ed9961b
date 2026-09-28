@@ -1,0 +1,41 @@
+.changeset/review-connection-guides.md
+  s_a953d60826be1b::t_4a27a37162d516 1-7
+packages/core/src/config-merge.ts
+  s_a953d60826be1b::t_09dd8cf353d0fe 1
+  s_a953d60826be1b::t_a71d5b9b1dbc1c 2-57
+adapters/adapter-icqq/src/system-events.ts
+  s_a953d60826be1b::t_e43c77a1fb453d 55-57
+packages/core/src/utils.ts
+  s_a953d60826be1b::t_a71d5b9b1dbc1c 8
+  s_a953d60826be1b::t_09dd8cf353d0fe 6
+packages/core/package.json
+  s_a953d60826be1b::t_a71d5b9b1dbc1c 32,36
+  s_a953d60826be1b::t_dd5194985dbda8 33-35,37-39
+packages/web/src/components/control-connections.ts
+  s_a953d60826be1b::t_6698c24d74a30b 195-198
+  s_a953d60826be1b::t_7be461ff1c7cce 2-3,72,83,100,113,178,193-194,199,209-217
+protocols/onebot-v11/protocol/src/__tests__/transport.test.ts
+  s_a953d60826be1b::t_e43c77a1fb453d 1,11,16-17,20
+packages/web/src/components/control-connections.spec.ts
+  s_a953d60826be1b::t_d32dfe8eb7bd03 39,70-77,81-83,87-119
+  s_a953d60826be1b::t_6698c24d74a30b 78-80,84-86
+packages/web/src/App.vue
+  s_a953d60826be1b::t_3430548141b635 58,383,449,595,620
+  s_a953d60826be1b::t_7be461ff1c7cce 381-382,384-385
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "508985a5fd79bd68fd35d16ce89bf8a99ed9961b",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
