@@ -146,7 +146,11 @@ export async function runManagerProgramUpdate(
         release.archives.host.sha256 !== release.archiveSha256 ||
         !Buffer.isBuffer(release.archives.host.bytes) ||
         !Buffer.isBuffer(release.archives.core.bytes) ||
-        !/^[a-f0-9]{64}$/.test(release.archives.core.sha256)
+        !/^[a-f0-9]{64}$/.test(release.archives.core.sha256) ||
+        (release.web !== undefined &&
+            (!release.archives.web ||
+                !Buffer.isBuffer(release.archives.web.bytes) ||
+                !/^[a-f0-9]{64}$/.test(release.archives.web.sha256)))
     )
         throw new Error("目标管理程序缺少已验证的宿主或 core 归档，未准备候选");
     const comparison = semver.compare(release.host.version, current.version);
@@ -214,6 +218,15 @@ export async function runManagerProgramUpdate(
                         version: release.core.version,
                         spec: release.core.spec,
                     },
+                    ...(release.web
+                        ? {
+                              web: {
+                                  name: release.web.name,
+                                  version: release.web.version,
+                                  spec: release.web.spec,
+                              },
+                          }
+                        : {}),
                 },
                 archives: release.archives,
             },

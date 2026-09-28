@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import type { GenerationPlan } from "./installation/generation-plan.js";
 import {
-    ManagerUpgradeCandidateRejectedError,
     prepareManagerUpgradeCandidate,
     resumeManagerUpgradeCandidate,
 } from "./manager-service-upgrade-preparation.js";
@@ -149,6 +148,32 @@ it("先持久化发布摘要和当前身份，再安装及双证明候选；重�
     expect(mock.close).toHaveBeenCalledTimes(2);
 });
 
+it("升级候选将同版本 Web 归档固定进安装计划，不回落到尚未发布的 registry 版本", async () => {
+    const f = fixture();
+    const bytes = Buffer.from("web archive");
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const request = {
+        ...f.request,
+        artifacts: {
+            ...f.request.artifacts,
+            web: { name: "@onebots/web", version: "1.0.20", spec: "1.0.20" },
+        },
+        archives: { ...f.request.archives, web: { bytes, sha256 } },
+    };
+    await prepareManagerUpgradeCandidate(request, f.host);
+    expect(mock.install).toHaveBeenCalledWith(
+        `upgrade-${f.id}`,
+        expect.objectContaining({
+            web: expect.objectContaining({ name: "@onebots/web", version: "1.0.20" }),
+            manifest: expect.objectContaining({
+                dependencies: expect.objectContaining({
+                    "@onebots/web": expect.stringMatching(/^file:/),
+                }),
+            }),
+        }),
+    );
+});
+
 it("安装结果未知后只查询原操作，不重派下载", async () => {
     const f = fixture();
     mock.install.mockRejectedValue(new Error("unknown"));
@@ -197,21 +222,27 @@ it("活动候选与新候选入口失败使用不同闭合诊断码", async () =
     mock.verify.mockImplementationOnce(() => {
         throw new Error("private active path");
     });
-    await expect(prepareManagerUpgradeCandidate(active.request, active.host)).rejects.toMatchObject({
-        code: "ACTIVE_CANDIDATE_INVALID",
-    });
+    await expect(prepareManagerUpgradeCandidate(active.request, active.host)).rejects.toMatchObject(
+        {
+            code: "ACTIVE_CANDIDATE_INVALID",
+        },
+    );
     expect(mock.install).not.toHaveBeenCalled();
 
     fs.rmSync(active.root, { recursive: true, force: true });
     roots.splice(roots.indexOf(active.root), 1);
     vi.resetAllMocks();
     const target = fixture();
-    mock.verify.mockImplementationOnce(() => undefined).mockImplementationOnce(() => {
-        throw new Error("private target path");
-    });
-    await expect(prepareManagerUpgradeCandidate(target.request, target.host)).rejects.toMatchObject({
-        code: "CANDIDATE_ENTRY_INVALID",
-    });
+    mock.verify
+        .mockImplementationOnce(() => undefined)
+        .mockImplementationOnce(() => {
+            throw new Error("private target path");
+        });
+    await expect(prepareManagerUpgradeCandidate(target.request, target.host)).rejects.toMatchObject(
+        {
+            code: "CANDIDATE_ENTRY_INVALID",
+        },
+    );
     expect(mock.install).toHaveBeenCalledOnce();
 });
 

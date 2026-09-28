@@ -104,14 +104,54 @@ it("core也必须来自固定registry归档并通过完整性校验", async () =
     await expect(resolveRelease(version)).rejects.toThrow("无法验证");
     expect(f.fetcher).toHaveBeenCalledWith(f.corePublished.dist.tarball, expect.anything());
 });
+it("发布版升级同时校验并携带宿主依赖的 Web 归档", async () => {
+    const f = fixture();
+    const webArchive = Buffer.from("synthetic-web-package");
+    const webPublished = {
+        name: "@onebots/web",
+        version: "1.0.20",
+        dist: {
+            tarball: "https://registry.npmjs.org/@onebots/web/-/web-1.0.20.tgz",
+            integrity: `sha512-${createHash("sha512").update(webArchive).digest("base64")}`,
+        },
+    };
+    vi.mocked(readReleaseArchive).mockResolvedValue({
+        manifest: {
+            ...manifest,
+            dependencies: { ...manifest.dependencies, "@onebots/web": "1.0.20" },
+        },
+        catalog,
+    });
+    f.fetcher.mockImplementation(async url => {
+        const target = String(url);
+        if (target === f.corePublished.dist.tarball) return new Response(f.coreArchive);
+        if (target === webPublished.dist.tarball) return new Response(webArchive);
+        if (target.includes("%40onebots%2Fcore")) return Response.json(f.corePublished);
+        if (target.includes("%40onebots%2Fweb")) return Response.json(webPublished);
+        return target.endsWith(".tgz") ? new Response(f.archive) : Response.json(f.published);
+    });
+    const release = await resolveRelease(version);
+    expect(release.web).toEqual({ name: "@onebots/web", version: "1.0.20", spec: "1.0.20" });
+    expect(release.archives?.web?.bytes).toEqual(webArchive);
+    expect(f.fetcher).toHaveBeenCalledWith(webPublished.dist.tarball, expect.anything());
+});
 it("离线清单只读取同目录精确归档并绑定目标版本", async () => {
     fixture();
+    vi.mocked(readReleaseArchive).mockResolvedValue({
+        manifest: {
+            ...manifest,
+            dependencies: { ...manifest.dependencies, "@onebots/web": "1.0.20" },
+        },
+        catalog,
+    });
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-local-release-"));
     try {
         const host = Buffer.from("local host archive");
         const core = Buffer.from("local core archive");
+        const web = Buffer.from("local web archive");
         fs.writeFileSync(path.join(root, "onebots.tgz"), host);
         fs.writeFileSync(path.join(root, "core.tgz"), core);
+        fs.writeFileSync(path.join(root, "web.tgz"), web);
         const file = path.join(root, "manifest.json");
         fs.writeFileSync(
             file,
@@ -129,12 +169,20 @@ it("离线清单只读取同目录精确归档并绑定目标版本", async () =
                     file: "core.tgz",
                     sha256: createHash("sha256").update(core).digest("hex"),
                 },
+                web: {
+                    name: "@onebots/web",
+                    version: "1.0.20",
+                    file: "web.tgz",
+                    sha256: createHash("sha256").update(web).digest("hex"),
+                },
                 extensions: [],
             }),
         );
         const release = await resolveLocalRelease(file, version);
         expect(release.archives?.host.bytes).toEqual(host);
         expect(release.archives?.core.bytes).toEqual(core);
+        expect(release.archives?.web?.bytes).toEqual(web);
+        expect(release.web?.version).toBe("1.0.20");
         expect(release.host.spec).toBe(`file:${path.join(fs.realpathSync(root), "onebots.tgz")}`);
         expect(fetch).not.toHaveBeenCalled();
         await expect(resolveLocalRelease(file, "1.2.98")).rejects.toThrow("本地管理程序");

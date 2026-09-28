@@ -134,6 +134,31 @@ it("非交互必须显式确认，确认后以同一操作ID准备候选并执�
     expect(f.output.mock.calls.some(call => call[0].includes("操作 ID：operation-1"))).toBe(true);
 });
 
+it("管理程序升级把已验证的 Web 工件传给候选安装，不解析未发布版本", async () => {
+    const f = fixture();
+    const release = await f.resolve();
+    const bytes = Buffer.from("web archive");
+    const sha256 = "e".repeat(64);
+    f.resolve.mockResolvedValue({
+        ...release,
+        web: { name: "@onebots/web", version: "1.0.20", spec: "file:/verified/web.tgz" },
+        archives: { ...release.archives, web: { bytes, sha256 } },
+    });
+    await runManagerProgramUpdate(
+        { check: false, yes: true, system: false },
+        { ...f, interactive: false },
+    );
+    expect(f.prepare).toHaveBeenCalledWith(
+        expect.objectContaining({
+            artifacts: expect.objectContaining({
+                web: { name: "@onebots/web", version: "1.0.20", spec: "file:/verified/web.tgz" },
+            }),
+            archives: expect.objectContaining({ web: { bytes, sha256 } }),
+        }),
+        f.host,
+    );
+});
+
 it("交互摘要取消不准备候选", async () => {
     const f = fixture();
     const prompt = { ask: vi.fn(async () => ["no"]), report: vi.fn() };

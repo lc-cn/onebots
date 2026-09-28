@@ -13,6 +13,7 @@ const ARCHIVE_LIMIT = 32 * 1024 * 1024;
 export interface ResolvedRelease {
     host: GenerationArtifact;
     core: GenerationArtifact;
+    web?: GenerationArtifact;
     extensionVersions: Readonly<Record<string, string>>;
     /** 本次确实检查过的宿主发布包摘要，不是活动安装目录的摘要。 */
     archiveSha256: string;
@@ -20,6 +21,7 @@ export interface ResolvedRelease {
     archives?: {
         host: { bytes: Buffer; sha256: string };
         core: { bytes: Buffer; sha256: string };
+        web?: { bytes: Buffer; sha256: string };
     };
 }
 
@@ -56,6 +58,20 @@ export async function resolveRelease(exactVersion?: string): Promise<ResolvedRel
             corePublished,
             `${REGISTRY}/@onebots/core/-/core-${release.core.version}.tgz`,
         );
+        let webArchive: Buffer | undefined;
+        if (release.web) {
+            const webPublished = await metadataFor("@onebots/web", release.web.version);
+            if (
+                !record(webPublished) ||
+                webPublished.name !== "@onebots/web" ||
+                webPublished.version !== release.web.version
+            )
+                throw new Error();
+            webArchive = await verifiedArchive(
+                webPublished,
+                `${REGISTRY}/@onebots/web/-/web-${release.web.version}.tgz`,
+            );
+        }
         const archiveSha256 = createHash("sha256").update(archive).digest("hex");
         const coreSha256 = createHash("sha256").update(coreArchive).digest("hex");
         return Object.freeze({
@@ -64,6 +80,14 @@ export async function resolveRelease(exactVersion?: string): Promise<ResolvedRel
             archives: {
                 host: { bytes: archive, sha256: archiveSha256 },
                 core: { bytes: coreArchive, sha256: coreSha256 },
+                ...(webArchive
+                    ? {
+                          web: {
+                              bytes: webArchive,
+                              sha256: createHash("sha256").update(webArchive).digest("hex"),
+                          },
+                      }
+                    : {}),
             },
         });
     } catch {
@@ -101,17 +125,28 @@ export async function resolveLocalRelease(
         const { manifest: hostManifest, catalog } = await readReleaseArchive(hostArchive);
         const release = parseReleaseCatalog(hostVersion, hostManifest, catalog);
         if (release.core.version !== coreVersion) throw new Error();
+        if (release.web?.version !== local.web?.version) throw new Error();
         const hostSha256 = local.host.sha256;
         const coreSha256 = local.core.sha256;
-        if (!hostSha256 || !coreSha256) throw new Error();
+        const webSha256 = local.web?.sha256;
+        if (!hostSha256 || !coreSha256 || (local.web && !webSha256)) throw new Error();
         return Object.freeze({
             ...release,
             host: Object.freeze(local.host),
             core: Object.freeze(local.core),
+            ...(local.web ? { web: Object.freeze(local.web) } : {}),
             archiveSha256: hostSha256,
             archives: {
                 host: { bytes: hostArchive, sha256: hostSha256 },
                 core: { bytes: coreArchive, sha256: coreSha256 },
+                ...(local.web
+                    ? {
+                          web: {
+                              bytes: localArchive(local.web.spec, local.web.sha256),
+                              sha256: webSha256,
+                          },
+                      }
+                    : {}),
             },
         });
     } catch {
@@ -144,12 +179,15 @@ export function parseReleaseCatalog(
     )
         throw new Error(FAILURE);
     const coreVersion = manifest.dependencies["@onebots/core"];
+    const webVersion = manifest.dependencies["@onebots/web"];
     if (
         !exact(coreVersion) ||
         !record(catalog) ||
         catalog.schemaVersion !== 2 ||
         !record(catalog.packages)
     )
+        throw new Error(FAILURE);
+    if (webVersion !== undefined && (typeof webVersion !== "string" || !exact(webVersion)))
         throw new Error(FAILURE);
     const entries = Object.entries(catalog.packages);
     if (entries.length === 0 || entries.length > 256) throw new Error(FAILURE);
@@ -163,9 +201,14 @@ export function parseReleaseCatalog(
             throw new Error(FAILURE);
         versions[name] = entry.version;
     }
+    const web: GenerationArtifact | undefined =
+        typeof webVersion === "string"
+            ? { name: "@onebots/web", version: webVersion, spec: webVersion }
+            : undefined;
     return Object.freeze({
         host: Object.freeze({ name: "onebots", version, spec: version }),
         core: Object.freeze({ name: "@onebots/core", version: coreVersion, spec: coreVersion }),
+        ...(web ? { web: Object.freeze(web) } : {}),
         extensionVersions: Object.freeze(versions),
     });
 }
