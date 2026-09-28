@@ -38,6 +38,7 @@ export interface ICQQQRCodeEvent {
 
 /** 身份验证页面要求使用的设备信息。 */
 export interface ICQQAuthDevice {
+    [key: string]: unknown;
     guid: string;
     qimei: string;
     qimei36: string;

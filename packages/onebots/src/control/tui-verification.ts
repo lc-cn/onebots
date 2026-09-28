@@ -151,6 +151,12 @@ export async function runControlVerification(
     const blocks = request.options?.blocks ?? [];
     for (const block of blocks) {
         if (block.type === "text") prompt.report(verificationTerminalText(block.content));
+        else if (block.type === "json")
+            prompt.report(
+                verificationTerminalText(
+                    `${block.label ?? "JSON"}\n${JSON.stringify(block.content, null, 2)}`,
+                ),
+            );
         else if (block.type === "qrcode")
             prompt.report(
                 `二维码内容（仅文本，不会自动打开）：${verificationTerminalText(block.content)}`,

@@ -127,6 +127,12 @@ function block(value: Json): boolean {
             );
         case "text":
             return keys(value, ["type", "content"]) && typeof value.content === "string";
+        case "json":
+            return (
+                keys(value, ["type", "content", "label"]) &&
+                object(value.content) &&
+                optional(value, "label", item => typeof item === "string")
+            );
         case "input":
             return (
                 keys(value, ["type", "key", "placeholder", "maxLength", "secret"]) &&

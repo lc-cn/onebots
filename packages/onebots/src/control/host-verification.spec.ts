@@ -67,7 +67,10 @@ async function fixture(secret: string) {
                     };
                     this.emit("verification:request", {
                         platform: "confirm", account_id: config.account_id, type: "pair_code", hint: "请输入验证码",
-                        options: { blocks: [{ type: "input", key: "code", secret: true, maxLength: 64 }] }
+                        options: { blocks: [
+                            { type: "json", label: "设备信息", content: { guid: "0011", bssid: "", extra: { enabled: true } } },
+                            { type: "input", key: "code", secret: true, maxLength: 64 }
+                        ] }
                     });
                 }));
                 return account;
@@ -294,6 +297,16 @@ describe("真实管理服务持久账号验证", () => {
             platform: "confirm",
             account_id: "bot",
             type: "pair_code",
+            options: {
+                blocks: [
+                    {
+                        type: "json",
+                        label: "设备信息",
+                        content: { guid: "0011", bssid: "", extra: { enabled: true } },
+                    },
+                    { type: "input", key: "code" },
+                ],
+            },
         });
         expect((await fetch(f.url + "/confirm/bot/confirm/v1/status")).status).toBe(404);
         const command = {
