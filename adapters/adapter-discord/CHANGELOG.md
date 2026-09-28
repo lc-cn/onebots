@@ -1,5 +1,12 @@
 # @onebots/adapter-discord
 
+## 3.0.14
+
+### Patch Changes
+
+- Updated dependencies [12f6492]
+  - onebots@1.2.14
+
 ## 3.0.13
 
 ### Patch Changes
