@@ -558,7 +558,9 @@ try {
     devtools.stage = "保存配置";
     await clickButton("保存");
     await waitFor(
-        async () => /应用成功/.test(await devtools.evaluate("document.body.innerText")),
+        // 成功后会自动准备下一份草稿，“应用成功”操作标签可能只显示一瞬；
+        // 等待页面稳定呈现的完成消息，并继续核验下方真实网关/API 状态。
+        async () => /设置已保存并生效/.test(await devtools.evaluate("document.body.innerText")),
         "Web 配置应用",
         60_000,
     );
