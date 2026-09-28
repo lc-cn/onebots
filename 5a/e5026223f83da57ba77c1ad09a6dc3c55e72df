@@ -1,0 +1,19 @@
+.changeset/bright-icqq-auth-web.md
+  s_a953d60826be1b::t_ec23684d36bd7e 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5ae5026223f83da57ba77c1ad09a6dc3c55e72df",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
