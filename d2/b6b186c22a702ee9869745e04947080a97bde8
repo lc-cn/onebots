@@ -1,0 +1,37 @@
+packages/onebots/src/installation/release-resolver.spec.ts
+  s_a953d60826be1b::t_e1206e1360e13a 140-146
+  s_a953d60826be1b::t_c692b642634bf9 107-137
+  s_a953d60826be1b::t_76456174de1e19 151,154,172-177,184-185
+packages/onebots/src/cli/manager-program-update.spec.ts
+  s_a953d60826be1b::t_717f39fcffc760 137-161
+.changeset/steady-manager-web-artifact.md
+  s_a953d60826be1b::t_2fb0c30c43d88f 1-5
+packages/onebots/src/installation/release-resolver.ts
+  s_a953d60826be1b::t_4b5e9446dcbc9f 16,24,61-74,83-90,128,137,142-145,147-149,182
+  s_a953d60826be1b::t_14dd800027e3e7 131-132,146
+  s_a953d60826be1b::t_0f0e0f283bf8ad 190-191
+  s_a953d60826be1b::t_31f0caa7c3c0a4 204-207,211
+packages/onebots/src/manager-service-upgrade-preparation.ts
+  s_a953d60826be1b::t_bc7c020b58fcbe 35,39,174-187,191,228-230,234,248-256,263
+packages/onebots/src/manager-service-upgrade-preparation.spec.ts
+  s_a953d60826be1b::t_7e203e6ce2913d 151-176
+  s_a953d60826be1b::t_f7c24c97e0a15a 225-229,236-245
+packages/onebots/src/cli/manager-program-update.ts
+  s_a953d60826be1b::t_6e82501ee78640 149-153,221-229
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d2b6b186c22a702ee9869745e04947080a97bde8",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
