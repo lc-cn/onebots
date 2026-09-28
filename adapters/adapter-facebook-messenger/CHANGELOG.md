@@ -1,5 +1,13 @@
 # @onebots/adapter-facebook-messenger
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [ec79a17]
+  - onebots@1.2.16
+  - @onebots/meta@0.1.7
+
 ## 0.1.7
 
 ### Patch Changes

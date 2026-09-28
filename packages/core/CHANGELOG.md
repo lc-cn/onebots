@@ -1,5 +1,11 @@
 # @onebots/core
 
+## 1.2.12
+
+### Patch Changes
+
+- ec79a17: ICQQ 身份验证保留完整设备 JSON，并在 Web 待办卡片提供 JSON 与安全辅助脚本复制；控制验证契约支持结构化 JSON 展示。
+
 ## 1.2.11
 
 ### Patch Changes
