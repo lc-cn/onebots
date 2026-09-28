@@ -318,7 +318,8 @@ try {
             `--user-data-dir=${browserProfile}`,
             "about:blank",
         ],
-        { stdio: ["ignore", "ignore", "pipe"] },
+        // Chrome 的 stderr 不含验收结果；无人消费的 pipe 填满后会反压并冻结 CDP。
+        { stdio: "ignore" },
     );
     const debugPort = await waitForBrowserPort(browser, browserProfile);
     const targets = await waitFor(async () => {
