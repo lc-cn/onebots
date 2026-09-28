@@ -92,6 +92,8 @@ class DevToolsSession {
         this.socket = new WebSocket(url);
         this.nextId = 1;
         this.pending = new Map();
+        this.stage = "加载页面";
+        this.dialogFailure = undefined;
         this.ready = new Promise((resolve, reject) => {
             this.socket.addEventListener("open", resolve, { once: true });
             this.socket.addEventListener("error", () => reject(new Error("浏览器调试连接失败")), {
@@ -100,6 +102,17 @@ class DevToolsSession {
         });
         this.socket.addEventListener("message", event => {
             const message = JSON.parse(event.data);
+            if (message.method === "Page.javascriptDialogOpening") {
+                const expected =
+                    this.stage === "保存配置" &&
+                    message.params?.type === "confirm" &&
+                    message.params?.message === "保存设置可能短暂中断账号和协议连接，继续吗？";
+                if (!expected) this.dialogFailure = new Error("浏览器出现非预期确认框");
+                void this.send("Page.handleJavaScriptDialog", { accept: expected }).catch(() => {
+                    this.dialogFailure = new Error("浏览器确认框处理失败");
+                });
+                return;
+            }
             if (!message.id) return;
             const pending = this.pending.get(message.id);
             if (!pending) return;
@@ -123,7 +136,7 @@ class DevToolsSession {
         const result = new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
                 this.pending.delete(id);
-                reject(new Error(`浏览器调试命令 ${method} 超时`));
+                reject(new Error(`浏览器调试命令 ${method} 超时（${this.stage}）`));
             }, 30_000);
             this.pending.set(id, { resolve, reject, timer });
         });
@@ -137,6 +150,7 @@ class DevToolsSession {
             awaitPromise: true,
             returnByValue: true,
         });
+        if (this.dialogFailure) throw this.dialogFailure;
         if (result.exceptionDetails)
             throw new Error(result.exceptionDetails.exception?.description ?? "浏览器脚本执行失败");
         return result.result.value;
@@ -338,6 +352,7 @@ try {
     );
     assert.match(await devtools.evaluate("document.body.innerText"), /连接管理服务/);
 
+    devtools.stage = "提交设备码";
     await devtools.evaluate(`(() => {
         const input = document.querySelector("#pair-code");
         if (!(input instanceof HTMLInputElement)) throw new Error("找不到设备码输入框");
@@ -420,6 +435,7 @@ try {
             return input.value;
         })()`);
 
+    devtools.stage = "选择扩展";
     await openWorkspace("扩展", "installation-heading");
     await waitFor(
         () =>
@@ -458,12 +474,14 @@ try {
             ))`),
         "Web 安装计划确认",
     );
+    devtools.stage = "安装扩展";
     await clickButton("确认并安装");
     await waitFor(
         async () => /验证通过，尚未应用/.test(await devtools.evaluate("document.body.innerText")),
         "Web 扩展安装与验证",
         10 * 60_000,
     );
+    devtools.stage = "应用运行版本";
     await clickButton("应用此运行版本");
     await waitFor(
         async () => /运行版本已应用/.test(await devtools.evaluate("document.body.innerText")),
@@ -487,6 +505,7 @@ try {
     assert.equal(installed.manager.id, before.manager.id);
     assert.equal(installed.gateway.desired, "running");
 
+    devtools.stage = "打开账号配置";
     await openWorkspace("账号", "accounts-title");
     await clickButton("添加");
     await waitFor(
@@ -496,6 +515,7 @@ try {
             ))`),
         "Web 配置快照读取",
     );
+    devtools.stage = "创建账号配置草稿";
     await clickButton("开始配置");
     await waitFor(
         () =>
@@ -507,11 +527,13 @@ try {
     );
     assert.equal(await setSelect("平台适配器", "mock"), "mock");
     assert.equal(await setInput("账号标识", "installed-web"), "installed-web");
+    devtools.stage = "创建 Mock 账号";
     await clickButton("创建账号");
     await waitFor(
         async () => /mock\.installed-web/.test(await devtools.evaluate("document.body.innerText")),
         "Web 添加 Mock 账号",
     );
+    devtools.stage = "打开协议配置";
     await openWorkspace("协议", "protocols-title");
     await clickButton("添加");
     await waitFor(
@@ -521,22 +543,26 @@ try {
     );
     assert.equal(await setSelect("配置作用域", "mock.installed-web"), "mock.installed-web");
     assert.equal(await setSelect("输出协议", "onebot.v11"), "onebot.v11");
+    devtools.stage = "添加 OneBot v11 出口";
     await clickButton("为账号添加出口");
     await waitFor(
         async () => /协议已加入草稿/.test(await devtools.evaluate("document.body.innerText")),
         "Web 添加 OneBot v11 配置",
     );
+    devtools.stage = "检测配置";
     await clickButton("检测");
     await waitFor(
         async () => /检测通过/.test(await devtools.evaluate("document.body.innerText")),
         "Web 配置校验",
     );
+    devtools.stage = "保存配置";
     await clickButton("保存");
     await waitFor(
         async () => /应用成功/.test(await devtools.evaluate("document.body.innerText")),
         "Web 配置应用",
         60_000,
     );
+    devtools.stage = "验证应用后的概览";
     await openWorkspace("概览", "overview-title");
     await waitFor(gatewayIsRunning, "Web 配置应用后的网关状态", 60_000);
 
