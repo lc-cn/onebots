@@ -52,6 +52,7 @@ export interface ICQQAuthDevice {
 
 /** 身份验证事件。 */
 export interface ICQQAuthEvent {
-    url: string;
-    device: ICQQAuthDevice;
+    url?: string;
+    device?: ICQQAuthDevice;
+    [key: string]: unknown;
 }

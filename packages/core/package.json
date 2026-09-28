@@ -29,6 +29,14 @@
     "./control": {
       "types": "./lib/control.d.ts",
       "import": "./lib/control.js"
+    },
+    "./config-merge": {
+      "types": "./lib/config-merge.d.ts",
+      "import": "./lib/config-merge.js"
+    },
+    "./gateway-path": {
+      "types": "./lib/gateway-path.d.ts",
+      "import": "./lib/gateway-path.js"
     }
   },
   "keywords": [

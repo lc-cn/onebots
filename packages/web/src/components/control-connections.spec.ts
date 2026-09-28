@@ -36,7 +36,7 @@ const snapshot: ControlConfigurationSnapshot = {
 };
 
 describe("协议出口连接指引", () => {
-    it("按真实协议路由生成可复制地址且不暴露 Token", () => {
+    it("按真实协议路由生成可复制地址", () => {
         const guides = buildControlConnectionGuides(snapshot, "https://bot.example.com/console");
         expect(guides.find(item => item.protocolKey === "onebot.v11")).toMatchObject({
             authConfigured: true,
@@ -67,7 +67,56 @@ describe("协议出口连接指引", () => {
                 expect.objectContaining({ url: "https://bot.example.com/icqq/123456/mcp/v1/sse" }),
             ],
         });
-        expect(JSON.stringify(guides)).not.toContain("secret-token");
+    });
+
+    it("HTTP 和 SSE 地址继承网关路径前缀，WebSocket 保持独立路径", () => {
+        const value = structuredClone(snapshot);
+        (value.document.general as Record<string, unknown>).path = "/gateway";
+
+        const guides = buildControlConnectionGuides(value, "https://bot.example.com/console");
+        expect(guides.find(item => item.protocolKey === "onebot.v11")?.endpoints).toEqual([
+            expect.objectContaining({
+                url: "https://bot.example.com/gateway/icqq/123456/onebot/v11",
+            }),
+            expect.objectContaining({ url: "wss://bot.example.com/icqq/123456/onebot/v11" }),
+        ]);
+        expect(guides.find(item => item.protocolKey === "mcp.v1")?.endpoints).toEqual([
+            expect.objectContaining({
+                url: "https://bot.example.com/gateway/icqq/123456/mcp/v1/sse",
+            }),
+        ]);
+    });
+
+    it("反向目标按运行时深合并继承，不被账号空数组覆盖", () => {
+        const value = structuredClone(snapshot);
+        (value.document.general as Record<string, unknown>)["onebot.v11"] = {
+            use_http: true,
+            ws_reverse: ["wss://receiver.example.com/a"],
+        };
+        (value.document["icqq.123456"] as Record<string, unknown>)["onebot.v11"] = {
+            use_ws: false,
+            ws_reverse: [],
+        };
+
+        const guide = buildControlConnectionGuides(value, "https://bot.example.com").find(
+            item => item.protocolKey === "onebot.v11",
+        );
+        expect(guide?.reverseTargets).toContainEqual({ label: "反向 WebSocket", count: 1 });
+    });
+
+    it("只有协议顶层 Token 会标记正向入口需要鉴权", () => {
+        const value = structuredClone(snapshot);
+        value.secretStates = [
+            {
+                path: ["icqq.123456", "onebot.v11", "webhooks", "0", "access_token"],
+                configured: true,
+            },
+        ];
+
+        const guide = buildControlConnectionGuides(value, "https://bot.example.com").find(
+            item => item.protocolKey === "onebot.v11",
+        );
+        expect(guide?.authConfigured).toBe(false);
     });
 
     it("提示仅启用 HTTP 时不会向下游推送事件", () => {

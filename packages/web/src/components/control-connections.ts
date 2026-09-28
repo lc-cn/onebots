@@ -1,4 +1,6 @@
 import type { ControlConfigurationSnapshot } from "@onebots/core/control";
+import { deepMerge } from "@onebots/core/config-merge";
+import { normalizeGatewayPathPrefix } from "@onebots/core/gateway-path";
 
 export interface ControlConnectionEndpoint {
     id: string;
@@ -67,6 +69,7 @@ function hasSecret(
     return snapshot.secretStates.some(
         state =>
             state.configured &&
+            state.path.length === 3 &&
             fields.includes(state.path.at(-1) ?? "") &&
             ((state.path[0] === accountKey && state.path[1] === protocolKey) ||
                 (state.path[0] === "general" && state.path[1] === protocolKey)),
@@ -77,6 +80,7 @@ function endpointsFor(
     protocolKey: string,
     path: string,
     httpOrigin: string,
+    httpPathPrefix: string,
     wsOrigin: string,
     useHttp: boolean,
     useWs: boolean,
@@ -93,7 +97,7 @@ function endpointsFor(
             endpoint(
                 "sse",
                 "SSE 入口",
-                `${httpOrigin}${path}/sse`,
+                `${httpOrigin}${httpPathPrefix}${path}/sse`,
                 "填写到支持旧版 HTTP + SSE 传输的 MCP 客户端",
                 "sse",
             ),
@@ -106,7 +110,7 @@ function endpointsFor(
             endpoint(
                 "http",
                 "HTTP API 根地址",
-                `${httpOrigin}${path}${suffix}`,
+                `${httpOrigin}${httpPathPrefix}${path}${suffix}`,
                 protocolKey === "milky.v1"
                     ? "下游会在该地址后追加 Milky API 动作"
                     : "下游会在该地址后追加 API 动作",
@@ -171,6 +175,7 @@ export function buildControlConnectionGuides(
     const adapterSchemas = record(schemas.adapters);
     const protocolSchemas = record(schemas.protocols);
     const general = record(snapshot.document.general);
+    const httpPathPrefix = normalizeGatewayPathPrefix(general.path ?? "");
     const adapterNames = Object.keys(adapterSchemas).sort(
         (left, right) => right.length - left.length,
     );
@@ -185,10 +190,13 @@ export function buildControlConnectionGuides(
         for (const protocolKey of protocolKeys) {
             if (!Object.hasOwn(account, protocolKey)) continue;
             const protocolSchema = record(protocolSchemas[protocolKey]);
-            const config = {
-                ...record(general[protocolKey]),
-                ...record(account[protocolKey]),
-            };
+            // 与 Account.protocolConfigs 使用同一合并规则，数组继承也必须一致。
+            const config = record(
+                deepMerge(
+                    structuredClone(record(general[protocolKey])),
+                    record(account[protocolKey]),
+                ),
+            );
             const useHttp = booleanSetting(config, protocolSchema, "use_http");
             const useWs = booleanSetting(config, protocolSchema, "use_ws");
             const reverseTargets = [
@@ -198,7 +206,15 @@ export function buildControlConnectionGuides(
                 { label: "反向 WebSocket", count: reverseCount(config, "ws_reverse") },
             ].filter(target => target.count > 0);
             const path = routeFor(platform, accountId, protocolKey);
-            const endpoints = endpointsFor(protocolKey, path, httpOrigin, wsOrigin, useHttp, useWs);
+            const endpoints = endpointsFor(
+                protocolKey,
+                path,
+                httpOrigin,
+                httpPathPrefix,
+                wsOrigin,
+                useHttp,
+                useWs,
+            );
             let warning: string | undefined;
             if (!endpoints.length && !reverseTargets.length)
                 warning =

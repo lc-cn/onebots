@@ -55,6 +55,7 @@ const notificationsDirty = ref(false);
 const installationCatalog = ref<ControlInstallationCatalog>();
 const configurationSnapshot = ref<ControlConfigurationSnapshot>();
 const workspaceFactsUnavailable = ref(false);
+const configurationUnavailable = ref(false);
 const pendingVerificationCount = ref<number>();
 const notificationSnapshot = ref<NotificationSnapshot>();
 const configurationTarget = ref<ConfigurationNavigationTarget>();
@@ -377,15 +378,11 @@ async function refreshWorkspaceFacts() {
         client.configurationSnapshot(),
     ]);
     if (revision !== factsRevision || !token.value) return;
-    if (catalog.status === "fulfilled" && configuration.status === "fulfilled") {
-        installationCatalog.value = catalog.value;
-        configurationSnapshot.value = configuration.value;
-        workspaceFactsUnavailable.value = false;
-    } else {
-        installationCatalog.value = undefined;
-        configurationSnapshot.value = undefined;
-        workspaceFactsUnavailable.value = true;
-    }
+    if (catalog.status === "fulfilled") installationCatalog.value = catalog.value;
+    if (configuration.status === "fulfilled") configurationSnapshot.value = configuration.value;
+    configurationUnavailable.value = configuration.status === "rejected";
+    workspaceFactsUnavailable.value =
+        catalog.status === "rejected" || configuration.status === "rejected";
 }
 
 async function refreshVerificationSummary(instanceId?: string) {
@@ -449,6 +446,7 @@ function reconnect() {
     installationCatalog.value = undefined;
     configurationSnapshot.value = undefined;
     workspaceFactsUnavailable.value = false;
+    configurationUnavailable.value = false;
     pendingVerificationCount.value = undefined;
     notificationSnapshot.value = undefined;
     code.value = "";
@@ -594,7 +592,7 @@ onUnmounted(() => {
             :configuration="configurationSnapshot"
             :status="state"
             :catalog="installationCatalog"
-            :configuration-unavailable="workspaceFactsUnavailable"
+            :configuration-unavailable="configurationUnavailable"
             @configure="(platform, accountId) => openConfiguration('accounts', platform, accountId)"
             @show-protocols="openAccountProtocols"
             @remove="
@@ -619,7 +617,7 @@ onUnmounted(() => {
             :configuration="configurationSnapshot"
             :status="state"
             :catalog="installationCatalog"
-            :configuration-unavailable="workspaceFactsUnavailable"
+            :configuration-unavailable="configurationUnavailable"
             :focused-account="protocolAccountFilter"
             @configure="
                 (platform, accountId, protocolKey) =>
