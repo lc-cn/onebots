@@ -1,5 +1,17 @@
 # @onebots/meta
 
+## 0.1.6
+
+### Patch Changes
+
+- abe58b0: 修复 Windows 原生 Shell 下的构建清理命令，补齐文档站安装脚本产物，并明确 Windows 前台管理端的配对方式。
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+  - @onebots/core@1.2.11
+
 ## 0.1.5
 
 ### Patch Changes
