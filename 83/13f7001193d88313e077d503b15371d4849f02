@@ -1,0 +1,41 @@
+protocols/onebot-v11/protocol/src/transport.ts
+  s_a953d60826be1b::t_b1eaf7ebfe033f 19,201,231
+.changeset/onebot-qq-reply-identity.md
+  s_a953d60826be1b::t_190525e2d7a928 1-7
+adapters/adapter-qq/src/messages.spec.ts
+  s_a953d60826be1b::t_ee6f83c9374298 53
+  s_a953d60826be1b::t_c0bdf12d0d98b7 62-70
+  s_a953d60826be1b::t_db338bfb7d040d 57
+  s_a953d60826be1b::t_c915bc42a050be 52,54-56,58-61
+adapters/adapter-qq/src/messages.ts
+  s_a953d60826be1b::t_09a582f6d8efc2 74-76,78-79,91
+  s_a953d60826be1b::t_4293241fccff1f 80-90
+__tests__/unit/docker-build-context.spec.ts
+  s_a953d60826be1b::t_db338bfb7d040d 23
+  s_a953d60826be1b::t_9e5496618563f7 62-72
+protocols/onebot-v11/protocol/src/__tests__/transport.test.ts
+  s_a953d60826be1b::t_db338bfb7d040d 13-21,24-25
+  s_a953d60826be1b::t_8c50f1e0a8357d 29,72,136
+  s_a953d60826be1b::t_376fc9fbd4d36d 2-3,9-12,22-23,26-28,30-58
+Dockerfile
+  s_a953d60826be1b::t_b0fedc411dc6fe 20
+protocols/onebot-v11/protocol/src/index.ts
+  s_a953d60826be1b::t_b1eaf7ebfe033f 140,242,281
+  s_a953d60826be1b::t_8c50f1e0a8357d 156-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8313f7001193d88313e077d503b15371d4849f02",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
