@@ -11,6 +11,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { installedManagerVersion } from "./manager-upgrade-acceptance-helpers.mjs";
+import { managerCandidateStates } from "./service-acceptance-diagnostics.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SERVICE = "onebots-gateway.service";
@@ -142,7 +143,11 @@ execute("tar", [
     previousStaging,
     "package",
 ]);
-for (const entry of [manifest.core, ...(manifest.web ? [manifest.web] : []), ...manifest.extensions])
+for (const entry of [
+    manifest.core,
+    ...(manifest.web ? [manifest.web] : []),
+    ...manifest.extensions,
+])
     fs.copyFileSync(path.join(artifacts, entry.file), path.join(previousArtifacts, entry.file));
 const previousManifest = {
     ...manifest,
@@ -280,7 +285,11 @@ function migrationJournalStates() {
                 const value = JSON.parse(fs.readFileSync(path.join(directory, name), "utf8"));
                 const safe = field =>
                     typeof field === "string" && /^[a-z-]{1,64}$/u.test(field) ? field : "invalid";
-                return { phase: safe(value.phase), status: safe(value.status) };
+                return {
+                    phase: safe(value.phase),
+                    status: safe(value.status),
+                    rollbackOrigin: value.rollbackOrigin ? safe(value.rollbackOrigin) : null,
+                };
             } catch {
                 return { phase: "unreadable", status: "unreadable" };
             }
@@ -401,11 +410,33 @@ async function linuxNodeCaptureState() {
 // 仅输出固定错误码与代码文件名，不暴露服务配置、环境、绝对路径或凭据。
 function migrationServiceErrors() {
     try {
-        const output = execute("journalctl", ["-u", SERVICE, "-n", "160", "--no-pager", "-o", "cat"], { statuses: [0] }).stdout;
+        const output = execute(
+            "journalctl",
+            ["-u", SERVICE, "-n", "160", "--no-pager", "-o", "cat"],
+            { statuses: [0] },
+        ).stdout;
         return {
-            codes: [...new Set(output.match(/\b(?:ERR_[A-Z_]+|EACCES|EPERM|ENOENT|EADDRINUSE|SQLITE_[A-Z_]+)\b/gu) ?? [])],
-            locations: [...new Set([...output.matchAll(/\/([a-z][a-z0-9-]*\.[cm]?js):([0-9]+)(?::[0-9]+)?/gu)].map(match => `${match[1]}:${match[2]}`))].slice(-20),
-            errorTypes: [...new Set(output.match(/\b(?:TypeError|SyntaxError|ReferenceError|RangeError|SystemError)\b/gu) ?? [])],
+            codes: [
+                ...new Set(
+                    output.match(
+                        /\b(?:ERR_[A-Z_]+|EACCES|EPERM|ENOENT|EADDRINUSE|SQLITE_[A-Z_]+)\b/gu,
+                    ) ?? [],
+                ),
+            ],
+            locations: [
+                ...new Set(
+                    [...output.matchAll(/\/([a-z][a-z0-9-]*\.[cm]?js):([0-9]+)(?::[0-9]+)?/gu)].map(
+                        match => `${match[1]}:${match[2]}`,
+                    ),
+                ),
+            ].slice(-20),
+            errorTypes: [
+                ...new Set(
+                    output.match(
+                        /\b(?:TypeError|SyntaxError|ReferenceError|RangeError|SystemError)\b/gu,
+                    ) ?? [],
+                ),
+            ],
         };
     } catch {
         return { unavailable: true };
@@ -418,7 +449,7 @@ async function invokeMigration(args) {
     const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
     const id = /操作 ([0-9a-f-]{36})：/iu.exec(text)?.[1];
     throw new Error(
-        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；捕获阶段=${JSON.stringify(id ? migrationCaptureState(id) : { operation: false })}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}；服务错误=${JSON.stringify(migrationServiceErrors())}`,
+        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；管理候选阶段=${JSON.stringify(managerCandidateStates(STATE_DIRECTORY))}；捕获阶段=${JSON.stringify(id ? migrationCaptureState(id) : { operation: false })}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}；服务错误=${JSON.stringify(migrationServiceErrors())}`,
     );
 }
 

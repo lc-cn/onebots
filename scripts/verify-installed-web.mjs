@@ -104,12 +104,15 @@ class DevToolsSession {
             const pending = this.pending.get(message.id);
             if (!pending) return;
             this.pending.delete(message.id);
+            clearTimeout(pending.timer);
             if (message.error) pending.reject(new Error(message.error.message));
             else pending.resolve(message.result);
         });
         this.socket.addEventListener("close", () => {
-            for (const pending of this.pending.values())
+            for (const pending of this.pending.values()) {
+                clearTimeout(pending.timer);
                 pending.reject(new Error("浏览器调试连接已关闭"));
+            }
             this.pending.clear();
         });
     }
@@ -117,7 +120,13 @@ class DevToolsSession {
     async send(method, params = {}) {
         await this.ready;
         const id = this.nextId++;
-        const result = new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+        const result = new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this.pending.delete(id);
+                reject(new Error(`浏览器调试命令 ${method} 超时`));
+            }, 30_000);
+            this.pending.set(id, { resolve, reject, timer });
+        });
         this.socket.send(JSON.stringify({ id, method, params }));
         return result;
     }
@@ -388,23 +397,12 @@ try {
             `${label}工作区显示`,
         );
     };
-    const openConfigurationStep = label =>
-        devtools.evaluate(`(() => {
-            const expected = ${JSON.stringify(label)};
-            const tabs = document.querySelector('[role="tablist"][aria-label="账号与协议配置步骤"]');
-            const tab = [...(tabs?.querySelectorAll('[role="tab"]') ?? [])].find(value =>
-                value.querySelector("strong")?.textContent?.trim() === expected,
-            );
-            if (!(tab instanceof HTMLButtonElement) || tab.disabled)
-                throw new Error(expected + "配置步骤不可用");
-            tab.click();
-            return true;
-        })()`);
     const setSelect = (label, value) =>
         devtools.evaluate(`(() => {
-            const select = document.querySelector(
-                "select[aria-label=" + JSON.stringify(${JSON.stringify(label)}) + "]",
-            );
+            const label = ${JSON.stringify(label)};
+            const select = label === "配置作用域"
+                ? document.querySelector("#configuration-protocol-target")
+                : document.querySelector("select[aria-label=" + JSON.stringify(label) + "]");
             if (!(select instanceof HTMLSelectElement)) throw new Error("找不到选择框");
             select.value = ${JSON.stringify(value)};
             select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -421,24 +419,37 @@ try {
             return input.value;
         })()`);
 
-    await openWorkspace("安装与扩展", "extensions-title");
+    await openWorkspace("扩展", "installation-heading");
     await waitFor(
         () =>
-            devtools.evaluate(`Boolean(
-                document.querySelector('input[type="checkbox"][value="mock"]') &&
-                document.querySelector('input[type="checkbox"][value="onebot-v11"]')
-            )`),
-        "Web 扩展目录加载",
+            devtools.evaluate(
+                `Boolean(document.querySelector('input[type="checkbox"][value="mock"]'))`,
+            ),
+        "Web 平台目录加载",
     );
     await devtools.evaluate(`(() => {
-        for (const name of ["mock", "onebot-v11"]) {
-            const input = document.querySelector('input[type="checkbox"][value="' + name + '"]');
-            if (!(input instanceof HTMLInputElement)) throw new Error("找不到扩展 " + name);
-            if (!input.checked) input.click();
-        }
+        const input = document.querySelector('input[type="checkbox"][value="mock"]');
+        if (!(input instanceof HTMLInputElement)) throw new Error("找不到平台 mock");
+        if (!input.checked) input.click();
+        const category = [...document.querySelectorAll('[aria-label="扩展分类"] button')]
+            .find(value => value.textContent?.trim() === "协议");
+        if (!(category instanceof HTMLButtonElement)) throw new Error("找不到协议分类");
+        category.click();
         return true;
     })()`);
-    await clickButton("查看安装计划");
+    await waitFor(
+        () =>
+            devtools.evaluate(
+                `Boolean(document.querySelector('input[type="checkbox"][value="onebot-v11"]'))`,
+            ),
+        "Web 协议目录加载",
+    );
+    await devtools.evaluate(`(() => {
+        const input = document.querySelector('input[type="checkbox"][value="onebot-v11"]');
+        if (!(input instanceof HTMLInputElement)) throw new Error("找不到协议 onebot-v11");
+        if (!input.checked) input.click();
+    })()`);
+    await clickButton("确认选择");
     await waitFor(
         () =>
             devtools.evaluate(`Boolean([...document.querySelectorAll("button")].find(value =>
@@ -475,8 +486,8 @@ try {
     assert.equal(installed.manager.id, before.manager.id);
     assert.equal(installed.gateway.desired, "running");
 
-    await openWorkspace("账号与协议", "configuration-title");
-    await clickButton("重新读取");
+    await openWorkspace("账号", "accounts-title");
+    await clickButton("添加");
     await waitFor(
         () =>
             devtools.evaluate(`Boolean([...document.querySelectorAll("button")].find(value =>
@@ -500,29 +511,32 @@ try {
         async () => /mock\.installed-web/.test(await devtools.evaluate("document.body.innerText")),
         "Web 添加 Mock 账号",
     );
-    await openConfigurationStep("协议出口");
-    assert.equal(await setSelect("协议配置位置", "mock.installed-web"), "mock.installed-web");
-    assert.equal(await setSelect("输出协议", "onebot.v11"), "onebot.v11");
-    await clickButton("添加到此作用域");
+    await openWorkspace("协议", "protocols-title");
+    await clickButton("添加");
     await waitFor(
-        async () =>
-            /mock\.installed-web \/ onebot\.v11/.test(
-                await devtools.evaluate("document.body.innerText"),
-            ),
+        () =>
+            devtools.evaluate(`Boolean(document.querySelector('#configuration-protocol-target'))`),
+        "Web 协议配置草稿恢复",
+    );
+    assert.equal(await setSelect("配置作用域", "mock.installed-web"), "mock.installed-web");
+    assert.equal(await setSelect("输出协议", "onebot.v11"), "onebot.v11");
+    await clickButton("为账号添加出口");
+    await waitFor(
+        async () => /协议已加入草稿/.test(await devtools.evaluate("document.body.innerText")),
         "Web 添加 OneBot v11 配置",
     );
-    await clickButton("校验配置");
+    await clickButton("检测");
     await waitFor(
-        async () => /校验通过，可以应用/.test(await devtools.evaluate("document.body.innerText")),
+        async () => /检测通过/.test(await devtools.evaluate("document.body.innerText")),
         "Web 配置校验",
     );
-    await clickButton("应用配置");
+    await clickButton("保存");
     await waitFor(
         async () => /应用成功/.test(await devtools.evaluate("document.body.innerText")),
         "Web 配置应用",
         60_000,
     );
-    await openWorkspace("运行概览", "overview-title");
+    await openWorkspace("概览", "overview-title");
     await waitFor(gatewayIsRunning, "Web 配置应用后的网关状态", 60_000);
 
     const protocolResult = await devtools.evaluate(`(async () => {

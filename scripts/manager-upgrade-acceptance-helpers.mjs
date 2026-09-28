@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { managerCandidateStates } from "./service-acceptance-diagnostics.mjs";
 
 export function preparePreviousPatchArtifacts({ temporary, artifacts, manifest, execute }) {
     const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(manifest.host.version);
@@ -19,7 +20,11 @@ export function preparePreviousPatchArtifacts({ temporary, artifacts, manifest, 
     fs.writeFileSync(packageFile, `${JSON.stringify(packageJson, null, 2)}\n`, { mode: 0o600 });
     const hostFile = `onebots-${previousVersion}.tgz`;
     execute("tar", ["-czf", path.join(directory, hostFile), "-C", staging, "package"]);
-    for (const entry of [manifest.core, ...(manifest.web ? [manifest.web] : []), ...manifest.extensions])
+    for (const entry of [
+        manifest.core,
+        ...(manifest.web ? [manifest.web] : []),
+        ...manifest.extensions,
+    ])
         fs.copyFileSync(path.join(artifacts, entry.file), path.join(directory, entry.file));
     const previousManifest = {
         ...manifest,
@@ -179,7 +184,14 @@ export async function verifyManagerPatchUpgrade(options) {
         runtime,
     );
     setEffectUnknown(true);
-    const obstacle = await obstructControlSocketWhenReleased(dataDirectory, failed.closed);
+    let obstacle;
+    try {
+        obstacle = await obstructControlSocketWhenReleased(dataDirectory, failed.closed);
+    } catch (error) {
+        throw new Error(
+            `${error.message}；管理候选阶段=${JSON.stringify(managerCandidateStates(stateDirectory))}`,
+        );
+    }
     const failedResult = await failed.closed;
     setEffectUnknown(false);
     assert.equal(failedResult.status, 1, "控制 socket 障碍必须让候选启动失败");
