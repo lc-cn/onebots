@@ -1,0 +1,29 @@
+scripts/verify-system-service-lifecycle.mjs
+  s_a953d60826be1b::t_ef6c736bc2123f 291
+  s_a953d60826be1b::t_c8c05eadaf06d6 14,146-150,288-290,292,413-417,419-439,452
+scripts/manager-upgrade-acceptance-helpers.mjs
+  s_a953d60826be1b::t_c8c05eadaf06d6 6,23-27,187-194
+scripts/verify-installed-web.mjs
+  s_a953d60826be1b::t_076a1dff6acd4c 422,428,431-437,440-441,445-452,489-490,514-521,523,528,530,533,539
+  s_a953d60826be1b::t_fb2d28b32053f0 107,112-113,115,123-129,425-427,442-444,525
+  s_a953d60826be1b::t_b812ebb3d8cdda 402-405
+scripts/service-acceptance-diagnostics.mjs
+  s_a953d60826be1b::t_c8c05eadaf06d6 1-35
+  s_a953d60826be1b::t_e3c25fe155f6aa 36-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f57e2b2b22757fbd8edd14d04b4b6f706ad04919",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
