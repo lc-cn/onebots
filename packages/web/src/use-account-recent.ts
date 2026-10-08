@@ -1,4 +1,5 @@
 import { ref, type Ref } from "vue";
+import { accountControlErrorMessage } from "./account-control-error.js";
 import type { ControlClient } from "@onebots/core/control";
 import {
     accountControlItemKey,
@@ -24,6 +25,7 @@ export function useAccountRecent(deps: RecentDependencies) {
     const olderError = ref("");
     let loadedAt = 0;
     let listRevision = 0;
+    let olderPagesLoaded = false;
 
     function reset() {
         listRevision++;
@@ -32,6 +34,7 @@ export function useAccountRecent(deps: RecentDependencies) {
         olderLoading.value = false;
         olderError.value = "";
         loadedAt = 0;
+        olderPagesLoaded = false;
     }
 
     /** 历史修订号变化时旧目录及其在途分页都不再可信。 */
@@ -60,18 +63,34 @@ export function useAccountRecent(deps: RecentDependencies) {
                 currentListRevision !== listRevision
             )
                 return;
-            recent.value.items = result.conversations.map(recentAccountControlItem);
+            const fresh = result.conversations.map(recentAccountControlItem);
+            if (olderPagesLoaded && result.hasMore) {
+                // 保留已翻阅的旧页，同时让新近活跃的会话进入列表顶部。
+                const byKey = new Map(
+                    recent.value.items.map(item => [accountControlItemKey(item), item]),
+                );
+                for (const item of fresh) byKey.set(accountControlItemKey(item), item);
+                recent.value.items = [...byKey.values()].sort(
+                    (left, right) => (right.latestId ?? 0) - (left.latestId ?? 0),
+                );
+            } else {
+                recent.value.items = fresh;
+                olderPagesLoaded = false;
+            }
             recent.value.loaded = true;
-            hasMore.value = result.hasMore;
+            if (!olderPagesLoaded) hasMore.value = result.hasMore;
             olderError.value = "";
             loadedAt = Date.now();
-        } catch {
+        } catch (error) {
             if (
                 !deps.disposed() &&
                 revision === deps.revision() &&
                 currentListRevision === listRevision
             )
-                recent.value.error = "最近会话读取失败，请重试。";
+                recent.value.error = accountControlErrorMessage(
+                    error,
+                    "最近会话读取失败，请重试。",
+                );
         } finally {
             if (revision === deps.revision() && currentListRevision === listRevision)
                 recent.value.loading = false;
@@ -105,14 +124,15 @@ export function useAccountRecent(deps: RecentDependencies) {
                     .map(recentAccountControlItem)
                     .filter(item => !seen.has(accountControlItemKey(item))),
             );
+            olderPagesLoaded = true;
             hasMore.value = result.hasMore;
-        } catch {
+        } catch (error) {
             if (
                 !deps.disposed() &&
                 revision === deps.revision() &&
                 currentListRevision === listRevision
             )
-                olderError.value = "更早会话读取失败，请重试。";
+                olderError.value = accountControlErrorMessage(error, "更早会话读取失败，请重试。");
         } finally {
             if (revision === deps.revision() && currentListRevision === listRevision)
                 olderLoading.value = false;
@@ -120,12 +140,7 @@ export function useAccountRecent(deps: RecentDependencies) {
     }
 
     function shouldRefresh(): boolean {
-        return (
-            deps.online.value &&
-            !recent.value.error &&
-            recent.value.items.length <= 50 &&
-            Date.now() - loadedAt >= 15_000
-        );
+        return deps.online.value && !recent.value.error && Date.now() - loadedAt >= 15_000;
     }
 
     return {

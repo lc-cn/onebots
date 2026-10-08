@@ -4,6 +4,8 @@ import type {
     ControlSendContext,
     ControlSendOperation,
 } from "@onebots/core/control";
+import { isControlSendRequest } from "@onebots/core/control";
+import { createControlOperationId } from "./control-operation-id.js";
 import type { AccountControlConversationItem } from "./account-control-list.js";
 import {
     browserAccountSendStorage,
@@ -28,6 +30,7 @@ interface PendingSend {
     status?: ControlSendOperation["status"];
     target?: { key: string; text: string; label: string };
     busy: boolean;
+    activity?: "sending" | "querying";
     error: string;
 }
 
@@ -60,6 +63,7 @@ export function useAccountSend(deps: AccountSendDependencies) {
     );
     const pending = computed(() => pendingByConversation.get(currentKey.value));
     const sendBusy = computed(() => pending.value?.busy ?? false);
+    const queryBusy = computed(() => sendBusy.value && pending.value?.activity === "querying");
     const sendError = computed(() => pending.value?.error ?? "");
     const pendingSendId = computed(() => pending.value?.id ?? "");
     const pendingStatus = computed(() => pending.value?.status);
@@ -118,7 +122,7 @@ export function useAccountSend(deps: AccountSendDependencies) {
     async function sendMessage() {
         const item = deps.selected.value;
         const draftText = text.value;
-        const message = draftText.trim();
+        const message = draftText;
         const key = currentKey.value;
         const account = deps.account();
         if (
@@ -126,7 +130,7 @@ export function useAccountSend(deps: AccountSendDependencies) {
             !key ||
             !deps.canChat.value ||
             !deps.online.value ||
-            !message ||
+            !message.trim() ||
             pendingByConversation.get(key)?.busy ||
             pendingByConversation.get(key)?.id
         )
@@ -139,7 +143,7 @@ export function useAccountSend(deps: AccountSendDependencies) {
                   : item.kind === "group"
                     ? "group"
                     : "channel";
-        update(key, { busy: true, error: "", status: undefined });
+        update(key, { busy: true, activity: "sending", error: "", status: undefined });
         const expected = await deps.ensureContext();
         if (
             !expected ||
@@ -161,26 +165,41 @@ export function useAccountSend(deps: AccountSendDependencies) {
             });
             return;
         }
-        const id = crypto.randomUUID();
+        let id: string;
+        try {
+            id = createControlOperationId();
+        } catch {
+            // 编号生成失败发生在提交之前，不能留下未知操作或锁住发送入口。
+            update(key, {
+                busy: false,
+                error: "当前浏览器无法生成安全操作编号，请更换浏览器后重试。",
+            });
+            return;
+        }
+        const request = {
+            id,
+            expected,
+            account,
+            targetType,
+            targetId: item.id,
+            ...(item.kind === "channel" && item.parentId ? { guildId: item.parentId } : {}),
+            message,
+        };
+        // 与管理服务使用同一字节及报文预算，未提交的校验失败不能成为“未知操作”。
+        if (!isControlSendRequest(request)) {
+            update(key, {
+                busy: false,
+                error: "消息或目标不符合发送要求（正文最多 32 KiB），请检查后重试。",
+            });
+            return;
+        }
         update(key, {
             id,
             status: "running",
             target: { key, text: draftText, label: item.name },
         });
         try {
-            acceptSendResult(
-                key,
-                id,
-                await deps.client.sendMessage({
-                    id,
-                    expected,
-                    account,
-                    targetType,
-                    targetId: item.id,
-                    ...(item.kind === "channel" && item.parentId ? { guildId: item.parentId } : {}),
-                    message,
-                }),
-            );
+            acceptSendResult(key, id, await deps.client.sendMessage(request));
         } catch {
             if (pendingByConversation.get(key)?.id === id)
                 update(key, {
@@ -195,6 +214,8 @@ export function useAccountSend(deps: AccountSendDependencies) {
     function acceptSendResult(key: string, id: string, operation: ControlSendOperation) {
         const state = pendingByConversation.get(key);
         if (state?.id !== id) return;
+        // 只允许原操作回执解除阻塞；错编号的成功不能证明这条消息已发送。
+        if (operation.id !== id) throw new Error("发送回执编号不匹配");
         if (operation.status === "succeeded") {
             const target = state.target;
             const isCurrent = currentKey.value === key;
@@ -215,6 +236,10 @@ export function useAccountSend(deps: AccountSendDependencies) {
                 status: "unknown",
                 error: "发送结果未知。请查询操作，不要重复发送。",
             });
+        } else if (operation.status === "running") {
+            // 查询确认仍在执行时不能保留“未知”状态，否则会错误开放放弃入口。
+            update(key, { status: "running", error: "发送操作仍在执行中，请稍后查询结果。" });
+            if (currentKey.value === key) confirmAbandon.value = false;
         }
     }
 
@@ -222,7 +247,8 @@ export function useAccountSend(deps: AccountSendDependencies) {
         const key = currentKey.value;
         const id = pendingByConversation.get(key)?.id;
         if (!id || pendingByConversation.get(key)?.busy) return;
-        update(key, { busy: true });
+        confirmAbandon.value = false;
+        update(key, { busy: true, activity: "querying" });
         try {
             acceptSendResult(key, id, await deps.client.sendOperation(id));
         } catch {
@@ -234,6 +260,7 @@ export function useAccountSend(deps: AccountSendDependencies) {
     }
 
     function requestAbandon() {
+        if (!pendingSendId.value || pendingStatus.value !== "unknown" || sendBusy.value) return;
         confirmAbandon.value = true;
     }
 
@@ -242,7 +269,7 @@ export function useAccountSend(deps: AccountSendDependencies) {
     }
 
     function abandonTracking() {
-        if (!confirmAbandon.value || pendingStatus.value !== "unknown") return;
+        if (!confirmAbandon.value || pendingStatus.value !== "unknown" || sendBusy.value) return;
         clear(currentKey.value);
         confirmAbandon.value = false;
     }
@@ -250,6 +277,7 @@ export function useAccountSend(deps: AccountSendDependencies) {
     return {
         text,
         sendBusy,
+        queryBusy,
         sendError,
         pendingSendId,
         pendingStatus,

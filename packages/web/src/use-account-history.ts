@@ -1,4 +1,5 @@
 import { ref, type Ref } from "vue";
+import { accountControlErrorMessage } from "./account-control-error.js";
 import type { ControlChatMessage, ControlClient } from "@onebots/core/control";
 import {
     accountControlSceneType,
@@ -20,7 +21,7 @@ interface HistoryDependencies {
 export function useAccountHistory(deps: HistoryDependencies) {
     const messages = ref<ControlChatMessage[]>([]);
     const loading = ref(false);
-    const error = ref("");
+    const failure = ref("");
     const retryOlder = ref(false);
     const hasMore = ref(true);
     let requestRevision = 0;
@@ -31,7 +32,7 @@ export function useAccountHistory(deps: HistoryDependencies) {
         loading.value = false;
         messages.value = [];
         hasMore.value = true;
-        error.value = "";
+        failure.value = "";
         retryOlder.value = false;
         historyRevision = undefined;
     }
@@ -53,7 +54,7 @@ export function useAccountHistory(deps: HistoryDependencies) {
             });
             if (deps.disposed() || revision !== deps.revision() || request !== requestRevision)
                 return;
-            error.value = "";
+            failure.value = "";
             retryOlder.value = false;
             const revisionChanged =
                 historyRevision !== undefined && historyRevision !== result.revision;
@@ -87,9 +88,9 @@ export function useAccountHistory(deps: HistoryDependencies) {
             messages.value = [
                 ...new Map(joined.map(message => [message.id, message])).values(),
             ].sort((left, right) => left.id - right.id);
-        } catch {
+        } catch (error) {
             if (!deps.disposed() && revision === deps.revision() && request === requestRevision) {
-                error.value = "聊天记录读取失败，请重试。";
+                failure.value = accountControlErrorMessage(error, "聊天记录读取失败，请重试。");
                 retryOlder.value = older;
             }
         } finally {
@@ -104,5 +105,5 @@ export function useAccountHistory(deps: HistoryDependencies) {
         }
     }
 
-    return { messages, loading, error, retryOlder, hasMore, load, reset };
+    return { messages, loading, error: failure, retryOlder, hasMore, load, reset };
 }

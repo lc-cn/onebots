@@ -94,8 +94,10 @@ watch(
                     ><small>{{ member.role ?? member.id }}</small>
                 </li>
             </ul>
-            <p v-if="membersTruncated && !memberError" class="account-control-hint">
-                成员较多，目前只展示前 500 位。
+            <p
+                v-if="membersTruncated && !memberError && !memberLoading"
+                class="account-control-hint">
+                成员列表未全部读取，目前展示 {{ members.length }} 位。
             </p>
         </section>
     </aside>

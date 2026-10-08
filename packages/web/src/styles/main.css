@@ -9,10 +9,12 @@
 @import "./responsive.css";
 @import "./notifications.css";
 @import "./accounts.css";
+@import "./entity-pages.css";
 @import "./account-control.css";
 @import "./account-control-chat.css";
 @import "./account-control-detail.css";
 @import "./account-control-responsive.css";
+@import "./account-control-actions.css";
 @import "./chat-history-settings.css";
 @import "./product-flow.css";
 

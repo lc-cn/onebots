@@ -1,4 +1,5 @@
 import { isControlVerificationCommand, controlVerificationOutcome } from "@onebots/core/control";
+import { createControlOperationId } from "../control-operation-id.js";
 import type {
     ControlClient,
     ControlVerificationAbandonment,
@@ -12,6 +13,7 @@ export interface VerificationView {
     ids: string[];
     receipts: Record<string, ControlVerificationOperation>;
     abandonments: Record<string, ControlVerificationAbandonment>;
+    queryFailures: Record<string, boolean>;
     busy: boolean;
     ready: boolean;
     error: string;
@@ -21,6 +23,7 @@ export const verificationView = (): VerificationView => ({
     ids: [],
     receipts: {},
     abandonments: {},
+    queryFailures: {},
     busy: false,
     ready: false,
     error: "",
@@ -51,13 +54,6 @@ export function safeVerificationImage(value: string): string | undefined {
         /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)
         ? value
         : undefined;
-}
-function verificationOperationId(): string {
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 export class VerificationController {
     private revision = 0;
@@ -106,6 +102,7 @@ export class VerificationController {
                 throw new Error("invalid");
             this.view.ids = ids;
             this.view.ready = true;
+            await this.resolveUnconfirmed(this.revision);
         } catch {
             if (!this.closed)
                 this.view.error =
@@ -137,6 +134,9 @@ export class VerificationController {
         this.view.answers = {};
         this.view.snapshot = undefined;
         try {
+            // 旧操作只读查询后再呈现新挑战，避免让用户手动点击历史回执才能继续。
+            await this.resolveUnconfirmed(revision);
+            if (this.closed || revision !== this.revision) return;
             const snapshot = await this.client.verification.pending();
             if (this.closed || revision !== this.revision) return;
             if (snapshot.gatewayInstanceId !== this.gateway) throw new Error("changed");
@@ -206,7 +206,7 @@ export class VerificationController {
                   ? { ...this.view.answers[challengeId] }
                   : undefined;
             const command = {
-                operationId: verificationOperationId(),
+                operationId: createControlOperationId(),
                 challengeId,
                 expected: {
                     gatewayInstanceId: snapshot.gatewayInstanceId,
@@ -248,25 +248,48 @@ export class VerificationController {
         this.view.busy = true;
         const revision = this.revision;
         try {
-            const receipt = await this.client.verification.operation(id);
-            if (!this.closed && revision === this.revision) {
-                this.view.receipts[id] = receipt;
-                this.view.error = "";
-            }
-        } catch {
-            if (this.closed || revision !== this.revision) return;
-            try {
-                const abandonment = await this.client.verification.abandonment(id);
-                if (!this.closed && revision === this.revision && !this.view.receipts[id]) {
-                    this.view.abandonments[id] = abandonment;
-                    this.view.error = "";
-                }
-            } catch {
-                if (!this.closed && revision === this.revision)
-                    this.view.error = "回执仍未确认，请保留原操作编号。查询失败不代表操作未执行。";
-            }
+            await this.loadReceipt(id, revision);
+            if (this.view.queryFailures[id])
+                this.view.error = "回执仍未确认，请保留原操作编号。查询失败不代表操作未执行。";
+            else this.view.error = "";
         } finally {
             this.view.busy = false;
+        }
+    }
+    private async resolveUnconfirmed(revision: number): Promise<void> {
+        const unresolved = this.view.ids.filter(id => {
+            if (this.view.abandonments[id]) return false;
+            const receipt = this.view.receipts[id];
+            return !receipt || ["running", "unknown"].includes(controlVerificationOutcome(receipt));
+        });
+        for (let index = 0; index < unresolved.length; index += 4) {
+            await Promise.all(
+                unresolved.slice(index, index + 4).map(id => this.loadReceipt(id, revision)),
+            );
+            if (this.closed || revision !== this.revision) return;
+        }
+    }
+    private async loadReceipt(id: string, revision: number): Promise<void> {
+        try {
+            const receipt = await this.client.verification.operation(id);
+            if (!receipt || receipt.id !== id) throw new Error("回执编号不匹配");
+            if (!this.closed && revision === this.revision) {
+                this.view.receipts[id] = receipt;
+                delete this.view.queryFailures[id];
+            }
+            return;
+        } catch {
+            if (this.closed || revision !== this.revision) return;
+        }
+        try {
+            const abandonment = await this.client.verification.abandonment(id);
+            if (!abandonment || abandonment.id !== id) throw new Error("封存编号不匹配");
+            if (!this.closed && revision === this.revision && !this.view.receipts[id]) {
+                this.view.abandonments[id] = abandonment;
+                delete this.view.queryFailures[id];
+            }
+        } catch {
+            if (!this.closed && revision === this.revision) this.view.queryFailures[id] = true;
         }
     }
     async reconcile(id: string): Promise<void> {

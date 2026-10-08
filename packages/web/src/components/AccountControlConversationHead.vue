@@ -91,7 +91,7 @@ function retryHistory() {
 }
 
 onMounted(() => {
-    mobileQuery = matchMedia("(max-width: 700px)");
+    mobileQuery = matchMedia("(max-width: 1100px)");
     mobileQuery.addEventListener("change", onMobileChange);
 });
 onBeforeUnmount(() => {

@@ -12,7 +12,7 @@ import {
     IconSun,
 } from "@tabler/icons-vue";
 import {
-    workspaceHash,
+    workspacePath,
     workspaceNavigation,
     systemNavigation,
     type Workspace,
@@ -91,7 +91,7 @@ function navigate(event: MouseEvent, workspace: Workspace) {
                 <a
                     v-for="item in workspaceNavigation"
                     :key="item.id"
-                    :href="workspaceHash(item.id)"
+                    :href="workspacePath(item.id)"
                     :class="{ active: active === item.id }"
                     :aria-current="active === item.id ? 'page' : undefined"
                     @click="navigate($event, item.id)">
@@ -109,7 +109,7 @@ function navigate(event: MouseEvent, workspace: Workspace) {
             </nav>
             <nav class="secondary-nav" aria-label="系统设置">
                 <a
-                    :href="workspaceHash(systemNavigation.id)"
+                    :href="workspacePath(systemNavigation.id)"
                     :class="{ active: active === systemNavigation.id || active === 'terminal' }"
                     :aria-current="
                         active === systemNavigation.id || active === 'terminal' ? 'page' : undefined
@@ -203,7 +203,7 @@ function navigate(event: MouseEvent, workspace: Workspace) {
                 <span class="mobile-current-workspace">{{ activeItem?.label }}</span>
                 <div class="mobile-header-actions flex gap-1">
                     <a
-                        :href="workspaceHash('system')"
+                        :href="workspacePath('system')"
                         class="icon-button"
                         aria-label="系统设置"
                         @click="navigate($event, 'system')"
@@ -242,7 +242,7 @@ function navigate(event: MouseEvent, workspace: Workspace) {
                 <a
                     v-for="item in workspaceNavigation"
                     :key="item.id"
-                    :href="workspaceHash(item.id)"
+                    :href="workspacePath(item.id)"
                     :class="{ active: active === item.id }"
                     :aria-current="active === item.id ? 'page' : undefined"
                     @click="navigate($event, item.id)">
@@ -268,7 +268,7 @@ function navigate(event: MouseEvent, workspace: Workspace) {
                         <a
                             v-for="item in workspaceNavigation"
                             :key="item.id"
-                            :href="workspaceHash(item.id)"
+                            :href="workspacePath(item.id)"
                             :class="{ active: active === item.id }"
                             :aria-current="active === item.id ? 'page' : undefined"
                             @click="navigate($event, item.id)">
@@ -285,7 +285,7 @@ function navigate(event: MouseEvent, workspace: Workspace) {
                             >
                         </a>
                         <a
-                            :href="workspaceHash(systemNavigation.id)"
+                            :href="workspacePath(systemNavigation.id)"
                             :class="{ active: active === 'system' || active === 'terminal' }"
                             :aria-current="
                                 active === 'system' || active === 'terminal' ? 'page' : undefined

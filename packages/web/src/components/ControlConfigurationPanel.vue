@@ -26,7 +26,7 @@ const emit = defineEmits<{
     dirtyChange: [dirty: boolean];
     selectExtensions: [];
     selectAccounts: [];
-    navigateScope: [scope: ConfigurationScope];
+    navigateScope: [scope: ConfigurationScope, path: string[]];
     close: [];
 }>();
 const {
@@ -138,8 +138,7 @@ async function checkConfiguration() {
     const result = await validate();
     if (!result?.valid && result?.issues[0]) {
         const issueScope = configurationWorkspaceForPath(result.issues[0].path, protocols.value);
-        if (issueScope !== "review" && issueScope !== props.scope)
-            emit("navigateScope", issueScope);
+        if (issueScope !== "review") emit("navigateScope", issueScope, result.issues[0].path);
         await nextTick();
         const key = JSON.stringify(result.issues[0].path);
         const field = Array.from(

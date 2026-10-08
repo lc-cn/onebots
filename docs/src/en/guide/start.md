@@ -35,7 +35,9 @@ node packages/onebots/lib/bin.js serve --data-dir .\workspace
 
 Open the manager URL and paste the code within five minutes. Do not share it in chats, commit it, or pass it as a CLI argument. An authorized Web browser can generate codes for additional devices in **System → Devices & Access**. If all sessions are lost, restart with a fresh `ONEBOTS_RECOVERY_CODE` instead. The local CLI/TUI control pipe is unavailable in Windows foreground mode; use the installer below for a production SCM service. Do not reuse an initial code for an already paired workspace.
 
-Select adapters, protocols and frameworks in the Web installation panel. Confirm the complete dependency list; private download authorization is used only for that installation, and required peers are installed and verified together. Activate the verified runtime separately, then configure accounts and protocol connections. Installing packages does not enable connections.
+Select adapters, protocols and frameworks in **Extensions**. Confirm the complete dependency list; private download authorization is used only for that installation, and required peers are installed and verified together. Apply the verified runtime separately. Then add and save an account in **Accounts**, and add and save its outlet in **Protocols**. Complete platform login challenges in **Tasks**. Installing packages does not enable connections.
+
+Management pages use paths under `/console`, such as `/console/accounts` and `/console/protocols`, and support direct access, refresh and bookmarks. Protocol APIs keep their account-specific addresses outside `/console`.
 
 The same workflow is available in an interactive terminal:
 

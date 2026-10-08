@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { onMounted, ref } from "vue";
 import type {
     ControlClient,
     ControlConfigurationSnapshot,
@@ -12,11 +12,12 @@ import AccountControlContext from "../components/AccountControlContext.vue";
 import AccountControlHeader from "../components/AccountControlHeader.vue";
 import AccountControlListToolbar from "../components/AccountControlListToolbar.vue";
 import AccountControlManualEntry from "../components/AccountControlManualEntry.vue";
-import { useAccountChatViewport } from "../use-account-chat-viewport.js";
+import AccountControlHistory from "../components/AccountControlHistory.vue";
+import AccountControlMessageInput from "../components/AccountControlMessageInput.vue";
 import { accountControlItemKey } from "../account-control-list.js";
-import { formatAccountMessageTime } from "../account-control-time.js";
 import { useAccountControl } from "../use-account-control.js";
 import { useAccountControlInteractions } from "../use-account-control-interactions.js";
+import { useAccountConversationList } from "../use-account-conversation-list.js";
 import UiButton from "../ui/UiButton.vue";
 
 const props = defineProps<{
@@ -60,6 +61,7 @@ const {
     text,
     manualId,
     sendBusy,
+    queryBusy,
     sendError,
     pendingSendId,
     pendingStatus,
@@ -87,8 +89,7 @@ const {
     cancelAbandon,
     abandonTracking,
 } = useAccountControl(props);
-const { chatViewport, showJumpLatest, loadOlder, onHistoryScroll, jumpLatest } =
-    useAccountChatViewport(messages, selected, loadHistory);
+const historyView = ref<InstanceType<typeof AccountControlHistory>>();
 const {
     conversationHead,
     contactsPanel,
@@ -116,57 +117,28 @@ const {
     querySend,
 });
 const historyEnabled = ref<boolean>();
-const timestamp = new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" });
-const displayMessages = computed(() =>
-    messages.value.map(message => ({
-        ...message,
-        displayTime: formatAccountMessageTime(message.time, timestamp),
-    })),
-);
-const contactsDialog = ref<HTMLDialogElement>();
-const mobileListOpen = ref(false);
-let mobileQuery: MediaQueryList | undefined;
-
-async function openConversationList() {
-    if (!mobileQuery?.matches) {
-        await returnToList();
-        return;
-    }
-    if (mobileListOpen.value) return;
-    mobileListOpen.value = true;
-    await nextTick();
-    if (!mobileListOpen.value || !mobileQuery.matches) return;
-    contactsDialog.value?.showModal();
-    // 打开列表时交接焦点，不自动弹出手机软键盘。
-    contactsPanel.value?.focus();
-}
-
-function closeConversationList() {
-    if (contactsDialog.value?.open) contactsDialog.value.close();
-    mobileListOpen.value = false;
-}
-
-function onConversationListClose() {
-    mobileListOpen.value = false;
-    if (mobileQuery?.matches) conversationHead.value?.focusBack();
-}
-
-async function openItemFromList(item: Parameters<typeof openItem>[0]) {
-    if (mobileListOpen.value) {
-        closeConversationList();
-        await nextTick();
-    }
-    await openItem(item);
-}
-
-onBeforeUnmount(() => {
-    mobileQuery?.removeEventListener("change", closeConversationList);
-    closeConversationList();
+const {
+    dialog: contactsDialog,
+    opened: mobileListOpen,
+    open: openConversationList,
+    close: closeConversationList,
+    onClose: onConversationListClose,
+    openTarget,
+} = useAccountConversationList({
+    panel: contactsPanel,
+    focusBack: () => conversationHead.value?.focusBack(),
+    returnToList,
 });
 
+async function openItemFromList(item: Parameters<typeof openItem>[0]) {
+    await openTarget(() => openItem(item));
+}
+
+async function openManualFromList() {
+    await openTarget(openManualItem);
+}
+
 onMounted(async () => {
-    mobileQuery = matchMedia("(max-width: 700px)");
-    mobileQuery.addEventListener("change", closeConversationList);
     try {
         historyEnabled.value = (await props.client.chatHistorySettings()).enabled;
     } catch {
@@ -350,15 +322,17 @@ onMounted(async () => {
                                 {{ recentOlderError }}
                             </p>
                         </div>
-                        <p v-if="visibleList.truncated" class="account-control-hint">
-                            此平台返回的条目超过 500 个，目前只展示前 500 个。
+                        <p
+                            v-if="visibleList.truncated && !visibleList.loading"
+                            class="account-control-hint">
+                            列表未全部读取，目前展示 {{ visibleList.items.length }} 个条目。
                         </p>
                     </div>
                     <AccountControlManualEntry
                         v-if="category !== 'recent'"
                         v-model="manualId"
                         :target-label="manualTargetLabel"
-                        @submit="openManualItem" />
+                        @submit="openManualFromList" />
                 </aside>
             </Teleport>
 
@@ -380,71 +354,20 @@ onMounted(async () => {
                     :history-error="historyError"
                     @back="openConversationList"
                     @refresh="loadHistory()"
-                    @retry-history="historyRetryOlder ? loadOlder() : loadHistory()"
+                    @retry-history="historyRetryOlder ? historyView?.loadOlder() : loadHistory()"
                     @retry-members="selected && loadMembers(selected)"
                     @view-members="ensureMembersForSelection"
                     @retry-detail="selected && loadDetail(selected)"
                     @history-settings="emit('historySettings')" />
-                <div class="account-control-history">
-                    <div
-                        ref="chatViewport"
-                        class="account-control-messages"
-                        role="log"
-                        aria-label="聊天记录"
-                        aria-live="polite"
-                        aria-relevant="additions"
-                        @scroll.passive="onHistoryScroll">
-                        <template v-if="selected">
-                            <button
-                                v-if="moreHistory && messages.length"
-                                type="button"
-                                class="account-control-older"
-                                :disabled="historyLoading"
-                                @click="loadOlder">
-                                加载更早消息
-                            </button>
-                            <div
-                                v-if="historyLoading && !messages.length"
-                                class="account-control-skeleton"
-                                role="status"
-                                aria-label="正在读取聊天记录">
-                                <span></span><span></span><span></span>
-                            </div>
-                            <p
-                                v-if="!messages.length && !historyLoading && !historyError"
-                                class="account-control-hint">
-                                {{
-                                    historyEnabled === false
-                                        ? "没有已保存的聊天记录；新消息不会保存。"
-                                        : "还没有聊天记录。"
-                                }}
-                            </p>
-                            <article
-                                v-for="message in displayMessages"
-                                :key="message.id"
-                                class="account-control-message"
-                                :class="message.direction">
-                                <div>
-                                    <span>{{
-                                        message.direction === "outbound" ? "我" : message.senderName
-                                    }}</span>
-                                    <time :datetime="message.displayTime.datetime">{{
-                                        message.displayTime.label
-                                    }}</time>
-                                </div>
-                                <p>{{ message.text }}</p>
-                            </article>
-                        </template>
-                        <p v-else class="account-control-placeholder">从左侧选择好友、群或频道。</p>
-                    </div>
-                    <button
-                        v-if="showJumpLatest"
-                        type="button"
-                        class="account-control-jump-latest"
-                        @click="jumpLatest">
-                        ↓ 新消息
-                    </button>
-                </div>
+                <AccountControlHistory
+                    ref="historyView"
+                    :selected="selected"
+                    :messages="messages"
+                    :loading="historyLoading"
+                    :error="historyError"
+                    :enabled="historyEnabled"
+                    :has-more="moreHistory"
+                    :load-history="loadHistory" />
                 <form
                     v-if="selected"
                     class="account-control-composer"
@@ -472,14 +395,9 @@ onMounted(async () => {
                             {{ sendCapabilityLoading ? "正在确认…" : "重新确认" }}
                         </UiButton>
                     </div>
-                    <textarea
-                        id="account-control-input"
+                    <AccountControlMessageInput
                         ref="composerInput"
                         v-model="text"
-                        name="message"
-                        autocomplete="off"
-                        rows="3"
-                        maxlength="32768"
                         :disabled="!canChat || !online || !!pendingSendId"
                         :placeholder="
                             statusError
@@ -492,8 +410,7 @@ onMounted(async () => {
                                       ? '发送能力尚未确认'
                                       : '先选择一个会话'
                         "
-                        @keydown.ctrl.enter.prevent="submitMessage"
-                        @keydown.meta.enter.prevent="submitMessage"></textarea>
+                        @send="submitMessage" />
                     <div class="account-control-compose-actions">
                         <span>Ctrl / ⌘ + Enter 发送</span>
                         <UiButton
@@ -503,7 +420,7 @@ onMounted(async () => {
                             :aria-disabled="!!pendingSendId || sendBusy"
                             :aria-busy="sendBusy">
                             <IconSend :size="16" aria-hidden="true" />
-                            {{ sendBusy ? "正在发送…" : "发送" }}
+                            {{ queryBusy ? "正在查询…" : sendBusy ? "正在发送…" : "发送" }}
                         </UiButton>
                     </div>
                     <div
@@ -526,13 +443,16 @@ onMounted(async () => {
                         <button
                             v-if="pendingStatus === 'unknown' && !confirmAbandon"
                             type="button"
+                            :disabled="sendBusy"
                             @click="requestAbandon">
                             放弃追踪
                         </button>
                         <div v-if="confirmAbandon" class="account-control-abandon-confirm">
                             <span>消息可能已发出。放弃后仍可查看历史，但无法再查询这次操作。</span>
                             <button type="button" @click="cancelAbandon">继续追踪</button>
-                            <button type="button" @click="abandonTracking">确认放弃</button>
+                            <button type="button" :disabled="sendBusy" @click="abandonTracking">
+                                确认放弃
+                            </button>
                         </div>
                     </div>
                 </form>

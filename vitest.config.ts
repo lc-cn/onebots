@@ -7,6 +7,18 @@ export default defineConfig({
   test: {
     // 测试环境
     environment: 'node',
+    // 原有服务端/SSR 用例保持 Node；客户端组件事件另用无 DOM 依赖的自定义宿主。
+    projects: [
+      { extends: true, test: { name: 'node', exclude: ['**/*.client.spec.ts'] } },
+      {
+        plugins: [vue()],
+        test: {
+          name: 'web-client',
+          include: ['packages/web/src/**/*.client.spec.ts'],
+          environment: './packages/web/test/client-renderer-environment.ts',
+        },
+      },
+    ],
     
     // 全局测试超时时间
     testTimeout: 30000,

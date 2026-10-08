@@ -1,6 +1,5 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type {
-    ControlAccountExploreResult,
     ControlAccountItem,
     ControlClient,
     ControlConfigurationSnapshot,
@@ -11,7 +10,6 @@ import type {
 import { buildAccountCards } from "./account-overview.js";
 import {
     accountControlCategories,
-    accountControlSceneType,
     emptyAccountControlList,
     filterAccountControlItems,
     manualAccountTargetLabel,
@@ -25,11 +23,8 @@ import { useAccountRecent } from "./use-account-recent.js";
 import { useAccountHistory } from "./use-account-history.js";
 import { useAccountDetail } from "./use-account-detail.js";
 import { useAccountMembers } from "./use-account-members.js";
-
-type Category = AccountControlCategory;
-type Tab = AccountControlTab;
-type ListState = AccountControlListState;
-const emptyList = emptyAccountControlList;
+import { accountControlErrorMessage } from "./account-control-error.js";
+import { useAccountSendCapabilities } from "./use-account-send-capabilities.js";
 
 export interface AccountControlProps {
     client: ControlClient;
@@ -52,19 +47,20 @@ export function useAccountControl(props: AccountControlProps) {
     const online = computed(() => account.value?.status === "online");
     const gatewayInstanceId = computed(() => props.status?.gateway.instance?.id);
     const context = ref<ControlSendContext>();
-    const category = ref<Tab>("recent");
-    const lists = ref<Record<Category, ListState>>({
-        friend: emptyList(),
-        group: emptyList(),
-        channel: emptyList(),
+    const category = ref<AccountControlTab>("recent");
+    const lists = ref<Record<AccountControlCategory, AccountControlListState>>({
+        friend: emptyAccountControlList(),
+        group: emptyAccountControlList(),
+        channel: emptyAccountControlList(),
     });
     const selectedGuild = ref<ControlAccountItem>();
     const channelListMode = ref(false);
-    const channels = ref<ListState>(emptyList());
+    const channels = ref<AccountControlListState>(emptyAccountControlList());
     const selected = ref<AccountControlConversationItem>();
     const manualId = ref("");
     const contactSearch = ref("");
-    const sendScenes = ref<Record<"private" | "direct" | "group" | "channel", boolean>>();
+    const { sendScenes, canChat, sendCapabilityPending, sendUnsupported, applyCapabilities } =
+        useAccountSendCapabilities(selected, () => props.statusError);
     let selectionRevision = 0;
     let accountRevision = 0;
     let channelRequestRevision = 0;
@@ -142,11 +138,6 @@ export function useAccountControl(props: AccountControlProps) {
         onCapabilities: applyCapabilities,
     });
 
-    function applyCapabilities(result: Pick<ControlAccountExploreResult, "sendScenes">) {
-        sendScenes.value = result.sendScenes;
-    }
-
-    const categories = accountControlCategories;
     const visibleList = computed(() =>
         category.value === "recent"
             ? recent.value
@@ -165,23 +156,7 @@ export function useAccountControl(props: AccountControlProps) {
         ),
     );
     const activeItem = computed(() => detail.value ?? selected.value);
-    const sceneType = computed(
-        () => selected.value?.sceneType ?? accountControlSceneType(selected.value?.kind),
-    );
-    const canSendScene = computed(() =>
-        Boolean(
-            selected.value &&
-            selected.value.kind !== "guild" &&
-            sendScenes.value?.[sceneType.value] === true,
-        ),
-    );
-    // 状态刷新失败时保留已读会话，但不能用过期的“在线”快照授权新发送。
-    const canChat = computed(() => canSendScene.value && !props.statusError);
-    const sendCapabilityPending = computed(() => Boolean(selected.value && !sendScenes.value));
     const sendCapabilityLoading = computed(() => lists.value.friend.loading);
-    const sendUnsupported = computed(() =>
-        Boolean(selected.value && sendScenes.value && !canSendScene.value),
-    );
 
     /** 账号、分类及会话切换共用这一状态边界，旧请求由 revision 一并失效。 */
     function clearSelection() {
@@ -202,12 +177,12 @@ export function useAccountControl(props: AccountControlProps) {
         channelListMode.value = false;
         sendScenes.value = undefined;
         contactSearch.value = "";
-        channels.value = emptyList();
+        channels.value = emptyAccountControlList();
         resetRecent();
         lists.value = {
-            friend: emptyList(),
-            group: emptyList(),
-            channel: emptyList(),
+            friend: emptyAccountControlList(),
+            group: emptyAccountControlList(),
+            channel: emptyAccountControlList(),
         };
     }
 
@@ -224,7 +199,7 @@ export function useAccountControl(props: AccountControlProps) {
         }
     }
 
-    async function loadList(kind: Category, force = false) {
+    async function loadList(kind: AccountControlCategory, force = false) {
         const state = lists.value[kind];
         if (!online.value || state.loading || (state.loaded && !force)) return;
         const revision = accountRevision;
@@ -263,9 +238,9 @@ export function useAccountControl(props: AccountControlProps) {
             state.supported = result.supported;
             state.truncated = result.truncated;
             state.loaded = true;
-        } catch {
+        } catch (error) {
             if (disposed || revision !== accountRevision) return;
-            state.error = "列表读取失败，请重试。";
+            state.error = accountControlErrorMessage(error, "列表读取失败，请重试。");
         } finally {
             if (revision === accountRevision) state.loading = false;
         }
@@ -278,7 +253,7 @@ export function useAccountControl(props: AccountControlProps) {
         if (!refresh) {
             selectedGuild.value = guild;
             contactSearch.value = "";
-            channels.value = emptyList();
+            channels.value = emptyAccountControlList();
         }
         channels.value.loading = true;
         channels.value.error = "";
@@ -313,8 +288,9 @@ export function useAccountControl(props: AccountControlProps) {
                 error: "",
             };
             sendScenes.value = result.sendScenes;
-        } catch {
-            if (isCurrent()) channels.value.error = "频道读取失败，请重试。";
+        } catch (error) {
+            if (isCurrent())
+                channels.value.error = accountControlErrorMessage(error, "频道读取失败，请重试。");
         } finally {
             if (isCurrent()) channels.value.loading = false;
         }
@@ -361,13 +337,13 @@ export function useAccountControl(props: AccountControlProps) {
             revision === selectionRevision &&
             !(
                 typeof window.matchMedia === "function" &&
-                window.matchMedia("(max-width: 700px)").matches
+                window.matchMedia("(max-width: 1100px)").matches
             )
         )
             void loadMembers(item, expected, revision);
     }
 
-    /** 手机成员列表只在打开详情时读取；桌面侧栏出现时也可补读一次。 */
+    /** 窄屏成员列表只在打开详情时读取；桌面侧栏出现时也可补读一次。 */
     function ensureMembersForSelection() {
         const item = selected.value;
         if (
@@ -404,6 +380,7 @@ export function useAccountControl(props: AccountControlProps) {
     const {
         text,
         sendBusy,
+        queryBusy,
         sendError,
         pendingSendId,
         pendingStatus,
@@ -462,7 +439,7 @@ export function useAccountControl(props: AccountControlProps) {
         account,
         online,
         category,
-        categories,
+        categories: accountControlCategories,
         recent,
         recentHasMore,
         recentOlderLoading,
@@ -490,6 +467,7 @@ export function useAccountControl(props: AccountControlProps) {
         text,
         manualId,
         sendBusy,
+        queryBusy,
         sendError,
         pendingSendId,
         pendingStatus,

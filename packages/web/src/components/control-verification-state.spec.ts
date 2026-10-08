@@ -55,6 +55,85 @@ function fixture() {
     return { controller, view, verification, storage, values, sessions };
 }
 describe("control verification browser workflow", () => {
+    it("进入待办时自动查询历史终态，不要求为新挑战手点原回执", async () => {
+        const f = fixture();
+        f.values.set(`onebots.verification.${session.id}`, JSON.stringify([challengeId]));
+        f.verification.operation.mockResolvedValue({
+            id: challengeId,
+            challengeId,
+            gatewayInstanceId: gateway,
+            configVersion: "v1",
+            action: "submit",
+            status: "succeeded",
+            startedAt: new Date(0).toISOString(),
+            finishedAt: new Date(1).toISOString(),
+        });
+        await f.controller.initialize();
+        expect(f.verification.operation).toHaveBeenCalledWith(challengeId);
+        expect(f.controller.uncertain).toBe(false);
+        await f.controller.refresh();
+        f.view.answers[challengeId].code = "1234";
+        f.verification.execute.mockImplementation(async command => ({
+            id: command.operationId,
+            challengeId,
+            gatewayInstanceId: gateway,
+            configVersion: "v1",
+            action: "submit",
+            status: "succeeded",
+            startedAt: new Date(2).toISOString(),
+            finishedAt: new Date(3).toISOString(),
+        }));
+        await f.controller.submit(challengeId, "submit");
+        expect(f.verification.execute).toHaveBeenCalledOnce();
+        expect(f.controller.uncertain).toBe(false);
+    });
+    it("刷新新挑战时自动确认上一笔失联请求，不重复发送旧编号", async () => {
+        const f = fixture();
+        await f.controller.initialize();
+        await f.controller.refresh();
+        f.view.answers[challengeId].code = "1234";
+        f.verification.execute.mockRejectedValueOnce(new Error("连接中断"));
+        await f.controller.submit(challengeId, "submit");
+        const originalId = f.view.ids[0];
+        expect(f.controller.uncertain).toBe(true);
+        f.verification.operation.mockResolvedValue({
+            id: originalId,
+            challengeId,
+            gatewayInstanceId: gateway,
+            configVersion: "v1",
+            action: "submit",
+            status: "succeeded",
+            startedAt: new Date(0).toISOString(),
+            finishedAt: new Date(1).toISOString(),
+        });
+        await f.controller.refresh();
+        expect(f.controller.uncertain).toBe(false);
+        expect(f.verification.execute).toHaveBeenCalledTimes(1);
+        expect(f.verification.operation).toHaveBeenCalledWith(originalId);
+    });
+    it("处理中回执在下次刷新时自动更新为终态", async () => {
+        const f = fixture();
+        await f.controller.initialize();
+        f.view.ids = [challengeId];
+        const operation = {
+            id: challengeId,
+            challengeId,
+            gatewayInstanceId: gateway,
+            configVersion: "v1",
+            action: "submit" as const,
+            status: "running" as const,
+            startedAt: new Date(0).toISOString(),
+        };
+        f.view.receipts[challengeId] = operation;
+        f.verification.operation.mockResolvedValue({
+            ...operation,
+            status: "succeeded",
+            finishedAt: new Date(1).toISOString(),
+        });
+        await f.controller.refresh();
+        expect(f.controller.uncertain).toBe(false);
+        expect(f.verification.operation).toHaveBeenCalledWith(challengeId);
+    });
     it("persists only identifiers before dispatch and never resends an uncertain operation", async () => {
         const f = fixture();
         await f.controller.initialize();
@@ -308,7 +387,7 @@ it("封存需停机和显式确认，保留编号并在刷新后只读恢复", a
     expect(f.verification.abandon).not.toHaveBeenCalled();
     await f.controller.query(challengeId);
     expect(f.controller.uncertain).toBe(true);
-    expect(f.verification.abandonment).toHaveBeenCalledExactlyOnceWith(challengeId);
+    expect(f.verification.abandonment).toHaveBeenLastCalledWith(challengeId);
     f.verification.abandon.mockRejectedValueOnce(new Error("lost"));
     await f.controller.abandon(challengeId, true);
     expect(f.controller.uncertain).toBe(true);
@@ -324,8 +403,6 @@ it("封存需停机和显式确认，保留编号并在刷新后只读恢复", a
         f.storage,
     );
     await restored.initialize();
-    expect(restored.uncertain).toBe(true);
-    await restored.query(challengeId);
     expect(restored.uncertain).toBe(false);
     expect(restored.view.abandonments[challengeId]).toEqual(sealed);
     expect(f.storage.setItem).not.toHaveBeenCalled();

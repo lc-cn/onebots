@@ -10,9 +10,11 @@ export function serveControlWeb(
     pathname: string,
     webRoot: string,
 ): boolean {
-    if (request.method !== "GET" || (pathname !== "/" && !pathname.startsWith("/assets/")))
-        return false;
-    const relative = pathname === "/" ? "index.html" : decodeURIComponent(pathname.slice(1));
+    const appRoute =
+        pathname === "/" || pathname === "/console" || pathname.startsWith("/console/");
+    const assetRoute = pathname.startsWith("/assets/");
+    if (request.method !== "GET" || (!appRoute && !assetRoute)) return false;
+    const relative = appRoute ? "index.html" : decodeURIComponent(pathname.slice(1));
     const file = path.resolve(webRoot, relative);
     if (!file.startsWith(`${path.resolve(webRoot)}${path.sep}`) || !fs.existsSync(file)) {
         jsonResponse(response, 404, { message: "管理端产物不存在，请完成 Web 构建" });

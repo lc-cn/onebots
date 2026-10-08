@@ -1,0 +1,199 @@
+.entity-detail-page,
+.entity-editor-page {
+    width: min(100%, 70rem);
+}
+.entity-back {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    margin-bottom: 0.8rem;
+    color: var(--accent);
+    font-size: var(--type-label);
+    font-weight: 650;
+}
+.entity-back:hover,
+.entity-inline-link:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+    text-underline-offset: 0.2rem;
+}
+.entity-detail-heading {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-width: 0;
+    margin-bottom: 1.5rem;
+}
+.entity-detail-heading > div:nth-child(2) {
+    min-width: 0;
+    flex: 1;
+}
+.entity-detail-heading .account-logo,
+.entity-detail-symbol {
+    width: 4rem;
+    height: 4rem;
+    border-radius: var(--radius-card);
+}
+.entity-detail-symbol {
+    display: grid;
+    place-items: center;
+    flex: none;
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+.entity-detail-heading h1 {
+    overflow-wrap: anywhere;
+    font-size: var(--type-focus);
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1.13;
+}
+.entity-eyebrow {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: var(--fg-tertiary);
+    font-size: var(--type-caption);
+    font-weight: 650;
+}
+.entity-detail-actions,
+.entity-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+.entity-detail-section {
+    margin-top: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    padding: clamp(1rem, 2vw, 1.4rem);
+}
+.entity-section-heading {
+    margin-bottom: 1rem;
+}
+.entity-detail-section h2 {
+    font-size: var(--type-section);
+    font-weight: 650;
+    letter-spacing: -0.025em;
+}
+.entity-section-empty,
+.entity-danger-section p {
+    color: var(--fg-secondary);
+    font-size: var(--type-label);
+    line-height: 1.6;
+}
+.entity-danger-section {
+    margin-top: 2rem;
+    background: transparent;
+}
+.entity-danger-section p {
+    margin: 0.4rem 0 1rem;
+}
+.entity-link-list {
+    display: grid;
+    gap: 0.4rem;
+}
+.entity-link-row,
+.entity-list-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    width: 100%;
+    color: var(--fg);
+    text-align: left;
+    cursor: pointer;
+    transition:
+        background 180ms ease,
+        border-color 180ms ease,
+        transform 180ms ease;
+}
+.entity-link-row {
+    min-height: 4rem;
+    border-radius: var(--radius-control);
+    padding: 0.75rem;
+}
+.entity-list-card {
+    padding: 1rem 1.25rem;
+}
+.entity-link-row:hover,
+.entity-list-card:hover {
+    background: var(--surface-raised);
+}
+.entity-link-row:active,
+.entity-list-card:active {
+    transform: translateY(1px);
+}
+.entity-link-row > span,
+.entity-list-main,
+.entity-list-meta,
+.entity-list-card .account-identity > span:last-child {
+    display: grid;
+    gap: 0.22rem;
+    min-width: 0;
+}
+.entity-link-row strong,
+.entity-list-main strong,
+.entity-list-card .account-identity strong {
+    overflow-wrap: anywhere;
+    font-size: var(--type-body);
+    font-weight: 650;
+}
+.entity-link-row small,
+.entity-list-main small,
+.entity-list-meta small {
+    color: var(--fg-secondary);
+    font-size: var(--type-caption);
+}
+.entity-list-meta {
+    margin-left: auto;
+    text-align: right;
+}
+.entity-inline-link {
+    min-height: 2rem;
+    color: var(--accent);
+    font-size: var(--type-label);
+}
+.entity-detail-section .account-status.ready {
+    color: var(--success);
+}
+.entity-detail-section .account-status.failed {
+    color: var(--danger);
+}
+.entity-detail-section .account-status.starting,
+.entity-detail-section .account-status.pending {
+    color: var(--warning);
+}
+.entity-editor-page .configuration-owner-editor {
+    margin-top: 1rem;
+}
+.entity-editor-page .configuration-object-layout {
+    grid-template-columns: minmax(0, 1fr);
+}
+.entity-editor-page .configuration-step-panel {
+    min-height: 0;
+}
+@media (max-width: 640px) {
+    .entity-detail-heading {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+    .entity-detail-actions {
+        width: 100%;
+    }
+    .entity-list-card {
+        padding: 0.85rem;
+    }
+    .entity-list-meta small {
+        display: none;
+    }
+    .entity-list-card .account-identity {
+        flex: 1;
+    }
+    .entity-list-card .account-logo {
+        width: 2.6rem;
+        height: 2.6rem;
+    }
+}

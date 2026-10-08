@@ -5,6 +5,10 @@ import {
     type ControlAccountExploreResult,
 } from "@onebots/core/control";
 import type { GatewayIdentity } from "./contracts.js";
+import {
+    isAccountExploreErrorCode,
+    type AccountExploreErrorCode,
+} from "./account-explore-errors.js";
 
 export interface GatewayAccountExploreRequest extends GatewayIdentity {
     type: "gateway.account-explore";
@@ -16,9 +20,11 @@ export interface GatewayAccountExploreReply extends GatewayIdentity {
     requestId: string;
     outcome: "succeeded" | "rejected";
     result?: ControlAccountExploreResult;
+    code?: AccountExploreErrorCode;
 }
 const uuid = (value: unknown): value is string =>
-    typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 function identity(value: Record<string, unknown>): boolean {
     return (
         value.protocolVersion === 1 &&
@@ -60,6 +66,7 @@ export function isGatewayAccountExploreRequest(
 export function isGatewayAccountExploreReply(value: unknown): value is GatewayAccountExploreReply {
     if (!value || typeof value !== "object") return false;
     const hasResult = Object.hasOwn(value, "result");
+    const hasCode = Object.hasOwn(value, "code");
     if (
         !closed(value, [
             "type",
@@ -69,6 +76,7 @@ export function isGatewayAccountExploreReply(value: unknown): value is GatewayAc
             "requestId",
             "outcome",
             ...(hasResult ? ["result"] : []),
+            ...(hasCode ? ["code"] : []),
         ])
     )
         return false;
@@ -76,7 +84,9 @@ export function isGatewayAccountExploreReply(value: unknown): value is GatewayAc
         value.type === "gateway.account-explore.result" &&
         identity(value) &&
         (value.outcome === "succeeded"
-            ? hasResult && isControlAccountExploreResult(value.result)
-            : value.outcome === "rejected" && !hasResult)
+            ? !hasCode && hasResult && isControlAccountExploreResult(value.result)
+            : value.outcome === "rejected" &&
+              !hasResult &&
+              (!hasCode || isAccountExploreErrorCode(value.code)))
     );
 }

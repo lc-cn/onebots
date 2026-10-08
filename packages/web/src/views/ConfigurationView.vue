@@ -19,7 +19,7 @@ const emit = defineEmits<{
     applied: [];
     dirtyChange: [dirty: boolean];
     select: [workspace: Workspace];
-    navigateScope: [scope: ConfigurationScope];
+    navigateScope: [scope: ConfigurationScope, path: string[]];
     close: [];
 }>();
 const scopeLabels: Record<ConfigurationScope, string> = {
@@ -42,7 +42,7 @@ const scopeLabels: Record<ConfigurationScope, string> = {
                 @applied="emit('applied')"
                 @select-extensions="emit('select', 'extensions')"
                 @select-accounts="emit('select', 'accounts')"
-                @navigate-scope="emit('navigateScope', $event)"
+                @navigate-scope="(scope, path) => emit('navigateScope', scope, path)"
                 @close="emit('close')" />
         </div>
     </section>

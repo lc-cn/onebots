@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onUnmounted, reactive, watch } from "vue";
+import { computed, onUnmounted, reactive, watch } from "vue";
 import { controlVerificationOutcome, type ControlClient } from "@onebots/core/control";
 import ControlVerificationCode from "./ControlVerificationCode.vue";
 import { IconCircleCheck, IconFingerprint } from "@tabler/icons-vue";
@@ -24,6 +24,15 @@ const controller = new VerificationController(props.client, view, {
     getItem: key => localStorage.getItem(key),
     setItem: (key, value) => localStorage.setItem(key, value),
 });
+const attentionIds = computed(() =>
+    view.ids.filter(id => {
+        const receipt = view.receipts[id];
+        return receipt
+            ? ["running", "unknown"].includes(controlVerificationOutcome(receipt))
+            : !view.abandonments[id];
+    }),
+);
+const settledIds = computed(() => view.ids.filter(id => !attentionIds.value.includes(id)));
 watch(
     [() => props.active, () => props.gatewayInstanceId],
     async ([active, id]) => {
@@ -186,15 +195,17 @@ const labels = {
         </article>
         <details
             v-if="view.ids.length"
-            :open="controller.uncertain"
+            :open="attentionIds.length > 0"
             class="verification-receipts space-y-3 border-t border-border pt-4"
             aria-live="polite">
-            <summary class="font-medium">查看验证操作记录（{{ view.ids.length }}）</summary>
-            <p class="text-sm text-fg-secondary">
+            <summary class="font-medium">
+                待核对 {{ attentionIds.length }} 项 · 已结束 {{ settledIds.length }} 项
+            </summary>
+            <p v-if="attentionIds.length" class="text-sm text-fg-secondary">
                 核对只读取原网关结果，不会重新验证。仅原网关存活且有确定结果才能解锁；网关退出或结果缺失仍保留未知。停止网关后可明确接受未知风险，只解除阻塞，不代表成功。
             </p>
             <div
-                v-for="id in [...view.ids].reverse()"
+                v-for="id in [...attentionIds].reverse()"
                 :key="id"
                 class="verification-receipt space-y-2 rounded-card border border-border p-3">
                 <code class="text-xs break-all">{{ id }}</code>
@@ -246,7 +257,20 @@ const labels = {
                         >停止网关后接受未知结果</UiButton
                     >
                 </div>
-                <div v-if="!view.receipts[id] && !view.abandonments[id]" class="space-y-2">
+                <p
+                    v-if="!view.receipts[id] && !view.abandonments[id] && view.queryFailures[id]"
+                    class="text-sm text-danger">
+                    回执暂不可查，已保留原编号；不要重复提交。
+                </p>
+                <p
+                    v-else-if="!view.receipts[id] && !view.abandonments[id]"
+                    class="text-sm text-fg-secondary">
+                    正在确认原操作回执。
+                </p>
+                <details
+                    v-if="!view.receipts[id] && !view.abandonments[id] && view.queryFailures[id]"
+                    class="verification-recovery">
+                    <summary>高级恢复说明</summary>
                     <p class="text-sm text-danger">
                         查询失败不代表未执行。请先停止网关；服务端只有确认原操作未受理后才允许封存，迟到请求将永久拒绝。不表示平台从未发生过动作，不会重提或删除历史编号。
                     </p>
@@ -267,7 +291,7 @@ const labels = {
                         ">
                         停止网关后封存未受理编号
                     </UiButton>
-                </div>
+                </details>
                 <p v-if="view.abandonments[id]" class="text-xs text-fg-muted">
                     {{ view.abandonments[id].abandonedAt }} 已封存；不表示平台从未发生过动作。
                 </p>
@@ -279,6 +303,25 @@ const labels = {
                     原回执为未知；{{ view.receipts[id].resolution?.confirmedAt }} 已核对网关结果。
                 </p>
             </div>
+            <details v-if="settledIds.length" class="verification-settled">
+                <summary>已结束的操作（{{ settledIds.length }}）</summary>
+                <div
+                    v-for="id in [...settledIds].reverse()"
+                    :key="id"
+                    class="verification-settled-row">
+                    <code>{{ id }}</code>
+                    <span>{{
+                        view.abandonments[id]
+                            ? "编号已封存"
+                            : view.receipts[id]
+                              ? labels[controlVerificationOutcome(view.receipts[id])]
+                              : "已结束"
+                    }}</span>
+                    <UiButton size="sm" :disabled="view.busy" @click="controller.query(id)"
+                        >查询原回执</UiButton
+                    >
+                </div>
+            </details>
         </details>
     </section>
 </template>

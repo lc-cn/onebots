@@ -1,5 +1,7 @@
 import type { GatewayIdentity } from "./contracts.js";
 import type { GatewayAccountExploreExecutor } from "./account-explore-executor.js";
+import { AccountExploreError, type AccountExploreErrorCode } from "./account-explore-errors.js";
+import { isControlAccountExploreResult } from "@onebots/core/control";
 import {
     isGatewayAccountExploreRequest,
     isGatewayAccountExploreReply,
@@ -26,18 +28,33 @@ export function handleGatewayAccountExplore(
     )
         return true;
     void (async () => {
-        const result = await executor?.explore(value.request);
+        let result;
+        let code: AccountExploreErrorCode = "gateway_unavailable";
+        try {
+            result = await executor?.explore(value.request);
+            if (executor && !result) code = "context_changed";
+            if (result && !isControlAccountExploreResult(result)) {
+                result = undefined;
+                code = "invalid_response";
+                process.stderr.write("[onebots] 账号查询响应不符合控制契约，已拒绝返回\n");
+            }
+        } catch (error) {
+            code = error instanceof AccountExploreError ? error.code : "platform_query_failed";
+            if (!(error instanceof AccountExploreError))
+                process.stderr.write("[onebots] 账号查询执行失败，已返回脱敏故障回执\n");
+        }
         const reply: GatewayAccountExploreReply = {
             type: "gateway.account-explore.result",
             protocolVersion: 1,
             controlInstanceId: identity.controlInstanceId,
             gatewayInstanceId: identity.gatewayInstanceId,
             requestId: value.requestId,
-            ...(result ? { outcome: "succeeded", result } : { outcome: "rejected" }),
+            ...(result ? { outcome: "succeeded", result } : { outcome: "rejected", code }),
         };
         if (isGatewayAccountExploreReply(reply)) send(reply);
     })().catch(() => {
-        // 读取失败不泄露平台异常；父进程请求在期限内自行结束。
+        // IPC 断连不能重发回执；父进程请求在期限内自行结束。
+        process.stderr.write("[onebots] 账号查询回执发送失败\n");
     });
     return true;
 }

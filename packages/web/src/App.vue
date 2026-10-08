@@ -11,12 +11,18 @@ import {
 import { controlMutationBlock, setupJourney } from "./control-product-state.js";
 import type { ExtensionCategory, Workspace } from "./control-workspace.js";
 import {
-    accountControlFromHash,
-    accountControlHash,
-    extensionCategoryFromHash,
-    extensionWorkspaceHash,
-    workspaceFromHash,
-    workspaceHash,
+    accountPageFromPath,
+    accountPagePath,
+    accountControlFromPath,
+    accountControlPath,
+    extensionCategoryFromPath,
+    extensionWorkspacePath,
+    protocolPageFromPath,
+    protocolPagePath,
+    workspaceFromPath,
+    workspacePath,
+    type AccountPageRoute,
+    type ProtocolPageRoute,
 } from "./control-workspace.js";
 import type {
     ConfigurationNavigationTarget,
@@ -24,8 +30,10 @@ import type {
 } from "./components/control-configuration-layout.js";
 import ControlLayout from "./layouts/ControlLayout.vue";
 import AccountsView from "./views/AccountsView.vue";
+import AccountDetailView from "./views/AccountDetailView.vue";
 import AccountControlView from "./views/AccountControlView.vue";
 import ProtocolsView from "./views/ProtocolsView.vue";
+import ProtocolDetailView from "./views/ProtocolDetailView.vue";
 import ConfigurationView from "./views/ConfigurationView.vue";
 import ExtensionsView from "./views/ExtensionsView.vue";
 import OperationsView from "./views/OperationsView.vue";
@@ -48,8 +56,11 @@ const notice = ref("");
 const busy = ref(false);
 const lastUpdated = ref<Date>();
 const activeWorkspace = ref<Workspace>("overview");
-const controlledAccount = ref(accountControlFromHash(window.location.hash));
-const extensionCategory = ref<ExtensionCategory>(extensionCategoryFromHash(window.location.hash));
+const currentLocation = () => window.location.pathname + window.location.search;
+const controlledAccount = ref(accountControlFromPath(currentLocation()));
+const accountPage = ref<AccountPageRoute>(accountPageFromPath(currentLocation()));
+const protocolPage = ref<ProtocolPageRoute>(protocolPageFromPath(currentLocation()));
+const extensionCategory = ref<ExtensionCategory>(extensionCategoryFromPath(currentLocation()));
 const configurationDirty = ref(false);
 const notificationsDirty = ref(false);
 const installationCatalog = ref<ControlInstallationCatalog>();
@@ -61,7 +72,6 @@ const notificationSnapshot = ref<NotificationSnapshot>();
 const configurationTarget = ref<ConfigurationNavigationTarget>();
 let configurationTargetRevision = 0;
 const configurationScope = ref<ConfigurationScope>();
-const protocolAccountFilter = ref<{ platform: string; accountId: string }>();
 const systemTarget = ref<{
     section: "notifications" | "history" | "runtime";
     notificationSection?: "channels" | "history";
@@ -101,8 +111,8 @@ const configurationWorkspace = computed<Workspace | undefined>(() => {
     return configurationScope.value;
 });
 const configurationDestination = computed(() => {
-    if (configurationScope.value === "accounts") return "#account-configuration-target";
-    if (configurationScope.value === "protocols") return "#protocol-configuration-target";
+    if (configurationScope.value === "accounts") return "#account-editor-target";
+    if (configurationScope.value === "protocols") return "#protocol-editor-target";
     return "#runtime-configuration-target";
 });
 const journey = computed(() =>
@@ -149,22 +159,77 @@ function canLeaveWorkspace(workspace: Workspace): boolean {
 
 function selectWorkspace(workspace: Workspace) {
     if (!canLeaveWorkspace(workspace)) return;
-    const leavingControl = Boolean(controlledAccount.value);
+    if (
+        (workspace === "accounts" || workspace === "protocols") &&
+        configurationScope.value &&
+        workspace === configurationWorkspace.value &&
+        configurationDirty.value &&
+        !confirmConfigurationLeave()
+    )
+        return;
+    const leavingSubpage =
+        Boolean(controlledAccount.value) ||
+        accountPage.value.page !== "list" ||
+        protocolPage.value.page !== "list";
     controlledAccount.value = undefined;
-    if (workspace !== configurationWorkspace.value) {
+    accountPage.value = { page: "list" };
+    protocolPage.value = { page: "list" };
+    if (
+        workspace !== configurationWorkspace.value ||
+        workspace === "accounts" ||
+        workspace === "protocols"
+    ) {
         configurationScope.value = undefined;
         configurationDirty.value = false;
     }
-    if (workspace === "protocols") protocolAccountFilter.value = undefined;
-    if (workspace !== activeWorkspace.value || leavingControl)
+    if (workspace !== activeWorkspace.value || leavingSubpage)
         history.pushState(
             { workspace },
             "",
             workspace === "extensions"
-                ? extensionWorkspaceHash(extensionCategory.value)
-                : workspaceHash(workspace),
+                ? extensionWorkspacePath(extensionCategory.value)
+                : workspacePath(workspace),
         );
     showWorkspace(workspace);
+}
+
+function openAccountPage(route: AccountPageRoute) {
+    if (!canLeaveWorkspace("accounts")) return;
+    if (
+        configurationScope.value &&
+        activeWorkspace.value === "accounts" &&
+        configurationDirty.value &&
+        !confirmConfigurationLeave()
+    )
+        return;
+    controlledAccount.value = undefined;
+    if (configurationScope.value && route.page !== "edit" && route.page !== "create") {
+        configurationScope.value = undefined;
+        configurationDirty.value = false;
+    }
+    accountPage.value = route;
+    protocolPage.value = { page: "list" };
+    history.pushState({ workspace: "accounts" }, "", accountPagePath(route));
+    showWorkspace("accounts");
+}
+
+function openProtocolPage(route: ProtocolPageRoute) {
+    if (!canLeaveWorkspace("protocols")) return;
+    if (
+        configurationScope.value &&
+        activeWorkspace.value === "protocols" &&
+        configurationDirty.value &&
+        !confirmConfigurationLeave()
+    )
+        return;
+    if (configurationScope.value && route.page !== "edit" && route.page !== "create") {
+        configurationScope.value = undefined;
+        configurationDirty.value = false;
+    }
+    protocolPage.value = route;
+    accountPage.value = { page: "list" };
+    history.pushState({ workspace: "protocols" }, "", protocolPagePath(route));
+    showWorkspace("protocols");
 }
 
 function openAccountControl(platform: string, accountId: string) {
@@ -179,16 +244,27 @@ function openAccountControl(platform: string, accountId: string) {
     )
         return;
     controlledAccount.value = { platform, accountId };
-    const hash = accountControlHash({ platform, accountId });
-    if (window.location.hash !== hash) history.pushState({ workspace: "accounts" }, "", hash);
+    const path = accountControlPath({ platform, accountId });
+    if (currentLocation() !== path) history.pushState({ workspace: "accounts" }, "", path);
     showWorkspace("accounts");
+}
+
+function leaveAccountControl() {
+    const account = controlledAccount.value;
+    if (account)
+        openAccountPage({
+            page: "detail",
+            platform: account.platform,
+            accountId: account.accountId,
+        });
+    else selectWorkspace("accounts");
 }
 
 function openExtensionCategory(category: ExtensionCategory) {
     if (!canLeaveWorkspace("extensions")) return;
     extensionCategory.value = category;
-    const hash = extensionWorkspaceHash(category);
-    if (window.location.hash !== hash) history.pushState({ workspace: "extensions" }, "", hash);
+    const path = extensionWorkspacePath(category);
+    if (currentLocation() !== path) history.pushState({ workspace: "extensions" }, "", path);
     if (configurationScope.value) {
         configurationScope.value = undefined;
         configurationDirty.value = false;
@@ -197,23 +273,62 @@ function openExtensionCategory(category: ExtensionCategory) {
 }
 
 function restoreWorkspaceFromLocation() {
-    const workspace = workspaceFromHash(window.location.hash);
-    if (!canLeaveWorkspace(workspace)) {
+    const workspace = workspaceFromPath(currentLocation());
+    const nextAccountPage = accountPageFromPath(currentLocation());
+    const nextProtocolPage = protocolPageFromPath(currentLocation());
+    const routeScope =
+        nextAccountPage.page === "edit" || nextAccountPage.page === "create"
+            ? "accounts"
+            : nextProtocolPage.page === "edit" || nextProtocolPage.page === "create"
+              ? "protocols"
+              : undefined;
+    if (
+        !canLeaveWorkspace(workspace) ||
+        (configurationScope.value &&
+            workspace === configurationWorkspace.value &&
+            configurationScope.value !== routeScope &&
+            configurationDirty.value &&
+            !confirmConfigurationLeave())
+    ) {
         history.replaceState(
             { workspace: activeWorkspace.value },
             "",
-            workspaceHash(activeWorkspace.value),
+            controlledAccount.value
+                ? accountControlPath(controlledAccount.value)
+                : activeWorkspace.value === "accounts"
+                  ? accountPagePath(accountPage.value)
+                  : activeWorkspace.value === "protocols"
+                    ? protocolPagePath(protocolPage.value)
+                    : workspacePath(activeWorkspace.value),
         );
         return;
     }
-    if (workspace !== configurationWorkspace.value) {
+    if (workspace !== configurationWorkspace.value || (configurationScope.value && !routeScope)) {
         configurationScope.value = undefined;
         configurationDirty.value = false;
     }
-    if (workspace === "protocols") protocolAccountFilter.value = undefined;
     if (workspace === "extensions")
-        extensionCategory.value = extensionCategoryFromHash(window.location.hash);
-    controlledAccount.value = accountControlFromHash(window.location.hash);
+        extensionCategory.value = extensionCategoryFromPath(currentLocation());
+    controlledAccount.value = accountControlFromPath(currentLocation());
+    accountPage.value = nextAccountPage;
+    protocolPage.value = nextProtocolPage;
+    if (routeScope) {
+        configurationScope.value = routeScope;
+        configurationTarget.value = {
+            platform:
+                (routeScope === "accounts" ? accountPage.value : protocolPage.value).platform ?? "",
+            accountId:
+                (routeScope === "accounts" ? accountPage.value : protocolPage.value).accountId ??
+                "",
+            protocolKey: routeScope === "protocols" ? protocolPage.value.protocolKey : undefined,
+            defaultScope: routeScope === "protocols" ? protocolPage.value.defaultScope : undefined,
+            mode:
+                (routeScope === "accounts" ? accountPage.value : protocolPage.value).page === "edit"
+                    ? "edit"
+                    : "create",
+            revision: ++configurationTargetRevision,
+        };
+    }
     showWorkspace(workspace);
 }
 
@@ -246,6 +361,7 @@ function openConfiguration(
     platform = "",
     accountId = "",
     protocolKey?: string,
+    defaultScope = false,
 ): boolean {
     const workspace: Workspace = scope === "runtime" ? "system" : scope;
     if (!canLeaveWorkspace(workspace)) return false;
@@ -254,12 +370,41 @@ function openConfiguration(
         platform,
         accountId,
         protocolKey,
+        defaultScope,
+        mode:
+            scope === "accounts"
+                ? accountId
+                    ? "edit"
+                    : "create"
+                : scope === "protocols"
+                  ? accountId && protocolKey
+                      ? "edit"
+                      : "create"
+                  : undefined,
         revision: ++configurationTargetRevision,
     };
+    if (scope === "accounts")
+        accountPage.value = accountId
+            ? { page: "edit", platform, accountId }
+            : { page: "create", ...(platform ? { platform } : {}) };
+    if (scope === "protocols")
+        protocolPage.value =
+            platform && accountId && protocolKey
+                ? { page: "edit", platform, accountId, protocolKey }
+                : { page: "create", platform, accountId, protocolKey, defaultScope };
+    if (scope === "accounts") protocolPage.value = { page: "list" };
+    if (scope === "protocols") accountPage.value = { page: "list" };
     if (scope === "runtime")
         systemTarget.value = { section: "runtime", revision: ++systemTargetRevision };
-    if (workspace !== activeWorkspace.value)
-        history.pushState({ workspace }, "", workspaceHash(workspace));
+    history.pushState(
+        { workspace },
+        "",
+        scope === "accounts"
+            ? accountPagePath(accountPage.value)
+            : scope === "protocols"
+              ? protocolPagePath(protocolPage.value)
+              : workspacePath(workspace),
+    );
     showWorkspace(workspace);
     void nextTick(() =>
         document.querySelector(configurationDestination.value)?.scrollIntoView({
@@ -289,38 +434,84 @@ function removeConfigurationItem(
         platform,
         accountId,
         protocolKey,
+        mode: "edit",
         action: "remove",
         revision: ++configurationTargetRevision,
     };
 }
 
-function moveConfigurationScope(scope: ConfigurationScope) {
+function moveConfigurationScope(scope: ConfigurationScope, path: string[]) {
     // 校验已把本地修改保存到同一草稿；移动唯一编辑实例，不重建草稿。
     configurationScope.value = scope;
     const workspace: Workspace = scope === "runtime" ? "system" : scope;
+    const accountKey = path[0];
+    const adapter = Object.keys(configurationSnapshot.value?.schemas.adapters ?? {})
+        .sort((left, right) => right.length - left.length)
+        .find(name => accountKey?.startsWith(`${name}.`));
+    const platform = adapter ?? accountKey?.split(".")[0] ?? "";
+    const accountId = adapter
+        ? accountKey.slice(adapter.length + 1)
+        : (accountKey?.slice(platform.length + 1) ?? "");
+    if (scope === "accounts")
+        accountPage.value =
+            platform && accountId ? { page: "edit", platform, accountId } : { page: "create" };
+    if (scope === "protocols")
+        protocolPage.value =
+            accountKey === "general" && path[1]
+                ? { page: "create", protocolKey: path[1], defaultScope: true }
+                : platform && accountId && path[1]
+                  ? { page: "edit", platform, accountId, protocolKey: path[1] }
+                  : { page: "create" };
+    const route = scope === "accounts" ? accountPage.value : protocolPage.value;
+    configurationTarget.value = {
+        platform: scope === "runtime" ? "" : (route.platform ?? ""),
+        accountId: scope === "runtime" ? "" : (route.accountId ?? ""),
+        protocolKey: scope === "protocols" ? protocolPage.value.protocolKey : undefined,
+        defaultScope: scope === "protocols" ? protocolPage.value.defaultScope : undefined,
+        mode:
+            scope === "runtime"
+                ? undefined
+                : scope === "accounts"
+                  ? accountPage.value.page === "edit"
+                      ? "edit"
+                      : "create"
+                  : protocolPage.value.page === "edit"
+                    ? "edit"
+                    : "create",
+        revision: ++configurationTargetRevision,
+    };
     if (scope === "runtime")
         systemTarget.value = { section: "runtime", revision: ++systemTargetRevision };
-    if (workspace !== activeWorkspace.value)
-        history.pushState({ workspace }, "", workspaceHash(workspace));
+    history.pushState(
+        { workspace },
+        "",
+        scope === "accounts"
+            ? accountPagePath(accountPage.value)
+            : scope === "protocols"
+              ? protocolPagePath(protocolPage.value)
+              : workspacePath(workspace),
+    );
     showWorkspace(workspace);
 }
 
 function closeConfiguration() {
     if (configurationDirty.value && !confirmConfigurationLeave()) return;
+    const removed = configurationTarget.value?.action === "remove";
     configurationScope.value = undefined;
     configurationTarget.value = undefined;
     configurationDirty.value = false;
-}
-
-function openAccountProtocols(platform: string, accountId: string) {
-    if (!canLeaveWorkspace("protocols")) return;
-    configurationScope.value = undefined;
-    configurationDirty.value = false;
-    configurationTarget.value = undefined;
-    protocolAccountFilter.value = { platform, accountId };
-    if (activeWorkspace.value !== "protocols")
-        history.pushState({ workspace: "protocols" }, "", workspaceHash("protocols"));
-    showWorkspace("protocols");
+    if (activeWorkspace.value === "accounts")
+        openAccountPage(
+            !removed && accountPage.value.page === "edit"
+                ? { ...accountPage.value, page: "detail" }
+                : { page: "list" },
+        );
+    if (activeWorkspace.value === "protocols")
+        openProtocolPage(
+            !removed && protocolPage.value.page === "edit"
+                ? { ...protocolPage.value, page: "detail" }
+                : { page: "list" },
+        );
 }
 
 function toggleTheme() {
@@ -456,7 +647,6 @@ function reconnect() {
     configurationDirty.value = false;
     configurationScope.value = undefined;
     configurationTarget.value = undefined;
-    protocolAccountFilter.value = undefined;
     notificationsDirty.value = false;
 }
 
@@ -503,20 +693,44 @@ async function command(action: "start" | "stop" | "restart") {
 }
 
 onMounted(() => {
-    const workspace = workspaceFromHash(window.location.hash);
+    const workspace = workspaceFromPath(currentLocation());
     activeWorkspace.value = workspace;
-    extensionCategory.value = extensionCategoryFromHash(window.location.hash);
-    controlledAccount.value = accountControlFromHash(window.location.hash);
-    const canonicalHash =
+    extensionCategory.value = extensionCategoryFromPath(currentLocation());
+    controlledAccount.value = accountControlFromPath(currentLocation());
+    accountPage.value = accountPageFromPath(currentLocation());
+    protocolPage.value = protocolPageFromPath(currentLocation());
+    if (accountPage.value.page === "edit" || accountPage.value.page === "create") {
+        configurationScope.value = "accounts";
+        configurationTarget.value = {
+            platform: accountPage.value.platform ?? "",
+            accountId: accountPage.value.accountId ?? "",
+            mode: accountPage.value.page === "edit" ? "edit" : "create",
+            revision: ++configurationTargetRevision,
+        };
+    }
+    if (protocolPage.value.page === "edit" || protocolPage.value.page === "create") {
+        configurationScope.value = "protocols";
+        configurationTarget.value = {
+            platform: protocolPage.value.platform ?? "",
+            accountId: protocolPage.value.accountId ?? "",
+            protocolKey: protocolPage.value.protocolKey,
+            defaultScope: protocolPage.value.defaultScope,
+            mode: protocolPage.value.page === "edit" ? "edit" : "create",
+            revision: ++configurationTargetRevision,
+        };
+    }
+    const canonicalPath =
         workspace === "extensions"
-            ? extensionWorkspaceHash(extensionCategory.value)
+            ? extensionWorkspacePath(extensionCategory.value)
             : controlledAccount.value
-              ? accountControlHash(controlledAccount.value)
-              : workspaceHash(workspace);
-    if (window.location.hash !== canonicalHash)
-        history.replaceState({ workspace }, "", canonicalHash);
+              ? accountControlPath(controlledAccount.value)
+              : workspace === "accounts"
+                ? accountPagePath(accountPage.value)
+                : workspace === "protocols"
+                  ? protocolPagePath(protocolPage.value)
+                  : workspacePath(workspace);
+    if (currentLocation() !== canonicalPath) history.replaceState({ workspace }, "", canonicalPath);
     window.addEventListener("popstate", restoreWorkspaceFromLocation);
-    window.addEventListener("hashchange", restoreWorkspaceFromLocation);
     window.addEventListener("beforeunload", protectUnsavedConfiguration);
     void refreshProductState();
     refreshTimer = setInterval(() => {
@@ -529,7 +743,6 @@ onUnmounted(() => {
     if (refreshTimer) clearInterval(refreshTimer);
     if (notificationTimer) clearInterval(notificationTimer);
     window.removeEventListener("popstate", restoreWorkspaceFromLocation);
-    window.removeEventListener("hashchange", restoreWorkspaceFromLocation);
     window.removeEventListener("beforeunload", protectUnsavedConfiguration);
 });
 </script>
@@ -588,18 +801,69 @@ onUnmounted(() => {
             @applied="refreshProductState"
             @category-change="openExtensionCategory" />
         <AccountsView
-            v-show="activeWorkspace === 'accounts' && !controlledAccount"
+            v-show="
+                activeWorkspace === 'accounts' && !controlledAccount && accountPage.page === 'list'
+            "
             :configuration="configurationSnapshot"
             :status="state"
             :catalog="installationCatalog"
             :configuration-unavailable="configurationUnavailable"
             @configure="(platform, accountId) => openConfiguration('accounts', platform, accountId)"
-            @show-protocols="openAccountProtocols"
-            @remove="
-                (platform, accountId) => removeConfigurationItem('accounts', platform, accountId)
+            @detail="
+                (platform, accountId) => openAccountPage({ page: 'detail', platform, accountId })
             "
-            @control="openAccountControl"
             @select-extensions="openExtensionCategory('platform')" />
+        <AccountDetailView
+            v-if="
+                activeWorkspace === 'accounts' &&
+                accountPage.page === 'detail' &&
+                accountPage.platform &&
+                accountPage.accountId
+            "
+            :platform="accountPage.platform"
+            :account-id="accountPage.accountId"
+            :configuration="configurationSnapshot"
+            :status="state"
+            :catalog="installationCatalog"
+            @back="openAccountPage({ page: 'list' })"
+            @edit="openConfiguration('accounts', accountPage.platform!, accountPage.accountId!)"
+            @remove="
+                removeConfigurationItem('accounts', accountPage.platform!, accountPage.accountId!)
+            "
+            @control="openAccountControl(accountPage.platform!, accountPage.accountId!)"
+            @protocol="
+                protocolKey =>
+                    openProtocolPage({
+                        page: 'detail',
+                        platform: accountPage.platform,
+                        accountId: accountPage.accountId,
+                        protocolKey,
+                    })
+            "
+            @add-protocol="
+                openConfiguration('protocols', accountPage.platform, accountPage.accountId, '')
+            " />
+        <section
+            v-show="
+                activeWorkspace === 'accounts' &&
+                (accountPage.page === 'create' || accountPage.page === 'edit')
+            "
+            class="workspace-view entity-editor-page"
+            aria-label="账号设置">
+            <button type="button" class="entity-back" @click="closeConfiguration">
+                ← 返回账号
+            </button>
+            <header class="page-heading">
+                <div>
+                    <h1>{{ accountPage.page === "create" ? "添加账号" : "编辑账号" }}</h1>
+                    <p v-if="accountPage.platform">
+                        {{ accountPage.platform
+                        }}{{ accountPage.accountId ? ` · ${accountPage.accountId}` : "" }}
+                    </p>
+                </div>
+            </header>
+            <div id="account-editor-target"></div>
+        </section>
         <AccountControlView
             v-if="activeWorkspace === 'accounts' && controlledAccount"
             :client="client"
@@ -609,30 +873,84 @@ onUnmounted(() => {
             :status-error="statusError"
             :configuration="configurationSnapshot"
             :catalog="installationCatalog"
-            @back="selectWorkspace('accounts')"
+            @back="leaveAccountControl"
             @retry-status="refresh"
             @history-settings="openChatHistorySettings" />
         <ProtocolsView
-            v-show="activeWorkspace === 'protocols'"
+            v-show="activeWorkspace === 'protocols' && protocolPage.page === 'list'"
             :configuration="configurationSnapshot"
             :status="state"
             :catalog="installationCatalog"
             :configuration-unavailable="configurationUnavailable"
-            :focused-account="protocolAccountFilter"
             @configure="
                 (platform, accountId, protocolKey) =>
                     openConfiguration('protocols', platform, accountId, protocolKey)
             "
-            @configure-account="
-                (platform, accountId) => openConfiguration('accounts', platform, accountId)
-            "
-            @remove="
+            @defaults="protocolKey => openConfiguration('protocols', '', '', protocolKey, true)"
+            @detail="
                 (platform, accountId, protocolKey) =>
-                    removeConfigurationItem('protocols', platform, accountId, protocolKey)
+                    openProtocolPage({ page: 'detail', platform, accountId, protocolKey })
             "
             @show-accounts="selectWorkspace('accounts')"
-            @clear-account="protocolAccountFilter = undefined"
             @select-extensions="openExtensionCategory('protocol')" />
+        <ProtocolDetailView
+            v-if="
+                activeWorkspace === 'protocols' &&
+                protocolPage.page === 'detail' &&
+                protocolPage.platform &&
+                protocolPage.accountId &&
+                protocolPage.protocolKey
+            "
+            :platform="protocolPage.platform"
+            :account-id="protocolPage.accountId"
+            :protocol-key="protocolPage.protocolKey"
+            :configuration="configurationSnapshot"
+            :status="state"
+            :catalog="installationCatalog"
+            @back="openProtocolPage({ page: 'list' })"
+            @account="
+                openAccountPage({
+                    page: 'detail',
+                    platform: protocolPage.platform,
+                    accountId: protocolPage.accountId,
+                })
+            "
+            @edit="
+                openConfiguration(
+                    'protocols',
+                    protocolPage.platform!,
+                    protocolPage.accountId!,
+                    protocolPage.protocolKey!,
+                )
+            "
+            @remove="
+                removeConfigurationItem(
+                    'protocols',
+                    protocolPage.platform!,
+                    protocolPage.accountId!,
+                    protocolPage.protocolKey!,
+                )
+            " />
+        <section
+            v-show="
+                activeWorkspace === 'protocols' &&
+                (protocolPage.page === 'create' || protocolPage.page === 'edit')
+            "
+            class="workspace-view entity-editor-page"
+            aria-label="协议设置">
+            <button type="button" class="entity-back" @click="closeConfiguration">
+                ← 返回协议
+            </button>
+            <header class="page-heading">
+                <div>
+                    <h1>{{ protocolPage.page === "create" ? "添加协议出口" : "编辑协议出口" }}</h1>
+                    <p v-if="protocolPage.accountId">
+                        {{ protocolPage.platform }} · {{ protocolPage.accountId }}
+                    </p>
+                </div>
+            </header>
+            <div id="protocol-editor-target"></div>
+        </section>
         <OperationsView
             v-show="activeWorkspace === 'activity'"
             :client="client"

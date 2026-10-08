@@ -22,7 +22,7 @@ export function useAccountControlInteractions(deps: AccountControlInteractionDep
     const conversationHead = ref<InstanceType<typeof AccountControlConversationHead>>();
     const contactsPanel = ref<HTMLElement>();
     const contactSearchInput = ref<HTMLInputElement>();
-    const composerInput = ref<HTMLTextAreaElement>();
+    const composerInput = ref<{ focus: () => void }>();
     const sendState = ref<HTMLElement>();
 
     async function focusConversationBack() {

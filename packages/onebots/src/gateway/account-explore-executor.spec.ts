@@ -24,7 +24,9 @@ function setup(
     const getChannelList = vi
         .fn()
         .mockResolvedValue([{ channel_id: identity("channel-1"), channel_name: "频道" }]);
+    const logger = { error: vi.fn() };
     const adapter = {
+        logger,
         accounts: new Map([["bot", { status: "online" }]]),
         describeCapabilities: () => ({ actions }),
         resolveId: identity,
@@ -36,10 +38,40 @@ function setup(
         executor: new GatewayAccountExploreExecutor(app, expected),
         getFriendList,
         getChannelList,
+        logger,
     };
 }
 
 describe("账号控制页平台能力查询", () => {
+    it("平台查询失败保留结构化原因，并留下不含异常原文的故障记录", async () => {
+        const { executor, getFriendList, logger } = setup({
+            get_friend_list: { support: "native" },
+        });
+        getFriendList.mockRejectedValueOnce(new TypeError("private-platform-token"));
+        await expect(
+            executor.explore({
+                expected,
+                account: "mock/bot",
+                action: "friends",
+                kind: "friend",
+            }),
+        ).rejects.toMatchObject({ code: "platform_query_failed" });
+        expect(logger.error).toHaveBeenCalledWith("账号资料查询失败", {
+            account: "mock/bot",
+            action: "friends",
+            errorType: "TypeError",
+        });
+        expect(JSON.stringify(logger.error.mock.calls)).not.toContain("private-platform-token");
+        // 一次失败不能占住并发额度或影响后续成功查询。
+        expect(
+            await executor.explore({
+                expected,
+                account: "mock/bot",
+                action: "friends",
+                kind: "friend",
+            }),
+        ).toMatchObject({ supported: true, items: [{ id: "friend-1" }] });
+    });
     it("仅查询已声明能力，并只返回可展示的标准字段", async () => {
         const { executor, getFriendList } = setup({
             get_friend_list: { support: "native" },

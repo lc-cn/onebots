@@ -6,6 +6,8 @@ export type ConfigurationScope = Exclude<ConfigurationWorkspace, "review">;
 export interface ConfigurationNavigationTarget {
     platform: string;
     accountId: string;
+    mode?: "create" | "edit";
+    defaultScope?: boolean;
     /** 空字符串表示添加协议，未提供表示编辑账号。 */
     protocolKey?: string;
     action?: "remove";

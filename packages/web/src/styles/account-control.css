@@ -1,9 +1,19 @@
+.workspace:has(> .account-control) {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
 .account-control {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
     max-width: 1500px;
     min-width: 0;
+    min-height: 0;
 }
 .account-control-header {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 1rem;
     min-height: 5.5rem;
@@ -63,15 +73,13 @@
 .account-control-grid {
     display: grid;
     grid-template-columns: minmax(14rem, 18rem) minmax(23rem, 1fr);
-    min-height: 0;
-    height: clamp(30rem, calc(100dvh - 14rem), 58rem);
+    flex: 1 1 auto;
+    min-height: 30rem;
+    max-height: 58rem;
     overflow: hidden;
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
     background: var(--surface);
-}
-.account-control-grid.status-unconfirmed {
-    height: clamp(30rem, calc(100dvh - 17rem), 58rem);
 }
 .account-control-grid.has-selection.has-context {
     grid-template-columns: minmax(14rem, 18rem) minmax(23rem, 1fr) minmax(13rem, 17rem);

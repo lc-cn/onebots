@@ -6,6 +6,7 @@ import type {
     ControlSendContext,
 } from "@onebots/core/control";
 import type { AccountControlConversationItem } from "./account-control-list.js";
+import { accountControlErrorMessage } from "./account-control-error.js";
 
 interface AccountDetailDependencies {
     client: Pick<ControlClient, "exploreAccount">;
@@ -21,7 +22,7 @@ export function useAccountDetail(deps: AccountDetailDependencies) {
     const detail = ref<ControlAccountItem>();
     const supported = ref<boolean>();
     const loading = ref(false);
-    const error = ref("");
+    const failure = ref("");
     let requestRevision = 0;
 
     function reset() {
@@ -29,7 +30,7 @@ export function useAccountDetail(deps: AccountDetailDependencies) {
         detail.value = undefined;
         supported.value = undefined;
         loading.value = false;
-        error.value = "";
+        failure.value = "";
     }
 
     async function load(
@@ -46,7 +47,7 @@ export function useAccountDetail(deps: AccountDetailDependencies) {
             const current = expected ?? (await deps.ensureContext());
             if (!isCurrent()) return;
             if (!current) {
-                error.value = "网关连接暂不可用，仍可查看已保存的聊天记录。";
+                failure.value = "网关连接暂不可用，仍可查看已保存的聊天记录。";
                 return;
             }
             const result = await deps.client.exploreAccount({
@@ -60,14 +61,18 @@ export function useAccountDetail(deps: AccountDetailDependencies) {
             if (!isCurrent()) return;
             supported.value = result.supported;
             detail.value = result.supported ? result.items[0] : undefined;
-            error.value = "";
+            failure.value = "";
             deps.onCapabilities(result);
-        } catch {
-            if (isCurrent()) error.value = "详情读取失败，请重试；列表信息仍可使用。";
+        } catch (error) {
+            if (isCurrent())
+                failure.value = accountControlErrorMessage(
+                    error,
+                    "详情读取失败，请重试；列表信息仍可使用。",
+                );
         } finally {
             if (isCurrent()) loading.value = false;
         }
     }
 
-    return { detail, supported, loading, error, load, reset };
+    return { detail, supported, loading, error: failure, load, reset };
 }

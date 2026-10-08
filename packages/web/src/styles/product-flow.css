@@ -229,6 +229,47 @@
     color: var(--fg-secondary);
     padding: 0.7rem 0;
 }
+.verification-settled {
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.7rem;
+}
+.verification-settled > summary {
+    color: var(--fg-secondary);
+    font-size: var(--type-label);
+    cursor: pointer;
+}
+.verification-settled-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: var(--type-label);
+}
+.verification-settled-row code {
+    overflow-wrap: anywhere;
+}
+.verification-settled-row span {
+    color: var(--fg-secondary);
+}
+.verification-settled-row .ui-button {
+    margin-left: auto;
+}
+.verification-recovery {
+    border-top: 1px solid var(--border);
+    padding-top: 0.55rem;
+}
+.verification-recovery > summary {
+    min-height: 2.5rem;
+    color: var(--fg-secondary);
+    font-size: var(--type-label);
+    cursor: pointer;
+}
+.verification-recovery[open] > * + * {
+    margin-top: 0.65rem;
+}
 
 .feature-intro {
     position: fixed;

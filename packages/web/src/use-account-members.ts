@@ -1,4 +1,5 @@
 import { ref } from "vue";
+import { accountControlErrorMessage } from "./account-control-error.js";
 import type {
     ControlAccountExploreResult,
     ControlAccountItem,
@@ -22,7 +23,7 @@ export function useAccountMembers(deps: AccountMembersDependencies) {
     const supported = ref(true);
     const truncated = ref(false);
     const loading = ref(false);
-    const error = ref("");
+    const failure = ref("");
 
     function reset() {
         members.value = [];
@@ -30,7 +31,7 @@ export function useAccountMembers(deps: AccountMembersDependencies) {
         supported.value = true;
         truncated.value = false;
         loading.value = false;
-        error.value = "";
+        failure.value = "";
     }
 
     async function load(
@@ -58,15 +59,15 @@ export function useAccountMembers(deps: AccountMembersDependencies) {
             loaded.value = true;
             truncated.value = result.truncated;
             members.value = result.items;
-            error.value = "";
+            failure.value = "";
             deps.onCapabilities(result);
-        } catch {
+        } catch (error) {
             if (!deps.disposed() && revision === deps.revision())
-                error.value = "成员读取失败，请重试。";
+                failure.value = accountControlErrorMessage(error, "成员读取失败，请重试。");
         } finally {
             if (revision === deps.revision()) loading.value = false;
         }
     }
 
-    return { members, loaded, supported, truncated, loading, error, load, reset };
+    return { members, loaded, supported, truncated, loading, error: failure, load, reset };
 }

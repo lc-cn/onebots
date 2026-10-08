@@ -9,12 +9,8 @@
 }
 @media (max-width: 1100px) {
     .account-control-grid {
-        height: auto;
         min-height: 0;
-        overflow: visible;
-    }
-    .account-control-grid.status-unconfirmed {
-        height: auto;
+        grid-template-rows: minmax(0, 1fr);
     }
     .account-control-grid.has-selection,
     .account-control-grid.has-selection.has-context {
@@ -22,35 +18,17 @@
     }
     .account-control-contacts,
     .account-control-conversation {
-        height: min(76dvh, 58rem);
-        min-height: 32rem;
+        height: 100%;
+        min-height: 0;
     }
-    .account-control-context {
-        grid-column: 1 / -1;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: none;
-        border-left: 0;
-        border-top: 1px solid var(--border);
-        max-height: 15rem;
-        background: var(--surface-raised);
-    }
-    .account-control-context.single-section {
-        grid-template-columns: 1fr;
-    }
-    .account-control-context section + section {
-        border-top: 0;
-        border-left: 1px solid var(--border);
-    }
-}
-@media (min-width: 701px) and (max-width: 900px) {
-    .account-control-contacts,
-    .account-control-conversation {
-        min-height: min(32rem, calc(100dvh - 15rem));
-        height: min(76dvh, calc(100dvh - 15rem), 58rem);
+    .account-control-grid > .account-control-context {
+        display: none;
     }
 }
 @media (max-width: 700px) {
+    .account-control-grid {
+        min-height: 16rem;
+    }
     .account-control-contacts-dialog {
         position: fixed;
         inset: auto 0 0;
@@ -63,7 +41,7 @@
         overflow: hidden;
         border: 1px solid var(--border);
         border-radius: var(--radius-panel) var(--radius-panel) 0 0;
-        background: var(--surface-raised);
+        background: var(--bg);
         color: var(--fg);
         box-shadow: 0 -1rem 3rem rgb(0 0 0 / 0.18);
     }
@@ -135,7 +113,7 @@
         overflow: hidden;
         border: 1px solid var(--border);
         border-radius: var(--radius-panel) var(--radius-panel) 0 0;
-        background: var(--surface);
+        background: var(--bg);
         color: var(--fg);
         box-shadow: 0 -1rem 3rem rgb(0 0 0 / 0.18);
     }
@@ -158,6 +136,7 @@
         min-height: 3.5rem;
         padding: 0.7rem 1rem;
         border-bottom: 1px solid var(--border);
+        background: var(--bg);
     }
     .account-control-category-sheet-head button {
         min-height: 2.5rem;
@@ -190,27 +169,12 @@
     .account-control-category-options span {
         font-size: var(--type-caption);
     }
-    .account-control-actions-trigger {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 2.5rem;
-        min-width: 2.5rem;
-        padding: 0.3rem;
-        border: 1px solid var(--border-strong);
-        border-radius: var(--radius-control);
-        background: var(--surface-raised);
-        color: var(--fg);
-        font-size: var(--type-label);
-        cursor: pointer;
-    }
     .account-control-refresh {
         display: none;
     }
     .account-control-conversation-head > .account-control-history-setting {
         display: none;
     }
-    .account-control-actions-dialog,
     .account-control-manual-dialog {
         position: fixed;
         inset: auto 0 0;
@@ -222,21 +186,13 @@
         overflow: hidden;
         border: 1px solid var(--border);
         border-radius: var(--radius-panel) var(--radius-panel) 0 0;
-        background: var(--surface);
+        background: var(--bg);
         color: var(--fg);
         box-shadow: 0 -1rem 3rem rgb(0 0 0 / 0.18);
     }
-    .account-control-actions-dialog::backdrop,
     .account-control-manual-dialog::backdrop {
         background: rgb(0 0 0 / 0.4);
     }
-    .account-control-actions-sheet {
-        max-height: 82dvh;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        padding-bottom: env(safe-area-inset-bottom);
-    }
-    .account-control-actions-sheet-head,
     .account-control-manual-sheet-head {
         position: sticky;
         top: 0;
@@ -247,49 +203,14 @@
         min-height: 3.5rem;
         padding: 0.7rem 1rem;
         border-bottom: 1px solid var(--border);
-        background: var(--surface);
+        background: var(--bg);
     }
-    .account-control-actions-sheet-head button,
     .account-control-manual-sheet-head button {
         min-height: 2.5rem;
         border: 0;
         background: transparent;
         color: var(--accent);
         cursor: pointer;
-    }
-    .account-control-actions-list {
-        display: grid;
-        gap: 0.15rem;
-        padding: 0.55rem;
-    }
-    .account-control-actions-list button {
-        display: flex;
-        align-items: center;
-        gap: 0.65rem;
-        min-height: 2.75rem;
-        padding: 0.55rem 0.7rem;
-        border: 0;
-        border-radius: var(--radius-control);
-        background: transparent;
-        color: var(--fg);
-        text-align: left;
-        cursor: pointer;
-    }
-    .account-control-actions-list button:hover {
-        background: var(--surface-strong);
-    }
-    .account-control-actions-list button[aria-disabled="true"] {
-        opacity: 0.6;
-        cursor: progress;
-    }
-    .account-control-actions-dialog .account-control-context {
-        display: block;
-        max-height: none;
-        border: 0;
-    }
-    .account-control-actions-dialog .account-control-context section {
-        max-height: none;
-        overflow: visible;
     }
     .account-control-manual {
         display: none;
@@ -418,12 +339,12 @@
     .account-control-contacts {
         border-right: 0;
         border-bottom: 1px solid var(--border);
-        height: max(20rem, calc(100dvh - 11.5rem));
-        min-height: 20rem;
+        height: 100%;
+        min-height: 0;
         max-height: none;
     }
     .account-control-grid:not(.has-selection) .account-control-contacts {
-        min-height: 20rem;
+        min-height: 0;
     }
     .account-control-grid.has-selection .account-control-contacts,
     .account-control-grid:not(.has-selection) .account-control-conversation,
@@ -435,12 +356,12 @@
         min-height: 5rem;
     }
     .account-control-conversation {
-        min-height: 20rem;
-        height: max(20rem, calc(100dvh - 11.5rem));
+        min-height: 0;
+        height: 100%;
     }
     .account-control-grid.status-unconfirmed .account-control-contacts,
     .account-control-grid.status-unconfirmed .account-control-conversation {
-        height: max(20rem, calc(100dvh - 15rem));
+        height: 100%;
     }
     .account-control-context section + section {
         border-left: 0;
@@ -455,8 +376,6 @@
         display: none;
     }
     .account-control-mobile-back,
-    .account-control-actions-trigger,
-    .account-control-actions-dialog,
     .account-control-manual-trigger,
     .account-control-manual-dialog {
         display: none;

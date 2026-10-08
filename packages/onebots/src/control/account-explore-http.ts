@@ -7,6 +7,7 @@ import {
 } from "@onebots/core/control";
 import type { ControlAuth } from "./auth.js";
 import { jsonResponse, readBody } from "./http-utils.js";
+import { AccountExploreError, ACCOUNT_EXPLORE_ERRORS } from "../gateway/account-explore-errors.js";
 
 export interface AccountExploreSource {
     context(): ControlSendContext | undefined;
@@ -60,9 +61,12 @@ export async function respondControlAccountExplore(
             return true;
         }
         jsonResponse(response, 200, result);
-    } catch {
-        if (!response.headersSent)
-            jsonResponse(response, 503, { message: "账号查询失败，请稍后重试" });
+    } catch (error) {
+        if (!response.headersSent) {
+            const code = error instanceof AccountExploreError ? error.code : "query_failed";
+            const failure = ACCOUNT_EXPLORE_ERRORS[code];
+            jsonResponse(response, failure.status, { code, message: failure.message });
+        }
     }
     return true;
 }

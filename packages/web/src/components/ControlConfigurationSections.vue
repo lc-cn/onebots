@@ -46,19 +46,48 @@ const emit = defineEmits<{
 const layout = computed(() => configurationGroupLayout(props.groups));
 const activeAccountKey = ref("");
 const activeProtocolKey = ref("");
+const createdAccountKey = ref("");
+const createdProtocolKey = ref("");
 const pendingAccountTitle = ref("");
 const pendingProtocol = ref<{ target: string; name: string }>();
 const protocolTargetChosen = ref(false);
 let appliedNavigationRevision = 0;
-const activeAccount = computed(
-    () =>
-        layout.value.accounts.find(group => group.key === activeAccountKey.value) ??
-        layout.value.accounts[0],
-);
-const activeProtocol = computed(
-    () =>
-        layout.value.protocols.find(group => group.key === activeProtocolKey.value) ??
-        layout.value.protocols[0],
+const focused = computed(() => props.workspace !== "runtime" && Boolean(props.navigationTarget));
+const activeAccount = computed(() => {
+    if (!focused.value)
+        return (
+            layout.value.accounts.find(group => group.key === activeAccountKey.value) ??
+            layout.value.accounts[0]
+        );
+    const target = props.navigationTarget;
+    const key =
+        target?.mode === "edit" && target.accountId
+            ? JSON.stringify([`${target.platform}.${target.accountId}`])
+            : createdAccountKey.value;
+    return layout.value.accounts.find(group => group.key === key);
+});
+const activeProtocol = computed(() => {
+    if (!focused.value)
+        return (
+            layout.value.protocols.find(group => group.key === activeProtocolKey.value) ??
+            layout.value.protocols[0]
+        );
+    const target = props.navigationTarget;
+    const key =
+        target?.defaultScope && target.protocolKey
+            ? JSON.stringify(["general", target.protocolKey])
+            : target?.mode === "edit" && target.accountId && target.protocolKey
+              ? JSON.stringify([`${target.platform}.${target.accountId}`, target.protocolKey])
+              : createdProtocolKey.value;
+    return layout.value.protocols.find(group => group.key === key);
+});
+
+watch(
+    () => props.navigationTarget?.revision,
+    () => {
+        createdAccountKey.value = "";
+        createdProtocolKey.value = "";
+    },
 );
 
 watch(
@@ -79,6 +108,7 @@ watch(
         );
         if (requested) {
             activeAccountKey.value = requested.key;
+            createdAccountKey.value = requested.key;
             pendingAccountTitle.value = "";
         } else if (!layout.value.accounts.some(group => group.key === activeAccountKey.value))
             activeAccountKey.value = layout.value.accounts[0]?.key ?? "";
@@ -95,6 +125,12 @@ watch(
         if (!target || target.revision === appliedNavigationRevision) return;
         if (target.platform) platform.value = target.platform;
         if (target.protocolKey !== undefined) protocol.value = target.protocolKey;
+        if (target.defaultScope) {
+            protocolTargetChosen.value = true;
+            accountTarget.value = "";
+            appliedNavigationRevision = target.revision;
+            return;
+        }
         if (!target.platform || !target.accountId) {
             if (target.platform) appliedNavigationRevision = target.revision;
             return;
@@ -143,6 +179,7 @@ watch(
             : undefined;
         if (requested) {
             activeProtocolKey.value = requested.key;
+            createdProtocolKey.value = requested.key;
             pendingProtocol.value = undefined;
         } else if (!layout.value.protocols.some(group => group.key === activeProtocolKey.value))
             activeProtocolKey.value = layout.value.protocols[0]?.key ?? "";
@@ -188,7 +225,7 @@ function forwardMode(field: SchemaFieldDef, value: string) {
             </div>
             <p>先创建平台身份，再填写该平台要求的凭据和连接参数。</p>
         </header>
-        <div class="configuration-add-row">
+        <div v-if="!focused || navigationTarget?.mode === 'create'" class="configuration-add-row">
             <label
                 >平台<select v-model="platform" name="account-platform" aria-label="平台适配器">
                     <option value="">选择已安装平台</option>
@@ -224,7 +261,7 @@ function forwardMode(field: SchemaFieldDef, value: string) {
         </div>
         <div class="configuration-object-layout">
             <aside
-                v-if="layout.accounts.length"
+                v-if="layout.accounts.length && !focused"
                 class="configuration-object-list"
                 aria-label="平台账号列表">
                 <button
@@ -289,7 +326,9 @@ function forwardMode(field: SchemaFieldDef, value: string) {
             </div>
             <p>决定下游框架如何连接 OneBots，并为全局或单个账号设置参数。</p>
         </header>
-        <div class="configuration-add-row protocol">
+        <div
+            v-if="!focused || navigationTarget?.mode === 'create'"
+            class="configuration-add-row protocol">
             <div class="configuration-scope-field">
                 <div>
                     <label for="configuration-protocol-target">配置作用域</label>
@@ -337,7 +376,7 @@ function forwardMode(field: SchemaFieldDef, value: string) {
         </div>
         <div class="configuration-object-layout">
             <aside
-                v-if="layout.protocols.length"
+                v-if="layout.protocols.length && !focused"
                 class="configuration-object-list"
                 aria-label="协议配置列表">
                 <button
@@ -390,7 +429,7 @@ function forwardMode(field: SchemaFieldDef, value: string) {
                     @change="forwardChange"
                     @mode="forwardMode" />
             </div>
-            <div v-else-if="protocols.length" class="configuration-empty">
+            <div v-else-if="protocols.length && !focused" class="configuration-empty">
                 <strong>尚未添加协议配置</strong
                 ><span>先选择作用域和协议。账号出口需要明确添加到具体账号。</span>
             </div>

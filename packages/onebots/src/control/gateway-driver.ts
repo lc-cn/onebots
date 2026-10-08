@@ -1,5 +1,6 @@
 import { openGatewayLog, appendGatewayLog } from "./gateway-log.js";
 import { GatewayRequestClient, GatewayRequestError } from "./gateway-request-client.js";
+import { AccountExploreError } from "../gateway/account-explore-errors.js";
 import { requestGatewayMessageDebug } from "./gateway-message-debug-client.js";
 import {
     requestGatewayVerification,
@@ -19,10 +20,7 @@ import {
     type ControlAccountExploreRequest,
     type ControlAccountExploreResult,
 } from "@onebots/core/control";
-import {
-    isGatewayAccountExploreRequest,
-    isGatewayAccountExploreReply,
-} from "../gateway/account-explore-contracts.js";
+import { requestGatewayAccountExplore } from "./gateway-account-explore-client.js";
 import { GatewayMcpClient } from "./gateway-mcp-client.js";
 import type { GatewayMcpRequest, GatewayMcpResult } from "../gateway/mcp-contracts.js";
 import { waitForProcessGroupExit } from "../process-group-exit.js";
@@ -250,40 +248,21 @@ export class NodeGatewayDriver implements GatewayDriver {
     ): Promise<ControlAccountExploreResult> {
         const managed = this.children.get(instanceId);
         const context = this.sendContext(instanceId);
-        if (!managed?.accountExplore || !managed.requests || !context ||
+        if (!managed?.requests || !context)
+            return Promise.reject(new AccountExploreError("gateway_unavailable"));
+        if (!managed.accountExplore)
+            return Promise.reject(new AccountExploreError("gateway_unsupported"));
+        if (
             request.expected.gatewayInstanceId !== context.gatewayInstanceId ||
-            request.expected.configVersion !== context.configVersion)
-            return Promise.reject(new GatewayRequestError("rejected", "账号查询网关不可用"));
+            request.expected.configVersion !== context.configVersion
+        )
+            return Promise.reject(new AccountExploreError("context_changed"));
         const identity = {
             protocolVersion: 1 as const,
             controlInstanceId: this.options.controlInstanceId,
             gatewayInstanceId: instanceId,
         };
-        return managed.requests.request({
-            encode: requestId => {
-                const message = { ...identity, type: "gateway.account-explore" as const, requestId, request };
-                if (!isGatewayAccountExploreRequest(message)) throw new Error("账号查询请求无效");
-                return message;
-            },
-            decode: (value, requestId) => {
-                if (!isGatewayAccountExploreReply(value) || value.requestId !== requestId ||
-                    value.controlInstanceId !== identity.controlInstanceId ||
-                    value.gatewayInstanceId !== instanceId) return;
-                if (value.outcome === "succeeded" && (
-                    value.result?.expected.configVersion !== context.configVersion ||
-                    value.result?.account !== request.account ||
-                    value.result?.action !== request.action
-                )) return;
-                return value.outcome === "succeeded"
-                    ? { ok: true, result: value.result! }
-                    : { ok: false, error: new GatewayRequestError("rejected", "账号查询被网关拒绝") };
-            },
-            errors: {
-                unavailable: "账号查询网关不可用", limit: "未完成网关请求已达上限",
-                invalid: "账号查询请求无效", timeout: "账号查询超时",
-                send: "账号查询通信中断", closed: "账号查询网关已关闭",
-            },
-        });
+        return requestGatewayAccountExplore(managed.requests, identity, context, request);
     }
 
     messageDebug(

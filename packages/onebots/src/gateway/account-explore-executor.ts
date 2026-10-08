@@ -1,5 +1,6 @@
 import type { BaseApp, Adapter } from "@onebots/core";
 import { supportsSendScene } from "./send-scene-capability.js";
+import { AccountExploreError } from "./account-explore-errors.js";
 import {
     CONTROL_ACCOUNT_EXPLORE_ITEM_LIMIT,
     CONTROL_ACCOUNT_EXPLORE_RESULT_LENGTH_LIMIT,
@@ -95,17 +96,18 @@ export class GatewayAccountExploreExecutor {
     ): Promise<ControlAccountExploreResult | undefined> {
         if (
             this.closed ||
-            this.active >= 8 ||
             !isControlAccountExploreRequest(request) ||
             request.expected.gatewayInstanceId !== this.context.gatewayInstanceId ||
             request.expected.configVersion !== this.context.configVersion
         )
             return undefined;
+        if (this.active >= 8) throw new AccountExploreError("query_busy");
         const separator = request.account.indexOf("/");
         const platform = request.account.slice(0, separator);
         const accountId = request.account.slice(separator + 1);
         const adapter = [...this.app.adapters].find(([name]) => String(name) === platform)?.[1];
-        if (!adapter || adapter.accounts.get(accountId)?.status !== "online") return undefined;
+        if (!adapter || adapter.accounts.get(accountId)?.status !== "online")
+            throw new AccountExploreError("account_unavailable");
         const capability = {
             friends: "get_friend_list",
             groups: "get_group_list",
@@ -180,8 +182,19 @@ export class GatewayAccountExploreExecutor {
                 resultLength += itemLength;
             }
             return result;
-        } catch {
-            return undefined;
+        } catch (error) {
+            // 只记录错误分类，第三方异常正文可能含 Cookie、Token 或聊天资料。
+            adapter.logger.error("账号资料查询失败", {
+                account: request.account,
+                action: request.action,
+                errorType:
+                    error instanceof TypeError
+                        ? "TypeError"
+                        : error instanceof RangeError
+                          ? "RangeError"
+                          : "Error",
+            });
+            throw new AccountExploreError("platform_query_failed");
         } finally {
             this.active--;
         }

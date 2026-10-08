@@ -43,43 +43,134 @@ export const systemNavigation: WorkspaceNavigationItem = {
     icon: IconKey,
 };
 
-export function workspaceFromHash(hash: string): Workspace {
-    const candidate = hash.replace(/^#/, "").split("?")[0];
+function routeParts(location: string): { segments: string[]; query: URLSearchParams } | undefined {
+    try {
+        const url = new URL(location, "http://localhost");
+        const segments = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+        if (segments.some(value => !value || value.length > 512)) return undefined;
+        return {
+            segments: segments[0] === "console" ? segments.slice(1) : [],
+            query: url.searchParams,
+        };
+    } catch {
+        return undefined;
+    }
+}
+
+export function workspaceFromPath(location: string): Workspace {
+    const candidate = routeParts(location)?.segments[0];
     return candidate === "terminal" ||
         [...workspaceNavigation, systemNavigation].some(item => item.id === candidate)
         ? (candidate as Workspace)
         : "overview";
 }
 
+export function workspacePath(workspace: Workspace): string {
+    return `/console/${workspace}`;
+}
+
+export type EntityPage = "list" | "detail" | "create" | "edit";
+export interface AccountPageRoute {
+    page: EntityPage;
+    platform?: string;
+    accountId?: string;
+}
+export interface ProtocolPageRoute extends AccountPageRoute {
+    protocolKey?: string;
+    defaultScope?: boolean;
+}
 export interface AccountControlRoute {
     platform: string;
     accountId: string;
 }
 
-export function accountControlFromHash(hash: string): AccountControlRoute | undefined {
-    if (workspaceFromHash(hash) !== "accounts") return undefined;
-    const params = new URLSearchParams(hash.split("?")[1] ?? "");
-    const platform = params.get("platform");
-    const accountId = params.get("account");
-    if (params.get("view") !== "control" || !platform || !accountId ||
-        platform.length > 512 || accountId.length > 512) return undefined;
-    return { platform, accountId };
+export function accountPageFromPath(location: string): AccountPageRoute {
+    const route = routeParts(location);
+    if (route?.segments[0] !== "accounts") return { page: "list" };
+    const [, platform, accountId, action] = route.segments;
+    if (platform === "new" && route.segments.length === 2) {
+        const requested = route.query.get("platform");
+        return {
+            page: "create",
+            ...(requested && requested.length <= 512 ? { platform: requested } : {}),
+        };
+    }
+    if (platform && accountId && route.segments.length === 3)
+        return { page: "detail", platform, accountId };
+    if (platform && accountId && action === "edit" && route.segments.length === 4)
+        return { page: "edit", platform, accountId };
+    return { page: "list" };
 }
 
-export function accountControlHash(route: AccountControlRoute): string {
-    return `#accounts?${new URLSearchParams({ view: "control", platform: route.platform, account: route.accountId })}`;
+export function accountPagePath(route: AccountPageRoute): string {
+    if (route.page === "list") return "/console/accounts";
+    if (route.page === "create")
+        return `/console/accounts/new${route.platform ? `?platform=${encodeURIComponent(route.platform)}` : ""}`;
+    return `/console/accounts/${encodeURIComponent(route.platform ?? "")}/${encodeURIComponent(route.accountId ?? "")}${route.page === "edit" ? "/edit" : ""}`;
 }
 
-export function extensionCategoryFromHash(hash: string): ExtensionCategory {
-    if (workspaceFromHash(hash) !== "extensions") return "platform";
-    const value = new URLSearchParams(hash.split("?")[1] ?? "").get("type");
+export function accountControlFromPath(location: string): AccountControlRoute | undefined {
+    const segments = routeParts(location)?.segments;
+    if (segments?.[0] !== "accounts" || segments.length !== 4 || segments[3] !== "control")
+        return undefined;
+    return { platform: segments[1], accountId: segments[2] };
+}
+
+export function accountControlPath(route: AccountControlRoute): string {
+    return `/console/accounts/${encodeURIComponent(route.platform)}/${encodeURIComponent(route.accountId)}/control`;
+}
+
+export function protocolPageFromPath(location: string): ProtocolPageRoute {
+    const route = routeParts(location);
+    if (route?.segments[0] !== "protocols") return { page: "list" };
+    const [, platform, accountId, protocolKey, action] = route.segments;
+    if (platform === "new" && route.segments.length === 2) {
+        const requestedPlatform = route.query.get("platform");
+        const requestedAccount = route.query.get("account");
+        const requestedProtocol = route.query.get("protocol");
+        return {
+            page: "create",
+            ...(requestedPlatform &&
+            requestedAccount &&
+            requestedPlatform.length <= 512 &&
+            requestedAccount.length <= 512
+                ? { platform: requestedPlatform, accountId: requestedAccount }
+                : {}),
+            ...(requestedProtocol && requestedProtocol.length <= 512
+                ? { protocolKey: requestedProtocol }
+                : {}),
+        };
+    }
+    if (platform === "defaults" && accountId && route.segments.length === 3)
+        return { page: "create", protocolKey: accountId, defaultScope: true };
+    if (platform && accountId && protocolKey && route.segments.length === 4)
+        return { page: "detail", platform, accountId, protocolKey };
+    if (platform && accountId && protocolKey && action === "edit" && route.segments.length === 5)
+        return { page: "edit", platform, accountId, protocolKey };
+    return { page: "list" };
+}
+
+export function protocolPagePath(route: ProtocolPageRoute): string {
+    if (route.page === "list") return "/console/protocols";
+    if (route.defaultScope && route.protocolKey)
+        return `/console/protocols/defaults/${encodeURIComponent(route.protocolKey)}`;
+    if (route.page === "create") {
+        const query = new URLSearchParams();
+        if (route.platform) query.set("platform", route.platform);
+        if (route.accountId) query.set("account", route.accountId);
+        if (route.protocolKey) query.set("protocol", route.protocolKey);
+        return `/console/protocols/new${query.size ? `?${query}` : ""}`;
+    }
+    return `/console/protocols/${encodeURIComponent(route.platform ?? "")}/${encodeURIComponent(route.accountId ?? "")}/${encodeURIComponent(route.protocolKey ?? "")}${route.page === "edit" ? "/edit" : ""}`;
+}
+
+export function extensionCategoryFromPath(location: string): ExtensionCategory {
+    const route = routeParts(location);
+    if (route?.segments[0] !== "extensions") return "platform";
+    const value = route.query.get("type");
     return value === "protocol" || value === "framework" ? value : "platform";
 }
 
-export function extensionWorkspaceHash(category: ExtensionCategory): string {
-    return `#extensions?type=${category}`;
-}
-
-export function workspaceHash(workspace: Workspace): string {
-    return `#${workspace}`;
+export function extensionWorkspacePath(category: ExtensionCategory): string {
+    return `/console/extensions?type=${category}`;
 }

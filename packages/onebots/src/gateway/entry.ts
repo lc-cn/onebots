@@ -221,9 +221,28 @@ for (const name of Object.keys(process.env)) {
     )
         delete process.env[name];
 }
+// Node 默认会把无人处理的 Promise 拒绝升级为未捕获异常；运行期异步任务失败
+// 不应直接杀死整个网关。第三方拒绝原因可能含凭据，只记录固定诊断文本。
+let nextUnhandledRejectionLogAt = 0;
+process.on("unhandledRejection", () => {
+    const now = Date.now();
+    // 故障风暴也不能无限追加日志，避免网关日志写满工作区。
+    if (now < nextUnhandledRejectionLogAt) return;
+    nextUnhandledRejectionLogAt = now + 30_000;
+    process.stderr.write(
+        "[onebots] 网关捕获未处理 Promise 拒绝，进程继续运行；出错任务未恢复，请检查扩展异步任务\n",
+    );
+});
 const handshakeTimer = setTimeout(() => process.exit(1), 30_000);
 process.on("message", value => {
-    if (handleGatewayAccountExplore(value, startMessage, stopping ? undefined : accountExploreExecutor, send))
+    if (
+        handleGatewayAccountExplore(
+            value,
+            startMessage,
+            stopping ? undefined : accountExploreExecutor,
+            send,
+        )
+    )
         return;
     if (
         handleGatewayVerification(

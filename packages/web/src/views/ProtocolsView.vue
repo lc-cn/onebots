@@ -1,53 +1,37 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import type {
     ControlConfigurationSnapshot,
     ControlInstallationCatalog,
     ControlStatus,
 } from "@onebots/core/control";
-import { IconAlertTriangle, IconCheck, IconCopy, IconPlugConnected } from "@tabler/icons-vue";
+import { IconArrowRight, IconPlugConnected } from "@tabler/icons-vue";
 import { buildAccountCards } from "../account-overview.js";
 import { buildExtensionTabs, protocolKeyForPackage } from "../extension-tabs.js";
-import { normalizeConnectionOrigin } from "../components/control-connections.js";
 import UiButton from "../ui/UiButton.vue";
-import UiInfoTip from "../ui/UiInfoTip.vue";
 
 const props = defineProps<{
     configuration?: ControlConfigurationSnapshot;
     status?: ControlStatus;
     catalog?: ControlInstallationCatalog;
     configurationUnavailable?: boolean;
-    focusedAccount?: { platform: string; accountId: string };
 }>();
 const emit = defineEmits<{
     configure: [platform: string, accountId: string, protocolKey?: string];
-    configureAccount: [platform: string, accountId: string];
-    remove: [platform: string, accountId: string, protocolKey: string];
+    detail: [platform: string, accountId: string, protocolKey: string];
+    defaults: [protocolKey: string];
     showAccounts: [];
-    clearAccount: [];
     selectExtensions: [];
 }>();
-const connectionOrigin = ref(window.location.origin);
-const normalizedOrigin = computed(() => normalizeConnectionOrigin(connectionOrigin.value));
-const localOnly = computed(() => {
-    if (!normalizedOrigin.value) return false;
-    return ["localhost", "127.0.0.1", "[::1]", "::1"].includes(
-        new URL(normalizedOrigin.value).hostname,
-    );
-});
 const cards = computed(() =>
-    buildAccountCards(
-        props.configuration,
-        props.status,
-        props.catalog,
-        normalizedOrigin.value ?? window.location.origin,
-    ),
+    buildAccountCards(props.configuration, props.status, props.catalog, window.location.origin),
 );
 const outlets = computed(() =>
     cards.value.flatMap(card =>
         card.protocols.map(protocol => ({
             id: protocol.guide.id,
             platform: card.platform,
+            platformLabel: card.platformLabel,
             accountId: card.accountId,
             protocol,
         })),
@@ -70,33 +54,13 @@ watch(
     },
     { immediate: true },
 );
-watch(
-    () => props.focusedAccount,
-    account => {
-        if (!account) return;
-        const first = outlets.value.find(
-            outlet => outlet.platform === account.platform && outlet.accountId === account.accountId,
-        );
-        if (first) activeProtocol.value = first.protocol.guide.protocolKey;
-    },
-    { immediate: true },
-);
 const activeProtocolInstalled = computed(
     () => protocolTabs.value.find(item => item.key === activeProtocol.value)?.installed,
 );
 const visibleOutlets = computed(() =>
-    outlets.value.filter(
-        outlet =>
-            outlet.protocol.guide.protocolKey === activeProtocol.value &&
-            (!props.focusedAccount ||
-                (outlet.platform === props.focusedAccount.platform &&
-                    outlet.accountId === props.focusedAccount.accountId)),
-    ),
+    outlets.value.filter(outlet => outlet.protocol.guide.protocolKey === activeProtocol.value),
 );
-const copied = ref("");
-const copyError = ref("");
-let copiedTimer: ReturnType<typeof setTimeout> | undefined;
-const protocolStatusLabel = (status?: string) =>
+const statusLabel = (status?: string) =>
     status
         ? {
               pending: "等待中",
@@ -107,34 +71,6 @@ const protocolStatusLabel = (status?: string) =>
               failed: "失败",
           }[status]
         : "状态待确认";
-
-async function copyEndpoint(id: string, value: string) {
-    copyError.value = "";
-    try {
-        await navigator.clipboard.writeText(value);
-    } catch {
-        const textarea = document.createElement("textarea");
-        textarea.value = value;
-        textarea.setAttribute("readonly", "");
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.append(textarea);
-        textarea.select();
-        const accepted = document.execCommand("copy");
-        textarea.remove();
-        if (!accepted) {
-            copyError.value = "浏览器未允许复制，请选中地址后手动复制。";
-            return;
-        }
-    }
-    copied.value = id;
-    clearTimeout(copiedTimer);
-    copiedTimer = setTimeout(() => {
-        if (copied.value === id) copied.value = "";
-    }, 1800);
-}
-
-onUnmounted(() => clearTimeout(copiedTimer));
 </script>
 
 <template>
@@ -147,36 +83,9 @@ onUnmounted(() => clearTimeout(copiedTimer));
                 <p>{{ outlets.length }} 个账号出口</p>
             </div>
         </header>
-
-        <div v-if="focusedAccount" class="protocols-focus">
-            <span>只看 {{ focusedAccount.platform }} · {{ focusedAccount.accountId }}</span>
-            <button type="button" @click="emit('clearAccount')">查看全部账号</button>
-        </div>
-        <div v-if="outlets.length" class="accounts-origin">
-            <label for="protocols-origin">下游访问地址</label>
-            <UiInfoTip
-                label="下游访问地址说明"
-                text="协议 URL 基于这个地址生成。下游在其他设备时，请填写它能访问的 OneBots 域名或 IP。" />
-            <input
-                id="protocols-origin"
-                v-model.trim="connectionOrigin"
-                type="url"
-                name="connection-origin"
-                inputmode="url"
-                autocomplete="url"
-                spellcheck="false" />
-        </div>
-        <p v-if="outlets.length && !normalizedOrigin" class="accounts-warning" role="alert">
-            请输入不含账号密码、以 http:// 或 https:// 开头的地址。
-        </p>
-        <p v-else-if="outlets.length && localOnly" class="accounts-local-note">
-            当前是本机地址；其他设备上的下游应用需要填写可访问的服务器地址。
-        </p>
-        <p v-if="copyError" class="accounts-warning" role="alert">{{ copyError }}</p>
         <p v-if="configurationUnavailable" class="accounts-warning" role="alert">
             配置暂不可用；协议地址待恢复后展示。
         </p>
-
         <div v-if="!catalog && !outlets.length" class="accounts-empty" role="status">
             {{ configurationUnavailable ? "协议信息暂不可用" : "正在读取协议状态…" }}
         </div>
@@ -184,9 +93,7 @@ onUnmounted(() => clearTimeout(copiedTimer));
             <IconPlugConnected :size="30" aria-hidden="true" />
             <h2>还没有任何协议能输出呢</h2>
             <p>先去扩展安装协议，安装后就能为账号添加出口。</p>
-            <div>
-                <UiButton variant="primary" @click="emit('selectExtensions')">去安装协议</UiButton>
-            </div>
+            <UiButton variant="primary" @click="emit('selectExtensions')">去安装协议</UiButton>
         </div>
         <template v-else>
             <div class="entity-tabs" role="group" aria-label="协议分类">
@@ -201,20 +108,20 @@ onUnmounted(() => clearTimeout(copiedTimer));
                 </button>
             </div>
             <div class="entity-tab-actions">
-                <span v-if="!activeProtocolInstalled">此协议依赖未安装；可删除旧出口配置。</span>
+                <span v-if="!activeProtocolInstalled">此协议依赖未安装；已有出口仍可查看。</span>
+                <button
+                    v-if="activeProtocolInstalled"
+                    type="button"
+                    class="entity-inline-link"
+                    @click="emit('defaults', activeProtocol)">
+                    全局默认值
+                </button>
                 <UiButton
                     v-if="activeProtocolInstalled && cards.length"
                     variant="primary"
                     size="sm"
-                    @click="
-                        emit(
-                            'configure',
-                            focusedAccount?.platform ?? '',
-                            focusedAccount?.accountId ?? '',
-                            activeProtocol,
-                        )
-                    "
-                    >添加</UiButton
+                    @click="emit('configure', '', '', activeProtocol)"
+                    >添加出口</UiButton
                 >
                 <UiButton
                     v-else-if="!cards.length"
@@ -229,97 +136,40 @@ onUnmounted(() => clearTimeout(copiedTimer));
             </div>
             <div v-if="!visibleOutlets.length" class="accounts-empty">
                 <IconPlugConnected :size="30" aria-hidden="true" />
-                <h2>{{ focusedAccount ? "此账号尚未添加该协议出口" : "还没有该协议出口" }}</h2>
+                <h2>还没有该协议出口</h2>
+                <p>添加后，可以在详情页复制适合下游使用的地址。</p>
             </div>
             <div v-else class="account-card-list">
-                <article
+                <button
                     v-for="outlet in visibleOutlets"
                     :key="outlet.id"
-                    class="account-card account-protocol">
-                    <header class="account-protocol-heading">
-                        <div>
-                            <h2>{{ outlet.protocol.guide.protocolLabel }}</h2>
-                            <span :class="outlet.protocol.status ?? 'unknown'">{{
-                                protocolStatusLabel(outlet.protocol.status)
-                            }}</span>
-                            <small>{{ outlet.platform }} · {{ outlet.accountId }}</small>
-                        </div>
-                        <div class="account-protocol-actions">
-                            <UiButton
-                                variant="ghost"
-                                size="sm"
-                                @click="
-                                    emit('configureAccount', outlet.platform, outlet.accountId)
-                                ">
-                                查看账号
-                            </UiButton>
-                            <UiButton
-                                variant="ghost"
-                                size="sm"
-                                @click="
-                                    emit(
-                                        'configure',
-                                        outlet.platform,
-                                        outlet.accountId,
-                                        outlet.protocol.guide.protocolKey,
-                                    )
-                                ">
-                                编辑协议
-                            </UiButton>
-                            <UiButton
-                                variant="ghost"
-                                size="sm"
-                                @click="
-                                    emit(
-                                        'remove',
-                                        outlet.platform,
-                                        outlet.accountId,
-                                        outlet.protocol.guide.protocolKey,
-                                    )
-                                "
-                                >删除</UiButton
-                            >
-                        </div>
-                    </header>
-                    <div
-                        v-if="normalizedOrigin && outlet.protocol.guide.endpoints.length"
-                        class="account-endpoints">
-                        <div
-                            v-for="endpoint in outlet.protocol.guide.endpoints"
-                            :key="endpoint.id"
-                            class="account-endpoint">
-                            <span>{{ endpoint.label }}</span>
-                            <code>{{ endpoint.url }}</code>
-                            <button
-                                type="button"
-                                :aria-label="`复制 ${outlet.accountId} ${outlet.protocol.guide.protocolLabel} ${endpoint.label}`"
-                                @click="copyEndpoint(`${outlet.id}:${endpoint.id}`, endpoint.url)">
-                                <IconCheck
-                                    v-if="copied === `${outlet.id}:${endpoint.id}`"
-                                    :size="16"
-                                    aria-hidden="true" />
-                                <IconCopy v-else :size="16" aria-hidden="true" />
-                                {{ copied === `${outlet.id}:${endpoint.id}` ? "已复制" : "复制" }}
-                            </button>
-                        </div>
-                    </div>
-                    <p
-                        v-else-if="outlet.protocol.guide.reverseTargets.length"
-                        class="account-reverse">
-                        仅配置反向投递：{{
-                            outlet.protocol.guide.reverseTargets
-                                .map(target => `${target.label} × ${target.count}`)
-                                .join(" · ")
-                        }}
-                    </p>
-                    <p v-if="outlet.protocol.guide.warning" class="accounts-warning">
-                        <IconAlertTriangle :size="16" aria-hidden="true" />{{
-                            outlet.protocol.guide.warning
-                        }}
-                    </p>
-                </article>
+                    type="button"
+                    class="account-card entity-list-card"
+                    @click="
+                        emit(
+                            'detail',
+                            outlet.platform,
+                            outlet.accountId,
+                            outlet.protocol.guide.protocolKey,
+                        )
+                    ">
+                    <span class="entity-list-main">
+                        <strong>{{ outlet.protocol.guide.protocolLabel }}</strong>
+                        <small>{{ outlet.platformLabel }} · {{ outlet.accountId }}</small>
+                    </span>
+                    <span class="entity-list-meta">
+                        <span class="account-status" :class="outlet.protocol.status ?? 'unknown'">{{
+                            statusLabel(outlet.protocol.status)
+                        }}</span>
+                        <small>{{
+                            outlet.protocol.guide.endpoints.length
+                                ? `${outlet.protocol.guide.endpoints.length} 种连接方式`
+                                : "反向投递"
+                        }}</small>
+                    </span>
+                    <IconArrowRight :size="19" aria-hidden="true" />
+                </button>
             </div>
         </template>
-        <div id="protocol-configuration-target" class="configuration-owner-target"></div>
     </section>
 </template>
