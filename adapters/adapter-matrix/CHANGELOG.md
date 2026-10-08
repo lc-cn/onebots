@@ -1,5 +1,14 @@
 # @onebots/adapter-matrix
 
+## 0.1.9
+
+### Patch Changes
+
+- Updated dependencies [09a1770]
+- Updated dependencies [09a1770]
+- Updated dependencies [09a1770]
+  - onebots@1.2.17
+
 ## 0.1.8
 
 ### Patch Changes
