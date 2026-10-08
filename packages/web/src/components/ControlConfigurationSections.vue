@@ -101,6 +101,16 @@ watch(
 );
 
 watch(
+    () => props.accounts.join("\n"),
+    () => {
+        // 首次进入优先配置真实账号出口；显式选择全局默认值后不再自动改动。
+        if (!protocolTargetChosen.value && !accountTarget.value && props.accounts.length)
+            accountTarget.value = props.accounts[0] ?? "";
+    },
+    { immediate: true },
+);
+
+watch(
     () => layout.value.accounts.map(group => group.key).join("\n"),
     () => {
         const requested = layout.value.accounts.find(

@@ -2,8 +2,13 @@
 import { computed, onUnmounted, reactive, watch } from "vue";
 import { controlVerificationOutcome, type ControlClient } from "@onebots/core/control";
 import ControlVerificationCode from "./ControlVerificationCode.vue";
-import { IconCircleCheck, IconFingerprint } from "@tabler/icons-vue";
+import { IconCircleCheck, IconCopy, IconFingerprint } from "@tabler/icons-vue";
 import UiButton from "../ui/UiButton.vue";
+import {
+    copyDeviceJson,
+    formatDeviceJson,
+    ICQQ_DEVICE_HELPER_SCRIPT,
+} from "./icqq-device-verification.js";
 import type { ControlMutationBlock } from "../control-product-state.js";
 import {
     VerificationController,
@@ -20,6 +25,23 @@ const props = defineProps<{
 const view = reactive(verificationView());
 const abandoned = reactive<Record<string, boolean>>({});
 const accepted = reactive<Record<string, boolean>>({});
+const copyStatus = reactive<Record<string, string>>({});
+async function copyJson(key: string, content: Record<string, unknown>): Promise<void> {
+    try {
+        await copyDeviceJson(content);
+        copyStatus[key] = "JSON 已复制";
+    } catch {
+        copyStatus[key] = "复制失败，请手动选择 JSON 内容";
+    }
+}
+async function copyHelper(key: string): Promise<void> {
+    try {
+        await navigator.clipboard.writeText(ICQQ_DEVICE_HELPER_SCRIPT);
+        copyStatus[key] = "辅助脚本已复制";
+    } catch {
+        copyStatus[key] = "复制失败，请手动选择脚本内容";
+    }
+}
 const controller = new VerificationController(props.client, view, {
     getItem: key => localStorage.getItem(key),
     setItem: (key, value) => localStorage.setItem(key, value),
@@ -106,6 +128,54 @@ const labels = {
                 <p v-if="block.type === 'text'" class="whitespace-pre-wrap break-words">
                     {{ block.content }}
                 </p>
+                <div v-else-if="block.type === 'json'" class="space-y-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <strong class="text-sm">{{ block.label || "JSON 数据" }}</strong>
+                        <UiButton
+                            size="sm"
+                            variant="secondary"
+                            :aria-label="`复制${block.label || 'JSON 数据'}`"
+                            @click="copyJson(`${challenge.id}-${index}`, block.content)">
+                            <IconCopy :size="14" aria-hidden="true" />复制 JSON
+                        </UiButton>
+                    </div>
+                    <pre
+                        class="max-h-60 overflow-auto rounded-control border border-border bg-surface p-3 text-xs font-mono select-text"
+                        >{{ formatDeviceJson(block.content) }}</pre
+                    >
+                    <p v-if="copyStatus[`${challenge.id}-${index}`]" role="status" class="text-xs">
+                        {{ copyStatus[`${challenge.id}-${index}`] }}
+                    </p>
+                    <details
+                        v-if="
+                            challenge.request.platform === 'icqq' &&
+                            challenge.request.type === 'auth'
+                        "
+                        class="rounded-control border border-border p-3 text-sm">
+                        <summary class="cursor-pointer">需要在 QQ 验证页填写设备信息？</summary>
+                        <ol class="mt-3 list-decimal space-y-1 pl-5 text-fg-secondary">
+                            <li>先复制上方设备 JSON，再点击验证链接并进入发送验证码页面。</li>
+                            <li>打开该页面的开发者工具，在 Console 中粘贴辅助脚本并回车。</li>
+                            <li>在弹出的输入框粘贴设备 JSON，成功后继续页面验证。</li>
+                        </ol>
+                        <UiButton
+                            size="sm"
+                            class="mt-3"
+                            :aria-label="'复制 ICQQ 设备验证辅助脚本'"
+                            @click="copyHelper(`${challenge.id}-${index}-script`)">
+                            <IconCopy :size="14" aria-hidden="true" />复制辅助脚本
+                        </UiButton>
+                        <p
+                            v-if="copyStatus[`${challenge.id}-${index}-script`]"
+                            role="status"
+                            class="mt-2 text-xs">
+                            {{ copyStatus[`${challenge.id}-${index}-script`] }}
+                        </p>
+                        <pre class="mt-3 max-h-40 overflow-auto text-xs font-mono select-text">{{
+                            ICQQ_DEVICE_HELPER_SCRIPT
+                        }}</pre>
+                    </details>
+                </div>
                 <div v-else-if="block.type === 'input'">
                     <label :for="`${challenge.id}-${index}`" class="block text-sm mb-1">{{
                         block.placeholder || block.key

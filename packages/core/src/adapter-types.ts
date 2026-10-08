@@ -17,6 +17,8 @@ declare module "./adapter.js" {
             | { type: "qrcode"; content: string; alt?: string }
             | { type: "link"; url: string; label?: string }
             | { type: "text"; content: string }
+            /** 保留原始 JSON 字段；展示层可以独立格式化及复制。 */
+            | { type: "json"; content: Record<string, unknown>; label?: string }
             | {
                   type: "input";
                   key: string;

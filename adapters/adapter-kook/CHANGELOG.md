@@ -1,5 +1,28 @@
 # @onebots/adapter-kook
 
+## 3.0.16
+
+### Patch Changes
+
+- Updated dependencies [ec79a17]
+  - onebots@1.2.16
+
+## 3.0.15
+
+### Patch Changes
+
+- abe58b0: 在常驻管理服务增加独立的通知规则、持久投递与 Webhook、SMTP 邮件和 Bark 渠道；Web 管理台提供动态配置、测试和重试，并为平台连接中断增加明确事件上报。
+- abe58b0: 修复 Windows 原生 Shell 下的构建清理命令，补齐文档站安装脚本产物，并明确 Windows 前台管理端的配对方式。
+- Updated dependencies [abe58b0]
+- Updated dependencies [d6ea4d3]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+  - onebots@1.2.15
+
 ## 3.0.14
 
 ### Patch Changes

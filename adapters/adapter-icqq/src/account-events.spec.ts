@@ -38,6 +38,7 @@ describe("ICQQ 账号登录验证事件", () => {
                 bssid: "",
                 devInfo: "OneBots Virtual Device",
                 sysVersion: "35",
+                vendorField: { enabled: true, count: 2 },
             },
         });
 
@@ -55,14 +56,23 @@ describe("ICQQ 账号登录验证事件", () => {
             url: "https://accounts.example.test/verify",
             label: "前往身份验证页面",
         });
-        const device = request?.options?.blocks
-            ?.filter(block => block.type === "text")
-            .map(block => block.content)
-            .join("\n");
-        expect(device).toContain("设备信息（验证页面可能需要）");
-        expect(device).toContain("guid: 0011223344556677");
-        expect(device).toContain("platform: AndroidPad");
-        expect(device).toContain("model: Virtual Device");
-        expect(device).toContain("sysVersion: 35");
+        const device = request?.options?.blocks?.find(block => block.type === "json");
+        expect(device).toEqual({
+            type: "json",
+            label: "设备信息",
+            content: {
+                guid: "0011223344556677",
+                qimei: "qimei-value",
+                qimei36: "qimei36-value",
+                subappid: "537200000",
+                platform: "AndroidPad",
+                brand: "OneBots",
+                model: "Virtual Device",
+                bssid: "",
+                devInfo: "OneBots Virtual Device",
+                sysVersion: "35",
+                vendorField: { enabled: true, count: 2 },
+            },
+        });
     });
 });

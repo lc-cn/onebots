@@ -1,5 +1,27 @@
 # @onebots/adapter-mock
 
+## 1.0.25
+
+### Patch Changes
+
+- Updated dependencies [ec79a17]
+  - onebots@1.2.16
+
+## 1.0.24
+
+### Patch Changes
+
+- abe58b0: 修复 Windows 原生 Shell 下的构建清理命令，补齐文档站安装脚本产物，并明确 Windows 前台管理端的配对方式。
+- Updated dependencies [abe58b0]
+- Updated dependencies [d6ea4d3]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+- Updated dependencies [abe58b0]
+  - onebots@1.2.15
+
 ## 1.0.23
 
 ### Patch Changes

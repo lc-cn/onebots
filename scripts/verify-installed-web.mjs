@@ -92,6 +92,8 @@ class DevToolsSession {
         this.socket = new WebSocket(url);
         this.nextId = 1;
         this.pending = new Map();
+        this.stage = "加载页面";
+        this.dialogFailure = undefined;
         this.ready = new Promise((resolve, reject) => {
             this.socket.addEventListener("open", resolve, { once: true });
             this.socket.addEventListener("error", () => reject(new Error("浏览器调试连接失败")), {
@@ -100,16 +102,30 @@ class DevToolsSession {
         });
         this.socket.addEventListener("message", event => {
             const message = JSON.parse(event.data);
+            if (message.method === "Page.javascriptDialogOpening") {
+                const expected =
+                    this.stage === "保存配置" &&
+                    message.params?.type === "confirm" &&
+                    message.params?.message === "保存设置可能短暂中断账号和协议连接，继续吗？";
+                if (!expected) this.dialogFailure = new Error("浏览器出现非预期确认框");
+                void this.send("Page.handleJavaScriptDialog", { accept: expected }).catch(() => {
+                    this.dialogFailure = new Error("浏览器确认框处理失败");
+                });
+                return;
+            }
             if (!message.id) return;
             const pending = this.pending.get(message.id);
             if (!pending) return;
             this.pending.delete(message.id);
+            clearTimeout(pending.timer);
             if (message.error) pending.reject(new Error(message.error.message));
             else pending.resolve(message.result);
         });
         this.socket.addEventListener("close", () => {
-            for (const pending of this.pending.values())
+            for (const pending of this.pending.values()) {
+                clearTimeout(pending.timer);
                 pending.reject(new Error("浏览器调试连接已关闭"));
+            }
             this.pending.clear();
         });
     }
@@ -117,7 +133,13 @@ class DevToolsSession {
     async send(method, params = {}) {
         await this.ready;
         const id = this.nextId++;
-        const result = new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
+        const result = new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+                this.pending.delete(id);
+                reject(new Error(`浏览器调试命令 ${method} 超时（${this.stage}）`));
+            }, 30_000);
+            this.pending.set(id, { resolve, reject, timer });
+        });
         this.socket.send(JSON.stringify({ id, method, params }));
         return result;
     }
@@ -128,6 +150,7 @@ class DevToolsSession {
             awaitPromise: true,
             returnByValue: true,
         });
+        if (this.dialogFailure) throw this.dialogFailure;
         if (result.exceptionDetails)
             throw new Error(result.exceptionDetails.exception?.description ?? "浏览器脚本执行失败");
         return result.result.value;
@@ -309,7 +332,8 @@ try {
             `--user-data-dir=${browserProfile}`,
             "about:blank",
         ],
-        { stdio: ["ignore", "ignore", "pipe"] },
+        // Chrome 的 stderr 不含验收结果；无人消费的 pipe 填满后会反压并冻结 CDP。
+        { stdio: "ignore" },
     );
     const debugPort = await waitForBrowserPort(browser, browserProfile);
     const targets = await waitFor(async () => {
@@ -328,6 +352,7 @@ try {
     );
     assert.match(await devtools.evaluate("document.body.innerText"), /连接管理服务/);
 
+    devtools.stage = "提交设备码";
     await devtools.evaluate(`(() => {
         const input = document.querySelector("#pair-code");
         if (!(input instanceof HTMLInputElement)) throw new Error("找不到设备码输入框");
@@ -390,9 +415,10 @@ try {
     };
     const setSelect = (label, value) =>
         devtools.evaluate(`(() => {
-            const select = document.querySelector(
-                "select[aria-label=" + JSON.stringify(${JSON.stringify(label)}) + "]",
-            );
+            const label = ${JSON.stringify(label)};
+            const select = label === "配置作用域"
+                ? document.querySelector("#configuration-protocol-target")
+                : document.querySelector("select[aria-label=" + JSON.stringify(label) + "]");
             if (!(select instanceof HTMLSelectElement)) throw new Error("找不到选择框");
             select.value = ${JSON.stringify(value)};
             select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -410,24 +436,9 @@ try {
         })()`);
 
     const saveConfiguration = async () => {
-        // 接受真实浏览器的保存确认；不替换页面的 confirm 实现。
-        const confirmation = new Promise((resolve, reject) => {
-            const listener = event => {
-                const message = JSON.parse(event.data);
-                if (message.method !== "Page.javascriptDialogOpening") return;
-                devtools.socket.removeEventListener("message", listener);
-                clearTimeout(timer);
-                devtools
-                    .send("Page.handleJavaScriptDialog", { accept: true })
-                    .then(resolve, reject);
-            };
-            const timer = setTimeout(() => {
-                devtools.socket.removeEventListener("message", listener);
-                reject(new Error("保存确认框未出现"));
-            }, 30_000);
-            devtools.socket.addEventListener("message", listener);
-        });
-        await Promise.all([clickButton("保存"), confirmation]);
+        // 复用 master 的确认框校验，只接受此阶段预期的保存确认。
+        devtools.stage = "保存配置";
+        await clickButton("保存");
         await waitFor(
             async () => /设置已保存并生效/.test(await devtools.evaluate("document.body.innerText")),
             "Web 配置保存",
@@ -481,12 +492,14 @@ try {
             ))`),
         "Web 安装计划确认",
     );
+    devtools.stage = "安装扩展";
     await clickButton("确认并安装");
     await waitFor(
         async () => /验证通过，尚未应用/.test(await devtools.evaluate("document.body.innerText")),
         "Web 扩展安装与验证",
         10 * 60_000,
     );
+    devtools.stage = "应用运行版本";
     await clickButton("应用此运行版本");
     await waitFor(
         async () => /运行版本已应用/.test(await devtools.evaluate("document.body.innerText")),
@@ -543,6 +556,7 @@ try {
             ))`),
         "Web 配置快照读取",
     );
+    devtools.stage = "创建账号配置草稿";
     await clickButton("开始配置");
     await waitFor(
         () =>
@@ -554,6 +568,7 @@ try {
     );
     assert.equal(await setSelect("平台适配器", "mock"), "mock");
     assert.equal(await setInput("账号标识", "installed-web"), "installed-web");
+    devtools.stage = "创建 Mock 账号";
     await clickButton("创建账号");
     await waitFor(
         async () => /mock\.installed-web/.test(await devtools.evaluate("document.body.innerText")),

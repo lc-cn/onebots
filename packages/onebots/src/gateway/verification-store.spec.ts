@@ -90,6 +90,25 @@ describe("GatewayVerificationStore", () => {
         );
     });
 
+    it("控制 API 的挑战数据保留完整设备 JSON，不改写空值或额外字段", () => {
+        const store = new GatewayVerificationStore();
+        const device = { guid: "0011", bssid: "", extra: { enabled: true } };
+        store.record(
+            request({
+                type: "auth",
+                options: { blocks: [{ type: "json", label: "设备信息", content: device }] },
+            }),
+        );
+        const block = store.list()[0]?.request.options?.blocks?.[0];
+        expect(block).toEqual({ type: "json", label: "设备信息", content: device });
+        device.guid = "changed";
+        expect(store.list()[0]?.request.options?.blocks?.[0]).toEqual({
+            type: "json",
+            label: "设备信息",
+            content: { guid: "0011", bssid: "", extra: { enabled: true } },
+        });
+    });
+
     it("JSON tuple 避免冒号碰撞，按账号或类型清理", () => {
         const store = new GatewayVerificationStore();
         store.record(request({ platform: "a:b", account_id: "c" }));

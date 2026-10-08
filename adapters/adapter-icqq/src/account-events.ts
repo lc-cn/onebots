@@ -189,32 +189,11 @@ export function wireICQQAccountEvents(
     });
 }
 
-const AUTH_DEVICE_FIELDS = [
-    "guid",
-    "qimei",
-    "qimei36",
-    "subappid",
-    "platform",
-    "brand",
-    "model",
-    "bssid",
-    "devInfo",
-    "sysVersion",
-] as const;
-
 function authDeviceBlock(
     device: ICQQAuthEvent["device"] | undefined,
 ): Adapter.VerificationBlock | undefined {
-    if (!device || typeof device !== "object") return undefined;
-    const rows = AUTH_DEVICE_FIELDS.flatMap(key => {
-        const value: unknown = device[key];
-        return typeof value === "string" ? [`${key}: ${value || "（空）"}`] : [];
-    });
-    if (!rows.length) return undefined;
-    return {
-        type: "text",
-        content: ["设备信息（验证页面可能需要）", ...rows].join("\n"),
-    };
+    if (!device || typeof device !== "object" || Array.isArray(device)) return undefined;
+    return { type: "json", label: "设备信息", content: device };
 }
 
 function wireProjectedEvents(

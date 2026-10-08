@@ -1,5 +1,13 @@
 # @imhelper/satori-v1
 
+## 1.0.10
+
+### Patch Changes
+
+- abe58b0: 修复 Windows 原生 Shell 下的构建清理命令，补齐文档站安装脚本产物，并明确 Windows 前台管理端的配对方式。
+- Updated dependencies [abe58b0]
+  - imhelper@1.0.10
+
 ## 1.0.9
 
 ### Patch Changes

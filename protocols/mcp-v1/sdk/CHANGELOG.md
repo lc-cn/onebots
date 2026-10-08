@@ -1,5 +1,11 @@
 # @onebots/mcp-client
 
+## 0.1.4
+
+### Patch Changes
+
+- abe58b0: 修复 Windows 原生 Shell 下的构建清理命令，补齐文档站安装脚本产物，并明确 Windows 前台管理端的配对方式。
+
 ## 0.1.3
 
 ### Patch Changes

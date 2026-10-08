@@ -55,6 +55,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify README capability matrix
+        run: pnpm readme:capabilities:check
+
       - name: Build packages
         run: pnpm build
 
