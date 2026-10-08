@@ -1,5 +1,14 @@
 # @onebots/adapter-twitch
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [09a1770]
+- Updated dependencies [09a1770]
+- Updated dependencies [09a1770]
+  - onebots@1.2.17
+
 ## 0.1.7
 
 ### Patch Changes
