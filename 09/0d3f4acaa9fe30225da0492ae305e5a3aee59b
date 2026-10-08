@@ -1,0 +1,225 @@
+adapters/adapter-twitch/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-matrix/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-qq/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+packages/imhelper/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/mcp-v1/sdk/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-icqq/src/account-events.spec.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 41,59-76
+packages/web/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-120
+adapters/adapter-ircv3/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-facebook-messenger/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-114
+packages/onebots/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-125
+adapters/adapter-teams/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-mattermost/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/onebot-v11/protocol/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+protocols/mcp-v1/protocol/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-112
+adapters/adapter-telegram/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-25
+packages/web/src/components/icqq-device-verification.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 1-32
+adapters/adapter-icqq/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-28
+adapters/adapter-feishu/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+packages/core/src/adapter-types.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 20-21
+protocols/milky-v1/sdk/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/onebot-v12/sdk/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/milky-v1/protocol/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-matrix/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-112
+adapters/adapter-wechat/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+packages/onebots/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-wecom/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+adapters/adapter-wechat/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-instagram/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-114
+adapters/adapter-mock/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+adapters/adapter-feishu/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-mattermost/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+adapters/adapter-wecom/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+packages/meta/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+packages/web/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-mock/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/onebot-v11/sdk/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-10
+protocols/satori-v1/sdk/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-instagram/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-kook/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-25
+scripts/manager-upgrade-acceptance-helpers.mjs
+  s_a953d60826be1b::t_9ef5488b98ab82 6,23-27,187-194
+development/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 4
+protocols/onebot-v11/protocol/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-teams/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+adapters/adapter-telegram/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/onebot-v12/sdk/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-10
+adapters/adapter-wecom-kf/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+scripts/verify-installed-web.mjs
+  s_a953d60826be1b::t_9ef5488b98ab82 95-96,105-115,120,125-126,128,136-142,153,335-336,355,418-421,495,502,559,571
+  s_a953d60826be1b::t_79719e0763a4d4 439-441
+packages/imhelper/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-8
+scripts/verify-system-service-lifecycle.mjs
+  s_a953d60826be1b::t_9ef5488b98ab82 14,146-150,288-292,413-417,419-439,452
+adapters/adapter-qq/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+packages/onebots/src/gateway/verification-store.spec.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 93-111
+protocols/milky-v1/sdk/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-10
+adapters/adapter-email/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-line/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-icqq/src/system-events.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 41
+adapters/adapter-ircv3/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+scripts/service-acceptance-diagnostics.mjs
+  s_a953d60826be1b::t_9ef5488b98ab82 1-37
+adapters/adapter-discord/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-25
+adapters/adapter-zulip/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-slack/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-twitch/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+adapters/adapter-discord/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-line/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+protocols/mcp-v1/sdk/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-8
+packages/core/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-110
+packages/onebots/src/extension-capability-catalog.json
+  s_a953d60826be1b::t_9ef5488b98ab82 5,8,11,14,17,20,23,26,32,35,38,41,44,47,50,53,56,59,62,65,68,71,74,77,80,83,86,89,92,95,98,104,442,1003,1232,1578,1979,2312,2689,3414,3755,4045,4744,5513,5789,6274,6371,7011,7639,8019,8465,9048,9872,9991,11000,11366,12370
+packages/core/src/control-verification-json.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 130-135
+.github/workflows/ci.yml
+  s_a953d60826be1b::t_9ef5488b98ab82 58-60
+adapters/adapter-heychat/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-25
+packages/onebots/src/control/tui-verification.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 154-159
+development/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-65
+adapters/adapter-whatsapp/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+adapters/adapter-kook/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-dingtalk/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+packages/core/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-google-chat/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-slack/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+protocols/onebot-v11/sdk/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/onebot-v12/protocol/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/mcp-v1/protocol/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/satori-v1/sdk/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-10
+adapters/adapter-icqq/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+packages/web/src/components/icqq-device-verification.spec.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 1-57
+adapters/adapter-icqq/src/account-events.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 195-196
+adapters/adapter-heychat/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/onebot-v12/protocol/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-112
+adapters/adapter-zulip/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+adapters/adapter-wechat-clawbot/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+protocols/milky-v1/protocol/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+packages/onebots/src/control/host-verification.spec.ts
+  s_a953d60826be1b::t_9ef5488b98ab82 70-73,300-309
+packages/web/src/components/ControlVerificationPanel.vue
+  s_a953d60826be1b::t_9ef5488b98ab82 5,7-11,28-44,131-178
+adapters/adapter-wechat-clawbot/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-wecom-kf/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+adapters/adapter-email/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+protocols/satori-v1/protocol/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-113
+adapters/adapter-facebook-messenger/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+docs/src/platform/icqq.md
+  s_a953d60826be1b::t_9ef5488b98ab82 57-60
+adapters/adapter-dingtalk/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-24
+adapters/adapter-whatsapp/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+protocols/satori-v1/protocol/package.json
+  s_a953d60826be1b::t_9ef5488b98ab82 3
+packages/web/src/components/ControlConfigurationSections.vue
+  s_a953d60826be1b::t_9ef5488b98ab82 104-112
+  s_a953d60826be1b::t_fe8fc62268d49e 103
+packages/meta/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-21
+adapters/adapter-google-chat/CHANGELOG.md
+  s_a953d60826be1b::t_9ef5488b98ab82 3-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "090d3f4acaa9fe30225da0492ae305e5a3aee59b",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
