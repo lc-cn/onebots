@@ -1,0 +1,32 @@
+.changeset/manager-upgrade-local-web.md
+  s_a953d60826be1b::t_908fe62f57b58b 1-5
+packages/onebots/src/installation/release-resolver.ts
+  s_a953d60826be1b::t_ff98658d460bf2 108-114,127-134
+  s_a953d60826be1b::t_bf5891a0ba077a 16,24,103,107,122
+packages/onebots/src/installation/release-local-web.spec.ts
+  s_a953d60826be1b::t_a78115327c7bc5 1-10,14-23,50-51,58,67-68,73-74,80-82,87-91
+  s_a953d60826be1b::t_ff98658d460bf2 11-13,24-49,52-57,59-66,69-72,75-79,84-86
+  s_a953d60826be1b::t_908fe62f57b58b 83
+packages/onebots/src/manager-service-upgrade-preparation.ts
+  s_a953d60826be1b::t_ff98658d460bf2 174-179,227-232,246-254
+  s_a953d60826be1b::t_bf5891a0ba077a 35,39,182-183,187,261
+  s_a953d60826be1b::t_badba5281a2ccf 180-181
+packages/onebots/src/cli/manager-program-update.ts
+  s_a953d60826be1b::t_ff98658d460bf2 217-225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cf86bc002e32fc269544bef301c2a1f243838f9c",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
