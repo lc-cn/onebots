@@ -32,10 +32,11 @@ export interface ManagerUpgradeCandidateRequest {
     scope: ServiceScope;
     expectedPreviousDigest: string;
     archiveSha256: string;
-    artifacts: { host: GenerationArtifact; core: GenerationArtifact };
+    artifacts: { host: GenerationArtifact; core: GenerationArtifact; web?: GenerationArtifact };
     archives: {
         host: { bytes: Buffer; sha256: string };
         core: { bytes: Buffer; sha256: string };
+        web?: { bytes: Buffer; sha256: string };
     };
 }
 
@@ -170,12 +171,20 @@ export async function prepareManagerUpgradeCandidate(
     let artifacts: Record<string, unknown>;
     let archives: Record<string, unknown>;
     try {
-        artifacts = closedServiceObject(value.artifacts, ["host", "core"]);
-        archives = closedServiceObject(value.archives, ["host", "core"]);
+        const keys =
+            value.artifacts &&
+            typeof value.artifacts === "object" &&
+            Object.hasOwn(value.artifacts, "web")
+                ? ["host", "core", "web"]
+                : ["host", "core"];
+        artifacts = closedServiceObject(value.artifacts, keys);
+        archives = closedServiceObject(value.archives, keys);
+        if ((artifacts.web === undefined) !== (archives.web === undefined))
+            throw failure("ARTIFACT_INPUT_INVALID");
     } catch {
         throw failure("ARTIFACT_INPUT_INVALID");
     }
-    const artifact = (input: unknown, name: "onebots" | "@onebots/core") => {
+    const artifact = (input: unknown, name: "onebots" | "@onebots/core" | "@onebots/web") => {
         const item = closedServiceObject(input, ["name", "version", "spec"]);
         if (item.name !== name || typeof item.version !== "string" || typeof item.spec !== "string")
             throw failure("ARTIFACT_INPUT_INVALID");
@@ -215,6 +224,12 @@ export async function prepareManagerUpgradeCandidate(
         if (hostArchive.sha256 !== value.archiveSha256) throw failure("ARTIFACT_INPUT_INVALID");
         const hostArtifact = artifact(artifacts.host, "onebots");
         const coreArtifact = artifact(artifacts.core, "@onebots/core");
+        const webArchive =
+            archives.web === undefined
+                ? undefined
+                : materializeManagerUpgradeArchive(archives.web, resolvedArtifacts, host);
+        const webArtifact =
+            artifacts.web === undefined ? undefined : artifact(artifacts.web, "@onebots/web");
         ensurePrivateManagerUpgradeDirectory(path.join(home, "artifacts"), true, host);
         const frozen = await freezeGenerationArtifacts(
             {
@@ -228,12 +243,22 @@ export async function prepareManagerUpgradeCandidate(
                     spec: `file:${coreArchive.file}`,
                     sha256: coreArchive.sha256,
                 },
+                ...(webArtifact && webArchive
+                    ? {
+                          web: {
+                              ...webArtifact,
+                              spec: `file:${webArchive.file}`,
+                              sha256: webArchive.sha256,
+                          },
+                      }
+                    : {}),
             },
             path.join(home, "artifacts"),
         );
         const plan = createGenerationPlan({
             host: frozen.host,
             core: frozen.core,
+            web: frozen.web,
             extensions: [],
             selection: { adapters: [], protocols: [], applications: [] },
         });

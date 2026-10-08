@@ -13,6 +13,7 @@ const ARCHIVE_LIMIT = 32 * 1024 * 1024;
 export interface ResolvedRelease {
     host: GenerationArtifact;
     core: GenerationArtifact;
+    web?: GenerationArtifact;
     extensionVersions: Readonly<Record<string, string>>;
     /** 本次确实检查过的宿主发布包摘要，不是活动安装目录的摘要。 */
     archiveSha256: string;
@@ -20,6 +21,7 @@ export interface ResolvedRelease {
     archives?: {
         host: { bytes: Buffer; sha256: string };
         core: { bytes: Buffer; sha256: string };
+        web?: { bytes: Buffer; sha256: string };
     };
 }
 
@@ -98,9 +100,18 @@ export async function resolveLocalRelease(
         });
         const hostArchive = localArchive(local.host.spec, local.host.sha256);
         const coreArchive = localArchive(local.core.spec, local.core.sha256);
+        const webArchive = local.web ? localArchive(local.web.spec, local.web.sha256) : undefined;
         const { manifest: hostManifest, catalog } = await readReleaseArchive(hostArchive);
         const release = parseReleaseCatalog(hostVersion, hostManifest, catalog);
         if (release.core.version !== coreVersion) throw new Error();
+        // 清单中的 Web 必须属于该宿主发布，不能静默替换成 registry 依赖。
+        if (
+            local.web &&
+            (!record(hostManifest) ||
+                !record(hostManifest.dependencies) ||
+                hostManifest.dependencies["@onebots/web"] !== local.web.version)
+        )
+            throw new Error();
         const hostSha256 = local.host.sha256;
         const coreSha256 = local.core.sha256;
         if (!hostSha256 || !coreSha256) throw new Error();
@@ -108,10 +119,19 @@ export async function resolveLocalRelease(
             ...release,
             host: Object.freeze(local.host),
             core: Object.freeze(local.core),
+            ...(local.web ? { web: Object.freeze(local.web) } : {}),
             archiveSha256: hostSha256,
             archives: {
                 host: { bytes: hostArchive, sha256: hostSha256 },
                 core: { bytes: coreArchive, sha256: coreSha256 },
+                ...(webArchive
+                    ? {
+                          web: {
+                              bytes: webArchive,
+                              sha256: createHash("sha256").update(webArchive).digest("hex"),
+                          },
+                      }
+                    : {}),
             },
         });
     } catch {

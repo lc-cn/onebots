@@ -214,6 +214,15 @@ export async function runManagerProgramUpdate(
                         version: release.core.version,
                         spec: release.core.spec,
                     },
+                    ...(release.web
+                        ? {
+                              web: {
+                                  name: release.web.name,
+                                  version: release.web.version,
+                                  spec: release.web.spec,
+                              },
+                          }
+                        : {}),
                 },
                 archives: release.archives,
             },
