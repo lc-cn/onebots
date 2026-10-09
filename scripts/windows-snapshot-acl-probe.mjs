@@ -27,7 +27,7 @@ try {
   $stage='apply'
   ${mode === "cmdlet" ? "Set-Acl -LiteralPath $p -AclObject $acl" : mode === "dotnet" ? "[IO.Directory]::SetAccessControl($p,$acl)" : nativeAclApplication}
   $stage='read'
-  $check=Get-Acl -LiteralPath $p
+  ${mode === "cmdlet" ? "$check=Get-Acl -LiteralPath $p" : "$check=[IO.Directory]::GetAccessControl($p)"}
   $stage='verify'
   ${windowsFullControlAclVerifier("directory")}
   [Console]::Out.Write('{"ok":true}')

@@ -29,7 +29,8 @@ it("新快照在发布前初始化文件 owner；复用既有快照不重写文�
             );
         expect(scripts).toHaveLength(3);
         expect(scripts[1]).toContain("FileSecurity");
-        expect(scripts[1]).toContain("Set-Acl -LiteralPath");
+        expect(scripts[1]).toContain("[System.IO.File]::SetAccessControl($p,$acl)");
+        expect(scripts[1]).toContain("[System.IO.File]::GetAccessControl($p)");
         expect(scripts[1]).toContain("$acl.SetOwner");
         expect(scripts[1]).not.toContain("$legalInheritance");
         expect(scripts[2]).not.toContain("Set-Acl");
@@ -75,7 +76,8 @@ it("Windows 目录有保护 ACL 并核验；文件只读核验不擅自改权限
         Buffer.from(String(call[1]?.[4]), "base64").toString("utf16le"),
     );
     expect(scripts[0]).toContain("SetAccessRuleProtection($true,$false)");
-    expect(scripts[0]).toContain("Set-Acl -LiteralPath");
+    expect(scripts[0]).toContain("[System.IO.Directory]::SetAccessControl($p,$acl)");
+    expect(scripts[0]).toContain("[System.IO.Directory]::GetAccessControl($p)");
     expect(scripts[1]).not.toContain("Set-Acl");
     expect(scripts[0]).not.toContain("$legalInheritance");
     expect(scripts[1]).toContain("$legalInheritance");
@@ -84,6 +86,7 @@ it("Windows 目录有保护 ACL 并核验；文件只读核验不擅自改权限
         expect(script).toContain("GetAccessRules");
         expect(script).toContain("$_ -notin $allowedSids");
         expect(script).not.toContain(location);
+        expect(script).not.toContain("Get-Acl");
     }
 });
 it("无法证明 DACL 时关闭快照入口，不暴露原始 PowerShell 输出", () => {

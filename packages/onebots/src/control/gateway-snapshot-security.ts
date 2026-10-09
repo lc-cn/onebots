@@ -60,6 +60,7 @@ function verifyWindowsSnapshotPermissions(
         "'S-1-5-32-544'",
     ]);
     const builder = windowsFullControlAclBuilder(secureDirectory ? "directory" : "file");
+    const fileSystem = secureDirectory ? "Directory" : "File";
     // DACL 可继承但 owner 来自创建令牌。新文件显式初始化；既有文件只读核验。
     const verifier = windowsFullControlAclVerifier(
         secureDirectory ? "directory" : "file",
@@ -79,11 +80,11 @@ ${
         ? String.raw`$stage='acl-build'
 ${builder}
 $stage='acl-apply'
-Set-Acl -LiteralPath $p -AclObject $acl`
+[System.IO.${fileSystem}]::SetAccessControl($p,$acl)`
         : ""
 }
 $stage='verify'
-$check=Get-Acl -LiteralPath $p
+$check=[System.IO.${fileSystem}]::GetAccessControl($p)
 ${verifier}
 [Console]::Out.Write('private')
 } catch {
