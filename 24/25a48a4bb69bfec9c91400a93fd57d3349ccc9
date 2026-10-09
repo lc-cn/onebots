@@ -1,0 +1,24 @@
+__tests__/unit/windows-snapshot-acl-probe.spec.ts
+  s_a953d60826be1b::t_344d17bb3e9827 57-62,65-71
+  s_a953d60826be1b::t_7475152031da86 55-56,63-64,72-75
+scripts/windows-snapshot-acl-probe.mjs
+  s_a953d60826be1b::t_7475152031da86 19,23,25,27,29,31,42-43,48-55,82-83,100,119
+  s_a953d60826be1b::t_344d17bb3e9827 101-118
+  s_a953d60826be1b::t_b3dea795a8d2bc 46-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2425a48a4bb69bfec9c91400a93fd57d3349ccc9",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
