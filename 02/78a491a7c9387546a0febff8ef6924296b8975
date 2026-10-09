@@ -1,0 +1,115 @@
+adapters/adapter-twitch/src/http-host.ts
+  s_efe26f87c3b074::t_e25816cca072b1 37-48
+packages/onebots/src/windows-service-security.spec.ts
+  s_efe26f87c3b074::t_e06e74518f798e 70,72
+adapters/adapter-facebook-messenger/src/http-host.ts
+  s_efe26f87c3b074::t_7c4feb6321ae34 38-52
+packages/onebots/src/windows-service-security.ts
+  s_efe26f87c3b074::t_b56b19859f2143 4-8,177-179
+  s_efe26f87c3b074::t_ba88af8d669bd7 183,196,215
+packages/onebots/src/control/gateway-snapshot-security.ts
+  s_efe26f87c3b074::t_ee0f23494b82cb 2-6,21-27,31-32,36,39-40,44,46,48-50,64-70,72
+adapters/adapter-wechat-clawbot/src/adapter.ts
+  s_efe26f87c3b074::t_24f9bad1c5e2a0 332,340,346,355,357,368,380,388,394
+packages/onebots/src/control/generation-configuration.ts
+  s_efe26f87c3b074::t_800b1f4d3fa771 5,58-65,71,75
+  s_efe26f87c3b074::t_3ae589775837e2 20,57
+packages/core/src/account.lifecycle.spec.ts
+  s_efe26f87c3b074::t_8413219761dfc6 39-50
+  s_efe26f87c3b074::t_e06e74518f798e 54-60,74-79,290
+packages/onebots/src/configuration/configuration-hot-reconciliation.ts
+  s_efe26f87c3b074::t_e5127846c9b513 70
+  s_efe26f87c3b074::t_800b1f4d3fa771 91-92,94-97
+packages/onebots/src/configuration/configuration-application-repair.spec.ts
+  s_efe26f87c3b074::t_eaf8bff1a9a61c 69-70,73-76
+  s_efe26f87c3b074::t_3ae589775837e2 71-72
+adapters/adapter-icqq/src/adapter.spec.ts
+  s_efe26f87c3b074::t_c0b1d2cc5fa768 12,25-40,45,60-65
+  s_efe26f87c3b074::t_a8e828f0967909 13-14
+packages/core/src/__tests__/account.dispatch.test.ts
+  s_efe26f87c3b074::t_83b631528b30e3 54,61,64,73-74
+adapters/adapter-instagram/src/http-host.ts
+  s_efe26f87c3b074::t_e25816cca072b1 37-49
+packages/core/src/base-app.ts
+  s_efe26f87c3b074::t_94bc225a02c9da 53-56,612-614,758
+  s_2104cc474f1ce5::t_3e5dc04fbecb0d 52
+packages/onebots/src/configuration/configuration-hot-application.ts
+  s_efe26f87c3b074::t_800b1f4d3fa771 47,60-61
+packages/onebots/src/windows-closed-acl.ts
+  s_efe26f87c3b074::t_ed6dc54dc3f31a 16
+  s_efe26f87c3b074::t_ee0f23494b82cb 1-15,17-60
+packages/onebots/src/control/gateway-snapshot-security.spec.ts
+  s_efe26f87c3b074::t_bea3d07608f702 45-50
+  s_efe26f87c3b074::t_63b3a90f705f08 27
+  s_efe26f87c3b074::t_5df5c91c668415 36-43
+  s_2104cc474f1ce5::t_8e85122475648e 44
+adapters/adapter-instagram/src/http-host.spec.ts
+  s_efe26f87c3b074::t_1cd47cdf0a9e4f 85,87-110,124-142
+packages/onebots/src/configuration/configuration-hot-application.spec.ts
+  s_efe26f87c3b074::t_f82bdb42e99463 123,171,191,195-211,254-272,297,304,306
+  s_efe26f87c3b074::t_16506b057be455 12,106-122
+packages/core/src/runtime-reconcile.ts
+  s_efe26f87c3b074::t_94bc225a02c9da 231-236
+packages/web/src/App.vue
+  s_efe26f87c3b074::t_eaf8bff1a9a61c 97-102,806,1000
+packages/onebots/src/control/generation-configuration.spec.ts
+  s_efe26f87c3b074::t_16506b057be455 7,107-109,111-114,122,124-125,127-128,130-135
+  s_efe26f87c3b074::t_3ae589775837e2 34-40,47,106,110,115-121,126
+  s_efe26f87c3b074::t_b5b52ff80867aa 123,136
+packages/core/src/account.ts
+  s_efe26f87c3b074::t_94bc225a02c9da 329-330
+packages/core/src/account-operations.ts
+  s_efe26f87c3b074::t_94bc225a02c9da 35,43,46,48-50,52,54-59
+packages/core/src/runtime-configuration.spec.ts
+  s_efe26f87c3b074::t_94bc225a02c9da 310
+  s_efe26f87c3b074::t_3768bd3f27f66f 335,344-346,350-351
+packages/onebots/src/configuration/configuration-application.ts
+  s_efe26f87c3b074::t_800b1f4d3fa771 131,172-175,177,191-199,242
+  s_efe26f87c3b074::t_e06e74518f798e 176,178-190
+adapters/adapter-instagram/src/adapter.ts
+  s_efe26f87c3b074::t_3d00221be2deb2 187
+packages/onebots/src/control/host.ts
+  s_efe26f87c3b074::t_3ae589775837e2 247-252
+  s_efe26f87c3b074::t_e811e38bef960d 289
+docs/development/runtime-hotplug-plan.md
+  s_efe26f87c3b074::t_eaf8bff1a9a61c 93
+packages/core/src/base-app-start-cancellation.spec.ts
+  s_efe26f87c3b074::t_8413219761dfc6 63-79,242,245-247,251,259-260
+  s_efe26f87c3b074::t_5e76f0f00b2f23 19-21,230-241,243-244,248-250,257-258,277-279
+adapters/adapter-twitch/src/http-host.spec.ts
+  s_efe26f87c3b074::t_1cd47cdf0a9e4f 2-3,21-52
+packages/onebots/src/control/gateway-configuration-snapshot.ts
+  s_efe26f87c3b074::t_5df5c91c668415 29-36
+adapters/adapter-matrix/src/appservice-host.spec.ts
+  s_efe26f87c3b074::t_1cd47cdf0a9e4f 86,88-109,126
+  s_efe26f87c3b074::t_033e94da65e744 2-3,33-48
+adapters/adapter-matrix/src/appservice-host.ts
+  s_efe26f87c3b074::t_e25816cca072b1 40-62
+packages/onebots/src/control/gateway-configuration-snapshot.spec.ts
+  s_efe26f87c3b074::t_5df5c91c668415 72-88,92-95
+  s_efe26f87c3b074::t_e06e74518f798e 89-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0278a491a7c9387546a0febff8ef6924296b8975",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
