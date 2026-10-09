@@ -1,0 +1,39 @@
+.changeset/friendly-douyin-adapter.md
+  s_efe26f87c3b074::t_6b7d9678447409 3,7
+adapters/adapter-douyin/package.json
+  s_efe26f87c3b074::t_92ae5c7c9fab93 33
+adapters/adapter-douyin/src/account.spec.ts
+  s_efe26f87c3b074::t_26d67e93d6118d 85-86,96-100,123-124,126,128,292-293,301-302,308-328,345-374
+adapters/adapter-douyin/src/account.ts
+  s_efe26f87c3b074::t_b6b509127f667a 15-19,45,52-56,59-60,266,271-301,303-310,312-317
+adapters/adapter-douyin/src/adapter.spec.ts
+  s_efe26f87c3b074::t_5fe8e9d7dc119a 38-39
+adapters/adapter-douyin/src/adapter.ts
+  s_efe26f87c3b074::t_5b16b7238c6e38 23,36,41,45-52
+adapters/adapter-douyin/src/verification-proxy.spec.ts
+  s_efe26f87c3b074::t_ccd712d978f201 1-142
+adapters/adapter-douyin/src/verification-proxy.ts
+  s_efe26f87c3b074::t_7c9b63448abe54 1-165
+packages/web/src/components/control-verification-state.spec.ts
+  s_efe26f87c3b074::t_e6d7b28d86dfeb 259-263
+packages/web/src/components/control-verification-state.ts
+  s_efe26f87c3b074::t_3de82964552c2d 32-35,37-42
+pnpm-lock.yaml
+  s_efe26f87c3b074::t_fa121a93ebf488 145-146,3253-3254,7590
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e872b00148e9f8cc7bf9f1be82f2c1da61f64acf",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
