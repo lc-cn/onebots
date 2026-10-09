@@ -1,5 +1,12 @@
 # @onebots/adapter-dingtalk
 
+## 3.0.18
+
+### Patch Changes
+
+- Updated dependencies [cf86bc0]
+  - onebots@1.2.18
+
 ## 3.0.17
 
 ### Patch Changes

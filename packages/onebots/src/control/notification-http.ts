@@ -61,6 +61,9 @@ export async function respondControlNotifications(
             error instanceof BarkPartialDeliveryError
                 ? "Bark 部分设备投递失败；重试可能使成功设备重复收到通知"
                 : error instanceof Error &&
+                    error.message === "Bark 服务拒绝全部设备 Key，请确认设备已在当前服务注册"
+                  ? error.message
+                : error instanceof Error &&
                     /^(通知目标返回 HTTP \d+|通知目标解析到内网、本机或保留地址|通知目标响应超时|公网通知目标必须使用 HTTPS)$/.test(
                         error.message,
                     )
