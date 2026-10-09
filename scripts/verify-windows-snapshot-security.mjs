@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { probeWindowsSnapshotAcl } from "./windows-snapshot-acl-probe.mjs";
 import { createGatewayConfigurationSnapshot } from "../packages/onebots/lib/control/gateway-configuration-snapshot.js";
 import {
     assertGatewaySnapshotFileSecurity,
@@ -49,6 +50,10 @@ try {
 }
 
 try {
+    console.log(
+        "[onebots] Windows ACL 隔离差分探针",
+        JSON.stringify(probeWindowsSnapshotAcl(root)),
+    );
     const snapshot = createGatewayConfigurationSnapshot(root, { log_level: "off" });
     assertGatewaySnapshotFileSecurity(snapshot.configPath);
     const staging = path.join(path.dirname(snapshot.configPath), `.snapshot-${randomUUID()}`);
