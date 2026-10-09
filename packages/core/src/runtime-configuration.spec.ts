@@ -307,6 +307,7 @@ describe("账号和协议热插拔公开效果", () => {
         const next = structuredClone(app.config);
         next["hotplug-test.a"]["hotplug-test.v1"] = { label: "after delivery" };
         const applying = app.applyRuntimeConfiguration(next);
+        await Promise.resolve();
         try {
             expect(delivery).toHaveBeenCalledOnce();
             expect(stop).not.toHaveBeenCalled();
@@ -331,6 +332,7 @@ describe("账号和协议热插拔公开效果", () => {
         const stopping = vi.spyOn(protocol, "stop").mockImplementationOnce(() => pending);
         const next = structuredClone(app.config);
         next["hotplug-test.a"]["hotplug-test.v1"] = { label: "unsafe" };
+        let shutdown: Promise<void> | undefined;
         try {
             expect((await app.applyRuntimeConfiguration(next)).status).toBe("recovery_required");
             expect(account.protocols[0]).toBe(protocol);
@@ -339,9 +341,14 @@ describe("账号和协议热插拔公开效果", () => {
             await expect(app.reload(next)).rejects.toThrow("停止结果未确定");
             await expect(app.start()).rejects.toThrow("停止结果未确定");
             expect(await json("/hotplug-test/b/hotplug-test/v1")).toEqual({ label: "unaffected" });
+            shutdown = app.stop();
+            await Promise.resolve();
+            expect(stopping).toHaveBeenCalledOnce();
         } finally {
             release();
         }
+        await shutdown;
+        expect(stopping).toHaveBeenCalledTimes(2);
     });
     it("其他账号等待登录不阻止局部配置，受影响启动账号则明确拒绝", async () => {
         const { app, json } = await fixture();

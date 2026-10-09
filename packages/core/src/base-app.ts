@@ -49,7 +49,11 @@ import { createAccountWithRouteScope } from "./scoped-account.js";
 import { closeAdapterRouteScope } from "./scoped-adapter.js";
 import { listenHttpServer } from "./http-listener.js";
 import { getHostLifecycleState, type ManagedRuntimeStart } from "./host-lifecycle-state.js";
-import { hasPendingRuntimeStop, reconcileRuntimeConfiguration } from "./runtime-reconcile.js";
+import {
+    hasPendingRuntimeStop,
+    reconcileRuntimeConfiguration,
+    settlePendingRuntimeStops,
+} from "./runtime-reconcile.js";
 import {
     RuntimeConfigurationRejectedError,
     planRuntimeConfiguration,
@@ -456,6 +460,9 @@ export class BaseApp extends Koa {
         // 固定首次启动批次；热添加的平台由配置协调器启动，不再被该批次重复启动。
         const adapters = [...this.adapters];
         const state = getHostLifecycleState(this);
+        // lifecycle.start() 可能同步创建新适配器；快照内尚未启动的平台也必须立刻进入
+        // 热配置门禁，避免后续平台同时被首次启动批次和热协调器启动。
+        for (const [platform] of adapters) state.queuedPlatforms?.add(String(platform));
         for (const [platform, adapter] of adapters) {
             signal?.throwIfAborted();
             while (this.runtimeConfiguration) {
@@ -605,6 +612,9 @@ export class BaseApp extends Koa {
         }
     }
     async reload(config: BaseApp.Config) {
+        const lifecycle = getHostLifecycleState(this);
+        if (lifecycle.starting && !this.isStarted)
+            throw new ConfigError("网关仍在启动，暂不能重载配置");
         if (hasPendingRuntimeStop(this))
             throw new ConfigError("旧实例停止结果未确定，暂不能重载配置");
         if (this.runtimeConfiguration) throw new ConfigError("配置热应用尚未完成");
@@ -748,6 +758,7 @@ export class BaseApp extends Koa {
 
     private async stopAttempt(): Promise<void> {
         await this.runtimeConfiguration?.catch(() => this.logger.error("停止前等待热配置失败"));
+        await settlePendingRuntimeStops(this);
         const stopTimer = this.enhancedLogger.start("Application stop");
         const failures = new FailureCollector();
 

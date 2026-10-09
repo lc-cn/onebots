@@ -66,7 +66,7 @@ describe("TUI 配置草稿", () => {
                                 },
                             ],
                             dynamicFields: ["timeout"],
-                            restartReasons: ["port"],
+                            restartReasons: ["port", "display\u202Espoof"],
                         },
                     }
                   : initial(),
@@ -76,6 +76,8 @@ describe("TUI 配置草稿", () => {
         expect(ui.reports.join()).toContain("移除协议：mock/bot · onebot/v11");
         expect(ui.reports.join()).toContain("动态设置：timeout");
         expect(ui.reports.join()).toContain("重启原因：port");
+        expect(ui.reports.join()).toContain("重启原因：display spoof");
+        expect(ui.reports.join()).not.toContain("\u202E");
         expect(api.request.mock.calls.some(call => call[1].endsWith("apply"))).toBe(false);
     });
     it("损坏源须明确确认私有备份与空修复，取消不写", async () => {

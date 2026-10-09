@@ -26,6 +26,14 @@ export function createGatewayConfigurationSnapshot(
     else if ((fs.statSync(directory).mode & 0o077) !== 0) throw new Error("网关快照目录权限无效");
     const configPath = path.join(directory, `${configVersion}.yaml`);
     if (!fs.existsSync(configPath)) {
+        // 崩溃可能绕过 finally；私有单写者目录中的未发布 staging 不属于任何运行版本。
+        for (const entry of fs.readdirSync(directory)) {
+            if (!entry.startsWith(".snapshot-")) continue;
+            const staging = path.join(directory, entry);
+            const stat = fs.lstatSync(staging);
+            if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("网关快照存储无效");
+            fs.unlinkSync(staging);
+        }
         // 不淘汰可能仍被子进程或恢复事务引用的快照；显式容量边界代替无界留存。
         const entries = fs.readdirSync(directory);
         let bytes = Buffer.byteLength(content);

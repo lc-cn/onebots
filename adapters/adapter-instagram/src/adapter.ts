@@ -184,6 +184,7 @@ export class InstagramAdapter extends Adapter<InstagramClient, "instagram"> {
                     client.config.instagram_user_id;
                 this.logger.info(`Instagram ${account.account_id} 已就绪（${client.receiveMode}）`);
             } catch (error) {
+                this.httpHost.unmount(account.account_id);
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动 Instagram ${account.account_id} 失败`, error);
                 throw error;

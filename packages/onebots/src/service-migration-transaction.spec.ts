@@ -114,6 +114,39 @@ function fixture(previousRunning = true) {
     };
 }
 describe("持久化服务迁移事务", () => {
+    it("失败阶段诊断写入未知时保留恢复门禁，不执行额外补偿或重发 stop", async () => {
+        const t = fixture();
+        t.state.stopOldFails = true;
+        const save = t.journal.save.bind(t.journal);
+        vi.spyOn(t.journal, "save").mockImplementation(record => {
+            if (record.failureStage) throw new Error("synthetic-private-detail");
+            save(record);
+        });
+        const result = await t.transaction.run("migration", t.backup);
+        expect(result).toMatchObject({ status: "interrupted", recoveryRequired: true });
+        expect(t.calls).toEqual(["stop-old"]);
+        expect(JSON.stringify(result)).not.toContain("synthetic-private-detail");
+    });
+    it.each(["verify-original", "stop-original", "verify-quiescent"] as const)(
+        "目标写入前 %s 失败只持久固定诊断，不持久化原始异常且不重派 stop",
+        async failureStage => {
+            const t = fixture();
+            if (failureStage === "verify-original") t.port.verifyOriginal = async () => false;
+            if (failureStage === "stop-original") t.state.stopOldFails = true;
+            if (failureStage === "verify-quiescent") {
+                let observations = 0;
+                t.port.verifyQuiescent = async () => ++observations > 1;
+            }
+            const result = await t.transaction.run("migration", t.backup);
+            expect(result).toMatchObject({ failureStage });
+            expect(t.journal.read("migration")).toMatchObject({ failureStage });
+            expect(JSON.stringify(result)).not.toContain("unknown");
+            expect(t.calls.filter(call => call === "stop-old")).toHaveLength(
+                failureStage === "verify-original" ? 0 : 1,
+            );
+            expect(t.calls).not.toContain("write-target");
+        },
+    );
     it("冷启动后的prepared记录不能作为热捕获结果重放", async () => {
         const t = fixture();
         const record = t.journal.prepare("migration", t.backup);

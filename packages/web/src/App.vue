@@ -94,6 +94,12 @@ const gatewayInstanceId = computed(() =>
         ? state.value.gateway.instance?.id
         : undefined,
 );
+const gatewayRunning = computed<boolean | undefined>(() => {
+    if (state.value?.gateway.actual === "running") return true;
+    if (state.value?.gateway.actual === "stopped" || state.value?.gateway.actual === "failed")
+        return false;
+    return undefined;
+});
 const notificationAccounts = computed(() =>
     Array.from(
         new Set([
@@ -797,13 +803,7 @@ onUnmounted(() => {
             :mutation-block="mutationBlock"
             :configuration="configurationSnapshot"
             :status="state"
-            :gateway-running="
-                state?.gateway.actual === 'running'
-                    ? true
-                    : state?.gateway.actual === 'stopped' || state?.gateway.actual === 'failed'
-                      ? false
-                      : undefined
-            "
+            :gateway-running="gatewayRunning"
             @applied="refreshProductState"
             @category-change="openExtensionCategory" />
         <AccountsView
@@ -997,13 +997,7 @@ onUnmounted(() => {
             <ConfigurationView
                 :client="client"
                 :mutation-block="mutationBlock"
-                :gateway-running="
-                    state?.gateway.actual === 'running'
-                        ? true
-                        : state?.gateway.actual === 'stopped' || state?.gateway.actual === 'failed'
-                          ? false
-                          : undefined
-                "
+                :gateway-running="gatewayRunning"
                 :target="configurationTarget"
                 :scope="configurationScope"
                 @select="selectWorkspace"

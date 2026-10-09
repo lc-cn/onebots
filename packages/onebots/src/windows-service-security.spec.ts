@@ -67,9 +67,9 @@ describe("Windows 服务状态 ACL", () => {
         const encoded = (value.exec as ReturnType<typeof vi.fn>).mock.calls[0][1][4] as string;
         const script = Buffer.from(encoded, "base64").toString("utf16le");
         expect(script).toContain("$ownerSid='S-1-5-32-544'");
-        expect(script).toContain("$allowedSids=@($ownerSid,'S-1-5-18')");
+        expect(script).toContain("$allowedSids=@('S-1-5-32-544','S-1-5-18')");
         expect(script).not.toContain(value.windowsSid);
-        expect(script).toContain("$rules.Count -ne 2");
+        expect(script).toContain("$rules.Count -ne $allowedSids.Count");
         expect(script).toContain("$_.AccessControlType -ne 'Allow'");
         expect(script).toContain("$_.FileSystemRights -ne");
         expect(script).toContain("$_.InheritanceFlags -ne $inherit");

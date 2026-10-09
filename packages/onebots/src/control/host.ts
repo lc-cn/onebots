@@ -244,7 +244,12 @@ export async function startControlHost(options: ControlHostOptions) {
         if (!generations) throw new Error("运行版本仓库不可用");
         return generations.readVerified(id);
     };
-    const activationVerification = new GenerationConfigurationVerifier(workspace, readVerified);
+    const activationVerification = new GenerationConfigurationVerifier(
+        workspace,
+        readVerified,
+        undefined,
+        options.runtimeRoot ?? path.resolve(import.meta.dirname, "../.."),
+    );
     lifecycle = new GenerationActivationController({
         statePath: path.join(controlDirectory(workspace), "active-generation.json"),
         gateway: controller,
@@ -281,12 +286,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 snapshot: document => createGatewayConfigurationSnapshot(workspace, document),
             },
             planImpact: (before, after) =>
-                activationVerification.planImpact(
-                    lifecycle.activeGeneration(),
-                    options.runtimeRoot ?? process.cwd(),
-                    before,
-                    after,
-                ),
+                activationVerification.planImpact(lifecycle.activeGeneration(), before, after),
             recovery: new ConfigurationRecoveryStore(
                 path.join(controlDirectory(workspace), "configuration/recovery"),
             ),

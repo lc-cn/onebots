@@ -25,6 +25,19 @@ function canonical(value: unknown): string {
 }
 
 describe("service migration record schema", () => {
+    it("失败诊断仅允许固定阶段，拒绝任意文本且保留旧记录读取", () => {
+        for (const failureStage of ["verify-original", "stop-original", "verify-quiescent"])
+            expect(
+                parseServiceMigrationRecord({ schemaVersion: 1, ...base, failureStage }),
+            ).toMatchObject({ failureStage });
+        for (const failureStage of ["secret-token", "/private/config.yaml", {}, undefined])
+            expect(() =>
+                parseServiceMigrationRecord({ schemaVersion: 1, ...base, failureStage }),
+            ).toThrow();
+        expect(parseServiceMigrationRecord({ schemaVersion: 1, ...base })).not.toHaveProperty(
+            "failureStage",
+        );
+    });
     it("strictly reads legacy v1 without accepting v2 phases or evidence", () => {
         expect(parseServiceMigrationRecord({ schemaVersion: 1, ...base })).toEqual({
             schemaVersion: 1,

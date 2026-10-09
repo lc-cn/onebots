@@ -82,13 +82,32 @@ describe("InstagramHttpHost", () => {
 
     it("拒绝活跃账号路径冲突，路径迁移后旧路由失活", async () => {
         const routes = new Map<string, Handler>();
+        let registered: string[] | undefined;
         const router = {
-            createRegistrationScope: () => ({
-                run: <T>(operation: () => T) => operation(),
-                close: () => undefined,
-            }),
-            get: (path: string, handler: Handler) => routes.set(`GET ${path}`, handler),
-            post: (path: string, handler: Handler) => routes.set(`POST ${path}`, handler),
+            createRegistrationScope: () => {
+                const owned: string[] = [];
+                return {
+                    run: <T>(operation: () => T) => {
+                        registered = owned;
+                        try {
+                            return operation();
+                        } finally {
+                            registered = undefined;
+                        }
+                    },
+                    close: () => owned.forEach(key => routes.delete(key)),
+                };
+            },
+            get: (path: string, handler: Handler) => {
+                const key = `GET ${path}`;
+                routes.set(key, handler);
+                registered?.push(key);
+            },
+            post: (path: string, handler: Handler) => {
+                const key = `POST ${path}`;
+                routes.set(key, handler);
+                registered?.push(key);
+            },
         };
         const clients = new Map<string, InstagramClient>();
         const host = new InstagramHttpHost({ router } as unknown as BaseApp, id => clients.get(id));
@@ -102,9 +121,25 @@ describe("InstagramHttpHost", () => {
         const moved = new InstagramClient(config("first", "101", "/new"));
         clients.set("first", moved);
         host.mount("first", moved);
-        const ctx = context("GET", "/shared", undefined);
-        await routes.get("GET /shared")?.(ctx);
-        expect(ctx.status).toBe(404);
+        expect(routes.has("GET /shared")).toBe(false);
+        expect(routes.has("POST /shared")).toBe(false);
+    });
+
+    it("部分路由注册冲突时关闭作用域并允许重试", () => {
+        const router = new Router(createServer());
+        const blocker = router.createRegistrationScope({ platform: "other" });
+        blocker.run(() => router.post("/events", () => undefined));
+        const current = new InstagramClient(config("account", "100", "/events"));
+        const host = new InstagramHttpHost({ router } as unknown as BaseApp, () => current);
+        try {
+            expect(() => host.mount("account", current)).toThrow();
+            expect(router.stack).toHaveLength(1);
+            blocker.close();
+            host.mount("account", current);
+            expect(router.stack).toHaveLength(2);
+        } finally {
+            router.cleanup();
+        }
     });
 });
 

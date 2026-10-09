@@ -51,17 +51,17 @@ describe("Account.dispatch 调试旁路隔离", () => {
         vi.restoreAllMocks();
     });
 
-    it("message:dispatch 监听器抛出异常时，仍然照常分发给所有协议", async () => {
+    it("message:dispatch 监听器抛出异常时，仍然同步开始分发给所有协议", () => {
         const { account, protocolDispatch } = createAccount(() => {
             throw new Error("调试旁路模拟异常（如 JSON.stringify 遇到 BigInt）");
         });
 
         const event = { type: "message" } as never;
         expect(() => account.dispatch(event)).not.toThrow();
-        await vi.waitFor(() => expect(protocolDispatch).toHaveBeenCalledWith(event));
+        expect(protocolDispatch).toHaveBeenCalledWith(event);
     });
 
-    it("message:dispatch 监听器正常时，行为不变", async () => {
+    it("message:dispatch 监听器正常时，行为不变", () => {
         const emitted: unknown[] = [];
         const { account, protocolDispatch } = createAccount((event, payload) => {
             emitted.push({ event, payload });
@@ -70,10 +70,8 @@ describe("Account.dispatch 调试旁路隔离", () => {
         const event = { type: "message" } as never;
         account.dispatch(event);
 
-        await vi.waitFor(() => {
-            expect(protocolDispatch).toHaveBeenCalledWith(event);
-            expect(emitted).toHaveLength(1);
-        });
+        expect(protocolDispatch).toHaveBeenCalledWith(event);
+        expect(emitted).toHaveLength(1);
     });
 
     it("dispatchAwaited 等待异步协议完成", async () => {
@@ -94,6 +92,35 @@ describe("Account.dispatch 调试旁路隔离", () => {
         release?.();
         await delivery;
         expect(settled).toBe(true);
+    });
+
+    it("不等待返回值的 dispatch 仍进入排空屏障，直到异步协议真实投递完成", async () => {
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const { account, protocolDispatch } = createAccount(vi.fn());
+        protocolDispatch.mockReturnValue(pending);
+        const event = { type: "message" } as never;
+
+        // dispatch 的公开契约为 fire-and-forget，不承诺同步完成协议投递。
+        expect(account.dispatch(event)).toBeUndefined();
+        const drain = account.beginOperationDrain();
+        let drained = false;
+        const settlement = drain.settled(1_000).then(() => {
+            drained = true;
+        });
+        try {
+            await vi.waitFor(() => expect(protocolDispatch).toHaveBeenCalledWith(event));
+            expect(drained).toBe(false);
+            await expect(account.runOperation(() => "new operation")).rejects.toThrow("操作未受理");
+        } finally {
+            release();
+            await settlement;
+            drain.release();
+        }
+        expect(drained).toBe(true);
+        await expect(account.runOperation(() => "after drain")).resolves.toBe("after drain");
     });
 
     it("一个协议失败时仍尝试其余协议并向接入层传播错误", async () => {

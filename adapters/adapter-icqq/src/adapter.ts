@@ -37,7 +37,7 @@ export class ICQQAdapter extends ICQQActionAdapter {
         account.on("start", () => {
             retired = false;
         });
-        account.on("stop", () => {
+        account.on("stopping", () => {
             retired = true;
         });
 

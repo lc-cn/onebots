@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type { VerifiedGeneration } from "../installation/generation-store.js";
 import { GenerationConfigurationVerifier } from "./generation-configuration.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
+import { allocateConfigurationVerification } from "../configuration/configuration-verify-ownership.js";
 vi.mock("../installation/generation-runtime.js", () => ({ resolveGenerationRuntime: vi.fn() }));
 const roots: string[] = [];
 afterEach(() => {
@@ -30,13 +31,20 @@ function fixture() {
         selection,
     }));
     const verify = vi.fn(async () => ({ valid: true, issues: [] }));
-    const service = new GenerationConfigurationVerifier(root, () => current, verify);
+    const bundledRuntimeRoot = path.join(root, "bundled-runtime");
+    const service = new GenerationConfigurationVerifier(
+        root,
+        () => current,
+        verify,
+        bundledRuntimeRoot,
+    );
     return {
         root,
         file,
         generation,
         verify,
         service,
+        bundledRuntimeRoot,
         replace: () => {
             current = { ...generation, planDigest: "b".repeat(64) };
         },
@@ -95,8 +103,36 @@ it("关闭撤销已签发复核能力并拒绝新验证", async () => {
 
 it("升级确认的配置摘要在验证开始前必须仍匹配", async () => {
     const f = fixture();
-    await expect(f.service.verify(f.generation, "f".repeat(64))).rejects.toThrow(
-        "配置已发生变化",
+    await expect(f.service.verify(f.generation, "f".repeat(64))).rejects.toThrow("配置已发生变化");
+    expect(f.verify).not.toHaveBeenCalled();
+});
+
+it("内置运行时影响规划固定使用管理宿主选择的包根并设置显式超时", async () => {
+    const f = fixture();
+    f.verify.mockResolvedValue({
+        valid: true,
+        issues: [],
+        impact: {
+            mode: "none",
+            accounts: [],
+            protocols: [],
+            dynamicFields: [],
+            restartReasons: [],
+        },
+    });
+    await f.service.planImpact(null, {}, {});
+    expect(f.verify).toHaveBeenCalledWith(
+        expect.objectContaining({
+            runtimeRoot: f.bundledRuntimeRoot,
+            timeoutMs: 15_000,
+        }),
     );
+});
+
+it("影响规划先恢复自己的 worker 目录，归属不明时拒绝启动新进程", async () => {
+    const f = fixture();
+    const privateRoot = path.join(f.root, ".control/application-verification-workers");
+    allocateConfigurationVerification(privateRoot);
+    await expect(f.service.planImpact(null, {}, {})).rejects.toThrow("归属尚待核实");
     expect(f.verify).not.toHaveBeenCalled();
 });

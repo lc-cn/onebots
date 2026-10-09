@@ -1,4 +1,6 @@
 import type { BaseApp } from "onebots";
+import { createServer } from "node:http";
+import { Router } from "../../../packages/core/src/router.js";
 import { describe, expect, it, vi } from "vitest";
 import { MatrixAppserviceHost } from "./appservice-host.js";
 import { MatrixClient } from "./client.js";
@@ -28,6 +30,22 @@ const config = (accountId: string, path?: string): MatrixConfig => ({
 });
 
 describe("MatrixAppserviceHost", () => {
+    it("部分路由冲突时关闭作用域并允许重试完整注册", () => {
+        const router = new Router(createServer());
+        const blocker = router.createRegistrationScope({ platform: "other" });
+        blocker.run(() => router.post("/shared/_matrix/app/v1/ping", () => undefined));
+        const current = new MatrixClient(config("bot", "/shared"));
+        const host = new MatrixAppserviceHost({ router } as unknown as BaseApp, () => current);
+        try {
+            expect(() => host.mount("bot", current, "/matrix/bot")).toThrow();
+            expect(router.stack).toHaveLength(1);
+            blocker.close();
+            host.mount("bot", current, "/matrix/bot");
+            expect(router.stack).toHaveLength(4);
+        } finally {
+            router.cleanup();
+        }
+    });
     it("路由热重载后解析当前 Client，不捕获旧实例", async () => {
         const routes = new Map<string, Handler>();
         const router = {
@@ -65,14 +83,30 @@ describe("MatrixAppserviceHost", () => {
 
     it("路径变更后旧路由失活，并拒绝活跃账号之间的路径冲突", async () => {
         const routes = new Map<string, Handler>();
+        let registered: string[] | undefined;
         const router = {
-            createRegistrationScope: () => ({
-                run: <T>(operation: () => T) => operation(),
-                close: () => undefined,
-            }),
-            put: (path: string, handler: Handler) => routes.set(`PUT ${path}`, handler),
-            post: (path: string, handler: Handler) => routes.set(`POST ${path}`, handler),
-            get: (path: string, handler: Handler) => routes.set(`GET ${path}`, handler),
+            createRegistrationScope: () => {
+                const owned: string[] = [];
+                return {
+                    run: <T>(operation: () => T) => {
+                        registered = owned;
+                        try {
+                            return operation();
+                        } finally {
+                            registered = undefined;
+                        }
+                    },
+                    close: () => owned.forEach(key => routes.delete(key)),
+                };
+            },
+            put: (path: string, handler: Handler) => register("PUT", path, handler),
+            post: (path: string, handler: Handler) => register("POST", path, handler),
+            get: (path: string, handler: Handler) => register("GET", path, handler),
+        };
+        const register = (method: string, path: string, handler: Handler) => {
+            const key = `${method} ${path}`;
+            routes.set(key, handler);
+            registered?.push(key);
         };
         const clients = new Map<string, MatrixClient>();
         const host = new MatrixAppserviceHost({ router } as unknown as BaseApp, accountId =>
@@ -89,10 +123,7 @@ describe("MatrixAppserviceHost", () => {
         const moved = new MatrixClient(config("first", "/new"));
         clients.set("first", moved);
         host.mount("first", moved, "/matrix/first");
-        const stale = routes.get("POST /shared/_matrix/app/v1/ping");
-        const ctx = context("/shared/_matrix/app/v1/ping", "POST");
-        await stale?.(ctx);
-        expect(ctx.status).toBe(404);
+        expect(routes.has("POST /shared/_matrix/app/v1/ping")).toBe(false);
     });
 });
 

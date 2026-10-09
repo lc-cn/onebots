@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Adapter } from "./adapter.js";
 import { BaseApp } from "./base-app.js";
+import { getHostLifecycleState } from "./host-lifecycle-state.js";
 
 function deferred() {
     let resolve!: () => void;
@@ -16,7 +17,9 @@ function deferred() {
 }
 
 class TestApp extends BaseApp {
-    startManaged() { return this.startManagedRuntime(); }
+    startManaged() {
+        return this.startManagedRuntime();
+    }
     listen = vi.fn(async (_signal?: AbortSignal) => undefined);
     protected override listenHttpServer(signal?: AbortSignal): Promise<void> {
         return this.listen(signal);
@@ -26,8 +29,8 @@ class TestApp extends BaseApp {
 class TestAdapter extends Adapter {
     startTask = vi.fn(async () => undefined);
     stopTask = vi.fn(async () => undefined);
-    constructor(app: BaseApp) {
-        super(app, "mock");
+    constructor(app: BaseApp, platform = "mock") {
+        super(app, platform as "mock");
     }
     createAccount(): never {
         throw new Error("测试不创建账号");
@@ -58,6 +61,46 @@ afterEach(async () => {
 });
 
 describe("BaseApp startup cancellation", () => {
+    it("生命周期钩子新增的后续平台在首次启动前进入热配置门禁", async () => {
+        const app = createApp();
+        const firstEntered = deferred();
+        const firstRelease = deferred();
+        const first = new TestAdapter(app, "first");
+        first.startTask.mockImplementation(() => {
+            firstEntered.resolve();
+            return firstRelease.promise;
+        });
+        app.adapters.set("first" as never, first as never);
+        app.lifecycle.addHook({
+            onStart: () => {
+                app.adapters.set("late" as never, new TestAdapter(app, "late") as never);
+            },
+        });
+
+        const starting = app.start();
+        await firstEntered.promise;
+        expect(getHostLifecycleState(app).queuedPlatforms).toContain("late");
+        firstRelease.resolve();
+        await starting;
+    });
+
+    it("启动批次尚未完成时拒绝重载，不替换正在启动的适配器", async () => {
+        const app = createApp();
+        const pending = deferred();
+        const entered = deferred();
+        const adapter = new TestAdapter(app);
+        adapter.startTask.mockImplementation(() => {
+            entered.resolve();
+            return pending.promise;
+        });
+        app.adapters.set("mock", adapter);
+        const starting = app.start();
+        await entered.promise;
+        await expect(app.reload(structuredClone(app.config))).rejects.toThrow("仍在启动");
+        expect(app.adapters.get("mock")).toBe(adapter);
+        pending.resolve();
+        await starting;
+    });
     it("shares start and stop tasks and suppresses late lifecycle hooks and listening", async () => {
         const app = createApp();
         const pending = deferred();
@@ -208,27 +251,37 @@ describe("BaseApp startup cancellation", () => {
         expect(app.start()).toBe(started);
     });
 
-    it.each(["lifecycle", "http"])("rejects both entries and rolls back once when %s fails", async phase => {
-        const app = createApp();
-        const onStop = vi.fn();
-        app.lifecycle.addHook({ onStop });
-        if (phase === "lifecycle") {
-            app.lifecycle.addHook({ onStart: () => { throw new Error("阶段失败"); } });
-        } else {
-            app.listen.mockRejectedValue(new Error("阶段失败"));
-        }
-        const complete = expect(app.start()).rejects.toThrow("阶段失败");
-        const managed = expect(app.startManaged()).rejects.toThrow("阶段失败");
-        await Promise.all([complete, managed]);
-        expect(onStop).toHaveBeenCalledOnce();
-        expect(app.isDisposed).toBe(true);
-    });
+    it.each(["lifecycle", "http"])(
+        "rejects both entries and rolls back once when %s fails",
+        async phase => {
+            const app = createApp();
+            const onStop = vi.fn();
+            app.lifecycle.addHook({ onStop });
+            if (phase === "lifecycle") {
+                app.lifecycle.addHook({
+                    onStart: () => {
+                        throw new Error("阶段失败");
+                    },
+                });
+            } else {
+                app.listen.mockRejectedValue(new Error("阶段失败"));
+            }
+            const complete = expect(app.start()).rejects.toThrow("阶段失败");
+            const managed = expect(app.startManaged()).rejects.toThrow("阶段失败");
+            await Promise.all([complete, managed]);
+            expect(onStop).toHaveBeenCalledOnce();
+            expect(app.isDisposed).toBe(true);
+        },
+    );
 
     it("cannot publish management readiness after stop wins an in-flight bind", async () => {
         const app = createApp();
         const pending = deferred();
         const entered = deferred();
-        app.listen.mockImplementation(() => { entered.resolve(); return pending.promise; });
+        app.listen.mockImplementation(() => {
+            entered.resolve();
+            return pending.promise;
+        });
         const managed = expect(app.startManaged()).rejects.toMatchObject({ name: "AbortError" });
         const complete = expect(app.start()).rejects.toMatchObject({ name: "AbortError" });
         await entered.promise;
@@ -245,7 +298,9 @@ describe("BaseApp startup cancellation", () => {
         adapter.startTask.mockImplementation(() => pending.promise);
         app.adapters.set("mock", adapter);
         const runtime = await app.startManaged();
-        const complete = expect(runtime.accountsSettled).rejects.toMatchObject({ name: "AbortError" });
+        const complete = expect(runtime.accountsSettled).rejects.toMatchObject({
+            name: "AbortError",
+        });
         await app.stop();
         pending.resolve();
         await complete;
@@ -261,5 +316,4 @@ describe("BaseApp startup cancellation", () => {
         await new Promise<void>(resolve => setImmediate(resolve));
         expect(app.isDisposed).toBe(true);
     });
-
 });

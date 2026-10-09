@@ -210,7 +210,9 @@ export async function runControlConfiguration(
                         `草稿未通过验证，存在 ${validation.issues.length} 项字段问题。请检查字段后重新验证。`,
                     );
                     for (const issue of validation.issues) {
-                        const location = issue.path.join(" / ").replace(/[\x00-\x1f\x7f]/gu, " ");
+                        const location = issue.path
+                            .join(" / ")
+                            .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ");
                         prompt.report(`${location || "配置"}：字段无效`);
                     }
                     continue;
@@ -222,7 +224,8 @@ export async function runControlConfiguration(
                 // 展示服务端计算的实例范围；不回显配置值或第三方原始诊断。
                 if (validation.impact) {
                     const impact = validation.impact;
-                    const safe = (value: string) => value.replace(/[\x00-\x1f\x7f]/gu, " ");
+                    const safe = (value: string) =>
+                        value.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ");
                     prompt.report(
                         `应用方式：${{ none: "无需更新连接", hot: "按实例热更新", restart: "重启网关" }[impact.mode]}`,
                     );

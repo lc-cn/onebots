@@ -59,13 +59,29 @@ describe("FacebookMessengerHttpHost", () => {
 
     it("拒绝活跃账号路径冲突，路径迁移后旧路由失活", async () => {
         const routes = new Map<string, Handler>();
+        let registered: string[] | undefined;
         const router = {
-            createRegistrationScope: () => ({
-                run: <T>(operation: () => T) => operation(),
-                close: () => undefined,
-            }),
-            get: (path: string, handler: Handler) => routes.set(`GET ${path}`, handler),
-            post: (path: string, handler: Handler) => routes.set(`POST ${path}`, handler),
+            createRegistrationScope: () => {
+                const owned: string[] = [];
+                return {
+                    run: <T>(operation: () => T) => {
+                        registered = owned;
+                        try {
+                            return operation();
+                        } finally {
+                            registered = undefined;
+                        }
+                    },
+                    close: () => owned.forEach(key => routes.delete(key)),
+                };
+            },
+            get: (path: string, handler: Handler) => register("GET", path, handler),
+            post: (path: string, handler: Handler) => register("POST", path, handler),
+        };
+        const register = (method: string, path: string, handler: Handler) => {
+            const key = `${method} ${path}`;
+            routes.set(key, handler);
+            registered?.push(key);
         };
         const clients = new Map<string, FacebookMessengerClient>();
         const host = new FacebookMessengerHttpHost({ router } as unknown as BaseApp, id =>
@@ -81,9 +97,8 @@ describe("FacebookMessengerHttpHost", () => {
         const moved = new FacebookMessengerClient(config("first", "/new"));
         clients.set("first", moved);
         host.mount("first", moved);
-        const ctx = context("GET", "/shared", undefined);
-        await routes.get("GET /shared")?.(ctx);
-        expect(ctx.status).toBe(404);
+        expect(routes.has("GET /shared")).toBe(false);
+        expect(routes.has("POST /shared")).toBe(false);
     });
 });
 

@@ -39,32 +39,50 @@ describe("WechatClawbotAdapter 身份契约", () => {
         database.close();
         await rm(`${databasePath}.db`, { force: true });
     });
-    it.each(["stop", "replace"])("%s 后迟到二维码和配对码不能污染同 ID 新账号", async boundary => {
-        const challenge = vi.fn();
-        adapter.on("verification:request", challenge);
-        const old = adapter.createAccount(config);
-        adapter.accounts.set(config.account_id, old);
-        old.client.emit("qr", { qrCodeUrl: "https://example.test/current", qrcode: "current" });
-        old.client.emit("verification_code_required");
-        expect(challenge).toHaveBeenCalledTimes(2);
-        if (boundary === "stop") await old.stop();
-        const replacement = adapter.createAccount(config);
-        if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
-        challenge.mockClear();
-        old.client.emit("qr", { qrCodeUrl: "https://example.test/late", qrcode: "late" });
-        old.client.emit("verification_code_required");
-        expect(challenge).not.toHaveBeenCalled();
-        adapter.accounts.set(config.account_id, replacement);
-        replacement.client.emit("qr", { qrCodeUrl: "https://example.test/new", qrcode: "new" });
-        replacement.client.emit("verification_code_required");
-        expect(challenge).toHaveBeenCalledTimes(2);
-        expect(challenge.mock.calls.map(([request]) => request.type)).toEqual([
-            "qrcode",
-            "pair_code",
-        ]);
-        await old.stop();
-        await replacement.stop();
-    });
+    it.each(["stop", "replace", "stopping"])(
+        "%s 后迟到二维码和配对码不能污染同 ID 新账号",
+        async boundary => {
+            const challenge = vi.fn();
+            adapter.on("verification:request", challenge);
+            const old = adapter.createAccount(config);
+            adapter.accounts.set(config.account_id, old);
+            old.client.emit("qr", { qrCodeUrl: "https://example.test/current", qrcode: "current" });
+            old.client.emit("verification_code_required");
+            expect(challenge).toHaveBeenCalledTimes(2);
+            let releaseStop: (() => void) | undefined;
+            let stopping: Promise<void> | undefined;
+            if (boundary === "stop") await old.stop();
+            if (boundary === "stopping") {
+                const pending = new Promise<void>(resolve => {
+                    releaseStop = resolve;
+                });
+                old.protocols.push({
+                    lifecycleStatus: "ready",
+                    stop: vi.fn(() => pending),
+                } as never);
+                stopping = old.stop();
+                await Promise.resolve();
+            }
+            const replacement = adapter.createAccount(config);
+            if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
+            challenge.mockClear();
+            old.client.emit("qr", { qrCodeUrl: "https://example.test/late", qrcode: "late" });
+            old.client.emit("verification_code_required");
+            expect(challenge).not.toHaveBeenCalled();
+            releaseStop?.();
+            await stopping;
+            adapter.accounts.set(config.account_id, replacement);
+            replacement.client.emit("qr", { qrCodeUrl: "https://example.test/new", qrcode: "new" });
+            replacement.client.emit("verification_code_required");
+            expect(challenge).toHaveBeenCalledTimes(2);
+            expect(challenge.mock.calls.map(([request]) => request.type)).toEqual([
+                "qrcode",
+                "pair_code",
+            ]);
+            await old.stop();
+            await replacement.stop();
+        },
+    );
 
     it("扫码窗口自动抬高账号有效启动边界并公开到账号摘要", () => {
         expect(adapter.resolveAccountStartupTimeoutSeconds(config)).toBe(480);
