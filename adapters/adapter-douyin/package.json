@@ -30,7 +30,7 @@
         "!lib/**/__tests__/**"
     ],
     "dependencies": {
-        "douyin-im": "^1.0.0"
+        "douyin-im": "^1.1.0"
     },
     "devDependencies": {
         "@types/node": "^24.0.0",

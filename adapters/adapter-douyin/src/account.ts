@@ -12,6 +12,11 @@ import type { DouyinAdapter } from "./adapter.js";
 import { projectDouyinGroupRequest, projectDouyinMessage, projectDouyinNotice } from "./events.js";
 import type { DouyinConfig } from "./types.js";
 
+interface BrowserChallenge {
+    owner: symbol;
+    verification: LoginVerification | ActionVerification;
+}
+
 export class DouyinAccountFactory {
     private readonly dataDir: string;
 
@@ -37,15 +42,22 @@ function wireAccount(
 ): void {
     const sdk = account.client;
     const accountId = account.config.account_id;
-    const browserChallenges = new Map<string, symbol>();
+    const browserChallenges = new Map<string, BrowserChallenge>();
     let logoutTask: Promise<boolean> | undefined;
     const projection = () => ({
         botId: adapter.createId(sdk.uid ?? accountId),
         createId: (value: string | number) => adapter.createId(value),
     });
     const clearVerification = (type?: string) => {
+        const challenges = type
+            ? browserChallenges.has(type)
+                ? [browserChallenges.get(type)!]
+                : []
+            : [...browserChallenges.values()];
         if (type) browserChallenges.delete(type);
         else browserChallenges.clear();
+        for (const challenge of challenges) challenge.verification.cancel("验证已清除");
+        adapter.revokeVerificationPage(accountId, type);
         adapter.emit("verification:clear", {
             platform: "douyin",
             account_id: accountId,
@@ -251,41 +263,60 @@ function openBrowserVerification(
     accountId: string,
     type: string,
     verification: LoginVerification | ActionVerification,
-    browserChallenges: Map<string, symbol>,
+    browserChallenges: Map<string, BrowserChallenge>,
     clearVerification: (type?: string) => void,
 ): void {
     clearVerification();
     const owner = Symbol(type);
-    browserChallenges.set(type, owner);
-    adapter.emit("verification:request", {
-        platform: "douyin",
-        account_id: accountId,
-        type,
-        hint: "抖音要求进行安全验证，验证页面已在 OneBots 所在主机打开",
-        options: {
-            blocks: [
-                { type: "text", content: "请在运行 OneBots 的电脑上完成抖音官方验证页面。" },
-                {
-                    type: "json",
-                    label: "验证信息",
-                    content:
-                        "methods" in verification
-                            ? {
-                                  operation: verification.operation,
-                                  methods: [...verification.methods],
-                                  description: verification.description,
-                              }
-                            : { operation: verification.target.operation },
+    browserChallenges.set(type, { owner, verification });
+    const completion = verification.open({ openBrowser: false });
+    void verification
+        .openUrl({ openBrowser: false })
+        .then(localUrl => {
+            if (browserChallenges.get(type)?.owner !== owner) {
+                verification.cancel("验证已被新的挑战替换");
+                return;
+            }
+            const proxyUrl = adapter.publishVerificationPage(accountId, type, localUrl);
+            adapter.emit("verification:request", {
+                platform: "douyin",
+                account_id: accountId,
+                type,
+                hint: "抖音要求进行安全验证，请打开官方验证页面并按提示完成操作",
+                options: {
+                    blocks: [
+                        { type: "link", url: proxyUrl, label: "打开抖音安全验证页面" },
+                        {
+                            type: "json",
+                            label: "验证信息",
+                            content:
+                                "methods" in verification
+                                    ? {
+                                          operation: verification.operation,
+                                          methods: [...verification.methods],
+                                          description: verification.description,
+                                      }
+                                    : { operation: verification.target.operation },
+                        },
+                    ],
                 },
-            ],
-        },
-    } satisfies Adapter.VerificationRequest);
-    void verification.open().then(
+            } satisfies Adapter.VerificationRequest);
+        })
+        .catch(error => {
+            if (browserChallenges.get(type)?.owner !== owner) return;
+            adapter.logger.error(`抖音账号 ${accountId} 安全验证页启动失败:`, error);
+            clearVerification(type);
+        });
+    void completion.then(
         () => {
-            if (browserChallenges.get(type) !== owner) return;
+            if (browserChallenges.get(type)?.owner !== owner) return;
             clearVerification(type);
         },
-        error => adapter.logger.error(`抖音账号 ${accountId} 安全验证失败:`, error),
+        error => {
+            if (browserChallenges.get(type)?.owner !== owner) return;
+            adapter.logger.error(`抖音账号 ${accountId} 安全验证失败:`, error);
+            clearVerification(type);
+        },
     );
 }
 

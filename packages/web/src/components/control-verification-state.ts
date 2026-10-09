@@ -29,9 +29,17 @@ export const verificationView = (): VerificationView => ({
     error: "",
 });
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-export function safeVerificationUrl(value: string): string | undefined {
+export function safeVerificationUrl(
+    value: string,
+    origin = typeof window === "undefined" ? undefined : window.location.origin,
+): string | undefined {
     try {
-        const url = new URL(value);
+        if (value.startsWith("//") || value.includes("\\") || /[\u0000-\u001f\u007f]/u.test(value))
+            return undefined;
+        const relative = value.startsWith("/");
+        if (relative && !origin) return undefined;
+        const url = new URL(value, origin);
+        if (relative && url.origin !== origin) return undefined;
         if (["http:", "https:"].includes(url.protocol) && !url.username && !url.password)
             return url.href;
     } catch {

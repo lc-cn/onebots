@@ -20,6 +20,7 @@ import { DouyinAccountFactory } from "./account.js";
 import { douyinCapabilities } from "./capabilities.js";
 import { compileDouyinMessage } from "./messages.js";
 import type { DouyinConfig } from "./types.js";
+import { DouyinVerificationProxy } from "./verification-proxy.js";
 
 const GROUP_REQUEST_TTL_MS = 15 * 60 * 1000;
 const MAX_GROUP_REQUESTS = 1_024;
@@ -32,11 +33,21 @@ interface RememberedGroupRequest {
 export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
     private readonly accountFactory: DouyinAccountFactory;
     private readonly groupRequests = new Map<string, RememberedGroupRequest>();
+    private readonly verificationProxy: DouyinVerificationProxy;
 
     constructor(app: BaseApp) {
         super(app, "douyin", douyinCapabilities);
         this.icon = "https://lf1-cdn-tos.bytegoofy.com/goofy/ies/douyin_web/public/favicon.ico";
+        this.verificationProxy = new DouyinVerificationProxy(app);
         this.accountFactory = new DouyinAccountFactory(this);
+    }
+
+    publishVerificationPage(accountId: string, type: string, localUrl: string): string {
+        return this.verificationProxy.publish(accountId, type, localUrl);
+    }
+
+    revokeVerificationPage(accountId: string, type?: string): void {
+        this.verificationProxy.revoke(accountId, type);
     }
 
     createAccount(config: Account.Config<"douyin">): Account<"douyin", DouyinAccount> {

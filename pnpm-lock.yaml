@@ -142,8 +142,8 @@ importers:
   adapters/adapter-douyin:
     dependencies:
       douyin-im:
-        specifier: ^1.0.0
-        version: 1.0.0
+        specifier: ^1.1.0
+        version: 1.1.0
       onebots:
         specifier: workspace:*
         version: link:../../packages/onebots
@@ -3250,8 +3250,8 @@ packages:
   dot-case@3.0.4:
     resolution: {integrity: sha512-Kv5nKlh6yRrdrGvxeJ2e5y2eRUpkUosIW4A2AS38zwSz27zu7ufDwQPi5Jhs3XAlGNetl3bmnGhQsMtkKJnj3w==}
 
-  douyin-im@1.0.0:
-    resolution: {integrity: sha512-S8Eb2JoEVh/p4Sb4HKF03rvuqV4pvUgZKOa/50tUuQLnqGW7+4jk2DlFniqSqWGmR8pT5UhFwjjXsMy+t8mYOg==}
+  douyin-im@1.1.0:
+    resolution: {integrity: sha512-OMd5nk9h58dRiaDotogcQXjKX/oVPnaW9isVr79ajtepItzh0NuXWxyo6fOLZHdw4xatKsyY8yCeTCzI87kifQ==}
     engines: {node: '>=22.5.0'}
 
   dunder-proto@1.0.1:
@@ -7587,7 +7587,7 @@ snapshots:
       no-case: 3.0.4
       tslib: 2.8.1
 
-  douyin-im@1.0.0:
+  douyin-im@1.1.0:
     dependencies:
       '@zhin.js/logger': 1.1.1
       protobufjs: 7.6.5

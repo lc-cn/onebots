@@ -82,6 +82,8 @@ interface FakeAdapter {
     };
     createId(value: string | number): { source: string | number; string: string; number: number };
     rememberGroupRequest: ReturnType<typeof vi.fn>;
+    publishVerificationPage: ReturnType<typeof vi.fn>;
+    revokeVerificationPage: ReturnType<typeof vi.fn>;
 }
 
 function createAdapter(): FakeAdapter {
@@ -91,6 +93,11 @@ function createAdapter(): FakeAdapter {
         logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
         createId: value => ({ source: value, string: String(value), number: Number(value) }),
         rememberGroupRequest: vi.fn(),
+        publishVerificationPage: vi.fn(
+            (_accountId: string, _type: string, _localUrl: string) =>
+                "/_onebots/douyin-verification/proxy-token",
+        ),
+        revokeVerificationPage: vi.fn(),
     };
 }
 
@@ -113,10 +120,12 @@ async function invokeLifecycle(
 
 function deferred<T>() {
     let resolve!: (value: T) => void;
-    const promise = new Promise<T>(done => {
+    let reject!: (error: Error) => void;
+    const promise = new Promise<T>((done, fail) => {
         resolve = done;
+        reject = fail;
     });
-    return { promise, resolve };
+    return { promise, resolve, reject };
 }
 
 beforeEach(() => {
@@ -280,6 +289,8 @@ describe("Douyin 登录验证", () => {
                 operation: "login",
                 methods: ["captcha"],
                 open: () => first.promise,
+                openUrl: async () => "http://127.0.0.1:1234/?token=first",
+                cancel: vi.fn(),
             },
         });
         account.client.emit("system.login.verification", {
@@ -287,11 +298,34 @@ describe("Douyin 登录验证", () => {
                 operation: "login",
                 methods: ["captcha"],
                 open: () => second.promise,
+                openUrl: async () => "http://127.0.0.1:1235/?token=second",
+                cancel: vi.fn(),
             },
         });
         const clearCount = () =>
             adapter.emit.mock.calls.filter(([event]) => event === "verification:clear").length;
         expect(clearCount()).toBe(2);
+        await Promise.resolve();
+        expect(adapter.publishVerificationPage).toHaveBeenCalledWith(
+            "bot",
+            "browser-verification",
+            "http://127.0.0.1:1235/?token=second",
+        );
+        expect(adapter.emit).toHaveBeenCalledWith(
+            "verification:request",
+            expect.objectContaining({
+                type: "browser-verification",
+                options: expect.objectContaining({
+                    blocks: expect.arrayContaining([
+                        {
+                            type: "link",
+                            url: "/_onebots/douyin-verification/proxy-token",
+                            label: "打开抖音安全验证页面",
+                        },
+                    ]),
+                }),
+            }),
+        );
 
         first.resolve();
         await first.promise;
@@ -302,6 +336,36 @@ describe("Douyin 登录验证", () => {
         await second.promise;
         await Promise.resolve();
         expect(clearCount()).toBe(3);
+        expect(adapter.emit).toHaveBeenLastCalledWith("verification:clear", {
+            platform: "douyin",
+            account_id: "bot",
+            type: "browser-verification",
+        });
+    });
+
+    it("浏览器验证失败后撤销代理并清除不可重用的链接", async () => {
+        const adapter = createAdapter();
+        const account = createAccount(adapter);
+        const completion = deferred<void>();
+
+        account.client.emit("system.login.verification", {
+            verification: {
+                operation: "login",
+                methods: ["captcha"],
+                open: () => completion.promise,
+                openUrl: async () => "http://127.0.0.1:1234/?token=failed",
+                cancel: vi.fn(),
+            },
+        });
+        await Promise.resolve();
+        completion.reject(new Error("平台拒绝验证"));
+        await completion.promise.catch(() => undefined);
+        await Promise.resolve();
+
+        expect(adapter.revokeVerificationPage).toHaveBeenLastCalledWith(
+            "bot",
+            "browser-verification",
+        );
         expect(adapter.emit).toHaveBeenLastCalledWith("verification:clear", {
             platform: "douyin",
             account_id: "bot",

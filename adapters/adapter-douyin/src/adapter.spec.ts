@@ -35,6 +35,8 @@ describe("DouyinAdapter 审查契约", () => {
         adapter = new DouyinAdapter({
             db: database,
             dataDir: "/tmp",
+            config: { path: "" },
+            router: { all: vi.fn() },
             getLogger: () => ({
                 trace: vi.fn(),
                 debug: vi.fn(),
