@@ -1,0 +1,52 @@
+import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebots";
+
+/** douyin-im 1.x 已实现且适配器完成统一投影的能力。 */
+export const douyinCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
+    actions: {
+        send_message: { support: "native", scenes: ["private", "group"] },
+        delete_message: { support: "native", availability: "context" },
+        mark_message_as_read: { support: "native", availability: "context" },
+        get_login_info: { support: "native" },
+        get_user_info: { support: "native" },
+        get_friend_list: { support: "native" },
+        get_friend_info: { support: "native" },
+        get_group_list: { support: "native" },
+        get_group_info: { support: "native" },
+        leave_group: { support: "native" },
+        get_group_member_list: { support: "native" },
+        get_group_member_info: { support: "native" },
+        kick_group_member: { support: "native", availability: "permission" },
+        invite_group_member: { support: "native", availability: "permission" },
+        handle_group_request: { support: "native", availability: "permission" },
+        get_status: { support: "native" },
+        get_version: { support: "native" },
+        get_supported_actions: { support: "native" },
+    },
+    events: {
+        message: { support: "native", scenes: ["private", "group"] },
+        group_request: { support: "native" },
+        member_joined: { support: "native" },
+        member_left: { support: "native" },
+        group_admin: { support: "native" },
+        custom: { support: "native", note: "群名称与群头像变化保留在 raw_event 中" },
+        friend_add: { support: "native" },
+        friend_remove: { support: "native" },
+        message_deleted: { support: "native" },
+        message_updated: { support: "native" },
+        reaction_added: { support: "native" },
+        reaction_removed: { support: "native" },
+    },
+    segments: {
+        text: { support: "native", direction: "both" },
+        at: { support: "native", direction: "both" },
+        image: { support: "native", direction: "both" },
+        reply: { support: "native", direction: "receive" },
+        video: { support: "native", direction: "receive" },
+        audio: { support: "native", direction: "receive" },
+        file: { support: "native", direction: "receive" },
+        link: { support: "native", direction: "receive" },
+    },
+    transports: {
+        websocket: { support: "native", mode: "websocket" },
+    },
+});

@@ -30,6 +30,7 @@
     "@onebots/adapter-wecom-kf": "workspace:*",
     "@onebots/adapter-slack": "workspace:*",
     "@onebots/adapter-telegram": "workspace:*",
+    "@onebots/adapter-douyin": "workspace:*",
     "@onebots/adapter-feishu": "workspace:*",
     "@onebots/adapter-teams": "workspace:*",
     "@onebots/adapter-wechat": "workspace:*",

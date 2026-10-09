@@ -20,6 +20,7 @@ onebots 目前支持以下平台适配器：
 | **微信 ClawBot (iLink)** | ✅ 已实现 | `@onebots/adapter-wechat-clawbot` | 微信 iLink Bot HTTP，扫码登录与长轮询 |
 | **Discord** | ✅ 已实现 | `@onebots/adapter-discord` | 支持Discord机器人 |
 | **Telegram** | ✅ 已实现 | `@onebots/adapter-telegram` | 支持私聊、群组、频道 |
+| **抖音** | ✅ 已实现 | `@onebots/adapter-douyin` | 支持扫码/短信/密码登录、私聊、群聊与群管理 |
 | **飞书** | ✅ 已实现 | `@onebots/adapter-feishu` | 支持单聊、群聊、富文本消息 |
 | **钉钉** | ✅ 已实现 | `@onebots/adapter-dingtalk` | 支持企业内部应用和自定义机器人 |
 | **Slack** | ✅ 已实现 | `@onebots/adapter-slack` | 支持频道消息、私聊、应用命令 |
@@ -111,6 +112,7 @@ Schema 中的封闭枚举继续使用 `choices`。若数组字段只想提供常
 - [Discord 适配器文档](/platform/discord)
 - [钉钉适配器文档](/platform/dingtalk)
 - [Telegram 适配器文档](/platform/telegram)
+- [抖音适配器文档](/platform/douyin)
 - [飞书适配器文档](/platform/feishu)
 - [Slack 适配器文档](/platform/slack)
 - [企业微信适配器文档](/platform/wecom)
