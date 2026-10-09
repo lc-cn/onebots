@@ -21,16 +21,20 @@ it("两种应用方式共用同一闭合策略，结果仅保留固定类别与�
         .mockReturnValueOnce(
             '{"ok":false,"category":"privilege","hresult":-2147023582,"secret":"private-value"}',
         )
-        .mockReturnValueOnce('{"ok":true,"secret":"private-value"}');
+        .mockReturnValueOnce('{"ok":true,"secret":"private-value"}')
+        .mockReturnValueOnce('{"ok":false,"nativeError":1307,"secret":"private-value"}');
     expect(probeWindowsSnapshotAcl(root())).toEqual({
         cmdlet: { ok: false, category: "privilege", hresult: -2147023582 },
         dotnet: { ok: true },
+        native: { ok: false, nativeError: 1307 },
     });
     const scripts = vi
         .mocked(execFileSync)
         .mock.calls.map(call => Buffer.from(String(call[1]?.[4]), "base64").toString("utf16le"));
     expect(scripts[0]).toContain("Set-Acl -LiteralPath $p -AclObject $acl");
     expect(scripts[1]).toContain("[IO.Directory]::SetAccessControl($p,$acl)");
+    expect(scripts[2]).toContain("SetNamedSecurityInfoW(name,1,0x80000005u");
+    expect(scripts[2]).not.toContain("AdjustTokenPrivileges");
     for (const script of scripts) {
         expect(script).toContain("$acl.SetOwner");
         expect(script).toContain("$owner -ne $ownerSid");
