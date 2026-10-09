@@ -45,28 +45,34 @@ describe("WechatClawbotAdapter 身份契约", () => {
             const challenge = vi.fn();
             adapter.on("verification:request", challenge);
             const old = adapter.createAccount(config);
-            adapter.accounts.set(config.account_id, old);
-            old.client.emit("qr", { qrCodeUrl: "https://example.test/current", qrcode: "current" });
-            old.client.emit("verification_code_required");
-            expect(challenge).toHaveBeenCalledTimes(2);
+            let replacement: ReturnType<WechatClawbotAdapter["createAccount"]> | undefined;
             let releaseStop: (() => void) | undefined;
             let stopping: Promise<void> | undefined;
-            if (boundary === "stop") await old.stop();
-            if (boundary === "stopping") {
-                const pending = new Promise<void>(resolve => {
-                    releaseStop = resolve;
-                });
-                old.protocols.push({
-                    lifecycleStatus: "ready",
-                    stop: vi.fn(() => pending),
-                } as never);
-                stopping = old.stop();
-            }
-            const replacement = adapter.createAccount(config);
             try {
+                adapter.accounts.set(config.account_id, old);
+                old.client.emit("qr", {
+                    qrCodeUrl: "https://example.test/current",
+                    qrcode: "current",
+                });
+                old.client.emit("verification_code_required");
+                expect(challenge).toHaveBeenCalledTimes(2);
+                if (boundary === "stop") await old.stop();
+                if (boundary === "stopping") {
+                    const pending = new Promise<void>(resolve => {
+                        releaseStop = resolve;
+                    });
+                    const fakeStop = vi.fn(() => pending);
+                    old.protocols.push({ lifecycleStatus: "ready", stop: fakeStop } as never);
+                    stopping = old.stop();
+                    await vi.waitFor(() => expect(fakeStop).toHaveBeenCalledOnce());
+                }
+                replacement = adapter.createAccount(config);
                 if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
                 challenge.mockClear();
-                old.client.emit("qr", { qrCodeUrl: "https://example.test/late", qrcode: "late" });
+                old.client.emit("qr", {
+                    qrCodeUrl: "https://example.test/late",
+                    qrcode: "late",
+                });
                 old.client.emit("verification_code_required");
                 expect(challenge).not.toHaveBeenCalled();
                 releaseStop?.();
@@ -82,12 +88,12 @@ describe("WechatClawbotAdapter 身份契约", () => {
                     "qrcode",
                     "pair_code",
                 ]);
-                await old.stop();
-                await replacement.stop();
             } finally {
-                // 即使迟到事件断言失败，也必须放行远端增加的挂起协议清理。
+                // 先放行挂起的协议清理，断言失败时也不阻塞实例回收。
                 releaseStop?.();
-                await Promise.allSettled([stopping, old.stop(), replacement.stop()]);
+                await Promise.allSettled(
+                    [stopping ?? old.stop(), replacement?.stop()].filter(Boolean),
+                );
             }
         },
     );

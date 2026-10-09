@@ -51,15 +51,17 @@ describe("ICQQ 账号统一 ID", () => {
                     const pending = new Promise<void>(resolve => {
                         releaseStop = resolve;
                     });
+                    const fakeStop = vi.fn(() => pending);
                     old.protocols.push({
                         lifecycleStatus: "ready",
-                        stop: vi.fn(() => pending),
+                        stop: fakeStop,
                     } as never);
                     // 原断言失败也必须先放行挂起清理，避免 teardown 永久等待。
                     cleanup.unshift(() => {
                         releaseStop?.();
                     });
                     stopping = old.stop();
+                    await vi.waitFor(() => expect(fakeStop).toHaveBeenCalledOnce());
                 }
                 const replacement = adapter.createAccount(config);
                 cleanup.unshift(() => replacement.stop());

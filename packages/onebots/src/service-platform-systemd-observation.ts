@@ -9,8 +9,8 @@ export function isNaturalSystemdTransition(
         key => before[key] === after[key],
     );
     const stopped =
-        after.ActiveState === "inactive" &&
-        after.SubState === "dead" &&
+        ((after.ActiveState === "inactive" && after.SubState === "dead") ||
+            (after.ActiveState === "failed" && after.SubState === "failed")) &&
         after.MainPID === "0" &&
         after.ControlPID === "0";
     const sameIdentity =
