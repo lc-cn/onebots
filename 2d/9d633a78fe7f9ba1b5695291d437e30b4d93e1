@@ -1,0 +1,27 @@
+scripts/windows-snapshot-acl-probe.mjs
+  s_a953d60826be1b::t_8e51df0c39faca 30
+.changeset/lifecycle-acceptance-diagnostics.md
+  s_a953d60826be1b::t_8e51df0c39faca 8-9
+packages/onebots/src/control/gateway-snapshot-security.spec.ts
+  s_a953d60826be1b::t_3a3f3bd033d6d1 32-33,79-80,89
+scripts/verify-windows-snapshot-security.mjs
+  s_a953d60826be1b::t_8e51df0c39faca 26,28-29
+packages/onebots/src/control/gateway-snapshot-security.ts
+  s_a953d60826be1b::t_8e51df0c39faca 63,83,87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2d9d633a78fe7f9ba1b5695291d437e30b4d93e1",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
