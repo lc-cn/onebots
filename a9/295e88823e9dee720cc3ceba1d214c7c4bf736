@@ -1,0 +1,35 @@
+packages/onebots/src/control/host-configuration-repair.spec.ts
+  s_a953d60826be1b::t_f727fb5707a0bb 1-57
+__tests__/unit/windows-lifecycle-diagnostics.spec.ts
+  s_a953d60826be1b::t_3fa4c9f1e83fbc 50-55,57-65
+  s_a953d60826be1b::t_d681ac29ca6cd8 56
+scripts/verify-control-repair.mjs
+  s_a953d60826be1b::t_72c5241698e607 33-35
+scripts/windows-lifecycle-diagnostics.mjs
+  s_a953d60826be1b::t_72c5241698e607 6,18,20,28-30
+  s_a953d60826be1b::t_246a7457e8dc78 19
+packages/onebots/src/control/gateway-snapshot-security.spec.ts
+  s_a953d60826be1b::t_72c5241698e607 57-73
+packages/onebots/src/control/gateway-snapshot-security.ts
+  s_a953d60826be1b::t_9a628ab7793a69 68
+  s_a953d60826be1b::t_72c5241698e607 9,11-13,15-18,69-77,93-95,102-106
+  s_a953d60826be1b::t_f44689d0265833 14
+.changeset/lifecycle-acceptance-diagnostics.md
+  s_a953d60826be1b::t_12c2fde5235008 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a9295e88823e9dee720cc3ceba1d214c7c4bf736",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
