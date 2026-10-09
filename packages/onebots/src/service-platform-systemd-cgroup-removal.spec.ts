@@ -1,9 +1,34 @@
 import { expect, it, vi } from "vitest";
 import type { ServiceHost } from "./service-host.js";
 import { SystemdServicePlatform } from "./service-platform-systemd.js";
+import { isNaturalSystemdTransition } from "./service-platform-systemd-observation.js";
 
 const definition = "/etc/systemd/system/onebots-gateway.service";
 const group = "/system.slice/onebots-gateway.service";
+
+it("同一 unit 自然崩溃到 failed 终态时允许丢弃旧 cgroup 证据并重读", () => {
+    const stable = {
+        LoadState: "loaded",
+        FragmentPath: definition,
+        UnitFileState: "enabled",
+        ActiveState: "active",
+        SubState: "running",
+        MainPID: "123",
+        ControlPID: "0",
+        ControlGroup: group,
+        InvocationID: "a".repeat(32),
+    };
+    expect(
+        isNaturalSystemdTransition(stable, {
+            ...stable,
+            ActiveState: "failed",
+            SubState: "failed",
+            MainPID: "0",
+            ControlGroup: "",
+            InvocationID: "",
+        }),
+    ).toBe(true);
+});
 
 it.each([false, true, "group"])(
     "读取 cgroup 时自然停态变迁重观测但实例换代仍拒绝（replacement=%s）",

@@ -45,42 +45,55 @@ describe("WechatClawbotAdapter 身份契约", () => {
             const challenge = vi.fn();
             adapter.on("verification:request", challenge);
             const old = adapter.createAccount(config);
-            adapter.accounts.set(config.account_id, old);
-            old.client.emit("qr", { qrCodeUrl: "https://example.test/current", qrcode: "current" });
-            old.client.emit("verification_code_required");
-            expect(challenge).toHaveBeenCalledTimes(2);
+            let replacement: ReturnType<WechatClawbotAdapter["createAccount"]> | undefined;
             let releaseStop: (() => void) | undefined;
             let stopping: Promise<void> | undefined;
-            if (boundary === "stop") await old.stop();
-            if (boundary === "stopping") {
-                const pending = new Promise<void>(resolve => {
-                    releaseStop = resolve;
+            try {
+                adapter.accounts.set(config.account_id, old);
+                old.client.emit("qr", {
+                    qrCodeUrl: "https://example.test/current",
+                    qrcode: "current",
                 });
-                old.protocols.push({
-                    lifecycleStatus: "ready",
-                    stop: vi.fn(() => pending),
-                } as never);
-                stopping = old.stop();
-                await Promise.resolve();
+                old.client.emit("verification_code_required");
+                expect(challenge).toHaveBeenCalledTimes(2);
+                if (boundary === "stop") await old.stop();
+                if (boundary === "stopping") {
+                    const pending = new Promise<void>(resolve => {
+                        releaseStop = resolve;
+                    });
+                    const fakeStop = vi.fn(() => pending);
+                    old.protocols.push({ lifecycleStatus: "ready", stop: fakeStop } as never);
+                    stopping = old.stop();
+                    await vi.waitFor(() => expect(fakeStop).toHaveBeenCalledOnce());
+                }
+                replacement = adapter.createAccount(config);
+                if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
+                challenge.mockClear();
+                old.client.emit("qr", {
+                    qrCodeUrl: "https://example.test/late",
+                    qrcode: "late",
+                });
+                old.client.emit("verification_code_required");
+                expect(challenge).not.toHaveBeenCalled();
+                releaseStop?.();
+                await stopping;
+                adapter.accounts.set(config.account_id, replacement);
+                replacement.client.emit("qr", {
+                    qrCodeUrl: "https://example.test/new",
+                    qrcode: "new",
+                });
+                replacement.client.emit("verification_code_required");
+                expect(challenge).toHaveBeenCalledTimes(2);
+                expect(challenge.mock.calls.map(([request]) => request.type)).toEqual([
+                    "qrcode",
+                    "pair_code",
+                ]);
+            } finally {
+                releaseStop?.();
+                await Promise.allSettled(
+                    [stopping ?? old.stop(), replacement?.stop()].filter(Boolean),
+                );
             }
-            const replacement = adapter.createAccount(config);
-            if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
-            challenge.mockClear();
-            old.client.emit("qr", { qrCodeUrl: "https://example.test/late", qrcode: "late" });
-            old.client.emit("verification_code_required");
-            expect(challenge).not.toHaveBeenCalled();
-            releaseStop?.();
-            await stopping;
-            adapter.accounts.set(config.account_id, replacement);
-            replacement.client.emit("qr", { qrCodeUrl: "https://example.test/new", qrcode: "new" });
-            replacement.client.emit("verification_code_required");
-            expect(challenge).toHaveBeenCalledTimes(2);
-            expect(challenge.mock.calls.map(([request]) => request.type)).toEqual([
-                "qrcode",
-                "pair_code",
-            ]);
-            await old.stop();
-            await replacement.stop();
         },
     );
 

@@ -14,6 +14,8 @@ describe("ICQQ 账号统一 ID", () => {
             let database: SqliteDB | undefined;
             let old: ReturnType<ICQQAdapter["createAccount"]> | undefined;
             let replacement: ReturnType<ICQQAdapter["createAccount"]> | undefined;
+            let releaseStop: (() => void) | undefined;
+            let stopping: Promise<void> | undefined;
             const logger = {
                 trace: vi.fn(),
                 debug: vi.fn(),
@@ -43,19 +45,18 @@ describe("ICQQ 账号统一 ID", () => {
                 old.client.emit("qrcode", { image: Buffer.from("current challenge") });
                 expect(challenge).toHaveBeenCalledOnce();
                 expect(qr).toHaveBeenCalledOnce();
-                let releaseStop: (() => void) | undefined;
-                let stopping: Promise<void> | undefined;
                 if (boundary === "stop") await old.stop();
                 if (boundary === "stopping") {
                     const pending = new Promise<void>(resolve => {
                         releaseStop = resolve;
                     });
+                    const fakeStop = vi.fn(() => pending);
                     old.protocols.push({
                         lifecycleStatus: "ready",
-                        stop: vi.fn(() => pending),
+                        stop: fakeStop,
                     } as never);
                     stopping = old.stop();
-                    await Promise.resolve();
+                    await vi.waitFor(() => expect(fakeStop).toHaveBeenCalledOnce());
                 }
                 replacement = adapter.createAccount(config);
                 if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
@@ -74,7 +75,10 @@ describe("ICQQ 账号统一 ID", () => {
                 expect(challenge).toHaveBeenCalledOnce();
                 expect(qr).toHaveBeenCalledOnce();
             } finally {
-                await Promise.allSettled([old?.stop(), replacement?.stop()].filter(Boolean));
+                releaseStop?.();
+                await Promise.allSettled(
+                    [stopping ?? old?.stop(), replacement?.stop()].filter(Boolean),
+                );
                 try {
                     database?.close();
                 } finally {
