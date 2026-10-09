@@ -1,0 +1,290 @@
+packages/web/src/styles/account-control.css
+  s_a953d60826be1b::t_0da6ba88634f55 1-5,7-9,12,16,76-78
+packages/web/src/components/AccountControlMessageInput.vue
+  s_a953d60826be1b::t_be460e9b2e4bda 1-6,8-9,18-36,40-41
+  s_a953d60826be1b::t_b6b78f5c068779 7,12
+  s_a953d60826be1b::t_1e2adddf90ed26 10,17,37-39
+  s_a953d60826be1b::t_6172844e8b2ad5 11,13-16
+packages/web/src/styles/account-control-actions.css
+  s_a953d60826be1b::t_8f93479b9ca835 26-27,50
+  s_a953d60826be1b::t_b438389d860849 1-25,28-49,51-112
+packages/onebots/src/gateway/runtime-rejection.spec.ts
+  s_a953d60826be1b::t_acf357ee048172 1-20,25-37,39-49,52-56,59,67-74
+  s_a953d60826be1b::t_610b0b1c93adca 21-24,57-58
+  s_a953d60826be1b::t_d25caf55c68f4c 38
+  s_a953d60826be1b::t_af971a06fda7ba 50
+  s_a953d60826be1b::t_0ceaf4dba86de7 51
+  s_a953d60826be1b::t_1509639403fccf 60-63
+  s_a953d60826be1b::t_cb32c72da34ea4 64-66
+packages/web/test/client-renderer-environment.ts
+  s_a953d60826be1b::t_7f9ec9481761d8 1
+  s_a953d60826be1b::t_8195e6ef6b03bb 2-8
+scripts/verify-installed-web.mjs
+  s_a953d60826be1b::t_2a4803f70c36b5 412-437,512,562-563,565-571,586,603
+  s_a953d60826be1b::t_6cd8938c6b829c 531
+  s_a953d60826be1b::t_d77b0afc8b5667 362
+  s_a953d60826be1b::t_0bd985cf5384dd 516-529
+  s_a953d60826be1b::t_95c336cd4311d8 439-448,452,457,464-467,469-475,514,538,564,572-583,588,598,600,604
+  s_a953d60826be1b::t_450495d40ed2fe 438
+  s_a953d60826be1b::t_53045a0ce19f87 532-535
+  s_a953d60826be1b::t_6bed402c9774e3 515,530,536-537
+  s_a953d60826be1b::t_091f3b2310dc40 476
+  s_a953d60826be1b::t_fd63468ac65668 590-595
+  s_a953d60826be1b::t_79a82293bed2c2 468
+  s_a953d60826be1b::t_7b4e3d8d31c77a 584-585
+packages/web/src/views/AccountsView.vue
+  s_a953d60826be1b::t_19c7b7765866d3 107,117,121-126,129-137,140-143,146-147
+  s_a953d60826be1b::t_440b7b0a9327ea 2,8,25,32-33,37-38,59-64,86,101,127-128,138-139,144-145,149-152
+packages/onebots/src/gateway/account-explore-executor.ts
+  s_a953d60826be1b::t_a3aed40fdf5c70 191-195
+  s_a953d60826be1b::t_33fa5b76e0e50d 3,104,109-110,185-190,196-197
+packages/web/src/use-account-control-interactions.ts
+  s_a953d60826be1b::t_2a192403228a7b 25
+packages/web/src/components/control-verification-state.spec.ts
+  s_a953d60826be1b::t_eec05a6dcbfd4d 90-113
+  s_a953d60826be1b::t_5c97d3ad5b1a81 390
+  s_a953d60826be1b::t_eab065fb993cbe 58-89
+  s_a953d60826be1b::t_fb47528d5bdfcf 114-136
+docs/src/en/guide/start.md
+  s_a953d60826be1b::t_7636516d394539 38-40
+packages/web/src/views/AccountDetailView.vue
+  s_a953d60826be1b::t_19c7b7765866d3 29-34,69-71,74-77,90-92,106-112,118-120
+  s_a953d60826be1b::t_70352b21c644c1 1-28,35-68,72-73,78-89,93-105,113-117,121-127
+.changeset/web-product-workspaces.md
+  s_a953d60826be1b::t_6fd2c5c4d1bcd1 9
+packages/onebots/src/control/account-explore-http.ts
+  s_a953d60826be1b::t_33fa5b76e0e50d 10,64-69
+packages/web/src/use-account-recent.spec.ts
+  s_a953d60826be1b::t_c9b4e58ab08206 1-29,40-67,73-90
+  s_a953d60826be1b::t_1509639403fccf 30-39,68-72
+packages/web/src/components/AccountControlConversationHead.vue
+  s_a953d60826be1b::t_95747f0611356d 94
+packages/web/src/components/ControlConfigurationPanel.vue
+  s_a953d60826be1b::t_3d9776b79b611f 29,141
+packages/web/src/components/AccountControlHistory.spec.ts
+  s_a953d60826be1b::t_afcadac6298691 1-6,26-44,61-66
+  s_a953d60826be1b::t_f69cd3c79fadc9 7-25,45-60
+packages/web/src/layouts/ControlLayout.vue
+  s_a953d60826be1b::t_76a8c463984674 15,94,112,206,245,271,288
+packages/onebots/src/control/web-assets.spec.ts
+  s_a953d60826be1b::t_13a64807c4e2c5 54
+  s_a953d60826be1b::t_8188821f95cfa0 1-21,27-53,55-66
+  s_a953d60826be1b::t_ba98988c4c892e 22-26
+packages/web/src/styles/account-control-responsive.css
+  s_a953d60826be1b::t_b438389d860849 13,24-25
+  s_a953d60826be1b::t_71c5c1be538ead 21-22
+  s_a953d60826be1b::t_76045cfe3f1825 29-31,44,116,139,189,206,342-343,347,359-360,364
+packages/onebots/src/control/account-explore-driver.spec.ts
+  s_a953d60826be1b::t_a3aed40fdf5c70 16-19,22-24,37-38,43-48,55-105
+  s_a953d60826be1b::t_4fb8543b3e1a28 1-15,20-21,25-36,39-42,49-54,106-111
+.changeset/gateway-unhandled-rejections.md
+  s_a953d60826be1b::t_fd94f1b3e41188 1-5
+packages/onebots/src/control/gateway-account-explore-client.ts
+  s_a953d60826be1b::t_a3aed40fdf5c70 1-5,7-10,24-29,34-36,38-48,54-59
+  s_a953d60826be1b::t_695a08cb873704 6,11-23,30-33,37,49-53,60-70
+packages/onebots/src/gateway/account-explore-contracts.ts
+  s_a953d60826be1b::t_a3aed40fdf5c70 8-11,26-27,88-89
+  s_a953d60826be1b::t_33fa5b76e0e50d 23,69,79,87,90
+packages/web/src/components/AccountControlContext.vue
+  s_a953d60826be1b::t_f7f6de493c723f 97-100
+README.md
+  s_a953d60826be1b::t_1e36bdc6c59524 176,298
+packages/web/src/use-account-recent.ts
+  s_a953d60826be1b::t_8022bff90c2c1c 90-93
+  s_a953d60826be1b::t_1509639403fccf 69-71,143
+  s_a953d60826be1b::t_95747f0611356d 2,84
+  s_a953d60826be1b::t_6bdbb3ade47c72 28,37,66-68,72-79,81,127
+  s_a953d60826be1b::t_0ab25805d19e9e 129,135
+packages/web/src/App.vue
+  s_a953d60826be1b::t_dd10ee6fcf3a3d 465
+  s_a953d60826be1b::t_cb2aefd9df9570 14-23,59-63,190-191,212,231,247-248,266-267,276-278,297,299,301-302,311-312,403,405-406,489,491-492,696,698-701,722,724,726,728,730-731
+  s_a953d60826be1b::t_0e28a55eb37509 24-25,33,36,114-115,175-176,196-197,205-210,213-217,225-229,232-234,315-317,323,329-331,386-393,399-402,404,407,485-488,490,493,702-706,708-716,719-721,727,729
+  s_a953d60826be1b::t_b6010aac334db3 324,364,373,394,437,717,889
+  s_a953d60826be1b::t_0ddeaf7ce2043d 170-173
+  s_a953d60826be1b::t_02e6bd315eee61 707,718
+  s_a953d60826be1b::t_b79568f46fef4d 255-259,732
+  s_a953d60826be1b::t_ec5be8606cc8b6 816,823-829,833,846,851-852,865-866,880,896,904-910,934,939-940,952-953
+  s_a953d60826be1b::t_04fcc61e1f8f1e 185
+  s_a953d60826be1b::t_19c7b7765866d3 168-169,177-181,198-204,218-224,287-291,318-322,325-328,374-383,804-806,812-813,817-822,830-832,834-845,847-850,853-864,890,892,897-903,911-933,935-938,941-951
+  s_a953d60826be1b::t_6063c088fd4ab9 503-504,506-510,512-514
+  s_a953d60826be1b::t_ddda5798bb1869 162-167
+  s_a953d60826be1b::t_1f8b9adde21355 252-254,260-262,876
+  s_a953d60826be1b::t_5f8bce55556a2c 443,447-453,455,458,466,469-470,481-482
+  s_a953d60826be1b::t_ba98988c4c892e 454,456-457,459-464,467-468,471-480
+  s_a953d60826be1b::t_b22ff405ca8b1a 499,505,511
+  s_a953d60826be1b::t_e166f2464592af 211,230,395-396
+  s_a953d60826be1b::t_27034b22e9ab0b 279-286,292,296,298,300,306,313-314
+packages/onebots/src/gateway/entry.ts
+  s_a953d60826be1b::t_4a81692a56f68c 224-225,227,232-235
+  s_a953d60826be1b::t_b5cb8bb114bb26 226,228-231
+  s_a953d60826be1b::t_1509639403fccf 238-245
+.changeset/web-entity-history-verification.md
+  s_a953d60826be1b::t_97243638c59521 23-24
+  s_a953d60826be1b::t_730497bd36e310 27-28
+  s_a953d60826be1b::t_2a192403228a7b 33-34
+  s_a953d60826be1b::t_8f93479b9ca835 13-14
+  s_a953d60826be1b::t_eb383ff5ac5407 29-30
+  s_a953d60826be1b::t_f7f6de493c723f 11-12
+  s_a953d60826be1b::t_2070ffa6c2256a 21-22
+  s_a953d60826be1b::t_524cd112a72cb4 31-32
+  s_a953d60826be1b::t_8ff082d8db5b69 9-10
+  s_a953d60826be1b::t_a86d4d527ae4e2 7-8
+  s_a953d60826be1b::t_a6f7c743c970e3 15-16
+  s_a953d60826be1b::t_00fc8c7a31e31f 25-26
+  s_a953d60826be1b::t_6fd2c5c4d1bcd1 1-6
+  s_a953d60826be1b::t_976212ab0402c3 17-18
+  s_a953d60826be1b::t_c3ce82aea09afa 19-20
+packages/web/src/components/control-verification-state.ts
+  s_a953d60826be1b::t_d0e1341bd38304 16,26,105,137-139,250-259,265,269-272,275,278,280,283-289,291-292
+  s_a953d60826be1b::t_b79568f46fef4d 266-268
+  s_a953d60826be1b::t_524cd112a72cb4 2,209
+  s_a953d60826be1b::t_405261e98678c1 260-264
+packages/web/src/components/AccountControlMessageInput.client.spec.ts
+  s_a953d60826be1b::t_673a8c83e1e6c5 1-5,7-45,51-57,59-64,68-83,138-142,147-155
+  s_a953d60826be1b::t_2a192403228a7b 84-94,99-119
+  s_a953d60826be1b::t_2cb2d9dbb5053f 6,46,50,58,120-125,130-137
+  s_a953d60826be1b::t_6172844e8b2ad5 47-49,65-67,95-98,126-129,143-146
+packages/onebots/src/gateway/account-explore-executor.spec.ts
+  s_a953d60826be1b::t_57c410939300a0 27,29,41
+  s_a953d60826be1b::t_a3aed40fdf5c70 47-49,51-59,62,66-73
+  s_a953d60826be1b::t_49b13638305764 46,50,60-61,63-65,74
+packages/web/src/components/control-configuration-layout.ts
+  s_a953d60826be1b::t_02e6bd315eee61 9
+  s_a953d60826be1b::t_15202dd020c2b1 10
+packages/web/src/views/ConfigurationView.vue
+  s_a953d60826be1b::t_3d9776b79b611f 22,45
+packages/web/src/account-control-errors.spec.ts
+  s_a953d60826be1b::t_4700f94ed04989 1-19,23-26,32-33,37-64,71-80
+  s_a953d60826be1b::t_8022bff90c2c1c 20-22,27-31,34-36,65-70
+packages/web/src/use-account-history.ts
+  s_a953d60826be1b::t_0ab25805d19e9e 24,35,57,91,93,108
+  s_a953d60826be1b::t_95747f0611356d 2
+vitest.config.ts
+  s_a953d60826be1b::t_673a8c83e1e6c5 10-21
+packages/web/src/views/ProtocolDetailView.vue
+  s_a953d60826be1b::t_2a54bbc247a290 1-80,84-90,94-97,102,112-115,125,130-133,138-139,148,150-153,162-163,167-173
+  s_a953d60826be1b::t_19c7b7765866d3 81-83,91-93,98-101,103-111,116-124,126-129,134-137,140-147,149,154-161,164-166
+packages/web/src/use-account-detail.ts
+  s_a953d60826be1b::t_0ab25805d19e9e 25,33,50,64,66,77
+  s_a953d60826be1b::t_8022bff90c2c1c 67-71
+  s_a953d60826be1b::t_95747f0611356d 9
+packages/onebots/src/control/gateway-driver.ts
+  s_a953d60826be1b::t_591fd92acd4705 3,251-254,259
+  s_a953d60826be1b::t_695a08cb873704 23,255,257-258,265
+packages/web/src/control-workspace.spec.ts
+  s_a953d60826be1b::t_6e3f8f6dd0dd35 3-12,16-17,26,32-34,36-47,49-61,65-67,73-76
+  s_a953d60826be1b::t_b79568f46fef4d 62-64,68-72
+  s_a953d60826be1b::t_cfe17d49918c06 18-22,27-30,35,48,77
+packages/onebots/src/gateway/account-explore-errors.ts
+  s_a953d60826be1b::t_5816a4de9ac33c 1-31
+packages/web/src/components/AccountControlHistory.vue
+  s_a953d60826be1b::t_b2a2534c48a449 1-92
+packages/web/src/views/AccountControlView.vue
+  s_a953d60826be1b::t_365327b63118e2 2,20,120-131,134,138
+  s_a953d60826be1b::t_2a192403228a7b 16,398,413
+  s_a953d60826be1b::t_00fc8c7a31e31f 64,423
+  s_a953d60826be1b::t_a6f7c743c970e3 137,139,325-328,335
+  s_a953d60826be1b::t_2070ffa6c2256a 446,453-455
+  s_a953d60826be1b::t_b2a2534c48a449 15,92,357,362-370
+packages/web/src/account-control-error.ts
+  s_a953d60826be1b::t_95747f0611356d 1-4,8-10
+  s_a953d60826be1b::t_8022bff90c2c1c 5-7
+packages/web/src/styles/main.css
+  s_a953d60826be1b::t_b3ca680743d406 12
+  s_a953d60826be1b::t_b438389d860849 17
+packages/web/src/use-account-send.ts
+  s_a953d60826be1b::t_2070ffa6c2256a 239-242,250,263,272
+  s_a953d60826be1b::t_816c07e992df0b 217-218
+  s_a953d60826be1b::t_eb383ff5ac5407 125,133
+  s_a953d60826be1b::t_00fc8c7a31e31f 33,66,146,202,251,280
+  s_a953d60826be1b::t_97243638c59521 7,179-195
+  s_a953d60826be1b::t_524cd112a72cb4 8,168-178
+packages/web/src/components/ControlConfigurationSections.vue
+  s_a953d60826be1b::t_19c7b7765866d3 58-61,63-66,71-74,76-81,85-90,329-331
+  s_a953d60826be1b::t_15202dd020c2b1 128-133
+  s_a953d60826be1b::t_02e6bd315eee61 228
+  s_a953d60826be1b::t_809bc817a5763d 49-50,55-57,62,67-70,75,82-84,111,182,264,379,432
+packages/onebots/src/control/web-assets.ts
+  s_a953d60826be1b::t_cdc480112a14f2 15,17
+  s_a953d60826be1b::t_b79568f46fef4d 13-14,16
+packages/web/src/use-account-send-capabilities.ts
+  s_a953d60826be1b::t_83d12d68f2ce55 1-2,7-15,21-24,28-34
+  s_a953d60826be1b::t_bd3113dd779462 3-6,16-20,25-27
+packages/web/src/components/ControlVerificationPanel.vue
+  s_a953d60826be1b::t_ba98988c4c892e 308-311,313-322
+  s_a953d60826be1b::t_68ef9e4533b289 2,27-35,198,201-204,208,306-307,312,323-324
+  s_a953d60826be1b::t_a502978dfb6e8c 260-262,265-267,270-272
+  s_a953d60826be1b::t_35147c79798aa0 263-264,268-269,273,294
+packages/web/src/views/ProtocolsView.vue
+  s_a953d60826be1b::t_19c7b7765866d3 112-118,123-124,143,146-155,161-168
+  s_a953d60826be1b::t_15202dd020c2b1 22
+  s_a953d60826be1b::t_b9ceb6a1e31653 2,8,21,27,34,61,63,96,111,139-140,156-160,169-171
+packages/onebots/src/control/account-explore-http.spec.ts
+  s_a953d60826be1b::t_a3aed40fdf5c70 24-26,33-40
+  s_a953d60826be1b::t_5816a4de9ac33c 1-23,27-32,41-50
+packages/web/src/use-account-send.spec.ts
+  s_a953d60826be1b::t_ca38c19ea7da6d 153-188
+  s_a953d60826be1b::t_9b9429ecbd0b64 117-123
+  s_a953d60826be1b::t_2da76ed8bc5ea5 140-152
+  s_a953d60826be1b::t_1509639403fccf 26-28,257-259,285-287,313-315,416-418,463-465
+  s_a953d60826be1b::t_92c6689af89f24 90-107,138-139
+  s_a953d60826be1b::t_41568165a03c2e 354-360,365-384,390-391,393-400,402-405
+  s_a953d60826be1b::t_ef4a4e08f6ec1d 189-223
+  s_a953d60826be1b::t_2f6825772f660b 361-364,385-389
+  s_a953d60826be1b::t_8b7a35397806a7 1,23,108-116,124-137
+  s_a953d60826be1b::t_72045d8bb569ac 22,25,29,35,46,68,311-312
+  s_a953d60826be1b::t_00fc8c7a31e31f 392,401
+packages/web/src/styles/entity-pages.css
+  s_a953d60826be1b::t_19c7b7765866d3 108-111
+  s_a953d60826be1b::t_b3ca680743d406 1-107,112-158,169-199
+  s_a953d60826be1b::t_ed66159ed4abb6 159-168
+packages/web/src/use-account-control.ts
+  s_a953d60826be1b::t_95747f0611356d 26,241,243,291,340,346
+  s_a953d60826be1b::t_83d12d68f2ce55 27,62-63
+  s_a953d60826be1b::t_0d2e9a9c7d0d37 50-54,58,180,183-185,202,256,442
+  s_a953d60826be1b::t_00fc8c7a31e31f 383,470
+  s_a953d60826be1b::t_8022bff90c2c1c 292-293
+packages/web/src/use-account-conversation-list.ts
+  s_a953d60826be1b::t_365327b63118e2 1-54
+packages/onebots/src/gateway/account-explore-contracts.spec.ts
+  s_a953d60826be1b::t_b1440bcc6ec6d7 1-2,7-18,22-28,35-39,46,50-51
+  s_a953d60826be1b::t_a3aed40fdf5c70 3-6,19-21,29-34,40-45,47-49
+packages/web/src/control-operation-id.ts
+  s_a953d60826be1b::t_524cd112a72cb4 1-10
+docs/src/guide/start.md
+  s_a953d60826be1b::t_7636516d394539 38-40
+packages/web/src/control-workspace.ts
+  s_a953d60826be1b::t_b79568f46fef4d 51-54,133-136
+  s_a953d60826be1b::t_41e7002576d40a 46-50,55-61,68,70-81,87-102,105,107,112-116,119,121-132,137-153,155,157-161,163,165-171,174
+  s_a953d60826be1b::t_553d49ff6158f5 69,106,108-109,120,154,156,162,164,175
+packages/onebots/src/gateway/account-explore-ipc.ts
+  s_a953d60826be1b::t_33fa5b76e0e50d 3-4,31-38,40-42,45,52
+  s_a953d60826be1b::t_b1440bcc6ec6d7 39,43-44,56-57
+.changeset/account-explore-failure-reasons.md
+  s_a953d60826be1b::t_1a244f479284cd 5
+  s_a953d60826be1b::t_4fb8543b3e1a28 1-4
+packages/web/src/styles/product-flow.css
+  s_a953d60826be1b::t_9140cdeb744670 232-259
+  s_a953d60826be1b::t_45a99b24dd6a9d 260-272
+packages/web/src/use-account-members.ts
+  s_a953d60826be1b::t_95747f0611356d 2
+  s_a953d60826be1b::t_0ab25805d19e9e 26,34,62,64,66,72
+packages/web/src/styles/account-control-chat.css
+  s_a953d60826be1b::t_4ae90ed6aef61e 15-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "09a1770a572cea2920ddb3bac8d3579bb258341b",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

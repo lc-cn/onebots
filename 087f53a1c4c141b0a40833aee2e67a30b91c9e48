@@ -1,0 +1,64 @@
+packages/onebots/src/service-platform-systemd-cgroup-removal.spec.ts
+  s_a953d60826be1b::t_54e5ec5731eb7f 9-25,30-31,39-71
+  s_a953d60826be1b::t_f1276c6c30e840 117
+  s_a953d60826be1b::t_1ba33b7f4127c3 8,72-80,96,107,112-116
+  s_a953d60826be1b::t_bb115a5743f555 26-29,32-38,81-95,97-106,108-111
+packages/onebots/src/service-migration-types.ts
+  s_a953d60826be1b::t_ce034b5ca2eab7 72-73
+packages/onebots/src/service-platform-systemd-observation.ts
+  s_efe26f87c3b074::t_7c4852d97e62c0 8-19
+  s_a953d60826be1b::t_39a0907ab4bf60 1-7,20-21
+scripts/verify-system-service-lifecycle.mjs
+  s_efe26f87c3b074::t_7c4852d97e62c0 292-296
+  s_a953d60826be1b::t_3195ffd7623c34 457
+.changeset/managed-runtime-hotplug.md
+  s_a953d60826be1b::t_198b0d9226f454 8-9
+scripts/verify-installed-cli-tui.mjs
+  s_a953d60826be1b::t_a69a9be69a819f 239-240,242,251-253
+  s_a953d60826be1b::t_64a30440ccc121 197-201
+packages/core/src/__tests__/account.dispatch.test.ts
+  s_a953d60826be1b::t_3f27160e4bc579 99-127
+packages/onebots/src/service-migration-transaction.ts
+  s_a953d60826be1b::t_ce034b5ca2eab7 59,63,65,67,78-86
+packages/onebots/src/service-platform-systemd.ts
+  s_a953d60826be1b::t_39a0907ab4bf60 301
+  s_a953d60826be1b::t_54e5ec5731eb7f 233-237
+  s_a953d60826be1b::t_619a1f03c5b2af 229-232,238-243,300,302-303,325-326
+  s_efe26f87c3b074::t_7c4852d97e62c0 9-12
+  s_efe26f87c3b074::t_1cf2cd2bfc3f1a 228
+packages/onebots/src/service-migration-transaction.spec.ts
+  s_a953d60826be1b::t_edb0deba9ca8c4 117-129
+  s_a953d60826be1b::t_1ba33b7f4127c3 130,133-143,147-149
+  s_a953d60826be1b::t_bb115a5743f555 131-132,144-146
+packages/onebots/src/service-migration-record.spec.ts
+  s_a953d60826be1b::t_bb115a5743f555 30-32,34-39
+  s_a953d60826be1b::t_1ba33b7f4127c3 28-29,33,40
+packages/onebots/src/service-migration-record.ts
+  s_efe26f87c3b074::t_7c4852d97e62c0 47-49,71-72
+  s_a953d60826be1b::t_e60c21f21ce19c 73-74
+  s_efe26f87c3b074::t_bb1a7c9240d5d5 75-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "087f53a1c4c141b0a40833aee2e67a30b91c9e48",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

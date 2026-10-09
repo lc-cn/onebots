@@ -1,0 +1,84 @@
+docs/src/en/config/platform.md
+  s_efe26f87c3b074::t_ea98643413f374 175
+adapters/adapter-douyin/tsconfig.json
+  s_efe26f87c3b074::t_e21db45cd28cc3 1-13
+adapters/adapter-douyin/src/messages.ts
+  s_efe26f87c3b074::t_e21db45cd28cc3 3-8,10-11,13-59,61-69,71-74,77-79,81,83-116,118-123,128
+  s_efe26f87c3b074::t_af3db7efb8cd70 1,70,75-76,80
+  s_efe26f87c3b074::t_5146a5f122258c 2,9,12,60,82,117,124-127
+adapters/adapter-douyin/src/capabilities.ts
+  s_efe26f87c3b074::t_e21db45cd28cc3 1-30,32-52
+  s_efe26f87c3b074::t_931b275137eb39 31
+.changeset/friendly-douyin-adapter.md
+  s_efe26f87c3b074::t_62343bdb85ef97 2
+  s_efe26f87c3b074::t_2e34b35025944e 1,3-6
+adapters/adapter-douyin/src/messages.spec.ts
+  s_efe26f87c3b074::t_2e34b35025944e 1-52
+adapters/adapter-douyin/README.md
+  s_efe26f87c3b074::t_2e34b35025944e 1-26
+docs/src/en/guide/adapter.md
+  s_efe26f87c3b074::t_ea98643413f374 105
+  s_efe26f87c3b074::t_3a544950e50c7c 18
+adapters/adapter-douyin/src/adapter.ts
+  s_efe26f87c3b074::t_2f4d6fabaedb4d 1-14,16-38,43-50,55-56,58-71,73-95,97-101,103-119,121-154,158-186,192-195,197-213,218-227,229-233,238-254,258,260-289,291-303,305-306,311-316,319,321-329,332,334-375,377-381,386
+  s_efe26f87c3b074::t_e7b3e76e73a971 39-42,51-54,155-156,187-191,214-217,234-237,255-257,307-310,317-318,330-331
+  s_efe26f87c3b074::t_5146a5f122258c 15,57,72,96,102,120,157,196,228,259,290,304,320,333,376,382-385
+docs/src/en/platform/douyin.md
+  s_efe26f87c3b074::t_2e34b35025944e 1-17
+packages/onebots/src/extension-catalog.ts
+  s_efe26f87c3b074::t_931b275137eb39 63,369-390
+scripts/generate-readme-api-matrix.mjs
+  s_efe26f87c3b074::t_2e34b35025944e 22
+docs/src/platform/douyin.md
+  s_efe26f87c3b074::t_2e34b35025944e 1-29
+adapters/adapter-douyin/src/types.ts
+  s_efe26f87c3b074::t_e21db45cd28cc3 1-9
+docs/src/en/guide/adapter-todo.md
+  s_efe26f87c3b074::t_3a544950e50c7c 15
+development/package.json
+  s_efe26f87c3b074::t_2e34b35025944e 33
+adapters/adapter-douyin/package.json
+  s_efe26f87c3b074::t_68468988710bb7 32
+  s_efe26f87c3b074::t_e21db45cd28cc3 1-30,33-41
+  s_efe26f87c3b074::t_dd5a907a6c24a9 31
+  s_efe26f87c3b074::t_d57353ecc36110 42-47
+adapters/adapter-douyin/src/events.ts
+  s_efe26f87c3b074::t_e21db45cd28cc3 1-2,4-5,8-20,24,30-166
+  s_efe26f87c3b074::t_5146a5f122258c 3,6-7,21-23,25-27
+  s_efe26f87c3b074::t_5df52bd42ba085 28-29
+adapters/adapter-douyin/src/account.ts
+  s_efe26f87c3b074::t_2567366d71dd9b 33,96,149-150
+  s_efe26f87c3b074::t_e7b3e76e73a971 206-207
+  s_efe26f87c3b074::t_2f4d6fabaedb4d 1-32,34-95,97-148,151-205,208-253
+adapters/adapter-douyin/src/index.ts
+  s_efe26f87c3b074::t_2f4d6fabaedb4d 1-57
+docs/src/guide/adapter.md
+  s_efe26f87c3b074::t_ea98643413f374 115
+  s_efe26f87c3b074::t_3a544950e50c7c 23
+docs/src/guide/adapter-todo.md
+  s_efe26f87c3b074::t_3a544950e50c7c 16
+docs/src/config/platform.md
+  s_efe26f87c3b074::t_ea98643413f374 506
+README.md
+  s_efe26f87c3b074::t_260bf962306a5a 173-219,226-254,261-288,295-363
+packages/onebots/src/extension-capability-catalog.json
+  s_efe26f87c3b074::t_1b9f6014eb7f72 10-12,1004-1158
+pnpm-lock.yaml
+  s_efe26f87c3b074::t_7a846d0f658653 92,142-160,654-656,751,754,2669-2671,3253-3256,4089-4092,4572-4576,4583-4586,4702-4704,5639,5641,5650,5657-5658,6979-6983,7590-7600,8532-8535,9019-9024,9030-9033,9169-9172,9603,9606,9610,9613,9662,9665
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "205a7fed45ac11904b6246342f0bf0940ae01700",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

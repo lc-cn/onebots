@@ -1,0 +1,23 @@
+.github/workflows/ci.yml
+  s_a953d60826be1b::t_9d7d258a4c1a6d 58-60
+.changeset/accurate-readme-api-matrix.md
+  s_a953d60826be1b::t_9d7d258a4c1a6d 1-5
+README.md
+  s_a953d60826be1b::t_b26ca271152070 176,298
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "205a8958c1f34de6fd7a1778d4b2c398487abbe4",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

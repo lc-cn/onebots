@@ -1,0 +1,20 @@
+scripts/verify-installed-web.mjs
+  s_a953d60826be1b::t_6709e68340d213 96,105-115,153
+  s_a953d60826be1b::t_2bbd2be177693a 95,139,355,438,477,484,508,518,530,536,546,552,558,565
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a4836d4f8e9581c5d251a6073fc713c5f1dee1e7",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

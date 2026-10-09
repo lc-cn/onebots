@@ -1,0 +1,30 @@
+adapters/adapter-icqq/src/account-events.spec.ts
+  s_efe26f87c3b074::t_5f0f49079d71bf 1-57,62-68
+  s_efe26f87c3b074::t_dfd93959a22303 58-61
+adapters/adapter-icqq/src/client-events.spec.ts
+  s_efe26f87c3b074::t_0e140d477d5042 7-32
+adapters/adapter-icqq/src/account-events.ts
+  s_efe26f87c3b074::t_62e0b8e1a75cef 137
+  s_efe26f87c3b074::t_dfd93959a22303 135,139-140,191-216
+  s_efe26f87c3b074::t_659f912c3839cf 217-218
+adapters/adapter-icqq/src/system-events.ts
+  s_efe26f87c3b074::t_dfd93959a22303 39-53,55-56
+.changeset/bright-icqq-auth-web.md
+  s_efe26f87c3b074::t_dfd93959a22303 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "922fc02dda405cf70440e53a41ed6370d651cf13",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

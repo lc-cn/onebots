@@ -1,0 +1,378 @@
+packages/onebots/src/configuration/configuration-verify.spec.ts
+  s_a953d60826be1b::t_f8d5a4ac5a351c 97-100,103-115
+  s_a953d60826be1b::t_81de0143487f96 102
+  s_a953d60826be1b::t_c3c0fa4a8a33ef 93-96,101
+packages/onebots/src/gateway/configuration-contracts.ts
+  s_a953d60826be1b::t_53cf3afe7bd588 1-10,12-29,34-35,50-51,59,80-81,90-91,109-110,121,126
+  s_a953d60826be1b::t_3a2018b5354ff7 30-33,36-49,52-58,60-79,82-89,92-108,111-115,119-120,122-125
+  s_a953d60826be1b::t_ff87e216bb0d8a 11
+  s_a953d60826be1b::t_872237b47237de 116-118
+packages/web/src/components/ControlConfigurationImpact.vue
+  s_a953d60826be1b::t_94dcb2067d74ba 1-7,16-20,23,25-29,36,45,52-59,61-62,92-93
+  s_a953d60826be1b::t_72d2ec35086061 8-11,14-15,24
+  s_a953d60826be1b::t_7ad00c746e1bab 60
+  s_a953d60826be1b::t_238d51b4ccb962 12-13,21-22,68
+  s_a953d60826be1b::t_10583ceefd3c9f 30-35,37-44,46-51,63-67,69-91
+  s_a953d60826be1b::t_8f90889b5d9e96 94-98
+adapters/adapter-twitch/src/adapter.ts
+  s_a953d60826be1b::t_4122b54ac31570 17,265
+packages/core/src/adapter-send.ts
+  s_a953d60826be1b::t_89af45e8a6c6d6 2,12
+  s_a953d60826be1b::t_6851aebdc41200 10-11
+packages/onebots/src/gateway/account-explore-executor.ts
+  s_a953d60826be1b::t_872237b47237de 150-151
+  s_a953d60826be1b::t_d536419bba83eb 149
+  s_a953d60826be1b::t_96e93f09ea8f79 114-115,194-195
+  s_a953d60826be1b::t_6fcc37ad8101e3 1-6
+packages/web/src/components/ControlConfigurationPanel.vue
+  s_a953d60826be1b::t_238d51b4ccb962 246
+  s_a953d60826be1b::t_10583ceefd3c9f 165-168,283-289,335-336
+  s_a953d60826be1b::t_72d2ec35086061 248,337-338
+  s_a953d60826be1b::t_94dcb2067d74ba 9,41,160-164,169-170,181,245,247,249
+packages/onebots/src/control/tui-configuration.ts
+  s_a953d60826be1b::t_0d3edd53aa9297 226-228,235-239
+packages/onebots/src/gateway/configuration-executor.ts
+  s_a953d60826be1b::t_5c66a2b27d164b 1-3,6-17,19-33,37-38,48,52,59,73-75,79-81,91-92,97-98,108-109,116,121-123,130-131,137,140,149,152,155,159,163-168,171-176
+  s_a953d60826be1b::t_af497ed1745f09 4
+  s_a953d60826be1b::t_6fcc37ad8101e3 93-96
+  s_a953d60826be1b::t_92c65f12c95b81 118
+  s_a953d60826be1b::t_5e9b8a263b38bb 5,169-170
+  s_a953d60826be1b::t_ff87e216bb0d8a 18,76-78,103-107,110-115
+  s_a953d60826be1b::t_3a2018b5354ff7 34-36,39-47,49-51,53-58,60-72,82-90,99-102,117,119-120,124-129,132-136,138-139,141-148,150-151,153-154,156-158,160-162
+packages/onebots/src/control/gateway-configuration-snapshot.ts
+  s_a953d60826be1b::t_fff4219399b415 1-16,18-20,23,28,31-33
+  s_a953d60826be1b::t_3a2018b5354ff7 21-22,24-27,29-30
+  s_a953d60826be1b::t_5e9b8a263b38bb 17
+packages/core/src/account-operations.ts
+  s_a953d60826be1b::t_6851aebdc41200 1,3-6,9-11,13-15,17-34,39,47,59-60,66-75,80,85-87,91,95-96
+  s_a953d60826be1b::t_eb435b54aedaa5 2,7,12,40-41,44-46,52,76-79
+  s_a953d60826be1b::t_02ecda19e6d5c1 42-43
+  s_a953d60826be1b::t_198993d1b9c32d 35-38,48-51,53,81-84,88-90,92-94
+  s_a953d60826be1b::t_72ae0dd1942dc6 61-65
+  s_a953d60826be1b::t_1fea61fd6c60f5 8,16,54-58
+packages/onebots/src/configuration/configuration-hot-reconciliation.ts
+  s_a953d60826be1b::t_8842d2e80924fb 12,23,29-30,48-52
+  s_efe26f87c3b074::t_a5541b3bb9ff9e 8-11,13-22,24-28,31-47
+  s_a953d60826be1b::t_afc255603c1e83 88,97
+  s_a953d60826be1b::t_72ac9ad845884e 1-3,53-61,67,75,82-86,91-96,98-103
+  s_a953d60826be1b::t_18c287aeb2134d 4-7,62-66,68-74,76-81,87,89-90
+packages/onebots/src/configuration/configuration-stored-application.ts
+  s_a953d60826be1b::t_79999fb3a7b289 1-3,10-11,20-24,32-36,40
+  s_a953d60826be1b::t_18c287aeb2134d 4-9,12-19,25-31,37-39
+packages/core/src/runtime-operation.ts
+  s_a953d60826be1b::t_f05766181703b2 13,35
+packages/onebots/src/control/configuration-api.ts
+  s_a953d60826be1b::t_c709c244f8a7c7 138
+  s_a953d60826be1b::t_09a0774101bf6d 51,146
+  s_a953d60826be1b::t_0d3edd53aa9297 152-154
+  s_a953d60826be1b::t_25daae12eaa4e2 139-144
+docs/src/en/config/global.md
+  s_a953d60826be1b::t_c026d503c76ab2 98-103,106-112
+  s_a953d60826be1b::t_dd33f74febd6f1 104-105
+packages/web/src/views/ProtocolDetailView.vue
+  s_a953d60826be1b::t_94dcb2067d74ba 168
+packages/onebots/src/control/generation-activation.ts
+  s_a953d60826be1b::t_ff87e216bb0d8a 94
+  s_a953d60826be1b::t_0d3edd53aa9297 60-63,74-76,197-214,303-307,324-327,329-332
+  s_a953d60826be1b::t_18c287aeb2134d 47-50,70-73,101-105,249-250,256-270
+  s_a953d60826be1b::t_0a3be463c6d222 242
+  s_a953d60826be1b::t_7c63ddf9dc6e86 44-46,51,69,83-93,95-96
+packages/onebots/src/gateway/contracts.ts
+  s_a953d60826be1b::t_3a2018b5354ff7 27-29
+packages/core/src/index.ts
+  s_a953d60826be1b::t_8d7b32b7b3477d 15-16
+  s_a953d60826be1b::t_6851aebdc41200 3
+packages/onebots/src/configuration/configuration-verify-worker.ts
+  s_a953d60826be1b::t_157549053d05b0 79,84
+  s_a953d60826be1b::t_21ae8344814e00 80-82
+  s_a953d60826be1b::t_7bf6a71a78139a 83
+packages/core/src/control.ts
+  s_a953d60826be1b::t_0d3edd53aa9297 137-145,401-405
+  s_a953d60826be1b::t_09a0774101bf6d 1,127,146-147,409
+packages/onebots/src/control/gateway-driver-configuration.ts
+  s_a953d60826be1b::t_3a2018b5354ff7 3-6,20-26,34-36,41-55,64-65,70-82,84-87
+  s_a953d60826be1b::t_a6e0e1e31d45f0 1-2,7-19,27-33,37-40,56-63,66-69,83,88-90
+packages/onebots/src/gateway/send-executor.spec.ts
+  s_a953d60826be1b::t_95b321d75213ad 2,65-75
+  s_efe26f87c3b074::t_231cf3d61a61eb 76
+packages/onebots/src/configuration/configuration-application.spec.ts
+  s_a953d60826be1b::t_c709c244f8a7c7 148
+packages/core/src/__tests__/account.dispatch.test.ts
+  s_a953d60826be1b::t_370700c09eab0e 22-27
+packages/onebots/src/gateway/send-executor.ts
+  s_a953d60826be1b::t_5c08b54d46d600 1,69-70
+packages/onebots/src/runtime-defaults.ts
+  s_a953d60826be1b::t_8842d2e80924fb 54-55
+  s_a953d60826be1b::t_5e47348585212c 1-8,49-53,56
+  s_a953d60826be1b::t_7bf6a71a78139a 47-48
+  s_efe26f87c3b074::t_a7fb0f262cbe78 57
+scripts/verify-installed-web.mjs
+  s_a953d60826be1b::t_8acabf92958ee8 572,604-605,607,627,640,650-655,670-676
+  s_a953d60826be1b::t_c4cf1222428c94 440-441,453-454,467
+  s_a953d60826be1b::t_e3bef983087eea 111,439,442
+  s_a953d60826be1b::t_6d61baff81e2ef 577-578,584-585
+  s_a953d60826be1b::t_df8faf992571a0 575,579-580
+  s_a953d60826be1b::t_8950b0d062a907 107,109-110,445-449,455-466,573-574,576,581-583,586-588,592-603,608-611,614-625,631-637,642-649
+packages/onebots/src/control/gateway-driver-send.ts
+  s_a953d60826be1b::t_cf2bb2d1441ba7 1-54
+packages/core/src/runtime-configuration.spec.ts
+  s_a953d60826be1b::t_e61faae3656008 14,26-30,59-73,85-87,107-115,245-259
+  s_a953d60826be1b::t_daf9571058c2fb 25,92-95,274-276,280-289,350-351,353-355,359
+  s_a953d60826be1b::t_36a5ba8d529f8a 229-244
+  s_a953d60826be1b::t_a195fcb6b039da 159-169,181-191,201-203,207-213,356-358,362-364
+  s_a953d60826be1b::t_e2d35982c359d0 33-35,54-56,83-84,88,100-102,104-106,116,126-130,137-139,346-348
+  s_a953d60826be1b::t_ba7af89a4d5535 125,135-136,140-142
+  s_a953d60826be1b::t_3a86a6bc5f2036 46
+  s_a953d60826be1b::t_f08286bd081417 1-13,15-24,31-32,36-45,47-53,57-58,74-82,89-91,98-99,103,117-124,131-134,143-158,170-172,290-308,311-315,317-345,349,365-366
+  s_a953d60826be1b::t_d54bdd83b739d9 173-180,192-200,204-206,214
+  s_a953d60826be1b::t_f8d5a4ac5a351c 96-97,277-279
+  s_a953d60826be1b::t_155d638dffd8d1 260-273
+  s_a953d60826be1b::t_72ae0dd1942dc6 309-310,316
+  s_a953d60826be1b::t_49be20a25a2fc2 215-228
+  s_a953d60826be1b::t_4be27c8d34a5e2 352,360-361
+packages/onebots/src/control/configuration-service.ts
+  s_a953d60826be1b::t_ed4365a3849297 64
+  s_a953d60826be1b::t_0a3be463c6d222 210
+  s_a953d60826be1b::t_0d3edd53aa9297 197-201
+  s_a953d60826be1b::t_09a0774101bf6d 196
+packages/onebots/src/control/host.ts
+  s_a953d60826be1b::t_0d3edd53aa9297 280-282
+  s_a953d60826be1b::t_0a3be463c6d222 261
+  s_a953d60826be1b::t_ad8a8b72f7a459 34,255-260,262
+adapters/adapter-facebook-messenger/src/adapter.ts
+  s_a953d60826be1b::t_3c3bcf09b2d9d2 7
+  s_a953d60826be1b::t_4122b54ac31570 209
+packages/onebots/src/control/workspace.ts
+  s_a953d60826be1b::t_3a2018b5354ff7 100-103
+  s_a953d60826be1b::t_fff4219399b415 8
+packages/onebots/src/configuration/configuration-application-storage.ts
+  s_a953d60826be1b::t_48445a9f0a87ef 4-5,11-18
+packages/core/src/scoped-adapter.ts
+  s_a953d60826be1b::t_8d7b32b7b3477d 7-12
+packages/core/src/runtime-configuration.ts
+  s_a953d60826be1b::t_ba7af89a4d5535 2,28-35
+  s_a953d60826be1b::t_ef4c386618e8ca 61-62,114,123-126,129
+  s_a953d60826be1b::t_e2d35982c359d0 9-20,41-51,67-68,77-88,93-100,109-113,115-122,127-128
+  s_a953d60826be1b::t_8d7b32b7b3477d 1,3-8,21-27,36-40,52-60,63-66,69-76,89-92,101-108,130
+packages/onebots/src/configuration/configuration-application-contracts.ts
+  s_a953d60826be1b::t_25daae12eaa4e2 89-91,97-104,106-107,124-132
+  s_a953d60826be1b::t_11b70e2aeafd8a 9-17,23-25,27-36,40-45,50-55,58-59,67-79
+  s_a953d60826be1b::t_157549053d05b0 112
+  s_a953d60826be1b::t_6140faeb886c99 21-22,26,37-39,46-49,56-57,60-66,80-83
+  s_a953d60826be1b::t_c3c0fa4a8a33ef 153,157,160-161,165-170
+  s_a953d60826be1b::t_f8d5a4ac5a351c 154-156,158-159,162-164
+  s_a953d60826be1b::t_600ed54ae2c272 1-4,20,84-88,92-96,105,108-111,113-123,133-152
+  s_a953d60826be1b::t_5eec22a1e30e14 5-8,18-19
+packages/core/src/adapter.ts
+  s_a953d60826be1b::t_a195fcb6b039da 279-281
+  s_a953d60826be1b::t_4be27c8d34a5e2 268,277-278
+  s_a953d60826be1b::t_c47206764e745d 282-283
+packages/web/src/components/control-configuration-impact.ts
+  s_a953d60826be1b::t_10583ceefd3c9f 19-24
+  s_a953d60826be1b::t_94dcb2067d74ba 1-18,25-33
+packages/onebots/src/control/gateway-configuration-client.ts
+  s_a953d60826be1b::t_3a2018b5354ff7 18-34,37-41
+  s_a953d60826be1b::t_53cf3afe7bd588 1-17,35-36,42-45
+adapters/adapter-instagram/src/adapter.ts
+  s_a953d60826be1b::t_4122b54ac31570 175
+  s_a953d60826be1b::t_3c3bcf09b2d9d2 7
+packages/onebots/src/control/gateway-driver.ts
+  s_a953d60826be1b::t_3a2018b5354ff7 7-14,160-161,189-191,194-201,203-211
+  s_a953d60826be1b::t_cf2bb2d1441ba7 21-22,240
+  s_a953d60826be1b::t_01b1a574d0cfaf 2
+  s_a953d60826be1b::t_ceef16a60c8d82 83,193,202,212
+  s_a953d60826be1b::t_a6e0e1e31d45f0 192
+  s_efe26f87c3b074::t_cbed3c0799aeef 6
+packages/core/src/account.ts
+  s_a953d60826be1b::t_e61faae3656008 338,342
+  s_a953d60826be1b::t_6851aebdc41200 54-60
+  s_a953d60826be1b::t_198993d1b9c32d 11-12,16-18
+  s_a953d60826be1b::t_49be20a25a2fc2 157,183,191
+  s_a953d60826be1b::t_57dab0ba82ab04 184-190
+  s_a953d60826be1b::t_73eddea2812a3d 158
+  s_a953d60826be1b::t_e2d35982c359d0 165-169,195-200,205-208
+  s_a953d60826be1b::t_60a27b48e04abf 46,51-53,61,138,145-154,175-182,192-194,201-204,209-210,212-227,290,327
+  s_a953d60826be1b::t_eb435b54aedaa5 155
+  s_a953d60826be1b::t_ba7af89a4d5535 211
+  s_a953d60826be1b::t_72ae0dd1942dc6 14-15,156,159-160,243
+  s_a953d60826be1b::t_1fea61fd6c60f5 13,318
+  s_a953d60826be1b::t_a78315ddbe3e03 161-164,170-174
+  s_a953d60826be1b::t_b4c80cdfa7867a 228
+packages/onebots/src/configuration/configuration-hot-application.spec.ts
+  s_a953d60826be1b::t_54aa54102dc7c2 196-202
+  s_a953d60826be1b::t_0e0190cebb5e07 40-41,93-94,96
+  s_a953d60826be1b::t_c63ae1ba853e24 76,136-140,149-156,160,170-177,185,214
+  s_a953d60826be1b::t_21c05dfa64e7f2 220-228,236-239
+  s_a953d60826be1b::t_48445a9f0a87ef 217-219,229-235,240-243
+  s_a953d60826be1b::t_18c287aeb2134d 30-33,65-68,141-148,157-159,161-169,178-184
+  s_a953d60826be1b::t_afc255603c1e83 95,97,186-192,212-213,215
+  s_a953d60826be1b::t_25daae12eaa4e2 12-13,42-45,57-64,70-75,81-85,99-103,106-109,115-120
+  s_a953d60826be1b::t_657e0428da4bbb 8,16,92
+  s_a953d60826be1b::t_467694016a75b3 124-127,133-135,216
+  s_a953d60826be1b::t_1d4b00a11f8f6e 128-132
+  s_a953d60826be1b::t_73934072bd055a 193-195,203-211
+  s_a953d60826be1b::t_4f4aad36742d90 1-7,9-11,14-15,17-29,34-39,46-56,69,77-80,86-91,98,104-105,110-114,121-123
+adapters/adapter-google-chat/src/adapter.ts
+  s_a953d60826be1b::t_4122b54ac31570 10,405
+.changeset/hotplug-web-impact.md
+  s_a953d60826be1b::t_7ad00c746e1bab 1-5
+packages/onebots/src/control/configuration-hot-host.spec.ts
+  s_a953d60826be1b::t_1a3d1384018fdc 17-40,43-49,59-65,67-75,78-89,92-94,102-103,105-106,109-111
+  s_a953d60826be1b::t_be4811f4601fdf 104
+  s_a953d60826be1b::t_bcc22d44d888de 1-16,41-42,50-58,66,76-77,90-91,95-101,107-108,112-114
+packages/onebots/src/control/gateway-driver-state.ts
+  s_a953d60826be1b::t_4e979c39b9d5a8 1-19,31-51,60-67,72-83
+  s_a953d60826be1b::t_3a2018b5354ff7 20-30,52-59,68-71
+packages/onebots/src/configuration/configuration-validation.spec.ts
+  s_a953d60826be1b::t_59fdb00a3590ae 274
+packages/web/src/components/ControlConfigurationPanel.client.spec.ts
+  s_a953d60826be1b::t_f2330248617a5f 48-49,201-207,213-215
+  s_a953d60826be1b::t_4f4fd65173fa41 7-9
+  s_a953d60826be1b::t_10583ceefd3c9f 31-40,54-56,59-62,64-71,73-75,77-80,83-89,91-99,111-115,118-124,142-144,147-149,159-164,170-175,184-186,196-198
+  s_a953d60826be1b::t_72d2ec35086061 195,199-200,208-212
+  s_a953d60826be1b::t_7ad00c746e1bab 1-6,10-30,41-47,50-53,57-58,63,72,76,81-82,90,100-110,116-117,125-141,145-146,150-158,165-169,176-183,187-194,216-217
+.changeset/account-protocol-hotplug.md
+  s_a953d60826be1b::t_3a86a6bc5f2036 1-10
+packages/onebots/src/control/gateway-hotplug.spec.ts
+  s_a953d60826be1b::t_cabb39639e18bd 1-15,18-27,38-44,51-54,65-67,75,86-89,94-95,118-119,127-129,138-148
+  s_a953d60826be1b::t_acde633719b59b 96-103,105
+  s_a953d60826be1b::t_3a2018b5354ff7 16-17,28-37,45-50,55-64,68-74,76-85,90-93,106-117,120-126,130-137
+  s_a953d60826be1b::t_a760fb2b38411a 104
+packages/onebots/src/gateway/entry.ts
+  s_a953d60826be1b::t_b47ea8974c9966 50
+  s_a953d60826be1b::t_d6013537a3fa6a 2-3,41,51,83,167,170-172,178-180,253
+  s_a953d60826be1b::t_3a2018b5354ff7 173-177,184-191
+packages/onebots/src/gateway/app.ts
+  s_a953d60826be1b::t_1290453c56afdd 161
+  s_a953d60826be1b::t_3a2018b5354ff7 1-7,157-159,162-172
+  s_a953d60826be1b::t_3b28c868297784 160,173-176
+  s_a953d60826be1b::t_1f68e55a4e0e8d 177-178
+packages/onebots/src/control/configuration-repair-host.spec.ts
+  s_a953d60826be1b::t_c63ae1ba853e24 118
+packages/web/src/components/ControlConfigurationImpact.spec.ts
+  s_a953d60826be1b::t_238d51b4ccb962 1-9,13-21,25-28,35-39
+  s_a953d60826be1b::t_a21e17de803ebf 10-12,22-24,29-34
+docs/src/config/global.md
+  s_a953d60826be1b::t_dd33f74febd6f1 104-105
+  s_a953d60826be1b::t_7e329b5ff25482 98-103,106-120
+packages/onebots/src/index.ts
+  s_a953d60826be1b::t_6851aebdc41200 54
+adapters/adapter-matrix/src/adapter.ts
+  s_a953d60826be1b::t_e2d35982c359d0 357-359
+  s_a953d60826be1b::t_3c3bcf09b2d9d2 7
+packages/onebots/src/configuration/configuration-application-repair.spec.ts
+  s_a953d60826be1b::t_9fe898fbdc324d 84,125
+packages/core/src/runtime-reconcile.ts
+  s_a953d60826be1b::t_198993d1b9c32d 75-77,79-82,93-95
+  s_a953d60826be1b::t_3201a761be7576 1-7,17-18,23-24,35-36,40-43,47-50,97-122,128-135,140,145-151,153-159,165-166,168-172,176-178,182,184-190,193-194,197-199,206-211,219-224,249
+  s_a953d60826be1b::t_e7dfdb8fccd9de 152,167,225-228,233-248
+  s_a953d60826be1b::t_1527b4ab6cafb2 63-67
+  s_a953d60826be1b::t_eb435b54aedaa5 73,78,84-85,87
+  s_a953d60826be1b::t_9c29fbdf62e07a 191-192
+  s_a953d60826be1b::t_13deb6427b6946 173-175,181,183
+  s_a953d60826be1b::t_d8647458a9feb5 54
+  s_a953d60826be1b::t_155d638dffd8d1 29-34
+  s_a953d60826be1b::t_f8d5a4ac5a351c 229-232
+  s_a953d60826be1b::t_b0193ec286551d 8-9,12,52-53,55-62,68-72
+  s_a953d60826be1b::t_105d883d7f13a3 74,83,88-92,96,195-196
+  s_a953d60826be1b::t_4be27c8d34a5e2 51
+  s_a953d60826be1b::t_e2d35982c359d0 10-11,13-16,19-22,25-28,37-39,44-46,123-127,136-139,141-144,160-164,179-180,200-205,212-218
+  s_efe26f87c3b074::t_18ad20132ecf11 86
+packages/web/src/components/use-control-configuration-panel.ts
+  s_a953d60826be1b::t_94dcb2067d74ba 23,40,342,350,358,375,427
+  s_a953d60826be1b::t_10583ceefd3c9f 352
+packages/onebots/src/configuration/configuration-application.ts
+  s_a953d60826be1b::t_c3c0fa4a8a33ef 38
+  s_a953d60826be1b::t_9fe898fbdc324d 164
+  s_a953d60826be1b::t_600ed54ae2c272 12,17,40
+  s_efe26f87c3b074::t_a5541b3bb9ff9e 110-118
+  s_a953d60826be1b::t_0d3edd53aa9297 140,142-143,149,165-166,177-178,221-222,226,228,230-233,237-241
+  s_a953d60826be1b::t_785b5b7f4dfd8a 13,224-225,242,244-246,287-295,304,451
+  s_a953d60826be1b::t_11b70e2aeafd8a 35-37,39
+  s_a953d60826be1b::t_8842d2e80924fb 14,109,119
+  s_a953d60826be1b::t_157549053d05b0 141,151,220,223
+  s_a953d60826be1b::t_21ae8344814e00 159-163
+  s_a953d60826be1b::t_25daae12eaa4e2 27,29-34
+  s_a953d60826be1b::t_467694016a75b3 227,229
+  s_a953d60826be1b::t_79999fb3a7b289 15
+  s_a953d60826be1b::t_18c287aeb2134d 296-303
+  s_a953d60826be1b::t_72ac9ad845884e 108
+  s_a953d60826be1b::t_6d6a2bc4540921 7-8
+  s_a953d60826be1b::t_1d4b00a11f8f6e 234-236
+  s_a953d60826be1b::t_6140faeb886c99 433,435
+  s_efe26f87c3b074::t_5d833d38b45382 120,150
+packages/onebots/src/configuration/configuration-verify.ts
+  s_a953d60826be1b::t_90fb47449fd50f 263-264
+  s_a953d60826be1b::t_21ae8344814e00 131-133,265-267
+  s_a953d60826be1b::t_157549053d05b0 14-15,25,30,63
+docs/development/runtime-hotplug-plan.md
+  s_a953d60826be1b::t_3e4f4ce0a7a569 1-8,11-79
+  s_a953d60826be1b::t_e9bad0bd817ddd 80-82,84-91,93
+  s_a953d60826be1b::t_dd33f74febd6f1 9-10
+  s_a953d60826be1b::t_5a7fb0bf7e2ea6 83,92
+packages/web/src/views/AccountDetailView.vue
+  s_a953d60826be1b::t_94dcb2067d74ba 122
+packages/core/src/router.ts
+  s_a953d60826be1b::t_e25c7b77d8c75d 133,140,143-148,156-158,299-302
+packages/onebots/src/control/configuration-command.ts
+  s_a953d60826be1b::t_ad8a8b72f7a459 23,100,240
+  s_a953d60826be1b::t_0d3edd53aa9297 91-99
+.changeset/managed-runtime-hotplug.md
+  s_a953d60826be1b::t_7e329b5ff25482 1-5
+packages/onebots/src/gateway/configuration-executor.spec.ts
+  s_a953d60826be1b::t_d536419bba83eb 147
+  s_a953d60826be1b::t_95427925ca6d3e 1-16,20-24,34-35,46-60,79,82,87,91-95,111,119,126-131,144-146,148-149
+  s_a953d60826be1b::t_872237b47237de 17-19,25-33,36-45,61-78,80-81,83,86,88-90,96-110,112-118,120-125,132-143
+  s_a953d60826be1b::t_6fcc37ad8101e3 84-85
+packages/onebots/src/configuration/configuration-hot-application.ts
+  s_a953d60826be1b::t_48445a9f0a87ef 23,31,64,67
+  s_a953d60826be1b::t_afc255603c1e83 71
+  s_a953d60826be1b::t_0d3edd53aa9297 4-8,42-45,59-60,63,65-66
+  s_a953d60826be1b::t_785b5b7f4dfd8a 1-3,9-22,36-41,46-58,61-62,68-70,72-75
+  s_a953d60826be1b::t_0c48815da33732 24-30,32-35
+packages/core/src/base-app.ts
+  s_a953d60826be1b::t_e2d35982c359d0 53-54,56-57,445,655,657-658,660-663,668-670,685-687
+  s_a953d60826be1b::t_7173934e3d5c47 85,444,584,656,698,700
+  s_a953d60826be1b::t_ba7af89a4d5535 665-667,671-672,688
+  s_a953d60826be1b::t_ae53bcd025daad 682
+  s_a953d60826be1b::t_f05766181703b2 87-90
+  s_a953d60826be1b::t_3201a761be7576 52
+  s_a953d60826be1b::t_648aa59d1cb47c 322,358,386,715
+  s_a953d60826be1b::t_0b7fcd0b96c5f3 646-647,664,697,699,701-702
+  s_a953d60826be1b::t_4be27c8d34a5e2 55,86,612,648-650,653-654,659,673-681,683-684,689,693-695
+  s_a953d60826be1b::t_e8a6607ee8b599 690-692,696
+  s_a953d60826be1b::t_180df1c1029119 651-652
+packages/onebots/src/configuration/configuration-validation.ts
+  s_a953d60826be1b::t_ed4365a3849297 32,43,154
+  s_a953d60826be1b::t_90fb47449fd50f 23,245
+  s_a953d60826be1b::t_157549053d05b0 50,182
+  s_a953d60826be1b::t_0e0190cebb5e07 114-123
+  s_a953d60826be1b::t_addd3ffd5d0658 2
+  s_a953d60826be1b::t_657e0428da4bbb 132,140,240
+  s_a953d60826be1b::t_21ae8344814e00 91-93,247-250
+  s_a953d60826be1b::t_0d3edd53aa9297 183-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6d43d404e62e4e9558f1724dccb96a75de6ef07d",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

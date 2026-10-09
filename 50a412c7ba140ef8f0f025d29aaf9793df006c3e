@@ -1,0 +1,27 @@
+packages/onebots/src/service-platform-systemd.spec.ts
+  s_a953d60826be1b::t_7296d90e3c3c27 428-439
+  s_a953d60826be1b::t_d592ac892ba40b 402-427
+scripts/verify-system-service-lifecycle.mjs
+  s_a953d60826be1b::t_81be3a34a1727f 1133-1139,1141
+.changeset/steady-manager-web-artifact.md
+  s_a953d60826be1b::t_65b7e4f4659e37 5
+packages/onebots/src/service-platform-systemd.ts
+  s_a953d60826be1b::t_c67496c4cec0c1 39,286-287,309-310,314-324,374,386,402,415,435
+  s_a953d60826be1b::t_c997ac07bd3868 40-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "50a412c7ba140ef8f0f025d29aaf9793df006c3e",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

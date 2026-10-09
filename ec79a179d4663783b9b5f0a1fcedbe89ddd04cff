@@ -1,0 +1,48 @@
+adapters/adapter-icqq/src/account-events.spec.ts
+  s_a953d60826be1b::t_ab604c0320a784 41,59-76
+packages/onebots/src/gateway/verification-store.spec.ts
+  s_a953d60826be1b::t_ab604c0320a784 93-111
+packages/core/src/adapter-types.ts
+  s_a953d60826be1b::t_2af6f6cba7065a 20-21
+.changeset/quiet-device-json.md
+  s_a953d60826be1b::t_c7bedcbad47353 1-8
+packages/web/src/components/ControlVerificationPanel.vue
+  s_a953d60826be1b::t_390feb50cbddb6 141-144
+  s_a953d60826be1b::t_f4141cdd5f9925 32
+  s_a953d60826be1b::t_cd8631f5ae3904 5,7-11,28-31,33-44,122-140,145-169
+packages/web/src/components/icqq-device-verification.ts
+  s_a953d60826be1b::t_cd8631f5ae3904 1-32
+adapters/adapter-icqq/src/account-events.ts
+  s_a953d60826be1b::t_2af6f6cba7065a 195-196
+packages/core/src/control-verification-json.ts
+  s_a953d60826be1b::t_2af6f6cba7065a 130-135
+adapters/adapter-icqq/src/system-events.ts
+  s_a953d60826be1b::t_2af6f6cba7065a 41
+packages/onebots/src/control/host-verification.spec.ts
+  s_a953d60826be1b::t_cef9c5bd687c49 70-73,300-301,307-309
+  s_a953d60826be1b::t_81df55dd0f59c0 302-306
+packages/web/src/components/icqq-device-verification.spec.ts
+  s_a953d60826be1b::t_00057ca32fe7b9 1-2,4-57
+  s_a953d60826be1b::t_390feb50cbddb6 3
+docs/src/platform/icqq.md
+  s_a953d60826be1b::t_d94fc31a4503f8 57-60
+packages/onebots/src/control/tui-verification.ts
+  s_a953d60826be1b::t_390feb50cbddb6 155-159
+  s_a953d60826be1b::t_2af6f6cba7065a 154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ec79a179d4663783b9b5f0a1fcedbe89ddd04cff",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

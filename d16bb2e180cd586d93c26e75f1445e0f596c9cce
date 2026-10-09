@@ -1,0 +1,302 @@
+packages/onebots/src/control/gateway-hotplug.spec.ts
+  s_a953d60826be1b::t_97ed2fdc7ba532 56-66
+  s_a953d60826be1b::t_990885e12b987d 54
+packages/onebots/src/gateway/configuration-executor.ts
+  s_a953d60826be1b::t_692371fd56d85b 8,142
+  s_a953d60826be1b::t_690e014e45e666 169-176
+packages/onebots/src/configuration/configuration-hot-application.spec.ts
+  s_a953d60826be1b::t_bfae9eee83b3d5 134-144,156-159,162-169,181-189,204-211,219-225
+  s_a953d60826be1b::t_85ca241d5837da 6-7,9,59,72-73,80-88,90
+  s_a953d60826be1b::t_053f18ee1835c9 145
+  s_a953d60826be1b::t_aaefb0aa2ce87f 227,240-246,248-252,254-257
+  s_a953d60826be1b::t_ed1d3e77e7182d 105,112-113,121-122,131-133,146-155,160-161,170-180,190-203,212-218,226
+  s_efe26f87c3b074::t_3e722ef4c4d2d8 8,89,247,253
+packages/onebots/src/gateway/verification-executor.ts
+  s_a953d60826be1b::t_87561c6c04b0a6 75
+  s_a953d60826be1b::t_690e014e45e666 70,74,76-82,88
+packages/onebots/src/configuration/configuration-application.ts
+  s_a953d60826be1b::t_db99a4ec16202a 431
+  s_a953d60826be1b::t_0350d2c835ec4a 462-463
+  s_a953d60826be1b::t_af9cc407f5ba84 240
+  s_a953d60826be1b::t_3b7b923838bf57 220,222-224,226,258
+  s_a953d60826be1b::t_b56823956dba8d 7,421
+  s_a953d60826be1b::t_f631ef4e403af7 225
+adapters/adapter-instagram/src/adapter.ts
+  s_a953d60826be1b::t_80e4f85eca4f34 177
+  s_a953d60826be1b::t_b87c2a2f13bd4f 193
+packages/web/src/components/ControlConfigurationPanel.vue
+  s_a953d60826be1b::t_0be5c785d066c7 163-166
+  s_a953d60826be1b::t_af9cc407f5ba84 18-27
+packages/core/src/scoped-adapter.ts
+  s_a953d60826be1b::t_2ee9f4051ac4da 35
+packages/core/src/runtime-configuration.ts
+  s_a953d60826be1b::t_b10271dee0f1e6 39,106-108
+  s_efe26f87c3b074::t_8b1457a9ff025a 109-112
+adapters/adapter-instagram/src/http-host.spec.ts
+  s_a953d60826be1b::t_0d5905d661ca0b 2-3,23-45
+  s_a953d60826be1b::t_37a8aa892a3957 50-53,86-89
+packages/onebots/src/configuration/configuration-hot-application.ts
+  s_a953d60826be1b::t_af9cc407f5ba84 29-33,55-56,58
+  s_a953d60826be1b::t_f7a8e5485af84c 26,39
+  s_a953d60826be1b::t_02120d0dfe44b8 34,47-49,54
+packages/onebots/src/control/gateway-snapshot-security.ts
+  s_a953d60826be1b::t_06c348807689d7 1-4,13-14,16-19,21-22,26-32,36-37,39-44,56-61
+  s_a953d60826be1b::t_87561c6c04b0a6 23-25,33-35,45-55
+  s_a953d60826be1b::t_692371fd56d85b 5-12,15,20,38
+packages/core/src/app-reload.spec.ts
+  s_a953d60826be1b::t_200bd98b0bac41 539-541,576-578
+adapters/adapter-twitch/src/adapter.ts
+  s_a953d60826be1b::t_6fbbecbff5af26 267
+  s_a953d60826be1b::t_77d9d8ba637e73 280
+adapters/adapter-google-chat/src/adapter.ts
+  s_a953d60826be1b::t_8b0618bc816e31 422
+  s_a953d60826be1b::t_a095da302b6e07 407
+packages/web/src/components/ControlConfigurationImpact.vue
+  s_a953d60826be1b::t_8eb5a3685b22bb 21-26
+packages/onebots/src/configuration/configuration-validation.ts
+  s_a953d60826be1b::t_db99a4ec16202a 240
+  s_a953d60826be1b::t_02120d0dfe44b8 279-281,287
+packages/web/src/components/ControlConfigurationImpact.spec.ts
+  s_a953d60826be1b::t_d7e85729bc754c 22,32-33,45-46,50-53
+  s_a953d60826be1b::t_8eb5a3685b22bb 6-9,23-31,34-44,47-49
+packages/onebots/src/configuration/configuration-verify.spec.ts
+  s_a953d60826be1b::t_08591baa87988a 114-121,123-128,130-144
+  s_a953d60826be1b::t_053f18ee1835c9 10-13,18-19,28-30
+  s_a953d60826be1b::t_82ea8f704ce1e4 14-17,20-27
+  s_a953d60826be1b::t_574ed2f0a09ca6 122,129
+packages/onebots/src/control/gateway-snapshot-security.spec.ts
+  s_a953d60826be1b::t_c3c38ea209f1ed 1-2,7-8,13-18,22-32,36-37
+  s_a953d60826be1b::t_87561c6c04b0a6 3-6,9-12,19-21,33-35
+packages/core/src/runtime-reconcile.ts
+  s_a953d60826be1b::t_b10271dee0f1e6 62-63
+  s_a953d60826be1b::t_2ee9f4051ac4da 75-81,110-111,145-148
+  s_a953d60826be1b::t_b8d60c60299059 119,129,159
+  s_efe26f87c3b074::t_8b1457a9ff025a 171-173,236-240,246-250
+  s_a953d60826be1b::t_fc73794ba0951e 190,194-198,222-223,231-235,241,251-252,254,259-263,265
+  s_a953d60826be1b::t_98996aeea7c26e 224-230,242-245,253
+  s_a953d60826be1b::t_37a8aa892a3957 160-161,255-258
+  s_a953d60826be1b::t_e89fb821985c1e 264,266
+packages/onebots/src/gateway/configuration-contracts.ts
+  s_a953d60826be1b::t_0e7bb002ebce44 121
+  s_a953d60826be1b::t_690e014e45e666 72,102
+  s_a953d60826be1b::t_87561c6c04b0a6 53-59
+docs/src/config/global.md
+  s_a953d60826be1b::t_30dd95d7083a49 116
+  s_a953d60826be1b::t_09d1e52cdc0d4f 126-127
+  s_a953d60826be1b::t_9a6f879ff22f6c 114
+  s_efe26f87c3b074::t_6fa290521b8a49 115
+packages/core/src/runtime-configuration.spec.ts
+  s_a953d60826be1b::t_37a8aa892a3957 292-294,299-305,328-330
+  s_a953d60826be1b::t_21ef9118433eb6 256-269
+  s_a953d60826be1b::t_5086d5ae734160 123-130,146,197-202,216-221,231-249,251-253
+  s_a953d60826be1b::t_b6f918678f629c 6,287-291,295-298,306-327,331-338,341-345
+  s_a953d60826be1b::t_f4b923590f1f68 145,147
+  s_a953d60826be1b::t_c967c550be367e 20,24,34-35,122,131,144,148,160,194-196,203-215,222-230,250,254-255
+  s_a953d60826be1b::t_b10271dee0f1e6 270-277
+  s_a953d60826be1b::t_fdd1b77ab91f73 278-286
+  s_a953d60826be1b::t_b8d60c60299059 339-340
+  s_a953d60826be1b::t_4c71eb5b4c4276 414,416
+  s_a953d60826be1b::t_daedcf470b04e6 436-450
+  s_a953d60826be1b::t_ac173395d54a6e 150-159
+  s_a953d60826be1b::t_da5f46b731bf60 415
+docs/development/runtime-hotplug-plan.md
+  s_a953d60826be1b::t_9a6f879ff22f6c 24
+  s_a953d60826be1b::t_988c3df9d29b2b 93
+packages/onebots/src/control/configuration-hot-host.spec.ts
+  s_a953d60826be1b::t_f0b2d1b5e22569 6,24,40,43-48,56
+adapters/adapter-matrix/src/appservice-host.spec.ts
+  s_a953d60826be1b::t_37a8aa892a3957 34-37,69-72
+packages/onebots/src/control/tui-configuration.spec.ts
+  s_a953d60826be1b::t_8eb5a3685b22bb 47-73
+  s_a953d60826be1b::t_d7e85729bc754c 45-46,74-80
+packages/onebots/src/gateway/app.ts
+  s_a953d60826be1b::t_5e5a4c6d333835 175-176
+packages/core/src/scoped-adapter.spec.ts
+  s_a953d60826be1b::t_daedcf470b04e6 9
+  s_a953d60826be1b::t_4bb64b38c6818d 58-61
+  s_a953d60826be1b::t_77f13b27bebf0c 62-63
+adapters/adapter-twitch/src/http-host.ts
+  s_a953d60826be1b::t_8f4592d1f965cb 1,20
+  s_a953d60826be1b::t_619a8e80651e94 36,40-54
+packages/onebots/src/gateway/entry.ts
+  s_a953d60826be1b::t_690e014e45e666 209
+scripts/verify-installed-web.mjs
+  s_a953d60826be1b::t_0be5c785d066c7 670,674,676-678
+adapters/adapter-google-chat/src/http-host.ts
+  s_a953d60826be1b::t_f01a7069ce3270 36,40-54
+  s_a953d60826be1b::t_1d3895caf0f4fd 1,19
+packages/onebots/src/configuration/configuration-hot-reconciliation.ts
+  s_a953d60826be1b::t_e14e9585d20416 26,62-63,67-69,79,82,85-90,102,108,116-118,122-127
+  s_a953d60826be1b::t_af9cc407f5ba84 64-66,100-101,103-107,109-115,161-166
+  s_a953d60826be1b::t_f7a8e5485af84c 121,158,171
+  s_a953d60826be1b::t_24b9173fc5311e 91-99
+  s_a953d60826be1b::t_52ee0751d5de9c 70-78,80-81,83-84
+  s_a953d60826be1b::t_0350d2c835ec4a 119-120
+adapters/adapter-matrix/src/adapter.ts
+  s_a953d60826be1b::t_3e9e45dadbb5e7 362-366,379
+adapters/adapter-facebook-messenger/src/http-host.spec.ts
+  s_a953d60826be1b::t_37a8aa892a3957 25-28,63-66
+adapters/adapter-facebook-messenger/src/adapter.ts
+  s_a953d60826be1b::t_1724e3b02a8d90 226
+  s_a953d60826be1b::t_e4906f16581262 211
+adapters/adapter-twitch/src/http-host.spec.ts
+  s_a953d60826be1b::t_a82872f8604843 50,55-56
+  s_a953d60826be1b::t_37a8aa892a3957 22-25,51-54
+packages/onebots/src/gateway/configuration-executor.spec.ts
+  s_a953d60826be1b::t_87561c6c04b0a6 154-182,192-198,210-219,221-231
+  s_a953d60826be1b::t_0e7bb002ebce44 150-153,183-191,199-209,220,232-234
+packages/onebots/src/control/gateway-configuration-snapshot.spec.ts
+  s_a953d60826be1b::t_c3c38ea209f1ed 1-20,27-29,33-38,45-46,50-54,58-63,69-76,80-81
+  s_a953d60826be1b::t_87561c6c04b0a6 21-26,30-32,39-44,47-49,55-57,64-68,77-79
+packages/onebots/src/configuration/configuration-application-contracts.ts
+  s_a953d60826be1b::t_af9cc407f5ba84 14-16,93-96
+  s_a953d60826be1b::t_ce58e3c2d0e09b 13,33,66
+  s_a953d60826be1b::t_3b7b923838bf57 92
+  s_a953d60826be1b::t_f7a8e5485af84c 150-151
+packages/onebots/src/control/host.ts
+  s_a953d60826be1b::t_87561c6c04b0a6 283-289
+.changeset/account-protocol-hotplug.md
+  s_a953d60826be1b::t_09d1e52cdc0d4f 8-9,13-14
+packages/web/src/components/ControlConfigurationPanel.client.spec.ts
+  s_a953d60826be1b::t_d7e85729bc754c 62,115,190
+  s_a953d60826be1b::t_c78612de48b90a 160-162,189,191-194
+  s_2104cc474f1ce5::t_b1488cbc1d065b 195-198
+packages/web/src/App.vue
+  s_a953d60826be1b::t_af9cc407f5ba84 800-806,1000-1006
+packages/onebots/src/control/gateway-driver-configuration.ts
+  s_a953d60826be1b::t_690e014e45e666 23-24
+packages/core/src/account.ts
+  s_a953d60826be1b::t_2ee9f4051ac4da 357-360
+adapters/adapter-icqq/src/adapter.spec.ts
+  s_a953d60826be1b::t_e21d3b0a5187a9 4-7,10-12,28-47,49-62
+  s_a953d60826be1b::t_2183cb028bf4ae 48
+  s_a953d60826be1b::t_cc6ca0f825744e 13-27
+packages/onebots/src/control/gateway-driver-configuration.spec.ts
+  s_efe26f87c3b074::t_97916b05910b16 9-12
+  s_a953d60826be1b::t_441afef750e927 1-8,13-18
+packages/onebots/src/control/tui-configuration.ts
+  s_a953d60826be1b::t_9a6f879ff22f6c 222-225,229,233,241
+  s_a953d60826be1b::t_8eb5a3685b22bb 226-228,230-232,234-240
+adapters/adapter-facebook-messenger/src/http-host.ts
+  s_a953d60826be1b::t_292494f15865e3 37,41-56
+  s_a953d60826be1b::t_c71734d140c5cb 1,19
+packages/onebots/src/gateway/verification-app.spec.ts
+  s_efe26f87c3b074::t_97916b05910b16 51-55,60-61,64-68
+  s_a953d60826be1b::t_441afef750e927 3-4,46-50,56-59,62-63,69-73
+  s_a953d60826be1b::t_b5675b6e237842 74-76
+packages/onebots/src/configuration/configuration-verify.ts
+  s_a953d60826be1b::t_ce58e3c2d0e09b 58,64-66,92,134-135
+packages/onebots/src/gateway/verification-executor.spec.ts
+  s_a953d60826be1b::t_c75fad554eb906 23-25,63,108-113,121-124
+  s_a953d60826be1b::t_020644bf040e08 3,83-96,100-107
+  s_a953d60826be1b::t_87561c6c04b0a6 19-21,114-120
+  s_efe26f87c3b074::t_97916b05910b16 97-99
+packages/core/src/account-operations.ts
+  s_a953d60826be1b::t_2ee9f4051ac4da 42
+packages/core/src/base-app.ts
+  s_a953d60826be1b::t_d466927036ea54 467-470
+  s_efe26f87c3b074::t_8b1457a9ff025a 444-445,608-609
+  s_a953d60826be1b::t_b8d60c60299059 52
+  s_a953d60826be1b::t_3b0ff880ba3ff1 473,550
+  s_a953d60826be1b::t_c349c16f83a639 448,641-642,666-667
+  s_a953d60826be1b::t_b0848b8ec4b5ae 456-459,471-472,549,592,602-603,690,711
+  s_a953d60826be1b::t_538998b8cd6b5c 664-665
+  s_a953d60826be1b::t_5e7b3391b55db7 461-465
+  s_a953d60826be1b::t_a3d8c3630850f1 466,668
+packages/onebots/src/configuration/configuration-stored-application.ts
+  s_a953d60826be1b::t_02120d0dfe44b8 26
+packages/core/src/host-lifecycle-state.ts
+  s_a953d60826be1b::t_b0848b8ec4b5ae 7-8
+adapters/adapter-wechat-clawbot/src/adapter.ts
+  s_a953d60826be1b::t_87561c6c04b0a6 272-279
+  s_a953d60826be1b::t_692371fd56d85b 321
+  s_a953d60826be1b::t_5e5a4c6d333835 271,282,300
+adapters/adapter-icqq/src/adapter.ts
+  s_a953d60826be1b::t_5e5a4c6d333835 35-36,43,46-49
+  s_a953d60826be1b::t_87561c6c04b0a6 37-42
+docs/src/en/config/global.md
+  s_a953d60826be1b::t_09d1e52cdc0d4f 116-117
+  s_a953d60826be1b::t_9a6f879ff22f6c 106
+packages/onebots/src/configuration/configuration-application.spec.ts
+  s_a953d60826be1b::t_f0b2d1b5e22569 81
+adapters/adapter-google-chat/src/http-host.spec.ts
+  s_a953d60826be1b::t_f2f4783efa8ea7 55,60-61
+  s_a953d60826be1b::t_37a8aa892a3957 23-26,56-59
+packages/onebots/src/configuration/configuration-verify-worker.ts
+  s_a953d60826be1b::t_af9cc407f5ba84 88-94
+  s_a953d60826be1b::t_ce58e3c2d0e09b 83-87,95
+packages/onebots/src/control/configuration-service.ts
+  s_a953d60826be1b::t_ce58e3c2d0e09b 209-213
+packages/onebots/src/configuration/configuration-application-repair.spec.ts
+  s_a953d60826be1b::t_f0b2d1b5e22569 59
+packages/onebots/src/control/gateway-configuration-snapshot.ts
+  s_a953d60826be1b::t_692371fd56d85b 29-37,42-47,66
+  s_a953d60826be1b::t_0e7bb002ebce44 48-49,62
+  s_efe26f87c3b074::t_97916b05910b16 52-56
+  s_a953d60826be1b::t_09d1e52cdc0d4f 38,50-51,57
+  s_a953d60826be1b::t_87561c6c04b0a6 5-8,26
+  s_a953d60826be1b::t_06c348807689d7 3,20,25,28,39-41,58-61,63-64
+packages/onebots/src/control/generation-configuration.ts
+  s_a953d60826be1b::t_b3de038a30d9dd 8,40-53,57-58,62-70,76
+  s_a953d60826be1b::t_87561c6c04b0a6 54-56,59-61,71-75
+  s_a953d60826be1b::t_89968d011b08a1 77-78
+packages/onebots/src/control/generation-activation.ts
+  s_a953d60826be1b::t_ce58e3c2d0e09b 255,268-274,296
+.changeset/hotplug-web-impact.md
+  s_a953d60826be1b::t_09d1e52cdc0d4f 6-7
+packages/onebots/src/configuration/configuration-application-storage.ts
+  s_a953d60826be1b::t_b56823956dba8d 13-15,17-23
+  s_efe26f87c3b074::t_c3d1f849d5a99c 16
+adapters/adapter-instagram/src/http-host.ts
+  s_a953d60826be1b::t_7430ce1ec0a591 1,19
+  s_a953d60826be1b::t_0315a11a14f930 36,40-55
+adapters/adapter-wechat-clawbot/src/adapter.spec.ts
+  s_a953d60826be1b::t_e21d3b0a5187a9 42-60,65-67
+  s_a953d60826be1b::t_cc6ca0f825744e 61-64
+packages/onebots/src/configuration/configuration-recovery-lifecycle.spec.ts
+  s_a953d60826be1b::t_7a2816123444f1 15-20,26-30,35-38,45-47,57-65,68-70,74-80,83-85,90-91,96-98
+  s_efe26f87c3b074::t_2fdebd35fb8c33 86-89
+  s_a953d60826be1b::t_4f3bc99fc403dd 1-14,21-25,31-34,39-44,48-56,66-67,71-73,81-82,92-95,99-110
+packages/onebots/src/index.ts
+  s_a953d60826be1b::t_d0d8ffc7de9044 72
+.changeset/managed-runtime-hotplug.md
+  s_a953d60826be1b::t_09d1e52cdc0d4f 6-7
+adapters/adapter-matrix/src/appservice-host.ts
+  s_a953d60826be1b::t_3a3c921071edc7 1,23
+  s_a953d60826be1b::t_9d89f8ef94042d 39,43-45,56-66
+  s_a953d60826be1b::t_37a8aa892a3957 46-55
+packages/web/src/components/control-configuration-impact.ts
+  s_a953d60826be1b::t_0be5c785d066c7 16-18,31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d16bb2e180cd586d93c26e75f1445e0f596c9cce",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

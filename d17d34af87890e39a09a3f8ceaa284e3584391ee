@@ -1,0 +1,23 @@
+adapters/adapter-douyin/src/adapter.ts
+  s_efe26f87c3b074::t_c8529df2eaf996 248
+adapters/adapter-douyin/src/events.spec.ts
+  s_efe26f87c3b074::t_c8529df2eaf996 1,4,21-48
+adapters/adapter-douyin/src/adapter.spec.ts
+  s_efe26f87c3b074::t_c8529df2eaf996 105,182-191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d17d34af87890e39a09a3f8ceaa284e3584391ee",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
