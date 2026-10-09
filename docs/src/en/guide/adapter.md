@@ -15,6 +15,7 @@ onebots currently supports the following platform adapters:
 | **WeChat ClawBot (iLink)** | ✅ Implemented | `@onebots/adapter-wechat-clawbot` | WeChat iLink Bot HTTP (QR login, long polling) |
 | **Discord** | ✅ Implemented | `@onebots/adapter-discord` | Supports Discord bots |
 | **Telegram** | ✅ Implemented | `@onebots/adapter-telegram` | Supports private chats, groups, channels |
+| **Douyin** | ✅ Implemented | `@onebots/adapter-douyin` | QR/SMS/voice-code/password login, direct messages, groups, and group management |
 | **Feishu** | ✅ Implemented | `@onebots/adapter-feishu` | Supports private chats, group chats, rich text messages |
 | **DingTalk** | ✅ Implemented | `@onebots/adapter-dingtalk` | Supports enterprise internal apps and custom bots |
 | **Slack** | ✅ Implemented | `@onebots/adapter-slack` | Supports channel messages, private chats, app commands |
@@ -101,6 +102,7 @@ Plugin import and contract verification run as one serialized registry transacti
 - [Discord Adapter Documentation](/en/platform/discord)
 - [DingTalk Adapter Documentation](/en/platform/dingtalk)
 - [Telegram Adapter Documentation](/en/platform/telegram)
+- [Douyin Adapter Documentation](/en/platform/douyin)
 - [Feishu Adapter Documentation](/en/platform/feishu)
 - [Slack Adapter Documentation](/en/platform/slack)
 - [WeCom Adapter Documentation](/en/platform/wecom)
