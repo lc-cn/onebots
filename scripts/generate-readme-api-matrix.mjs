@@ -19,6 +19,7 @@ const endMarker = "<!-- protocol-api-matrix:end -->";
 const platformLabels = {
     dingtalk: "钉钉",
     discord: "Discord",
+    douyin: "抖音",
     email: "邮件",
     feishu: "飞书",
     "facebook-messenger": "Messenger",

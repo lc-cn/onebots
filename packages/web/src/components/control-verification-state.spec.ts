@@ -256,6 +256,12 @@ describe("control verification browser workflow", () => {
         expect(safeVerificationUrl("javascript:alert(1)")).toBeUndefined();
         expect(safeVerificationUrl("https://user:password@example.com")).toBeUndefined();
         expect(safeVerificationUrl("https://example.com")).toBe("https://example.com/");
+        expect(safeVerificationUrl("/verify/session", "https://onebots.example")).toBe(
+            "https://onebots.example/verify/session",
+        );
+        expect(safeVerificationUrl("//evil.example", "https://onebots.example")).toBeUndefined();
+        expect(safeVerificationUrl(" //evil.example", "https://onebots.example")).toBeUndefined();
+        expect(safeVerificationUrl("/verify\n/evil", "https://onebots.example")).toBeUndefined();
         expect(safeVerificationImage("data:image/svg+xml;base64,PHN2Zz4=")).toBeUndefined();
         expect(safeVerificationImage("https://example.com/a.png")).toBeUndefined();
         expect(safeVerificationImage("data:image/png;base64,YQ==")).toBeDefined();

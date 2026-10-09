@@ -503,6 +503,7 @@ wechat.prod:
 - [黑盒语音平台](/platform/heychat)
 - [钉钉平台](/platform/dingtalk)
 - [Telegram 平台](/platform/telegram)
+- [抖音平台](/platform/douyin)
 - [飞书平台](/platform/feishu)
 - [Slack 平台](/platform/slack)
 - [企业微信平台](/platform/wecom)
