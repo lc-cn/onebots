@@ -23,10 +23,10 @@ try {
   $p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}'))
   $identity=[Security.Principal.WindowsIdentity]::GetCurrent()
   if($identity.User.Value -eq 'S-1-5-32-544'){throw 'invalid fixture'}
-  $acl=Get-Acl -LiteralPath $p
+  $acl=[IO.File]::GetAccessControl($p)
   $acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')))
-  Set-Acl -LiteralPath $p -AclObject $acl
-  if((Get-Acl -LiteralPath $p).GetOwner([Security.Principal.SecurityIdentifier]).Value -ne 'S-1-5-32-544'){throw 'invalid fixture'}
+  [IO.File]::SetAccessControl($p,$acl)
+  if(([IO.File]::GetAccessControl($p)).GetOwner([Security.Principal.SecurityIdentifier]).Value -ne 'S-1-5-32-544'){throw 'invalid fixture'}
   [Console]::Out.Write('owner-set')
 } catch {[Console]::Out.Write('fixture-failed')}
 `;
