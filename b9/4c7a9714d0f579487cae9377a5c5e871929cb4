@@ -1,0 +1,44 @@
+adapters/adapter-douyin/README.md
+  s_efe26f87c3b074::t_92685f0efabb6c 26
+adapters/adapter-douyin/src/verification-proxy.spec.ts
+  s_efe26f87c3b074::t_92685f0efabb6c 9,37-42,50,87,104,121-128,130-149
+  s_efe26f87c3b074::t_8541e47563bb3e 170
+  s_efe26f87c3b074::t_ed9ed33958962c 129
+  s_a953d60826be1b::t_0afefd7111862d 150
+packages/web/src/components/control-verification-state.spec.ts
+  s_efe26f87c3b074::t_8541e47563bb3e 263
+packages/web/src/components/control-verification-state.ts
+  s_efe26f87c3b074::t_8541e47563bb3e 37-42
+docs/src/platform/douyin.md
+  s_efe26f87c3b074::t_92685f0efabb6c 27,29-31
+adapters/adapter-douyin/src/verification-proxy.ts
+  s_efe26f87c3b074::t_8541e47563bb3e 7,70-87,89,179-210
+  s_efe26f87c3b074::t_ed9ed33958962c 164-165
+  s_a953d60826be1b::t_fa8537d4e7b67a 211
+docs/src/en/platform/douyin.md
+  s_efe26f87c3b074::t_92685f0efabb6c 17-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b94c7a9714d0f579487cae9377a5c5e871929cb4",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    },
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
