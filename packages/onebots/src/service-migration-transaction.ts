@@ -56,11 +56,15 @@ export class ServiceMigrationTransaction {
         )
             throw new Error("迁移准备记录已变化，禁止重放");
         const backup = this.journal.backup(operation);
+        let failureStage: ServiceMigrationRecord["failureStage"] = "verify-original";
         try {
             if (!(await this.port.verifyOriginal(backup))) throw new Error("旧服务基线已变化");
             operation = this.phase(operation, "stopping-old");
+            failureStage = "stop-original";
             await this.port.stopOriginal(backup);
+            failureStage = "verify-quiescent";
             if (!(await this.port.verifyQuiescent())) throw new Error("旧服务停止结果未知");
+            failureStage = undefined;
             operation = this.phase(operation, "writing-target");
             await this.port.writeTarget(backup);
             operation = this.transition(operation, { type: "target-written" });
@@ -71,6 +75,15 @@ export class ServiceMigrationTransaction {
             operation = this.transition(operation, { type: "advance-target" });
             if (!(await this.port.verifyTarget(backup))) throw new Error("新管理服务未通过验收");
         } catch (error) {
+            if (failureStage && !(error instanceof PersistenceFailure)) {
+                try {
+                    this.journal.save({ ...operation, failureStage });
+                    operation = this.journal.read(operation.id);
+                } catch {
+                    // 固定诊断仍须持久化确认；未知写入不继续执行外部动作。
+                    return this.unknown(operation);
+                }
+            }
             // 日志结果未知时不再写配置/调用OS，避免外部效果超出可恢复意图。
             if (error instanceof PersistenceFailure) return this.unknown(operation);
             if (operation.phase === "prepared") return this.unknown(operation);
