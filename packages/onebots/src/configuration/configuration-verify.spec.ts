@@ -75,6 +75,15 @@ describe("配置隔离验证", () => {
         }
         expect(invoked).toBe(false);
     });
+    it("验证入口与应用入口保持相同的 1MB 配置文档上限", async () => {
+        await expect(
+            verifyConfiguration({
+                runtimeRoot: path.resolve("development"),
+                selection,
+                document: { value: "x".repeat(1_000_001) },
+            }),
+        ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    });
     it("使用真实宿主验证空配置和非法端口，不回显秘密", async () => {
         const runtimeRoot = path.resolve("development");
         await expect(
@@ -121,6 +130,19 @@ describe("配置隔离验证", () => {
                 valid: true,
                 impact: { mode: "restart", restartReasons: ["invalid-configuration-baseline"] },
             });
+            for (const previousDocument of [undefined, {}, { "mock.bot": null }]) {
+                for (const protocol of ["not-a-protocol-object", ["not-a-protocol-object"]]) {
+                    const invalidCandidate = await verifyConfiguration({
+                        runtimeRoot,
+                        selection: { adapters: ["mock"], protocols: [], applications: [] },
+                        previousDocument,
+                        document: { "mock.bot": { "onebot.v11": protocol } },
+                    });
+                    expect(invalidCandidate.valid).toBe(false);
+                    expect(invalidCandidate).not.toHaveProperty("impact");
+                    expect(JSON.stringify(invalidCandidate)).not.toContain("not-a-protocol-object");
+                }
+            }
             const large = await verifyConfiguration({
                 runtimeRoot,
                 selection: { adapters: ["mock"], protocols: [], applications: [] },

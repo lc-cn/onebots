@@ -123,7 +123,6 @@ describe("InstagramHttpHost", () => {
             const second = new InstagramClient(config("second", "102", "/shared"));
             clients.set("second", second);
             expect(() => host.mount("second", second)).toThrow(/已由账号/u);
-
             const moved = new InstagramClient(config("first", "101", "/new"));
             clients.set("first", moved);
             host.mount("first", moved);

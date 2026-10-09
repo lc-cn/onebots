@@ -76,22 +76,36 @@ async function verify(): Promise<ConfigurationVerification> {
     }
     try {
         validator.validateRuntimeConfig(config);
-        if (!input.previousDocument) return { valid: true, issues: [] };
         const defaults = await import(
             pathToFileURL(path.join(hostDirectory, "runtime-defaults.js")).href
         );
+        // validator 会跳过未注册协议；候选必须先独立通过规划形状校验，不能借坏基线旁路。
+        defaults.planEffectiveRuntimeConfiguration(config, config);
+        if (!input.previousDocument) return { valid: true, issues: [] };
         let impact;
         try {
             impact = defaults.planEffectiveRuntimeConfiguration(input.previousDocument, config);
-        } catch {
-            // 有效候选仍可修复语义损坏的基线；不能把规划失败冒充字段校验失败。
-            impact = {
-                mode: "restart",
-                accounts: [],
-                protocols: [],
-                dynamicFields: [],
-                restartReasons: ["invalid-configuration-baseline"],
-            };
+        } catch (error) {
+            try {
+                defaults.planEffectiveRuntimeConfiguration(
+                    input.previousDocument,
+                    input.previousDocument,
+                );
+            } catch {
+                // 只有基线自身无法规划时允许有效候选修复；不向外发送原始诊断。
+                return {
+                    valid: true,
+                    issues: [],
+                    impact: {
+                        mode: "restart",
+                        accounts: [],
+                        protocols: [],
+                        dynamicFields: [],
+                        restartReasons: ["invalid-configuration-baseline"],
+                    },
+                };
+            }
+            throw error;
         }
         return { valid: true, issues: [], impact };
     } catch (error) {

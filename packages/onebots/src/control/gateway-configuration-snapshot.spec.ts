@@ -57,6 +57,40 @@ it("已存在但截断的快照不被悄悄覆盖", () => {
     );
     expect(fs.readFileSync(first.configPath, "utf8")).toBe("truncated");
 });
+it("非普通文件条目拒绝新增，不删除未知存储", () => {
+    const root = workspace();
+    const first = createGatewayConfigurationSnapshot(root, {});
+    const unknown = path.join(path.dirname(first.configPath), "reserved-directory");
+    fs.mkdirSync(unknown);
+    expect(() => createGatewayConfigurationSnapshot(root, { log_level: "debug" })).toThrow(
+        /^网关快照存储无效$/,
+    );
+    expect(fs.statSync(unknown).isDirectory()).toBe(true);
+    expect(createGatewayConfigurationSnapshot(root, {})).toEqual(first);
+});
+it.skipIf(process.platform === "win32")("符号链接条目拒绝新增，不追踪或删除目标", () => {
+    const root = workspace();
+    const first = createGatewayConfigurationSnapshot(root, {});
+    const unknown = path.join(path.dirname(first.configPath), "reserved-link");
+    fs.symlinkSync(first.configPath, unknown);
+    expect(() => createGatewayConfigurationSnapshot(root, { log_level: "debug" })).toThrow(
+        /^网关快照存储无效$/,
+    );
+    expect(fs.lstatSync(unknown).isSymbolicLink()).toBe(true);
+    expect(fs.existsSync(first.configPath)).toBe(true);
+});
+it("EEXIST 竞争只复用校验一致的最终文件并清理 staging", () => {
+    const root = workspace();
+    vi.spyOn(fs, "renameSync").mockImplementationOnce((source, destination) => {
+        fs.copyFileSync(source, destination);
+        throw Object.assign(new Error("已有发布文件"), { code: "EEXIST" });
+    });
+    const result = createGatewayConfigurationSnapshot(root, {});
+    expect(fs.readFileSync(result.configPath, "utf8")).toBe(yaml.dump({}));
+    expect(fs.readdirSync(path.dirname(result.configPath))).toEqual([
+        `${result.configVersion}.yaml`,
+    ]);
+});
 it("容量边界拒绝新增，不删除旧快照或损坏已有版本", () => {
     const root = workspace();
     const first = createGatewayConfigurationSnapshot(root, { log_level: "off" });
@@ -116,6 +150,14 @@ it("临时路径的硬链接不能作为孤儿文件自动删除", () => {
     );
     expect(fs.existsSync(temporary)).toBe(true);
     expect(fs.existsSync(first.configPath)).toBe(true);
+});
+it("未知 staging 名称不被自动认领或删除", () => {
+    const root = workspace();
+    const first = createGatewayConfigurationSnapshot(root, {});
+    const unknown = path.join(path.dirname(first.configPath), ".snapshot-interrupted");
+    fs.writeFileSync(unknown, "unknown", { mode: 0o600 });
+    createGatewayConfigurationSnapshot(root, { log_level: "debug" });
+    expect(fs.readFileSync(unknown, "utf8")).toBe("unknown");
 });
 it.skipIf(process.platform === "win32")("既有公开目录不能靠新文件的 0600 掩盖权限风险", () => {
     const root = workspace();

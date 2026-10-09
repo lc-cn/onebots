@@ -9,6 +9,7 @@ import {
 } from "./configuration-application.js";
 import type { ConfigurationTransactionPort } from "../control/generation-activation.js";
 import { GatewayRequestError } from "../control/gateway-request-client.js";
+import { planRuntimeConfiguration } from "@onebots/core";
 
 const directories: string[] = [];
 afterEach(() => {
@@ -103,6 +104,24 @@ it("新增账号只派发热应用，重复请求读取原回执，不启停网�
     expect(test.port.start).not.toHaveBeenCalled();
     expect(test.port.suspend).not.toHaveBeenCalled();
 });
+it("影响规划在进入串行生命周期事务前完成", async () => {
+    const test = fixture();
+    let release!: () => void;
+    const waiting = new Promise<void>(resolve => {
+        release = resolve;
+    });
+    const transaction = vi.spyOn(test.options.lifecycle, "runConfigurationTransaction");
+    test.options.planImpact = vi.fn(async (before, after) => {
+        await waiting;
+        return planRuntimeConfiguration(before, after);
+    });
+    const applying = test.application.apply(test.request);
+    await Promise.resolve();
+    expect(transaction).not.toHaveBeenCalled();
+    release();
+    await applying;
+    expect(transaction).toHaveBeenCalledOnce();
+});
 it("泛化 rejected 异常不能证明未执行，保留候选并封锁", async () => {
     const rejected = fixture("rejected");
     expect(await rejected.application.apply(rejected.request)).toMatchObject({
@@ -170,8 +189,26 @@ it("writing 阶段源文件已经提交但 replace 抛错，查询恢复旧文�
         status: "failed",
     });
     expect(test.source.read().document).toEqual(test.before);
+    expect(snapshot).not.toHaveBeenCalled();
     expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
     expect(snapshot).not.toHaveBeenCalled();
+});
+
+it("无法确认原运行实例时，即使进程表为空也不恢复候选文件", async () => {
+    const test = fixture();
+    const replace = test.source.replace;
+    vi.spyOn(test.source, "replace").mockImplementation((expected, document) => {
+        replace(expected, document);
+        throw new Error("post-commit interruption");
+    });
+    await test.application.apply(test.request);
+    test.port.hasLiveChildren = () => false;
+    test.port.runtimeContext = () => undefined;
+    expect(await test.application.queryStatus(test.request.id)).toMatchObject({
+        recoveryRequired: true,
+        phase: "writing",
+    });
+    expect(test.source.read().document).toEqual(test.request.document);
 });
 
 it("restoring 已提交但 replace 抛错，重查询识别旧文件不重派", async () => {
@@ -215,6 +252,25 @@ it("stored 源文件提交后抛错，查询核对候选后收敛且不启动网
     });
     expect(test.port.start).not.toHaveBeenCalled();
     expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
+});
+
+it("运行中等效配置使用 stored 模式时允许按磁盘事实收敛", async () => {
+    const test = fixture();
+    test.port.applyRuntimeConfiguration = undefined;
+    const replace = test.source.replace;
+    vi.spyOn(test.source, "replace").mockImplementation((expected, document) => {
+        replace(expected, document);
+        throw new Error("post-store interruption");
+    });
+    const request = { ...test.request, document: test.before };
+    expect(await test.application.apply(request)).toMatchObject({
+        executionMode: "stored",
+        recoveryRequired: true,
+    });
+    expect(await test.application.queryStatus(request.id)).toMatchObject({
+        recoveryRequired: false,
+        status: "succeeded",
+    });
 });
 
 it("新实例达到候选版本不能证明旧实例原动作成功", async () => {

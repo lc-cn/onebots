@@ -42,6 +42,102 @@ function transport(
     return { client: new ControlClient({ request }), request };
 }
 describe("TUI 配置草稿", () => {
+    it("读取运行态失败不能声称已停止或跳过应用确认", async () => {
+        const ui = prompt([["resume"], ["draft"], ["validate"], ["no"], ["back"]]);
+        const api = transport(route => {
+            if (route === "/api/control/status") throw new Error("private remote failure");
+            return route.endsWith("validate")
+                ? {
+                      valid: true,
+                      receiptId: "receipt",
+                      draftRevision: "r0",
+                      issues: [],
+                      impact: {
+                          mode: "restart",
+                          accounts: [],
+                          protocols: [],
+                          dynamicFields: [],
+                          restartReasons: [],
+                      },
+                  }
+                : initial();
+        });
+        await runControlConfiguration(api.client, ui.ui);
+        expect(ui.reports.join()).toContain("状态暂不可确认");
+        expect(ui.reports.join()).toContain("计划影响：重启网关");
+        expect(ui.reports.join()).not.toContain("仅保存配置");
+        expect(ui.reports.join()).not.toContain("private remote failure");
+        expect(ui.requests.find(item => item.title === "确认应用已验证草稿？")?.detail).toContain(
+            "确认重启",
+        );
+        expect(api.request.mock.calls.some(call => call[1].endsWith("apply"))).toBe(false);
+    });
+    it("大计划只展示20项并准确报告省略数量，仍由用户确认", async () => {
+        const ui = prompt([["resume"], ["draft"], ["validate"], ["no"], ["back"]]);
+        const api = transport(route =>
+            route === "/api/control/status"
+                ? { gateway: { desired: "running" } }
+                : route.endsWith("validate")
+                  ? {
+                        valid: true,
+                        receiptId: "receipt",
+                        draftRevision: "r0",
+                        issues: [],
+                        impact: {
+                            mode: "hot",
+                            accounts: Array.from({ length: 25 }, (_, index) => ({
+                                platform: "mock",
+                                accountId: String(index),
+                                action: "add",
+                            })),
+                            protocols: [],
+                            dynamicFields: ["timeout"],
+                            restartReasons: [],
+                        },
+                    }
+                  : initial(),
+        );
+        await runControlConfiguration(api.client, ui.ui);
+        expect(ui.reports.filter(item => item.startsWith("新增账号："))).toHaveLength(20);
+        expect(ui.reports.join()).toContain("另有 6 项未显示");
+        expect(ui.reports.join()).toContain("Web 配置校验结果");
+        expect(ui.reports.join()).not.toContain("新增账号：mock/20");
+        expect(api.request.mock.calls.some(call => call[1].endsWith("apply"))).toBe(false);
+    });
+
+    it.each(["hot", "restart"])("停止网关的%s计划说明仅保存且不授权启动/重启", async mode => {
+        const ui = prompt([["resume"], ["draft"], ["validate"], ["yes"]]);
+        const api = transport(route =>
+            route === "/api/control/status"
+                ? { gateway: { desired: "stopped" } }
+                : route.endsWith("validate")
+                  ? {
+                        valid: true,
+                        receiptId: "receipt",
+                        draftRevision: "r0",
+                        issues: [],
+                        impact: {
+                            mode,
+                            accounts: [],
+                            protocols: [],
+                            dynamicFields: [],
+                            restartReasons: [],
+                        },
+                    }
+                  : route.includes("operations/")
+                    ? { status: "succeeded", phase: "completed" }
+                    : initial(),
+        );
+        await runControlConfiguration(api.client, ui.ui);
+        expect(ui.reports.join()).toContain("仅保存配置，下次启动网关时生效");
+        expect(ui.reports.join()).not.toContain("应用方式：重启网关");
+        expect(ui.requests.find(item => item.title === "确认应用已验证草稿？")?.detail).toContain(
+            "不会启动停止的网关",
+        );
+        expect(
+            api.request.mock.calls.find(call => call[1].endsWith("apply"))?.[2],
+        ).not.toHaveProperty("allowRestart");
+    });
     it("确认前展示服务端实际账号、协议和重启原因", async () => {
         const ui = prompt([["resume"], ["draft"], ["validate"], ["no"], ["back"]]);
         const api = transport(route =>
@@ -66,7 +162,7 @@ describe("TUI 配置草稿", () => {
                                 },
                             ],
                             dynamicFields: ["timeout"],
-                            restartReasons: ["port"],
+                            restartReasons: ["port", "display\u202Espoof"],
                         },
                     }
                   : initial(),
@@ -76,6 +172,8 @@ describe("TUI 配置草稿", () => {
         expect(ui.reports.join()).toContain("移除协议：mock/bot · onebot/v11");
         expect(ui.reports.join()).toContain("动态设置：timeout");
         expect(ui.reports.join()).toContain("重启原因：port");
+        expect(ui.reports.join()).toContain("重启原因：display spoof");
+        expect(ui.reports.join()).not.toContain("\u202E");
         expect(api.request.mock.calls.some(call => call[1].endsWith("apply"))).toBe(false);
     });
     it("损坏源须明确确认私有备份与空修复，取消不写", async () => {

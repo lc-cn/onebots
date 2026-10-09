@@ -102,7 +102,6 @@ describe("FacebookMessengerHttpHost", () => {
             const second = new FacebookMessengerClient(config("second", "/shared"));
             clients.set("second", second);
             expect(() => host.mount("second", second)).toThrow(/已由账号/u);
-
             const moved = new FacebookMessengerClient(config("first", "/new"));
             clients.set("first", moved);
             host.mount("first", moved);

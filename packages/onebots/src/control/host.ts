@@ -73,6 +73,7 @@ export async function startControlHost(options: ControlHostOptions) {
     const installDeploymentAuth = consumeDeploymentAuthenticationEnvironment();
     fs.mkdirSync(options.workspace, { recursive: true });
     const workspace = fs.realpathSync(options.workspace);
+    const bundledRuntimeRoot = options.runtimeRoot ?? path.resolve(import.meta.dirname, "../..");
     const windowsNativeMode = options.windowsHostPipe !== undefined;
     const filesystemControlSocket = supportsFilesystemControlSocket();
     // Windows foreground/candidate verification has no Unix socket. Production Windows service
@@ -157,10 +158,7 @@ export async function startControlHost(options: ControlHostOptions) {
     const driver = new NodeGatewayDriver({
         controlInstanceId: id,
         prepare: async () => {
-            const prepared = prepareGatewayWorkspace(
-                workspace,
-                options.runtimeRoot ?? path.resolve(import.meta.dirname, "../.."),
-            );
+            const prepared = prepareGatewayWorkspace(workspace, bundledRuntimeRoot);
             const generation = lifecycle.activeGeneration();
             return {
                 ...prepared,
@@ -247,7 +245,12 @@ export async function startControlHost(options: ControlHostOptions) {
         if (!generations) throw new Error("运行版本仓库不可用");
         return generations.readVerified(id);
     };
-    const activationVerification = new GenerationConfigurationVerifier(workspace, readVerified);
+    const activationVerification = new GenerationConfigurationVerifier(
+        workspace,
+        readVerified,
+        undefined,
+        bundledRuntimeRoot,
+    );
     lifecycle = new GenerationActivationController({
         statePath: path.join(controlDirectory(workspace), "active-generation.json"),
         gateway: controller,
@@ -284,12 +287,7 @@ export async function startControlHost(options: ControlHostOptions) {
                 snapshot: document => createGatewayConfigurationSnapshot(workspace, document),
             },
             planImpact: (before, after) =>
-                activationVerification.planImpact(
-                    lifecycle.activeGeneration(),
-                    options.runtimeRoot ?? path.resolve(import.meta.dirname, "../.."),
-                    before,
-                    after,
-                ),
+                activationVerification.planImpact(lifecycle.activeGeneration(), before, after),
             recovery: new ConfigurationRecoveryStore(
                 path.join(controlDirectory(workspace), "configuration/recovery"),
             ),
@@ -300,7 +298,7 @@ export async function startControlHost(options: ControlHostOptions) {
             configuration = new ControlConfigurationService({
                 directory: path.join(controlDirectory(workspace), "configuration"),
                 configFile: path.join(workspace, "config.yaml"),
-                runtimeRoot: options.runtimeRoot ?? path.resolve(import.meta.dirname, "../.."),
+                runtimeRoot: bundledRuntimeRoot,
                 generations,
                 application: configurationApplication,
                 activeGeneration: () => lifecycle.activeGeneration(),

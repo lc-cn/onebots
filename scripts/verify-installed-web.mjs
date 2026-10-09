@@ -656,26 +656,22 @@ try {
     await openWorkspace("概览", "overview-title");
     await waitFor(gatewayIsRunning, "Web 配置应用后的网关状态", 60_000);
 
-    const protocolResult = await devtools.evaluate(`(async () => {
-        const response = await fetch("/mock/installed-web/onebot/v11/get_login_info", {
+    const probeMockProtocol = async accountId => {
+        const url = `/mock/${encodeURIComponent(accountId)}/onebot/v11/get_login_info`;
+        const result = await devtools.evaluate(`(async () => {
+        const response = await fetch(${JSON.stringify(url)}, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: "{}",
         });
         return { status: response.status, body: await response.json() };
     })()`);
-    assert.equal(protocolResult.status, 200);
-    assert.equal(protocolResult.body.status, "ok");
-    assert.ok(Number.isSafeInteger(protocolResult.body.data.user_id));
-    const addedProtocolResult = await devtools.evaluate(`(async () => {
-        const response = await fetch("/mock/hot-web/onebot/v11/get_login_info", {
-            method: "POST", headers: { "content-type": "application/json" }, body: "{}",
-        });
-        return { status: response.status, body: await response.json() };
-    })()`);
-    assert.equal(addedProtocolResult.status, 200);
-    assert.equal(addedProtocolResult.body.status, "ok");
-    assert.ok(Number.isSafeInteger(addedProtocolResult.body.data.user_id));
+        assert.equal(result.status, 200);
+        assert.equal(result.body.status, "ok");
+        assert.ok(Number.isSafeInteger(result.body.data.user_id));
+    };
+    await probeMockProtocol("installed-web");
+    await probeMockProtocol("hot-web");
 
     devtools.close();
     devtools = undefined;

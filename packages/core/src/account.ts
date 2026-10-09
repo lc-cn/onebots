@@ -331,18 +331,24 @@ export class Account<
         this.#routeScope?.close();
         this.#routeScope = undefined;
         // 先发布停止任务，再执行第三方钩子，重入和并发 stop 共用唯一清理。
-        this.#stopping = Promise.resolve().then(() => this.#finishStop(force));
+        let retiring!: Promise<void>;
+        this.#stopping = Promise.resolve().then(() => this.#finishStop(force, retiring));
+        // 退役监听器的同步前缀必须在 stop 返回前运行，阻断 SDK 的即时迟到事件。
+        retiring = emitAllAwaited(this, "stopping");
         return this.#stopping;
     }
 
-    async #finishStop(force?: boolean): Promise<void> {
+    async #finishStop(force: boolean | undefined, retiring: Promise<void>): Promise<void> {
         const failures = new FailureCollector();
+        // 先发布退役边界，再等待协议关闭；平台 SDK 在排空期间产生的迟到事件必须立即失效。
+        await failures.capture(() => retiring);
         for (const protocol of this.protocols) {
             await failures.capture(() => this.stopProtocol(protocol, force));
         }
         try {
             await failures.capture(() => emitAllAwaited(this, "stop"));
         } finally {
+            // stop 是终结操作；热恢复由 Adapter 工厂创建新的 Account 生命周期。
             this.removeAllListeners();
         }
         failures.throwIfAny(`${failures.size} 个账号停止操作失败`);

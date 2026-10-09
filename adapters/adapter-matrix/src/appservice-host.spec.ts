@@ -30,6 +30,22 @@ const config = (accountId: string, path?: string): MatrixConfig => ({
 });
 
 describe("MatrixAppserviceHost", () => {
+    it("POST ping 冲突也完整撤销此前注册的 PUT 路由，并可重新挂载", () => {
+        const router = new Router(createServer());
+        const blocker = router.createRegistrationScope({ platform: "other" });
+        const current = new MatrixClient(config("bot", "/shared"));
+        const host = new MatrixAppserviceHost({ router } as unknown as BaseApp, () => current);
+        try {
+            blocker.run(() => router.post("/shared/_matrix/app/v1/ping", () => undefined));
+            expect(() => host.mount("bot", current, "/matrix/bot")).toThrow(HttpRouteConflictError);
+            expect(router.stack).toHaveLength(1);
+            blocker.close();
+            host.mount("bot", current, "/matrix/bot");
+            expect(router.stack).toHaveLength(4);
+        } finally {
+            router.cleanup();
+        }
+    });
     it("真实路由部分注册失败完整回滚，修正冲突后可重试并释放、重新挂载", () => {
         const router = new Router(createServer());
         const current = new MatrixClient(config("bot", "/events"));

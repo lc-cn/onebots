@@ -1,7 +1,11 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
 import type { ServiceHost } from "./service-host.js";
-import { protectedWindowsDirectoryAclScript } from "./windows-acl-script.js";
+import {
+    windowsAclPrincipals,
+    windowsFullControlAclBuilder,
+    windowsFullControlAclVerifier,
+} from "./windows-closed-acl.js";
 
 const SID = /^S-1-(?:[0-9]+-)+[0-9]+$/;
 const failure = () => new Error("Windows 服务状态目录 ACL 无法确认");
@@ -79,8 +83,7 @@ export function createExclusiveWindowsServiceDirectory(
     const script = String.raw`
 $ErrorActionPreference='Stop'
 $p=${JSON.stringify(directory)}
-$ownerSid='S-1-5-32-544'
-$allowedSids=@($ownerSid,'S-1-5-18')
+${windowsAclPrincipals("'S-1-5-32-544'", ["'S-1-5-32-544'", "'S-1-5-18'"])}
 $temporary=$null
 $stage='ancestor'
 try {
@@ -94,7 +97,7 @@ while($ancestor){
   $ancestor=$next
 }
 $stage='acl-build'
-${protectedWindowsDirectoryAclScript}
+${windowsFullControlAclBuilder("directory")}
 $stage='exclusive-create'
 if([IO.Directory]::Exists($p)){throw 'target exists'}
 $temporary=[IO.Path]::Combine($parentPath,'.onebots-directory-'+[Guid]::NewGuid().ToString('N'))
@@ -113,12 +116,8 @@ if($PSVersionTable.PSEdition -eq 'Desktop'){
 } elseif($PSVersionTable.PSEdition -eq 'Core'){
   $check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
 } else {throw 'unsupported powershell runtime'}
-$rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
-$ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
-$owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
-$bad=@($rules|Where-Object{$_.IsInherited -or $_.AccessControlType -ne 'Allow' -or $_.InheritanceFlags -ne $inherit -or $_.PropagationFlags -ne $prop -or $_.FileSystemRights -ne [System.Security.AccessControl.FileSystemRights]::FullControl})
 $stage='verify'
-if(-not $check.AreAccessRulesProtected -or $owner -ne $ownerSid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin $allowedSids -or $ids[1] -notin $allowedSids -or $bad.Count -ne 0){throw 'unsafe acl'}
+${windowsFullControlAclVerifier("directory")}
 $encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
 [Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
 } catch {
@@ -160,11 +159,13 @@ export function secureWindowsServiceDirectory(host: ServiceHost, directory: stri
     )
         throw failure();
     const location = JSON.stringify(directory);
+    const principals = windowsAclPrincipals("'S-1-5-32-544'", ["'S-1-5-32-544'", "'S-1-5-18'"]);
+    const builder = windowsFullControlAclBuilder("directory");
+    const verifier = windowsFullControlAclVerifier("directory");
     const script = String.raw`
 $ErrorActionPreference='Stop'
 $p=${location}
-$ownerSid='S-1-5-32-544'
-$allowedSids=@($ownerSid,'S-1-5-18')
+${principals}
 $stage='ancestor'
 try {
 $ancestor=[IO.Path]::GetDirectoryName($p)
@@ -177,7 +178,7 @@ while($ancestor){
 }
 
 $stage='acl-build'
-${protectedWindowsDirectoryAclScript}
+${builder}
 $stage='create'
 $item=New-Object System.IO.DirectoryInfo($p)
 if(-not $item.Exists){
@@ -195,12 +196,8 @@ if($PSVersionTable.PSEdition -eq 'Desktop'){
 } elseif($PSVersionTable.PSEdition -eq 'Core'){
   $check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
 } else {throw 'unsupported powershell runtime'}
-$rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
-$ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
-$owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
-$bad=@($rules|Where-Object{$_.IsInherited -or $_.AccessControlType -ne 'Allow' -or $_.InheritanceFlags -ne $inherit -or $_.PropagationFlags -ne $prop -or $_.FileSystemRights -ne [System.Security.AccessControl.FileSystemRights]::FullControl})
 $stage='verify'
-if(-not $check.AreAccessRulesProtected -or $owner -ne $ownerSid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin $allowedSids -or $ids[1] -notin $allowedSids -or $bad.Count -ne 0){throw 'unsafe acl'}
+${verifier}
 $encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
 [Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
 } catch {

@@ -460,6 +460,9 @@ export class BaseApp extends Koa {
         // 固定首次启动批次；热添加的平台由配置协调器启动，不再被该批次重复启动。
         const adapters = [...this.adapters];
         const state = getHostLifecycleState(this);
+        // lifecycle.start() 可能同步创建新适配器；快照内尚未启动的平台也必须立刻进入
+        // 热配置门禁，避免后续平台同时被首次启动批次和热协调器启动。
+        for (const [platform] of adapters) state.queuedPlatforms?.add(String(platform));
         for (const [platform, adapter] of adapters) {
             signal?.throwIfAborted();
             while (this.runtimeConfiguration) {

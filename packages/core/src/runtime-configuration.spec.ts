@@ -11,7 +11,10 @@ import { Protocol } from "./protocol.js";
 import { AdapterRegistry, ProtocolRegistry } from "./registry.js";
 import { runWithAdapterRouteScope } from "./scoped-adapter.js";
 import { createAccountWithRouteScope } from "./scoped-account.js";
-import { planRuntimeConfiguration } from "./runtime-configuration.js";
+import {
+    planRuntimeConfiguration,
+    RuntimeConfigurationRejectedError,
+} from "./runtime-configuration.js";
 import { sendAccountMessage } from "./adapter-send.js";
 
 const disposals: Array<() => Promise<void>> = [];
@@ -158,8 +161,11 @@ async function fixture(options: { queued?: boolean; beforeStart?: (app: BaseApp)
             rmSync(directory, { recursive: true, force: true });
         }
     });
-    options.beforeStart?.(app);
-    BaseApp.configDir = previousDirectory;
+    try {
+        options.beforeStart?.(app);
+    } finally {
+        BaseApp.configDir = previousDirectory;
+    }
     const oldPort = process.env.PORT;
     process.env.PORT = "0";
     try {
@@ -192,6 +198,60 @@ async function fixture(options: { queued?: boolean; beforeStart?: (app: BaseApp)
 }
 
 describe("账号和协议热插拔公开效果", () => {
+    it("beforeStart 失败也恢复全局配置目录，不污染后续宿主", async () => {
+        const previous = BaseApp.configDir;
+        await expect(
+            fixture({
+                beforeStart: () => {
+                    throw new Error("setup hook failed");
+                },
+            }),
+        ).rejects.toThrow("setup hook failed");
+        expect(BaseApp.configDir).toBe(previous);
+    });
+    it("未变账号的历史未安装协议不阻断无关热改，重建该账号仍严格拒绝", async () => {
+        const { app, json } = await fixture({
+            beforeStart: host => {
+                host.config["hotplug-test.b"]["onebot.v11"] = { use_http: true };
+            },
+        });
+        const before = await json("/hotplug-test/b/callback");
+        const next = structuredClone(app.config);
+        next["hotplug-test.a"]["hotplug-test.v1"] = { label: "unrelated updated" };
+        expect((await app.applyRuntimeConfiguration(next)).status).toBe("applied");
+        expect(await json("/hotplug-test/a/hotplug-test/v1")).toEqual({
+            label: "unrelated updated",
+        });
+        expect(await json("/hotplug-test/b/callback")).toEqual(before);
+        const reconnect = structuredClone(app.config);
+        reconnect["hotplug-test.b"].token = "new token";
+        await expect(app.applyRuntimeConfiguration(reconnect)).rejects.toMatchObject({
+            name: "RuntimeConfigurationRejectedError",
+            message: "协议 onebot/v11 尚未安装",
+        });
+        expect(await json("/hotplug-test/b/callback")).toEqual(before);
+        delete reconnect["hotplug-test.b"]["onebot.v11"];
+        expect((await app.applyRuntimeConfiguration(reconnect)).status).toBe("applied");
+    });
+    it("新增账号内未安装协议和未引用的新协议默认值均返回具体拒绝，不静默接受", async () => {
+        const { app, json } = await fixture();
+        const before = structuredClone(app.config);
+        const account = structuredClone(app.config);
+        account["hotplug-test.c"] = { "onebot.v11": { use_http: true } };
+        await expect(app.applyRuntimeConfiguration(account)).rejects.toBeInstanceOf(
+            RuntimeConfigurationRejectedError,
+        );
+        await expect(app.applyRuntimeConfiguration(account)).rejects.toThrow(
+            "协议 onebot/v11 尚未安装",
+        );
+        const defaults = structuredClone(app.config);
+        defaults.general = { "onebot.v11": { use_http: true } };
+        await expect(app.applyRuntimeConfiguration(defaults)).rejects.toThrow(
+            "协议 onebot/v11 尚未安装",
+        );
+        expect(app.config).toEqual(before);
+        expect(await json("/hotplug-test/b/hotplug-test/v1")).toEqual({ label: "unaffected" });
+    });
     it("宿主尚未完成 HTTP 初始化时热配置未受理", async () => {
         let entered!: () => void;
         let release!: () => void;
@@ -314,6 +374,7 @@ describe("账号和协议热插拔公开效果", () => {
         const next = structuredClone(app.config);
         next["hotplug-test.a"]["hotplug-test.v1"] = { label: "after delivery" };
         const applying = app.applyRuntimeConfiguration(next);
+        await Promise.resolve();
         try {
             // 完成无关账号的真实 HTTP 请求，让配置协调器有机会进入排空阶段。
             expect(await json("/hotplug-test/b/hotplug-test/v1")).toEqual({ label: "unaffected" });
@@ -339,6 +400,7 @@ describe("账号和协议热插拔公开效果", () => {
         const stopping = vi.spyOn(protocol, "stop").mockImplementationOnce(() => pending);
         const next = structuredClone(app.config);
         next["hotplug-test.a"]["hotplug-test.v1"] = { label: "unsafe" };
+        let shutdown: Promise<void> | undefined;
         try {
             expect((await app.applyRuntimeConfiguration(next)).status).toBe("recovery_required");
             expect(account.protocols[0]).toBe(protocol);
@@ -347,9 +409,14 @@ describe("账号和协议热插拔公开效果", () => {
             await expect(app.reload(next)).rejects.toThrow("停止结果未确定");
             await expect(app.start()).rejects.toThrow("停止结果未确定");
             expect(await json("/hotplug-test/b/hotplug-test/v1")).toEqual({ label: "unaffected" });
+            shutdown = app.stop();
+            await Promise.resolve();
+            expect(stopping).toHaveBeenCalledOnce();
         } finally {
             release();
         }
+        await shutdown;
+        expect(stopping).toHaveBeenCalledTimes(2);
     });
     it("热停止超时后全局停机等待原停止任务，不并发重发第三方 stop", async () => {
         const { app } = await fixture();

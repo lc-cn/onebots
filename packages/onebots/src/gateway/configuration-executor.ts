@@ -139,7 +139,6 @@ export class GatewayConfigurationExecutor {
             if (request.configPath !== file || fs.realpathSync(directory) !== directory)
                 return "rejected";
             const stat = fs.lstatSync(file);
-            assertGatewaySnapshotFileSecurity(file);
             if (
                 !stat.isFile() ||
                 stat.isSymbolicLink() ||
@@ -148,6 +147,8 @@ export class GatewayConfigurationExecutor {
                 (process.platform !== "win32" && (stat.mode & 0o077) !== 0)
             )
                 return "rejected";
+            // 先用文件元数据拒绝非法入口，避免 Windows ACL 子进程阻塞整个串行队列。
+            assertGatewaySnapshotFileSecurity(file);
             const bytes = fs.readFileSync(file);
             if (createHash("sha256").update(bytes).digest("hex") !== request.nextConfigVersion)
                 return "rejected";

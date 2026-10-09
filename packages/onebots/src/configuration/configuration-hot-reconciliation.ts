@@ -90,7 +90,7 @@ export async function reconcileHotConfiguration(
     // accepted/writing 意图在 applying 落盘前不可能派发，恢复文件不依赖已死亡实例的回执。
     // restoring 意图允许识别已提交的旧文档，不重复覆盖或重派原操作。
     if (["accepted", "writing", "restoring"].includes(operation.phase)) {
-        // 已有新实例可能从候选磁盘配置启动；不能仅凭旧意图修改文件并留下运行态漂移。
+        // 空进程表不能排除孤儿实例；只接受原实例身份或持久生命周期确认的静止证据。
         const runtime = port.runtimeContext?.();
         const originalRuntimeUnchanged =
             operation.runtimeBefore &&

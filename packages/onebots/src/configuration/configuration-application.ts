@@ -128,7 +128,7 @@ export class ConfigurationApplication {
             throw invalid();
         }
     }
-    apply(input: ConfigurationApplicationInput): Promise<ConfigurationApplicationOperation> {
+    async apply(input: ConfigurationApplicationInput): Promise<ConfigurationApplicationOperation> {
         let request: ConfigurationApplicationInput;
         try {
             const snapshot = parseConfigurationDocument(input);
@@ -169,14 +169,36 @@ export class ConfigurationApplication {
                     : {}),
             };
         } catch {
-            return Promise.reject(invalid());
+            throw invalid();
+        }
+        const candidate = bytes(request.document);
+        // 修复写入与冷恢复均从同一规范文档序列化，避免键顺序改变原始摘要。
+        if (request.repair) request.document = parseConfigurationDocument(JSON.parse(candidate));
+        const candidateDigest = digest(candidate);
+        if (fs.existsSync(this.file(request.id))) {
+            const previous = this.read(request.id);
+            if (
+                previous.repair?.backupId !== request.repair?.backupId ||
+                previous.repair?.originalRevision !== request.repair?.originalRevision ||
+                previous.validationId !== request.validationId ||
+                previous.documentDigest !== candidateDigest ||
+                previous.base.configRevision !== request.base.configRevision ||
+                previous.base.generationId !== request.base.generationId
+            )
+                throw new ConfigurationConflictError();
+            return publicOperation(previous);
+        }
+        if (this.blocked) throw new Error("配置应用需要人工对账");
+        let plannedImpact: ConfigurationApplicationInput["impact"];
+        if (!request.repair) {
+            const before = this.options.source.read();
+            if (before.revision !== request.base.configRevision)
+                throw new ConfigurationConflictError();
+            plannedImpact = this.options.planImpact
+                ? await this.options.planImpact(before.document, request.document)
+                : planRuntimeConfiguration(before.document, request.document);
         }
         return this.options.lifecycle.runConfigurationTransaction(async port => {
-            const candidate = bytes(request.document);
-            // 修复写入与冷恢复均从同一规范文档序列化，避免键顺序改变原始摘要。
-            if (request.repair)
-                request.document = parseConfigurationDocument(JSON.parse(candidate));
-            const candidateDigest = digest(candidate);
             if (fs.existsSync(this.file(request.id))) {
                 const previous = this.read(request.id);
                 if (
@@ -217,11 +239,7 @@ export class ConfigurationApplication {
             )
                 throw new ConfigurationConflictError();
             const previousBytes = request.repair ? undefined : bytes(before.document);
-            const impact = request.repair
-                ? undefined
-                : this.options.planImpact
-                  ? await this.options.planImpact(before.document!, request.document)
-                  : planRuntimeConfiguration(before.document!, request.document);
+            const impact = request.repair ? undefined : plannedImpact;
             if (request.impact && impact && bytes(request.impact) !== bytes(impact))
                 throw new ConfigurationConflictError();
             const runtimeBefore = port.runtimeContext?.();

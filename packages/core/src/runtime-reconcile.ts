@@ -6,7 +6,7 @@ import { createAccountWithRouteScope } from "./scoped-account.js";
 import { closeAdapterRouteScope } from "./scoped-adapter.js";
 import { deepClone } from "./utils.js";
 import { ConfigValidator } from "./config-validator.js";
-import { parseAccountConfigKey } from "./account-config.js";
+import { isDeepStrictEqual } from "node:util";
 import {
     effectiveProtocolConfig,
     isProtocolKey,
@@ -49,27 +49,39 @@ export async function reconcileRuntimeConfiguration(
     const undo: Array<() => Promise<void>> = [];
     const createdAdapters = new Set<Adapter>();
     const wasStarted = app.isStarted || app.httpServer.listening;
-    // 所有候选 Schema 在关闭任何旧连接之前校验；错误不携带候选原文。
+    // 预验收与执行范围一致：完整重建的账号验完整配置，独立协议仅验其有效配置。
+    // 未变化的无关实例不会因历史残留字段而被重新验收；新增/修改字段仍必须严格校验。
     try {
-        for (const key of Object.keys(next)) {
-            const identity = parseAccountConfigKey(key);
-            if (!identity) continue;
-            const candidate = accountConfig(next, key, identity.platform, identity.account_id);
-            const schema = AdapterRegistry.getSchema(identity.platform);
+        for (const change of impact.accounts) {
+            if (change.action === "remove") continue;
+            const key = `${change.platform}.${change.accountId}`;
+            const candidate = accountConfig(next, key, change.platform, change.accountId);
+            const schema = AdapterRegistry.getSchema(change.platform);
             if (schema) ConfigValidator.validate(candidate, schema);
             for (const field of Object.keys(candidate)) {
                 if (!isProtocolKey(field)) continue;
-                const [name, version] = field.split(".");
-                if (!ProtocolRegistry.has(name, version)) throw new Error("协议尚未安装");
-                const protocolSchema = ProtocolRegistry.getSchema(field);
-                if (protocolSchema)
-                    ConfigValidator.validate(
-                        effectiveProtocolConfig(next, candidate, field),
-                        protocolSchema,
-                    );
+                validateProtocolCandidate(next, candidate, field);
             }
         }
-    } catch {
+        for (const change of impact.protocols) {
+            if (change.action === "remove") continue;
+            const key = `${change.platform}.${change.accountId}`;
+            validateProtocolCandidate(
+                next,
+                accountConfig(next, key, change.platform, change.accountId),
+                `${change.name}.${change.version}`,
+            );
+        }
+        for (const field of Object.keys(next.general)) {
+            if (
+                !isProtocolKey(field) ||
+                isDeepStrictEqual(previous.general[field], next.general[field])
+            )
+                continue;
+            validateProtocolCandidate(next, {}, field);
+        }
+    } catch (error) {
+        if (error instanceof RuntimeConfigurationRejectedError) throw error;
         throw new RuntimeConfigurationRejectedError("扩展配置校验失败，热配置未受理");
     }
     const affected = new Map(
@@ -217,6 +229,19 @@ export async function reconcileRuntimeConfiguration(
     } finally {
         for (const { drain } of drains) drain.release();
     }
+}
+
+function validateProtocolCandidate(
+    config: Required<BaseApp.Config>,
+    candidate: Record<string, unknown>,
+    field: string,
+): void {
+    const [name, version] = field.split(".");
+    if (!ProtocolRegistry.has(name, version))
+        throw new RuntimeConfigurationRejectedError(`协议 ${name}/${version} 尚未安装`);
+    const effective = effectiveProtocolConfig(config, candidate, field);
+    const schema = ProtocolRegistry.getSchema(field);
+    if (schema) ConfigValidator.validate(effective, schema);
 }
 
 class RuntimeStopTimeoutError extends Error {}

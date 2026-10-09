@@ -75,6 +75,14 @@ describe("配置修复共用应用事务", () => {
         expect(test.calls).toEqual([]);
         expect(test.application.hasOperation(test.request.id)).toBe(false);
     });
+    it("运行中的网关未明确授权重启时拒绝修复", async () => {
+        const test = fixture("running");
+        const { allowRestart, ...request } = test.request;
+        expect(allowRestart).toBe(true);
+        await expect(test.application.apply(request)).rejects.toThrow("明确确认重启");
+        expect(test.calls).toEqual([]);
+        expect(fs.readFileSync(test.file)).toEqual(test.original);
+    });
     it.each(["candidateRevision", "configRevision"])(
         "损坏日志的 %s 不能授权覆盖第三方配置",
         async field => {

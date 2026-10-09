@@ -22,9 +22,12 @@ it("Windows 目录有保护 ACL 并核验；文件只读核验不擅自改权限
     expect(scripts[0]).toContain("SetAccessRuleProtection($true,$false)");
     expect(scripts[0]).toContain("Set-Acl -LiteralPath");
     expect(scripts[1]).not.toContain("Set-Acl");
+    expect(scripts[0]).not.toContain("$legalInheritance");
+    expect(scripts[1]).toContain("$legalInheritance");
+    expect(scripts[1]).toContain("$inheritedCount -eq $allowedSids.Count");
     for (const script of scripts) {
         expect(script).toContain("GetAccessRules");
-        expect(script).toContain("IdentityReference.Value -notin $ids");
+        expect(script).toContain("$_ -notin $allowedSids");
         expect(script).not.toContain(location);
     }
 });

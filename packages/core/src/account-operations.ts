@@ -32,7 +32,7 @@ export interface AccountOperationDrain {
 }
 
 /** 先取得租约再执行 SDK 调用；拒绝仅表示尚未执行，不重试外部操作。 */
-export async function runAccountOperation<T>(
+export function runAccountOperation<T>(
     account: object,
     operation: () => T | Promise<T>,
 ): Promise<T> {
@@ -40,7 +40,7 @@ export async function runAccountOperation<T>(
     const parent = contexts.getStore();
     const reentrant = parent?.account === account && state.admitted.has(parent.token);
     if (state.closed || (state.blockers.size && !reentrant))
-        throw new AccountOperationRejectedError();
+        return Promise.reject(new AccountOperationRejectedError());
     const token = Symbol("account-operation");
     state.admitted.add(token);
     let resolvePending!: (value: T | PromiseLike<T>) => void;
@@ -56,12 +56,10 @@ export async function runAccountOperation<T>(
     } catch (error) {
         rejectPending(error);
     }
-    try {
-        return await pending;
-    } finally {
+    return pending.finally(() => {
         state.active.delete(pending);
         state.admitted.delete(token);
-    }
+    });
 }
 
 /** 停止后的旧实例不可在路由被替换后继续调用新账号连接。 */

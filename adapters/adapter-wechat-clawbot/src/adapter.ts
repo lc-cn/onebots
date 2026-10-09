@@ -270,7 +270,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         const account = new Account<"wechat-clawbot", WechatIlinkBot>(this, bot, config);
         let retired = false;
         // stop 终结此 Account 的生命周期；恢复由工厂创建新实例，不复活旧 SDK。
-        account.on("stop", () => {
+        account.on("stopping", () => {
             retired = true;
         });
         const acceptsEvent = () => !retired && this.accounts.get(account.account_id) === account;
@@ -363,6 +363,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("polling_error", (error: unknown) => {
+            if (!acceptsEvent()) return;
             if (error instanceof StaleCredentialFault) return;
             if (isTransientNetworkError(error)) {
                 this.logger.warn(
@@ -374,6 +375,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("listener_error", (payload: { event: string; error: unknown }) => {
+            if (!acceptsEvent()) return;
             this.logger.error(
                 `[${this.platform}] ${config.account_id} 事件监听器 ${payload.event} 执行失败:`,
                 payload.error,
