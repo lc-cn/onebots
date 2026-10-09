@@ -67,7 +67,9 @@ export async function reconcileHotConfiguration(
     const validRevision = /^[a-f0-9]{64}$/.test(source.revision);
     if (!validRevision) return false;
     if (operation.executionMode === "stored") {
-        if (operation.desired === "stopped" && port.hasLiveChildren()) return false;
+        if (operation.desired === "running" && operation.impact?.mode !== "none") return false;
+        // 在线 none 的 stored 路径只确认磁盘保存，不声称执行过实例动作。
+        if (operation.desired === "stopped" && port.runtimeStopped?.() !== true) return false;
         const committed =
             sourceDigest === operation.documentDigest &&
             (operation.candidateRevision === undefined ||
@@ -88,15 +90,13 @@ export async function reconcileHotConfiguration(
     // accepted/writing 意图在 applying 落盘前不可能派发，恢复文件不依赖已死亡实例的回执。
     // restoring 意图允许识别已提交的旧文档，不重复覆盖或重派原操作。
     if (["accepted", "writing", "restoring"].includes(operation.phase)) {
-        // 进程表为空不能排除 manager 重启后留下的孤儿网关；只接受绑定到原实例的权威回执。
+        // 空进程表不能排除孤儿实例；只接受原实例身份或持久生命周期确认的静止证据。
         const runtime = port.runtimeContext?.();
-        if (
-            !operation.runtimeBefore ||
-            !runtime ||
-            runtime.gatewayInstanceId !== operation.runtimeBefore.gatewayInstanceId ||
-            runtime.configVersion !== operation.runtimeBefore.configVersion
-        )
-            return false;
+        const originalRuntimeUnchanged =
+            operation.runtimeBefore &&
+            runtime?.gatewayInstanceId === operation.runtimeBefore.gatewayInstanceId &&
+            runtime?.configVersion === operation.runtimeBefore.configVersion;
+        if (!originalRuntimeUnchanged && port.runtimeStopped?.() !== true) return false;
         if (sourceDigest !== operation.previousDigest && sourceDigest !== operation.documentDigest)
             return false;
         if (sourceDigest === operation.documentDigest) {

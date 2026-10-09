@@ -41,6 +41,7 @@ export class TwitchHttpHost {
                     this.app.router.post(path, ctx => this.accept(path, ctx));
                 });
             } catch (error) {
+                // 部分注册也必须全部释放；所有权仅在完整注册成功后提交。
                 scope.close();
                 throw error;
             }
@@ -50,7 +51,7 @@ export class TwitchHttpHost {
         this.accountPaths.set(accountId, path);
     }
 
-    /** 释放已移除账号的路径；重连重新挂载，不累积失效 HTTP layer。 */
+    /** 释放旧账号的路径；工厂创建的新实例重新挂载，不累积失效 HTTP layer。 */
     unmount(accountId: string): void {
         const path = this.accountPaths.get(accountId);
         this.accountPaths.delete(accountId);

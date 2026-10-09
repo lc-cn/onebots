@@ -73,6 +73,7 @@ export async function startControlHost(options: ControlHostOptions) {
     const installDeploymentAuth = consumeDeploymentAuthenticationEnvironment();
     fs.mkdirSync(options.workspace, { recursive: true });
     const workspace = fs.realpathSync(options.workspace);
+    const bundledRuntimeRoot = options.runtimeRoot ?? path.resolve(import.meta.dirname, "../..");
     const windowsNativeMode = options.windowsHostPipe !== undefined;
     const filesystemControlSocket = supportsFilesystemControlSocket();
     // Windows foreground/candidate verification has no Unix socket. Production Windows service
@@ -157,7 +158,7 @@ export async function startControlHost(options: ControlHostOptions) {
     const driver = new NodeGatewayDriver({
         controlInstanceId: id,
         prepare: async () => {
-            const prepared = prepareGatewayWorkspace(workspace, options.runtimeRoot);
+            const prepared = prepareGatewayWorkspace(workspace, bundledRuntimeRoot);
             const generation = lifecycle.activeGeneration();
             return {
                 ...prepared,
@@ -248,7 +249,7 @@ export async function startControlHost(options: ControlHostOptions) {
         workspace,
         readVerified,
         undefined,
-        options.runtimeRoot ?? path.resolve(import.meta.dirname, "../.."),
+        bundledRuntimeRoot,
     );
     lifecycle = new GenerationActivationController({
         statePath: path.join(controlDirectory(workspace), "active-generation.json"),
@@ -297,7 +298,7 @@ export async function startControlHost(options: ControlHostOptions) {
             configuration = new ControlConfigurationService({
                 directory: path.join(controlDirectory(workspace), "configuration"),
                 configFile: path.join(workspace, "config.yaml"),
-                runtimeRoot: options.runtimeRoot ?? process.cwd(),
+                runtimeRoot: bundledRuntimeRoot,
                 generations,
                 application: configurationApplication,
                 activeGeneration: () => lifecycle.activeGeneration(),

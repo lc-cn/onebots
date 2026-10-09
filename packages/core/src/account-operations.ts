@@ -43,16 +43,19 @@ export function runAccountOperation<T>(
         return Promise.reject(new AccountOperationRejectedError());
     const token = Symbol("account-operation");
     state.admitted.add(token);
-    let result: T | Promise<T>;
-    try {
-        // 准入后的同步前缀立即执行；fire-and-forget 事件分发不能被额外微任务延迟。
-        result = contexts.run({ account, token }, operation);
-    } catch (error) {
-        state.admitted.delete(token);
-        return Promise.reject(error);
-    }
-    const pending = Promise.resolve(result);
+    let resolvePending!: (value: T | PromiseLike<T>) => void;
+    let rejectPending!: (reason: unknown) => void;
+    const pending = new Promise<T>((resolve, reject) => {
+        resolvePending = resolve;
+        rejectPending = reject;
+    });
     state.active.add(pending);
+    // 先公布租约，再同步启动回调：保持原 dispatch 的投递起始时序，同时覆盖回调重入。
+    try {
+        resolvePending(contexts.run({ account, token }, operation));
+    } catch (error) {
+        rejectPending(error);
+    }
     return pending.finally(() => {
         state.active.delete(pending);
         state.admitted.delete(token);
@@ -64,7 +67,7 @@ export function closeAccountOperations(account: object): void {
     stateFor(account).closed = true;
 }
 
-/** 同一账号显式重新启动时开启新入口；旧操作 token 已随完成失效。 */
+/** 候选账号首次启动时开启入口；Account.stop 后禁止复用旧生命周期。 */
 export function openAccountOperations(account: object): void {
     stateFor(account).closed = false;
 }

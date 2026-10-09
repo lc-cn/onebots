@@ -174,7 +174,6 @@ export class InstagramAdapter extends Adapter<InstagramClient, "instagram"> {
         );
         runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async () => {
-            runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
             try {
                 await client.start();
                 account.status = AccountStatus.Online;

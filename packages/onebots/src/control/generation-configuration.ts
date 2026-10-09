@@ -1,18 +1,21 @@
 import path from "node:path";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
 import { ConfigurationConflictError } from "../configuration/configuration-store.js";
-import { verifyConfiguration } from "../configuration/configuration-verify.js";
-import { recoverConfigurationVerifications } from "../configuration/configuration-verify.js";
+import {
+    verifyConfiguration,
+    recoverConfigurationVerifications,
+} from "../configuration/configuration-verify.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
 import type { VerifiedGeneration } from "../installation/generation-store.js";
 import { getConfiguredPluginSelection } from "../runtime-plugin-selection.js";
 import type { ConfigurationImpact } from "@onebots/core";
 
-/** 在生命周期队列内验证候选宿主与当前配置；安装验证不能替代业务配置验证。 */
+/** 使用所选运行版本隔离验证配置；激活复核与应用 CAS 仍由生命周期事务保护。 */
 export class GenerationConfigurationVerifier {
     private readonly source: ConfigurationFile;
     private readonly abort = new AbortController();
     private readonly pending = new Set<Promise<unknown>>();
+    private workersBlocked = false;
     constructor(
         private readonly workspace: string,
         private readonly readVerified: (id: string) => VerifiedGeneration,
@@ -20,10 +23,15 @@ export class GenerationConfigurationVerifier {
         private readonly bundledRuntimeRoot = path.resolve(import.meta.dirname, "../.."),
     ) {
         this.source = new ConfigurationFile(path.join(workspace, "config.yaml"));
+        // 宿主在工作区独占锁下构造本服务；冷恢复不能遗漏影响规划的独立私有目录。
+        this.recoverWorkers();
     }
 
     verify(generation: VerifiedGeneration, expectedConfigRevision?: string): Promise<() => void> {
         if (this.abort.signal.aborted) return Promise.reject(new Error("版本验证已关闭"));
+        // 当前进程已登记的 worker 由 pending/close 管理；不能把并发规划误认成冷启动孤儿。
+        if (this.pending.size === 0) this.recoverWorkers();
+        if (this.workersBlocked) return Promise.reject(new Error("配置验证进程归属尚待核实"));
         const work = this.validate(generation, expectedConfigRevision);
         this.pending.add(work);
         void work
@@ -46,11 +54,28 @@ export class GenerationConfigurationVerifier {
         after: Record<string, unknown>,
     ): Promise<ConfigurationImpact> {
         if (this.abort.signal.aborted) return Promise.reject(new Error("版本验证已关闭"));
+        if (this.pending.size === 0) this.recoverWorkers();
+        if (this.workersBlocked) return Promise.reject(new Error("配置验证进程归属尚待核实"));
         const configured = getConfiguredPluginSelection(after, true);
+        let previous: ReturnType<typeof getConfiguredPluginSelection>;
+        try {
+            previous = getConfiguredPluginSelection(before, true);
+        } catch {
+            // 语义损坏的旧 plugins 不应阻止有效候选修复；隔离 worker 独立核实坏基线。
+        }
         const selection = {
-            adapters: configured?.adapters ?? [],
-            protocols: configured?.protocols ?? [],
-            applications: configured?.applications ?? [],
+            adapters: [
+                ...new Set([...(previous?.adapters ?? []), ...(configured?.adapters ?? [])]),
+            ],
+            protocols: [
+                ...new Set([...(previous?.protocols ?? []), ...(configured?.protocols ?? [])]),
+            ],
+            applications: [
+                ...new Set([
+                    ...(previous?.applications ?? []),
+                    ...(configured?.applications ?? []),
+                ]),
+            ],
         };
         const runtime = generation
             ? resolveGenerationRuntime(generation, selection)
@@ -60,9 +85,6 @@ export class GenerationConfigurationVerifier {
             ".control",
             "application-verification-workers",
         );
-        const recovery = recoverConfigurationVerifications(privateRoot);
-        if (recovery.blocked.length)
-            return Promise.reject(new Error("配置影响检查进程或临时文件归属尚待核实"));
         const work = this.verifyRuntime({
             ...runtime,
             hostEntrypoint: generation
@@ -72,6 +94,7 @@ export class GenerationConfigurationVerifier {
             document: after,
             previousDocument: before,
             signal: this.abort.signal,
+            // 规划有界且不信任调用方回执；进入生命周期队列后仍复核源版本与运行版本。
             timeoutMs: 15_000,
         }).then(result => {
             if (!result.valid || !result.impact) throw new Error("配置影响无法确认，请重新验证");
@@ -84,6 +107,25 @@ export class GenerationConfigurationVerifier {
                 // 异常交给应用事务处理，这里只清理生命周期登记。
             });
         return work;
+    }
+
+    private recoverWorkers(): void {
+        if (process.platform === "win32") return; // 当前隔离验证不创建 Windows worker。
+        for (const name of [
+            "activation-verification-workers",
+            "application-verification-workers",
+        ]) {
+            try {
+                if (
+                    recoverConfigurationVerifications(path.join(this.workspace, ".control", name))
+                        .blocked.length
+                )
+                    this.workersBlocked = true;
+            } catch {
+                // 保留所有权记录与敏感请求，不推断历史进程已经退出。
+                this.workersBlocked = true;
+            }
+        }
     }
 
     private async validate(

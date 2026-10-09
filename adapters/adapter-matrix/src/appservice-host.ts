@@ -55,6 +55,7 @@ export class MatrixAppserviceHost {
                     );
                 });
             } catch (error) {
+                // 回滚完整路由组，避免部分挂载和无法重试的幽灵所有权。
                 scope.close();
                 throw error;
             }

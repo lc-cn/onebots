@@ -5,6 +5,7 @@ import type { VerifiedGeneration } from "../installation/generation-store.js";
 import { GenerationConfigurationVerifier } from "./generation-configuration.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
 import { allocateConfigurationVerification } from "../configuration/configuration-verify-ownership.js";
+import type { verifyConfiguration } from "../configuration/configuration-verify.js";
 vi.mock("../installation/generation-runtime.js", () => ({ resolveGenerationRuntime: vi.fn() }));
 const roots: string[] = [];
 afterEach(() => {
@@ -30,7 +31,7 @@ function fixture() {
         dependencyVersion: target.id,
         selection,
     }));
-    const verify = vi.fn(async () => ({ valid: true, issues: [] }));
+    const verify = vi.fn<typeof verifyConfiguration>(async () => ({ valid: true, issues: [] }));
     const bundledRuntimeRoot = path.join(root, "bundled-runtime");
     const service = new GenerationConfigurationVerifier(
         root,
@@ -136,3 +137,127 @@ it("影响规划先恢复自己的 worker 目录，归属不明时拒绝启动�
     await expect(f.service.planImpact(null, {}, {})).rejects.toThrow("归属尚待核实");
     expect(f.verify).not.toHaveBeenCalled();
 });
+
+it("移除唯一自定义协议仍载入before注册，平台不会被误判重连", async () => {
+    const f = fixture();
+    const impact = {
+        mode: "hot" as const,
+        accounts: [],
+        protocols: [],
+        dynamicFields: [],
+        restartReasons: [],
+    };
+    f.verify.mockResolvedValue({ valid: true, issues: [], impact });
+    await f.service.planImpact(null, { "mock.bot": { "custom.v1": {} } }, { "mock.bot": {} });
+    expect(f.verify).toHaveBeenCalledWith(
+        expect.objectContaining({
+            selection: { adapters: ["mock"], protocols: ["custom-v1"], applications: [] },
+        }),
+    );
+});
+
+it("损坏基线的plugins不阻止有效候选进入隔离repair规划", async () => {
+    const f = fixture();
+    const impact = {
+        mode: "restart" as const,
+        accounts: [],
+        protocols: [],
+        dynamicFields: [],
+        restartReasons: ["invalid-configuration-baseline"],
+    };
+    f.verify.mockResolvedValue({ valid: true, issues: [], impact });
+    expect(await f.service.planImpact(null, { plugins: false }, { "mock.bot": {} })).toEqual(
+        impact,
+    );
+    expect(f.verify).toHaveBeenCalledWith(
+        expect.objectContaining({
+            selection: { adapters: ["mock"], protocols: [], applications: [] },
+        }),
+    );
+});
+
+it("当前宿主登记的并发 worker 不当成冷恢复孤儿阻断第二次规划", async () => {
+    const f = fixture();
+    let release!: () => void;
+    const waiting = new Promise<void>(resolve => {
+        release = resolve;
+    });
+    const impact = {
+        mode: "none" as const,
+        accounts: [],
+        protocols: [],
+        dynamicFields: [],
+        restartReasons: [],
+    };
+    f.verify.mockImplementation(async input => {
+        if (f.verify.mock.calls.length === 1) allocateConfigurationVerification(input.privateRoot);
+        await waiting;
+        return { valid: true, issues: [], impact };
+    });
+    const first = f.service.planImpact(null, {}, {});
+    const second = f.service.planImpact(null, {}, {});
+    expect(f.verify).toHaveBeenCalledTimes(2);
+    release();
+    expect(await Promise.all([first, second])).toEqual([impact, impact]);
+    await f.service.close();
+});
+
+it("权威规划沿用明确的运行根且明确限制规划时间", async () => {
+    const root = fs.mkdtempSync("/tmp/ob-impact-bound-");
+    roots.push(root);
+    const impact = {
+        mode: "none" as const,
+        accounts: [],
+        protocols: [],
+        dynamicFields: [],
+        restartReasons: [],
+    };
+    const verify = vi.fn(async () => ({ valid: true, issues: [], impact }));
+    const runtimeRoot = path.join(root, "installed-host");
+    const service = new GenerationConfigurationVerifier(
+        root,
+        () => {
+            throw new Error("unexpected generation");
+        },
+        verify,
+        runtimeRoot,
+    );
+    expect(await service.planImpact(null, {}, {})).toEqual(impact);
+    expect(verify).toHaveBeenCalledWith(
+        expect.objectContaining({
+            runtimeRoot,
+            timeoutMs: 15_000,
+            privateRoot: path.join(root, ".control/application-verification-workers"),
+            previousDocument: {},
+        }),
+    );
+    await service.close();
+});
+
+it.skipIf(process.platform === "win32")(
+    "冷恢复不能遗漏应用规划 worker，未知归属保持请求并阻止新验证",
+    async () => {
+        const root = fs.mkdtempSync("/tmp/ob-impact-recovery-");
+        roots.push(root);
+        const privateRoot = path.join(root, ".control/application-verification-workers");
+        const { directory } = allocateConfigurationVerification(privateRoot);
+        // 活着的旧父进程不是静止证据；不得删除请求或擅自杀任何历史 PID。
+        fs.writeFileSync(path.join(directory, "request.json"), "private-test-request", {
+            mode: 0o600,
+        });
+        const verify = vi.fn(async () => ({ valid: true, issues: [] }));
+        const service = new GenerationConfigurationVerifier(
+            root,
+            () => {
+                throw new Error("unexpected generation");
+            },
+            verify,
+        );
+        await expect(service.planImpact(null, {}, {})).rejects.toThrow("归属尚待核实");
+        expect(verify).not.toHaveBeenCalled();
+        expect(fs.readFileSync(path.join(directory, "request.json"), "utf8")).toBe(
+            "private-test-request",
+        );
+        await service.close();
+    },
+);

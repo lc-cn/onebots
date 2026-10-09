@@ -66,6 +66,8 @@ export interface GenerationActivationOptions {
 
 /** 仅供可信配置服务使用；事务中必须 await 操作，不得调用外层 facade。 */
 export interface ConfigurationTransactionPort {
+    /** 必须由持久生命周期事实证明静止，不以当前驱动的空 children map 推断。 */
+    runtimeStopped?(): boolean;
     runtimeContext?(): RuntimeConfigurationContext | undefined;
     queryRuntimeConfiguration?(input: {
         id: string;
@@ -100,6 +102,7 @@ export type ConfigurationRecoveryTransactionPort = Pick<
     ConfigurationTransactionPort,
     | "activeGenerationId"
     | "hasLiveChildren"
+    | "runtimeStopped"
     | "gatewayStatus"
     | "runtimeContext"
     | "queryRuntimeConfiguration"
@@ -254,6 +257,16 @@ export class GenerationActivationController {
             };
             const pending = new Set<Promise<unknown>>();
             const port: ConfigurationRecoveryTransactionPort = {
+                runtimeStopped: () => {
+                    check();
+                    const state = this.options.gateway.status();
+                    return (
+                        !state.recoveryRequired &&
+                        !state.instance &&
+                        ["stopped", "failed"].includes(state.actual) &&
+                        !this.options.hasLiveChildren()
+                    );
+                },
                 ...(this.options.runtimeConfiguration
                     ? {
                           runtimeContext: () => {

@@ -36,17 +36,48 @@ function protocol(overrides: Partial<Protocol> = {}): Protocol {
 }
 
 describe("Account lifecycle", () => {
-    it("同一账号 stop 后再次 start 仍保留生命周期监听器", async () => {
+    it("并发停止只调用一次清理，停止期间及之后禁止同实例重新启动", async () => {
         const account = createAccount();
-        const start = vi.fn();
-        const stop = vi.fn();
-        account.on("start", start);
-        account.on("stop", stop);
-        await account.start();
-        await account.stop();
-        await account.start();
-        expect(start).toHaveBeenCalledTimes(2);
-        expect(stop).toHaveBeenCalledOnce();
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const cleanup = vi.fn(() => pending);
+        const startup = vi.fn();
+        const phases: string[] = [];
+        const retired = vi.fn(() => {
+            phases.push("stopping");
+        });
+        account.on("stopping", retired);
+        account.on("start", startup);
+        account.on("stop", cleanup);
+        const selected = protocol({
+            stop: vi.fn(async () => {
+                phases.push("protocol");
+            }),
+        });
+        account.protocols = [selected];
+        const first = account.stop();
+        expect(retired).toHaveBeenCalledOnce();
+        expect(phases).toEqual(["stopping"]);
+        const second = account.stop(true);
+        expect(second).toBe(first);
+        await expect(account.start()).rejects.toThrow("账号资源已释放");
+        try {
+            await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce());
+            expect(selected.stop).toHaveBeenCalledOnce();
+            expect(phases).toEqual(["stopping", "protocol"]);
+            expect(startup).not.toHaveBeenCalled();
+        } finally {
+            release();
+            await first;
+        }
+        expect(account.stop()).toBe(first);
+        await expect(account.start()).rejects.toThrow("账号资源已释放");
+        expect(cleanup).toHaveBeenCalledOnce();
+        expect(startup).not.toHaveBeenCalled();
+        expect(account.listenerCount("start")).toBe(0);
+        expect(account.listenerCount("stop")).toBe(0);
     });
     it("停止后不执行已快照但尚未开始的启动监听器", async () => {
         const account = createAccount();
@@ -287,7 +318,7 @@ describe("Account lifecycle", () => {
         await expect(account.stop()).rejects.toThrow("protocol failed");
         expect(secondStop).toHaveBeenCalledOnce();
         expect(accountStop).toHaveBeenCalledOnce();
-        expect(account.listenerCount("stop")).toBe(1);
+        expect(account.listenerCount("stop")).toBe(0);
         expect(account.protocols.map(item => item.lifecycleStatus)).toEqual(["failed", "stopped"]);
     });
 });

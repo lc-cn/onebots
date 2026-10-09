@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import { BaseApp, SqliteDB, type Account } from "onebots";
+import { BaseApp, SqliteDB, AccountStatus, emitAllAwaited, type Account } from "onebots";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WechatClawbotAdapter } from "./adapter.js";
 import type { IlinkSession } from "./sdk/ilink-types.js";
@@ -89,6 +89,7 @@ describe("WechatClawbotAdapter 身份契约", () => {
                     "pair_code",
                 ]);
             } finally {
+                // 先放行挂起的协议清理，断言失败时也不阻塞实例回收。
                 releaseStop?.();
                 await Promise.allSettled(
                     [stopping ?? old.stop(), replacement?.stop()].filter(Boolean),
@@ -96,6 +97,60 @@ describe("WechatClawbotAdapter 身份契约", () => {
             }
         },
     );
+
+    it.each(["ready", "message"])("%s 异步读取身份期间停止，不复活状态或投递消息", async event => {
+        const old = adapter.createAccount(config);
+        adapter.accounts.set(config.account_id, old);
+        const session: IlinkSession = {
+            token: "fixture",
+            accountId: "fixture-bot",
+            baseUrl: "https://example.test",
+            cdnBaseUrl: "https://example.test",
+        };
+        let resolveSession: ((session: IlinkSession) => void) | undefined;
+        const getSession = vi.spyOn(old.client, "getSession").mockReturnValue(
+            new Promise(resolve => {
+                resolveSession = resolve;
+            }),
+        );
+        const dispatch = vi.spyOn(old, "dispatchAwaited").mockResolvedValue();
+        const message = {
+            id: 42,
+            type: "text",
+            chat: { id: "peer", type: "private" },
+            from: { id: "peer" },
+            date: 1_700_000_000_000,
+            text: "hello",
+            raw: {
+                message_id: 42,
+                message_type: 1,
+                from_user_id: "peer",
+                item_list: [{ type: ItemKind.Text, text_item: { text: "hello" } }],
+            },
+        };
+        const pending =
+            event === "ready"
+                ? emitAllAwaited(old.client, "ready")
+                : emitAllAwaited(old.client, "message", message);
+        expect(getSession).toHaveBeenCalledOnce();
+        await old.stop();
+        resolveSession?.(session);
+        await pending;
+        expect(old.status).not.toBe(AccountStatus.Online);
+        expect(old.nickname).not.toBe("fixture-bot");
+        getSession.mockClear();
+        await emitAllAwaited(old.client, "ready");
+        await emitAllAwaited(old.client, "message", message);
+        expect(getSession).not.toHaveBeenCalled();
+        expect(dispatch).not.toHaveBeenCalled();
+        const current = adapter.createAccount(config);
+        adapter.accounts.set(config.account_id, current);
+        vi.spyOn(current.client, "getSession").mockResolvedValue(session);
+        await emitAllAwaited(current.client, "ready");
+        expect(current.status).toBe(AccountStatus.Online);
+        expect(current.nickname).toBe("fixture-bot");
+        await current.stop();
+    });
 
     it("扫码窗口自动抬高账号有效启动边界并公开到账号摘要", () => {
         expect(adapter.resolveAccountStartupTimeoutSeconds(config)).toBe(480);

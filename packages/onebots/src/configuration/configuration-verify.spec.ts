@@ -130,6 +130,19 @@ describe("配置隔离验证", () => {
                 valid: true,
                 impact: { mode: "restart", restartReasons: ["invalid-configuration-baseline"] },
             });
+            for (const previousDocument of [undefined, {}, { "mock.bot": null }]) {
+                for (const protocol of ["not-a-protocol-object", ["not-a-protocol-object"]]) {
+                    const invalidCandidate = await verifyConfiguration({
+                        runtimeRoot,
+                        selection: { adapters: ["mock"], protocols: [], applications: [] },
+                        previousDocument,
+                        document: { "mock.bot": { "onebot.v11": protocol } },
+                    });
+                    expect(invalidCandidate.valid).toBe(false);
+                    expect(invalidCandidate).not.toHaveProperty("impact");
+                    expect(JSON.stringify(invalidCandidate)).not.toContain("not-a-protocol-object");
+                }
+            }
             const large = await verifyConfiguration({
                 runtimeRoot,
                 selection: { adapters: ["mock"], protocols: [], applications: [] },

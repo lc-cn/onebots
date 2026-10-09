@@ -83,8 +83,7 @@ export function createExclusiveWindowsServiceDirectory(
     const script = String.raw`
 $ErrorActionPreference='Stop'
 $p=${JSON.stringify(directory)}
-$ownerSid='S-1-5-32-544'
-$allowedSids=@($ownerSid,'S-1-5-18')
+${windowsAclPrincipals("'S-1-5-32-544'", ["'S-1-5-32-544'", "'S-1-5-18'"])}
 $temporary=$null
 $stage='ancestor'
 try {
@@ -98,17 +97,7 @@ while($ancestor){
   $ancestor=$next
 }
 $stage='acl-build'
-$acl=New-Object System.Security.AccessControl.DirectorySecurity
-$acl.SetAccessRuleProtection($true,$false)
-$inherit=[System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
-$prop=[System.Security.AccessControl.PropagationFlags]::None
-$allow=[System.Security.AccessControl.AccessControlType]::Allow
-foreach($identity in $allowedSids){
-  $principal=New-Object System.Security.Principal.SecurityIdentifier($identity)
-  $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($principal,'FullControl',$inherit,$prop,$allow)
-  $acl.AddAccessRule($rule)|Out-Null
-}
-$acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($ownerSid)))
+${windowsFullControlAclBuilder("directory")}
 $stage='exclusive-create'
 if([IO.Directory]::Exists($p)){throw 'target exists'}
 $temporary=[IO.Path]::Combine($parentPath,'.onebots-directory-'+[Guid]::NewGuid().ToString('N'))
@@ -127,12 +116,8 @@ if($PSVersionTable.PSEdition -eq 'Desktop'){
 } elseif($PSVersionTable.PSEdition -eq 'Core'){
   $check=[System.IO.FileSystemAclExtensions]::GetAccessControl($item)
 } else {throw 'unsupported powershell runtime'}
-$rules=@($check.GetAccessRules($true,$true,[System.Security.Principal.SecurityIdentifier]))
-$ids=@($rules|ForEach-Object{$_.IdentityReference.Value}|Sort-Object -Unique)
-$owner=$check.GetOwner([System.Security.Principal.SecurityIdentifier]).Value
-$bad=@($rules|Where-Object{$_.IsInherited -or $_.AccessControlType -ne 'Allow' -or $_.InheritanceFlags -ne $inherit -or $_.PropagationFlags -ne $prop -or $_.FileSystemRights -ne [System.Security.AccessControl.FileSystemRights]::FullControl})
 $stage='verify'
-if(-not $check.AreAccessRulesProtected -or $owner -ne $ownerSid -or $rules.Count -ne 2 -or $ids.Count -ne 2 -or $ids[0] -notin $allowedSids -or $ids[1] -notin $allowedSids -or $bad.Count -ne 0){throw 'unsafe acl'}
+${windowsFullControlAclVerifier("directory")}
 $encoded=[Convert]::ToBase64String($check.GetSecurityDescriptorBinaryForm())
 [Console]::Out.Write('{"secured":true,"sddl":"'+$encoded+'"}')
 } catch {

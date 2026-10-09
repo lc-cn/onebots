@@ -1,6 +1,6 @@
 import type { BaseApp } from "onebots";
 import { createServer } from "node:http";
-import { Router } from "../../../packages/core/src/router.js";
+import { Router, HttpRouteConflictError } from "../../../packages/core/src/router.js";
 import { describe, expect, it, vi } from "vitest";
 import { TwitchHttpHost } from "./http-host.js";
 import type { TwitchClient } from "./client.js";
@@ -18,33 +18,31 @@ interface TestContext {
 type Handler = (ctx: TestContext) => Promise<void>;
 
 describe("TwitchHttpHost", () => {
-    it("卸载后释放路由并允许重新挂载", () => {
+    it("真实路由部分注册失败完整回滚，修正冲突后可重试并释放、重新挂载", () => {
         const router = new Router(createServer());
         const current = client();
         const host = new TwitchHttpHost({ router } as unknown as BaseApp, () => current);
-        try {
-            host.mount("account", current);
-            expect(router.stack).toHaveLength(1);
-            host.unmount("account");
-            expect(router.stack).toHaveLength(0);
-            host.mount("account", current);
-            expect(router.stack).toHaveLength(1);
-        } finally {
-            router.cleanup();
-        }
-    });
-
-    it("路由注册冲突回滚作用域，清除冲突后可重试", () => {
-        const router = new Router(createServer());
         const blocker = router.createRegistrationScope({ platform: "other" });
-        blocker.run(() => router.post("/twitch/events", () => undefined));
-        const current = client();
-        const host = new TwitchHttpHost({ router } as unknown as BaseApp, () => current);
         try {
-            expect(() => host.mount("account", current)).toThrow();
+            blocker.run(() => router.post("/twitch/events", () => undefined));
+            try {
+                host.mount("current", current);
+                throw new Error("应拒绝重复路由");
+            } catch (error) {
+                expect(error).toBeInstanceOf(HttpRouteConflictError);
+                expect(error).toMatchObject({
+                    registeringOwner: { platform: "twitch" },
+                    existingOwner: { platform: "other" },
+                });
+            }
             expect(router.stack).toHaveLength(1);
             blocker.close();
-            host.mount("account", current);
+            expect(router.stack).toHaveLength(0);
+            host.mount("current", current);
+            expect(router.stack).toHaveLength(1);
+            host.unmount("current");
+            expect(router.stack).toHaveLength(0);
+            host.mount("current", current);
             expect(router.stack).toHaveLength(1);
         } finally {
             router.cleanup();

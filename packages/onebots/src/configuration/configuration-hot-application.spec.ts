@@ -27,6 +27,7 @@ function fixture(outcome: "applied" | "rolled_back" | "unknown" | "rejected" = "
     const port: ConfigurationTransactionPort = {
         activeGenerationId: () => null,
         hasLiveChildren: () => true,
+        runtimeStopped: () => false,
         gatewayStatus: () => ({ desired: "running" }),
         suspend: vi.fn(async () => ({ status: "succeeded" })),
         start: vi.fn(async () => ({ status: "succeeded" })),
@@ -190,6 +191,7 @@ it("writing 阶段源文件已经提交但 replace 抛错，查询恢复旧文�
     expect(test.source.read().document).toEqual(test.before);
     expect(snapshot).not.toHaveBeenCalled();
     expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
+    expect(snapshot).not.toHaveBeenCalled();
 });
 
 it("无法确认原运行实例时，即使进程表为空也不恢复候选文件", async () => {
@@ -234,6 +236,7 @@ it("stored 源文件提交后抛错，查询核对候选后收敛且不启动网
     const test = fixture();
     test.port.gatewayStatus = () => ({ desired: "stopped" });
     test.port.hasLiveChildren = () => false;
+    test.port.runtimeStopped = () => true;
     const replace = test.source.replace;
     vi.spyOn(test.source, "replace").mockImplementation((expected, document) => {
         replace(expected, document);
@@ -294,7 +297,7 @@ it("进程级变更必须明确授权，拒绝之前不写文件或派发热操�
     expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
 });
 
-it("快照创建失败后按 writing 意图恢复已提交源文件且不派发", async () => {
+it("源写确认后快照失败，冷恢复回旧文档解除封锁且不派发", async () => {
     const test = fixture();
     vi.spyOn(test.options.runtime!, "snapshot").mockImplementation(() => {
         throw new Error("snapshot failed");
@@ -310,6 +313,46 @@ it("快照创建失败后按 writing 意图恢复已提交源文件且不派发"
         status: "failed",
     });
     expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
+    expect(test.source.read().document).toEqual(test.before);
+});
+
+it("驱动 children 为空但无持久静止或原实例证据，不恢复候选或解除门禁", async () => {
+    const test = fixture();
+    const replace = test.source.replace;
+    vi.spyOn(test.source, "replace").mockImplementation((expected, document) => {
+        replace(expected, document);
+        throw new Error("post-commit interruption");
+    });
+    await test.application.apply(test.request);
+    test.port.hasLiveChildren = () => false;
+    test.port.runtimeContext = () => undefined;
+    expect(await test.application.queryStatus(test.request.id)).toMatchObject({
+        recoveryRequired: true,
+    });
+    expect(test.source.read().document).toEqual(test.request.document);
+    expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
+});
+
+it("在线 none 的 stored 保存中断可核对磁盘收敛，不要求停止账号", async () => {
+    const test = fixture();
+    test.options.runtime = undefined;
+    const replace = test.source.replace;
+    vi.spyOn(test.source, "replace").mockImplementation((expected, document) => {
+        replace(expected, document);
+        throw new Error("post-commit interruption");
+    });
+    const request = { ...test.request, document: test.before };
+    expect(await test.application.apply(request)).toMatchObject({
+        recoveryRequired: true,
+        executionMode: "stored",
+        impact: { mode: "none" },
+    });
+    expect(await test.application.queryStatus(request.id)).toMatchObject({
+        recoveryRequired: false,
+        status: "succeeded",
+    });
+    expect(test.port.start).not.toHaveBeenCalled();
+    expect(test.port.suspend).not.toHaveBeenCalled();
 });
 
 it("在线等效配置只同步运行身份，不启动或停止实例", async () => {

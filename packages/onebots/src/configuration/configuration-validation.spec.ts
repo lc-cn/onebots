@@ -76,6 +76,58 @@ function fixture() {
     };
 }
 describe("configuration validation receipts", () => {
+    it("两调用者同时等待上下文时，首个提交后第二个返回同一回执而不再次写入", async () => {
+        for (const rejectedContext of [false, true]) {
+            const test = fixture();
+            const receipt = await test.validation.validate(test.draft.id, test.draft.revision);
+            let release!: () => void;
+            const gate = new Promise<void>(resolve => {
+                release = resolve;
+            });
+            const original = await test.runtime();
+            let contexts = 0;
+            test.runtime.mockImplementation(async () => {
+                contexts++;
+                if (contexts === 2) {
+                    await gate;
+                    if (rejectedContext) throw new Error("context changed after original commit");
+                    return { ...original, fingerprint: "d".repeat(64) };
+                }
+                return original;
+            });
+            const first = test.validation.apply("concurrent-operation", receipt.receiptId!);
+            const second = new ConfigurationValidation(test.options).apply(
+                "concurrent-operation",
+                receipt.receiptId!,
+            );
+            const completed = await first;
+            release();
+            expect(await second).toEqual(completed);
+            expect(test.effects()).toBe(1);
+        }
+    });
+
+    it("上下文等待期间同编号由另一回执完成，迟到调用仍拒绝而非冒领回执", async () => {
+        const test = fixture();
+        const firstReceipt = await test.validation.validate(test.draft.id, test.draft.revision);
+        const secondReceipt = await test.validation.validate(test.draft.id, test.draft.revision);
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const original = await test.runtime();
+        let contexts = 0;
+        test.runtime.mockImplementation(async () => {
+            if (++contexts === 1) await gate;
+            return original;
+        });
+        const pending = test.validation.apply("shared-id", firstReceipt.receiptId!);
+        const rejected = expect(pending).rejects.toThrow("配置已发生变化");
+        await test.validation.apply("shared-id", secondReceipt.receiptId!);
+        release();
+        await rejected;
+        expect(test.effects()).toBe(1);
+    });
     it("回执写入中断不返回成功或半文件，下次可重新校验", async () => {
         const test = fixture();
         const original = fs.renameSync;

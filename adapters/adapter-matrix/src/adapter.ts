@@ -359,17 +359,13 @@ export class MatrixAdapter extends Adapter<MatrixClient, "matrix"> {
             );
         }
         account.on("start", async (signal: AbortSignal) => {
-            if (client.receiveMode === "appservice") {
-                runWithAdapterRouteScope(this, () =>
-                    this.appserviceHost.mount(account.account_id, client, account.path),
-                );
-            }
             try {
                 const identity = await client.start(signal);
                 account.status = AccountStatus.Online;
                 account.nickname = identity.user_id;
                 this.logger.info(`Matrix Bot ${identity.user_id} 已就绪（${client.receiveMode}）`);
             } catch (error) {
+                this.appserviceHost.unmount(account.account_id);
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动 Matrix Bot ${config.account_id} 失败`, error);
                 throw error;

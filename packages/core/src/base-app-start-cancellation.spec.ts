@@ -96,7 +96,7 @@ describe("BaseApp startup cancellation", () => {
         app.adapters.set("mock", adapter);
         const starting = app.start();
         await entered.promise;
-        await expect(app.reload(structuredClone(app.config))).rejects.toThrow("仍在启动");
+        await expect(app.reload(structuredClone(app.config))).rejects.toThrow("启动批次尚未完成");
         expect(app.adapters.get("mock")).toBe(adapter);
         pending.resolve();
         await starting;

@@ -52,7 +52,7 @@ import { getHostLifecycleState, type ManagedRuntimeStart } from "./host-lifecycl
 import {
     hasPendingRuntimeStop,
     reconcileRuntimeConfiguration,
-    settlePendingRuntimeStops,
+    waitForPendingRuntimeStops,
 } from "./runtime-reconcile.js";
 import {
     RuntimeConfigurationRejectedError,
@@ -554,6 +554,7 @@ export class BaseApp extends Koa {
         const state = getHostLifecycleState(this);
         if (state.starting) return;
         state.initializing = true;
+        state.startupSettled = false;
         state.queuedPlatforms = new Set([...this.adapters.keys()].map(String));
         const controller = new AbortController();
         state.controller = controller;
@@ -607,14 +608,15 @@ export class BaseApp extends Koa {
             await this.rollbackFailedStart(error);
         } finally {
             getHostLifecycleState(this).initializing = false;
+            getHostLifecycleState(this).startupSettled = true;
             getHostLifecycleState(this).queuedPlatforms?.clear();
             stopTimer();
         }
     }
     async reload(config: BaseApp.Config) {
         const lifecycle = getHostLifecycleState(this);
-        if (lifecycle.starting && !this.isStarted)
-            throw new ConfigError("网关仍在启动，暂不能重载配置");
+        if (lifecycle.starting && !lifecycle.startupSettled)
+            throw new ConfigError("网关启动批次尚未完成，暂不能完整重载配置；可使用局部热配置");
         if (hasPendingRuntimeStop(this))
             throw new ConfigError("旧实例停止结果未确定，暂不能重载配置");
         if (this.runtimeConfiguration) throw new ConfigError("配置热应用尚未完成");
@@ -758,12 +760,12 @@ export class BaseApp extends Koa {
 
     private async stopAttempt(): Promise<void> {
         await this.runtimeConfiguration?.catch(() => this.logger.error("停止前等待热配置失败"));
-        await settlePendingRuntimeStops(this);
         const stopTimer = this.enhancedLogger.start("Application stop");
         const failures = new FailureCollector();
 
         // 每个阶段都必须获得清理机会；完成后再统一传播扩展或资源失败。
         await failures.capture(() => this.lifecycle.stop());
+        await waitForPendingRuntimeStops(this);
         await failures.capture(() => this.stopAdapters(true));
         this.adapters.clear();
         await failures.capture(() => this.lifecycle.cleanup({ throwOnFailure: true }));

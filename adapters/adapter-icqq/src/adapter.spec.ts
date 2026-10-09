@@ -4,29 +4,27 @@ import { projectICQQFriendChange } from "./events.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BaseApp, SqliteDB, type Account } from "onebots";
+import { BaseApp, FailureCollector, SqliteDB, type Account } from "onebots";
 
 describe("ICQQ 账号统一 ID", () => {
     it.each(["stop", "replace", "stopping"])(
         "%s 后旧实例验证事件不污染同 ID 新账号",
         async boundary => {
             const directory = await mkdtemp(join(tmpdir(), "onebots-icqq-verification-"));
-            let database: SqliteDB | undefined;
-            let old: ReturnType<ICQQAdapter["createAccount"]> | undefined;
-            let replacement: ReturnType<ICQQAdapter["createAccount"]> | undefined;
-            let releaseStop: (() => void) | undefined;
-            let stopping: Promise<void> | undefined;
-            const logger = {
-                trace: vi.fn(),
-                debug: vi.fn(),
-                info: vi.fn(),
-                warn: vi.fn(),
-                error: vi.fn(),
-                fatal: vi.fn(),
-                mark: vi.fn(),
-            };
-            try {
-                database = new SqliteDB(join(directory, "state"));
+            const failures = new FailureCollector();
+            const cleanup: Array<() => void | Promise<void>> = [];
+            await failures.capture(async () => {
+                const database = new SqliteDB(join(directory, "state"));
+                cleanup.push(() => database.close());
+                const logger = {
+                    trace: vi.fn(),
+                    debug: vi.fn(),
+                    info: vi.fn(),
+                    warn: vi.fn(),
+                    error: vi.fn(),
+                    fatal: vi.fn(),
+                    mark: vi.fn(),
+                };
                 const adapter = new ICQQAdapter({
                     db: database,
                     config: { general: {} },
@@ -40,12 +38,15 @@ describe("ICQQ 账号统一 ID", () => {
                 adapter.on("verification:request", challenge);
                 adapter.on("verification:clear", cleared);
                 adapter.on("qrcode", qr);
-                old = adapter.createAccount(config);
+                const old = adapter.createAccount(config);
+                cleanup.unshift(() => old.stop());
                 adapter.accounts.set(config.account_id, old);
                 old.client.emit("qrcode", { image: Buffer.from("current challenge") });
                 expect(challenge).toHaveBeenCalledOnce();
                 expect(qr).toHaveBeenCalledOnce();
                 if (boundary === "stop") await old.stop();
+                let releaseStop: (() => void) | undefined;
+                let stopping: Promise<void> | undefined;
                 if (boundary === "stopping") {
                     const pending = new Promise<void>(resolve => {
                         releaseStop = resolve;
@@ -55,10 +56,15 @@ describe("ICQQ 账号统一 ID", () => {
                         lifecycleStatus: "ready",
                         stop: fakeStop,
                     } as never);
+                    // 原断言失败也必须先放行挂起清理，避免 teardown 永久等待。
+                    cleanup.unshift(() => {
+                        releaseStop?.();
+                    });
                     stopping = old.stop();
                     await vi.waitFor(() => expect(fakeStop).toHaveBeenCalledOnce());
                 }
-                replacement = adapter.createAccount(config);
+                const replacement = adapter.createAccount(config);
+                cleanup.unshift(() => replacement.stop());
                 if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
                 challenge.mockClear();
                 cleared.mockClear();
@@ -74,17 +80,12 @@ describe("ICQQ 账号统一 ID", () => {
                 replacement.client.emit("qrcode", { image: Buffer.from("new challenge") });
                 expect(challenge).toHaveBeenCalledOnce();
                 expect(qr).toHaveBeenCalledOnce();
-            } finally {
-                releaseStop?.();
-                await Promise.allSettled(
-                    [stopping ?? old?.stop(), replacement?.stop()].filter(Boolean),
-                );
-                try {
-                    database?.close();
-                } finally {
-                    await rm(directory, { recursive: true, force: true });
-                }
-            }
+                await replacement.stop();
+            });
+            // 保留原始断言失败，同时独立尝试每个实例、数据库和临时目录清理。
+            for (const operation of cleanup) await failures.capture(operation);
+            await failures.capture(() => rm(directory, { recursive: true, force: true }));
+            failures.throwIfAny("ICQQ 验证事件回归或清理失败");
         },
     );
     it("将配置中的数字 QQ 号恢复为 number 后投影 CommonEvent.bot_id", () => {

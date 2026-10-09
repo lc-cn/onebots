@@ -41,6 +41,8 @@ export class Account<
     #logger: Logger;
     #startGeneration = 0;
     #starting?: Promise<void>;
+    #stopping?: Promise<void>;
+    #stopped = false;
     #startController?: AbortController;
     #routeScope?: RouterRegistrationScope;
     readonly #protocolScopes = new Map<Protocol, RouterRegistrationScope>();
@@ -239,6 +241,10 @@ export class Account<
      * start 监听器会收到 AbortSignal；超时或 stop 时扩展应据此取消底层异步工作。
      */
     start(): Promise<void> {
+        if (this.#stopped)
+            return Promise.reject(
+                new ResourceError("账号资源已释放，不能再次启动；请创建新的账号实例"),
+            );
         if (this.#starting) return this.#starting;
         openAccountOperations(this);
         const generation = ++this.#startGeneration;
@@ -314,7 +320,9 @@ export class Account<
         }
     }
 
-    async stop(force?: boolean): Promise<void> {
+    stop(force?: boolean): Promise<void> {
+        if (this.#stopping) return this.#stopping;
+        this.#stopped = true;
         closeAccountOperations(this);
         this.#startGeneration += 1;
         this.#startController?.abort();
@@ -322,14 +330,27 @@ export class Account<
         this.#starting = undefined;
         this.#routeScope?.close();
         this.#routeScope = undefined;
+        // 先发布停止任务，再执行第三方钩子，重入和并发 stop 共用唯一清理。
+        let retiring!: Promise<void>;
+        this.#stopping = Promise.resolve().then(() => this.#finishStop(force, retiring));
+        // 退役监听器的同步前缀必须在 stop 返回前运行，阻断 SDK 的即时迟到事件。
+        retiring = emitAllAwaited(this, "stopping");
+        return this.#stopping;
+    }
+
+    async #finishStop(force: boolean | undefined, retiring: Promise<void>): Promise<void> {
         const failures = new FailureCollector();
         // 先发布退役边界，再等待协议关闭；平台 SDK 在排空期间产生的迟到事件必须立即失效。
-        await failures.capture(() => emitAllAwaited(this, "stopping"));
+        await failures.capture(() => retiring);
         for (const protocol of this.protocols) {
             await failures.capture(() => this.stopProtocol(protocol, force));
         }
-        // Account 支持显式 stop/start；保留生命周期监听器，下一次 start 才能重建连接与路由。
-        await failures.capture(() => emitAllAwaited(this, "stop"));
+        try {
+            await failures.capture(() => emitAllAwaited(this, "stop"));
+        } finally {
+            // stop 是终结操作；热恢复由 Adapter 工厂创建新的 Account 生命周期。
+            this.removeAllListeners();
+        }
         failures.throwIfAny(`${failures.size} 个账号停止操作失败`);
     }
 

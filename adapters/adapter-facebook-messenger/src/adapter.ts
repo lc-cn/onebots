@@ -208,7 +208,6 @@ export class FacebookMessengerAdapter extends Adapter<
         );
         runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async (signal: AbortSignal) => {
-            runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
             try {
                 await client.start(signal);
                 account.status = AccountStatus.Online;

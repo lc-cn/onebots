@@ -61,7 +61,7 @@ describe("Account.dispatch 调试旁路隔离", () => {
         expect(protocolDispatch).toHaveBeenCalledWith(event);
     });
 
-    it("message:dispatch 监听器正常时，行为不变", () => {
+    it("message:dispatch 监听器正常时，投递同步起始行为不变", () => {
         const emitted: unknown[] = [];
         const { account, protocolDispatch } = createAccount((event, payload) => {
             emitted.push({ event, payload });
@@ -72,6 +72,24 @@ describe("Account.dispatch 调试旁路隔离", () => {
 
         expect(protocolDispatch).toHaveBeenCalledWith(event);
         expect(emitted).toHaveLength(1);
+    });
+
+    it("操作回调同步抛错仍返回 rejected Promise，完成后租约不残留", async () => {
+        const { account } = createAccount(vi.fn());
+        let failure: Promise<unknown> | undefined;
+        expect(() => {
+            failure = account.runOperation(() => {
+                throw new Error("synchronous operation failed");
+            });
+        }).not.toThrow();
+        await expect(failure).rejects.toThrow("synchronous operation failed");
+        const drain = account.beginOperationDrain();
+        try {
+            await drain.settled(100);
+        } finally {
+            drain.release();
+        }
+        await expect(account.runOperation(() => "completed")).resolves.toBe("completed");
     });
 
     it("dispatchAwaited 等待异步协议完成", async () => {
