@@ -5,6 +5,7 @@ import yaml from "js-yaml";
 import {
     assertGatewaySnapshotFileSecurity,
     secureGatewaySnapshotDirectory,
+    secureGatewaySnapshotStagingFile,
 } from "./gateway-snapshot-security.js";
 
 /** 管理服务唯一写入：热应用与冷启动消费相同的去管理凭据、摘要绑定快照。 */
@@ -62,6 +63,8 @@ export function createGatewayConfigurationSnapshot(
             } finally {
                 fs.closeSync(descriptor);
             }
+            // Windows 默认 owner 未必是当前宿主；发布前初始化新文件，不修补既有快照。
+            secureGatewaySnapshotStagingFile(temporary);
             // 工作区唯一管理写者发布完整文件；rename 不会遗留崩溃时的双硬链接。
             fs.renameSync(temporary, configPath);
             if (process.platform !== "win32") {

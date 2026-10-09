@@ -1,14 +1,69 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import {
     assertGatewaySnapshotFileSecurity,
     secureGatewaySnapshotDirectory,
+    secureGatewaySnapshotStagingFile,
 } from "./gateway-snapshot-security.js";
+import { createGatewayConfigurationSnapshot } from "./gateway-configuration-snapshot.js";
 
 vi.mock("node:child_process", () => ({ execFileSync: vi.fn(() => "private") }));
 afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
+});
+it("新快照在发布前初始化文件 owner；复用既有快照不重写文件 ACL", () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ob-owner-publish-")));
+    try {
+        vi.stubGlobal("process", { ...process, platform: "win32" });
+        const publish = vi.spyOn(fs, "renameSync");
+        const first = createGatewayConfigurationSnapshot(root, {});
+        const scripts = vi
+            .mocked(execFileSync)
+            .mock.calls.map(call =>
+                Buffer.from(String(call[1]?.[4]), "base64").toString("utf16le"),
+            );
+        expect(scripts).toHaveLength(3);
+        expect(scripts[1]).toContain("FileSecurity");
+        expect(scripts[1]).toContain("Set-Acl -LiteralPath");
+        expect(scripts[1]).toContain("$acl.SetOwner");
+        expect(scripts[1]).not.toContain("$legalInheritance");
+        expect(scripts[2]).not.toContain("Set-Acl");
+        expect(vi.mocked(execFileSync).mock.invocationCallOrder[1]).toBeLessThan(
+            publish.mock.invocationCallOrder[0],
+        );
+        vi.mocked(execFileSync).mockClear();
+        expect(createGatewayConfigurationSnapshot(root, {})).toEqual(first);
+        const reusedScripts = vi
+            .mocked(execFileSync)
+            .mock.calls.map(call =>
+                Buffer.from(String(call[1]?.[4]), "base64").toString("utf16le"),
+            );
+        expect(reusedScripts).toHaveLength(2);
+        expect(reusedScripts[1]).not.toContain("Set-Acl");
+        expect(() => secureGatewaySnapshotStagingFile(first.configPath)).toThrow(
+            "网关临时快照无效",
+        );
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+it("文件 ACL 初始化失败不发布快照且清理本次临时文件", () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ob-owner-failed-")));
+    try {
+        vi.stubGlobal("process", { ...process, platform: "win32" });
+        vi.mocked(execFileSync)
+            .mockReturnValueOnce("private")
+            .mockReturnValueOnce("unsafe:acl-apply:read");
+        expect(() => createGatewayConfigurationSnapshot(root, {})).toThrow("阶段：acl-apply");
+        expect(fs.readdirSync(path.join(root, ".control", "configurations"))).toEqual([]);
+    } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+    }
 });
 it("Windows 目录有保护 ACL 并核验；文件只读核验不擅自改权限", () => {
     vi.stubGlobal("process", { ...process, platform: "win32" });

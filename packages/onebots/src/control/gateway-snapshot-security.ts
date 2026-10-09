@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import {
     windowsAclPrincipals,
     windowsFullControlAclBuilder,
@@ -28,7 +30,27 @@ export function assertGatewaySnapshotFileSecurity(file: string): void {
     verifyWindowsSnapshotPermissions(file, false);
 }
 
-function verifyWindowsSnapshotPermissions(location: string, secureDirectory: boolean): void {
+/** 仅初始化调用方以 wx 新建的私有 staging 文件，既有摘要文件不得走此入口。 */
+export function secureGatewaySnapshotStagingFile(file: string): void {
+    if (process.platform !== "win32") return;
+    const stat = fs.lstatSync(file);
+    if (
+        !/^\.snapshot-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+            path.basename(file),
+        ) ||
+        !stat.isFile() ||
+        stat.isSymbolicLink() ||
+        stat.nlink !== 1
+    )
+        throw new Error("网关临时快照无效");
+    verifyWindowsSnapshotPermissions(file, false, true);
+}
+
+function verifyWindowsSnapshotPermissions(
+    location: string,
+    secureDirectory: boolean,
+    initializeFile = false,
+): void {
     if (process.platform !== "win32") return;
     // 路径通过 Base64 传入固定脚本，不能把工作区名插入 PowerShell 源码。
     const encodedPath = Buffer.from(location, "utf8").toString("base64");
@@ -37,11 +59,11 @@ function verifyWindowsSnapshotPermissions(location: string, secureDirectory: boo
         "'S-1-5-18'",
         "'S-1-5-32-544'",
     ]);
-    const builder = windowsFullControlAclBuilder("directory");
-    // Node 创建的快照继承私有目录权限；只接受身份、数量和权限完全闭合的继承规则。
+    const builder = windowsFullControlAclBuilder(secureDirectory ? "directory" : "file");
+    // DACL 可继承但 owner 来自创建令牌。新文件显式初始化；既有文件只读核验。
     const verifier = windowsFullControlAclVerifier(
         secureDirectory ? "directory" : "file",
-        !secureDirectory,
+        !secureDirectory && !initializeFile,
     );
     const script = String.raw`
 $ErrorActionPreference='Stop'
@@ -53,7 +75,7 @@ if($item.PSIsContainer -ne $${secureDirectory ? "true" : "false"} -or (($item.At
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
 ${principals}
 ${
-    secureDirectory
+    secureDirectory || initializeFile
         ? String.raw`$stage='acl-build'
 ${builder}
 $stage='acl-apply'
