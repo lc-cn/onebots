@@ -1,0 +1,46 @@
+packages/core/src/base-app.ts
+  s_efe26f87c3b074::t_61145cc29ade5a 463-465
+adapters/adapter-icqq/src/adapter.ts
+  s_efe26f87c3b074::t_61145cc29ade5a 40
+packages/core/src/account.ts
+  s_efe26f87c3b074::t_61145cc29ade5a 326-327
+adapters/adapter-facebook-messenger/src/adapter.ts
+  s_efe26f87c3b074::t_61145cc29ade5a 220
+packages/onebots/src/configuration/configuration-verify.spec.ts
+  s_efe26f87c3b074::t_8d9ff7d62e5035 78-86
+adapters/adapter-wechat-clawbot/src/adapter.ts
+  s_efe26f87c3b074::t_61145cc29ade5a 275
+adapters/adapter-icqq/src/adapter.spec.ts
+  s_efe26f87c3b074::t_f41c0bfb7dedaa 10-25,27-70,75
+  s_efe26f87c3b074::t_271a1937053d93 71-74,77-82,84-85
+packages/onebots/src/control/tui-configuration.ts
+  s_efe26f87c3b074::t_61145cc29ade5a 213-215,227-228
+adapters/adapter-wechat-clawbot/src/adapter.spec.ts
+  s_efe26f87c3b074::t_f41c0bfb7dedaa 42-82
+  s_efe26f87c3b074::t_200a0880257301 83-85
+packages/onebots/src/configuration/configuration-verify.ts
+  s_efe26f87c3b074::t_61145cc29ade5a 92
+packages/core/src/base-app-start-cancellation.spec.ts
+  s_efe26f87c3b074::t_8d9ff7d62e5035 7,32-33,64-86
+adapters/adapter-facebook-messenger/src/adapter.spec.ts
+  s_efe26f87c3b074::t_5b4130bf9e50a9 2,31-72
+  s_efe26f87c3b074::t_3633b5963ff729 73-79
+packages/onebots/src/control/tui-configuration.spec.ts
+  s_efe26f87c3b074::t_e8646d7ecf3dad 69,79-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "758b25ae173f4f0ce14230015ec68c14dce31e07",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
