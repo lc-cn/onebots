@@ -1,0 +1,89 @@
+.changeset/friendly-douyin-adapter.md
+  s_efe26f87c3b074::t_41b23feb630f33 1-7
+README.md
+  s_efe26f87c3b074::t_12b001f824c2bc 173-219,226-254,261-288,295-363
+adapters/adapter-douyin/README.md
+  s_efe26f87c3b074::t_194bb7318884ca 1-26
+adapters/adapter-douyin/package.json
+  s_efe26f87c3b074::t_50bc15a206a5c5 1-47
+adapters/adapter-douyin/src/account.spec.ts
+  s_efe26f87c3b074::t_0fee4f1f8d03f6 1-375
+adapters/adapter-douyin/src/account.ts
+  s_efe26f87c3b074::t_8ad3c72b31a292 1-325
+adapters/adapter-douyin/src/adapter.spec.ts
+  s_efe26f87c3b074::t_ef0f03f12a0c65 1-278
+adapters/adapter-douyin/src/adapter.ts
+  s_efe26f87c3b074::t_93a9790ff73428 1-477
+adapters/adapter-douyin/src/capabilities.ts
+  s_efe26f87c3b074::t_48e6ea881c9370 1-64
+adapters/adapter-douyin/src/events.spec.ts
+  s_efe26f87c3b074::t_cb74c374aa44c4 1-178
+adapters/adapter-douyin/src/events.ts
+  s_efe26f87c3b074::t_19673b12ea882b 1-280
+adapters/adapter-douyin/src/index.ts
+  s_efe26f87c3b074::t_8c2797fd198726 1-57
+adapters/adapter-douyin/src/messages.spec.ts
+  s_efe26f87c3b074::t_22a730d1deda4f 1-171
+adapters/adapter-douyin/src/messages.ts
+  s_efe26f87c3b074::t_1e1947a88d64ac 1-176
+adapters/adapter-douyin/src/types.ts
+  s_efe26f87c3b074::t_ddda25ba3f1335 1-9
+adapters/adapter-douyin/src/verification-proxy.spec.ts
+  s_efe26f87c3b074::t_599ea1372662aa 1-181
+adapters/adapter-douyin/src/verification-proxy.ts
+  s_efe26f87c3b074::t_4e7bbf249fdaaf 1-211
+adapters/adapter-douyin/tsconfig.json
+  s_efe26f87c3b074::t_b453023ba74ba8 1-13
+development/package.json
+  s_efe26f87c3b074::t_e81b7b3c7b4d18 33
+docs/.vitepress/config.mts
+  s_efe26f87c3b074::t_be3d2ece2b0074 108,194,278,366
+docs/src/config/platform.md
+  s_efe26f87c3b074::t_8028ee85a8f6ff 506
+docs/src/en/config/platform.md
+  s_efe26f87c3b074::t_da25ed7f4fd027 175
+docs/src/en/guide/adapter-todo.md
+  s_efe26f87c3b074::t_ea1599e9d52e40 15
+docs/src/en/guide/adapter.md
+  s_efe26f87c3b074::t_5d16b16b6e28b7 18,105
+docs/src/en/platform/douyin.md
+  s_efe26f87c3b074::t_a124be2e7d888c 1-19
+docs/src/guide/adapter-todo.md
+  s_efe26f87c3b074::t_f5d59740b28fef 16
+docs/src/guide/adapter.md
+  s_efe26f87c3b074::t_23bd6b19d9f648 23,115
+docs/src/platform/douyin.md
+  s_efe26f87c3b074::t_23a8c8728de391 1-31
+packages/onebots/src/extension-capability-catalog.json
+  s_efe26f87c3b074::t_75ffd72b3129cb 10-12,1004-1206
+packages/onebots/src/extension-catalog.ts
+  s_efe26f87c3b074::t_14d5c05c92fc46 63,369-390
+packages/web/src/components/control-verification-state.spec.ts
+  s_efe26f87c3b074::t_e43d145dfcf4d6 259-264
+packages/web/src/components/control-verification-state.ts
+  s_efe26f87c3b074::t_da72afe063bc8f 32-35,37-47
+pnpm-lock.yaml
+  s_efe26f87c3b074::t_0e4e550bd2adf8 92,142-160,654-656,751,754,2669-2671,3253-3256,4089-4092,4572-4576,4583-4586,4702-4704,5639,5641,5650,5657-5658,6979-6983,7590-7600,8532-8535,9019-9024,9030-9033,9169-9172,9603,9606,9610,9613,9662,9665
+scripts/generate-readme-api-matrix.mjs
+  s_efe26f87c3b074::t_d0c72e3472c6a2 22
+scripts/verify-control-installation.mjs
+  s_efe26f87c3b074::t_c30b43beb08110 4-7,9-10,20-26,31,33-42,54-55,58,62,65-68,71-77,79,81-82,84-85,90-92,95-98,101-104,108-109,116,121-128,130-132,136,138-143,146-147,150-176,178,184-188
+scripts/verify-control-repair.mjs
+  s_efe26f87c3b074::t_8331d7dcde765d 2-6,8-9,11-14,16,18-20,23,25-26,28-33,37-43,48-57,59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8ed03e523a34ac815538a24fe0124a51dc20b07f",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
