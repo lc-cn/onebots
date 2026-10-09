@@ -1,0 +1,53 @@
+packages/web/src/components/control-verification-state.ts
+  s_efe26f87c3b074::t_0ecc2fe0e21c61 32-35,39-42
+  s_efe26f87c3b074::t_9059d5434d9487 37-38
+adapters/adapter-douyin/src/verification-proxy.ts
+  s_efe26f87c3b074::t_944c1b8f49fd85 23,55,143,145
+  s_efe26f87c3b074::t_2fd244dd8b97cc 147
+  s_efe26f87c3b074::t_0ecc2fe0e21c61 1-22,24-54,56-142,144,146,148-163
+  s_efe26f87c3b074::t_b87c1e4e619c5c 164-166
+adapters/adapter-douyin/src/account.ts
+  s_efe26f87c3b074::t_0ecc2fe0e21c61 60,272,277-301,303,310
+  s_efe26f87c3b074::t_9e35528184b2ee 52,56,59,271,273-276,304-309,312,315-317
+  s_efe26f87c3b074::t_38e2ce791d65e1 15-19,45,266
+  s_efe26f87c3b074::t_b683fe34255a24 53-55
+  s_efe26f87c3b074::t_b2c0b8dc20aa57 318
+packages/web/src/components/control-verification-state.spec.ts
+  s_efe26f87c3b074::t_9059d5434d9487 263
+  s_efe26f87c3b074::t_0ecc2fe0e21c61 259-262
+adapters/adapter-douyin/src/verification-proxy.spec.ts
+  s_efe26f87c3b074::t_944c1b8f49fd85 1-35,55-74,96-108,110-126,128-131,134-135,137,139-141
+  s_efe26f87c3b074::t_fe48740f52c5b4 75,127,136,138
+  s_efe26f87c3b074::t_5cd5f6149d109e 132
+  s_efe26f87c3b074::t_9059d5434d9487 36-54,76-95,109,133
+.changeset/friendly-douyin-adapter.md
+  s_efe26f87c3b074::t_f285d1cbd3ae4b 3,7
+adapters/adapter-douyin/src/adapter.spec.ts
+  s_efe26f87c3b074::t_8944c9b871219f 38-39
+adapters/adapter-douyin/src/adapter.ts
+  s_efe26f87c3b074::t_0ecc2fe0e21c61 23,36,41,45-51
+  s_efe26f87c3b074::t_fae73e04c33e83 52
+adapters/adapter-douyin/src/account.spec.ts
+  s_efe26f87c3b074::t_fe48740f52c5b4 316,324
+  s_efe26f87c3b074::t_944c1b8f49fd85 85-86,96-100,290-291,299-300,306-315,317-323,325-326
+adapters/adapter-douyin/package.json
+  s_efe26f87c3b074::t_0ecc2fe0e21c61 33
+pnpm-lock.yaml
+  s_efe26f87c3b074::t_09f52216613700 145-146,3253-3254,7590
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "386e268baf77e4ef1c73a830993797297033d49f",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
