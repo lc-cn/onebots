@@ -7,64 +7,82 @@ import { join } from "node:path";
 import { BaseApp, SqliteDB, type Account } from "onebots";
 
 describe("ICQQ 账号统一 ID", () => {
-    it.each(["stop", "replace"])("%s 后旧实例验证事件不污染同 ID 新账号", async boundary => {
-        const directory = await mkdtemp(join(tmpdir(), "onebots-icqq-verification-"));
-        let database: SqliteDB | undefined;
-        let old: ReturnType<ICQQAdapter["createAccount"]> | undefined;
-        let replacement: ReturnType<ICQQAdapter["createAccount"]> | undefined;
-        const logger = {
-            trace: vi.fn(),
-            debug: vi.fn(),
-            info: vi.fn(),
-            warn: vi.fn(),
-            error: vi.fn(),
-            fatal: vi.fn(),
-            mark: vi.fn(),
-        };
-        try {
-            database = new SqliteDB(join(directory, "state"));
-            const adapter = new ICQQAdapter({
-                db: database,
-                config: { general: {} },
-                router: {},
-                getLogger: () => logger,
-            } as unknown as BaseApp);
-            const config: Account.Config<"icqq"> = { platform: "icqq", account_id: "12345678" };
-            const challenge = vi.fn();
-            const cleared = vi.fn();
-            const qr = vi.fn();
-            adapter.on("verification:request", challenge);
-            adapter.on("verification:clear", cleared);
-            adapter.on("qrcode", qr);
-            old = adapter.createAccount(config);
-            adapter.accounts.set(config.account_id, old);
-            old.client.emit("qrcode", { image: Buffer.from("current challenge") });
-            expect(challenge).toHaveBeenCalledOnce();
-            expect(qr).toHaveBeenCalledOnce();
-            if (boundary === "stop") await old.stop();
-            replacement = adapter.createAccount(config);
-            if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
-            challenge.mockClear();
-            cleared.mockClear();
-            qr.mockClear();
-            old.client.emit("qrcode", { image: Buffer.from("late challenge") });
-            old.client.emit("offline", { uin: 12345678, message: "late offline" });
-            expect(challenge).not.toHaveBeenCalled();
-            expect(cleared).not.toHaveBeenCalled();
-            expect(qr).not.toHaveBeenCalled();
-            adapter.accounts.set(config.account_id, replacement);
-            replacement.client.emit("qrcode", { image: Buffer.from("new challenge") });
-            expect(challenge).toHaveBeenCalledOnce();
-            expect(qr).toHaveBeenCalledOnce();
-        } finally {
-            await Promise.allSettled([old?.stop(), replacement?.stop()].filter(Boolean));
+    it.each(["stop", "replace", "stopping"])(
+        "%s 后旧实例验证事件不污染同 ID 新账号",
+        async boundary => {
+            const directory = await mkdtemp(join(tmpdir(), "onebots-icqq-verification-"));
+            let database: SqliteDB | undefined;
+            let old: ReturnType<ICQQAdapter["createAccount"]> | undefined;
+            let replacement: ReturnType<ICQQAdapter["createAccount"]> | undefined;
+            const logger = {
+                trace: vi.fn(),
+                debug: vi.fn(),
+                info: vi.fn(),
+                warn: vi.fn(),
+                error: vi.fn(),
+                fatal: vi.fn(),
+                mark: vi.fn(),
+            };
             try {
-                database?.close();
+                database = new SqliteDB(join(directory, "state"));
+                const adapter = new ICQQAdapter({
+                    db: database,
+                    config: { general: {} },
+                    router: {},
+                    getLogger: () => logger,
+                } as unknown as BaseApp);
+                const config: Account.Config<"icqq"> = { platform: "icqq", account_id: "12345678" };
+                const challenge = vi.fn();
+                const cleared = vi.fn();
+                const qr = vi.fn();
+                adapter.on("verification:request", challenge);
+                adapter.on("verification:clear", cleared);
+                adapter.on("qrcode", qr);
+                old = adapter.createAccount(config);
+                adapter.accounts.set(config.account_id, old);
+                old.client.emit("qrcode", { image: Buffer.from("current challenge") });
+                expect(challenge).toHaveBeenCalledOnce();
+                expect(qr).toHaveBeenCalledOnce();
+                let releaseStop: (() => void) | undefined;
+                let stopping: Promise<void> | undefined;
+                if (boundary === "stop") await old.stop();
+                if (boundary === "stopping") {
+                    const pending = new Promise<void>(resolve => {
+                        releaseStop = resolve;
+                    });
+                    old.protocols.push({
+                        lifecycleStatus: "ready",
+                        stop: vi.fn(() => pending),
+                    } as never);
+                    stopping = old.stop();
+                    await Promise.resolve();
+                }
+                replacement = adapter.createAccount(config);
+                if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
+                challenge.mockClear();
+                cleared.mockClear();
+                qr.mockClear();
+                old.client.emit("qrcode", { image: Buffer.from("late challenge") });
+                old.client.emit("offline", { uin: 12345678, message: "late offline" });
+                expect(challenge).not.toHaveBeenCalled();
+                expect(cleared).not.toHaveBeenCalled();
+                expect(qr).not.toHaveBeenCalled();
+                releaseStop?.();
+                await stopping;
+                adapter.accounts.set(config.account_id, replacement);
+                replacement.client.emit("qrcode", { image: Buffer.from("new challenge") });
+                expect(challenge).toHaveBeenCalledOnce();
+                expect(qr).toHaveBeenCalledOnce();
             } finally {
-                await rm(directory, { recursive: true, force: true });
+                await Promise.allSettled([old?.stop(), replacement?.stop()].filter(Boolean));
+                try {
+                    database?.close();
+                } finally {
+                    await rm(directory, { recursive: true, force: true });
+                }
             }
-        }
-    });
+        },
+    );
     it("将配置中的数字 QQ 号恢复为 number 后投影 CommonEvent.bot_id", () => {
         const adapter = Object.create(ICQQAdapter.prototype) as ICQQAdapter;
         const createId = vi.fn((value: string | number) => ({

@@ -89,6 +89,7 @@ export async function verifyConfiguration(
             !Number.isSafeInteger(timeout) ||
             timeout < 1 ||
             timeout > 300_000 ||
+            Buffer.byteLength(JSON.stringify(snapshot.document)) > 1_000_000 ||
             Buffer.byteLength(JSON.stringify(snapshot)) > 4_200_000
         )
             throw new Error();

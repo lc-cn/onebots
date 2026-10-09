@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Adapter } from "./adapter.js";
 import { BaseApp } from "./base-app.js";
+import { getHostLifecycleState } from "./host-lifecycle-state.js";
 
 function deferred() {
     let resolve!: () => void;
@@ -28,8 +29,8 @@ class TestApp extends BaseApp {
 class TestAdapter extends Adapter {
     startTask = vi.fn(async () => undefined);
     stopTask = vi.fn(async () => undefined);
-    constructor(app: BaseApp) {
-        super(app, "mock");
+    constructor(app: BaseApp, platform = "mock") {
+        super(app, platform as "mock");
     }
     createAccount(): never {
         throw new Error("测试不创建账号");
@@ -60,6 +61,29 @@ afterEach(async () => {
 });
 
 describe("BaseApp startup cancellation", () => {
+    it("生命周期钩子新增的后续平台在首次启动前进入热配置门禁", async () => {
+        const app = createApp();
+        const firstEntered = deferred();
+        const firstRelease = deferred();
+        const first = new TestAdapter(app, "first");
+        first.startTask.mockImplementation(() => {
+            firstEntered.resolve();
+            return firstRelease.promise;
+        });
+        app.adapters.set("first" as never, first as never);
+        app.lifecycle.addHook({
+            onStart: () => {
+                app.adapters.set("late" as never, new TestAdapter(app, "late") as never);
+            },
+        });
+
+        const starting = app.start();
+        await firstEntered.promise;
+        expect(getHostLifecycleState(app).queuedPlatforms).toContain("late");
+        firstRelease.resolve();
+        await starting;
+    });
+
     it("启动批次尚未完成时拒绝重载，不替换正在启动的适配器", async () => {
         const app = createApp();
         const pending = deferred();

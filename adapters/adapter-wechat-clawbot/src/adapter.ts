@@ -272,7 +272,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         account.on("start", () => {
             retired = false;
         });
-        account.on("stop", () => {
+        account.on("stopping", () => {
             retired = true;
         });
         const acceptsChallenge = () =>
