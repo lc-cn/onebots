@@ -263,6 +263,43 @@ describe("KOOK Bot", () => {
         expect(fetchMock.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal);
     });
 
+    test("HELLO 超时关闭仍在连接的 WebSocket 时不让 error 退出进程", async () => {
+        vi.useFakeTimers();
+        const socket = Object.assign(new EventEmitter(), {
+            readyState: 0,
+            close: vi.fn(),
+            send: vi.fn(),
+        });
+        socket.close.mockImplementation(() => {
+            socket.readyState = 2;
+            socket.emit("error", new Error("WebSocket was closed before the connection was established"));
+            socket.emit("close", 1006, Buffer.alloc(0));
+        });
+        const createSocket = vi.fn(() => socket as never);
+        vi.stubGlobal(
+            "fetch",
+            vi
+                .fn()
+                .mockResolvedValueOnce(
+                    new Response(JSON.stringify({ code: 0, data: { id: "bot", username: "KOOK" } })),
+                )
+                .mockResolvedValueOnce(
+                    new Response(JSON.stringify({ code: 0, data: { url: "wss://gateway.example.test" } })),
+                ),
+        );
+        const bot = new KookBot({ account_id: "bot", token: "token" }, createSocket);
+        const starting = bot.start();
+        const rejected = expect(starting).rejects.toMatchObject({
+            code: "KOOK_GATEWAY_HELLO_TIMEOUT",
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(createSocket).toHaveBeenCalledOnce();
+        await vi.advanceTimersByTimeAsync(6_000);
+        await rejected;
+        expect(socket.close).toHaveBeenCalledOnce();
+        await bot.stop();
+    });
+
     test("就绪后继续响应账号启动信号以支持协议启动回滚", async () => {
         vi.stubGlobal(
             "fetch",

@@ -1,5 +1,12 @@
 # @onebots/adapter-mock
 
+## 1.0.27
+
+### Patch Changes
+
+- Updated dependencies [cf86bc0]
+  - onebots@1.2.18
+
 ## 1.0.26
 
 ### Patch Changes

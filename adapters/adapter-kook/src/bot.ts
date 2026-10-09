@@ -106,7 +106,7 @@ export class KookBot extends EventEmitter<KookBotEvents> {
         this.socket = undefined;
         const failures = new FailureCollector();
         if (socket && socket.readyState < WebSocket.CLOSING) {
-            await failures.capture(() => socket.close(1000, "OneBots stopped"));
+            await failures.capture(() => this.closeSocket(socket, 1000, "OneBots stopped"));
         }
         await failures.capture(() => this.gatewayDeliveryTail);
         this.resetGatewaySession();
@@ -180,11 +180,22 @@ export class KookBot extends EventEmitter<KookBotEvents> {
             this.assertLifecycle(generation, signal);
         } catch (error) {
             if (this.socket === socket) this.socket = undefined;
-            socket.removeAllListeners();
-            if (socket.readyState < WebSocket.CLOSING) socket.close();
+            try {
+                this.closeSocket(socket);
+            } catch (closeError) {
+                this.reportError(closeError);
+            }
             this.scheduleReconnect(generation);
             throw error;
         }
+    }
+
+    /** ws 在 CONNECTING 状态关闭时还会异步发出 error，保留监听直到 close。 */
+    private closeSocket(socket: WebSocket, code?: number, reason?: string): void {
+        socket.removeAllListeners();
+        socket.on("error", () => undefined);
+        socket.once("close", () => socket.removeAllListeners());
+        if (socket.readyState < WebSocket.CLOSING) socket.close(code, reason);
     }
 
     private waitForHello(

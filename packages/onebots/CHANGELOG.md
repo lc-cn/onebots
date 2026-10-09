@@ -1,5 +1,11 @@
 # onebots
 
+## 1.2.18
+
+### Patch Changes
+
+- cf86bc0: 修复管理程序本地工件升级遗漏 Web 包的问题：完整校验、固化并安装清单中的 Web 工件，避免在发布前误从 npm 下载尚未可用的 Web 版本。
+
 ## 1.2.17
 
 ### Patch Changes

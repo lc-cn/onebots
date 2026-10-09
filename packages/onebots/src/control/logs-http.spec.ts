@@ -111,6 +111,38 @@ it("SSE 首帧立即返回尾部、随后只返回增量，断开后停止轮询
     expect(write).toHaveBeenCalledTimes(2);
 });
 
+it("SSE 写入背压时等待 drain，保留连接并继续发送增量", async () => {
+    vi.useFakeTimers();
+    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "ob-logs-backpressure-"));
+    roots.push(workspace);
+    fs.mkdirSync(path.join(workspace, ".control"), { mode: 0o700 });
+    appendControlLog(workspace, "gateway", "x".repeat(32_000));
+    const request = new NodeIncomingMessage(new Socket());
+    request.method = "GET";
+    request.url = "/api/control/logs/stream?source=gateway";
+    const response = new NodeServerResponse(request);
+    const write = vi.spyOn(response, "write").mockReturnValueOnce(false).mockReturnValue(true);
+    const destroy = vi.spyOn(response, "destroy").mockReturnValue(response);
+    const auth = { verify: vi.fn(() => true) } as unknown as ControlAuth;
+
+    respondControlLogs(workspace, request, response, "/api/control/logs/stream", true, auth);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(destroy).not.toHaveBeenCalled();
+
+    appendControlLog(workspace, "gateway", "next\n");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(write).toHaveBeenCalledTimes(1);
+    response.emit("drain");
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(write.mock.calls[1][0]).toContain('"text":"next\\n"');
+    expect(destroy).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(write.mock.calls.at(-1)?.[0]).toBe(": keepalive\n\n");
+    response.emit("close");
+    expect(destroy).toHaveBeenCalledTimes(1);
+});
+
 it("SSE 复用认证和固定查询参数边界", () => {
     const denied = fixture("/api/control/logs/stream?source=gateway");
     const verify = vi.spyOn(denied.auth, "verify").mockReturnValue(false);

@@ -1,5 +1,12 @@
 # @onebots/adapter-ircv3
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [cf86bc0]
+  - onebots@1.2.18
+
 ## 0.1.7
 
 ### Patch Changes

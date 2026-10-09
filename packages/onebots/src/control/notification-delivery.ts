@@ -91,8 +91,10 @@ async function postJson(
                 method: "POST",
                 agent: false,
                 timeout: 10_000,
-                lookup: (_host, _options, callback) =>
-                    callback(null, chosen.address, chosen.family),
+                lookup: (_host, options, callback) => {
+                    if (options.all) callback(null, [chosen]);
+                    else callback(null, chosen.address, chosen.family);
+                },
                 headers: {
                     "content-type": "application/json; charset=utf-8",
                     "content-length": String(body.length),
@@ -202,7 +204,10 @@ export async function deliverBark(
     if (result.code !== 200) throw new Error("Bark 服务拒绝推送");
     if (!Array.isArray(result.data) || result.data.length !== channel.deviceKeys.length)
         throw new Error("Bark 批量回执不完整");
-    if (result.data.some(item => !item || typeof item !== "object" || item.code !== 200))
+    const failed = result.data.filter(item => !item || typeof item !== "object" || item.code !== 200);
+    if (failed.length === channel.deviceKeys.length)
+        throw new Error("Bark 服务拒绝全部设备 Key，请确认设备已在当前服务注册");
+    if (failed.length)
         throw new BarkPartialDeliveryError("Bark 部分设备推送失败，已停止自动重试");
 }
 
