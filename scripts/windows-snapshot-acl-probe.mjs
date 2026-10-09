@@ -16,13 +16,19 @@ export function probeWindowsSnapshotAcl(root) {
         const encoded = Buffer.from(directory, "utf8").toString("base64");
         const script = `
 $ErrorActionPreference='Stop'
+$stage='decode'
 try {
   $p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}'))
   $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
+  $stage='principals'
   ${windowsAclPrincipals("$sid.Value", ["$sid.Value", "'S-1-5-18'", "'S-1-5-32-544'"])}
+  $stage='builder'
   ${windowsFullControlAclBuilder("directory")}
+  $stage='apply'
   ${mode === "cmdlet" ? "Set-Acl -LiteralPath $p -AclObject $acl" : mode === "dotnet" ? "[IO.Directory]::SetAccessControl($p,$acl)" : nativeAclApplication}
+  $stage='read'
   $check=Get-Acl -LiteralPath $p
+  $stage='verify'
   ${windowsFullControlAclVerifier("directory")}
   [Console]::Out.Write('{"ok":true}')
 } catch {
@@ -33,9 +39,20 @@ try {
     'System.ArgumentException' {'argument'}
     'System.InvalidOperationException' {'operation'}
     'System.SystemException' {'system'}
+    'System.Management.Automation.RuntimeException' {'runtime'}
+    'System.Management.Automation.ParameterBindingException' {'binding'}
     default {'unclassified'}
   }
-  [Console]::Out.Write('{"ok":false,"category":"'+$category+'","hresult":'+$failure.HResult+'}')
+  $errorId=[string]$_.FullyQualifiedErrorId
+  $fault=switch($errorId.Split(',')[0]){
+    'InvokeMethodOnNull' {'null-method'}
+    'MethodNotFound' {'method'}
+    'VariableNotWritable' {'readonly-variable'}
+    'NamedParameterNotFound' {'parameter'}
+    'TypeNotFound' {'type'}
+    default {'unclassified'}
+  }
+  [Console]::Out.Write('{"ok":false,"category":"'+$category+'","stage":"'+$stage+'","fault":"'+$fault+'","hresult":'+$failure.HResult+'}')
 }
 `;
         let proof;
@@ -62,6 +79,8 @@ try {
             "argument",
             "operation",
             "system",
+            "runtime",
+            "binding",
             "unclassified",
         ]);
         if (proof?.ok === true) results[mode] = { ok: true };
@@ -78,7 +97,26 @@ try {
             categories.has(proof.category) &&
             Number.isInteger(proof.hresult)
         )
-            results[mode] = { ok: false, category: proof.category, hresult: proof.hresult };
+            results[mode] = {
+                ok: false,
+                category: proof.category,
+                hresult: proof.hresult,
+                ...(new Set(["decode", "principals", "builder", "apply", "read", "verify"]).has(
+                    proof.stage,
+                )
+                    ? { stage: proof.stage }
+                    : {}),
+                ...(new Set([
+                    "null-method",
+                    "method",
+                    "readonly-variable",
+                    "parameter",
+                    "type",
+                    "unclassified",
+                ]).has(proof.fault)
+                    ? { fault: proof.fault }
+                    : {}),
+            };
         else throw new Error("Windows ACL 隔离探针结果无效");
     }
     return results;

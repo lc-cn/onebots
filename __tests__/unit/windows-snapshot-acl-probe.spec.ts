@@ -52,3 +52,24 @@ it("未知类别与子进程原始错误不会进入公开诊断", () => {
     });
     expect(() => probeWindowsSnapshotAcl(root())).toThrow(/^Windows ACL 隔离探针执行失败$/);
 });
+it("只允许固定阶段和故障标识，未知字段不外发", () => {
+    vi.mocked(execFileSync)
+        .mockReturnValueOnce(
+            '{"ok":false,"category":"runtime","hresult":1,"stage":"builder","fault":"null-method"}',
+        )
+        .mockReturnValueOnce(
+            '{"ok":false,"category":"runtime","hresult":1,"stage":"private-stage","fault":"private-fault"}',
+        )
+        .mockReturnValueOnce('{"ok":true}');
+    expect(probeWindowsSnapshotAcl(root())).toEqual({
+        cmdlet: {
+            ok: false,
+            category: "runtime",
+            hresult: 1,
+            stage: "builder",
+            fault: "null-method",
+        },
+        dotnet: { ok: false, category: "runtime", hresult: 1 },
+        native: { ok: true },
+    });
+});
