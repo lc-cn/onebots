@@ -1,0 +1,35 @@
+scripts/verify-windows-snapshot-security.mjs
+  s_a953d60826be1b::t_baad50da461ed1 36-42,66-69
+  s_a953d60826be1b::t_6332c0f05954a6 26
+  s_a953d60826be1b::t_9e1475aa81f9bd 1-25,27-35,43-65,70-75
+.github/workflows/service-architecture.yml
+  s_a953d60826be1b::t_9e1475aa81f9bd 101-102
+.changeset/lifecycle-acceptance-diagnostics.md
+  s_a953d60826be1b::t_9e1475aa81f9bd 6-7
+packages/onebots/src/control/gateway-snapshot-security.ts
+  s_a953d60826be1b::t_43d5f2d3b0e709 2-3,33-53,62-63,66,78
+packages/onebots/src/control/gateway-configuration-snapshot.ts
+  s_a953d60826be1b::t_43d5f2d3b0e709 8,66
+  s_a953d60826be1b::t_9e1475aa81f9bd 67
+packages/onebots/src/control/gateway-snapshot-security.spec.ts
+  s_a953d60826be1b::t_baad50da461ed1 25-29,41-45
+  s_a953d60826be1b::t_4564f1761d2827 2-4,9,11,16,19,21-24,30-40,46-53
+  s_a953d60826be1b::t_f1422070a66e7e 20
+  s_a953d60826be1b::t_6332c0f05954a6 54-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "50b49bdfa2dfe647692e85aa222c5fc4ec57f50e",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
