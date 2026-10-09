@@ -6,8 +6,8 @@ import type {
     PrivateMessageEvent,
     StrangerMessageEvent,
 } from "douyin-im";
-import type { CommonEvent, CommonTypes } from "onebots";
-import { projectDouyinSegments } from "./messages.js";
+import { sha256Json, type CommonEvent, type CommonTypes } from "onebots";
+import { projectDouyinSegments, projectDouyinStoredMessage } from "./messages.js";
 
 export interface DouyinProjectionContext {
     botId: CommonTypes.Id;
@@ -27,8 +27,7 @@ export function projectDouyinMessage(
         : event.chatType === "private"
           ? ((event as PrivateMessageEvent).friend.nickname ?? event.senderUid)
           : ((event as StrangerMessageEvent).stranger.nickname ?? event.senderUid);
-    const eventId =
-        event.serverMessageId ?? event.clientMessageId ?? `${event.threadId}:${event.time}`;
+    const eventId = messageIdentity(event);
     return {
         id: context.createId(eventId),
         timestamp: event.time * 1000,
@@ -131,27 +130,31 @@ export function projectDouyinNotice(
             return {
                 ...base,
                 notice_type: "message_deleted",
-                message_id: event.serverMessageId
-                    ? context.createId(event.serverMessageId)
-                    : undefined,
+                message_id: messageId(event, context),
+                ...messageNoticeContext(event, context),
+                ...(event.type === "message.delete"
+                    ? { user: { id: context.createId(event.message.senderUid) } }
+                    : {}),
             };
         case "message.update":
             return {
                 ...base,
                 notice_type: "message_updated",
-                message_id: event.serverMessageId
-                    ? context.createId(event.serverMessageId)
+                message_id: messageId(event, context),
+                user: { id: context.createId(event.message.senderUid) },
+                message: event.message.content
+                    ? projectDouyinStoredMessage(event.message, context.createId)
                     : undefined,
+                ...messageNoticeContext(event, context),
             };
         case "message.reaction":
             return {
                 ...base,
                 notice_type: event.enabled ? "reaction_added" : "reaction_removed",
-                message_id: event.serverMessageId
-                    ? context.createId(event.serverMessageId)
-                    : undefined,
-                operator: { id: context.createId(event.operatorUid) },
+                message_id: messageId(event, context),
+                user: { id: context.createId(event.operatorUid) },
                 reaction: event.emoji,
+                ...messageNoticeContext(event, context),
             };
         default:
             return undefined;
@@ -159,8 +162,119 @@ export function projectDouyinNotice(
 }
 
 function noticeIdentity(event: AnyNoticeEvent): string {
-    if ("serverMessageId" in event && event.serverMessageId) return event.serverMessageId;
-    if ("conversationId" in event) return event.conversationId;
-    if ("peerUid" in event) return event.peerUid;
-    return "event";
+    switch (event.type) {
+        case "message.reaction":
+            return fingerprint({
+                conversationId: event.conversationId,
+                messageId: event.serverMessageId ?? event.clientMessageId,
+                operatorUid: event.operatorUid,
+                emoji: event.emoji,
+                enabled: event.enabled,
+            });
+        case "message.update":
+        case "message.delete":
+            return fingerprint({
+                conversationId: event.conversationId,
+                messageId: event.serverMessageId ?? event.clientMessageId,
+                senderUid: event.message.senderUid,
+                version: event.message.version,
+                content: event.type === "message.update" ? event.message.content : undefined,
+            });
+        case "message.recall":
+            return fingerprint({
+                conversationId: event.conversationId,
+                messageId: event.serverMessageId ?? event.clientMessageId,
+            });
+        case "friend.increase":
+        case "friend.decrease":
+            return fingerprint({
+                peerUid: event.peerUid,
+                fromUid: event.fromUid,
+                toUid: event.toUid,
+            });
+        case "group.member-increase":
+        case "group.invite":
+        case "group.member-decrease":
+            return fingerprint({
+                conversationId: event.conversationId,
+                memberUid: event.member.uid,
+                operatorUid: event.operator?.uid,
+                source: event.source,
+            });
+        case "group.admin":
+            return fingerprint({
+                conversationId: event.conversationId,
+                memberUid: event.member.uid,
+                enabled: event.enabled,
+            });
+        case "group.name-change":
+            return fingerprint({
+                conversationId: event.conversationId,
+                name: event.name,
+                operatorUid: event.operator?.uid,
+            });
+        case "group.avatar-change":
+            return fingerprint({
+                conversationId: event.conversationId,
+                avatar: event.avatar,
+                operatorUid: event.operator?.uid,
+            });
+        default:
+            return fingerprint({ type: event.type, time: event.time });
+    }
+}
+
+function messageIdentity(event: MessageEvent): string {
+    if (event.serverMessageId) return event.serverMessageId;
+    if (event.clientMessageId) return event.clientMessageId;
+    return `message:${fingerprint({
+        threadId: event.threadId,
+        senderUid: event.senderUid,
+        time: event.time,
+        createTime: event.createTime,
+        indexInConversation: event.indexInConversation,
+        indexInConversationV2: event.indexInConversationV2,
+        orderInConversation: event.orderInConversation,
+        messageType: event.messageType,
+        rawContent: event.rawContent,
+    })}`;
+}
+
+function messageId(
+    event: Extract<
+        AnyNoticeEvent,
+        { type: "message.recall" | "message.delete" | "message.update" | "message.reaction" }
+    >,
+    context: DouyinProjectionContext,
+): CommonTypes.Id | undefined {
+    const value = event.serverMessageId ?? event.clientMessageId;
+    return value ? context.createId(value) : undefined;
+}
+
+function messageNoticeContext(
+    event: Extract<
+        AnyNoticeEvent,
+        { type: "message.recall" | "message.delete" | "message.update" | "message.reaction" }
+    >,
+    context: DouyinProjectionContext,
+): Pick<CommonEvent.Notice, "group" | "extensions"> & {
+    sub_type: "group" | "private";
+    scene_id: CommonTypes.Id;
+} {
+    const scene = event.conversationType === 2 ? "group" : "private";
+    return {
+        sub_type: scene,
+        scene_id: context.createId(event.conversationId),
+        group: scene === "group" ? { id: context.createId(event.conversationId) } : undefined,
+        extensions: {
+            douyin: {
+                conversation_id: event.conversationId,
+                conversation_type: event.conversationType,
+            },
+        },
+    };
+}
+
+function fingerprint(value: unknown): string {
+    return `sha256:${sha256Json(value)}`;
 }

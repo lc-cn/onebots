@@ -10,7 +10,7 @@ douyin.my-account:
   login_method: qr
 ```
 
-Set `login_method` to `sms` and provide `mobile` for SMS login. Password login also requires the sensitive `password` field. QR codes, verification-code inputs, and account selection are shown in the Web todo panel. Successful sessions are persisted under `data/douyin`.
+Both SMS and password login require `mobile`. Set `login_method` to `sms` for SMS login; password login additionally requires the sensitive `password` field. QR codes, verification-code inputs, and account selection are shown in the Web todo panel, where an SMS challenge can be switched to a voice code. Successful sessions are persisted under `data/douyin`.
 
 The adapter supports text, mentions and image sending; direct and group message events; friend, group, and member queries; group membership operations and join-request review; and relationship, membership, message update/deletion, and reaction events.
 

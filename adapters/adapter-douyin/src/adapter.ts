@@ -21,9 +21,17 @@ import { douyinCapabilities } from "./capabilities.js";
 import { compileDouyinMessage } from "./messages.js";
 import type { DouyinConfig } from "./types.js";
 
+const GROUP_REQUEST_TTL_MS = 15 * 60 * 1000;
+const MAX_GROUP_REQUESTS = 1_024;
+
+interface RememberedGroupRequest {
+    request: GroupJoinRequest;
+    expiresAt: number;
+}
+
 export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
     private readonly accountFactory: DouyinAccountFactory;
-    private readonly groupRequests = new Map<string, GroupJoinRequest>();
+    private readonly groupRequests = new Map<string, RememberedGroupRequest>();
 
     constructor(app: BaseApp) {
         super(app, "douyin", douyinCapabilities);
@@ -81,20 +89,24 @@ export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
         params: Adapter.SendMessageParams,
     ): Promise<Adapter.SendMessageResult> {
         const sdk = this.requireSdkAccount(uin);
-        const contact = await this.resolveContact(sdk, params.scene_type, params.scene_id);
-        let lastMessageId = "";
-        for (const operation of compileDouyinMessage(params.message, value => {
+        const operations = compileDouyinMessage(params.message, value => {
             if (value && typeof value === "object" && "source" in value) {
                 return String((value as CommonTypes.Id).source);
             }
             return String(value ?? "");
-        })) {
-            const response = await contact.sendMsg(operation);
-            assertSucceeded(response.statusCode, response.statusMsg, "发送消息");
-            lastMessageId = response.serverMessageId ?? response.clientMessageId ?? lastMessageId;
+        });
+        if (operations.length !== 1) {
+            throw fault(
+                "MESSAGE_MULTI_OPERATION_UNSUPPORTED",
+                "抖音单次 send_message 只能对应一条平台消息，请拆分文本与图片后分别发送",
+            );
         }
-        if (!lastMessageId) throw fault("UPSTREAM_INVALID", "抖音发送成功但未返回消息 ID");
-        return { message_id: this.createId(lastMessageId) };
+        const contact = await this.resolveContact(sdk, params.scene_type, params.scene_id);
+        const response = await contact.sendMsg(operations[0]!);
+        assertSucceeded(response.statusCode, response.statusMsg, "发送消息");
+        const messageId = response.serverMessageId ?? response.clientMessageId;
+        if (!messageId) throw fault("UPSTREAM_INVALID", "抖音发送成功但未返回消息 ID");
+        return { message_id: this.createId(messageId) };
     }
 
     async deleteMessage(uin: string, params: Adapter.DeleteMessageParams): Promise<void> {
@@ -107,7 +119,7 @@ export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
             params.scene_id,
         );
         const response = await contact.recallMsg(String(this.resolveId(params.message_id).source));
-        assertSucceeded(response.statusCode, response.statusMsg, "撤回消息");
+        assertRecallSucceeded(response.statusCode, response.statusMsg);
     }
 
     async markMessageAsRead(uin: string, params: Adapter.MarkMessageAsReadParams): Promise<void> {
@@ -142,6 +154,7 @@ export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
         uin: string,
         _params?: Adapter.GetFriendListParams,
     ): Promise<Adapter.FriendInfo[]> {
+        // douyin-im 1.0 的 getFriendList() 没有 force 参数，并且每次都会从服务端分页刷新。
         const friends = await this.requireSdkAccount(uin).getFriendList();
         return friends.map(friend => this.projectFriend(friend));
     }
@@ -153,7 +166,8 @@ export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
         const sdk = this.requireSdkAccount(uin);
         const uid = String(this.resolveId(params.user_id).source);
         const friend =
-            sdk.pickFriend(uid) ?? (await sdk.getFriendList()).find(item => item.uid === uid);
+            (params.no_cache === true ? undefined : sdk.pickFriend(uid)) ??
+            (await sdk.getFriendList()).find(item => item.uid === uid);
         if (!friend) throw fault("FRIEND_NOT_FOUND", `未找到抖音好友 ${uid}`);
         return this.projectFriend(friend);
     }
@@ -222,9 +236,16 @@ export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
         uin: string,
         params: Adapter.GetGroupMemberInfoParams,
     ): Promise<Adapter.GroupMemberInfo> {
-        const group = await this.requireGroup(this.requireSdkAccount(uin), params.group_id, false);
+        const refresh = params.no_cache === true;
+        const group = await this.requireGroup(
+            this.requireSdkAccount(uin),
+            params.group_id,
+            refresh,
+        );
         const uid = String(this.resolveId(params.user_id).source);
-        const member = group.pickMember(uid) ?? (await group.getMemberList(true)).get(uid);
+        const member =
+            (refresh ? undefined : group.pickMember(uid)) ??
+            (await group.getMemberList(refresh)).get(uid);
         if (!member) throw fault("MEMBER_NOT_FOUND", `未找到抖音群成员 ${uid}`);
         return {
             group_id: params.group_id,
@@ -252,14 +273,23 @@ export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
 
     async handleGroupRequest(uin: string, params: Adapter.HandleGroupRequestParams): Promise<void> {
         this.requireSdkAccount(uin);
+        assertGroupRequestParams(params);
+        this.pruneGroupRequests();
         const requestId =
             params.flag ??
-            (params.request_id ? String(this.resolveId(params.request_id).source) : "");
-        const request = this.groupRequests.get(requestId);
-        if (!request) throw fault("REQUEST_NOT_FOUND", `未找到抖音入群申请 ${requestId}`);
-        const response = await (params.approve ? request.approve() : request.reject());
+            (params.request_id
+                ? normalizeGroupRequestId(String(this.resolveId(params.request_id).source))
+                : "");
+        const key = groupRequestKey(uin, requestId);
+        const remembered = this.groupRequests.get(key);
+        if (!remembered) throw fault("REQUEST_NOT_FOUND", `未找到抖音入群申请 ${requestId}`);
+
+        // 先 claim 再访问上游：并发调用只能有一个进入，失败也不会留下可重放的申请。
+        this.groupRequests.delete(key);
+        const response = await (params.approve
+            ? remembered.request.approve()
+            : remembered.request.reject());
         assertSucceeded(response.statusCode, response.statusMsg, "处理入群申请");
-        this.groupRequests.delete(requestId);
     }
 
     async getStatus(uin: string): Promise<Adapter.StatusInfo> {
@@ -282,7 +312,31 @@ export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
     }
 
     rememberGroupRequest(request: GroupJoinRequest): void {
-        this.groupRequests.set(request.requestId, request);
+        const accountId = [...this.accounts].find(
+            ([, account]) => account.client === request.account,
+        )?.[0];
+        if (!accountId) {
+            this.logger.warn(`忽略无法归属账号的抖音入群申请 ${request.requestId}`);
+            return;
+        }
+        this.pruneGroupRequests();
+        const key = groupRequestKey(accountId, request.requestId);
+        this.groupRequests.delete(key);
+        while (this.groupRequests.size >= MAX_GROUP_REQUESTS) {
+            const oldest = this.groupRequests.keys().next().value;
+            if (oldest === undefined) break;
+            this.groupRequests.delete(oldest);
+        }
+        this.groupRequests.set(key, {
+            request,
+            expiresAt: Date.now() + GROUP_REQUEST_TTL_MS,
+        });
+    }
+
+    private pruneGroupRequests(now = Date.now()): void {
+        for (const [key, remembered] of this.groupRequests) {
+            if (remembered.expiresAt <= now) this.groupRequests.delete(key);
+        }
     }
 
     private requireSdkAccount(uin: string): DouyinAccount {
@@ -375,6 +429,32 @@ function assertSucceeded(statusCode: number, statusMessage: string, operation: s
     if (statusCode !== 0) {
         throw fault("DOUYIN_API_ERROR", `${operation}失败: ${statusCode} ${statusMessage}`);
     }
+}
+
+function assertRecallSucceeded(statusCode: number, statusMessage: string): void {
+    if (statusCode !== 0 && statusCode !== 200) {
+        throw fault("DOUYIN_API_ERROR", `撤回消息失败: ${statusCode} ${statusMessage}`);
+    }
+}
+
+function assertGroupRequestParams(params: Adapter.HandleGroupRequestParams): void {
+    if (params.type !== "request") {
+        throw fault("PARAM_UNSUPPORTED", "抖音当前只能处理用户主动提交的入群申请");
+    }
+    if (params.sub_type !== undefined && params.sub_type !== "add") {
+        throw fault("PARAM_UNSUPPORTED", "抖音当前不支持处理群邀请");
+    }
+    if (params.block === true) {
+        throw fault("PARAM_UNSUPPORTED", "抖音拒绝入群申请时不支持阻止后续申请");
+    }
+}
+
+function normalizeGroupRequestId(requestId: string): string {
+    return requestId.startsWith("request:") ? requestId.slice("request:".length) : requestId;
+}
+
+function groupRequestKey(accountId: string, requestId: string): string {
+    return JSON.stringify([accountId, requestId]);
 }
 
 function stringValue(value: unknown): string | undefined {

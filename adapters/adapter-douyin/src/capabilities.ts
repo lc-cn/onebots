@@ -3,9 +3,17 @@ import { defineAdapterCapabilities, type AdapterCapabilityManifest } from "onebo
 /** douyin-im 1.x 已实现且适配器完成统一投影的能力。 */
 export const douyinCapabilities: AdapterCapabilityManifest = defineAdapterCapabilities({
     actions: {
-        send_message: { support: "native", scenes: ["private", "group"] },
-        delete_message: { support: "native", availability: "context" },
-        mark_message_as_read: { support: "native", availability: "context" },
+        send_message: { support: "native", scenes: ["private", "direct", "group"] },
+        delete_message: {
+            support: "native",
+            availability: "context",
+            scenes: ["private", "direct", "group"],
+        },
+        mark_message_as_read: {
+            support: "native",
+            availability: "context",
+            scenes: ["private", "direct", "group"],
+        },
         get_login_info: { support: "native" },
         get_user_info: { support: "native" },
         get_friend_list: { support: "native" },
@@ -24,17 +32,21 @@ export const douyinCapabilities: AdapterCapabilityManifest = defineAdapterCapabi
     },
     events: {
         message: { support: "native", scenes: ["private", "group"] },
-        group_request: { support: "native" },
-        member_joined: { support: "native" },
-        member_left: { support: "native" },
-        group_admin: { support: "native" },
-        custom: { support: "native", note: "群名称与群头像变化保留在 raw_event 中" },
-        friend_add: { support: "native" },
-        friend_remove: { support: "native" },
-        message_deleted: { support: "native" },
-        message_updated: { support: "native" },
-        reaction_added: { support: "native" },
-        reaction_removed: { support: "native" },
+        group_request: { support: "native", scenes: ["group"] },
+        member_joined: { support: "native", scenes: ["group"] },
+        member_left: { support: "native", scenes: ["group"] },
+        group_admin: { support: "native", scenes: ["group"] },
+        custom: {
+            support: "native",
+            scenes: ["group"],
+            note: "群名称与群头像变化保留在 raw_event 中",
+        },
+        friend_add: { support: "native", scenes: ["private"] },
+        friend_remove: { support: "native", scenes: ["private"] },
+        message_deleted: { support: "native", scenes: ["private", "group"] },
+        message_updated: { support: "native", scenes: ["private", "group"] },
+        reaction_added: { support: "native", scenes: ["private", "group"] },
+        reaction_removed: { support: "native", scenes: ["private", "group"] },
     },
     segments: {
         text: { support: "native", direction: "both" },

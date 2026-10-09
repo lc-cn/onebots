@@ -1,24 +1,52 @@
-import type { MessageEvent, SendableMessage, SendableText } from "douyin-im";
+import type { MessageEvent, ParsedMessageContent, SendableMessage, SendableText } from "douyin-im";
+import { parseMessageContent } from "douyin-im/protocol";
 import { AdapterError, type CommonTypes } from "onebots";
 
 export function projectDouyinSegments(
     event: Pick<MessageEvent, "content" | "mentions" | "referenceInfo" | "text">,
     createId: (value: string | number) => CommonTypes.Id,
 ): CommonTypes.Segment[] {
+    return projectContent(event.content, event.text, event.mentions, event.referenceInfo, createId);
+}
+
+export function projectDouyinStoredMessage(
+    message: {
+        content: string;
+        msgType: number;
+        referenceInfo?: MessageEvent["referenceInfo"];
+    },
+    createId: (value: string | number) => CommonTypes.Id,
+): CommonTypes.Segment[] {
+    const content = parseMessageContent(message.content, message.msgType);
+    return projectContent(
+        content,
+        content.text,
+        content.kind === "text" ? (content.mentions ?? []) : [],
+        message.referenceInfo,
+        createId,
+    );
+}
+
+function projectContent(
+    content: ParsedMessageContent,
+    text: string,
+    mentions: MessageEvent["mentions"],
+    referenceInfo: MessageEvent["referenceInfo"],
+    createId: (value: string | number) => CommonTypes.Id,
+): CommonTypes.Segment[] {
     const result: CommonTypes.Segment[] = [];
-    if (event.referenceInfo?.refMessageId) {
+    if (referenceInfo?.refMessageId) {
         result.push({
             type: "reply",
-            data: { message_id: createId(event.referenceInfo.refMessageId) },
+            data: { message_id: createId(referenceInfo.refMessageId) },
         });
     }
 
-    if (event.content.kind === "text") {
-        result.push(...projectText(event.text, event.mentions, createId));
+    if (content.kind === "text") {
+        result.push(...projectText(text, mentions, createId));
         return result;
     }
 
-    const content = event.content;
     if (content.kind === "image") {
         result.push({
             type: "image",
@@ -35,7 +63,14 @@ export function projectDouyinSegments(
             },
         });
     } else if (content.kind === "video") {
-        result.push({ type: "video", data: { douyin: content.video } });
+        result.push({
+            type: "video",
+            data: {
+                width: content.video.width,
+                height: content.video.height,
+                douyin: content.video,
+            },
+        });
     } else if (content.kind === "audio") {
         result.push({
             type: "audio",
@@ -48,7 +83,7 @@ export function projectDouyinSegments(
     } else if (content.kind === "emoji") {
         result.push({ type: "image", data: { file: content.url, emoji: true } });
     } else {
-        result.push({ type: "text", data: { text: content.text || event.text } });
+        result.push({ type: "text", data: { text: content.text || text } });
     }
     return result;
 }
@@ -60,6 +95,7 @@ export function compileDouyinMessage(
     if (!input.length) throw fault("MESSAGE_EMPTY", "抖音消息段不能为空");
     const operations: SendableMessage[] = [];
     let text: SendableText[] = [];
+    let hasContent = false;
     const flush = () => {
         if (text.length) operations.push(text.length === 1 ? text[0]! : text);
         text = [];
@@ -67,22 +103,27 @@ export function compileDouyinMessage(
 
     for (const item of input) {
         if (item.type === "text") {
-            text.push({ type: "text", text: requiredString(item.data.text, "text") });
+            const value = messageText(item.data.text);
+            text.push({ type: "text", text: value });
+            hasContent ||= Boolean(value.trim());
         } else if (item.type === "at") {
             const source = item.data.user_id ?? item.data.qq ?? item.data.uid;
             const uid = resolveId(source);
             const name = optionalString(item.data.name) ?? optionalString(item.data.text) ?? uid;
             if (!/^\d+$/u.test(uid)) throw fault("PARAM_INVALID", "抖音 @ 用户 ID 必须为数字");
             text.push({ type: "at", uid, name: name.replace(/^@/u, "") });
+            hasContent = true;
         } else if (item.type === "image") {
             flush();
             const source = item.data.file ?? item.data.url ?? item.data.base64;
             operations.push({ type: "image", data: requiredString(source, "图片来源") });
+            hasContent = true;
         } else {
             throw fault("MESSAGE_SEGMENT_UNSUPPORTED", `抖音发送暂不支持消息段 ${item.type}`);
         }
     }
     flush();
+    if (!hasContent) throw fault("MESSAGE_EMPTY", "抖音消息内容不能为空");
     return operations;
 }
 
@@ -110,6 +151,13 @@ function projectText(
 
 function firstUrl(...groups: readonly string[][]): string | undefined {
     return groups.flat().find(Boolean);
+}
+
+function messageText(value: unknown): string {
+    if (typeof value !== "string" || !value.length) {
+        throw fault("PARAM_INVALID", "抖音text必须是非空字符串");
+    }
+    return value;
 }
 
 function requiredString(value: unknown, label: string): string {

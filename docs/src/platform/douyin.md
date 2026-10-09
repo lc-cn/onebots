@@ -12,7 +12,7 @@ douyin.my-account:
   login_method: qr
 ```
 
-短信登录填写 `mobile` 并将 `login_method` 设为 `sms`；密码登录还需填写敏感字段 `password`。首次启动账号后，二维码、短信输入和多账号选择会进入 Web「待办」。登录成功后，设备与会话保存在 OneBots 数据目录的 `data/douyin` 下。
+短信和密码登录都必须填写 `mobile`；短信登录将 `login_method` 设为 `sms`，密码登录还必须填写敏感字段 `password`。首次启动账号后，二维码、验证码输入和多账号选择会进入 Web「待办」；短信验证可在待办中切换为语音验证码。登录成功后，设备与会话保存在 OneBots 数据目录的 `data/douyin` 下。
 
 ## 能力
 

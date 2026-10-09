@@ -12,7 +12,7 @@ This document lists the IM platform adapters planned for the onebots project.
 | **WeChat ClawBot (iLink)** | ✅ Implemented | `@onebots/adapter-wechat-clawbot` | WeChat iLink Bot HTTP |
 | **Discord** | ✅ Implemented | `@onebots/adapter-discord` | Supports Discord bots |
 | **Telegram** | ✅ Implemented | `@onebots/adapter-telegram` | Supports private chats, groups, channels |
-| **Douyin** | ✅ Implemented | `@onebots/adapter-douyin` | QR/SMS/password login, direct messages, groups, and group management |
+| **Douyin** | ✅ Implemented | `@onebots/adapter-douyin` | QR/SMS/voice-code/password login, direct messages, groups, and group management |
 | **Feishu** | ✅ Implemented | `@onebots/adapter-feishu` | Supports private chats, group chats, rich text messages |
 | **DingTalk** | ✅ Implemented | `@onebots/adapter-dingtalk` | Supports enterprise internal apps and custom bots |
 | **Slack** | ✅ Implemented | `@onebots/adapter-slack` | Supports channel messages, private chats, app commands |

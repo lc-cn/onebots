@@ -1011,16 +1011,27 @@
             "support": "native",
             "scenes": [
               "private",
+              "direct",
               "group"
             ]
           },
           "delete_message": {
             "support": "native",
-            "availability": "context"
+            "availability": "context",
+            "scenes": [
+              "private",
+              "direct",
+              "group"
+            ]
           },
           "mark_message_as_read": {
             "support": "native",
-            "availability": "context"
+            "availability": "context",
+            "scenes": [
+              "private",
+              "direct",
+              "group"
+            ]
           },
           "get_login_info": {
             "support": "native"
@@ -1080,38 +1091,75 @@
             ]
           },
           "group_request": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "group"
+            ]
           },
           "member_joined": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "group"
+            ]
           },
           "member_left": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "group"
+            ]
           },
           "group_admin": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "group"
+            ]
           },
           "custom": {
             "support": "native",
+            "scenes": [
+              "group"
+            ],
             "note": "群名称与群头像变化保留在 raw_event 中"
           },
           "friend_add": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "private"
+            ]
           },
           "friend_remove": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "private"
+            ]
           },
           "message_deleted": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "private",
+              "group"
+            ]
           },
           "message_updated": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "private",
+              "group"
+            ]
           },
           "reaction_added": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "private",
+              "group"
+            ]
           },
           "reaction_removed": {
-            "support": "native"
+            "support": "native",
+            "scenes": [
+              "private",
+              "group"
+            ]
           }
         },
         "segments": {

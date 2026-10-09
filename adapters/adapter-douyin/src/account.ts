@@ -13,36 +13,50 @@ import { projectDouyinGroupRequest, projectDouyinMessage, projectDouyinNotice } 
 import type { DouyinConfig } from "./types.js";
 
 export class DouyinAccountFactory {
-    private readonly client: Client;
+    private readonly dataDir: string;
 
     constructor(private readonly adapter: DouyinAdapter) {
-        this.client = createClient({
-            dataDir: path.join(adapter.app.dataDir, "douyin"),
-            autoLoad: false,
-        });
+        this.dataDir = path.join(adapter.app.dataDir, "douyin");
     }
 
     create(config: Account.Config<"douyin">): Account<"douyin", DouyinAccount> {
-        const sdkAccount = this.client.createAccount(toAccountOptions(config));
+        // douyin-im Client 会按账号别名复用已注册的 Account。配置重载会重建 OneBots
+        // wrapper，因此每个 wrapper 必须拥有独立 Client，避免沿用旧登录参数或重复绑定监听器。
+        const client = createClient({ dataDir: this.dataDir, autoLoad: false });
+        const sdkAccount = client.createAccount(toAccountOptions(config));
         const account = new Account<"douyin", DouyinAccount>(this.adapter, sdkAccount, config);
-        wireAccount(account, this.adapter);
+        wireAccount(account, this.adapter, client);
         return account;
     }
 }
 
-function wireAccount(account: Account<"douyin", DouyinAccount>, adapter: DouyinAdapter): void {
+function wireAccount(
+    account: Account<"douyin", DouyinAccount>,
+    adapter: DouyinAdapter,
+    client: Client,
+): void {
     const sdk = account.client;
     const accountId = account.config.account_id;
+    const browserChallenges = new Map<string, symbol>();
+    let logoutTask: Promise<boolean> | undefined;
     const projection = () => ({
         botId: adapter.createId(sdk.uid ?? accountId),
         createId: (value: string | number) => adapter.createId(value),
     });
-    const clearVerification = (type?: string) =>
+    const clearVerification = (type?: string) => {
+        if (type) browserChallenges.delete(type);
+        else browserChallenges.clear();
         adapter.emit("verification:clear", {
             platform: "douyin",
             account_id: accountId,
             ...(type ? { type } : {}),
         } satisfies Adapter.VerificationClear);
+    };
+    const removeSdkAccountOnce = () =>
+        (logoutTask ??= client.removeAccount(accountId).catch(error => {
+            adapter.logger.error(`注销抖音账号 ${accountId} 失败:`, error);
+            throw error;
+        }));
 
     sdk.on("system.online", payload => {
         account.status = AccountStatus.Online;
@@ -64,6 +78,7 @@ function wireAccount(account: Account<"douyin", DouyinAccount>, adapter: DouyinA
     });
     sdk.on("system.login.error", error => {
         account.status = AccountStatus.OffLine;
+        clearVerification();
         adapter.logger.error(`抖音账号 ${accountId} 登录失败:`, error);
     });
     sdk.on("system.handler.error", payload => {
@@ -92,13 +107,20 @@ function wireAccount(account: Account<"douyin", DouyinAccount>, adapter: DouyinA
             adapter.logger.error(`抖音账号 ${accountId} 二维码登录失败:`, error);
         });
     });
-    sdk.on("system.login.sms", payload => emitCodeRequest(adapter, accountId, "sms", payload));
-    sdk.on("system.login.voice", payload => emitCodeRequest(adapter, accountId, "voice", payload));
+    sdk.on("system.login.sms", payload => {
+        clearVerification();
+        emitCodeRequest(adapter, accountId, "sms", payload);
+    });
+    sdk.on("system.login.voice", payload => {
+        clearVerification();
+        emitCodeRequest(adapter, accountId, "voice", payload);
+    });
     sdk.on("system.login.sms-required", payload => {
+        clearVerification();
         adapter.emit("verification:request", {
             platform: "douyin",
             account_id: accountId,
-            type: "sms-required",
+            type: "sms",
             hint: payload.reason || "需要短信验证码才能继续登录",
             requestSmsAvailable: true,
             options: {
@@ -110,6 +132,7 @@ function wireAccount(account: Account<"douyin", DouyinAccount>, adapter: DouyinA
         } satisfies Adapter.VerificationRequest);
     });
     sdk.on("system.login.accounts", payload => {
+        clearVerification();
         adapter.emit("verification:request", {
             platform: "douyin",
             account_id: accountId,
@@ -128,10 +151,24 @@ function wireAccount(account: Account<"douyin", DouyinAccount>, adapter: DouyinA
         } satisfies Adapter.VerificationRequest);
     });
     sdk.on("system.login.verification", ({ verification }) => {
-        openBrowserVerification(adapter, accountId, "browser-verification", verification);
+        openBrowserVerification(
+            adapter,
+            accountId,
+            "browser-verification",
+            verification,
+            browserChallenges,
+            clearVerification,
+        );
     });
     sdk.on("system.action.verification", ({ verification }) => {
-        openBrowserVerification(adapter, accountId, "action-verification", verification);
+        openBrowserVerification(
+            adapter,
+            accountId,
+            "action-verification",
+            verification,
+            browserChallenges,
+            clearVerification,
+        );
     });
 
     sdk.on("message", event => account.dispatchAwaited(projectDouyinMessage(event, projection())));
@@ -146,8 +183,8 @@ function wireAccount(account: Account<"douyin", DouyinAccount>, adapter: DouyinA
 
     account.on("start", async (signal: AbortSignal) => {
         account.status = AccountStatus.Pending;
-        const abort = () =>
-            void sdk.logout().catch(error => adapter.logger.error("取消抖音登录失败", error));
+        logoutTask = undefined;
+        const abort = () => void removeSdkAccountOnce().catch(() => undefined);
         signal.addEventListener("abort", abort, { once: true });
         try {
             await sdk.login();
@@ -161,10 +198,11 @@ function wireAccount(account: Account<"douyin", DouyinAccount>, adapter: DouyinA
     });
     account.on("stop", async () => {
         try {
-            await sdk.logout();
+            await removeSdkAccountOnce();
         } finally {
             account.status = AccountStatus.OffLine;
             clearVerification();
+            sdk.removeAllListeners();
         }
     });
 }
@@ -213,7 +251,12 @@ function openBrowserVerification(
     accountId: string,
     type: string,
     verification: LoginVerification | ActionVerification,
+    browserChallenges: Map<string, symbol>,
+    clearVerification: (type?: string) => void,
 ): void {
+    clearVerification();
+    const owner = Symbol(type);
+    browserChallenges.set(type, owner);
     adapter.emit("verification:request", {
         platform: "douyin",
         account_id: accountId,
@@ -238,12 +281,10 @@ function openBrowserVerification(
         },
     } satisfies Adapter.VerificationRequest);
     void verification.open().then(
-        () =>
-            adapter.emit("verification:clear", {
-                platform: "douyin",
-                account_id: accountId,
-                type,
-            } satisfies Adapter.VerificationClear),
+        () => {
+            if (browserChallenges.get(type) !== owner) return;
+            clearVerification(type);
+        },
         error => adapter.logger.error(`抖音账号 ${accountId} 安全验证失败:`, error),
     );
 }
