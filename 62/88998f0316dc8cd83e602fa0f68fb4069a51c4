@@ -1,0 +1,19 @@
+packages/onebots/src/configuration/configuration-worker-owner.spec.ts
+  s_a953d60826be1b::t_be4908ad4e5a7a 34-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6288998f0316dc8cd83e602fa0f68fb4069a51c4",
+  "prompts": {},
+  "sessions": {
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
