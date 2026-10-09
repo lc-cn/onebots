@@ -4,6 +4,7 @@ import type { RouterContext } from "onebots";
 const ROUTE = "/_onebots/douyin-verification";
 const SESSION_TTL_MS = 5 * 60 * 1000;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const UPSTREAM_TIMEOUT_MS = 30 * 1000;
 const KEY_PATTERN = /^[0-9a-f]{64}$/u;
 
 interface VerificationSession {
@@ -66,16 +67,26 @@ export class DouyinVerificationProxy {
         target.searchParams.set("token", session.upstream.searchParams.get("token")!);
         const method = ctx.method.toUpperCase();
         const body = requestBody(ctx, method);
-        const response = await fetch(target, {
-            method,
-            headers: proxyRequestHeaders(ctx.headers),
-            redirect: "manual",
-            ...(body === undefined ? {} : { body }),
-        });
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        if (bytes.byteLength > MAX_RESPONSE_BYTES) {
+        let response: Response;
+        let bytes: Uint8Array;
+        try {
+            response = await fetch(target, {
+                method,
+                headers: proxyRequestHeaders(ctx.headers),
+                redirect: "manual",
+                signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+                ...(body === undefined ? {} : { body }),
+            });
+            const received = await readBoundedResponse(response);
+            if (!received) {
+                ctx.status = 502;
+                ctx.body = "抖音验证页面响应过大";
+                return;
+            }
+            bytes = received;
+        } catch {
             ctx.status = 502;
-            ctx.body = "抖音验证页面响应过大";
+            ctx.body = "抖音验证页面暂时不可用，请返回 OneBots 重新发起验证";
             return;
         }
         ctx.status = response.status;
@@ -150,6 +161,8 @@ function requestBody(ctx: RouterContext, method: string): BodyInit | undefined {
 
 function proxyRequestHeaders(headers: RouterContext["headers"]): Headers {
     const result = new Headers();
+    // The verification page reads its scoped fingerprint cookie in-browser and sends the value
+    // inside the SDK request payload. Never forward ambient OneBots management cookies upstream.
     const allowed = new Set(["accept", "accept-language", "content-type", "user-agent"]);
     for (const [name, value] of Object.entries(headers)) {
         if (!value || !allowed.has(name.toLowerCase())) continue;
@@ -162,4 +175,37 @@ function proxyResponseHeader(name: string): boolean {
     return !/^(?:connection|content-length|content-encoding|location|set-cookie|transfer-encoding)$/iu.test(
         name,
     );
+}
+
+async function readBoundedResponse(response: Response): Promise<Uint8Array | undefined> {
+    const declared = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
+        await response.body?.cancel();
+        return undefined;
+    }
+    if (!response.body) return new Uint8Array();
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            length += value.byteLength;
+            if (length > MAX_RESPONSE_BYTES) {
+                await reader.cancel();
+                return undefined;
+            }
+            chunks.push(value);
+        }
+    } finally {
+        reader.releaseLock();
+    }
+    const bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+    }
+    return bytes;
 }

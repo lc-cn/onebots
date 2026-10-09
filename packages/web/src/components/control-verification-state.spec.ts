@@ -260,6 +260,7 @@ describe("control verification browser workflow", () => {
             "https://onebots.example/verify/session",
         );
         expect(safeVerificationUrl("//evil.example", "https://onebots.example")).toBeUndefined();
+        expect(safeVerificationUrl(" //evil.example", "https://onebots.example")).toBeUndefined();
         expect(safeVerificationUrl("/verify\n/evil", "https://onebots.example")).toBeUndefined();
         expect(safeVerificationImage("data:image/svg+xml;base64,PHN2Zz4=")).toBeUndefined();
         expect(safeVerificationImage("https://example.com/a.png")).toBeUndefined();

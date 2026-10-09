@@ -34,7 +34,12 @@ export function safeVerificationUrl(
     origin = typeof window === "undefined" ? undefined : window.location.origin,
 ): string | undefined {
     try {
-        if (value.startsWith("//") || value.includes("\\") || /[\u0000-\u001f\u007f]/u.test(value))
+        if (
+            value.trim() !== value ||
+            value.startsWith("//") ||
+            value.includes("\\") ||
+            /[\u0000-\u001f\u007f]/u.test(value)
+        )
             return undefined;
         const relative = value.startsWith("/");
         if (relative && !origin) return undefined;

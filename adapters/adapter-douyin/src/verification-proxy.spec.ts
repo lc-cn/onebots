@@ -6,6 +6,7 @@ import { DouyinVerificationProxy, rewriteVerificationHtml } from "./verification
 const servers: Server[] = [];
 
 afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.all(
         servers.splice(0).map(
             server =>
@@ -33,7 +34,12 @@ describe("Douyin 验证页代理", () => {
     });
 
     it("代理当前挑战、重写页面绝对路径，并在撤销后拒绝访问", async () => {
-        const received: Array<{ url: string; body: string; authorization?: string }> = [];
+        const received: Array<{
+            url: string;
+            body: string;
+            authorization?: string;
+            cookie?: string;
+        }> = [];
         const upstream = createServer(async (request, response) => {
             const chunks: Buffer[] = [];
             for await (const chunk of request) chunks.push(Buffer.from(chunk));
@@ -41,6 +47,7 @@ describe("Douyin 验证页代理", () => {
                 url: request.url ?? "",
                 body: Buffer.concat(chunks).toString("utf8"),
                 authorization: request.headers.authorization,
+                cookie: request.headers.cookie,
             });
             if (request.url?.startsWith("/api/complete")) {
                 response.writeHead(200, { "content-type": "application/json" });
@@ -77,6 +84,7 @@ describe("Douyin 验证页代理", () => {
             url: "/?token=upstream-secret",
             body: "",
             authorization: undefined,
+            cookie: undefined,
         });
 
         const submission = context(`${publicPath}/api/complete?token=browser-copy`);
@@ -93,6 +101,7 @@ describe("Douyin 验证页代理", () => {
             url: "/api/complete?token=upstream-secret",
             body: '{"result":{"status":true}}',
             authorization: undefined,
+            cookie: undefined,
         });
 
         fixture.proxy.revoke("bot", "browser-verification");
@@ -108,6 +117,36 @@ describe("Douyin 验证页代理", () => {
                 "/proxy/key",
             ),
         ).toBe(`<script src='/proxy/key/react-dom.js?token=x'></script><a href='/other'>other</a>`);
+    });
+
+    it("将失效或超限的本机验证服务映射为受控的 502", async () => {
+        const fixture = createProxy("");
+        const publicPath = fixture.proxy.publish(
+            "bot",
+            "browser-verification",
+            "http://127.0.0.1:12345/?token=upstream-secret",
+        );
+        vi.spyOn(globalThis, "fetch")
+            .mockRejectedValueOnce(new Error("server closed"))
+            .mockResolvedValueOnce(
+                new Response("x", { headers: { "content-length": String(2 * 1024 * 1024 + 1) } }),
+            )
+            .mockResolvedValueOnce(new Response(new Uint8Array(2 * 1024 * 1024 + 1)));
+
+        const unavailable = context(publicPath);
+        await fixture.handlers[0]!(unavailable as never);
+        expect(unavailable.status).toBe(502);
+        expect(unavailable.body).toContain("暂时不可用");
+
+        const declaredTooLarge = context(publicPath);
+        await fixture.handlers[0]!(declaredTooLarge as never);
+        expect(declaredTooLarge.status).toBe(502);
+        expect(declaredTooLarge.body).toBe("抖音验证页面响应过大");
+
+        const streamedTooLarge = context(publicPath);
+        await fixture.handlers[0]!(streamedTooLarge as never);
+        expect(streamedTooLarge.status).toBe(502);
+        expect(streamedTooLarge.body).toBe("抖音验证页面响应过大");
     });
 });
 
@@ -128,7 +167,7 @@ function context(path: string) {
     const responseHeaders: Record<string, string> = {};
     return {
         method: "GET",
-        path,
+        path: new URL(path, "http://localhost").pathname,
         url: path,
         headers: { accept: "text/html" } as Record<string, string>,
         request: { rawBody: undefined as Buffer | undefined },
