@@ -5,6 +5,7 @@ import { types } from "node:util";
 import { RuntimeConfigurationRejectedError, type BaseApp } from "@onebots/core";
 import { parseRuntimeConfig, validateRuntimeConfig } from "../runtime-config-validator.js";
 import { mergeRuntimeConfigDefaults } from "../runtime-defaults.js";
+import { assertGatewaySnapshotFileSecurity } from "../control/gateway-snapshot-security.js";
 import type { GatewayStartMessage } from "./contracts.js";
 import {
     isGatewayConfigurationRequest,
@@ -138,6 +139,7 @@ export class GatewayConfigurationExecutor {
             if (request.configPath !== file || fs.realpathSync(directory) !== directory)
                 return "rejected";
             const stat = fs.lstatSync(file);
+            assertGatewaySnapshotFileSecurity(file);
             if (
                 !stat.isFile() ||
                 stat.isSymbolicLink() ||
@@ -162,9 +164,16 @@ export class GatewayConfigurationExecutor {
             );
             if (result.status === "applied") {
                 this.identity.configVersion = request.nextConfigVersion!;
-                this.onApplied(this.identity.configVersion);
             }
             receipt.result = { status: result.status, configVersion: this.identity.configVersion };
+            if (result.status === "applied") {
+                try {
+                    this.onApplied(this.identity.configVersion);
+                } catch {
+                    // 旁路状态发布失败不改变已保存的原回执，也不能重新派发配置。
+                    process.stderr.write("[onebots] 热配置已应用，但状态发布失败\n");
+                }
+            }
             return "succeeded";
         } catch (error) {
             if (error instanceof RuntimeConfigurationRejectedError) return "rejected";

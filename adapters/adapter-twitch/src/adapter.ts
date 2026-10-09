@@ -264,6 +264,7 @@ export class TwitchAdapter extends Adapter<TwitchClient, "twitch"> {
         });
         runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async (signal: AbortSignal) => {
+            runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
             try {
                 await client.start(signal);
                 account.status = AccountStatus.Online;
@@ -276,6 +277,7 @@ export class TwitchAdapter extends Adapter<TwitchClient, "twitch"> {
             }
         });
         account.on("stop", async () => {
+            this.httpHost.unmount(account.account_id);
             try {
                 await client.stop();
             } finally {

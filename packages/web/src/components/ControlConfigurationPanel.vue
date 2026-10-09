@@ -15,13 +15,16 @@ import {
     type ConfigurationScope,
 } from "./control-configuration-layout.js";
 
-const props = defineProps<{
-    client: ControlClient;
-    mutationBlock?: ControlMutationBlock;
-    gatewayRunning?: boolean;
-    target?: ConfigurationNavigationTarget;
-    scope: ConfigurationScope;
-}>();
+const props = withDefaults(
+    defineProps<{
+        client: ControlClient;
+        mutationBlock?: ControlMutationBlock;
+        gatewayRunning?: boolean;
+        target?: ConfigurationNavigationTarget;
+        scope: ConfigurationScope;
+    }>(),
+    { gatewayRunning: undefined },
+);
 const emit = defineEmits<{
     applied: [];
     dirtyChange: [dirty: boolean];
@@ -157,6 +160,10 @@ async function saveConfiguration() {
         return;
     }
     if (!(await checkConfiguration())) return;
+    if (props.gatewayRunning === undefined) {
+        error.value = "网关状态尚未确认，未发送应用请求。请刷新状态后重试。";
+        return;
+    }
     if (props.gatewayRunning && !validation.value?.impact) {
         error.value = "尚未确认配置的影响范围，未发送应用请求。请重新检测配置。";
         return;

@@ -50,6 +50,13 @@ function data(value: unknown): value is Record<string, unknown> {
 }
 function identity(value: Record<string, unknown>): boolean {
     return (
+        [
+            "protocolVersion",
+            "controlInstanceId",
+            "gatewayInstanceId",
+            "requestId",
+            "operationId",
+        ].every(key => Object.hasOwn(value, key)) &&
         value.protocolVersion === 1 &&
         id(value.controlInstanceId) &&
         id(value.gatewayInstanceId) &&
@@ -62,6 +69,7 @@ export function isGatewayConfigurationRequest(
 ): value is GatewayConfigurationRequest {
     if (
         !data(value) ||
+        !["type", "action", "expectedConfigVersion"].every(key => Object.hasOwn(value, key)) ||
         value.type !== "gateway.configuration" ||
         !identity(value) ||
         !hash(value.expectedConfigVersion)
@@ -91,6 +99,7 @@ export function isGatewayConfigurationRequest(
 export function isGatewayConfigurationReply(value: unknown): value is GatewayConfigurationReply {
     if (
         !data(value) ||
+        !["type", "outcome"].every(key => Object.hasOwn(value, key)) ||
         value.type !== "gateway.configuration.result" ||
         !identity(value) ||
         typeof value.outcome !== "string" ||
@@ -109,6 +118,7 @@ export function isGatewayConfigurationReply(value: unknown): value is GatewayCon
     if (value.outcome === "succeeded") {
         keys.push("result");
         if (
+            !Object.hasOwn(value, "result") ||
             !data(value.result) ||
             Object.keys(value.result).sort().join(",") !== "configVersion,status" ||
             !hash(value.result.configVersion) ||

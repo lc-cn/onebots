@@ -20,6 +20,10 @@ describe("GoogleChatHttpHost", () => {
     it("热重载后解析当前 Client，不捕获旧实例", async () => {
         const routes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             post: vi.fn((path: string, handler: Handler) => routes.set(path, handler)),
         };
         const clients = new Map<string, GoogleChatClient>();
@@ -48,7 +52,13 @@ describe("GoogleChatHttpHost", () => {
 
     it("拒绝活跃账号路径冲突，路径迁移后旧路由失活", async () => {
         const routes = new Map<string, Handler>();
-        const router = { post: (path: string, handler: Handler) => routes.set(path, handler) };
+        const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
+            post: (path: string, handler: Handler) => routes.set(path, handler),
+        };
         const clients = new Map<string, GoogleChatClient>();
         const host = new GoogleChatHttpHost({ router } as unknown as BaseApp, accountId =>
             clients.get(accountId),

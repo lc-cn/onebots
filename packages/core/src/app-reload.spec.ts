@@ -536,6 +536,9 @@ describe("BaseApp reload boundary", () => {
         expect(app.isReloading).toBe(false);
         expect(initAdapters).not.toHaveBeenCalled();
         expect(startAdapters).not.toHaveBeenCalled();
+        await expect(BaseApp.prototype.applyRuntimeConfiguration.call(app, config)).rejects.toThrow(
+            "恢复未完成",
+        );
     });
 
     it("旧运行态恢复失败时同时保留新配置错误与回滚错误", async () => {
@@ -570,6 +573,9 @@ describe("BaseApp reload boundary", () => {
         });
         expect(app.config.access_token).toBe("token");
         expect(app.isReloading).toBe(false);
+        await expect(BaseApp.prototype.applyRuntimeConfiguration.call(app, config)).rejects.toThrow(
+            "恢复未完成",
+        );
     });
 });
 

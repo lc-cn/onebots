@@ -172,7 +172,8 @@ export class GatewayApp extends BaseApp {
             .map(challenge => challenge.id);
         const result = await super.applyRuntimeConfiguration(next);
         // 只清理本次变化前的挑战编号，不能删除重连时刚产生的新二维码/验证请求。
-        for (const id of invalidated) this.verification.complete(id);
+        if (result.status === "applied")
+            for (const id of invalidated) this.verification.complete(id);
         return result;
     }
 

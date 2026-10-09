@@ -359,6 +359,11 @@ export class MatrixAdapter extends Adapter<MatrixClient, "matrix"> {
             );
         }
         account.on("start", async (signal: AbortSignal) => {
+            if (client.receiveMode === "appservice") {
+                runWithAdapterRouteScope(this, () =>
+                    this.appserviceHost.mount(account.account_id, client, account.path),
+                );
+            }
             try {
                 const identity = await client.start(signal);
                 account.status = AccountStatus.Online;
@@ -371,6 +376,7 @@ export class MatrixAdapter extends Adapter<MatrixClient, "matrix"> {
             }
         });
         account.on("stop", async () => {
+            this.appserviceHost.unmount(account.account_id);
             try {
                 await client.stop();
             } finally {

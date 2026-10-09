@@ -252,6 +252,7 @@ export class GenerationActivationController {
             const check = () => {
                 if (!open) throw new Error("配置事务已结束");
             };
+            const pending = new Set<Promise<unknown>>();
             const port: ConfigurationRecoveryTransactionPort = {
                 ...(this.options.runtimeConfiguration
                     ? {
@@ -264,7 +265,13 @@ export class GenerationActivationController {
                               expected: RuntimeConfigurationContext;
                           }) => {
                               check();
-                              return this.options.runtimeConfiguration!.query(input);
+                              const result = this.options.runtimeConfiguration!.query(input);
+                              pending.add(result);
+                              void result.then(
+                                  () => pending.delete(result),
+                                  () => pending.delete(result),
+                              );
+                              return result;
                           },
                       }
                     : {}),
@@ -286,6 +293,7 @@ export class GenerationActivationController {
                 return await this.configurationContext.run(true, () => task(port));
             } finally {
                 open = false;
+                await Promise.allSettled([...pending]);
             }
         });
     }

@@ -23,6 +23,7 @@ export function executeStoredConfiguration(
         save(operation);
         const next = options.source.replace(operation.base.configRevision, document);
         if (
+            !/^[a-f0-9]{64}$/.test(next.revision) ||
             createHash("sha256").update(canonicalConfiguration(next.document)).digest("hex") !==
                 operation.documentDigest ||
             (operation.candidateRevision !== undefined &&

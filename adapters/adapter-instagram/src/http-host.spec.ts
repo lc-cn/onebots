@@ -1,4 +1,6 @@
 import { createHmac } from "node:crypto";
+import { createServer } from "node:http";
+import { Router } from "../../../packages/core/src/router.js";
 import type { BaseApp } from "onebots";
 import { describe, expect, it, vi } from "vitest";
 import { InstagramClient } from "./client.js";
@@ -18,10 +20,37 @@ interface TestContext {
 type Handler = (ctx: TestContext) => Promise<void>;
 
 describe("InstagramHttpHost", () => {
+    it("账号迁移、删除与重新挂载只保留当前 HTTP layer", () => {
+        const router = new Router(createServer());
+        const clients = new Map<string, InstagramClient>();
+        const host = new InstagramHttpHost({ router } as unknown as BaseApp, id => clients.get(id));
+        try {
+            for (let index = 0; index < 30; index++) {
+                const client = new InstagramClient(config("account", "100", `/events-${index}`));
+                clients.set("account", client);
+                host.mount("account", client);
+                expect(router.stack).toHaveLength(2);
+                expect(router.stack.every(layer => layer.path === `/events-${index}`)).toBe(true);
+            }
+            host.unmount("account");
+            expect(router.stack).toHaveLength(0);
+            host.unmount("account");
+            const current = clients.get("account");
+            if (!current) throw new Error("测试客户端不存在");
+            host.mount("account", current);
+            expect(router.stack).toHaveLength(2);
+        } finally {
+            router.cleanup();
+        }
+    });
     it("GET/POST 共用路径，热重载后只解析当前 Client，并保留 raw body", async () => {
         const getRoutes = new Map<string, Handler>();
         const postRoutes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             get: vi.fn((path: string, handler: Handler) => getRoutes.set(path, handler)),
             post: vi.fn((path: string, handler: Handler) => postRoutes.set(path, handler)),
         };
@@ -54,6 +83,10 @@ describe("InstagramHttpHost", () => {
     it("拒绝活跃账号路径冲突，路径迁移后旧路由失活", async () => {
         const routes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             get: (path: string, handler: Handler) => routes.set(`GET ${path}`, handler),
             post: (path: string, handler: Handler) => routes.set(`POST ${path}`, handler),
         };

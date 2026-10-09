@@ -20,6 +20,8 @@ export function runtimeContext(managed: ConfigurationChild | undefined, id: stri
     return managed &&
         !managed.stopping &&
         !managed.exited &&
+        managed.child.exitCode === null &&
+        managed.child.signalCode === null &&
         managed.child.connected &&
         managed.configurationVersion
         ? { gatewayInstanceId: id, configVersion: managed.configurationVersion }

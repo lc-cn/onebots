@@ -103,7 +103,7 @@ Validate first and review the server-generated impact summary. Adding, removing,
 
 Hot application requires the extension to be installed, activated, and enabled in `plugins`. First enabling an unloaded extension also changes process-level selection and requires explicit restart approval. Subsequent accounts and outlets using that extension are hot-applied.
 
-`log_level` and `timeout` update dynamically. An effectively unchanged configuration updates the configuration version without restarting resources. If the gateway is stopped, application only saves the configuration for the next start.
+`log_level` and `timeout` update dynamically. An effectively unchanged configuration updates the configuration version without restarting resources. Only when the server confirms that the gateway has stopped does application merely save the configuration for the next start. An unavailable or uncertain gateway state is not treated as stopped.
 
 Replacing a protocol closes its own WS/SSE connections; its clients should reconnect. Unrelated connections remain running. Complete pending account login first. Active account operations are given a bounded drain window; inability to drain safely rejects the apply before closing connections.
 
@@ -112,6 +112,8 @@ Process-level settings such as database, listening configuration, and extension 
 For a timeout or disconnect, query the original operation ID instead of applying again with a new ID. A confirmed late success or rollback can settle the original operation while its gateway remains available. Unknown receipts, externally changed files, and incomplete rollback keep the recovery protection active.
 
 Before any platform connection, OneBots validates the complete configuration against schemas registered by the active extensions. Validation covers required platform credentials, field types, adapter and protocol references, account protocol outlets, and merged account and `general` values. Errors include the full path, such as `qq.my_bot.appid`.
+
+Configuration receipts retain at most 4096 operations per gateway instance. At capacity, new operations are rejected without evicting original evidence; after reconciliation, an explicit restart opens a new instance. Private snapshots are bounded to 512 files and 64 MiB total. Capacity exhaustion rejects new snapshots rather than deleting versions that recovery may still reference. Reconcile outstanding operations before offline snapshot maintenance.
 
 ## Pre-deployment check
 

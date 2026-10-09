@@ -10,6 +10,17 @@ import type {
 const invalid = () => new Error("配置应用私有存储无效");
 const HASH = /^[a-f0-9]{64}$/;
 
+/** 同时满足恢复读取与纯数据解析限制，不能在派发后才发现意图不可读。 */
+export function writeApplicationJournal(
+    file: string,
+    operation: ConfigurationApplicationJournal,
+): void {
+    const content = JSON.stringify(operation);
+    if (Buffer.byteLength(content) > 4_200_000) throw invalid();
+    parseConfigurationDocument(JSON.parse(content));
+    atomic(file, content);
+}
+
 export function applicationDocumentBytes(document: unknown): string {
     return canonicalConfiguration(parseConfigurationDocument(document));
 }

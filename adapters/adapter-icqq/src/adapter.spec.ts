@@ -1,8 +1,65 @@
 import { describe, expect, it, vi } from "vitest";
 import { ICQQAdapter } from "./adapter.js";
 import { projectICQQFriendChange } from "./events.js";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { BaseApp, SqliteDB, type Account } from "onebots";
 
 describe("ICQQ 账号统一 ID", () => {
+    it.each(["stop", "replace"])("%s 后旧实例验证事件不污染同 ID 新账号", async boundary => {
+        const directory = await mkdtemp(join(tmpdir(), "onebots-icqq-verification-"));
+        const database = new SqliteDB(join(directory, "state"));
+        const logger = {
+            trace: vi.fn(),
+            debug: vi.fn(),
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+            fatal: vi.fn(),
+            mark: vi.fn(),
+        };
+        const adapter = new ICQQAdapter({
+            db: database,
+            config: { general: {} },
+            router: {},
+            getLogger: () => logger,
+        } as unknown as BaseApp);
+        const config: Account.Config<"icqq"> = { platform: "icqq", account_id: "12345678" };
+        const challenge = vi.fn();
+        const cleared = vi.fn();
+        const qr = vi.fn();
+        adapter.on("verification:request", challenge);
+        adapter.on("verification:clear", cleared);
+        adapter.on("qrcode", qr);
+        const old = adapter.createAccount(config);
+        adapter.accounts.set(config.account_id, old);
+        try {
+            old.client.emit("qrcode", { image: Buffer.from("current challenge") });
+            expect(challenge).toHaveBeenCalledOnce();
+            expect(qr).toHaveBeenCalledOnce();
+            if (boundary === "stop") await old.stop();
+            const replacement = adapter.createAccount(config);
+            if (boundary === "replace") adapter.accounts.set(config.account_id, replacement);
+            challenge.mockClear();
+            cleared.mockClear();
+            qr.mockClear();
+            old.client.emit("qrcode", { image: Buffer.from("late challenge") });
+            old.client.emit("offline", { uin: 12345678, message: "late offline" });
+            expect(challenge).not.toHaveBeenCalled();
+            expect(cleared).not.toHaveBeenCalled();
+            expect(qr).not.toHaveBeenCalled();
+            adapter.accounts.set(config.account_id, replacement);
+            replacement.client.emit("qrcode", { image: Buffer.from("new challenge") });
+            expect(challenge).toHaveBeenCalledOnce();
+            expect(qr).toHaveBeenCalledOnce();
+            await replacement.stop();
+        } finally {
+            await old.stop();
+            database.close();
+            await rm(directory, { recursive: true, force: true });
+        }
+    });
     it("将配置中的数字 QQ 号恢复为 number 后投影 CommonEvent.bot_id", () => {
         const adapter = Object.create(ICQQAdapter.prototype) as ICQQAdapter;
         const createId = vi.fn((value: string | number) => ({

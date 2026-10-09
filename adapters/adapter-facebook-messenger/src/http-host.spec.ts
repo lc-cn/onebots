@@ -22,6 +22,10 @@ describe("FacebookMessengerHttpHost", () => {
         const getRoutes = new Map<string, Handler>();
         const postRoutes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             get: vi.fn((path: string, handler: Handler) => getRoutes.set(path, handler)),
             post: vi.fn((path: string, handler: Handler) => postRoutes.set(path, handler)),
         };
@@ -56,6 +60,10 @@ describe("FacebookMessengerHttpHost", () => {
     it("拒绝活跃账号路径冲突，路径迁移后旧路由失活", async () => {
         const routes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             get: (path: string, handler: Handler) => routes.set(`GET ${path}`, handler),
             post: (path: string, handler: Handler) => routes.set(`POST ${path}`, handler),
         };

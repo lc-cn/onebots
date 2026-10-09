@@ -67,18 +67,25 @@ export class GatewayVerificationExecutor {
         this.busy.add(accountKey);
         // 在 SDK 调用前登记 receipt，连同步重入也不能再次派发。
         const result = Promise.resolve().then(async (): Promise<GatewayVerificationOutcome> => {
+            let dispatched = false;
             try {
                 if (this.closed || !this.store.get(command.challengeId) || !isCurrent())
                     return { outcome: "rejected" };
-                if (command.action === "submit")
-                    await adapter.submitVerification!(accountId, type, command.data ?? {});
-                else await adapter.requestSmsCode!(accountId);
+                await account.runOperation(async () => {
+                    if (this.closed || !this.store.get(command.challengeId) || !isCurrent()) return;
+                    // 只有真正进入 SDK 才有未知外部副作用；租约拒绝可确认未派发。
+                    dispatched = true;
+                    if (command.action === "submit")
+                        await adapter.submitVerification!(accountId, type, command.data ?? {});
+                    else await adapter.requestSmsCode!(accountId);
+                });
+                if (!dispatched) return { outcome: "rejected" };
                 if (this.closed || !isCurrent()) return { outcome: "unknown" };
                 if (command.action === "submit") this.store.complete(command.challengeId);
                 return { outcome: "succeeded" };
             } catch {
                 // SDK 可能已消耗验证码或发出短信，不能将异常声称为未执行。
-                return { outcome: "unknown" };
+                return { outcome: dispatched ? "unknown" : "rejected" };
             } finally {
                 this.busy.delete(accountKey);
             }

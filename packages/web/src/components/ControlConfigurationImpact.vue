@@ -18,8 +18,12 @@ const protocolActions = { add: "新增", replace: "更新", remove: "移除" };
 </script>
 
 <template>
-    <section class="configuration-impact" :aria-label="applied ? '上次应用范围' : '配置影响范围'">
-        <strong v-if="applied" class="configuration-impact-label">上次应用</strong>
+    <section
+        class="configuration-impact"
+        :aria-label="stored ? '待生效配置范围' : applied ? '上次应用范围' : '配置影响范围'">
+        <strong v-if="applied" class="configuration-impact-label">{{
+            stored ? "已保存，待生效" : "上次应用"
+        }}</strong>
         <p role="status">{{ summary }}</p>
         <p v-if="impact.mode === 'hot' && !stored" class="configuration-impact-note">
             {{ applied ? "本次仅更新受影响实例。" : "仅更新受影响实例，其他账号保持连接。" }}

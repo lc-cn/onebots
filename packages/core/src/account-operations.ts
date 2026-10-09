@@ -39,7 +39,7 @@ export async function runAccountOperation<T>(
     const state = stateFor(account);
     const parent = contexts.getStore();
     const reentrant = parent?.account === account && state.admitted.has(parent.token);
-    if ((state.closed || state.blockers.size) && !reentrant)
+    if (state.closed || (state.blockers.size && !reentrant))
         throw new AccountOperationRejectedError();
     const token = Symbol("account-operation");
     state.admitted.add(token);

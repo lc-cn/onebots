@@ -280,6 +280,13 @@ export async function startControlHost(options: ControlHostOptions) {
             runtime: {
                 snapshot: document => createGatewayConfigurationSnapshot(workspace, document),
             },
+            planImpact: (before, after) =>
+                activationVerification.planImpact(
+                    lifecycle.activeGeneration(),
+                    options.runtimeRoot ?? process.cwd(),
+                    before,
+                    after,
+                ),
             recovery: new ConfigurationRecoveryStore(
                 path.join(controlDirectory(workspace), "configuration/recovery"),
             ),

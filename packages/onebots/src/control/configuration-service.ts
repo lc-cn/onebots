@@ -206,9 +206,11 @@ export class ControlConfigurationService {
         );
     }
     operation(id: string) {
-        return this.options.application.hasOperation(id)
-            ? this.options.application.queryStatus(id)
-            : undefined;
+        return this.run(async () =>
+            this.options.application.hasOperation(id)
+                ? this.options.application.queryStatus(id)
+                : undefined,
+        );
     }
     async close() {
         this.closed = true;

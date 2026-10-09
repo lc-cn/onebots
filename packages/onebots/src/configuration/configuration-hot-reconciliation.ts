@@ -23,7 +23,7 @@ export async function queryHotConfigurationStatus(
     const operation = journal.read(id);
     if (
         !operation.recoveryRequired ||
-        operation.executionMode !== "hot" ||
+        !["hot", "stored"].includes(operation.executionMode ?? "") ||
         !options.lifecycle.runConfigurationRecoveryTransaction
     )
         return projectConfigurationOperation(operation);
@@ -59,6 +59,72 @@ export async function reconcileHotConfiguration(
     previous: () => Record<string, unknown>,
     save: (operation: ConfigurationApplicationJournal) => void,
 ): Promise<boolean> {
+    if (port.activeGenerationId() !== operation.base.generationId) return false;
+    const source = options.source.read();
+    const sourceDigest = createHash("sha256")
+        .update(canonicalConfiguration(source.document))
+        .digest("hex");
+    const validRevision = /^[a-f0-9]{64}$/.test(source.revision);
+    if (!validRevision) return false;
+    if (operation.executionMode === "stored") {
+        if (port.hasLiveChildren()) return false;
+        const committed =
+            sourceDigest === operation.documentDigest &&
+            (operation.candidateRevision === undefined ||
+                source.revision === operation.candidateRevision);
+        const unchanged =
+            sourceDigest === operation.previousDigest &&
+            source.revision === operation.base.configRevision;
+        if (!committed && !unchanged) return false;
+        operation.configRevision = source.revision;
+        operation.status = committed ? "succeeded" : "failed";
+        operation.phase = committed ? "completed" : "failed";
+        operation.recoveryRequired = false;
+        if (committed) delete operation.error;
+        else operation.error = "CONFIG_APPLY_FAILED";
+        save(operation);
+        return true;
+    }
+    // accepted/writing 意图在 applying 落盘前不可能派发，恢复文件不依赖已死亡实例的回执。
+    // restoring 意图允许识别已提交的旧文档，不重复覆盖或重派原操作。
+    if (["accepted", "writing", "restoring"].includes(operation.phase)) {
+        // 已有新实例可能从候选磁盘配置启动；不能仅凭旧意图修改文件并留下运行态漂移。
+        if (
+            port.hasLiveChildren() &&
+            (!operation.runtimeBefore ||
+                port.runtimeContext?.()?.gatewayInstanceId !==
+                    operation.runtimeBefore.gatewayInstanceId ||
+                port.runtimeContext?.()?.configVersion !== operation.runtimeBefore.configVersion)
+        )
+            return false;
+        if (sourceDigest !== operation.previousDigest && sourceDigest !== operation.documentDigest)
+            return false;
+        if (sourceDigest === operation.documentDigest) {
+            if (
+                operation.candidateRevision !== undefined &&
+                source.revision !== operation.candidateRevision
+            )
+                return false;
+            const restored = options.source.replace(source.revision, previous());
+            if (
+                !/^[a-f0-9]{64}$/.test(restored.revision) ||
+                createHash("sha256")
+                    .update(canonicalConfiguration(restored.document))
+                    .digest("hex") !== operation.previousDigest
+            )
+                return false;
+            operation.configRevision = restored.revision;
+        } else operation.configRevision = source.revision;
+        operation.status = "failed";
+        if (operation.restoreRolledBack !== undefined)
+            operation.rolledBack = operation.restoreRolledBack;
+        delete operation.restoreRolledBack;
+        operation.phase = "failed";
+        operation.recoveryRequired = false;
+        operation.error = "CONFIG_APPLY_FAILED";
+        save(operation);
+        return true;
+    }
     if (
         !operation.runtimeBefore ||
         !operation.runtimeAfter ||
@@ -89,12 +155,20 @@ export async function reconcileHotConfiguration(
         result.configVersion === operation.runtimeBefore.configVersion
     ) {
         operation.phase = "restoring";
+        operation.restoreRolledBack = result.status === "rolled_back";
         save(operation);
         const restored = options.source.replace(operation.configRevision, previous());
+        if (
+            !/^[a-f0-9]{64}$/.test(restored.revision) ||
+            createHash("sha256").update(canonicalConfiguration(restored.document)).digest("hex") !==
+                operation.previousDigest
+        )
+            return false;
         operation.configRevision = restored.revision;
         operation.status = "failed";
         operation.phase = "failed";
         operation.rolledBack = result.status === "rolled_back";
+        delete operation.restoreRolledBack;
         operation.recoveryRequired = false;
         operation.error = "CONFIG_APPLY_FAILED";
     } else return false;

@@ -32,6 +32,6 @@ export function createAdapterWithRouteScope<T extends Adapter>(
 export function closeAdapterRouteScope(adapter: Adapter): void {
     const scope = routeScopes.get(adapter);
     if (!scope) return;
-    routeScopes.delete(adapter);
+    // 保留关闭后的作用域墓碑：迟到的 Host 初始化仍必须被撤销，不能落入无作用域路由。
     scope.close();
 }

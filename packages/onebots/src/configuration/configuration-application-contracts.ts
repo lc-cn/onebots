@@ -10,7 +10,10 @@ export function checkApplicationBase(value: unknown): void {
         Object.keys(base).sort().join(",") !== "configRevision,generationId" ||
         !(
             base.generationId === null ||
-            (typeof base.generationId === "string" && /^[a-f0-9-]{36}$/.test(base.generationId))
+            (typeof base.generationId === "string" &&
+                /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+                    base.generationId,
+                ))
         ) ||
         typeof base.configRevision !== "string" ||
         !/^[a-f0-9]{64}$/.test(base.configRevision)
@@ -27,7 +30,7 @@ export function checkApplicationRuntimeFields(value: Record<string, unknown>): v
     const identifier = (input: unknown) =>
         typeof input === "string" &&
         input.length > 0 &&
-        input.length <= 512 &&
+        input.length <= 1_048_576 &&
         !/[\p{Cc}\p{Cf}]/u.test(input);
     if (
         value.executionMode !== undefined &&
@@ -60,7 +63,7 @@ export function checkApplicationRuntimeFields(value: Record<string, unknown>): v
     }
     for (const field of ["accounts", "protocols"]) {
         const entries = impact[field];
-        if (!Array.isArray(entries) || entries.length > 1000) invalid();
+        if (!Array.isArray(entries) || entries.length > 100_000) invalid();
         for (const entry of entries as unknown[]) {
             const item = parseConfigurationDocument(entry);
             const protocol = field === "protocols";
@@ -86,6 +89,11 @@ export interface ConfigurationSourceSnapshot {
     document: Record<string, unknown>;
 }
 export interface ConfigurationApplicationOptions {
+    /** 宿主注入实际协议注册表规划器；客户端影响摘要不作为授权依据。 */
+    planImpact?(
+        before: Record<string, unknown>,
+        after: Record<string, unknown>,
+    ): Promise<ConfigurationImpact>;
     runtime?: {
         snapshot(document: Record<string, unknown>): { configPath: string; configVersion: string };
     };
@@ -139,6 +147,8 @@ export interface ConfigurationApplicationOperation {
     error?: "CONFIG_APPLY_FAILED" | "CONFIG_RECOVERY_REQUIRED";
 }
 export interface ConfigurationApplicationJournal extends ConfigurationApplicationOperation {
+    /** 恢复磁盘前的原回执事实，完成前不能投影为 rolledBack 成功。 */
+    restoreRolledBack?: boolean;
     runtimeBefore?: { gatewayInstanceId: string; configVersion: string };
     runtimeAfter?: string;
     mode?: "repair";

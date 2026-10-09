@@ -4,6 +4,7 @@ import {
     atomic,
     checkRepair,
     checkRepairRevisions,
+    writeApplicationJournal,
     applicationDocumentBytes as bytes,
     applicationDigest as digest,
 } from "./configuration-application-storage.js";
@@ -55,7 +56,6 @@ export class ConfigurationApplication {
                 const operation = this.read(filename.slice(0, -5));
                 if (operation.status === "running") {
                     operation.status = "interrupted";
-                    operation.phase = "failed";
                     operation.recoveryRequired = true;
                     operation.error = "CONFIG_RECOVERY_REQUIRED";
                     this.save(operation);
@@ -217,10 +217,13 @@ export class ConfigurationApplication {
             )
                 throw new ConfigurationConflictError();
             const previousBytes = request.repair ? undefined : bytes(before.document);
-            const rawImpact = request.repair
+            const impact = request.repair
                 ? undefined
-                : planRuntimeConfiguration(before.document!, request.document);
-            const impact = request.impact ?? rawImpact;
+                : this.options.planImpact
+                  ? await this.options.planImpact(before.document!, request.document)
+                  : planRuntimeConfiguration(before.document!, request.document);
+            if (request.impact && impact && bytes(request.impact) !== bytes(impact))
+                throw new ConfigurationConflictError();
             const runtimeBefore = port.runtimeContext?.();
             const desired = port.gatewayStatus().desired;
             const executionMode =
@@ -234,11 +237,7 @@ export class ConfigurationApplication {
                       : impact?.mode === "none"
                         ? "stored"
                         : "restart";
-            if (
-                executionMode === "restart" &&
-                this.options.runtime &&
-                request.allowRestart !== true
-            )
+            if (executionMode === "restart" && request.allowRestart !== true)
                 throw new Error("此配置需要重启网关，请明确确认重启后再应用");
             const operation: ConfigurationApplicationJournal = {
                 ...(impact ? { impact } : {}),
@@ -256,7 +255,7 @@ export class ConfigurationApplication {
                 ...(request.repair
                     ? { mode: "repair" as const, repair: { ...request.repair } }
                     : {}),
-                ...(request.repair
+                ...(this.options.source.serialize
                     ? {
                           candidateRevision: digest(
                               this.options.source.serialize!(request.document),
@@ -405,7 +404,6 @@ export class ConfigurationApplication {
         this.blocked = true;
         delete operation.rolledBack;
         operation.status = "failed";
-        operation.phase = "failed";
         operation.recoveryRequired = true;
         operation.error = "CONFIG_RECOVERY_REQUIRED";
         try {
@@ -420,7 +418,7 @@ export class ConfigurationApplication {
         return path.join(this.directory, `${id}.json`);
     }
     private save(operation: ConfigurationApplicationJournal): void {
-        atomic(this.file(operation.id), JSON.stringify(operation));
+        writeApplicationJournal(this.file(operation.id), operation);
         if (operation.status !== "running")
             observeNamedPersistedOperation(
                 this.options.onOperation,
@@ -430,7 +428,7 @@ export class ConfigurationApplication {
     }
     private read(id: string): ConfigurationApplicationJournal {
         try {
-            const raw = parseConfigurationDocument(JSON.parse(readFile(this.file(id), 1_048_576)));
+            const raw = parseConfigurationDocument(JSON.parse(readFile(this.file(id), 4_200_000)));
             checkBase(raw.base);
             checkApplicationRuntimeFields(raw);
             if (
@@ -461,6 +459,8 @@ export class ConfigurationApplication {
                     (typeof raw.candidateRevision !== "string" ||
                         !HASH.test(raw.candidateRevision))) ||
                 (raw.rolledBack !== undefined && typeof raw.rolledBack !== "boolean") ||
+                (raw.restoreRolledBack !== undefined &&
+                    typeof raw.restoreRolledBack !== "boolean") ||
                 (raw.error !== undefined &&
                     !["CONFIG_APPLY_FAILED", "CONFIG_RECOVERY_REQUIRED"].includes(
                         String(raw.error),

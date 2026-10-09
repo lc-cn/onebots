@@ -32,9 +32,21 @@ export class ICQQAdapter extends ICQQActionAdapter {
         const bot = new ICQQBot(icqqConfig);
         const account = new Account<"icqq", ICQQBot>(this, bot, config);
 
+        // SDK 的迟到事件不能把已移除实例的验证请求投影到同 ID 新账号。
+        let retired = false;
+        account.on("start", () => {
+            retired = false;
+        });
+        account.on("stop", () => {
+            retired = true;
+        });
+
         wireICQQAccountEvents(account, {
             logger: this.logger,
-            emit: (event, payload) => this.emit(event, payload),
+            emit: (event, payload) => {
+                if (!retired && this.accounts.get(account.account_id) === account)
+                    this.emit(event, payload);
+            },
             projectionContext: accountId => this.projectionContext(accountId),
         });
 

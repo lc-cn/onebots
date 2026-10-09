@@ -219,6 +219,26 @@ export async function runControlConfiguration(
                     prompt.report("草稿版本已变化，请重新读取并验证。");
                     continue;
                 }
+                // 展示服务端计算的实例范围；不回显配置值或第三方原始诊断。
+                if (validation.impact) {
+                    const impact = validation.impact;
+                    const safe = (value: string) => value.replace(/[\x00-\x1f\x7f]/gu, " ");
+                    prompt.report(
+                        `应用方式：${{ none: "无需更新连接", hot: "按实例热更新", restart: "重启网关" }[impact.mode]}`,
+                    );
+                    for (const item of impact.accounts)
+                        prompt.report(
+                            `${{ add: "新增", reconnect: "重连", remove: "移除" }[item.action]}账号：${safe(item.platform)}/${safe(item.accountId)}`,
+                        );
+                    for (const item of impact.protocols)
+                        prompt.report(
+                            `${{ add: "新增", replace: "更新", remove: "移除" }[item.action]}协议：${safe(item.platform)}/${safe(item.accountId)} · ${safe(item.name)}/${safe(item.version)}`,
+                        );
+                    for (const field of impact.dynamicFields)
+                        prompt.report(`动态设置：${safe(field)}`);
+                    for (const reason of impact.restartReasons)
+                        prompt.report(`重启原因：${safe(reason)}`);
+                }
                 if (
                     !(await confirmControlAction(
                         prompt,

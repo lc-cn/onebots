@@ -667,13 +667,15 @@ try {
     assert.equal(protocolResult.status, 200);
     assert.equal(protocolResult.body.status, "ok");
     assert.ok(Number.isSafeInteger(protocolResult.body.data.user_id));
-    const addedProtocolStatus = await devtools.evaluate(`(async () => {
+    const addedProtocolResult = await devtools.evaluate(`(async () => {
         const response = await fetch("/mock/hot-web/onebot/v11/get_login_info", {
             method: "POST", headers: { "content-type": "application/json" }, body: "{}",
         });
-        return response.status;
+        return { status: response.status, body: await response.json() };
     })()`);
-    assert.equal(addedProtocolStatus, 200);
+    assert.equal(addedProtocolResult.status, 200);
+    assert.equal(addedProtocolResult.body.status, "ok");
+    assert.ok(Number.isSafeInteger(addedProtocolResult.body.data.user_id));
 
     devtools.close();
     devtools = undefined;

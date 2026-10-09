@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { WebSocket } from "ws";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BaseApp } from "./base-app.js";
 import { Account, AccountStatus } from "./account.js";
 import { Adapter } from "./adapter.js";
@@ -17,10 +17,11 @@ const disposals: Array<() => Promise<void>> = [];
 afterEach(async () => {
     for (const dispose of disposals.splice(0)) await dispose();
     AdapterRegistry.unregister("hotplug-test");
+    AdapterRegistry.unregister("hotplug-queued");
     ProtocolRegistry.unregister("hotplug-test");
 });
 
-async function fixture() {
+async function fixture(options: { queued?: boolean; beforeStart?: (app: BaseApp) => void } = {}) {
     let sequence = 0;
     let rejectRecovery = false;
     let releaseQuery: (() => void) | undefined;
@@ -30,8 +31,8 @@ async function fixture() {
     });
     class TestAdapter extends Adapter {
         private readonly mounted = new Set<string>();
-        constructor(app: BaseApp) {
-            super(app, "hotplug-test");
+        constructor(app: BaseApp, platform = "hotplug-test") {
+            super(app, platform);
         }
         createAccount(config: Account.Config): Account {
             const identity = ++sequence;
@@ -118,6 +119,16 @@ async function fixture() {
         ProtocolRegistry.register("hotplug-test", version, TestProtocol);
     }
     AdapterRegistry.register("hotplug-test", TestAdapter);
+    if (options.queued) {
+        AdapterRegistry.register(
+            "hotplug-queued",
+            class extends TestAdapter {
+                constructor(app: BaseApp) {
+                    super(app, "hotplug-queued");
+                }
+            },
+        );
+    }
     const previousDirectory = BaseApp.configDir;
     const directory = mkdtempSync(join(tmpdir(), "onebots-hotplug-"));
     BaseApp.configDir = directory;
@@ -130,7 +141,23 @@ async function fixture() {
         },
         "hotplug-test.b": { token: "b", "hotplug-test.v1": { label: "unaffected" } },
     };
+    if (options.queued) {
+        initial["hotplug-queued.waiting"] = {
+            "hotplug-test.v1": { label: "queued" },
+        };
+    }
     const app = new BaseApp(initial);
+    const sockets: WebSocket[] = [];
+    disposals.push(async () => {
+        releaseQuery?.();
+        sockets.forEach(socket => socket.terminate());
+        try {
+            await app.stop();
+        } finally {
+            rmSync(directory, { recursive: true, force: true });
+        }
+    });
+    options.beforeStart?.(app);
     BaseApp.configDir = previousDirectory;
     const oldPort = process.env.PORT;
     process.env.PORT = "0";
@@ -143,18 +170,12 @@ async function fixture() {
     const address = app.httpServer.address();
     if (!address || typeof address === "string") throw new Error("监听失败");
     const base = `http://127.0.0.1:${address.port}`;
-    const sockets: WebSocket[] = [];
     const connect = async (path: string) => {
         const socket = new WebSocket(base.replace("http", "ws") + path);
         sockets.push(socket);
         await once(socket, "open");
         return socket;
     };
-    disposals.push(async () => {
-        sockets.forEach(socket => socket.terminate());
-        await app.stop();
-        rmSync(directory, { recursive: true, force: true });
-    });
     const json = async (path: string) => (await fetch(base + path)).json();
     return {
         app,
@@ -170,6 +191,158 @@ async function fixture() {
 }
 
 describe("账号和协议热插拔公开效果", () => {
+    it("宿主尚未完成 HTTP 初始化时热配置未受理", async () => {
+        let entered!: () => void;
+        let release!: () => void;
+        const listening = new Promise<void>(resolve => {
+            entered = resolve;
+        });
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        class DelayedHost extends BaseApp {
+            protected override async listenHttpServer(signal?: AbortSignal): Promise<void> {
+                entered();
+                await gate;
+                await super.listenHttpServer(signal);
+            }
+        }
+        const original = process.env.PORT;
+        process.env.PORT = "0";
+        const app = new DelayedHost({});
+        const starting = app.start();
+        try {
+            await listening;
+            await expect(
+                app.applyRuntimeConfiguration({
+                    ...structuredClone(app.config),
+                    log_level: "debug",
+                }),
+            ).rejects.toThrow("生命周期正在变更");
+        } finally {
+            release();
+            await starting;
+            await app.stop();
+            if (original === undefined) delete process.env.PORT;
+            else process.env.PORT = original;
+        }
+    });
+    it("首个平台注册账号等待期间，排队平台拒绝热改但新增无关账号仍可用", async () => {
+        const { app, json } = await fixture({
+            queued: true,
+            beforeStart: host => {
+                const first = host.adapters.get("hotplug-test")?.accounts.get("a");
+                if (!first) throw new Error("测试账号不存在");
+                first.on("start", async () => {
+                    const queued = structuredClone(host.config);
+                    queued["hotplug-queued.waiting"].token = "changed before queued start";
+                    await expect(host.applyRuntimeConfiguration(queued)).rejects.toThrow(
+                        "受影响账号仍在启动",
+                    );
+                    const added = structuredClone(host.config);
+                    added["hotplug-test.c"] = {
+                        "hotplug-test.v1": { label: "added during startup" },
+                    };
+                    expect((await host.applyRuntimeConfiguration(added)).status).toBe("applied");
+                });
+            },
+        });
+        expect(await json("/hotplug-queued/waiting/hotplug-test/v1")).toEqual({ label: "queued" });
+        expect(await json("/hotplug-test/c/hotplug-test/v1")).toEqual({
+            label: "added during startup",
+        });
+        expect(app.adapters.get("hotplug-test")?.accounts.size).toBe(3);
+    });
+    it("删除运行态缺失的账号是幂等操作，不创建或重连其他实例", async () => {
+        const { app, json } = await fixture();
+        const adapter = app.adapters.get("hotplug-test");
+        const account = adapter?.accounts.get("a");
+        if (!adapter || !account) throw new Error("测试账号不存在");
+        await account.stop();
+        adapter.accounts.delete("a");
+        const other = await json("/hotplug-test/b/callback");
+        const next = structuredClone(app.config);
+        delete next["hotplug-test.a"];
+        expect((await app.applyRuntimeConfiguration(next)).status).toBe("applied");
+        expect(adapter.accounts.size).toBe(1);
+        expect(await json("/hotplug-test/b/callback")).toEqual(other);
+    });
+    it("尚未安装的标准协议配置明确拒绝，不重连账号或静默忽略", async () => {
+        const { app, json } = await fixture();
+        const before = await json("/hotplug-test/a/callback");
+        const next = structuredClone(app.config);
+        next["hotplug-test.a"]["onebot.v11"] = { use_http: true };
+        await expect(app.applyRuntimeConfiguration(next)).rejects.toThrow("尚未安装");
+        expect(await json("/hotplug-test/a/callback")).toEqual(before);
+    });
+    it("停止后的旧账号拒绝已准入调用继续嵌套发起新操作", async () => {
+        const { app } = await fixture();
+        const account = app.adapters.get("hotplug-test")?.accounts.get("a");
+        if (!account) throw new Error("测试账号不存在");
+        await account.runOperation(async () => {
+            await account.stop();
+            await expect(account.runOperation(() => "late SDK call")).rejects.toThrow("操作未受理");
+        });
+    });
+    it("协议投递持有租约，热替换在投递完成前不得关闭协议", async () => {
+        const { app, json } = await fixture();
+        const account = app.adapters.get("hotplug-test")?.accounts.get("a");
+        if (!account) throw new Error("测试账号不存在");
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const protocol = account.protocols[0];
+        const delivery = vi.spyOn(protocol, "dispatch").mockReturnValue(pending);
+        const stop = vi.spyOn(protocol, "stop");
+        const id = account.adapter.createId("event");
+        const sending = account.dispatchAwaited({
+            id,
+            bot_id: id,
+            timestamp: Date.now(),
+            type: "message",
+            platform: "hotplug-test",
+        });
+        await Promise.resolve();
+        const next = structuredClone(app.config);
+        next["hotplug-test.a"]["hotplug-test.v1"] = { label: "after delivery" };
+        const applying = app.applyRuntimeConfiguration(next);
+        try {
+            expect(delivery).toHaveBeenCalledOnce();
+            expect(stop).not.toHaveBeenCalled();
+            expect(await json("/hotplug-test/b/hotplug-test/v1")).toEqual({ label: "unaffected" });
+        } finally {
+            release();
+        }
+        await sending;
+        expect((await applying).status).toBe("applied");
+        expect(stop).toHaveBeenCalledOnce();
+    });
+    it("协议停止超时不创建重叠恢复实例，返回需要完整恢复并锁定热应用", async () => {
+        const { app, json } = await fixture();
+        await app.applyRuntimeConfiguration({ ...structuredClone(app.config), timeout: 1 });
+        const account = app.adapters.get("hotplug-test")?.accounts.get("a");
+        if (!account) throw new Error("测试账号不存在");
+        const protocol = account.protocols[0];
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const stopping = vi.spyOn(protocol, "stop").mockImplementationOnce(() => pending);
+        const next = structuredClone(app.config);
+        next["hotplug-test.a"]["hotplug-test.v1"] = { label: "unsafe" };
+        try {
+            expect((await app.applyRuntimeConfiguration(next)).status).toBe("recovery_required");
+            expect(account.protocols[0]).toBe(protocol);
+            expect(stopping).toHaveBeenCalledOnce();
+            await expect(app.applyRuntimeConfiguration(next)).rejects.toThrow("恢复未完成");
+            await expect(app.reload(next)).rejects.toThrow("停止结果未确定");
+            await expect(app.start()).rejects.toThrow("停止结果未确定");
+            expect(await json("/hotplug-test/b/hotplug-test/v1")).toEqual({ label: "unaffected" });
+        } finally {
+            release();
+        }
+    });
     it("其他账号等待登录不阻止局部配置，受影响启动账号则明确拒绝", async () => {
         const { app, json } = await fixture();
         const adapter = app.adapters.get("hotplug-test");
@@ -238,6 +411,9 @@ describe("账号和协议热插拔公开效果", () => {
         await expect(app.applyRuntimeConfiguration(next)).rejects.toThrow("热配置未受理");
         expect(app.config).toEqual(previous);
         expect(await json("/hotplug-test/a/callback")).toEqual(callback);
+        expect(app.adapters.get("hotplug-test")?.accounts.get("a")?.status).toBe(
+            AccountStatus.Online,
+        );
         releaseQuery();
         expect(await query).toEqual({ sentBy: String(callback.identity) });
         expect(await json("/hotplug-test/b/hotplug-test/v1")).toEqual({ label: "unaffected" });
@@ -256,6 +432,21 @@ describe("账号和协议热插拔公开效果", () => {
         expect(await query).toEqual({ sentBy: String(callback.identity) });
         expect((await applying).status).toBe("applied");
         expect(await json("/hotplug-test/a/callback")).not.toEqual(callback);
+    });
+    it("仅替换协议也等待原查询和内层发送完成，不关闭正在使用的连接", async () => {
+        const { app, json, queryEntered, releaseQuery } = await fixture();
+        const callback = await json("/hotplug-test/a/callback");
+        const query = json("/hotplug-test/a/hotplug-test/v1/query");
+        await queryEntered;
+        const next = structuredClone(app.config);
+        next["hotplug-test.a"]["hotplug-test.v1"] = { label: "after drain" };
+        const applying = app.applyRuntimeConfiguration(next);
+        expect(await json("/hotplug-test/a/hotplug-test/v1")).toEqual({ label: "old" });
+        expect(await json("/hotplug-test/b/hotplug-test/v1")).toEqual({ label: "unaffected" });
+        releaseQuery();
+        expect(await query).toEqual({ sentBy: String(callback.identity) });
+        expect((await applying).status).toBe("applied");
+        expect(await json("/hotplug-test/a/hotplug-test/v1")).toEqual({ label: "after drain" });
     });
     it("有效值未变也保留新的覆盖关系，后续默认值变更能正确生效", async () => {
         const { app, json } = await fixture();

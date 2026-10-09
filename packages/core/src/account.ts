@@ -354,6 +354,10 @@ export class Account<
      * 但最终会向接入层传播失败，使 Webhook、队列或 Stream 可以请求平台重投。
      */
     async dispatchAwaited(commonEvent: CommonEvent.Base): Promise<void> {
+        return this.runOperation(() => this.dispatchProtocolsAwaited(commonEvent));
+    }
+
+    private async dispatchProtocolsAwaited(commonEvent: CommonEvent.Base): Promise<void> {
         this.logger.debug(
             `Dispatching event: ${commonEvent.type} to ${this.protocols.length} protocol(s)`,
         );

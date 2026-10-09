@@ -5,6 +5,7 @@ import { verifyConfiguration } from "../configuration/configuration-verify.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
 import type { VerifiedGeneration } from "../installation/generation-store.js";
 import { getConfiguredPluginSelection } from "../runtime-plugin-selection.js";
+import type { ConfigurationImpact } from "@onebots/core";
 
 /** 在生命周期队列内验证候选宿主与当前配置；安装验证不能替代业务配置验证。 */
 export class GenerationConfigurationVerifier {
@@ -34,6 +35,45 @@ export class GenerationConfigurationVerifier {
     async close(): Promise<void> {
         this.abort.abort();
         await Promise.allSettled([...this.pending]);
+    }
+
+    /** 应用前重新使用隔离运行版本注册表规划，不能信任可变验证收据中的影响。 */
+    planImpact(
+        generation: VerifiedGeneration | null,
+        runtimeRoot: string,
+        before: Record<string, unknown>,
+        after: Record<string, unknown>,
+    ): Promise<ConfigurationImpact> {
+        if (this.abort.signal.aborted) return Promise.reject(new Error("版本验证已关闭"));
+        const configured = getConfiguredPluginSelection(after, true);
+        const selection = {
+            adapters: configured?.adapters ?? [],
+            protocols: configured?.protocols ?? [],
+            applications: configured?.applications ?? [],
+        };
+        const runtime = generation
+            ? resolveGenerationRuntime(generation, selection)
+            : { runtimeRoot, selection };
+        const work = this.verifyRuntime({
+            ...runtime,
+            hostEntrypoint: generation
+                ? undefined
+                : path.resolve(import.meta.dirname, "../../lib/index.js"),
+            privateRoot: path.join(this.workspace, ".control", "application-verification-workers"),
+            document: after,
+            previousDocument: before,
+            signal: this.abort.signal,
+        }).then(result => {
+            if (!result.valid || !result.impact) throw new Error("配置影响无法确认，请重新验证");
+            return result.impact;
+        });
+        this.pending.add(work);
+        void work
+            .finally(() => this.pending.delete(work))
+            .catch(() => {
+                // 异常交给应用事务处理，这里只清理生命周期登记。
+            });
+        return work;
     }
 
     private async validate(

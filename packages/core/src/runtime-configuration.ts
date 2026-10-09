@@ -36,6 +36,7 @@ export class RuntimeConfigurationRejectedError extends ConfigError {
 }
 
 const DYNAMIC_FIELDS = new Set(["log_level", "timeout"]);
+const STANDARD_PROTOCOLS = new Set(["onebot", "milky", "satori", "mcp"]);
 
 /** 比较有效配置；输出仅包含字段路径和实例身份，绝不包含配置值或凭据。 */
 export function planRuntimeConfiguration(
@@ -102,8 +103,13 @@ export function planRuntimeConfiguration(
 }
 
 export function isProtocolKey(key: string): boolean {
-    const [name, version] = key.split(".");
-    return Boolean(version && ProtocolRegistry.has(name, version));
+    const [name, version, extra] = key.split(".");
+    if (!version || extra !== undefined) return false;
+    // 尚未安装的标准协议也应进入验证，不能被当成平台配置静默忽略。
+    return (
+        ProtocolRegistry.has(name, version) ||
+        (STANDARD_PROTOCOLS.has(name) && /^v\d+$/u.test(version))
+    );
 }
 
 export function effectiveProtocolConfig(

@@ -59,6 +59,7 @@ const hot: ConfigurationImpact = {
 function fixture(
     impact: ConfigurationImpact | undefined,
     executionMode: "hot" | "restart" | "stored" = "hot",
+    gatewayRunning: boolean | null = executionMode !== "stored",
 ) {
     const base = { generationId: "generation", configRevision: "a".repeat(64) };
     const draft = {
@@ -111,7 +112,7 @@ function fixture(
     const app = renderer.createApp(ControlConfigurationPanel, {
         client,
         scope: "accounts",
-        gatewayRunning: executionMode !== "stored",
+        gatewayRunning: gatewayRunning ?? undefined,
     });
     app.mount(root);
     async function clickSave() {
@@ -156,9 +157,9 @@ describe("配置保存的实例影响与重启确认", () => {
             expect(f.confirm).toHaveBeenCalledOnce();
             expect(f.apply).not.toHaveBeenCalled();
             expect(text(f.root)).toContain("所有账号和协议连接将短暂中断");
-            expect(
-                flatten(f.root).find(item => item.tag === "details")?.props.open,
-            ).toBeUndefined();
+            const details = flatten(f.root).find(item => item.tag === "details");
+            expect(details).toBeDefined();
+            expect(details?.props.open).toBeUndefined();
         } finally {
             f.close();
         }
@@ -181,6 +182,16 @@ describe("配置保存的实例影响与重启确认", () => {
             expect(f.apply).not.toHaveBeenCalled();
             expect(f.confirm).not.toHaveBeenCalled();
             expect(text(f.root)).toContain("请重新检测配置");
+        } finally {
+            f.close();
+        }
+    });
+    it("网关状态未知时不能当作已停止而跳过确认", async () => {
+        const f = fixture({ ...hot, mode: "restart", restartReasons: ["port"] }, "hot", null);
+        try {
+            await f.clickSave();
+            expect(f.apply).not.toHaveBeenCalled();
+            expect(text(f.root)).toContain("网关状态尚未确认");
         } finally {
             f.close();
         }

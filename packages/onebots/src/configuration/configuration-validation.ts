@@ -237,7 +237,7 @@ export class ConfigurationValidation {
             !stat.isFile() ||
             stat.isSymbolicLink() ||
             stat.nlink !== 1 ||
-            stat.size > 1_048_576 ||
+            stat.size > 4_200_000 ||
             (process.platform !== "win32" && (stat.mode & 0o077) !== 0)
         )
             throw failure();
@@ -276,12 +276,15 @@ export class ConfigurationValidation {
         return raw as unknown as Receipt;
     }
     private write(receipt: Receipt): void {
+        const content = JSON.stringify(receipt);
+        if (Buffer.byteLength(content) > 4_200_000) throw failure();
+        parseConfigurationDocument(JSON.parse(content));
         const file = this.file(receipt.id);
         const temporary = `${file}.${randomUUID()}.tmp`;
         try {
             const descriptor = fs.openSync(temporary, "wx", 0o600);
             try {
-                fs.writeFileSync(descriptor, JSON.stringify(receipt));
+                fs.writeFileSync(descriptor, content);
                 fs.fsyncSync(descriptor);
             } finally {
                 fs.closeSync(descriptor);

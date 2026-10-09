@@ -3,6 +3,7 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { afterEach, expect, it } from "vitest";
 import { startControlHost } from "./host.js";
+import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { createLocalControlClient } from "../client/local-control.js";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -20,7 +21,7 @@ async function fixture() {
         ["@onebots/protocol-onebot-v11", "protocols/onebot-v11/protocol"],
     ])
         fs.symlinkSync(
-            path.resolve(directory),
+            path.resolve(import.meta.dirname, "../../../..", directory),
             path.join(runtimeRoot, "node_modules", name),
             "dir",
         );
@@ -36,10 +37,15 @@ async function fixture() {
         workspace,
         runtimeRoot,
         port: 0,
-        gatewayEntrypoint: path.resolve("packages/onebots/lib/gateway/entry.js"),
+        gatewayEntrypoint: path.resolve(import.meta.dirname, "../../lib/gateway/entry.js"),
     });
     cleanups.push(() => host.close());
-    const client = createLocalControlClient(workspace);
+    const address = host.server.address();
+    if (!address || typeof address === "string") throw new Error("测试管理入口不可用");
+    const url = `http://127.0.0.1:${address.port}`;
+    let token = "";
+    const client = new ControlClient(createHttpControlTransport(url, () => token));
+    ({ token } = await client.pair((await createLocalControlClient(workspace).bootstrap()).code));
     await expect
         .poll(
             async () =>
@@ -47,9 +53,7 @@ async function fixture() {
                     .length,
         )
         .toBe(2);
-    const address = host.server.address();
-    if (!address || typeof address === "string") throw new Error("测试管理入口不可用");
-    return { client, url: `http://127.0.0.1:${address.port}` };
+    return { client, url };
 }
 it("公开配置API应用单账号协议时网关实例不变，另一个账号协议持续服务", async () => {
     const { client, url } = await fixture();

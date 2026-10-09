@@ -23,12 +23,20 @@ export async function executeHotConfiguration(
     const restore = (rolledBack: boolean): ConfigurationApplicationOperation => {
         if (!operation.configRevision) return journal.unknown();
         operation.phase = "restoring";
+        operation.restoreRolledBack = rolledBack;
         journal.save(operation);
         const restored = options.source.replace(operation.configRevision, journal.previous());
+        if (
+            !/^[a-f0-9]{64}$/.test(restored.revision) ||
+            createHash("sha256").update(canonicalConfiguration(restored.document)).digest("hex") !==
+                operation.previousDigest
+        )
+            return journal.unknown();
         operation.configRevision = restored.revision;
         operation.status = "failed";
         operation.phase = "failed";
         operation.rolledBack = rolledBack;
+        delete operation.restoreRolledBack;
         operation.error = "CONFIG_APPLY_FAILED";
         journal.save(operation);
         return journal.project(operation);
@@ -36,17 +44,21 @@ export async function executeHotConfiguration(
     try {
         if (!operation.runtimeBefore || !port.applyRuntimeConfiguration || !options.runtime)
             return journal.unknown();
+        // 在提交源文件前固定运行时快照；writing 阶段永远表示尚未派发。
+        const snapshot = options.runtime.snapshot(document);
+        operation.runtimeAfter = snapshot.configVersion;
         operation.phase = "writing";
         journal.save(operation);
         const next = options.source.replace(operation.base.configRevision, document);
         if (
+            !/^[a-f0-9]{64}$/.test(next.revision) ||
+            (operation.candidateRevision !== undefined &&
+                operation.candidateRevision !== next.revision) ||
             createHash("sha256").update(canonicalConfiguration(next.document)).digest("hex") !==
-            operation.documentDigest
+                operation.documentDigest
         )
             return journal.unknown();
         operation.configRevision = next.revision;
-        const snapshot = options.runtime.snapshot(next.document);
-        operation.runtimeAfter = snapshot.configVersion;
         operation.phase = "applying";
         journal.save(operation);
         const result = await port.applyRuntimeConfiguration({

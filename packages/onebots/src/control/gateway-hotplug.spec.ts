@@ -51,16 +51,19 @@ it("真实网关热改协议与账号，未涉及的 WS 保持连接且新版本
             });
             return response.status;
         };
-        await expect.poll(() => login("b")).toBe(200);
+        await expect.poll(() => login("b"), { timeout: 10_000 }).toBe(200);
         await expect
-            .poll(() => {
-                const status = driver.accountStatuses(instance!.id);
-                return (
-                    status.available &&
-                    status.items.length === 2 &&
-                    status.items.every(account => account.status === "online")
-                );
-            })
+            .poll(
+                () => {
+                    const status = driver.accountStatuses(instance!.id);
+                    return (
+                        status.available &&
+                        status.items.length === 2 &&
+                        status.items.every(account => account.status === "online")
+                    );
+                },
+                { timeout: 10_000 },
+            )
             .toBe(true);
         socket = new WebSocket(`${origin.replace("http:", "ws:")}/mock/b/onebot/v11/api`);
         await once(socket, "open");

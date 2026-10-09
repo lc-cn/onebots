@@ -78,6 +78,7 @@ function fixture(desired: "running" | "stopped" = "running") {
     const options = { directory, source, lifecycle };
     const application = new ConfigurationApplication(options);
     const request = {
+        allowRestart: true,
         id: "request-1",
         validationId: "validation-1",
         base: { generationId: null, configRevision: snapshot.revision },

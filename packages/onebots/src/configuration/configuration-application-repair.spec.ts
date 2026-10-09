@@ -56,6 +56,7 @@ function fixture(desired: "running" | "stopped" = "running") {
     };
     const application = new ConfigurationApplication(options);
     const request = {
+        allowRestart: true,
         id: "repair-1",
         validationId: "receipt-1",
         base: { generationId: null, configRevision: repair.originalRevision },

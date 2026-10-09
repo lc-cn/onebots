@@ -55,12 +55,15 @@ export async function verifyConfiguration(
     const timeout = input.timeoutMs ?? 30_000;
     let snapshot: {
         document: Record<string, unknown>;
+        previousDocument?: Record<string, unknown>;
         selection: ConfigurationVerificationInput["selection"];
     };
     try {
         snapshot = parseConfigurationDocument({
             document: input.document,
-            ...(input.previousDocument ? { previousDocument: input.previousDocument } : {}),
+            ...(input.previousDocument !== undefined
+                ? { previousDocument: parseConfigurationDocument(input.previousDocument) }
+                : {}),
             selection: input.selection,
         }) as unknown as typeof snapshot;
         if (
@@ -86,7 +89,7 @@ export async function verifyConfiguration(
             !Number.isSafeInteger(timeout) ||
             timeout < 1 ||
             timeout > 300_000 ||
-            Buffer.byteLength(JSON.stringify(snapshot.document)) > 1024 * 1024
+            Buffer.byteLength(JSON.stringify(snapshot)) > 4_200_000
         )
             throw new Error();
     } catch {
@@ -128,8 +131,8 @@ export async function verifyConfiguration(
                 hostEntrypoint,
                 selection: snapshot.selection,
                 document: snapshot.document,
-                ...(input.previousDocument
-                    ? { previousDocument: parseConfigurationDocument(input.previousDocument) }
+                ...(snapshot.previousDocument
+                    ? { previousDocument: snapshot.previousDocument }
                     : {}),
             }),
             { flag: "wx", mode: 0o600 },

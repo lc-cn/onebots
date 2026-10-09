@@ -59,6 +59,8 @@ export async function reconcileRuntimeConfiguration(
             if (schema) ConfigValidator.validate(candidate, schema);
             for (const field of Object.keys(candidate)) {
                 if (!isProtocolKey(field)) continue;
+                const [name, version] = field.split(".");
+                if (!ProtocolRegistry.has(name, version)) throw new Error("协议尚未安装");
                 const protocolSchema = ProtocolRegistry.getSchema(field);
                 if (protocolSchema)
                     ConfigValidator.validate(
@@ -70,7 +72,13 @@ export async function reconcileRuntimeConfiguration(
     } catch {
         throw new RuntimeConfigurationRejectedError("扩展配置校验失败，热配置未受理");
     }
-    const targets = impact.accounts.flatMap(change => {
+    const affected = new Map(
+        [...impact.accounts, ...impact.protocols].map(change => [
+            `${change.platform}/${change.accountId}`,
+            change,
+        ]),
+    );
+    const targets = [...affected.values()].flatMap(change => {
         const account = app.adapters.get(change.platform)?.accounts.get(change.accountId);
         return account
             ? [
@@ -99,6 +107,8 @@ export async function reconcileRuntimeConfiguration(
         for (const change of impact.accounts) {
             const key = `${change.platform}.${change.accountId}`;
             const existing = app.adapters.get(change.platform);
+            // 删除配置中残留、但运行态不存在的实例是幂等操作，不创建空适配器。
+            if (change.action === "remove" && !existing?.accounts.has(change.accountId)) continue;
             const adapter = existing ?? app.findOrCreateAdapter(change.platform);
             if (!existing) createdAdapters.add(adapter);
             const old = adapter.accounts.get(change.accountId);
@@ -106,7 +116,7 @@ export async function reconcileRuntimeConfiguration(
             undo.push(async () => {
                 const active = adapter.accounts.get(change.accountId);
                 if (active) {
-                    await active.stop(true);
+                    await stopBounded(app, accountStopTimeout(active), () => active.stop(true));
                     adapter.accounts.delete(change.accountId);
                 }
                 if (oldConfig) {
@@ -116,7 +126,7 @@ export async function reconcileRuntimeConfiguration(
                 }
             });
             if (old) {
-                await old.stop();
+                await stopBounded(app, accountStopTimeout(old), () => old.stop());
                 adapter.accounts.delete(change.accountId);
             }
             if (change.action !== "remove") {
@@ -132,7 +142,10 @@ export async function reconcileRuntimeConfiguration(
         for (const change of impact.protocols) {
             const key = `${change.platform}.${change.accountId}`;
             const account = app.adapters.get(change.platform)?.accounts.get(change.accountId);
-            if (!account) throw new Error(`账号 ${change.platform}/${change.accountId} 不存在`);
+            if (!account) {
+                if (change.action === "remove") continue;
+                throw new Error(`账号 ${change.platform}/${change.accountId} 不存在`);
+            }
             const old = account.protocols.find(
                 protocol => protocol.name === change.name && protocol.version === change.version,
             );
@@ -143,7 +156,9 @@ export async function reconcileRuntimeConfiguration(
                         protocol.name === change.name && protocol.version === change.version,
                 );
                 if (active) {
-                    await account.stopProtocol(active, true);
+                    await stopBounded(app, accountStopTimeout(account), () =>
+                        account.stopProtocol(active, true),
+                    );
                     account.protocols = account.protocols.filter(protocol => protocol !== active);
                 }
                 if (oldConfig) {
@@ -153,7 +168,9 @@ export async function reconcileRuntimeConfiguration(
                 }
             });
             if (old) {
-                await account.stopProtocol(old);
+                await stopBounded(app, accountStopTimeout(account), () =>
+                    account.stopProtocol(old),
+                );
                 account.protocols = account.protocols.filter(protocol => protocol !== old);
             }
             if (change.action !== "remove") {
@@ -170,10 +187,15 @@ export async function reconcileRuntimeConfiguration(
         synchronizeAccountConfigs(app, next);
         updateLogLevel(app);
         return { status: "applied", impact };
-    } catch {
+    } catch (error) {
         // 第三方错误可能包含连接凭据；只记录固定阶段，不写入原始 Error。
         app.logger.error("配置热应用失败，正在恢复受影响实例", { phase: "apply" });
         app.config = previous;
+        if (error instanceof RuntimeStopTimeoutError) {
+            // 第三方 stop 不能可靠取消。迟到停止仍可能改变资源，禁止同时创建恢复实例。
+            app.logger.error("实例停止结果尚未确定，配置需要完整恢复", { phase: "stop" });
+            return { status: "recovery_required", impact };
+        }
         let recovered = true;
         for (const restore of undo.reverse()) {
             try {
@@ -194,6 +216,51 @@ export async function reconcileRuntimeConfiguration(
         return { status: recovered ? "rolled_back" : "recovery_required", impact };
     } finally {
         for (const { drain } of drains) drain.release();
+    }
+}
+
+class RuntimeStopTimeoutError extends Error {}
+
+const pendingStops = new WeakMap<BaseApp, Set<Promise<void>>>();
+
+/** 超时不是取消；未确定的旧停止完成之前，禁止启动/重载造成连接重叠。 */
+export function hasPendingRuntimeStop(app: BaseApp): boolean {
+    return Boolean(pendingStops.get(app)?.size);
+}
+
+function accountStopTimeout(account: Account): number {
+    return Math.min(account.startupTimeoutSeconds * 1000, 5_000);
+}
+
+/** 有界等待只给出未知结果，不把超时误当成可安全重试的停止失败。 */
+async function stopBounded(
+    app: BaseApp,
+    timeoutMs: number,
+    stop: () => Promise<void>,
+): Promise<void> {
+    let timer: NodeJS.Timeout | undefined;
+    const active = pendingStops.get(app) ?? new Set<Promise<void>>();
+    pendingStops.set(app, active);
+    const pending = Promise.resolve().then(stop);
+    active.add(pending);
+    void pending
+        .finally(() => active.delete(pending))
+        .catch(() => {
+            // 错误由下面的有界等待或事务恢复报告；此旁路只清理租约。
+        });
+    try {
+        await Promise.race([
+            pending,
+            new Promise<never>((_, reject) => {
+                timer = setTimeout(
+                    () => reject(new RuntimeStopTimeoutError("停止超时")),
+                    timeoutMs,
+                );
+                timer.unref?.();
+            }),
+        ]);
+    } finally {
+        if (timer) clearTimeout(timer);
     }
 }
 

@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
-import { ConfigurationApplication } from "./configuration-application.js";
+import {
+    ConfigurationApplication,
+    type ConfigurationApplicationOptions,
+} from "./configuration-application.js";
 import type { ConfigurationTransactionPort } from "../control/generation-activation.js";
 import { GatewayRequestError } from "../control/gateway-request-client.js";
 
@@ -53,7 +56,7 @@ function fixture(outcome: "applied" | "rolled_back" | "unknown" | "rejected" = "
             return structuredClone(snapshot);
         },
     };
-    const application = new ConfigurationApplication({
+    const options: ConfigurationApplicationOptions = {
         directory,
         source,
         runtime: {
@@ -66,14 +69,25 @@ function fixture(outcome: "applied" | "rolled_back" | "unknown" | "rejected" = "
             runConfigurationTransaction: async task => task(port),
             runConfigurationRecoveryTransaction: async task => task(port),
         },
-    });
+    };
+    const application = new ConfigurationApplication(options);
     const request = {
         id: "hot-1",
         validationId: "validation-1",
         base: { generationId: null, configRevision: snapshot.revision },
         document: { ...before, "mock.beta": {} },
     };
-    return { application, source, request, port, before, nextConfigVersion, context };
+    return {
+        application,
+        source,
+        request,
+        port,
+        before,
+        nextConfigVersion,
+        context,
+        directory,
+        options,
+    };
 }
 it("新增账号只派发热应用，重复请求读取原回执，不启停网关", async () => {
     const test = fixture();
@@ -88,13 +102,15 @@ it("新增账号只派发热应用，重复请求读取原回执，不启停网�
     expect(test.port.start).not.toHaveBeenCalled();
     expect(test.port.suspend).not.toHaveBeenCalled();
 });
-it("明确回滚才恢复旧文件；未知结果保留候选并封锁写入", async () => {
+it("泛化 rejected 异常不能证明未执行，保留候选并封锁", async () => {
     const rejected = fixture("rejected");
     expect(await rejected.application.apply(rejected.request)).toMatchObject({
         status: "failed",
         recoveryRequired: true,
     });
     expect(rejected.source.read().document).toEqual(rejected.request.document);
+});
+it("明确 rolled_back 回执才恢复旧文件", async () => {
     const rolled = fixture("rolled_back");
     expect(await rolled.application.apply(rolled.request)).toMatchObject({
         status: "failed",
@@ -102,6 +118,8 @@ it("明确回滚才恢复旧文件；未知结果保留候选并封锁写入", a
         recoveryRequired: false,
     });
     expect(rolled.source.read().document).toEqual(rolled.before);
+});
+it("未知结果保留候选并封锁写入", async () => {
     const unknown = fixture("unknown");
     expect(await unknown.application.apply(unknown.request)).toMatchObject({
         status: "failed",
@@ -109,6 +127,103 @@ it("明确回滚才恢复旧文件；未知结果保留候选并封锁写入", a
     });
     expect(unknown.source.read().document).toEqual(unknown.request.document);
     expect(unknown.application.health().recoveryRequired).toBe(true);
+});
+
+it("不信任 caller 降级的影响摘要，拒绝前不写文件或操作实例", async () => {
+    const test = fixture();
+    await expect(
+        test.application.apply({
+            ...test.request,
+            impact: {
+                mode: "none",
+                accounts: [],
+                protocols: [],
+                dynamicFields: [],
+                restartReasons: [],
+            },
+        }),
+    ).rejects.toThrow("配置已发生变化");
+    expect(test.source.read().document).toEqual(test.before);
+    expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
+});
+
+it("writing 阶段源文件已经提交但 replace 抛错，查询恢复旧文件且不派发", async () => {
+    const test = fixture();
+    const replace = test.source.replace;
+    let fail = true;
+    vi.spyOn(test.source, "replace").mockImplementation((expected, document) => {
+        const result = replace(expected, document);
+        if (fail) {
+            fail = false;
+            throw new Error("post-commit interruption");
+        }
+        return result;
+    });
+    expect(await test.application.apply(test.request)).toMatchObject({
+        recoveryRequired: true,
+        phase: "writing",
+    });
+    expect(await test.application.queryStatus(test.request.id)).toMatchObject({
+        recoveryRequired: false,
+        status: "failed",
+    });
+    expect(test.source.read().document).toEqual(test.before);
+    expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
+});
+
+it("restoring 已提交但 replace 抛错，重查询识别旧文件不重派", async () => {
+    const test = fixture("rolled_back");
+    const replace = test.source.replace;
+    vi.spyOn(test.source, "replace").mockImplementation((expected, document) => {
+        const result = replace(expected, document);
+        if (document["mock.beta"] === undefined) throw new Error("post-restore interruption");
+        return result;
+    });
+    expect(await test.application.apply(test.request)).toMatchObject({
+        recoveryRequired: true,
+        phase: "restoring",
+    });
+    expect(await test.application.queryStatus(test.request.id)).toMatchObject({
+        recoveryRequired: false,
+        status: "failed",
+        rolledBack: true,
+    });
+    expect(test.source.read().document).toEqual(test.before);
+    expect(test.port.applyRuntimeConfiguration).toHaveBeenCalledTimes(1);
+});
+
+it("stored 源文件提交后抛错，查询核对候选后收敛且不启动网关", async () => {
+    const test = fixture();
+    test.port.gatewayStatus = () => ({ desired: "stopped" });
+    test.port.hasLiveChildren = () => false;
+    const replace = test.source.replace;
+    vi.spyOn(test.source, "replace").mockImplementation((expected, document) => {
+        replace(expected, document);
+        throw new Error("post-store interruption");
+    });
+    expect(await test.application.apply(test.request)).toMatchObject({
+        executionMode: "stored",
+        recoveryRequired: true,
+    });
+    expect(await test.application.queryStatus(test.request.id)).toMatchObject({
+        recoveryRequired: false,
+        status: "succeeded",
+    });
+    expect(test.port.start).not.toHaveBeenCalled();
+    expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
+});
+
+it("新实例达到候选版本不能证明旧实例原动作成功", async () => {
+    const test = fixture("unknown");
+    await test.application.apply(test.request);
+    test.port.runtimeContext = () => ({
+        gatewayInstanceId: "replacement",
+        configVersion: test.nextConfigVersion,
+    });
+    expect(await test.application.queryStatus(test.request.id)).toMatchObject({
+        recoveryRequired: true,
+    });
+    expect(test.port.queryRuntimeConfiguration).not.toHaveBeenCalled();
 });
 it("进程级变更必须明确授权，拒绝之前不写文件或派发热操作", async () => {
     const test = fixture();
@@ -119,6 +234,24 @@ it("进程级变更必须明确授权，拒绝之前不写文件或派发热操�
         }),
     ).rejects.toThrow("明确确认重启");
     expect(test.source.read().document).toEqual(test.before);
+    expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
+});
+
+it("快照创建失败尚未写入源文件，冷恢复查询解除封锁且不派发", async () => {
+    const test = fixture();
+    vi.spyOn(test.options.runtime!, "snapshot").mockImplementation(() => {
+        throw new Error("snapshot failed");
+    });
+    expect(await test.application.apply(test.request)).toMatchObject({
+        recoveryRequired: true,
+        phase: "accepted",
+    });
+    expect(test.source.read().document).toEqual(test.before);
+    const restarted = new ConfigurationApplication(test.options);
+    expect(await restarted.queryStatus(test.request.id)).toMatchObject({
+        recoveryRequired: false,
+        status: "failed",
+    });
     expect(test.port.applyRuntimeConfiguration).not.toHaveBeenCalled();
 });
 

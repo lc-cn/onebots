@@ -80,7 +80,19 @@ async function verify(): Promise<ConfigurationVerification> {
         const defaults = await import(
             pathToFileURL(path.join(hostDirectory, "runtime-defaults.js")).href
         );
-        const impact = defaults.planEffectiveRuntimeConfiguration(input.previousDocument, config);
+        let impact;
+        try {
+            impact = defaults.planEffectiveRuntimeConfiguration(input.previousDocument, config);
+        } catch {
+            // 有效候选仍可修复语义损坏的基线；不能把规划失败冒充字段校验失败。
+            impact = {
+                mode: "restart",
+                accounts: [],
+                protocols: [],
+                dynamicFields: [],
+                restartReasons: ["invalid-configuration-baseline"],
+            };
+        }
         return { valid: true, issues: [], impact };
     } catch (error) {
         const entries = (error as { context?: { issues?: unknown } })?.context?.issues;

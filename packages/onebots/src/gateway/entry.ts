@@ -206,6 +206,7 @@ async function start(message: GatewayStartMessage): Promise<void> {
         // 已由停止路径接管时，不重复报告启动失败或重新清理。
         if (stopping) return;
         stopping = true;
+        configurationExecutor?.close();
         verificationExecutor?.close();
         sendExecutor?.close();
         accountExploreExecutor?.close();

@@ -49,7 +49,7 @@ import { createAccountWithRouteScope } from "./scoped-account.js";
 import { closeAdapterRouteScope } from "./scoped-adapter.js";
 import { listenHttpServer } from "./http-listener.js";
 import { getHostLifecycleState, type ManagedRuntimeStart } from "./host-lifecycle-state.js";
-import { reconcileRuntimeConfiguration } from "./runtime-reconcile.js";
+import { hasPendingRuntimeStop, reconcileRuntimeConfiguration } from "./runtime-reconcile.js";
 import {
     RuntimeConfigurationRejectedError,
     planRuntimeConfiguration,
@@ -441,8 +441,11 @@ export class BaseApp extends Koa {
     protected onAdapterCreated(_adapter: Adapter): void {}
 
     protected assertCanStart(): void {
+        if (hasPendingRuntimeStop(this))
+            throw new ResourceError("旧实例停止结果未确定，暂不能启动网关");
         if (this.runtimeConfiguration)
             throw new ResourceError("配置热应用尚未结束，暂不能启动网关");
+        if (this.isReloading) throw new ResourceError("运行态正在变更，暂不能启动网关");
         if (this.isDisposed || getHostLifecycleState(this).stopping) {
             throw new ResourceError("应用资源已释放，不能再次启动；请创建新的 App 实例");
         }
@@ -450,8 +453,24 @@ export class BaseApp extends Koa {
 
     private async startAdapters(throwOnFailure = false, signal?: AbortSignal): Promise<void> {
         const failures = new FailureCollector();
-        for (const [platform, adapter] of this.adapters) {
+        // 固定首次启动批次；热添加的平台由配置协调器启动，不再被该批次重复启动。
+        const adapters = [...this.adapters];
+        const state = getHostLifecycleState(this);
+        for (const [platform, adapter] of adapters) {
             signal?.throwIfAborted();
+            while (this.runtimeConfiguration) {
+                await this.runtimeConfiguration.catch(() => {
+                    this.logger.error("启动下一平台前热配置未完成");
+                });
+            }
+            signal?.throwIfAborted();
+            if (
+                hasPendingRuntimeStop(this) ||
+                (this.runtimeRecoveryRequired && this.runtimeOperation !== "configuration_reload")
+            )
+                throw new ResourceError("运行态恢复未完成，不能继续启动平台");
+            // 删除与 adapter.start() 同步进入批次之间无 await；此后账号级启动屏障接管。
+            state.queuedPlatforms?.delete(String(platform));
             await failures.capture(
                 () => adapter.start(),
                 error => {
@@ -527,6 +546,8 @@ export class BaseApp extends Koa {
         this.assertCanStart();
         const state = getHostLifecycleState(this);
         if (state.starting) return;
+        state.initializing = true;
+        state.queuedPlatforms = new Set([...this.adapters.keys()].map(String));
         const controller = new AbortController();
         state.controller = controller;
         let resolveReady!: () => void;
@@ -568,6 +589,7 @@ export class BaseApp extends Koa {
                 { port: listeningPort, path: this.config.path },
             );
             signal.throwIfAborted();
+            getHostLifecycleState(this).initializing = false;
             markManagedReady();
             await this.startAdapters(false, signal);
             signal.throwIfAborted();
@@ -577,10 +599,14 @@ export class BaseApp extends Koa {
             signal.throwIfAborted();
             await this.rollbackFailedStart(error);
         } finally {
+            getHostLifecycleState(this).initializing = false;
+            getHostLifecycleState(this).queuedPlatforms?.clear();
             stopTimer();
         }
     }
     async reload(config: BaseApp.Config) {
+        if (hasPendingRuntimeStop(this))
+            throw new ConfigError("旧实例停止结果未确定，暂不能重载配置");
         if (this.runtimeConfiguration) throw new ConfigError("配置热应用尚未完成");
         const runtimeLease = acquireRuntimeOperation(
             this,
@@ -612,6 +638,8 @@ export class BaseApp extends Koa {
                 this.runtimeRecoveryRequired = false;
             } catch (error) {
                 if (!previousStopped) {
+                    // stopAdapters 会并行停止部分实例；失败不能证明原运行态仍完整。
+                    this.runtimeRecoveryRequired = true;
                     throw ErrorHandler.wrap(error, {
                         operation: "reload",
                         phase: "stop-previous",
@@ -632,6 +660,11 @@ export class BaseApp extends Koa {
                 });
                 if (wasStarted && previousInitialized) {
                     await failures.capture(() => this.startAdapters(true));
+                }
+                // 第一个错误属于新配置应用；只有后续清理/恢复错误才证明运行态不完整。
+                this.runtimeRecoveryRequired = failures.size > 1;
+                if (!this.runtimeRecoveryRequired) {
+                    throw ErrorHandler.wrap(error, { operation: "reload", phase: "apply" });
                 }
                 try {
                     failures.throwIfAny("配置重载失败且运行态回滚未完整完成");
@@ -654,6 +687,7 @@ export class BaseApp extends Koa {
         }
         if (
             this.runtimeConfiguration ||
+            getHostLifecycleState(this).initializing ||
             this.isReloading ||
             this.isDisposed ||
             getHostLifecycleState(this).stopping
@@ -674,6 +708,7 @@ export class BaseApp extends Koa {
             for (const change of [...impact.accounts, ...impact.protocols]) {
                 const adapter = this.adapters.get(change.platform);
                 if (
+                    getHostLifecycleState(this).queuedPlatforms?.has(change.platform) ||
                     adapter?.accounts.get(change.accountId)?.isStarting ||
                     adapter?.isAccountStartupPending(change.accountId)
                 ) {

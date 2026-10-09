@@ -1,4 +1,4 @@
-import type { BaseApp } from "onebots";
+import type { BaseApp, RouterRegistrationScope } from "onebots";
 import type { FacebookMessengerClient } from "./client.js";
 import { FacebookMessengerError } from "./errors.js";
 
@@ -16,7 +16,7 @@ interface MessengerKoaContext {
 export class FacebookMessengerHttpHost {
     private readonly owners = new Map<string, string>();
     private readonly accountPaths = new Map<string, string>();
-    private readonly mounted = new Set<string>();
+    private readonly mounted = new Map<string, RouterRegistrationScope>();
 
     constructor(
         private readonly app: BaseApp,
@@ -34,12 +34,26 @@ export class FacebookMessengerHttpHost {
                 { code: "FACEBOOK_MESSENGER_HTTP_PATH_CONFLICT" },
             );
         }
+        if (this.accountPaths.get(accountId) !== path) this.unmount(accountId);
         this.owners.set(path, accountId);
         this.accountPaths.set(accountId, path);
         if (this.mounted.has(path)) return;
-        this.mounted.add(path);
-        this.app.router.get(path, ctx => this.accept(path, ctx));
-        this.app.router.post(path, ctx => this.accept(path, ctx));
+        const scope = this.app.router.createRegistrationScope();
+        this.mounted.set(path, scope);
+        scope.run(() => {
+            this.app.router.get(path, ctx => this.accept(path, ctx));
+            this.app.router.post(path, ctx => this.accept(path, ctx));
+        });
+    }
+
+    /** 释放已移除账号的路径；重连重新挂载，不累积失效 HTTP layer。 */
+    unmount(accountId: string): void {
+        const path = this.accountPaths.get(accountId);
+        this.accountPaths.delete(accountId);
+        if (!path || this.owners.get(path) !== accountId) return;
+        this.owners.delete(path);
+        this.mounted.get(path)?.close();
+        this.mounted.delete(path);
     }
 
     private async accept(path: string, ctx: MessengerKoaContext): Promise<void> {
