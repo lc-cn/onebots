@@ -172,6 +172,7 @@ For configuration details of other platforms, see:
 - [Discord Platform](/en/platform/discord)
 - [DingTalk Platform](/en/platform/dingtalk)
 - [Telegram Platform](/en/platform/telegram)
+- [Douyin Platform](/en/platform/douyin)
 - [Feishu Platform](/en/platform/feishu)
 - [Slack Platform](/en/platform/slack)
 - [WeCom Platform](/en/platform/wecom)

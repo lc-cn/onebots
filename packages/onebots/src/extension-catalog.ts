@@ -60,6 +60,7 @@ const adapterIconUrls: Record<string, string> = {
     zulip: "https://zulip.com/static/images/logo/zulip-icon-circle.png",
     heychat: "https://chat.xiaoheihe.cn/favicon.ico",
     icqq: "https://qzonestyle.gtimg.cn/qzone/qzact/act/external/tiqq/logo.png",
+    douyin: "https://www.douyin.com/favicon.ico",
 };
 
 const adapter = (
@@ -365,6 +366,28 @@ export const EXTENSION_CATALOG: readonly ExtensionCatalogEntry[] = [
     adapter("email", "电子邮件", "通过 IMAP/SMTP 收发消息。", genericSetup),
     adapter("zulip", "Zulip", "连接 Zulip Bot。", genericSetup),
     adapter("heychat", "黑盒语音", "连接黑盒语音机器人。", genericSetup),
+    adapter(
+        "douyin",
+        "抖音",
+        "通过 douyin-im 接入抖音私聊、群聊和联系人能力，支持二维码、短信或密码登录。",
+        [
+            {
+                title: "选择登录方式",
+                description:
+                    "推荐二维码登录；也可使用手机号短信或账号密码。登录数据保存在 OneBots 数据目录。",
+            },
+            {
+                title: "完成身份验证",
+                description:
+                    "保存账号后，在 Web 登录引导中扫码、填写短信验证码，或按提示完成平台安全验证。",
+            },
+            {
+                title: "启用协议出口",
+                description:
+                    "账号上线后，为该账号启用 OneBot、Satori、Milky 或 MCP 协议，并复制连接地址给下游应用。",
+            },
+        ],
+    ),
     adapter("icqq", "ICQQ", "通过 ICQQ 接入 QQ。", genericSetup, [
         {
             kind: "registry-authentication",
