@@ -89,11 +89,14 @@ const edited = await client.editConfigurationDraft(draft.id, {
 const validation = await client.validateConfigurationDraft(draft.id, edited.revision);
 assert.equal(validation.valid, true);
 assert.ok(validation.receiptId);
+// 安装与激活不会启用扩展；首次启用会改变 plugins，需要明确许可进程重启。
+// 后续已加载扩展内的账号/协议变更仍按服务端影响计划热应用。
+const applyOptions = validation.impact?.mode === 'restart' ? { allowRestart: true } : undefined;
 const applyId = `ci-config-${randomUUID()}`;
 let mcpSession;
 let sendReceipt;
 try {
-    assert.equal((await client.applyConfiguration(applyId, validation.receiptId)).status, 'succeeded');
+    assert.equal((await client.applyConfiguration(applyId, validation.receiptId, applyOptions)).status, 'succeeded');
     assert.equal((await client.applyConfiguration(applyId, validation.receiptId)).status, 'succeeded');
     const response = await fetch(`${base}/mock/bot/onebot/v11/get_login_info`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',

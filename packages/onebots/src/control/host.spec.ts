@@ -84,6 +84,43 @@ async function upgrade(port: number, target: string): Promise<string> {
 }
 
 describe("control host integration", () => {
+    it("首次进程级配置需要显式重启许可；拒绝不重启，再确认只执行一次", async () => {
+        const root = workspace();
+        fs.writeFileSync(
+            path.join(root, "config.yaml"),
+            "plugins:\n  adapters: []\n  protocols: []\n  applications: []\n",
+        );
+        const running = await start(root);
+        const client = await pair(running);
+        const before = await client.status();
+        const snapshot = await client.configurationSnapshot();
+        const draft = await client.createConfigurationDraft(snapshot.base);
+        const edited = await client.editConfigurationDraft(draft.id, {
+            expectedRevision: draft.revision,
+            changes: [{ op: "set", path: ["database"], value: "restart-fixture.db" }],
+            secrets: [],
+        });
+        const validation = await client.validateConfigurationDraft(draft.id, edited.revision);
+        expect(validation.valid).toBe(true);
+        expect(validation.impact?.mode).toBe("restart");
+        await expect(
+            client.applyConfiguration("restart-gate", validation.receiptId!),
+        ).rejects.toMatchObject({ status: 400 });
+        expect((await client.status()).gateway.instance?.id).toBe(before.gateway.instance?.id);
+        expect(
+            (
+                await client.applyConfiguration("restart-gate", validation.receiptId!, {
+                    allowRestart: true,
+                })
+            ).status,
+        ).toBe("succeeded");
+        const applied = (await client.status()).gateway.instance?.id;
+        expect(applied).not.toBe(before.gateway.instance?.id);
+        expect(
+            (await client.applyConfiguration("restart-gate", validation.receiptId!)).status,
+        ).toBe("succeeded");
+        expect((await client.status()).gateway.instance?.id).toBe(applied);
+    });
     it("先查看平台Schema，再通过草稿添加账号和协议完成真实协议调用", async () => {
         const root = workspace();
         fs.writeFileSync(

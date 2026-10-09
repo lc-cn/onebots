@@ -6,6 +6,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { packControlRuntime } from "./pack-control-runtime.mjs";
+import { assertWindowsCliSuccess } from "./windows-lifecycle-diagnostics.mjs";
 if (process.platform !== "win32" || process.env.ONEBOTS_WINDOWS_ACCEPTANCE !== "1")
     throw new Error("Windows 生命周期验收只能在显式启用的 windows-latest 主机运行");
 const root = path.resolve(import.meta.dirname, "..");
@@ -95,10 +96,7 @@ function cli(bin, args, input = "", env = process.env) {
         timeout: 15 * 60_000,
         maxBuffer: 8 * 1024 * 1024,
     });
-    if (result.status !== 0)
-        throw new Error(
-            `onebots ${args.join(" ")} 退出 ${result.status}: stdout=${result.stdout.trim()} stderr=${result.stderr.trim()}`,
-        );
+    assertWindowsCliSuccess(result, args[0], workspace);
     return result.stdout.trim();
 }
 function installationEvidence() {
