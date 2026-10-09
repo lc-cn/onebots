@@ -104,10 +104,11 @@ class DevToolsSession {
             const message = JSON.parse(event.data);
             if (message.method === "Page.javascriptDialogOpening") {
                 const expected =
-                    this.stage === "保存配置" &&
+                    this.stage === "启用扩展并保存配置" &&
                     message.params?.type === "confirm" &&
-                    message.params?.message === "保存设置可能短暂中断账号和协议连接，继续吗？";
-                if (!expected) this.dialogFailure = new Error("浏览器出现非预期确认框");
+                    message.params?.message ===
+                        "此修改需要重启整个网关，所有账号和协议连接将短暂中断。确认重启并保存？";
+                if (!expected) this.dialogFailure = new Error("热应用不应出现浏览器确认框");
                 void this.send("Page.handleJavaScriptDialog", { accept: expected }).catch(() => {
                     this.dialogFailure = new Error("浏览器确认框处理失败");
                 });
@@ -435,15 +436,35 @@ try {
             return input.value;
         })()`);
 
-    const saveConfiguration = async () => {
-        // 复用 master 的确认框校验，只接受此阶段预期的保存确认。
-        devtools.stage = "保存配置";
+    const saveConfiguration = async (mode = "restart") => {
+        const previous = JSON.parse(await cli(["control", "status"]));
+        assert.equal(previous.gateway.actual, "running");
+        devtools.stage = mode === "restart" ? "启用扩展并保存配置" : "热保存配置";
         await clickButton("保存");
         await waitFor(
-            async () => /设置已保存并生效/.test(await devtools.evaluate("document.body.innerText")),
+            async () =>
+                (mode === "restart"
+                    ? /设置已保存，网关已重新启动/
+                    : /设置已按实例更新，无需重启网关/
+                ).test(await devtools.evaluate("document.body.innerText")),
             "Web 配置保存",
             60_000,
         );
+        const current = JSON.parse(await cli(["control", "status"]));
+        assert.equal(current.gateway.actual, "running");
+        if (mode === "hot")
+            assert.deepEqual(
+                current.gateway.instance,
+                previous.gateway.instance,
+                "热配置不得更换网关实例或 PID",
+            );
+        else
+            assert.notEqual(
+                current.gateway.instance?.id,
+                previous.gateway.instance?.id,
+                "启用扩展应在确认后重启网关",
+            );
+        assert.equal(current.manager.id, previous.manager.id);
     };
 
     await openWorkspace("扩展", "installation-heading");
@@ -548,88 +569,109 @@ try {
                 ))`),
         "账号 History 子页刷新直达",
     );
-    await clickButton("添加账号");
-    await waitFor(
-        () =>
-            devtools.evaluate(`Boolean([...document.querySelectorAll("button")].find(value =>
-                value.textContent?.trim() === "开始配置" && !value.disabled,
-            ))`),
-        "Web 配置快照读取",
-    );
-    devtools.stage = "创建账号配置草稿";
-    await clickButton("开始配置");
-    await waitFor(
-        () =>
-            devtools.evaluate(`Boolean(
+    const addMockAccount = async (accountId, mode) => {
+        await openWorkspace("账号", "accounts-title");
+        await clickButton("添加账号");
+        const editAction = await waitFor(
+            () =>
+                devtools.evaluate(`document.querySelector('select[aria-label="平台适配器"]')?.checkVisibility()
+                    ? "draft-ready" : ([...document.querySelectorAll("button")].find(value =>
+                ["开始配置", "编辑配置"].includes(value.textContent?.trim()) && !value.disabled,
+            ))?.textContent?.trim()`),
+            "Web 配置快照读取",
+        );
+        devtools.stage = "创建账号配置草稿";
+        // 保存完成会创建下一份草稿，返回账号页时可能直接恢复编辑器，不重复创建。
+        if (editAction !== "draft-ready") await clickButton(editAction);
+        await waitFor(
+            () =>
+                devtools.evaluate(`Boolean(
                 [...document.querySelectorAll('select[aria-label="平台适配器"] option')]
                     .find(value => value.value === "mock")
             )`),
-        "Web 配置 Schema 加载",
-    );
-    assert.equal(await setSelect("平台适配器", "mock"), "mock");
-    assert.equal(await setInput("账号标识", "installed-web"), "installed-web");
-    devtools.stage = "创建 Mock 账号";
-    await clickButton("创建账号");
-    await waitFor(
-        async () => /mock\.installed-web/.test(await devtools.evaluate("document.body.innerText")),
-        "Web 添加 Mock 账号",
-    );
-    await saveConfiguration();
+            "Web 配置 Schema 加载",
+        );
+        assert.equal(await setSelect("平台适配器", "mock"), "mock");
+        assert.equal(await setInput("账号标识", accountId), accountId);
+        devtools.stage = "创建 Mock 账号";
+        await clickButton("创建账号");
+        await waitFor(
+            async () =>
+                (await devtools.evaluate("document.body.innerText")).includes(`mock.${accountId}`),
+            "Web 添加 Mock 账号",
+        );
+        await saveConfiguration(mode);
+    };
+    await addMockAccount("installed-web", "restart");
     process.stdout.write("✓ 账号 History 子页刷新、创建与保存通过\n");
-    await openWorkspace("协议", "protocols-title");
-    await waitFor(
-        () =>
-            devtools.evaluate(`Boolean([...document.querySelectorAll("button")].find(value =>
+    const addOneBotOutlet = async (accountId, mode) => {
+        await openWorkspace("协议", "protocols-title");
+        await waitFor(
+            () =>
+                devtools.evaluate(`Boolean([...document.querySelectorAll("button")].find(value =>
             value.textContent?.trim() === "添加出口" && !value.disabled,
         ))`),
-        "已保存账号的协议配置入口",
-    );
-    await clickButton("添加出口");
-    await waitFor(
-        () =>
-            devtools.evaluate('Boolean(document.querySelector("#configuration-protocol-target"))'),
-        "协议出口编辑页加载",
-    );
-    assert.equal(
-        await devtools.evaluate(`(() => {
+            "已保存账号的协议配置入口",
+        );
+        await clickButton("添加出口");
+        await waitFor(
+            () =>
+                devtools.evaluate(
+                    'Boolean(document.querySelector("#configuration-protocol-target"))',
+                ),
+            "协议出口编辑页加载",
+        );
+        assert.equal(
+            await devtools.evaluate(`(() => {
         const select = document.querySelector("#configuration-protocol-target");
-        select.value = "mock.installed-web";
+        select.value = ${JSON.stringify(`mock.${accountId}`)};
         select.dispatchEvent(new Event("change", { bubbles: true }));
         return select.value;
     })()`),
-        "mock.installed-web",
-    );
-    assert.equal(await setSelect("输出协议", "onebot.v11"), "onebot.v11");
-    await clickButton("为账号添加出口");
-    await waitFor(
-        () =>
-            devtools.evaluate(`(() => {
+            `mock.${accountId}`,
+        );
+        assert.equal(await setSelect("输出协议", "onebot.v11"), "onebot.v11");
+        await clickButton("为账号添加出口");
+        await waitFor(
+            () =>
+                devtools.evaluate(`(() => {
                 const editor = document.querySelector("#configuration-panel-protocols .configuration-object-toolbar");
                 return editor?.textContent?.includes("onebot.v11") &&
-                    editor?.textContent?.includes("mock.installed-web");
+                    editor?.textContent?.includes(${JSON.stringify(`mock.${accountId}`)});
             })()`),
-        "Web 添加 OneBot v11 配置",
-    );
-    await clickButton("检测");
-    await waitFor(
-        async () => /检测通过/.test(await devtools.evaluate("document.body.innerText")),
-        "Web 配置校验",
-    );
-    await saveConfiguration();
+            "Web 添加 OneBot v11 配置",
+        );
+        await clickButton("检测");
+        await waitFor(
+            async () => /检测通过/.test(await devtools.evaluate("document.body.innerText")),
+            "Web 配置校验",
+        );
+        await saveConfiguration(mode);
+    };
+    await addOneBotOutlet("installed-web", "restart");
+    // 新扩展首次启用属于进程配置；已有扩展中的第二个账号与协议才是纯热插拔。
+    await addMockAccount("hot-web", "hot");
+    await addOneBotOutlet("hot-web", "hot");
+    process.stdout.write("✓ Web 热添加账号与协议，原网关实例和 PID 保持不变\n");
     await openWorkspace("概览", "overview-title");
     await waitFor(gatewayIsRunning, "Web 配置应用后的网关状态", 60_000);
 
-    const protocolResult = await devtools.evaluate(`(async () => {
-        const response = await fetch("/mock/installed-web/onebot/v11/get_login_info", {
+    const probeMockProtocol = async accountId => {
+        const url = `/mock/${encodeURIComponent(accountId)}/onebot/v11/get_login_info`;
+        const result = await devtools.evaluate(`(async () => {
+        const response = await fetch(${JSON.stringify(url)}, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: "{}",
         });
         return { status: response.status, body: await response.json() };
     })()`);
-    assert.equal(protocolResult.status, 200);
-    assert.equal(protocolResult.body.status, "ok");
-    assert.ok(Number.isSafeInteger(protocolResult.body.data.user_id));
+        assert.equal(result.status, 200);
+        assert.equal(result.body.status, "ok");
+        assert.ok(Number.isSafeInteger(result.body.data.user_id));
+    };
+    await probeMockProtocol("installed-web");
+    await probeMockProtocol("hot-web");
 
     devtools.close();
     devtools = undefined;

@@ -1,5 +1,6 @@
 // Core modules
 export * from "./account.js";
+export * from "./account-operations.js";
 export * from "./account-config.js";
 export * from "./adapter.js";
 export * from "./adapter-send.js";
@@ -11,6 +12,8 @@ export * from "./json-fingerprint.js";
 export * from "./base-app.js";
 export * from "./http-listener.js";
 export * from "./app-reload.js";
+export * from "./runtime-configuration.js";
+export { runWithAdapterRouteScope } from "./scoped-adapter.js";
 export * from "./router.js";
 export * from "./types.js";
 export * from "./utils.js";

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import type { ConfigurationImpact } from "@onebots/core";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -19,6 +20,7 @@ import type {
     ConfigurationApplication,
     ConfigurationApplicationOperation,
 } from "./configuration-application.js";
+import { checkApplicationRuntimeFields } from "./configuration-application-contracts.js";
 
 export interface ConfigurationRuntimeContext {
     runtimeRoot: string;
@@ -27,6 +29,7 @@ export interface ConfigurationRuntimeContext {
     fingerprint: string;
 }
 export interface ConfigurationValidationOptions {
+    currentDocument?(): Record<string, unknown>;
     directory: string;
     privateRoot: string;
     store: ConfigurationStore;
@@ -37,12 +40,14 @@ export interface ConfigurationValidationOptions {
     verify?: typeof verifyConfiguration;
 }
 export interface ConfigurationValidationResult {
+    impact?: ConfigurationImpact;
     valid: boolean;
     issues: Array<{ path: string[]; message: string }>;
     receiptId?: string;
     draftRevision: string;
 }
 interface Receipt {
+    impact?: ConfigurationImpact;
     mode?: "repair";
     repair?: ConfigurationRepairReference;
     schemaVersion: 1;
@@ -83,6 +88,9 @@ export class ConfigurationValidation {
                 selection: context.selection,
                 privateRoot: this.options.privateRoot,
                 document: parseConfigurationDocument(draft.document),
+                ...(this.options.currentDocument && draft.mode !== "repair"
+                    ? { previousDocument: this.options.currentDocument() }
+                    : {}),
             });
             if (result.valid !== true)
                 return {
@@ -103,6 +111,16 @@ export class ConfigurationValidation {
             if (rechecked.fingerprint !== context.fingerprint)
                 throw new ConfigurationConflictError();
             this.assertDraft(draft);
+            const impact: ConfigurationImpact | undefined =
+                draft.mode === "repair"
+                    ? {
+                          mode: "restart",
+                          accounts: [],
+                          protocols: [],
+                          dynamicFields: [],
+                          restartReasons: ["configuration-repair"],
+                      }
+                    : result.impact;
             const receipt: Receipt = {
                 schemaVersion: 1,
                 id: randomUUID(),
@@ -111,6 +129,7 @@ export class ConfigurationValidation {
                 base: { ...draft.base },
                 runtimeFingerprint: context.fingerprint,
                 documentDigest: documentDigest(draft.document),
+                ...(impact ? { impact } : {}),
                 ...(draft.mode === "repair"
                     ? { mode: "repair" as const, repair: { ...draft.repair! } }
                     : {}),
@@ -118,6 +137,7 @@ export class ConfigurationValidation {
             this.write(receipt);
             return {
                 valid: true,
+                ...(impact ? { impact } : {}),
                 issues: [],
                 receiptId: receipt.id,
                 draftRevision: draft.revision,
@@ -131,15 +151,20 @@ export class ConfigurationValidation {
     async apply(
         operationId: string,
         receiptId: string,
+        options?: { allowRestart?: boolean },
     ): Promise<ConfigurationApplicationOperation> {
+        // 每次异步上下文返回后都重新查持久回执；并发首个调用可能已推进 base。
+        const existing = () => {
+            if (!this.options.application.hasOperation(operationId)) return undefined;
+            const operation = this.options.application.status(operationId);
+            if (operation.validationId !== receiptId) throw new ConfigurationConflictError();
+            return operation;
+        };
         try {
             const receipt = this.read(receiptId);
             // 已执行的同一操作是只读查询；不能因应用后base变化而重新执行。
-            if (this.options.application.hasOperation(operationId)) {
-                const operation = this.options.application.status(operationId);
-                if (operation.validationId !== receiptId) throw new ConfigurationConflictError();
-                return operation;
-            }
+            const completed = existing();
+            if (completed) return completed;
             const draft = this.options.store.read(receipt.draftId);
             if (
                 draft.revision !== receipt.draftRevision ||
@@ -149,7 +174,17 @@ export class ConfigurationValidation {
             )
                 throw new ConfigurationConflictError();
             this.assertBase(receipt.base);
-            const context = await this.context(draft);
+            let context: ConfigurationRuntimeContext;
+            try {
+                context = await this.context(draft);
+            } catch (error) {
+                // 上下文自身可能因首个请求提交而报 base 变化；只读原回执不能重派。
+                const concurrent = existing();
+                if (concurrent) return concurrent;
+                throw error;
+            }
+            const concurrent = existing();
+            if (concurrent) return concurrent;
             if (context.fingerprint !== receipt.runtimeFingerprint)
                 throw new ConfigurationConflictError();
             this.assertDraft(draft);
@@ -158,6 +193,10 @@ export class ConfigurationValidation {
                 validationId: receiptId,
                 base: { ...receipt.base },
                 document: parseConfigurationDocument(draft.document),
+                ...(receipt.impact ? { impact: receipt.impact } : {}),
+                ...(options?.allowRestart !== undefined
+                    ? { allowRestart: options.allowRestart }
+                    : {}),
                 ...(receipt.mode === "repair" ? { repair: { ...receipt.repair! } } : {}),
             });
         } catch (error) {
@@ -212,13 +251,17 @@ export class ConfigurationValidation {
             !stat.isFile() ||
             stat.isSymbolicLink() ||
             stat.nlink !== 1 ||
-            stat.size > 16_384 ||
+            stat.size > 4_200_000 ||
             (process.platform !== "win32" && (stat.mode & 0o077) !== 0)
         )
             throw failure();
         const raw = parseConfigurationDocument(JSON.parse(fs.readFileSync(file, "utf8")));
+        checkApplicationRuntimeFields({ impact: raw.impact });
         if (
-            Object.keys(raw).sort().join(",") !==
+            Object.keys(raw)
+                .filter(key => key !== "impact")
+                .sort()
+                .join(",") !==
                 (raw.mode === "repair"
                     ? "base,documentDigest,draftId,draftRevision,id,mode,repair,runtimeFingerprint,schemaVersion"
                     : "base,documentDigest,draftId,draftRevision,id,runtimeFingerprint,schemaVersion") ||
@@ -247,12 +290,15 @@ export class ConfigurationValidation {
         return raw as unknown as Receipt;
     }
     private write(receipt: Receipt): void {
+        const content = JSON.stringify(receipt);
+        if (Buffer.byteLength(content) > 4_200_000) throw failure();
+        parseConfigurationDocument(JSON.parse(content));
         const file = this.file(receipt.id);
         const temporary = `${file}.${randomUUID()}.tmp`;
         try {
             const descriptor = fs.openSync(temporary, "wx", 0o600);
             try {
-                fs.writeFileSync(descriptor, JSON.stringify(receipt));
+                fs.writeFileSync(descriptor, content);
                 fs.fsyncSync(descriptor);
             } finally {
                 fs.closeSync(descriptor);

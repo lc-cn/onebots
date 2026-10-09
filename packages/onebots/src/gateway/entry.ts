@@ -1,4 +1,6 @@
 import { GatewaySendExecutor } from "./send-executor.js";
+import { GatewayConfigurationExecutor } from "./configuration-executor.js";
+import type { GatewayConfigurationReply } from "./configuration-contracts.js";
 import { GatewayAccountExploreExecutor } from "./account-explore-executor.js";
 import { handleGatewayAccountExplore } from "./account-explore-ipc.js";
 import type { GatewayAccountExploreReply } from "./account-explore-contracts.js";
@@ -36,6 +38,7 @@ let sendExecutor: GatewaySendExecutor | undefined;
 let accountExploreExecutor: GatewayAccountExploreExecutor | undefined;
 let verificationExecutor: GatewayVerificationExecutor | undefined;
 let accountStatusTimer: NodeJS.Timeout | undefined;
+let configurationExecutor: GatewayConfigurationExecutor | undefined;
 
 function send(
     message:
@@ -44,7 +47,8 @@ function send(
         | GatewaySendReply
         | GatewayAccountExploreReply
         | GatewayMessageDebugReply
-        | GatewayVerificationReply,
+        | GatewayVerificationReply
+        | GatewayConfigurationReply,
 ): void {
     if (!process.connected || !process.send) return;
     try {
@@ -76,6 +80,7 @@ function failure(code: GatewayFailedMessage["code"], message: string): void {
 async function stop(timeoutMs = 15_000): Promise<void> {
     if (stopping) return;
     stopping = true;
+    configurationExecutor?.close();
     if (accountStatusTimer) clearInterval(accountStatusTimer);
     verificationExecutor?.close();
     sendExecutor?.close();
@@ -159,21 +164,31 @@ async function start(message: GatewayStartMessage): Promise<void> {
             throw new Error("网关未监听私有回环地址");
         }
         mcpSessions = new GatewayMcpSessions(app);
-        sendExecutor = new GatewaySendExecutor(app, {
+        const runtimeIdentity = {
             gatewayInstanceId: message.gatewayInstanceId,
             configVersion: message.configVersion,
-        });
-        accountExploreExecutor = new GatewayAccountExploreExecutor(app, {
-            gatewayInstanceId: message.gatewayInstanceId,
-            configVersion: message.configVersion,
-        });
-        verificationExecutor = new GatewayVerificationExecutor(app, app.verification, {
-            gatewayInstanceId: message.gatewayInstanceId,
-            configVersion: message.configVersion,
+        };
+        sendExecutor = new GatewaySendExecutor(app, runtimeIdentity);
+        accountExploreExecutor = new GatewayAccountExploreExecutor(app, runtimeIdentity);
+        verificationExecutor = new GatewayVerificationExecutor(
+            app,
+            app.verification,
+            runtimeIdentity,
+        );
+        configurationExecutor = new GatewayConfigurationExecutor(app, message, configVersion => {
+            runtimeIdentity.configVersion = configVersion;
+            publishAccountStatus();
         });
         send({
             type: "gateway.ready",
-            capabilities: ["mcp", "send", "message-debug", "verification", "account-explore"],
+            capabilities: [
+                "mcp",
+                "send",
+                "message-debug",
+                "verification",
+                "account-explore",
+                "configuration",
+            ],
             protocolVersion: 1,
             controlInstanceId: message.controlInstanceId,
             gatewayInstanceId: message.gatewayInstanceId,
@@ -191,6 +206,7 @@ async function start(message: GatewayStartMessage): Promise<void> {
         // 已由停止路径接管时，不重复报告启动失败或重新清理。
         if (stopping) return;
         stopping = true;
+        configurationExecutor?.close();
         verificationExecutor?.close();
         sendExecutor?.close();
         accountExploreExecutor?.close();
@@ -235,6 +251,7 @@ process.on("unhandledRejection", () => {
 });
 const handshakeTimer = setTimeout(() => process.exit(1), 30_000);
 process.on("message", value => {
+    if (configurationExecutor?.handle(value, send)) return;
     if (
         handleGatewayAccountExplore(
             value,

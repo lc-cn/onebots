@@ -19,6 +19,12 @@ function createAccount(adapterEmit: (event: string, payload: unknown) => void) {
         name: "fake",
         version: "v1",
         path: "/fake/bot/fake/v1",
+        lifecycleStatus: "pending",
+        config: { protocol: "fake", version: "v1" },
+        start: vi.fn(),
+        stop: vi.fn(),
+        format: vi.fn(() => ({})),
+        apply: vi.fn(async () => ({})),
         dispatch: protocolDispatch,
     }) as unknown as Protocol;
 
@@ -45,7 +51,7 @@ describe("Account.dispatch 调试旁路隔离", () => {
         vi.restoreAllMocks();
     });
 
-    it("message:dispatch 监听器抛出异常时，仍然照常分发给所有协议", () => {
+    it("message:dispatch 监听器抛出异常时，仍然同步开始分发给所有协议", () => {
         const { account, protocolDispatch } = createAccount(() => {
             throw new Error("调试旁路模拟异常（如 JSON.stringify 遇到 BigInt）");
         });
@@ -55,7 +61,7 @@ describe("Account.dispatch 调试旁路隔离", () => {
         expect(protocolDispatch).toHaveBeenCalledWith(event);
     });
 
-    it("message:dispatch 监听器正常时，行为不变", () => {
+    it("message:dispatch 监听器正常时，投递同步起始行为不变", () => {
         const emitted: unknown[] = [];
         const { account, protocolDispatch } = createAccount((event, payload) => {
             emitted.push({ event, payload });
@@ -66,6 +72,24 @@ describe("Account.dispatch 调试旁路隔离", () => {
 
         expect(protocolDispatch).toHaveBeenCalledWith(event);
         expect(emitted).toHaveLength(1);
+    });
+
+    it("操作回调同步抛错仍返回 rejected Promise，完成后租约不残留", async () => {
+        const { account } = createAccount(vi.fn());
+        let failure: Promise<unknown> | undefined;
+        expect(() => {
+            failure = account.runOperation(() => {
+                throw new Error("synchronous operation failed");
+            });
+        }).not.toThrow();
+        await expect(failure).rejects.toThrow("synchronous operation failed");
+        const drain = account.beginOperationDrain();
+        try {
+            await drain.settled(100);
+        } finally {
+            drain.release();
+        }
+        await expect(account.runOperation(() => "completed")).resolves.toBe("completed");
     });
 
     it("dispatchAwaited 等待异步协议完成", async () => {
@@ -86,6 +110,35 @@ describe("Account.dispatch 调试旁路隔离", () => {
         release?.();
         await delivery;
         expect(settled).toBe(true);
+    });
+
+    it("不等待返回值的 dispatch 仍进入排空屏障，直到异步协议真实投递完成", async () => {
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const { account, protocolDispatch } = createAccount(vi.fn());
+        protocolDispatch.mockReturnValue(pending);
+        const event = { type: "message" } as never;
+
+        // dispatch 的公开契约为 fire-and-forget，不承诺同步完成协议投递。
+        expect(account.dispatch(event)).toBeUndefined();
+        const drain = account.beginOperationDrain();
+        let drained = false;
+        const settlement = drain.settled(1_000).then(() => {
+            drained = true;
+        });
+        try {
+            await vi.waitFor(() => expect(protocolDispatch).toHaveBeenCalledWith(event));
+            expect(drained).toBe(false);
+            await expect(account.runOperation(() => "new operation")).rejects.toThrow("操作未受理");
+        } finally {
+            release();
+            await settlement;
+            drain.release();
+        }
+        expect(drained).toBe(true);
+        await expect(account.runOperation(() => "after drain")).resolves.toBe("after drain");
     });
 
     it("一个协议失败时仍尝试其余协议并向接入层传播错误", async () => {

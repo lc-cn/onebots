@@ -4,6 +4,7 @@ import {
     Adapter,
     BaseApp,
     readPackageVersion,
+    runWithAdapterRouteScope,
     type AdapterCapabilityManifest,
     type CommonTypes,
 } from "onebots";
@@ -353,7 +354,9 @@ export class MatrixAdapter extends Adapter<MatrixClient, "matrix"> {
             ),
         );
         if (client.receiveMode === "appservice") {
-            this.appserviceHost.mount(account.account_id, client, account.path);
+            runWithAdapterRouteScope(this, () =>
+                this.appserviceHost.mount(account.account_id, client, account.path),
+            );
         }
         account.on("start", async (signal: AbortSignal) => {
             try {
@@ -362,12 +365,14 @@ export class MatrixAdapter extends Adapter<MatrixClient, "matrix"> {
                 account.nickname = identity.user_id;
                 this.logger.info(`Matrix Bot ${identity.user_id} 已就绪（${client.receiveMode}）`);
             } catch (error) {
+                this.appserviceHost.unmount(account.account_id);
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动 Matrix Bot ${config.account_id} 失败`, error);
                 throw error;
             }
         });
         account.on("stop", async () => {
+            this.appserviceHost.unmount(account.account_id);
             try {
                 await client.stop();
             } finally {

@@ -36,10 +36,59 @@ function protocol(overrides: Partial<Protocol> = {}): Protocol {
 }
 
 describe("Account lifecycle", () => {
+    it("并发停止只调用一次清理，停止期间及之后禁止同实例重新启动", async () => {
+        const account = createAccount();
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const cleanup = vi.fn(() => pending);
+        const startup = vi.fn();
+        const phases: string[] = [];
+        const retired = vi.fn(() => {
+            phases.push("stopping");
+        });
+        account.on("stopping", retired);
+        account.on("start", startup);
+        account.on("stop", cleanup);
+        const selected = protocol({
+            stop: vi.fn(async () => {
+                phases.push("protocol");
+            }),
+        });
+        account.protocols = [selected];
+        const first = account.stop();
+        expect(retired).toHaveBeenCalledOnce();
+        expect(phases).toEqual(["stopping"]);
+        const second = account.stop(true);
+        expect(second).toBe(first);
+        await expect(account.start()).rejects.toThrow("账号资源已释放");
+        try {
+            await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce());
+            expect(selected.stop).toHaveBeenCalledOnce();
+            expect(phases).toEqual(["stopping", "protocol"]);
+            expect(startup).not.toHaveBeenCalled();
+        } finally {
+            release();
+            await first;
+        }
+        expect(account.stop()).toBe(first);
+        await expect(account.start()).rejects.toThrow("账号资源已释放");
+        expect(cleanup).toHaveBeenCalledOnce();
+        expect(startup).not.toHaveBeenCalled();
+        expect(account.listenerCount("start")).toBe(0);
+        expect(account.listenerCount("stop")).toBe(0);
+    });
     it("停止后不执行已快照但尚未开始的启动监听器", async () => {
         const account = createAccount();
         let release!: () => void;
-        account.on("start", () => new Promise<void>(resolve => { release = resolve; }));
+        account.on(
+            "start",
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
         const next = vi.fn();
         account.on("start", next);
         account.protocols = [protocol()];
@@ -53,8 +102,12 @@ describe("Account lifecycle", () => {
 
     it("普通启动监听器失败仍尝试其他监听器，once 语义保持不变", async () => {
         const account = createAccount();
-        account.on("start", () => { throw new Error("first failed"); });
-        const next = vi.fn(function (this: Account) { expect(this).toBe(account); });
+        account.on("start", () => {
+            throw new Error("first failed");
+        });
+        const next = vi.fn(function (this: Account) {
+            expect(this).toBe(account);
+        });
         account.once("start", next);
         await expect(account.start()).rejects.toThrow("first failed");
         expect(next).toHaveBeenCalledOnce();

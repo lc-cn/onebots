@@ -7,6 +7,7 @@ import {
     type AdapterCapabilityManifest,
     type CommonTypes,
 } from "onebots";
+import { runWithAdapterRouteScope } from "onebots";
 import {
     googleChatContentType,
     materializeGoogleChatUpload,
@@ -401,7 +402,7 @@ export class GoogleChatAdapter extends Adapter<GoogleChatClient, "google-chat"> 
                 }),
             ),
         );
-        this.httpHost.mount(account.account_id, client);
+        runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async (signal: AbortSignal) => {
             try {
                 await client.start(signal);
@@ -411,12 +412,14 @@ export class GoogleChatAdapter extends Adapter<GoogleChatClient, "google-chat"> 
                     `Google Chat ${account.account_id} 已就绪（${client.receiveMode}）`,
                 );
             } catch (error) {
+                this.httpHost.unmount(account.account_id);
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动 Google Chat ${account.account_id} 失败`, error);
                 throw error;
             }
         });
         account.on("stop", async () => {
+            this.httpHost.unmount(account.account_id);
             try {
                 await client.stop();
             } finally {

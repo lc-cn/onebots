@@ -268,8 +268,15 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         const contextTokenStore = new SqliteClawbotContextTokenStore(this.db);
         const bot = new WechatIlinkBot(wc, { contextTokenStore });
         const account = new Account<"wechat-clawbot", WechatIlinkBot>(this, bot, config);
+        let retired = false;
+        // stop 终结此 Account 的生命周期；恢复由工厂创建新实例，不复活旧 SDK。
+        account.on("stopping", () => {
+            retired = true;
+        });
+        const acceptsEvent = () => !retired && this.accounts.get(account.account_id) === account;
 
         bot.on("qr", (payload: { qrCodeUrl: string; qrcode: string; refreshed?: boolean }) => {
+            if (!acceptsEvent()) return;
             this.logger.info(
                 `[${this.platform}] ${config.account_id} 请使用微信扫描登录: ${payload.qrCodeUrl}` +
                     (payload.refreshed ? " [已刷新]" : ""),
@@ -287,6 +294,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("verification_code_required", () => {
+            if (!acceptsEvent()) return;
             this.emit("verification:request", {
                 platform: this.platform,
                 account_id: config.account_id,
@@ -307,6 +315,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("login", session => {
+            if (!acceptsEvent()) return;
             account.nickname = session.accountId;
             account.avatar = this.icon;
             this.logger.info(`[${this.platform}] ${config.account_id} 扫码登录成功`);
@@ -317,6 +326,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("credential_stale", (err: StaleCredentialFault) => {
+            if (!acceptsEvent()) return;
             account.status = AccountStatus.Pending;
             this.logger.warn(
                 `[${this.platform}] ${config.account_id} 会话已在服务端失效，本地凭证已清除，将自动弹出二维码重新登录（无需重启）。原因: ${err.message}`,
@@ -324,11 +334,13 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("relogin_blocked", (payload: { message: string }) => {
+            if (!acceptsEvent()) return;
             account.status = AccountStatus.OffLine;
             this.logger.warn(`[${this.platform}] ${config.account_id} ${payload.message}`);
         });
 
         bot.on("relogin_failed", (error: unknown) => {
+            if (!acceptsEvent()) return;
             account.status = AccountStatus.OffLine;
             this.logger.error(
                 `[${this.platform}] ${config.account_id} 自动重新扫码登录失败:`,
@@ -337,7 +349,10 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("ready", async () => {
+            if (!acceptsEvent()) return;
             const session = await bot.getSession();
+            // 异步身份读取期间也可能发生 stop 或同 ID 替换。
+            if (!acceptsEvent()) return;
             if (!session) {
                 throw new GatewayFault("SESSION_NOT_AVAILABLE", "iLink 就绪时缺少会话身份");
             }
@@ -348,6 +363,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("polling_error", (error: unknown) => {
+            if (!acceptsEvent()) return;
             if (error instanceof StaleCredentialFault) return;
             if (isTransientNetworkError(error)) {
                 this.logger.warn(
@@ -359,6 +375,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("listener_error", (payload: { event: string; error: unknown }) => {
+            if (!acceptsEvent()) return;
             this.logger.error(
                 `[${this.platform}] ${config.account_id} 事件监听器 ${payload.event} 执行失败:`,
                 payload.error,
@@ -366,11 +383,13 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("message", async (m: IlinkBotMessage) => {
+            if (!acceptsEvent()) return;
             const rawText = m.text ?? m.caption ?? "";
             const preview = rawText.length > 80 ? `${rawText.slice(0, 80)}...` : rawText;
             this.logger.info(`[${this.platform}] 收到私聊 | from=${m.from.id} | ${preview}`);
 
             const session = await bot.getSession();
+            if (!acceptsEvent()) return;
             if (!session) {
                 throw new GatewayFault("SESSION_NOT_AVAILABLE", "iLink 消息缺少机器人会话身份");
             }

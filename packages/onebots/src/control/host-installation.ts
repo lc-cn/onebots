@@ -31,7 +31,10 @@ export async function createHostInstallation(
         const active = lifecycle.activeGeneration();
         return active
             ? readGenerationPlan(active).selection
-            : prepareGatewayWorkspace(workspace, options.runtimeRoot).selection;
+            : prepareGatewayWorkspace(
+                  workspace,
+                  options.runtimeRoot ?? path.resolve(import.meta.dirname, "../.."),
+              ).selection;
     };
     const catalog = new ControlInstallationCatalogReader({
         store: generations,

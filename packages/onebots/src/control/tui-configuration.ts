@@ -210,7 +210,9 @@ export async function runControlConfiguration(
                         `草稿未通过验证，存在 ${validation.issues.length} 项字段问题。请检查字段后重新验证。`,
                     );
                     for (const issue of validation.issues) {
-                        const location = issue.path.join(" / ").replace(/[\x00-\x1f\x7f]/gu, " ");
+                        const location = issue.path
+                            .join(" / ")
+                            .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ");
                         prompt.report(`${location || "配置"}：字段无效`);
                     }
                     continue;
@@ -219,18 +221,79 @@ export async function runControlConfiguration(
                     prompt.report("草稿版本已变化，请重新读取并验证。");
                     continue;
                 }
+                // 展示服务端计算的实例范围；不回显配置值或第三方原始诊断。
+                let stopped: boolean | undefined;
+                if (validation.impact) {
+                    try {
+                        const desired = (await client.status()).gateway?.desired;
+                        stopped =
+                            desired === "stopped"
+                                ? true
+                                : desired === "running"
+                                  ? false
+                                  : undefined;
+                    } catch {
+                        // 状态读取失败不能假装网关已停止；提交时服务端仍重新核实运行态。
+                        prompt.report("当前网关状态暂不可确认，提交时由服务端重新确认生效方式。");
+                    }
+                    const impact = validation.impact;
+                    const safe = (value: string) =>
+                        value.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, " ");
+                    prompt.report(
+                        stopped === true
+                            ? "应用方式：仅保存配置，下次启动网关时生效。"
+                            : `${stopped === undefined ? "计划影响" : "应用方式"}：${{ none: "无需更新连接", hot: "按实例热更新", restart: "重启网关" }[impact.mode]}`,
+                    );
+                    const displayLimit = 20;
+                    let remaining = displayLimit;
+                    const reportItems = <T>(items: T[], describe: (item: T) => string) => {
+                        const displayed = items.slice(0, remaining);
+                        for (const item of displayed) prompt.report(describe(item));
+                        remaining -= displayed.length;
+                    };
+                    reportItems(
+                        impact.accounts,
+                        item =>
+                            `${{ add: "新增", reconnect: "重连", remove: "移除" }[item.action]}账号：${safe(item.platform)}/${safe(item.accountId)}`,
+                    );
+                    reportItems(
+                        impact.protocols,
+                        item =>
+                            `${{ add: "新增", replace: "更新", remove: "移除" }[item.action]}协议：${safe(item.platform)}/${safe(item.accountId)} · ${safe(item.name)}/${safe(item.version)}`,
+                    );
+                    reportItems(impact.dynamicFields, field => `动态设置：${safe(field)}`);
+                    reportItems(impact.restartReasons, reason => `重启原因：${safe(reason)}`);
+                    const total =
+                        impact.accounts.length +
+                        impact.protocols.length +
+                        impact.dynamicFields.length +
+                        impact.restartReasons.length;
+                    if (total > displayLimit)
+                        prompt.report(
+                            `另有 ${total - displayLimit} 项未显示；完整范围请查看 Web 配置校验结果或非交互配置校验输出。`,
+                        );
+                }
+                const restartRequired = validation.impact?.mode === "restart" && stopped !== true;
                 if (
                     !(await confirmControlAction(
                         prompt,
                         "确认应用已验证草稿？",
-                        "将按当前网关启停意图应用；运行中的网关可能重启。",
+                        stopped === true
+                            ? "仅保存配置，下次启动网关时生效；不会启动停止的网关。"
+                            : restartRequired
+                              ? "该配置需要重启整个网关，确认重启？"
+                              : "仅更新受影响账号或协议，其他账号保持运行；停止的网关不会自动启动。",
                     ))
                 )
                     continue;
                 const id = randomUUID();
                 prompt.report(`配置应用任务：${id}`);
                 try {
-                    await client.applyConfiguration(id, validation.receiptId);
+                    await client.applyConfiguration(
+                        id,
+                        validation.receiptId,
+                        restartRequired ? { allowRestart: true } : undefined,
+                    );
                 } catch {
                     prompt.report("提交结果暂不可确认，查询原任务，不重新提交。");
                 }

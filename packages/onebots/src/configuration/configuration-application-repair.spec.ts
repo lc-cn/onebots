@@ -56,6 +56,7 @@ function fixture(desired: "running" | "stopped" = "running") {
     };
     const application = new ConfigurationApplication(options);
     const request = {
+        allowRestart: true,
         id: "repair-1",
         validationId: "receipt-1",
         base: { generationId: null, configRevision: repair.originalRevision },
@@ -65,6 +66,23 @@ function fixture(desired: "running" | "stopped" = "running") {
     return { application, request, source, file, original, options, recovery, state, calls };
 }
 describe("配置修复共用应用事务", () => {
+    it("运行中修复未明确授权重启时零停机零写入", async () => {
+        const test = fixture();
+        await expect(
+            test.application.apply({ ...test.request, allowRestart: false }),
+        ).rejects.toThrow("明确确认重启");
+        expect(fs.readFileSync(test.file)).toEqual(test.original);
+        expect(test.calls).toEqual([]);
+        expect(test.application.hasOperation(test.request.id)).toBe(false);
+    });
+    it("运行中的网关未明确授权重启时拒绝修复", async () => {
+        const test = fixture("running");
+        const { allowRestart, ...request } = test.request;
+        expect(allowRestart).toBe(true);
+        await expect(test.application.apply(request)).rejects.toThrow("明确确认重启");
+        expect(test.calls).toEqual([]);
+        expect(fs.readFileSync(test.file)).toEqual(test.original);
+    });
     it.each(["candidateRevision", "configRevision"])(
         "损坏日志的 %s 不能授权覆盖第三方配置",
         async field => {
@@ -81,7 +99,7 @@ describe("配置修复共用应用事务", () => {
             expect(restarted.health().recoveryRequired).toBe(true);
             await expect(restarted.reconcileRestore(test.request.id, revision)).rejects.toThrow();
             expect(fs.readFileSync(test.file, "utf8")).toBe("external: preserved\n");
-            expect(test.calls).toEqual(["stop"]);
+            expect(test.calls).toEqual([]);
         },
     );
     it("候选落盘但结果未确认后，冷启动对账只恢复原始字节且清除门禁", async () => {
@@ -122,7 +140,7 @@ describe("配置修复共用应用事务", () => {
             const test = fixture(desired);
             const result = await test.application.apply(test.request);
             expect(result.status).toBe("succeeded");
-            expect(test.calls).toEqual(desired === "running" ? ["stop", "start"] : ["stop"]);
+            expect(test.calls).toEqual(desired === "running" ? ["stop", "start"] : []);
             expect(test.source.read().document).toEqual(test.request.document);
             expect(test.recovery.read(test.request.repair)).toEqual(test.original);
             expect(JSON.stringify(result)).not.toContain("原始秘密");

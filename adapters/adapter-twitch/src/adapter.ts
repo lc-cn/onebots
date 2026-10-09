@@ -14,6 +14,7 @@ import { TwitchClient } from "./client.js";
 import { TwitchError } from "./errors.js";
 import { projectTwitchEvent } from "./events.js";
 import { TwitchHttpHost } from "./http-host.js";
+import { runWithAdapterRouteScope } from "onebots";
 import { compileTwitchMessage } from "./messages.js";
 import { executeTwitchPlatformAction, TWITCH_PLATFORM_ACTIONS } from "./platform-actions.js";
 import type { TwitchChannel, TwitchChatter, TwitchDelivery, TwitchUser } from "./types.js";
@@ -261,7 +262,7 @@ export class TwitchAdapter extends Adapter<TwitchClient, "twitch"> {
                 account_id: String(account.account_id),
             });
         });
-        this.httpHost.mount(account.account_id, client);
+        runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async (signal: AbortSignal) => {
             try {
                 await client.start(signal);
@@ -269,12 +270,14 @@ export class TwitchAdapter extends Adapter<TwitchClient, "twitch"> {
                 account.nickname = client.me?.display_name || account.account_id;
                 this.logger.info(`Twitch ${account.account_id} 已就绪（${client.receiveMode}）`);
             } catch (error) {
+                this.httpHost.unmount(account.account_id);
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动 Twitch ${account.account_id} 失败`, error);
                 throw error;
             }
         });
         account.on("stop", async () => {
+            this.httpHost.unmount(account.account_id);
             try {
                 await client.stop();
             } finally {

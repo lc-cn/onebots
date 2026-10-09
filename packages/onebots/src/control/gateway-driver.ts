@@ -1,18 +1,25 @@
 import { openGatewayLog, appendGatewayLog } from "./gateway-log.js";
+import { groupExists, gatewayEnvironment, isReady, waitForClose } from "./gateway-driver-state.js";
 import { GatewayRequestClient, GatewayRequestError } from "./gateway-request-client.js";
 import { AccountExploreError } from "../gateway/account-explore-errors.js";
 import { requestGatewayMessageDebug } from "./gateway-message-debug-client.js";
+import {
+    applyRuntimeConfiguration,
+    queryRuntimeConfiguration,
+    runtimeContext,
+} from "./gateway-driver-configuration.js";
+import type {
+    GatewayConfigurationInput,
+    GatewayConfigurationResult,
+} from "../gateway/configuration-contracts.js";
 import {
     requestGatewayVerification,
     type GatewayVerificationOperation,
 } from "./gateway-verification-client.js";
 import type { GatewayVerificationReply } from "../gateway/verification-contracts.js";
 import type { GatewayMessageDebugReply } from "../gateway/message-debug-contracts.js";
-import {
-    isGatewaySendMessage,
-    isGatewaySendReply,
-    type GatewaySendResult,
-} from "../gateway/send-contracts.js";
+import type { GatewaySendResult } from "../gateway/send-contracts.js";
+import { requestGatewaySend } from "./gateway-driver-send.js";
 import {
     isControlSendContext,
     type ControlSendContext,
@@ -73,6 +80,7 @@ interface ManagedChild {
     messageDebug?: boolean;
     accountExplore?: boolean;
     verificationConfig?: string;
+    configurationVersion?: string;
     accounts?: GatewayAccountStatusMessage["accounts"];
 }
 
@@ -149,6 +157,8 @@ export class NodeGatewayDriver implements GatewayDriver {
             managed.requests = new GatewayRequestClient(child);
             managed.messageDebug = ready.capabilities?.includes("message-debug") ?? false;
             managed.accountExplore = ready.capabilities?.includes("account-explore") ?? false;
+            if (ready.capabilities?.includes("configuration"))
+                managed.configurationVersion = prepared.configVersion;
             if (ready.capabilities?.includes("verification"))
                 managed.verificationConfig = prepared.configVersion;
             if (ready.capabilities?.includes("send"))
@@ -176,6 +186,30 @@ export class NodeGatewayDriver implements GatewayDriver {
         }
     }
 
+    runtimeContext(
+        instanceId: string,
+    ): { gatewayInstanceId: string; configVersion: string } | undefined {
+        return runtimeContext(this.children.get(instanceId), instanceId);
+    }
+    async applyRuntimeConfiguration(
+        input: GatewayConfigurationInput,
+    ): Promise<GatewayConfigurationResult> {
+        return applyRuntimeConfiguration(
+            this.children.get(input.expected.gatewayInstanceId),
+            this.options.controlInstanceId,
+            input,
+        );
+    }
+    queryRuntimeConfiguration(input: {
+        id: string;
+        expected: { gatewayInstanceId: string; configVersion: string };
+    }): Promise<GatewayConfigurationResult> {
+        return queryRuntimeConfiguration(
+            this.children.get(input.expected.gatewayInstanceId),
+            this.options.controlInstanceId,
+            input,
+        );
+    }
     sendContext(instanceId: string): ControlSendContext | undefined {
         const managed = this.children.get(instanceId);
         return managed &&
@@ -203,43 +237,7 @@ export class NodeGatewayDriver implements GatewayDriver {
             controlInstanceId: this.options.controlInstanceId,
             gatewayInstanceId: instanceId,
         };
-        return managed.requests.request({
-            encode: requestId => {
-                const message = { ...identity, type: "gateway.send" as const, requestId, request };
-                if (!isGatewaySendMessage(message)) throw new Error();
-                return message;
-            },
-            decode: (value, requestId) => {
-                if (
-                    !isGatewaySendReply(value) ||
-                    value.requestId !== requestId ||
-                    value.controlInstanceId !== identity.controlInstanceId ||
-                    value.gatewayInstanceId !== instanceId ||
-                    value.configVersion !== context.configVersion ||
-                    value.operationId !== request.id
-                )
-                    return;
-                return value.outcome === "succeeded"
-                    ? { ok: true, result: value.result! }
-                    : {
-                          ok: false,
-                          error: new GatewayRequestError(
-                              value.outcome,
-                              value.outcome === "rejected"
-                                  ? "网关拒绝发送请求"
-                                  : "消息发送结果未知，请勿自动重试",
-                          ),
-                      };
-            },
-            errors: {
-                unavailable: "发送网关不可用",
-                limit: "未完成网关请求已达上限",
-                invalid: "发送请求无效",
-                timeout: "消息发送超时，结果未知，请勿自动重试",
-                send: "发送通信中断，结果未知，请勿自动重试",
-                closed: "发送网关已关闭，结果未知，请勿自动重试",
-            },
-        });
+        return requestGatewaySend(managed.requests, identity, context, request);
     }
 
     exploreAccount(
@@ -491,77 +489,5 @@ export class NodeGatewayDriver implements GatewayDriver {
             (await waitForProcessGroupExit(managed.child.pid, remaining(2000))) !== "exited"
         )
             throw new Error("网关进程组仍未确认退出，禁止启动新实例");
-    }
-}
-
-function groupExists(pid: number | undefined): boolean {
-    if (!pid || process.platform === "win32") return false;
-    try {
-        process.kill(-pid, 0);
-        return true;
-    } catch (error) {
-        return (error as NodeJS.ErrnoException).code !== "ESRCH";
-    }
-}
-
-function gatewayEnvironment(): NodeJS.ProcessEnv {
-    const result: NodeJS.ProcessEnv = {};
-    for (const key of [
-        "PATH",
-        "SystemRoot",
-        "WINDIR",
-        "TMPDIR",
-        "TMP",
-        "TEMP",
-        "LANG",
-        "LC_ALL",
-        "TZ",
-    ]) {
-        if (process.env[key] !== undefined) result[key] = process.env[key];
-    }
-    result.NODE_ENV = "production";
-    return result;
-}
-
-function isReady(value: unknown, start: GatewayStartMessage): value is GatewayReadyMessage {
-    if (!value || typeof value !== "object") return false;
-    const message = value as Partial<GatewayReadyMessage>;
-    return (
-        message.type === "gateway.ready" &&
-        message.protocolVersion === GATEWAY_PROTOCOL_VERSION &&
-        message.controlInstanceId === start.controlInstanceId &&
-        message.gatewayInstanceId === start.gatewayInstanceId &&
-        message.configVersion === start.configVersion &&
-        message.dependencyVersion === start.dependencyVersion &&
-        (message.capabilities === undefined ||
-            (Array.isArray(message.capabilities) &&
-                message.capabilities.length <= 5 &&
-                new Set(message.capabilities).size === message.capabilities.length &&
-                message.capabilities.every(
-                    value =>
-                        value === "mcp" ||
-                        value === "send" ||
-                        value === "message-debug" ||
-                        value === "verification" ||
-                        value === "account-explore",
-                ))) &&
-        message.address?.host === "127.0.0.1" &&
-        Number.isInteger(message.address.port) &&
-        message.address.port > 0 &&
-        message.address.port <= 65535
-    );
-}
-
-async function waitForClose(managed: ManagedChild, timeoutMs: number): Promise<boolean> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-        return await Promise.race([
-            managed.closed.then(() => true),
-            new Promise<boolean>(resolve => {
-                timer = setTimeout(() => resolve(false), timeoutMs);
-            }),
-        ]);
-    } finally {
-        clearTimeout(timer);
     }
 }

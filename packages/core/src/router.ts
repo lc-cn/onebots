@@ -130,13 +130,21 @@ export namespace WsServer {
 export class RouterRegistrationScope {
     private readonly httpLayers = new Set<Layer>();
     private readonly wsServers = new Map<string, WsServer>();
+    private readonly children = new Set<RouterRegistrationScope>();
     private closed = false;
 
     constructor(
         private readonly router: Router,
         /** @internal 供 Router 生成冲突诊断。 */
         readonly owner?: RouterRegistrationOwner,
+        private readonly parent?: RouterRegistrationScope,
     ) {}
+
+    /** 子协议作用域能独立释放，也必须随未完成的账号构造一起清理。 */
+    trackScope(scope: RouterRegistrationScope): void {
+        if (this.closed) scope.close();
+        else this.children.add(scope);
+    }
 
     run<T>(operation: () => T): T {
         return this.router.runInRegistrationScope(this, operation);
@@ -145,6 +153,9 @@ export class RouterRegistrationScope {
     close(): void {
         if (this.closed) return;
         this.closed = true;
+        this.parent?.children.delete(this);
+        for (const scope of this.children) scope.close();
+        this.children.clear();
         for (const layer of this.httpLayers) this.router.removeScopedHttpLayer(layer);
         this.httpLayers.clear();
         for (const [path, server] of this.wsServers) {
@@ -285,7 +296,10 @@ export class Router extends KoaRouter {
     }
 
     createRegistrationScope(owner?: RouterRegistrationOwner): RouterRegistrationScope {
-        return new RouterRegistrationScope(this, owner);
+        const parent = this.registrationScope.getStore();
+        const scope = new RouterRegistrationScope(this, owner, parent);
+        parent?.trackScope(scope);
+        return scope;
     }
 
     /** @internal 由 RouterRegistrationScope.run 建立异步注册归属。 */

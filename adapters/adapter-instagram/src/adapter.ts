@@ -4,6 +4,7 @@ import {
     Adapter,
     BaseApp,
     readPackageVersion,
+    runWithAdapterRouteScope,
     type AdapterCapabilityManifest,
     type CommonTypes,
 } from "onebots";
@@ -171,7 +172,7 @@ export class InstagramAdapter extends Adapter<InstagramClient, "instagram"> {
                 }),
             ),
         );
-        this.httpHost.mount(account.account_id, client);
+        runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async () => {
             try {
                 await client.start();
@@ -182,12 +183,14 @@ export class InstagramAdapter extends Adapter<InstagramClient, "instagram"> {
                     client.config.instagram_user_id;
                 this.logger.info(`Instagram ${account.account_id} 已就绪（${client.receiveMode}）`);
             } catch (error) {
+                this.httpHost.unmount(account.account_id);
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动 Instagram ${account.account_id} 失败`, error);
                 throw error;
             }
         });
         account.on("stop", async () => {
+            this.httpHost.unmount(account.account_id);
             try {
                 await client.stop();
             } finally {

@@ -289,6 +289,11 @@ function migrationJournalStates() {
                     phase: safe(value.phase),
                     status: safe(value.status),
                     rollbackOrigin: value.rollbackOrigin ? safe(value.rollbackOrigin) : null,
+                    failureStage: ["verify-original", "stop-original", "verify-quiescent"].includes(
+                        value.failureStage,
+                    )
+                        ? value.failureStage
+                        : null,
                 };
             } catch {
                 return { phase: "unreadable", status: "unreadable" };
@@ -449,7 +454,7 @@ async function invokeMigration(args) {
     const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
     const id = /操作 ([0-9a-f-]{36})：/iu.exec(text)?.[1];
     throw new Error(
-        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}；管理候选阶段=${JSON.stringify(managerCandidateStates(STATE_DIRECTORY))}；捕获阶段=${JSON.stringify(id ? migrationCaptureState(id) : { operation: false })}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}；服务错误=${JSON.stringify(migrationServiceErrors())}`,
+        `公开 CLI migrate 失败（exit ${String(result.status)}）；操作编号已报告=${Boolean(id)}；迁移记录=${JSON.stringify(migrationJournalStates())}；管理候选阶段=${JSON.stringify(managerCandidateStates(STATE_DIRECTORY))}；捕获阶段=${JSON.stringify(id ? migrationCaptureState(id) : { operation: false })}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}；服务错误=${JSON.stringify(migrationServiceErrors())}`,
     );
 }
 

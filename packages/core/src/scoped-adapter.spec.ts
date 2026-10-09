@@ -6,7 +6,7 @@ import type { BaseApp } from "./base-app.js";
 import { BaseApp as BaseAppClass } from "./base-app.js";
 import { AdapterRegistry } from "./registry.js";
 import { Router } from "./router.js";
-import { closeAdapterRouteScope } from "./scoped-adapter.js";
+import { closeAdapterRouteScope, runWithAdapterRouteScope } from "./scoped-adapter.js";
 
 const capabilities = defineAdapterCapabilities({
     actions: {},
@@ -53,6 +53,12 @@ describe("scoped adapter factory", () => {
         expect(app.router.getWsPaths()).toEqual(["/owned/events"]);
 
         closeAdapterRouteScope(adapter);
+        expect(app.router.stack).toHaveLength(0);
+        expect(app.router.getWsPaths()).toEqual([]);
+        runWithAdapterRouteScope(adapter, () => {
+            app.router.get("/late", () => undefined);
+            app.router.ws("/late/events");
+        });
         expect(app.router.stack).toHaveLength(0);
         expect(app.router.getWsPaths()).toEqual([]);
     });

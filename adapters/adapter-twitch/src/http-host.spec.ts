@@ -1,4 +1,6 @@
 import type { BaseApp } from "onebots";
+import { createServer } from "node:http";
+import { Router, HttpRouteConflictError } from "../../../packages/core/src/router.js";
 import { describe, expect, it, vi } from "vitest";
 import { TwitchHttpHost } from "./http-host.js";
 import type { TwitchClient } from "./client.js";
@@ -16,9 +18,43 @@ interface TestContext {
 type Handler = (ctx: TestContext) => Promise<void>;
 
 describe("TwitchHttpHost", () => {
+    it("真实路由部分注册失败完整回滚，修正冲突后可重试并释放、重新挂载", () => {
+        const router = new Router(createServer());
+        const current = client();
+        const host = new TwitchHttpHost({ router } as unknown as BaseApp, () => current);
+        const blocker = router.createRegistrationScope({ platform: "other" });
+        try {
+            blocker.run(() => router.post("/twitch/events", () => undefined));
+            try {
+                host.mount("current", current);
+                throw new Error("应拒绝重复路由");
+            } catch (error) {
+                expect(error).toBeInstanceOf(HttpRouteConflictError);
+                expect(error).toMatchObject({
+                    registeringOwner: { platform: "twitch" },
+                    existingOwner: { platform: "other" },
+                });
+            }
+            expect(router.stack).toHaveLength(1);
+            blocker.close();
+            expect(router.stack).toHaveLength(0);
+            host.mount("current", current);
+            expect(router.stack).toHaveLength(1);
+            host.unmount("current");
+            expect(router.stack).toHaveLength(0);
+            host.mount("current", current);
+            expect(router.stack).toHaveLength(1);
+        } finally {
+            router.cleanup();
+        }
+    });
     it("热重载后把原始请求体交给当前 Client", async () => {
         const routes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             post: vi.fn((path: string, handler: Handler) => routes.set(path, handler)),
         };
         const oldClient = client();
@@ -43,7 +79,13 @@ describe("TwitchHttpHost", () => {
 
     it("缺少 rawBody 时拒绝验签，而不是使用空请求体", async () => {
         const routes = new Map<string, Handler>();
-        const router = { post: (path: string, handler: Handler) => routes.set(path, handler) };
+        const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
+            post: (path: string, handler: Handler) => routes.set(path, handler),
+        };
         const currentClient = client();
         const host = new TwitchHttpHost({ router } as unknown as BaseApp, () => currentClient);
         host.mount("account", currentClient);

@@ -119,7 +119,7 @@ const statusLabel = computed(() => {
                 class="entity-detail-section entity-danger-section"
                 aria-labelledby="account-manage-title">
                 <h2 id="account-manage-title">管理账号</h2>
-                <p>删除会同时移除这个账号配置的所有协议出口，保存并应用后生效。</p>
+                <p>删除会停止这个账号，并移除它的所有协议出口；其他账号不受影响。</p>
                 <UiButton variant="danger" size="sm" @click="emit('remove')">删除账号</UiButton>
             </section>
         </template>

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { BaseApp } from "@onebots/core";
+import { beginAccountOperationDrain, type BaseApp } from "@onebots/core";
 import type { ControlSendRequest } from "@onebots/core/control";
 import { expect, it, vi } from "vitest";
 import { GatewaySendExecutor } from "./send-executor.js";
@@ -61,6 +61,18 @@ it("passes a direct scene through to adapters that require it", async () => {
         "account/with/slash",
         expect.objectContaining({ scene_type: "direct" }),
     );
+});
+it("账号热配置排空时发送明确未受理，不调用 SDK，也不标记未知副作用", async () => {
+    const f = fixture();
+    const drain = beginAccountOperationDrain(f.adapter.accounts.get("account/with/slash")!);
+    try {
+        expect(await f.executor.send(f.request())).toEqual({ outcome: "rejected" });
+        expect(f.sendMessage).not.toHaveBeenCalled();
+    } finally {
+        drain.release();
+    }
+    expect(await f.executor.send(f.request())).toMatchObject({ outcome: "succeeded" });
+    expect(f.sendMessage).toHaveBeenCalledOnce();
 });
 it("rejects scenes not declared by the active adapter before calling its SDK", async () => {
     const f = fixture();

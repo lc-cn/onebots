@@ -95,9 +95,25 @@ Protocol `access_token`, `token`, and signing-secret fields remain business conn
 
 Run `onebots extensions install --data-dir <workspace>` to open the complete dependency selection wizard. Before removing an extension, delete its accounts and protocol outlets from a configuration draft, remove it from the `plugins` selection, and apply that configuration. Then run `onebots extensions remove --adapter <name>`, `--protocol <name>`, or `--framework <name>`. Removal creates another complete immutable runtime version; it never deletes packages in the active directory. The dependency disappears from the active version only after the candidate is installed, verified, and explicitly activated. `--plan-only` only returns the plan.
 
-Web and TUI apply configuration through the same transaction. An invalid draft cannot replace active configuration. If runtime application fails, both the file and the runtime return to the previous revision. Host fields such as the port and database explicitly report that a restart is required.
+Web, TUI, and CLI use the same configuration transaction. Invalid drafts cannot replace active configuration. A failed runtime apply attempts to restore only affected instances; the source file is restored only after rollback is confirmed. Unknown or incomplete results block subsequent application rather than assuming no platform action occurred.
+
+### Account and protocol hot application
+
+Validate first and review the server-generated impact summary. Adding, removing, or changing an account only affects that account; connection settings reconnect it. Adding, removing, or changing a protocol only replaces that protocol instance, preserving the platform connection and unrelated outlets. Changes to `general` affect only protocols whose effective merged configuration changes.
+
+Hot application requires the extension to be installed, activated, and enabled in `plugins`. First enabling an unloaded extension also changes process-level selection and requires explicit restart approval. Subsequent accounts and outlets using that extension are hot-applied.
+
+`log_level` and `timeout` update dynamically. An effectively unchanged configuration updates the configuration version without restarting resources. Only when the server confirms that the gateway has stopped does application merely save the configuration for the next start. An unavailable or uncertain gateway state is not treated as stopped.
+
+Replacing a protocol closes its own WS/SSE connections; its clients should reconnect. Unrelated connections remain running. Complete pending account login first. Active account operations are given a bounded drain window; inability to drain safely rejects the apply before closing connections.
+
+Process-level settings such as database, listening configuration, and extension selection require explicit restart approval. The CLI requires `--allow-restart`; without approval the old configuration and gateway remain in place.
+
+For a timeout or disconnect, query the original operation ID instead of applying again with a new ID. A confirmed late success or rollback can settle the original operation while its gateway remains available. Unknown receipts, externally changed files, and incomplete rollback keep the recovery protection active.
 
 Before any platform connection, OneBots validates the complete configuration against schemas registered by the active extensions. Validation covers required platform credentials, field types, adapter and protocol references, account protocol outlets, and merged account and `general` values. Errors include the full path, such as `qq.my_bot.appid`.
+
+Configuration receipts retain at most 4096 operations per gateway instance. At capacity, new operations are rejected without evicting original evidence; after reconciliation, an explicit restart opens a new instance. Private snapshots are bounded to 512 files and 64 MiB total. Capacity exhaustion rejects new snapshots rather than deleting versions that recovery may still reference. Reconcile outstanding operations before offline snapshot maintenance.
 
 ## Pre-deployment check
 

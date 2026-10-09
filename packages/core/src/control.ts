@@ -1,3 +1,4 @@
+import type { ConfigurationImpact } from "./runtime-configuration.js";
 import { ControlLogClient } from "./control-logs.js";
 export * from "./control-logs.js";
 import { ControlVerificationClient } from "./control-verification.js";
@@ -123,6 +124,7 @@ export type ControlSecretChange =
     | { op: "set"; path: string[]; value: unknown }
     | { op: "keep" | "clear"; path: string[] };
 export interface ControlConfigurationValidation {
+    impact?: ConfigurationImpact;
     valid: boolean;
     issues: Array<{ path: string[]; message: string }>;
     receiptId?: string;
@@ -132,7 +134,17 @@ export interface ControlConfigurationOperation {
     id: string;
     validationId: string;
     status: "running" | "succeeded" | "failed" | "interrupted";
-    phase: "accepted" | "stopping" | "writing" | "starting" | "restoring" | "completed" | "failed";
+    phase:
+        | "accepted"
+        | "stopping"
+        | "writing"
+        | "starting"
+        | "applying"
+        | "restoring"
+        | "completed"
+        | "failed";
+    impact?: ConfigurationImpact;
+    executionMode?: "hot" | "restart" | "stored";
     recoveryRequired: boolean;
     rolledBack?: boolean;
     sourceState?: "damaged";
@@ -386,10 +398,15 @@ export class ControlClient {
             { expectedRevision },
         );
     }
-    applyConfiguration(id: string, receiptId: string): Promise<ControlConfigurationOperation> {
+    applyConfiguration(
+        id: string,
+        receiptId: string,
+        options?: { allowRestart?: boolean },
+    ): Promise<ControlConfigurationOperation> {
         return this.transport.request("POST", "/api/control/configuration/apply", {
             id,
             receiptId,
+            ...(options?.allowRestart !== undefined ? { allowRestart: options.allowRestart } : {}),
         });
     }
     configurationOperation(id: string): Promise<ControlConfigurationOperation> {

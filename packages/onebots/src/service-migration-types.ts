@@ -69,6 +69,8 @@ export interface ServiceMigrationBackup {
     targetCandidateDigest?: string;
 }
 export interface ServiceMigrationRecord {
+    /** 固定枚举定位目标写入前的失败边界，不保存异常文案、路径或外部命令输出。 */
+    failureStage?: "verify-original" | "stop-original" | "verify-quiescent";
     /** 准备与工件绑定阶段保留v1；目标写入确认及闭合回退事务升级为v2。 */
     schemaVersion: 1 | 2;
     id: string;

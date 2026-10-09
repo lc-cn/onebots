@@ -8,6 +8,14 @@ import { CommonEvent } from "./types.js";
 import { emitAllAwaited, FailureCollector } from "./async-utils.js";
 import { ResourceError } from "./errors.js";
 import type { RouterRegistrationScope } from "./router.js";
+import {
+    beginAccountOperationDrain,
+    closeAccountOperations,
+    openAccountOperations,
+    AccountOperationRejectedError,
+    runAccountOperation,
+    type AccountOperationDrain,
+} from "./account-operations.js";
 
 export interface ProtocolRuntimeInfo {
     name: string;
@@ -33,11 +41,25 @@ export class Account<
     #logger: Logger;
     #startGeneration = 0;
     #starting?: Promise<void>;
+    #stopping?: Promise<void>;
+    #stopped = false;
     #startController?: AbortController;
     #routeScope?: RouterRegistrationScope;
+    readonly #protocolScopes = new Map<Protocol, RouterRegistrationScope>();
     protocols: Protocol[];
     get account_id() {
         return this.config.account_id;
+    }
+    /** 热配置不能与尚未完成的平台登录事务交错。 */
+    get isStarting(): boolean {
+        return this.#starting !== undefined;
+    }
+    runOperation<T>(operation: () => T | Promise<T>): Promise<T> {
+        return runAccountOperation(this, operation);
+    }
+
+    beginOperationDrain(): AccountOperationDrain {
+        return beginAccountOperationDrain(this);
     }
     get app() {
         return this.adapter.app;
@@ -115,35 +137,95 @@ export class Account<
         super();
         this.protocols = this.protocolConfigs.map(
             ({ protocol, version, ...config }: Protocol.FullConfig<C>) => {
-                const instance = ProtocolRegistry.create(
-                    protocol,
-                    version,
-                    this.adapter,
-                    this,
-                    config,
-                );
-                // 调试观测用的旁路监听器：绝不能抛出，否则会阻断在它之后注册的同一 "dispatch" 事件的
-                // 其它监听器（比如协议自身真正向客户端广播的监听器）。
-                instance.on("dispatch", (data: unknown) => {
-                    try {
-                        this.adapter.emit("message:protocol-dispatch", {
-                            platform: this.platform,
-                            account_id: this.account_id,
-                            protocol: instance.name,
-                            version: instance.version,
-                            data,
-                        });
-                    } catch (error) {
-                        this.logger.debug(
-                            `message:protocol-dispatch 旁路监听器异常（已忽略）:`,
-                            error,
-                        );
-                    }
-                });
+                const instance = this.createProtocol(protocol, version, config);
                 return instance;
             },
         );
         this.status = AccountStatus.Pending;
+    }
+
+    /** 构造与启动各自捕获协议资源；协议变更不触碰账号自身路由。 */
+    createProtocol(name: string, version: string, config: Record<string, unknown>): Protocol {
+        const scope = this.app.router?.createRegistrationScope({
+            platform: String(this.platform),
+            account_id: String(this.account_id),
+        });
+        try {
+            const create = () => ProtocolRegistry.create(name, version, this.adapter, this, config);
+            const protocol = scope ? scope.run(create) : create();
+            if (scope) this.#protocolScopes.set(protocol, scope);
+            const apply = protocol.apply.bind(protocol);
+            protocol.apply = (action, params) => {
+                if (protocol.lifecycleStatus !== "ready" || !this.protocols.includes(protocol))
+                    return Promise.reject(new AccountOperationRejectedError());
+                return this.runOperation(() => apply(action, params));
+            };
+            // 调试旁路异常不能阻断协议实际投递，热创建与冷启动采用同一观测路径。
+            protocol.on("dispatch", (data: unknown) => {
+                try {
+                    this.adapter.emit("message:protocol-dispatch", {
+                        platform: this.platform,
+                        account_id: this.account_id,
+                        protocol: protocol.name,
+                        version: protocol.version,
+                        data,
+                    });
+                } catch (error) {
+                    this.logger.debug("message:protocol-dispatch 旁路监听器异常（已忽略）:", error);
+                }
+            });
+            return protocol;
+        } catch (error) {
+            scope?.close();
+            throw error;
+        }
+    }
+
+    async startProtocol(protocol: Protocol, signal?: AbortSignal): Promise<void> {
+        if (!this.#protocolScopes.has(protocol) && this.app.router) {
+            this.#protocolScopes.set(
+                protocol,
+                this.app.router.createRegistrationScope({
+                    platform: String(this.platform),
+                    account_id: String(this.account_id),
+                }),
+            );
+        }
+        protocol.lifecycleStatus = "starting";
+        const start = () => {
+            const router = this.app.router;
+            return router
+                ? router.runWithProtocolReadiness(
+                      () => protocol.lifecycleStatus === "ready",
+                      () => protocol.start(signal),
+                  )
+                : protocol.start(signal);
+        };
+        try {
+            const scope = this.#protocolScopes.get(protocol);
+            await (scope ? scope.run(start) : start());
+            if (signal?.aborted)
+                throw new ResourceError(
+                    `账号 ${this.platform}/${this.account_id} 的启动任务已失效`,
+                );
+            protocol.lifecycleStatus = "ready";
+        } catch (error) {
+            if (protocol.lifecycleStatus === "starting") protocol.lifecycleStatus = "failed";
+            throw error;
+        }
+    }
+
+    async stopProtocol(protocol: Protocol, force?: boolean): Promise<void> {
+        protocol.lifecycleStatus = "stopping";
+        this.#protocolScopes.get(protocol)?.close();
+        this.#protocolScopes.delete(protocol);
+        try {
+            await protocol.stop(force);
+            protocol.lifecycleStatus = "stopped";
+        } catch (error) {
+            protocol.lifecycleStatus = "failed";
+            throw error;
+        }
     }
 
     /** @internal 由 BaseApp 在账号构造完成后绑定路由所有权。 */
@@ -159,7 +241,12 @@ export class Account<
      * start 监听器会收到 AbortSignal；超时或 stop 时扩展应据此取消底层异步工作。
      */
     start(): Promise<void> {
+        if (this.#stopped)
+            return Promise.reject(
+                new ResourceError("账号资源已释放，不能再次启动；请创建新的账号实例"),
+            );
         if (this.#starting) return this.#starting;
+        openAccountOperations(this);
         const generation = ++this.#startGeneration;
         const controller = new AbortController();
         this.#startController = controller;
@@ -205,15 +292,8 @@ export class Account<
         await this.#startListeners(signal, generation);
         this.#assertStartCurrent(generation);
         for (const protocol of this.protocols) {
-            protocol.lifecycleStatus = "starting";
             try {
-                const router = this.adapter.app.router;
-                await (router
-                    ? router.runWithProtocolReadiness(
-                          () => protocol.lifecycleStatus === "ready",
-                          () => protocol.start(signal),
-                      )
-                    : protocol.start(signal));
+                await this.startProtocol(protocol, signal);
                 this.#assertStartCurrent(generation);
                 protocol.lifecycleStatus = "ready";
             } catch (error) {
@@ -240,40 +320,46 @@ export class Account<
         }
     }
 
-    async stop(force?: boolean): Promise<void> {
+    stop(force?: boolean): Promise<void> {
+        if (this.#stopping) return this.#stopping;
+        this.#stopped = true;
+        closeAccountOperations(this);
         this.#startGeneration += 1;
         this.#startController?.abort();
         this.#startController = undefined;
         this.#starting = undefined;
         this.#routeScope?.close();
         this.#routeScope = undefined;
+        // 先发布停止任务，再执行第三方钩子，重入和并发 stop 共用唯一清理。
+        let retiring!: Promise<void>;
+        this.#stopping = Promise.resolve().then(() => this.#finishStop(force, retiring));
+        // 退役监听器的同步前缀必须在 stop 返回前运行，阻断 SDK 的即时迟到事件。
+        retiring = emitAllAwaited(this, "stopping");
+        return this.#stopping;
+    }
+
+    async #finishStop(force: boolean | undefined, retiring: Promise<void>): Promise<void> {
         const failures = new FailureCollector();
+        // 先发布退役边界，再等待协议关闭；平台 SDK 在排空期间产生的迟到事件必须立即失效。
+        await failures.capture(() => retiring);
         for (const protocol of this.protocols) {
-            await failures.capture(async () => {
-                protocol.lifecycleStatus = "stopping";
-                try {
-                    await protocol.stop(force);
-                    protocol.lifecycleStatus = "stopped";
-                } catch (error) {
-                    protocol.lifecycleStatus = "failed";
-                    throw error;
-                }
-            });
+            await failures.capture(() => this.stopProtocol(protocol, force));
         }
         try {
             await failures.capture(() => emitAllAwaited(this, "stop"));
         } finally {
+            // stop 是终结操作；热恢复由 Adapter 工厂创建新的 Account 生命周期。
             this.removeAllListeners();
         }
         failures.throwIfAny(`${failures.size} 个账号停止操作失败`);
     }
 
     getGroupList() {
-        return this.adapter.getGroupList(this.account_id);
+        return this.runOperation(() => this.adapter.getGroupList(this.account_id));
     }
 
     getFriendList() {
-        return this.adapter.getFriendList(this.account_id);
+        return this.runOperation(() => this.adapter.getFriendList(this.account_id));
     }
 
     /** 将事件发往各协议，但不把完成状态反馈给调用方。可靠接入应使用 dispatchAwaited。 */
@@ -288,6 +374,10 @@ export class Account<
      * 但最终会向接入层传播失败，使 Webhook、队列或 Stream 可以请求平台重投。
      */
     async dispatchAwaited(commonEvent: CommonEvent.Base): Promise<void> {
+        return this.runOperation(() => this.dispatchProtocolsAwaited(commonEvent));
+    }
+
+    private async dispatchProtocolsAwaited(commonEvent: CommonEvent.Base): Promise<void> {
         this.logger.debug(
             `Dispatching event: ${commonEvent.type} to ${this.protocols.length} protocol(s)`,
         );

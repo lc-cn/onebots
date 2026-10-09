@@ -1,4 +1,6 @@
 import type { BaseApp } from "onebots";
+import { createServer } from "node:http";
+import { Router, HttpRouteConflictError } from "../../../packages/core/src/router.js";
 import { describe, expect, it, vi } from "vitest";
 import { MatrixAppserviceHost } from "./appservice-host.js";
 import { MatrixClient } from "./client.js";
@@ -28,9 +30,61 @@ const config = (accountId: string, path?: string): MatrixConfig => ({
 });
 
 describe("MatrixAppserviceHost", () => {
+    it("POST ping 冲突也完整撤销此前注册的 PUT 路由，并可重新挂载", () => {
+        const router = new Router(createServer());
+        const blocker = router.createRegistrationScope({ platform: "other" });
+        const current = new MatrixClient(config("bot", "/shared"));
+        const host = new MatrixAppserviceHost({ router } as unknown as BaseApp, () => current);
+        try {
+            blocker.run(() => router.post("/shared/_matrix/app/v1/ping", () => undefined));
+            expect(() => host.mount("bot", current, "/matrix/bot")).toThrow(HttpRouteConflictError);
+            expect(router.stack).toHaveLength(1);
+            blocker.close();
+            host.mount("bot", current, "/matrix/bot");
+            expect(router.stack).toHaveLength(4);
+        } finally {
+            router.cleanup();
+        }
+    });
+    it("真实路由部分注册失败完整回滚，修正冲突后可重试并释放、重新挂载", () => {
+        const router = new Router(createServer());
+        const current = new MatrixClient(config("bot", "/events"));
+        const host = new MatrixAppserviceHost({ router } as unknown as BaseApp, () => current);
+        const blocker = router.createRegistrationScope({ platform: "other" });
+        try {
+            blocker.run(() =>
+                router.get("/events/_matrix/app/v1/rooms/:roomAlias", () => undefined),
+            );
+            try {
+                host.mount("current", current, "/matrix/current");
+                throw new Error("应拒绝重复路由");
+            } catch (error) {
+                expect(error).toBeInstanceOf(HttpRouteConflictError);
+                expect(error).toMatchObject({
+                    registeringOwner: { platform: "matrix" },
+                    existingOwner: { platform: "other" },
+                });
+            }
+            expect(router.stack).toHaveLength(1);
+            blocker.close();
+            expect(router.stack).toHaveLength(0);
+            host.mount("current", current, "/matrix/current");
+            expect(router.stack).toHaveLength(4);
+            host.unmount("current");
+            expect(router.stack).toHaveLength(0);
+            host.mount("current", current, "/matrix/current");
+            expect(router.stack).toHaveLength(4);
+        } finally {
+            router.cleanup();
+        }
+    });
     it("路由热重载后解析当前 Client，不捕获旧实例", async () => {
         const routes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             put: vi.fn((path: string, handler: Handler) => routes.set(`PUT ${path}`, handler)),
             post: vi.fn((path: string, handler: Handler) => routes.set(`POST ${path}`, handler)),
             get: vi.fn((path: string, handler: Handler) => routes.set(`GET ${path}`, handler)),
@@ -60,31 +114,30 @@ describe("MatrixAppserviceHost", () => {
     });
 
     it("路径变更后旧路由失活，并拒绝活跃账号之间的路径冲突", async () => {
-        const routes = new Map<string, Handler>();
-        const router = {
-            put: (path: string, handler: Handler) => routes.set(`PUT ${path}`, handler),
-            post: (path: string, handler: Handler) => routes.set(`POST ${path}`, handler),
-            get: (path: string, handler: Handler) => routes.set(`GET ${path}`, handler),
-        };
-        const clients = new Map<string, MatrixClient>();
-        const host = new MatrixAppserviceHost({ router } as unknown as BaseApp, accountId =>
-            clients.get(accountId),
-        );
-        const first = new MatrixClient(config("first", "/shared"));
-        clients.set("first", first);
-        host.mount("first", first, "/matrix/first");
+        const router = new Router(createServer());
+        try {
+            const clients = new Map<string, MatrixClient>();
+            const host = new MatrixAppserviceHost({ router } as unknown as BaseApp, accountId =>
+                clients.get(accountId),
+            );
+            const first = new MatrixClient(config("first", "/shared"));
+            clients.set("first", first);
+            host.mount("first", first, "/matrix/first");
 
-        const second = new MatrixClient(config("second", "/shared"));
-        clients.set("second", second);
-        expect(() => host.mount("second", second, "/matrix/second")).toThrow(/已由账号/u);
+            const second = new MatrixClient(config("second", "/shared"));
+            clients.set("second", second);
+            expect(() => host.mount("second", second, "/matrix/second")).toThrow(/已由账号/u);
 
-        const moved = new MatrixClient(config("first", "/new"));
-        clients.set("first", moved);
-        host.mount("first", moved, "/matrix/first");
-        const stale = routes.get("POST /shared/_matrix/app/v1/ping");
-        const ctx = context("/shared/_matrix/app/v1/ping", "POST");
-        await stale?.(ctx);
-        expect(ctx.status).toBe(404);
+            const moved = new MatrixClient(config("first", "/new"));
+            clients.set("first", moved);
+            host.mount("first", moved, "/matrix/first");
+            expect(router.stack).toHaveLength(4);
+            expect(router.stack.every(layer => String(layer.path).startsWith("/new/"))).toBe(true);
+            host.unmount("first");
+            expect(router.stack).toHaveLength(0);
+        } finally {
+            router.cleanup();
+        }
     });
 });
 

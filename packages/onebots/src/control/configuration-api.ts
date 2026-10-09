@@ -48,7 +48,7 @@ export interface ConfigurationApiService {
         protocol: string;
         enabled: boolean;
     }): Promise<unknown>;
-    apply(input: { id: string; receiptId: string }): Promise<unknown>;
+    apply(input: { id: string; receiptId: string; allowRestart?: boolean }): Promise<unknown>;
     reconcile(input: { id: string; expectedRevision: string }): Promise<unknown>;
     operation(id: string): unknown;
 }
@@ -135,13 +135,23 @@ async function handle(input: ConfigurationRequest): Promise<{ status: number; bo
         return { status: 201, body: await service.create(base as unknown as ConfigurationBase) };
     }
     if (pathname === `${ROOT}/apply` && method === "POST") {
-        const body = await fields(input, ["id", "receiptId"]);
+        const raw = parseConfigurationDocument(await input.body());
+        const body = objectFields(
+            raw,
+            raw.allowRestart === undefined
+                ? ["id", "receiptId"]
+                : ["id", "receiptId", "allowRestart"],
+        );
         if (!matches(body.id, ID) || !matches(body.receiptId, UUID)) invalid();
+        if (body.allowRestart !== undefined && typeof body.allowRestart !== "boolean") invalid();
         return {
             status: 202,
             body: await service.apply({
                 id: body.id as string,
                 receiptId: body.receiptId as string,
+                ...(body.allowRestart !== undefined
+                    ? { allowRestart: body.allowRestart as boolean }
+                    : {}),
             }),
         };
     }

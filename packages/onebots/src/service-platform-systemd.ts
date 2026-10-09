@@ -6,6 +6,10 @@ import { MANAGER_SERVICE_STOP_TIMEOUT_SECONDS } from "./manager-service-definiti
 import { SERVICE_NAME, type ServiceScope } from "./service-definition.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
+import {
+    SystemdObservationChanged as ObservationChanged,
+    isNaturalSystemdTransition,
+} from "./service-platform-systemd-observation.js";
 
 const UNIT = `${SERVICE_NAME}.service`;
 const CGROUP_ROOT = "/sys/fs/cgroup";
@@ -222,6 +226,22 @@ export class SystemdServicePlatform implements ServicePlatform {
     private async inspectDetailedWithin(
         deadline?: number,
     ): Promise<ServicePlatformState & { controlGroup: string | null }> {
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                return await this.observeDetailed(deadline);
+            } catch (error) {
+                if (
+                    !(error instanceof ObservationChanged) ||
+                    (deadline !== undefined && this.now() >= deadline)
+                )
+                    throw error;
+            }
+        }
+        unavailable();
+    }
+    private async observeDetailed(
+        deadline?: number,
+    ): Promise<ServicePlatformState & { controlGroup: string | null }> {
         try {
             const properties = this.show(deadline);
             const main = pid(properties.MainPID),
@@ -277,7 +297,10 @@ export class SystemdServicePlatform implements ServicePlatform {
                 empty = events === null || !populated(events);
                 // 读取内核证据期间发生换代不能把两个实例的观察拼成一份证明。
                 const after = this.show(deadline);
-                if (PROPERTIES.some(key => properties[key] !== after[key])) unavailable();
+                if (PROPERTIES.some(key => properties[key] !== after[key])) {
+                    if (!isNaturalSystemdTransition(properties, after)) unavailable();
+                    throw new ObservationChanged();
+                }
             } else if (properties.ActiveState === "inactive" && !main && !control) {
                 empty = true;
             }
@@ -299,7 +322,8 @@ export class SystemdServicePlatform implements ServicePlatform {
                 quiescent: !running && !main && !control && empty,
                 controlGroup: properties.ControlGroup || null,
             };
-        } catch {
+        } catch (error) {
+            if (error instanceof ObservationChanged) throw error;
             unavailable();
         }
     }
