@@ -96,6 +96,35 @@ describe("Account.dispatch 调试旁路隔离", () => {
         expect(settled).toBe(true);
     });
 
+    it("不等待返回值的 dispatch 仍进入排空屏障，直到异步协议真实投递完成", async () => {
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const { account, protocolDispatch } = createAccount(vi.fn());
+        protocolDispatch.mockReturnValue(pending);
+        const event = { type: "message" } as never;
+
+        // dispatch 的公开契约为 fire-and-forget，不承诺同步完成协议投递。
+        expect(account.dispatch(event)).toBeUndefined();
+        const drain = account.beginOperationDrain();
+        let drained = false;
+        const settlement = drain.settled(1_000).then(() => {
+            drained = true;
+        });
+        try {
+            await vi.waitFor(() => expect(protocolDispatch).toHaveBeenCalledWith(event));
+            expect(drained).toBe(false);
+            await expect(account.runOperation(() => "new operation")).rejects.toThrow("操作未受理");
+        } finally {
+            release();
+            await settlement;
+            drain.release();
+        }
+        expect(drained).toBe(true);
+        await expect(account.runOperation(() => "after drain")).resolves.toBe("after drain");
+    });
+
     it("一个协议失败时仍尝试其余协议并向接入层传播错误", async () => {
         const { account, protocolDispatch } = createAccount(vi.fn());
         const secondDispatch = vi.fn();

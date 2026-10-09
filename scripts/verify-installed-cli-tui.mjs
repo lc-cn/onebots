@@ -194,7 +194,11 @@ try {
         if (["verified", "failed", "interrupted"].includes(installation.phase)) break;
         await new Promise(resolve => setTimeout(resolve, 250));
     }
-    assert.equal(installation?.phase, "verified", `安装未通过：${installation?.error ?? installation?.phase}`);
+    assert.equal(
+        installation?.phase,
+        "verified",
+        `安装未通过：${installation?.error ?? installation?.phase}`,
+    );
     assert.ok(installation.candidateId);
     assert.equal(
         (await json(["control", "activate", ...data, "--generation", installation.candidateId]))
@@ -232,8 +236,10 @@ try {
     ]);
     assert.equal(validation.valid, true);
     assert.ok(validation.receiptId);
+    // 首次启用扩展会改变插件集合，不属于已有账号/协议的热插拔。
+    assert.equal(validation.impact?.mode, "restart");
     const applyId = `cli-apply-${randomUUID()}`;
-    const applied = await json([
+    const applyArguments = [
         "control",
         "config",
         "apply",
@@ -242,7 +248,9 @@ try {
         applyId,
         "--receipt",
         validation.receiptId,
-    ]);
+    ];
+    await assert.rejects(cli(applyArguments), /配置命令失败/);
+    const applied = await json([...applyArguments, "--allow-restart"]);
     assert.equal(applied.status, "succeeded");
     assert.deepEqual(
         await json(["control", "config", "operation", ...data, "--request", applyId]),

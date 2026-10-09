@@ -44,6 +44,9 @@ export function parseServiceMigrationRecord(input: unknown): ServiceMigrationRec
         "status",
         "recoveryRequired",
         "rolledBack",
+        ...(input && typeof input === "object" && Object.hasOwn(input, "failureStage")
+            ? ["failureStage"]
+            : []),
         ...(input && typeof input === "object" && Object.hasOwn(input, "previousBackupDigests")
             ? ["previousBackupDigests"]
             : []),
@@ -63,6 +66,12 @@ export function parseServiceMigrationRecord(input: unknown): ServiceMigrationRec
         !["running", "succeeded", "failed", "interrupted"].includes(value.status) ||
         typeof value.recoveryRequired !== "boolean" ||
         typeof value.rolledBack !== "boolean"
+    )
+        throw invalid();
+    if (
+        Object.hasOwn(value, "failureStage") &&
+        (typeof value.failureStage !== "string" ||
+            !["verify-original", "stop-original", "verify-quiescent"].includes(value.failureStage))
     )
         throw invalid();
     if (Object.hasOwn(value, "previousBackupDigests")) {
