@@ -27,7 +27,7 @@ afterEach(async () => {
     );
 });
 
-async function receiver(barkCodes?: number[]) {
+async function receiver(barkCodes?: number[], hostname = "127.0.0.1") {
     let received:
         | { path: string; body: string; headers: Record<string, string | string[] | undefined> }
         | undefined;
@@ -54,10 +54,10 @@ async function receiver(barkCodes?: number[]) {
         });
     });
     servers.push(server);
-    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    await new Promise<void>(resolve => server.listen(0, hostname, resolve));
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("receiver unavailable");
-    return { url: `http://127.0.0.1:${address.port}`, received: () => received };
+    return { url: `http://${hostname}:${address.port}`, received: () => received };
 }
 
 const event: NotificationEvent = {
@@ -187,6 +187,22 @@ describe("notification delivery", () => {
         });
     });
 
+    it("delivers to a DNS hostname when Node requests all lookup addresses", async () => {
+        const target = await receiver(undefined, "localhost");
+        const channel: BarkChannel = {
+            id: "bark-dns",
+            name: "Bark DNS",
+            type: "bark",
+            enabled: true,
+            includeChallengeLink: false,
+            serverUrl: target.url,
+            deviceKeys: ["device-one"],
+            allowPrivateNetwork: true,
+        };
+        await deliverBark(channel, emptyNotificationConfig(), [event]);
+        expect(target.received()?.path).toBe("/push");
+    });
+
     it("does not report batch success when Bark rejects one device", async () => {
         const target = await receiver([200, 400]);
         const channel: BarkChannel = {
@@ -202,6 +218,23 @@ describe("notification delivery", () => {
         await expect(
             deliverBark(channel, emptyNotificationConfig(), [event]),
         ).rejects.toBeInstanceOf(BarkPartialDeliveryError);
+    });
+
+    it("identifies when Bark rejects every configured device", async () => {
+        const target = await receiver([400]);
+        const channel: BarkChannel = {
+            id: "bark-rejected",
+            name: "Bark",
+            type: "bark",
+            enabled: true,
+            includeChallengeLink: false,
+            serverUrl: target.url,
+            deviceKeys: ["device-one"],
+            allowPrivateNetwork: true,
+        };
+        await expect(deliverBark(channel, emptyNotificationConfig(), [event])).rejects.toThrow(
+            "Bark 服务拒绝全部设备 Key，请确认设备已在当前服务注册",
+        );
     });
 
     it("only forwards selected login display materials, never inputs or adapter data", async () => {
