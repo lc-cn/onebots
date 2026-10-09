@@ -31,6 +31,12 @@ it.skipIf(process.platform === "win32").each(["success", "failure", "disconnect"
             path.join(host, "runtime-config-validator.js"),
             "export function validateRuntimeConfig() {}",
         );
+        // 所有权测试使用最小宿主；候选形状规划是 worker 必需接口，不能缺失该模块。
+        // 规划的真实输入输出另由 configuration-verify.spec.ts 验证。
+        fs.writeFileSync(
+            path.join(host, "runtime-defaults.js"),
+            'export function planEffectiveRuntimeConfiguration() { return { mode: "none", accounts: [], protocols: [], dynamicFields: [], restartReasons: [] }; }',
+        );
         const ownership = JSON.stringify({ test: "parent-owned evidence" });
         fs.writeFileSync(path.join(directory, "owner.json"), ownership);
         fs.writeFileSync(
