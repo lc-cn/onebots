@@ -245,7 +245,7 @@ export class DouyinAdapter extends Adapter<DouyinAccount, "douyin"> {
         const uid = String(this.resolveId(params.user_id).source);
         const member =
             (refresh ? undefined : group.pickMember(uid)) ??
-            (await group.getMemberList(refresh)).get(uid);
+            (await group.getMemberList(true)).get(uid);
         if (!member) throw fault("MEMBER_NOT_FOUND", `未找到抖音群成员 ${uid}`);
         return {
             group_id: params.group_id,

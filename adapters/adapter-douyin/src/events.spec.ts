@@ -1,7 +1,7 @@
-import type { AnyNoticeEvent, MessageEvent } from "douyin-im";
+import type { AnyNoticeEvent, GroupJoinRequest, MessageEvent } from "douyin-im";
 import { describe, expect, it, vi } from "vitest";
 import type { CommonTypes } from "onebots";
-import { projectDouyinMessage, projectDouyinNotice } from "./events.js";
+import { projectDouyinGroupRequest, projectDouyinMessage, projectDouyinNotice } from "./events.js";
 
 vi.mock("douyin-im/protocol", () => ({
     parseMessageContent: (content: string) => {
@@ -18,6 +18,34 @@ const createId = (source: string | number): CommonTypes.Id => ({
 const context = { botId: createId("bot"), createId };
 
 describe("Douyin 事件投影", () => {
+    it("完整投影入群申请的申请人、群、理由和 flag", () => {
+        const event = {
+            requestId: "request-1",
+            time: 1_700_000_000,
+            applicantUid: "applicant-1",
+            displayName: "申请人",
+            applicantAvatar: "https://example.com/avatar.png",
+            reason: "申请理由",
+            group: { groupId: "group-1", name: "测试群" },
+        } as unknown as GroupJoinRequest;
+
+        expect(projectDouyinGroupRequest(event, context)).toMatchObject({
+            id: createId("request:request-1"),
+            timestamp: 1_700_000_000_000,
+            type: "request",
+            request_type: "group",
+            sub_type: "add",
+            user: {
+                id: createId("applicant-1"),
+                name: "申请人",
+                avatar: "https://example.com/avatar.png",
+            },
+            group: { id: createId("group-1"), name: "测试群" },
+            comment: "申请理由",
+            flag: "request-1",
+        });
+    });
+
     it("无平台消息 ID 时生成稳定且可区分的 fallback ID", () => {
         const base = {
             isGroup: false,

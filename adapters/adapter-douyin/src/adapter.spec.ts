@@ -102,7 +102,7 @@ describe("DouyinAdapter 审查契约", () => {
 
         await adapter.handleGroupRequest(
             "account",
-            requestParams({ request_id: adapter.createId("request:join-1") }),
+            requestParams({ flag: undefined, request_id: adapter.createId("request:join-1") }),
         );
         expect(approve).toHaveBeenCalledOnce();
 
@@ -179,6 +179,16 @@ describe("DouyinAdapter 审查契约", () => {
         expect(groupSdk.pickGroup).not.toHaveBeenCalled();
         expect(group.pickMember).not.toHaveBeenCalled();
         expect(group.getMemberList).toHaveBeenCalledWith(true);
+
+        group.pickMember.mockReturnValue(undefined);
+        await expect(
+            adapter.getGroupMemberInfo("group-account", {
+                group_id: id("group"),
+                user_id: id("member"),
+            }),
+        ).resolves.toMatchObject({ user_name: "新成员" });
+        expect(groupSdk.pickGroup).toHaveBeenCalledWith("group");
+        expect(group.getMemberList).toHaveBeenLastCalledWith(true);
     });
 
     it("撤回接受 douyin-im 的 200 成功码", async () => {
