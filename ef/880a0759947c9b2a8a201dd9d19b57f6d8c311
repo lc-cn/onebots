@@ -1,0 +1,139 @@
+.changeset/account-protocol-hotplug.md
+  s_efe26f87c3b074::t_02ebef8d53d1d4 15-16
+.changeset/managed-runtime-hotplug.md
+  s_efe26f87c3b074::t_cd436710c519bd 10-11
+adapters/adapter-facebook-messenger/src/adapter.spec.ts
+  s_efe26f87c3b074::t_394fe271c2f308 5-8,11-80,106
+adapters/adapter-facebook-messenger/src/http-host.spec.ts
+  s_efe26f87c3b074::t_e7050481607cfb 3-4,23-52,93-114
+adapters/adapter-facebook-messenger/src/http-host.ts
+  s_efe26f87c3b074::t_4197d1515ad238 48,58
+adapters/adapter-google-chat/src/adapter.spec.ts
+  s_efe26f87c3b074::t_890a4664f65269 5-7,11-79
+adapters/adapter-google-chat/src/adapter.ts
+  s_efe26f87c3b074::t_f6be6bd59bda60 415
+adapters/adapter-google-chat/src/http-host.spec.ts
+  s_efe26f87c3b074::t_986cac3a2ace8d 2-3,22-50
+adapters/adapter-google-chat/src/http-host.ts
+  s_efe26f87c3b074::t_f007fa53d35c28 37-49,54
+adapters/adapter-icqq/src/adapter.spec.ts
+  s_efe26f87c3b074::t_575fa364506def 7,14-27,41-42,48-49,59-62,66-67,83-88
+adapters/adapter-icqq/src/adapter.ts
+  s_efe26f87c3b074::t_2504d72aeb1126 37
+adapters/adapter-instagram/src/adapter.spec.ts
+  s_efe26f87c3b074::t_68c96dd64a321d 5-8,11-78
+adapters/adapter-instagram/src/http-host.spec.ts
+  s_efe26f87c3b074::t_9537fdb40e271a 3-4,23-52,116-128,130-132
+adapters/adapter-instagram/src/http-host.ts
+  s_efe26f87c3b074::t_7fe5b6538e443b 45,55
+adapters/adapter-matrix/src/adapter.spec.ts
+  s_efe26f87c3b074::t_b409183e981cf9 5-8,11-81
+adapters/adapter-matrix/src/adapter.ts
+  s_efe26f87c3b074::t_f047bcad2d8bee 368
+adapters/adapter-matrix/src/appservice-host.spec.ts
+  s_efe26f87c3b074::t_c45518e0e67bd5 3,33,39-40,49-80,117-125,127-129,131-140
+adapters/adapter-matrix/src/appservice-host.ts
+  s_efe26f87c3b074::t_5aa95a38d98536 58
+adapters/adapter-twitch/src/adapter.spec.ts
+  s_efe26f87c3b074::t_1c1c8abfbaaf03 5-8,11-80
+adapters/adapter-twitch/src/adapter.ts
+  s_efe26f87c3b074::t_a5449ae8ad0c5e 273
+adapters/adapter-twitch/src/http-host.spec.ts
+  s_efe26f87c3b074::t_83b344928ac7c2 3,21,27-37,40-45
+adapters/adapter-twitch/src/http-host.ts
+  s_efe26f87c3b074::t_c4f12a2ee89fbe 44,54
+adapters/adapter-wechat-clawbot/src/adapter.spec.ts
+  s_efe26f87c3b074::t_1daebb05f62f11 2,92,101-154
+adapters/adapter-wechat-clawbot/src/adapter.ts
+  s_efe26f87c3b074::t_fff111b7cab049 272,276,279,297,318,329,337,343,352,354-355,366,378,386,392
+packages/core/src/__tests__/account.dispatch.test.ts
+  s_efe26f87c3b074::t_17d809f952baf8 64,77-94
+packages/core/src/account-operations.ts
+  s_efe26f87c3b074::t_1ccc6cca6b3dc6 46-53,55,57,70
+packages/core/src/account.lifecycle.spec.ts
+  s_efe26f87c3b074::t_e90c9876b9864b 39,41-80,321
+packages/core/src/account.ts
+  s_efe26f87c3b074::t_015677f36480af 44-45,244-247,323-325,333-341,344,348-353
+packages/core/src/base-app-start-cancellation.spec.ts
+  s_efe26f87c3b074::t_9b4d9606181d60 99
+packages/core/src/base-app.ts
+  s_efe26f87c3b074::t_a96914c7f142d7 55,557,611,618-619,768
+packages/core/src/host-lifecycle-state.ts
+  s_efe26f87c3b074::t_bdae7c40af2f1f 11
+packages/core/src/runtime-configuration.spec.ts
+  s_efe26f87c3b074::t_792f29ff9298fb 13-17,164-168,201-254,277-279,301-303,379-380,421-463,467,470-475,512,517-520,523
+packages/core/src/runtime-reconcile.ts
+  s_efe26f87c3b074::t_2539a0b56ac824 9,52-53,55-59,63,66-84,234-246,256-257
+packages/onebots/src/configuration/configuration-application-repair.spec.ts
+  s_efe26f87c3b074::t_e4111810f9702e 69-77
+packages/onebots/src/configuration/configuration-hot-application.spec.ts
+  s_efe26f87c3b074::t_2bb39c4dfb4f03 30,194,239,300,316-355
+packages/onebots/src/configuration/configuration-hot-application.ts
+  s_efe26f87c3b074::t_d72229f7886917 47,60
+packages/onebots/src/configuration/configuration-hot-reconciliation.ts
+  s_efe26f87c3b074::t_19d2151fd2db2d 70-72,93,95-99
+packages/onebots/src/configuration/configuration-validation.spec.ts
+  s_efe26f87c3b074::t_a108aaa45db872 79-130
+packages/onebots/src/configuration/configuration-validation.ts
+  s_efe26f87c3b074::t_4f9f0e3ecb2591 156-162,166-167,177-187
+packages/onebots/src/configuration/configuration-verify-worker.ts
+  s_efe26f87c3b074::t_969b1ec44b5111 82-84,88-108
+packages/onebots/src/configuration/configuration-verify.spec.ts
+  s_efe26f87c3b074::t_74ba813904f44b 133-145
+packages/onebots/src/configuration/configuration-worker-owner.spec.ts
+  s_efe26f87c3b074::t_8d4b4a4a0b69ee 34-39
+packages/onebots/src/control/configuration-bundled-cwd.spec.ts
+  s_efe26f87c3b074::t_2b455307d5f3b4 1-156
+packages/onebots/src/control/gateway-configuration-snapshot.spec.ts
+  s_efe26f87c3b074::t_9b1ed03dc18c31 60-93,106,108-111,113,115-127,129,131-147,149,151-160
+packages/onebots/src/control/gateway-configuration-snapshot.ts
+  s_efe26f87c3b074::t_76be9eccbd9431 27-43
+packages/onebots/src/control/gateway-snapshot-security.spec.ts
+  s_efe26f87c3b074::t_e5689d55990eaa 25-27,39-48,50,52-54
+packages/onebots/src/control/gateway-snapshot-security.ts
+  s_efe26f87c3b074::t_ee2d6999b97359 8-14,34-38,41,43,50,52,56,61,77-85,89-90
+packages/onebots/src/control/generation-activation.spec.ts
+  s_efe26f87c3b074::t_e10cf7944d5830 274
+packages/onebots/src/control/generation-activation.ts
+  s_efe26f87c3b074::t_32034016ed1b5f 69-70,105,260-269
+packages/onebots/src/control/generation-configuration.spec.ts
+  s_efe26f87c3b074::t_af8265c342e5a2 8,34,140-263
+packages/onebots/src/control/generation-configuration.ts
+  s_efe26f87c3b074::t_b664bcee89a274 4-7,13,18,26-27,32-34,57-58,60-65,67-78,97,112-130
+packages/onebots/src/control/host-installation.ts
+  s_efe26f87c3b074::t_95cc416219fd3b 34-37
+packages/onebots/src/control/host.ts
+  s_efe26f87c3b074::t_451d8751107943 76,161,252,301
+packages/onebots/src/control/tui-configuration.spec.ts
+  s_efe26f87c3b074::t_ce00af89d875b2 45-140
+packages/onebots/src/control/tui-configuration.ts
+  s_efe26f87c3b074::t_ed1be16ad853f0 225,227-238,243-245,247-256,258-261,263-273,276,281-285,295
+packages/onebots/src/gateway/configuration-executor.spec.ts
+  s_efe26f87c3b074::t_3d909d23b8991b 4-5,16,20-21,62-128
+packages/onebots/src/gateway/configuration-executor.ts
+  s_efe26f87c3b074::t_1e53facbb518e5 150-151
+packages/onebots/src/gateway/verification-app.spec.ts
+  s_efe26f87c3b074::t_423f32af33433d 12,14-21,41-47,54-55,57-88,93-101,103-109
+packages/onebots/src/windows-service-security.ts
+  s_efe26f87c3b074::t_030abed53bbf01 86,100,120
+packages/web/src/App.vue
+  s_efe26f87c3b074::t_95424ca0f0e0ed 52-62
+scripts/verify-installed-web.mjs
+  s_efe26f87c3b074::t_b1f1d4c72c9606 659-662,669-674
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ef880a0759947c9b2a8a201dd9d19b57f6d8c311",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
