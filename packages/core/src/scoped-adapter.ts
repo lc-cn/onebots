@@ -4,6 +4,12 @@ import type { RouterRegistrationScope } from "./router.js";
 
 const routeScopes = new WeakMap<Adapter, RouterRegistrationScope>();
 
+/** 延迟挂载的共享 Host 属于平台，不随首次挂载它的账号一起释放。 */
+export function runWithAdapterRouteScope<T>(adapter: Adapter, operation: () => T): T {
+    const scope = routeScopes.get(adapter);
+    return scope ? scope.run(operation) : operation();
+}
+
 /** 在 Adapter 候选验收期间捕获路由，成功后把所有权延续到 Adapter 生命周期。 */
 export function createAdapterWithRouteScope<T extends Adapter>(
     app: BaseApp,

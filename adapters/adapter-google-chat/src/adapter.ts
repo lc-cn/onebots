@@ -7,6 +7,7 @@ import {
     type AdapterCapabilityManifest,
     type CommonTypes,
 } from "onebots";
+import { runWithAdapterRouteScope } from "onebots";
 import {
     googleChatContentType,
     materializeGoogleChatUpload,
@@ -401,7 +402,7 @@ export class GoogleChatAdapter extends Adapter<GoogleChatClient, "google-chat"> 
                 }),
             ),
         );
-        this.httpHost.mount(account.account_id, client);
+        runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async (signal: AbortSignal) => {
             try {
                 await client.start(signal);

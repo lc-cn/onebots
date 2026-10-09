@@ -6,6 +6,7 @@ import UiButton from "../ui/UiButton.vue";
 import UiInfoTip from "../ui/UiInfoTip.vue";
 import ControlConfigurationRepair from "./ControlConfigurationRepair.vue";
 import ControlConfigurationSections from "./ControlConfigurationSections.vue";
+import ControlConfigurationImpact from "./ControlConfigurationImpact.vue";
 import { useControlConfigurationPanel } from "./use-control-configuration-panel.js";
 import type { ControlMutationBlock } from "../control-product-state.js";
 import {
@@ -37,6 +38,7 @@ const {
     draft,
     validation,
     operation,
+    appliedOperation,
     tracking,
     values,
     modes,
@@ -154,10 +156,18 @@ async function saveConfiguration() {
         await query();
         return;
     }
-    if (props.gatewayRunning && !window.confirm("保存设置可能短暂中断账号和协议连接，继续吗？"))
-        return;
     if (!(await checkConfiguration())) return;
-    await apply();
+    if (props.gatewayRunning && !validation.value?.impact) {
+        error.value = "尚未确认配置的影响范围，未发送应用请求。请重新检测配置。";
+        return;
+    }
+    const restart = props.gatewayRunning && validation.value?.impact?.mode === "restart";
+    if (
+        restart &&
+        !window.confirm("此修改需要重启整个网关，所有账号和协议连接将短暂中断。确认重启并保存？")
+    )
+        return;
+    await apply(restart ? { allowRestart: true } : undefined);
 }
 </script>
 
@@ -168,7 +178,7 @@ async function saveConfiguration() {
                 {{ scopeTitle[scope] }}
                 <UiInfoTip
                     label="配置说明"
-                    text="检测会检查同一份配置草稿；保存会应用配置，运行中的连接可能短暂中断。" />
+                    text="检测会确认配置及影响范围。账号和协议按实例更新；只有必须重启网关的修改才会要求额外确认。" />
             </h2>
             <div class="configuration-header-controls">
                 <UiButton
@@ -232,6 +242,11 @@ async function saveConfiguration() {
             ><span>无法安全展示的内容会原样保留，本页面不会用空值覆盖。</span>
         </div>
         <p v-if="message" role="status" class="configuration-message">{{ message }}</p>
+        <ControlConfigurationImpact
+            v-if="appliedOperation?.impact && !validation && !dirty"
+            :impact="appliedOperation.impact"
+            :stored="appliedOperation.executionMode === 'stored'"
+            applied />
 
         <div
             v-if="snapshot && (!draft || staleBase) && !tracking.operationId"
@@ -265,7 +280,13 @@ async function saveConfiguration() {
                     ><i :class="{ changed: dirty }"></i
                     >{{ dirty ? "有未保存的修改" : "设置已同步" }}</span
                 >
-                <span v-if="operation?.status === 'running'">正在更新运行设置</span>
+                <span v-if="operation?.status === 'running'">{{
+                    operation.executionMode === "hot"
+                        ? "正在更新受影响实例"
+                        : operation.executionMode === "restart"
+                          ? "正在重启网关"
+                          : "正在应用设置"
+                }}</span>
             </div>
 
             <ControlConfigurationSections
@@ -311,6 +332,10 @@ async function saveConfiguration() {
                         </li>
                     </ul>
                 </div>
+                <ControlConfigurationImpact
+                    v-if="validation?.valid && validation.impact"
+                    :impact="validation.impact"
+                    :stored="!gatewayRunning" />
                 <div v-if="tracking.operationId" class="configuration-operation">
                     <div>
                         <span>应用操作</span><code>{{ tracking.operationId }}</code

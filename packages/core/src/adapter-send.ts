@@ -1,4 +1,5 @@
 import type { Adapter } from "./adapter.js";
+import { runAccountOperation } from "./account-operations.js";
 
 /** 所有协议与管理控制页共用的发送 seam；成功后才发布可持久化的发送事实。 */
 export async function sendAccountMessage(
@@ -6,7 +7,9 @@ export async function sendAccountMessage(
     accountId: string,
     params: Adapter.SendMessageParams,
 ): Promise<Adapter.SendMessageResult> {
-    const result = await adapter.sendMessage(accountId, params);
+    const account = adapter.accounts?.get(accountId);
+    const send = () => adapter.sendMessage(accountId, params);
+    const result = await (account ? runAccountOperation(account, send) : send());
     try {
         adapter.emit("message:sent", {
             platform: String(adapter.platform),

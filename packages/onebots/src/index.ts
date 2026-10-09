@@ -51,6 +51,7 @@ export {
     Account,
     Protocol,
     BaseApp,
+    runWithAdapterRouteScope,
     SqliteDB,
     Router,
     // Types

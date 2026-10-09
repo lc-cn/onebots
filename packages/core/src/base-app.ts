@@ -49,6 +49,12 @@ import { createAccountWithRouteScope } from "./scoped-account.js";
 import { closeAdapterRouteScope } from "./scoped-adapter.js";
 import { listenHttpServer } from "./http-listener.js";
 import { getHostLifecycleState, type ManagedRuntimeStart } from "./host-lifecycle-state.js";
+import { reconcileRuntimeConfiguration } from "./runtime-reconcile.js";
+import {
+    RuntimeConfigurationRejectedError,
+    planRuntimeConfiguration,
+    type RuntimeConfigurationResult,
+} from "./runtime-configuration.js";
 export { configure, yaml, connectLogger };
 export interface KoaOptions {
     env?: string;
@@ -76,6 +82,12 @@ export class BaseApp extends Koa {
     isStarted: boolean = false;
     /** 独占运行态操作期间保持 HTTP 存活，但 readiness 必须拒绝流量。 */
     isReloading: boolean = false;
+    private runtimeConfiguration?: Promise<RuntimeConfigurationResult>;
+    private runtimeRecoveryRequired = false;
+    /** 仅用于生命周期互斥，不代表全部账号的协议入口不可用。 */
+    get runtimeConfigurationInProgress(): boolean {
+        return this.runtimeConfiguration !== undefined;
+    }
     /** 对外解释 isReloading 对应的具体运行态操作。 */
     runtimeOperation: RuntimeOperation = "idle";
     isDisposed: boolean = false;
@@ -307,7 +319,7 @@ export class BaseApp extends Koa {
 
     public async addAccount<P extends keyof Adapter.Configs>(config: Account.Config<P>) {
         assertAccountIdentity(config);
-        if (this.isReloading) throw new AccountMutationConflictError();
+        if (this.isReloading || this.runtimeConfiguration) throw new AccountMutationConflictError();
         const nextConfig = deepClone(config);
         const configKey = `${config.platform}.${config.account_id}`;
         this.validateAccountConfigCandidate(configKey, nextConfig);
@@ -343,7 +355,7 @@ export class BaseApp extends Koa {
 
     public async updateAccount<P extends keyof Adapter.Configs>(config: Adapter.Configs[P]) {
         assertAccountIdentity(config);
-        if (this.isReloading) throw new AccountMutationConflictError();
+        if (this.isReloading || this.runtimeConfiguration) throw new AccountMutationConflictError();
         const adapter = this.adapters.get(config.platform);
         if (!adapter) return this.addAccount(config);
         const account = adapter.accounts.get(config.account_id);
@@ -371,7 +383,7 @@ export class BaseApp extends Koa {
     public async removeAccount(p: string, uin: string, force?: boolean) {
         assertAccountIdentifier("platform", p);
         assertAccountIdentifier("account_id", uin);
-        if (this.isReloading) throw new AccountMutationConflictError();
+        if (this.isReloading || this.runtimeConfiguration) throw new AccountMutationConflictError();
         const adapter = this.adapters.get(p);
         if (!adapter) return this.logger.warn(`未找到适配器${p}`);
         const account = adapter.accounts.get(uin);
@@ -429,6 +441,8 @@ export class BaseApp extends Koa {
     protected onAdapterCreated(_adapter: Adapter): void {}
 
     protected assertCanStart(): void {
+        if (this.runtimeConfiguration)
+            throw new ResourceError("配置热应用尚未结束，暂不能启动网关");
         if (this.isDisposed || getHostLifecycleState(this).stopping) {
             throw new ResourceError("应用资源已释放，不能再次启动；请创建新的 App 实例");
         }
@@ -567,6 +581,7 @@ export class BaseApp extends Koa {
         }
     }
     async reload(config: BaseApp.Config) {
+        if (this.runtimeConfiguration) throw new ConfigError("配置热应用尚未完成");
         const runtimeLease = acquireRuntimeOperation(
             this,
             "configuration_reload",
@@ -594,6 +609,7 @@ export class BaseApp extends Koa {
                 this.enhancedLogger.setLevel(next.log_level);
                 this.initAdapters();
                 if (wasStarted) await this.startAdapters(true);
+                this.runtimeRecoveryRequired = false;
             } catch (error) {
                 if (!previousStopped) {
                     throw ErrorHandler.wrap(error, {
@@ -627,6 +643,63 @@ export class BaseApp extends Koa {
             runtimeLease.release();
         }
     }
+    /** 管理服务提交配置快照；不写文件，也不撤销其他账号的 readiness。 */
+    applyRuntimeConfiguration(config: BaseApp.Config): Promise<RuntimeConfigurationResult> {
+        if (this.runtimeRecoveryRequired) {
+            return Promise.reject(
+                new RuntimeConfigurationRejectedError(
+                    "运行态恢复未完成，请显式恢复或重启后再应用配置",
+                ),
+            );
+        }
+        if (
+            this.runtimeConfiguration ||
+            this.isReloading ||
+            this.isDisposed ||
+            getHostLifecycleState(this).stopping
+        ) {
+            return Promise.reject(
+                new RuntimeConfigurationRejectedError("网关生命周期正在变更，请稍后重试热配置"),
+            );
+        }
+        let next: Required<BaseApp.Config>;
+        try {
+            next = ConfigValidator.validateWithDefaults(
+                deepMerge(deepClone(BaseApp.defaultConfig), deepClone(config)) as Partial<
+                    Required<BaseApp.Config>
+                >,
+                BaseAppConfigSchema,
+            );
+            const impact = planRuntimeConfiguration(this.config, next);
+            for (const change of [...impact.accounts, ...impact.protocols]) {
+                const adapter = this.adapters.get(change.platform);
+                if (
+                    adapter?.accounts.get(change.accountId)?.isStarting ||
+                    adapter?.isAccountStartupPending(change.accountId)
+                ) {
+                    throw new RuntimeConfigurationRejectedError("受影响账号仍在启动，热配置未受理");
+                }
+            }
+        } catch (error) {
+            if (error instanceof RuntimeConfigurationRejectedError) return Promise.reject(error);
+            return Promise.reject(
+                new RuntimeConfigurationRejectedError("配置校验失败，热配置未受理"),
+            );
+        }
+        const operation = Promise.resolve().then(async () => {
+            if (this.isDisposed || getHostLifecycleState(this).stopping) {
+                throw new RuntimeConfigurationRejectedError("网关已开始停止，热配置未受理");
+            }
+            const result = await reconcileRuntimeConfiguration(this, next);
+            if (result.status === "recovery_required") this.runtimeRecoveryRequired = true;
+            return result;
+        });
+        const tracked = operation.finally(() => {
+            if (this.runtimeConfiguration === tracked) this.runtimeConfiguration = undefined;
+        });
+        this.runtimeConfiguration = tracked;
+        return tracked;
+    }
     stop(): Promise<void> {
         const state = getHostLifecycleState(this);
         if (state.stopping) return state.stopping;
@@ -639,6 +712,7 @@ export class BaseApp extends Koa {
     }
 
     private async stopAttempt(): Promise<void> {
+        await this.runtimeConfiguration?.catch(() => this.logger.error("停止前等待热配置失败"));
         const stopTimer = this.enhancedLogger.start("Application stop");
         const failures = new FailureCollector();
 

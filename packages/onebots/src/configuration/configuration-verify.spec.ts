@@ -90,6 +90,29 @@ describe("配置隔离验证", () => {
                 document: { "mock.bot": { "onebot.v11": { use_http: true } } },
             });
             expect(result).toEqual({ valid: true, issues: [] });
+            const effective = await verifyConfiguration({
+                runtimeRoot,
+                selection: { adapters: ["mock"], protocols: ["onebot-v11"], applications: [] },
+                previousDocument: { "mock.bot": { "onebot.v11": { use_http: true } } },
+                document: {
+                    general: { "onebot.v11": { heartbeat_interval: 6000 } },
+                    "mock.bot": { "onebot.v11": { use_http: true } },
+                },
+            });
+            expect(effective).toMatchObject({ valid: true, issues: [] });
+            expect(effective.impact).toMatchObject({
+                mode: "hot",
+                accounts: [],
+                protocols: [
+                    {
+                        platform: "mock",
+                        accountId: "bot",
+                        name: "onebot",
+                        version: "v11",
+                        action: "replace",
+                    },
+                ],
+            });
             const invalid = await verifyConfiguration({
                 runtimeRoot,
                 selection: { adapters: ["mock"], protocols: ["onebot-v11"], applications: [] },

@@ -265,12 +265,20 @@ export abstract class Adapter<
                 );
                 // 在收集器之外检查，避免 stop 导致的取消被当作普通账号失败后继续启动。
                 assertCurrent();
+                batch.accountIds.delete(String(account.account_id));
             }
             failures.throwIfAny(`${failures.size} 个 ${this.platform} 账号启动失败`);
             this.logger.info(`Adapter for platform ${this.platform} started`);
         } finally {
             this.#startupBatches.delete(batch);
         }
+    }
+
+    /** 包括批次里尚未轮到的账号，防止移除后旧启动快照又把它启动。 */
+    isAccountStartupPending(accountId: string): boolean {
+        return [...this.#startupBatches].some(
+            batch => !batch.cancelled && batch.accountIds.has(accountId),
+        );
     }
 
     async stop(account_id?: string): Promise<void> {

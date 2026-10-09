@@ -223,14 +223,20 @@ export async function runControlConfiguration(
                     !(await confirmControlAction(
                         prompt,
                         "确认应用已验证草稿？",
-                        "将按当前网关启停意图应用；运行中的网关可能重启。",
+                        validation.impact?.mode === "restart"
+                            ? "该配置需要重启整个网关，确认重启？"
+                            : "仅更新受影响账号或协议，其他账号保持运行；停止的网关不会自动启动。",
                     ))
                 )
                     continue;
                 const id = randomUUID();
                 prompt.report(`配置应用任务：${id}`);
                 try {
-                    await client.applyConfiguration(id, validation.receiptId);
+                    await client.applyConfiguration(
+                        id,
+                        validation.receiptId,
+                        validation.impact?.mode === "restart" ? { allowRestart: true } : undefined,
+                    );
                 } catch {
                     prompt.report("提交结果暂不可确认，查询原任务，不重新提交。");
                 }

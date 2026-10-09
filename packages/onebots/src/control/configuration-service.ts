@@ -61,6 +61,7 @@ export class ControlConfigurationService {
             store,
             application: options.application,
             currentBase: () => this.workspace.base(),
+            currentDocument: () => this.source.read().document,
             runtime: draft => this.workspace.runtime(draft),
             verify: input => verifyConfiguration({ ...input, signal: this.abort.signal }),
         });
@@ -192,8 +193,12 @@ export class ControlConfigurationService {
             return this.validation.validate(request.id, request.expectedRevision);
         });
     }
-    apply(request: { id: string; receiptId: string }) {
-        return this.run(() => this.validation.apply(request.id, request.receiptId));
+    apply(request: { id: string; receiptId: string; allowRestart?: boolean }) {
+        return this.run(() =>
+            this.validation.apply(request.id, request.receiptId, {
+                allowRestart: request.allowRestart,
+            }),
+        );
     }
     reconcile(request: { id: string; expectedRevision: string }) {
         return this.run(() =>
@@ -202,7 +207,7 @@ export class ControlConfigurationService {
     }
     operation(id: string) {
         return this.options.application.hasOperation(id)
-            ? this.options.application.status(id)
+            ? this.options.application.queryStatus(id)
             : undefined;
     }
     async close() {

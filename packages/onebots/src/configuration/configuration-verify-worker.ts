@@ -76,7 +76,12 @@ async function verify(): Promise<ConfigurationVerification> {
     }
     try {
         validator.validateRuntimeConfig(config);
-        return { valid: true, issues: [] };
+        if (!input.previousDocument) return { valid: true, issues: [] };
+        const defaults = await import(
+            pathToFileURL(path.join(hostDirectory, "runtime-defaults.js")).href
+        );
+        const impact = defaults.planEffectiveRuntimeConfiguration(input.previousDocument, config);
+        return { valid: true, issues: [], impact };
     } catch (error) {
         const entries = (error as { context?: { issues?: unknown } })?.context?.issues;
         const issues = Array.isArray(entries)

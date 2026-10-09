@@ -19,6 +19,12 @@ function createAccount(adapterEmit: (event: string, payload: unknown) => void) {
         name: "fake",
         version: "v1",
         path: "/fake/bot/fake/v1",
+        lifecycleStatus: "pending",
+        config: { protocol: "fake", version: "v1" },
+        start: vi.fn(),
+        stop: vi.fn(),
+        format: vi.fn(() => ({})),
+        apply: vi.fn(async () => ({})),
         dispatch: protocolDispatch,
     }) as unknown as Protocol;
 

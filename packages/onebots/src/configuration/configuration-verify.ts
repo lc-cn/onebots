@@ -11,6 +11,8 @@ import {
 } from "./configuration-verify-ownership.js";
 export { recoverConfigurationVerifications } from "./configuration-verify-ownership.js";
 import { parseConfigurationDocument } from "./configuration-document.js";
+import type { ConfigurationImpact } from "@onebots/core";
+import { checkApplicationRuntimeFields } from "./configuration-application-contracts.js";
 
 export interface ConfigurationVerificationInput {
     runtimeRoot: string;
@@ -20,10 +22,12 @@ export interface ConfigurationVerificationInput {
     privateRoot?: string;
     selection: { adapters: string[]; protocols: string[]; applications: string[] };
     document: Record<string, unknown>;
+    previousDocument?: Record<string, unknown>;
     signal?: AbortSignal;
     timeoutMs?: number;
 }
 export interface ConfigurationVerification {
+    impact?: ConfigurationImpact;
     valid: boolean;
     /** 结构化字段路径，不包含原始异常文案或配置值。 */
     issues: Array<{ path: string[]; message: string }>;
@@ -56,6 +60,7 @@ export async function verifyConfiguration(
     try {
         snapshot = parseConfigurationDocument({
             document: input.document,
+            ...(input.previousDocument ? { previousDocument: input.previousDocument } : {}),
             selection: input.selection,
         }) as unknown as typeof snapshot;
         if (
@@ -123,6 +128,9 @@ export async function verifyConfiguration(
                 hostEntrypoint,
                 selection: snapshot.selection,
                 document: snapshot.document,
+                ...(input.previousDocument
+                    ? { previousDocument: parseConfigurationDocument(input.previousDocument) }
+                    : {}),
             }),
             { flag: "wx", mode: 0o600 },
         );
@@ -252,6 +260,11 @@ function run(
 function isResult(value: unknown): value is ConfigurationVerification {
     if (!value || typeof value !== "object") return false;
     const result = value as Partial<ConfigurationVerification>;
+    try {
+        checkApplicationRuntimeFields({ impact: result.impact });
+    } catch {
+        return false;
+    }
     return (
         typeof result.valid === "boolean" &&
         Array.isArray(result.issues) &&

@@ -4,6 +4,7 @@ import {
     Adapter,
     BaseApp,
     readPackageVersion,
+    runWithAdapterRouteScope,
     type AdapterCapabilityManifest,
     type CommonTypes,
 } from "onebots";
@@ -171,7 +172,7 @@ export class InstagramAdapter extends Adapter<InstagramClient, "instagram"> {
                 }),
             ),
         );
-        this.httpHost.mount(account.account_id, client);
+        runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async () => {
             try {
                 await client.start();
