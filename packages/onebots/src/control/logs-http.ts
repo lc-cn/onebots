@@ -6,6 +6,7 @@ import { readControlLog, readGatewayLog } from "./gateway-log.js";
 
 const STREAM_PATH = "/api/control/logs/stream";
 const STREAM_INTERVAL_MS = 500;
+const STREAM_HEARTBEAT_MS = 15_000;
 
 function authorized(request: IncomingMessage, local: boolean, auth: ControlAuth): boolean {
     if (local) return true;
@@ -44,6 +45,8 @@ function streamControlLogs(
 ): void {
     let stopped = false;
     let busy = false;
+    let blocked = false;
+    let lastWriteAt = Date.now();
     let cursor = initial.cursor;
     let exists: boolean | undefined;
     const stop = () => {
@@ -53,10 +56,11 @@ function streamControlLogs(
         request.off("aborted", stop);
         response.off("close", stop);
         response.off("error", stop);
+        response.off("drain", resume);
         response.destroy();
     };
     const poll = () => {
-        if (stopped || busy) return;
+        if (stopped || busy || blocked) return;
         if (!authorized(request, local, auth) || response.destroyed) return stop();
         busy = true;
         try {
@@ -65,16 +69,25 @@ function streamControlLogs(
             const changed = batch.text.length > 0 || batch.reset || batch.exists !== exists;
             cursor = batch.cursor;
             exists = batch.exists;
-            if (
-                (first || changed) &&
-                !response.write(`event: logs\ndata: ${JSON.stringify(batch)}\n\n`)
-            )
-                stop();
+            if (first || changed || Date.now() - lastWriteAt >= STREAM_HEARTBEAT_MS) {
+                const frame = first || changed
+                    ? `event: logs\ndata: ${JSON.stringify(batch)}\n\n`
+                    : ": keepalive\n\n";
+                lastWriteAt = Date.now();
+                if (!response.write(frame)) {
+                    blocked = true;
+                    response.once("drain", resume);
+                }
+            }
         } catch {
             stop();
         } finally {
             busy = false;
         }
+    };
+    const resume = () => {
+        blocked = false;
+        poll();
     };
     const timer = setInterval(poll, STREAM_INTERVAL_MS);
     timer.unref();
