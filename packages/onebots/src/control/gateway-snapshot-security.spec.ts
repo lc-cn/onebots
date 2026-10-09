@@ -24,7 +24,7 @@ it("Windows 目录有保护 ACL 并核验；文件只读核验不擅自改权限
     expect(scripts[1]).not.toContain("Set-Acl");
     for (const script of scripts) {
         expect(script).toContain("GetAccessRules");
-        expect(script).toContain("IdentityReference.Value -notin $ids");
+        expect(script).toContain("$_ -notin $allowedSids");
         expect(script).not.toContain(location);
     }
 });
@@ -33,5 +33,19 @@ it("无法证明 DACL 时关闭快照入口，不暴露原始 PowerShell 输出"
     vi.mocked(execFileSync).mockImplementationOnce(() => {
         throw new Error("secret raw output");
     });
-    expect(() => secureGatewaySnapshotDirectory("C:\\private")).toThrow("网关快照目录权限无法确认");
+    let message = "";
+    try {
+        secureGatewaySnapshotDirectory("C:\\private");
+    } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toBe("网关快照目录权限无法确认（阶段：process）");
+    expect(message).not.toContain("secret raw output");
+});
+it("只保留固定失败阶段，不回显 PowerShell 原文或路径", () => {
+    vi.stubGlobal("process", { ...process, platform: "win32" });
+    vi.mocked(execFileSync).mockReturnValueOnce("stage:acl");
+    expect(() => secureGatewaySnapshotDirectory("C:\\private\\secret")).toThrow(
+        /^网关快照目录权限无法确认（阶段：acl）$/u,
+    );
 });

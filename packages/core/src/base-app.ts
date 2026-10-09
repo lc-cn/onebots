@@ -49,7 +49,11 @@ import { createAccountWithRouteScope } from "./scoped-account.js";
 import { closeAdapterRouteScope } from "./scoped-adapter.js";
 import { listenHttpServer } from "./http-listener.js";
 import { getHostLifecycleState, type ManagedRuntimeStart } from "./host-lifecycle-state.js";
-import { hasPendingRuntimeStop, reconcileRuntimeConfiguration } from "./runtime-reconcile.js";
+import {
+    hasPendingRuntimeStop,
+    reconcileRuntimeConfiguration,
+    settlePendingRuntimeStops,
+} from "./runtime-reconcile.js";
 import {
     RuntimeConfigurationRejectedError,
     planRuntimeConfiguration,
@@ -605,6 +609,9 @@ export class BaseApp extends Koa {
         }
     }
     async reload(config: BaseApp.Config) {
+        const lifecycle = getHostLifecycleState(this);
+        if (lifecycle.starting && !this.isStarted)
+            throw new ConfigError("网关仍在启动，暂不能重载配置");
         if (hasPendingRuntimeStop(this))
             throw new ConfigError("旧实例停止结果未确定，暂不能重载配置");
         if (this.runtimeConfiguration) throw new ConfigError("配置热应用尚未完成");
@@ -748,6 +755,7 @@ export class BaseApp extends Koa {
 
     private async stopAttempt(): Promise<void> {
         await this.runtimeConfiguration?.catch(() => this.logger.error("停止前等待热配置失败"));
+        await settlePendingRuntimeStops(this);
         const stopTimer = this.enhancedLogger.start("Application stop");
         const failures = new FailureCollector();
 

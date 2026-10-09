@@ -2,6 +2,7 @@ import path from "node:path";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
 import { ConfigurationConflictError } from "../configuration/configuration-store.js";
 import { verifyConfiguration } from "../configuration/configuration-verify.js";
+import { recoverConfigurationVerifications } from "../configuration/configuration-verify.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
 import type { VerifiedGeneration } from "../installation/generation-store.js";
 import { getConfiguredPluginSelection } from "../runtime-plugin-selection.js";
@@ -16,6 +17,7 @@ export class GenerationConfigurationVerifier {
         private readonly workspace: string,
         private readonly readVerified: (id: string) => VerifiedGeneration,
         private readonly verifyRuntime = verifyConfiguration,
+        private readonly bundledRuntimeRoot = path.resolve(import.meta.dirname, "../.."),
     ) {
         this.source = new ConfigurationFile(path.join(workspace, "config.yaml"));
     }
@@ -40,7 +42,6 @@ export class GenerationConfigurationVerifier {
     /** 应用前重新使用隔离运行版本注册表规划，不能信任可变验证收据中的影响。 */
     planImpact(
         generation: VerifiedGeneration | null,
-        runtimeRoot: string,
         before: Record<string, unknown>,
         after: Record<string, unknown>,
     ): Promise<ConfigurationImpact> {
@@ -53,16 +54,25 @@ export class GenerationConfigurationVerifier {
         };
         const runtime = generation
             ? resolveGenerationRuntime(generation, selection)
-            : { runtimeRoot, selection };
+            : { runtimeRoot: this.bundledRuntimeRoot, selection };
+        const privateRoot = path.join(
+            this.workspace,
+            ".control",
+            "application-verification-workers",
+        );
+        const recovery = recoverConfigurationVerifications(privateRoot);
+        if (recovery.blocked.length)
+            return Promise.reject(new Error("配置影响检查进程或临时文件归属尚待核实"));
         const work = this.verifyRuntime({
             ...runtime,
             hostEntrypoint: generation
                 ? undefined
                 : path.resolve(import.meta.dirname, "../../lib/index.js"),
-            privateRoot: path.join(this.workspace, ".control", "application-verification-workers"),
+            privateRoot,
             document: after,
             previousDocument: before,
             signal: this.abort.signal,
+            timeoutMs: 15_000,
         }).then(result => {
             if (!result.valid || !result.impact) throw new Error("配置影响无法确认，请重新验证");
             return result.impact;

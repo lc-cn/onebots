@@ -44,9 +44,7 @@ export async function executeHotConfiguration(
     try {
         if (!operation.runtimeBefore || !port.applyRuntimeConfiguration || !options.runtime)
             return journal.unknown();
-        // 在提交源文件前固定运行时快照；writing 阶段永远表示尚未派发。
-        const snapshot = options.runtime.snapshot(document);
-        operation.runtimeAfter = snapshot.configVersion;
+        // writing 阶段永远表示尚未派发；先确认源文件提交，再创建运行时快照。
         operation.phase = "writing";
         journal.save(operation);
         const next = options.source.replace(operation.base.configRevision, document);
@@ -59,6 +57,8 @@ export async function executeHotConfiguration(
         )
             return journal.unknown();
         operation.configRevision = next.revision;
+        const snapshot = options.runtime.snapshot(document);
+        operation.runtimeAfter = snapshot.configVersion;
         operation.phase = "applying";
         journal.save(operation);
         const result = await port.applyRuntimeConfiguration({

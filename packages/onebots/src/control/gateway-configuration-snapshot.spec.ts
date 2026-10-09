@@ -69,6 +69,30 @@ it("容量边界拒绝新增，不删除旧快照或损坏已有版本", () => {
     expect(createGatewayConfigurationSnapshot(root, { log_level: "off" })).toEqual(first);
     expect(fs.readdirSync(directory)).toHaveLength(512);
 });
+it("启动时清理崩溃遗留的 staging，再计算容量", () => {
+    const root = workspace();
+    const first = createGatewayConfigurationSnapshot(root, { log_level: "off" });
+    const directory = path.dirname(first.configPath);
+    fs.writeFileSync(path.join(directory, ".snapshot-interrupted"), "partial", { mode: 0o600 });
+    createGatewayConfigurationSnapshot(root, { log_level: "debug" });
+    expect(fs.readdirSync(directory).some(name => name.startsWith(".snapshot-"))).toBe(false);
+});
+it("拒绝单个超过 8 MiB 的快照", () => {
+    const root = workspace();
+    expect(() =>
+        createGatewayConfigurationSnapshot(root, { payload: "x".repeat(8 * 1024 * 1024) }),
+    ).toThrow("网关快照超过大小限制");
+});
+it("拒绝总量超过 64 MiB 的快照存储", () => {
+    const root = workspace();
+    const first = createGatewayConfigurationSnapshot(root, { log_level: "off" });
+    const filler = path.join(path.dirname(first.configPath), "reserved-large");
+    fs.writeFileSync(filler, "", { mode: 0o600 });
+    fs.truncateSync(filler, 64 * 1024 * 1024);
+    expect(() => createGatewayConfigurationSnapshot(root, { log_level: "debug" })).toThrow(
+        "容量限制",
+    );
+});
 it.skipIf(process.platform === "win32")("既有公开目录不能靠新文件的 0600 掩盖权限风险", () => {
     const root = workspace();
     const directory = path.join(root, ".control/configurations");

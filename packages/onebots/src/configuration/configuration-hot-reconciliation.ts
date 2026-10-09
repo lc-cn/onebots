@@ -67,7 +67,7 @@ export async function reconcileHotConfiguration(
     const validRevision = /^[a-f0-9]{64}$/.test(source.revision);
     if (!validRevision) return false;
     if (operation.executionMode === "stored") {
-        if (port.hasLiveChildren()) return false;
+        if (operation.desired === "stopped" && port.hasLiveChildren()) return false;
         const committed =
             sourceDigest === operation.documentDigest &&
             (operation.candidateRevision === undefined ||
@@ -88,13 +88,13 @@ export async function reconcileHotConfiguration(
     // accepted/writing 意图在 applying 落盘前不可能派发，恢复文件不依赖已死亡实例的回执。
     // restoring 意图允许识别已提交的旧文档，不重复覆盖或重派原操作。
     if (["accepted", "writing", "restoring"].includes(operation.phase)) {
-        // 已有新实例可能从候选磁盘配置启动；不能仅凭旧意图修改文件并留下运行态漂移。
+        // 进程表为空不能排除 manager 重启后留下的孤儿网关；只接受绑定到原实例的权威回执。
+        const runtime = port.runtimeContext?.();
         if (
-            port.hasLiveChildren() &&
-            (!operation.runtimeBefore ||
-                port.runtimeContext?.()?.gatewayInstanceId !==
-                    operation.runtimeBefore.gatewayInstanceId ||
-                port.runtimeContext?.()?.configVersion !== operation.runtimeBefore.configVersion)
+            !operation.runtimeBefore ||
+            !runtime ||
+            runtime.gatewayInstanceId !== operation.runtimeBefore.gatewayInstanceId ||
+            runtime.configVersion !== operation.runtimeBefore.configVersion
         )
             return false;
         if (sourceDigest !== operation.previousDigest && sourceDigest !== operation.documentDigest)

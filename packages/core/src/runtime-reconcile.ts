@@ -228,6 +228,12 @@ export function hasPendingRuntimeStop(app: BaseApp): boolean {
     return Boolean(pendingStops.get(app)?.size);
 }
 
+/** 应用最终停机必须先等待热配置中已发起、但曾超时的第三方停止任务。 */
+export async function settlePendingRuntimeStops(app: BaseApp): Promise<void> {
+    const active = pendingStops.get(app);
+    while (active?.size) await Promise.allSettled([...active]);
+}
+
 function accountStopTimeout(account: Account): number {
     return Math.min(account.startupTimeoutSeconds * 1000, 5_000);
 }

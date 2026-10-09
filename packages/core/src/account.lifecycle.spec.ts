@@ -36,10 +36,28 @@ function protocol(overrides: Partial<Protocol> = {}): Protocol {
 }
 
 describe("Account lifecycle", () => {
+    it("同一账号 stop 后再次 start 仍保留生命周期监听器", async () => {
+        const account = createAccount();
+        const start = vi.fn();
+        const stop = vi.fn();
+        account.on("start", start);
+        account.on("stop", stop);
+        await account.start();
+        await account.stop();
+        await account.start();
+        expect(start).toHaveBeenCalledTimes(2);
+        expect(stop).toHaveBeenCalledOnce();
+    });
     it("停止后不执行已快照但尚未开始的启动监听器", async () => {
         const account = createAccount();
         let release!: () => void;
-        account.on("start", () => new Promise<void>(resolve => { release = resolve; }));
+        account.on(
+            "start",
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
         const next = vi.fn();
         account.on("start", next);
         account.protocols = [protocol()];
@@ -53,8 +71,12 @@ describe("Account lifecycle", () => {
 
     it("普通启动监听器失败仍尝试其他监听器，once 语义保持不变", async () => {
         const account = createAccount();
-        account.on("start", () => { throw new Error("first failed"); });
-        const next = vi.fn(function (this: Account) { expect(this).toBe(account); });
+        account.on("start", () => {
+            throw new Error("first failed");
+        });
+        const next = vi.fn(function (this: Account) {
+            expect(this).toBe(account);
+        });
         account.once("start", next);
         await expect(account.start()).rejects.toThrow("first failed");
         expect(next).toHaveBeenCalledOnce();
@@ -265,7 +287,7 @@ describe("Account lifecycle", () => {
         await expect(account.stop()).rejects.toThrow("protocol failed");
         expect(secondStop).toHaveBeenCalledOnce();
         expect(accountStop).toHaveBeenCalledOnce();
-        expect(account.listenerCount("stop")).toBe(0);
+        expect(account.listenerCount("stop")).toBe(1);
         expect(account.protocols.map(item => item.lifecycleStatus)).toEqual(["failed", "stopped"]);
     });
 });

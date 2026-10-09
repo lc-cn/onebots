@@ -326,11 +326,8 @@ export class Account<
         for (const protocol of this.protocols) {
             await failures.capture(() => this.stopProtocol(protocol, force));
         }
-        try {
-            await failures.capture(() => emitAllAwaited(this, "stop"));
-        } finally {
-            this.removeAllListeners();
-        }
+        // Account 支持显式 stop/start；保留生命周期监听器，下一次 start 才能重建连接与路由。
+        await failures.capture(() => emitAllAwaited(this, "stop"));
         failures.throwIfAny(`${failures.size} 个账号停止操作失败`);
     }
 
