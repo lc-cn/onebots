@@ -219,18 +219,44 @@ export async function runControlConfiguration(
                     prompt.report("草稿版本已变化，请重新读取并验证。");
                     continue;
                 }
+                // 展示服务端计算的实例范围；不回显配置值或第三方原始诊断。
+                if (validation.impact) {
+                    const impact = validation.impact;
+                    const safe = (value: string) => value.replace(/[\x00-\x1f\x7f]/gu, " ");
+                    prompt.report(
+                        `应用方式：${{ none: "无需更新连接", hot: "按实例热更新", restart: "重启网关" }[impact.mode]}`,
+                    );
+                    for (const item of impact.accounts)
+                        prompt.report(
+                            `${{ add: "新增", reconnect: "重连", remove: "移除" }[item.action]}账号：${safe(item.platform)}/${safe(item.accountId)}`,
+                        );
+                    for (const item of impact.protocols)
+                        prompt.report(
+                            `${{ add: "新增", replace: "更新", remove: "移除" }[item.action]}协议：${safe(item.platform)}/${safe(item.accountId)} · ${safe(item.name)}/${safe(item.version)}`,
+                        );
+                    for (const field of impact.dynamicFields)
+                        prompt.report(`动态设置：${safe(field)}`);
+                    for (const reason of impact.restartReasons)
+                        prompt.report(`重启原因：${safe(reason)}`);
+                }
                 if (
                     !(await confirmControlAction(
                         prompt,
                         "确认应用已验证草稿？",
-                        "将按当前网关启停意图应用；运行中的网关可能重启。",
+                        validation.impact?.mode === "restart"
+                            ? "该配置需要重启整个网关，确认重启？"
+                            : "仅更新受影响账号或协议，其他账号保持运行；停止的网关不会自动启动。",
                     ))
                 )
                     continue;
                 const id = randomUUID();
                 prompt.report(`配置应用任务：${id}`);
                 try {
-                    await client.applyConfiguration(id, validation.receiptId);
+                    await client.applyConfiguration(
+                        id,
+                        validation.receiptId,
+                        validation.impact?.mode === "restart" ? { allowRestart: true } : undefined,
+                    );
                 } catch {
                     prompt.report("提交结果暂不可确认，查询原任务，不重新提交。");
                 }

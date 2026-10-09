@@ -7,6 +7,27 @@ import { verifyConfiguration, recoverConfigurationVerifications } from "./config
 
 const selection = { adapters: [], protocols: [], applications: [] };
 describe("配置隔离验证", () => {
+    it("previousDocument 在分配 worker 前拒绝非法形状、getter 与超大 UTF8 文档", async () => {
+        let invoked = false;
+        const getter = Object.defineProperty({}, "token", {
+            enumerable: true,
+            get() {
+                invoked = true;
+                return "secret";
+            },
+        });
+        for (const previousDocument of [[], getter, { value: "😀".repeat(1_048_577) }]) {
+            await expect(
+                verifyConfiguration({
+                    runtimeRoot: path.resolve("development"),
+                    selection,
+                    document: {},
+                    previousDocument: previousDocument as Record<string, unknown>,
+                }),
+            ).rejects.toMatchObject({ code: "INVALID_INPUT" });
+        }
+        expect(invoked).toBe(false);
+    });
     it("空工作目录通过明确管理宿主验证配置，不依赖 cwd 包解析", async () => {
         const runtimeRoot = await fs.mkdtemp(path.join(os.tmpdir(), "ob-empty-cwd-verify-"));
         try {
@@ -90,6 +111,60 @@ describe("配置隔离验证", () => {
                 document: { "mock.bot": { "onebot.v11": { use_http: true } } },
             });
             expect(result).toEqual({ valid: true, issues: [] });
+            const repair = await verifyConfiguration({
+                runtimeRoot,
+                selection: { adapters: ["mock"], protocols: ["onebot-v11"], applications: [] },
+                previousDocument: { "mock.bot": null },
+                document: { "mock.bot": { "onebot.v11": { use_http: true } } },
+            });
+            expect(repair).toMatchObject({
+                valid: true,
+                impact: { mode: "restart", restartReasons: ["invalid-configuration-baseline"] },
+            });
+            const large = await verifyConfiguration({
+                runtimeRoot,
+                selection: { adapters: ["mock"], protocols: [], applications: [] },
+                previousDocument: {},
+                document: Object.fromEntries(
+                    Array.from({ length: 1001 }, (_, index) => [`mock.${index}`, {}]),
+                ),
+            });
+            expect(large.valid).toBe(true);
+            expect(large.impact?.accounts).toHaveLength(1001);
+            const longAccountId = "x".repeat(600);
+            const longId = await verifyConfiguration({
+                runtimeRoot,
+                selection: { adapters: ["mock"], protocols: [], applications: [] },
+                previousDocument: {},
+                document: { [`mock.${longAccountId}`]: {} },
+            });
+            expect(longId).toMatchObject({
+                valid: true,
+                impact: { accounts: [{ accountId: longAccountId }] },
+            });
+            const effective = await verifyConfiguration({
+                runtimeRoot,
+                selection: { adapters: ["mock"], protocols: ["onebot-v11"], applications: [] },
+                previousDocument: { "mock.bot": { "onebot.v11": { use_http: true } } },
+                document: {
+                    general: { "onebot.v11": { heartbeat_interval: 6000 } },
+                    "mock.bot": { "onebot.v11": { use_http: true } },
+                },
+            });
+            expect(effective).toMatchObject({ valid: true, issues: [] });
+            expect(effective.impact).toMatchObject({
+                mode: "hot",
+                accounts: [],
+                protocols: [
+                    {
+                        platform: "mock",
+                        accountId: "bot",
+                        name: "onebot",
+                        version: "v11",
+                        action: "replace",
+                    },
+                ],
+            });
             const invalid = await verifyConfiguration({
                 runtimeRoot,
                 selection: { adapters: ["mock"], protocols: ["onebot-v11"], applications: [] },

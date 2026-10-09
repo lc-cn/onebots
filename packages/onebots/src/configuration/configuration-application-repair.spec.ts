@@ -56,6 +56,7 @@ function fixture(desired: "running" | "stopped" = "running") {
     };
     const application = new ConfigurationApplication(options);
     const request = {
+        allowRestart: true,
         id: "repair-1",
         validationId: "receipt-1",
         base: { generationId: null, configRevision: repair.originalRevision },
@@ -81,7 +82,7 @@ describe("配置修复共用应用事务", () => {
             expect(restarted.health().recoveryRequired).toBe(true);
             await expect(restarted.reconcileRestore(test.request.id, revision)).rejects.toThrow();
             expect(fs.readFileSync(test.file, "utf8")).toBe("external: preserved\n");
-            expect(test.calls).toEqual(["stop"]);
+            expect(test.calls).toEqual([]);
         },
     );
     it("候选落盘但结果未确认后，冷启动对账只恢复原始字节且清除门禁", async () => {
@@ -122,7 +123,7 @@ describe("配置修复共用应用事务", () => {
             const test = fixture(desired);
             const result = await test.application.apply(test.request);
             expect(result.status).toBe("succeeded");
-            expect(test.calls).toEqual(desired === "running" ? ["stop", "start"] : ["stop"]);
+            expect(test.calls).toEqual(desired === "running" ? ["stop", "start"] : []);
             expect(test.source.read().document).toEqual(test.request.document);
             expect(test.recovery.read(test.request.repair)).toEqual(test.original);
             expect(JSON.stringify(result)).not.toContain("原始秘密");

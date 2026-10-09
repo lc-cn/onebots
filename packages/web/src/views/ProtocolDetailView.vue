@@ -165,7 +165,7 @@ onUnmounted(() => clearTimeout(copiedTimer));
                 class="entity-detail-section entity-danger-section"
                 aria-labelledby="protocol-manage-title">
                 <h2 id="protocol-manage-title">管理出口</h2>
-                <p>移除后，下游将无法再通过此协议连接该账号。</p>
+                <p>移除后，下游将无法再通过此协议连接该账号；账号本身和其他协议保持连接。</p>
                 <UiButton variant="danger" size="sm" @click="emit('remove')">移除协议出口</UiButton>
             </section>
         </template>

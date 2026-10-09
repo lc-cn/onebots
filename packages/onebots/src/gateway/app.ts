@@ -1,4 +1,10 @@
-import { BaseApp, listenHttpServer, type Adapter } from "@onebots/core";
+import {
+    BaseApp,
+    listenHttpServer,
+    planRuntimeConfiguration,
+    type RuntimeConfigurationResult,
+    type Adapter,
+} from "@onebots/core";
 import { GatewayMessageDebugStore } from "./message-debug-store.js";
 import { GatewayVerificationStore } from "./verification-store.js";
 import packageMetadata from "../../package.json" with { type: "json" };
@@ -146,6 +152,29 @@ export class GatewayApp extends BaseApp {
 
     override async reload(): Promise<void> {
         throw new Error("网关使用固定配置快照，请由管理服务切换实例");
+    }
+
+    override async applyRuntimeConfiguration(
+        config: BaseApp.Config,
+    ): Promise<RuntimeConfigurationResult> {
+        const next = mergeRuntimeConfigDefaults(config);
+        const impact = planRuntimeConfiguration(this.config, { ...next });
+        const invalidated = this.verification
+            .list()
+            .filter(challenge =>
+                impact.accounts.some(
+                    account =>
+                        account.action !== "add" &&
+                        account.platform === challenge.request.platform &&
+                        account.accountId === challenge.request.account_id,
+                ),
+            )
+            .map(challenge => challenge.id);
+        const result = await super.applyRuntimeConfiguration(next);
+        // 只清理本次变化前的挑战编号，不能删除重连时刚产生的新二维码/验证请求。
+        if (result.status === "applied")
+            for (const id of invalidated) this.verification.complete(id);
+        return result;
     }
 
     override async stop(): Promise<void> {

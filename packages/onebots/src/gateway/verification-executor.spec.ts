@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Adapter, BaseApp } from "@onebots/core";
+import { runAccountOperation, beginAccountOperationDrain } from "@onebots/core";
 import { describe, expect, it, vi } from "vitest";
 import {
     GatewayVerificationExecutor,
@@ -15,10 +16,13 @@ function fixture() {
         async (_account: string, _type: string, _data: Record<string, unknown>) => {},
     );
     const sms = vi.fn(async (_account: string) => {});
+    const runOperation = vi.fn(<T>(operation: () => T | Promise<T>) =>
+        Promise.resolve(operation()),
+    );
     const adapter = {
-        accounts: new Map([
-            ["bot", {}],
-            ["other", {}],
+        accounts: new Map<string, { runOperation?: typeof runOperation }>([
+            ["bot", { runOperation }],
+            ["other", { runOperation }],
         ]),
         submitVerification: submit,
         requestSmsCode: sms,
@@ -56,6 +60,7 @@ function fixture() {
         adapter,
         submit,
         sms,
+        runOperation,
         executor,
         challenge,
         item,
@@ -75,6 +80,48 @@ function deferred() {
     return { promise, resolve, reject };
 }
 describe("网关验证执行器", () => {
+    it("真实账号租约参与热配置排空，屏障内拒绝新验证且不调用 SDK", async () => {
+        const f = fixture();
+        const account = {};
+        f.runOperation.mockImplementation(operation => runAccountOperation(account, operation));
+        const barrier = beginAccountOperationDrain(account);
+        expect(await f.executor.execute(f.command())).toEqual({ outcome: "rejected" });
+        expect(f.submit).not.toHaveBeenCalled();
+        barrier.release();
+        const sdk = deferred();
+        f.submit.mockImplementationOnce(() => sdk.promise);
+        const operation = f.executor.execute(f.command());
+        await vi.waitFor(() => expect(f.submit).toHaveBeenCalledOnce());
+        const drain = beginAccountOperationDrain(account);
+        let settled = false;
+        const completion = drain.settled(1000).then(() => {
+            settled = true;
+        });
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        sdk.resolve();
+        expect(await operation).toEqual({ outcome: "succeeded" });
+        await completion;
+        expect(settled).toBe(true);
+        drain.release();
+    });
+    it("租约拒绝可查询为未派发，而 SDK 内部错误仍为 unknown", async () => {
+        const f = fixture();
+        f.runOperation.mockRejectedValueOnce(new Error("排空中"));
+        const command = f.command();
+        expect(await f.executor.execute(command)).toEqual({ outcome: "rejected" });
+        expect(f.submit).not.toHaveBeenCalled();
+        expect(
+            f.executor.query({
+                operationId: command.operationId,
+                challengeId: command.challengeId,
+                verificationAction: command.action,
+            }),
+        ).toEqual({ state: "rejected" });
+        f.submit.mockRejectedValueOnce(new Error("SDK已受理但失败"));
+        expect(await f.executor.execute(f.command())).toEqual({ outcome: "unknown" });
+        expect(f.submit).toHaveBeenCalledOnce();
+    });
     it("使用挑战身份调用SDK，提交后完成原挑战；返回不是在线断言", async () => {
         const f = fixture();
         expect(await f.executor.execute(f.command())).toEqual({ outcome: "succeeded" });

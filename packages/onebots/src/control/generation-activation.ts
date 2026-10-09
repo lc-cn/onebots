@@ -41,6 +41,14 @@ export interface GenerationActivationState {
 }
 
 export interface GenerationActivationOptions {
+    runtimeConfiguration?: {
+        context(): RuntimeConfigurationContext | undefined;
+        apply(input: RuntimeConfigurationInput): Promise<RuntimeConfigurationResult>;
+        query(input: {
+            id: string;
+            expected: RuntimeConfigurationContext;
+        }): Promise<RuntimeConfigurationResult>;
+    };
     statePath: string;
     gateway: GatewayController;
     /** Must be the trusted generation store's readVerified, including receipt/file validation. */
@@ -49,23 +57,52 @@ export interface GenerationActivationOptions {
     hasLiveChildren(): boolean;
     configurationRecoveryRequired?(): boolean;
     /** Verify candidate configuration under the lifecycle queue; guard must synchronously recheck its snapshot. */
-    verifyActivation?(generation: VerifiedGeneration, expectedConfigRevision?: string): Promise<() => void>;
+    verifyActivation?(
+        generation: VerifiedGeneration,
+        expectedConfigRevision?: string,
+    ): Promise<() => void>;
     onOperation?: PersistedOperationObserver;
 }
 
 /** 仅供可信配置服务使用；事务中必须 await 操作，不得调用外层 facade。 */
 export interface ConfigurationTransactionPort {
+    runtimeContext?(): RuntimeConfigurationContext | undefined;
+    queryRuntimeConfiguration?(input: {
+        id: string;
+        expected: RuntimeConfigurationContext;
+    }): Promise<RuntimeConfigurationResult>;
+    applyRuntimeConfiguration?(
+        input: RuntimeConfigurationInput,
+    ): Promise<RuntimeConfigurationResult>;
     activeGenerationId(): string | null;
     hasLiveChildren(): boolean;
     gatewayStatus(): { desired: "running" | "stopped"; recoveryRequired?: boolean };
     suspend(): Promise<{ status: string }>;
     start(): Promise<{ status: string }>;
 }
+export interface RuntimeConfigurationContext {
+    gatewayInstanceId: string;
+    configVersion: string;
+}
+export interface RuntimeConfigurationInput {
+    id: string;
+    expected: RuntimeConfigurationContext;
+    nextConfigVersion: string;
+    configPath: string;
+}
+export interface RuntimeConfigurationResult {
+    status: "applied" | "rolled_back" | "recovery_required" | "rejected";
+    configVersion: string;
+}
 
 /** 恢复事务只读取生命周期事实；不能启动、停止或自行对账未知实例。 */
 export type ConfigurationRecoveryTransactionPort = Pick<
     ConfigurationTransactionPort,
-    "activeGenerationId" | "hasLiveChildren" | "gatewayStatus"
+    | "activeGenerationId"
+    | "hasLiveChildren"
+    | "gatewayStatus"
+    | "runtimeContext"
+    | "queryRuntimeConfiguration"
 >;
 
 /**
@@ -157,6 +194,24 @@ export class GenerationActivationController {
                 return result;
             };
             const port: ConfigurationTransactionPort = {
+                ...(this.options.runtimeConfiguration
+                    ? {
+                          runtimeContext: () => {
+                              check();
+                              return this.options.runtimeConfiguration!.context();
+                          },
+                          applyRuntimeConfiguration: (input: RuntimeConfigurationInput) => {
+                              check();
+                              const result = this.options.runtimeConfiguration!.apply(input);
+                              pending.add(result);
+                              void result.then(
+                                  () => pending.delete(result),
+                                  () => pending.delete(result),
+                              );
+                              return result;
+                          },
+                      }
+                    : {}),
                 activeGenerationId: () => {
                     check();
                     return this.state.active?.id ?? null;
@@ -184,18 +239,42 @@ export class GenerationActivationController {
 
     runConfigurationRecoveryTransaction<T>(
         task: (port: ConfigurationRecoveryTransactionPort) => Promise<T>,
+        options?: { allowLiveRuntime?: boolean },
     ): Promise<T> {
         return this.serial(async () => {
             this.assertInitialized();
             if (this.state.recoveryRequired) throw new Error("版本切换需要对账，禁止恢复配置");
             if (this.options.gateway.status().recoveryRequired)
                 throw new Error("网关实例需要对账，禁止恢复配置");
-            if (this.options.hasLiveChildren()) throw new Error("网关子进程仍存活，禁止恢复配置");
+            if (this.options.hasLiveChildren() && options?.allowLiveRuntime !== true)
+                throw new Error("网关子进程仍存活，禁止恢复配置");
             let open = true;
             const check = () => {
                 if (!open) throw new Error("配置事务已结束");
             };
+            const pending = new Set<Promise<unknown>>();
             const port: ConfigurationRecoveryTransactionPort = {
+                ...(this.options.runtimeConfiguration
+                    ? {
+                          runtimeContext: () => {
+                              check();
+                              return this.options.runtimeConfiguration!.context();
+                          },
+                          queryRuntimeConfiguration: (input: {
+                              id: string;
+                              expected: RuntimeConfigurationContext;
+                          }) => {
+                              check();
+                              const result = this.options.runtimeConfiguration!.query(input);
+                              pending.add(result);
+                              void result.then(
+                                  () => pending.delete(result),
+                                  () => pending.delete(result),
+                              );
+                              return result;
+                          },
+                      }
+                    : {}),
                 activeGenerationId: () => {
                     check();
                     return this.state.active?.id ?? null;
@@ -214,6 +293,7 @@ export class GenerationActivationController {
                 return await this.configurationContext.run(true, () => task(port));
             } finally {
                 open = false;
+                await Promise.allSettled([...pending]);
             }
         });
     }
@@ -228,7 +308,11 @@ export class GenerationActivationController {
         });
     }
 
-    activate(id: string, expected?: string | null, expectedConfigRevision?: string): Promise<GenerationActivationOperation> {
+    activate(
+        id: string,
+        expected?: string | null,
+        expectedConfigRevision?: string,
+    ): Promise<GenerationActivationOperation> {
         return this.serial(async () => {
             this.assertWritable();
             const verified = this.options.readVerified(id);
@@ -245,10 +329,15 @@ export class GenerationActivationController {
             } else if (expected !== undefined && expected !== (this.state.active?.id ?? null)) {
                 throw new GenerationConflictError();
             }
-            if (expectedConfigRevision !== undefined &&
-                (!/^[a-f0-9]{64}$/.test(expectedConfigRevision) || !this.options.verifyActivation))
+            if (
+                expectedConfigRevision !== undefined &&
+                (!/^[a-f0-9]{64}$/.test(expectedConfigRevision) || !this.options.verifyActivation)
+            )
                 throw new Error("缺少升级配置验证能力或有效快照");
-            const assertCurrent = await this.options.verifyActivation?.(verified, expectedConfigRevision);
+            const assertCurrent = await this.options.verifyActivation?.(
+                verified,
+                expectedConfigRevision,
+            );
             const before = structuredClone(this.state);
             const operation: GenerationActivationOperation = {
                 id: randomUUID(),

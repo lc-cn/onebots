@@ -42,6 +42,42 @@ function transport(
     return { client: new ControlClient({ request }), request };
 }
 describe("TUI 配置草稿", () => {
+    it("确认前展示服务端实际账号、协议和重启原因", async () => {
+        const ui = prompt([["resume"], ["draft"], ["validate"], ["no"], ["back"]]);
+        const api = transport(route =>
+            route === "/api/control/configuration"
+                ? { base, schemas: {} }
+                : route.endsWith("validate")
+                  ? {
+                        valid: true,
+                        receiptId: "receipt",
+                        draftRevision: "r0",
+                        issues: [],
+                        impact: {
+                            mode: "restart",
+                            accounts: [{ platform: "mock", accountId: "bot", action: "reconnect" }],
+                            protocols: [
+                                {
+                                    platform: "mock",
+                                    accountId: "bot",
+                                    name: "onebot",
+                                    version: "v11",
+                                    action: "remove",
+                                },
+                            ],
+                            dynamicFields: ["timeout"],
+                            restartReasons: ["port"],
+                        },
+                    }
+                  : initial(),
+        );
+        await runControlConfiguration(api.client, ui.ui);
+        expect(ui.reports.join()).toContain("重连账号：mock/bot");
+        expect(ui.reports.join()).toContain("移除协议：mock/bot · onebot/v11");
+        expect(ui.reports.join()).toContain("动态设置：timeout");
+        expect(ui.reports.join()).toContain("重启原因：port");
+        expect(api.request.mock.calls.some(call => call[1].endsWith("apply"))).toBe(false);
+    });
     it("损坏源须明确确认私有备份与空修复，取消不写", async () => {
         for (const accepted of [false, true]) {
             const ui = prompt([

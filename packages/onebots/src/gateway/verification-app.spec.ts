@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { expect, it } from "vitest";
+import os from "node:os";
+import { expect, it, vi } from "vitest";
 import { BaseApp } from "@onebots/core";
 import { MockAdapter } from "../../../../adapters/adapter-mock/src/adapter.js";
 import { GatewayApp } from "./app.js";
@@ -39,6 +40,37 @@ it("真实网关收集验证挑战，旧完成回执不能清除替换后的挑�
         await app.stop();
         BaseApp.configDir = previous.directory;
         BaseApp.configFileName = previous.file;
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+});
+
+it.each(["applied", "rolled_back"] as const)("热配置 %s 只在实际应用后清理旧挑战", async status => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ob-verification-hot-")));
+    const previous = BaseApp.configDir;
+    BaseApp.configDir = root;
+    const app = new GatewayApp({
+        log_level: "off",
+        general: {},
+        "mock.bot": { auto_events: false },
+    });
+    const payload = { platform: "mock", account_id: "bot", type: "qrcode", hint: "scan" };
+    app.verification.record(payload);
+    const old = app.verification.list()[0];
+    const apply = vi.spyOn(BaseApp.prototype, "applyRuntimeConfiguration").mockResolvedValue({
+        status,
+        impact: { mode: "hot", accounts: [], protocols: [], dynamicFields: [], restartReasons: [] },
+    });
+    try {
+        await app.applyRuntimeConfiguration({
+            log_level: "off",
+            general: {},
+            "mock.bot": { auto_events: true },
+        });
+        expect(Boolean(app.verification.get(old.id))).toBe(status === "rolled_back");
+    } finally {
+        apply.mockRestore();
+        await app.stop();
+        BaseApp.configDir = previous;
         fs.rmSync(root, { recursive: true, force: true });
     }
 });

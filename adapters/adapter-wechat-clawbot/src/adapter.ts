@@ -268,8 +268,18 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         const contextTokenStore = new SqliteClawbotContextTokenStore(this.db);
         const bot = new WechatIlinkBot(wc, { contextTokenStore });
         const account = new Account<"wechat-clawbot", WechatIlinkBot>(this, bot, config);
+        let retired = false;
+        account.on("start", () => {
+            retired = false;
+        });
+        account.on("stop", () => {
+            retired = true;
+        });
+        const acceptsChallenge = () =>
+            !retired && this.accounts.get(account.account_id) === account;
 
         bot.on("qr", (payload: { qrCodeUrl: string; qrcode: string; refreshed?: boolean }) => {
+            if (!acceptsChallenge()) return;
             this.logger.info(
                 `[${this.platform}] ${config.account_id} 请使用微信扫描登录: ${payload.qrCodeUrl}` +
                     (payload.refreshed ? " [已刷新]" : ""),
@@ -287,6 +297,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("verification_code_required", () => {
+            if (!acceptsChallenge()) return;
             this.emit("verification:request", {
                 platform: this.platform,
                 account_id: config.account_id,
@@ -307,6 +318,7 @@ export class WechatClawbotAdapter extends Adapter<WechatIlinkBot, "wechat-clawbo
         });
 
         bot.on("login", session => {
+            if (!acceptsChallenge()) return;
             account.nickname = session.accountId;
             account.avatar = this.icon;
             this.logger.info(`[${this.platform}] ${config.account_id} 扫码登录成功`);

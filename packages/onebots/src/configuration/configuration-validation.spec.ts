@@ -271,6 +271,7 @@ describe("修复回执授权", () => {
         const result = await test.validation.validate(draft.id, draft.revision);
         expect(Object.keys(result).sort()).toEqual([
             "draftRevision",
+            "impact",
             "issues",
             "receiptId",
             "valid",

@@ -10,6 +10,7 @@ export type ActiveRuntimeOperation = Exclude<RuntimeOperation, "idle" | "unknown
 export interface RuntimeOperationHost {
     isReloading: boolean;
     runtimeOperation?: RuntimeOperation;
+    readonly runtimeConfigurationInProgress?: boolean;
 }
 
 export interface RuntimeOperationLease {
@@ -31,7 +32,7 @@ export function acquireRuntimeOperation(
     conflictError: (active: RuntimeOperation) => Error,
 ): RuntimeOperationLease {
     const existingLease = activeLeases.has(host);
-    if (host.isReloading || existingLease) {
+    if (host.isReloading || host.runtimeConfigurationInProgress || existingLease) {
         throw conflictError(resolveCurrentOperation(host));
     }
 

@@ -78,6 +78,7 @@ function fixture(desired: "running" | "stopped" = "running") {
     const options = { directory, source, lifecycle };
     const application = new ConfigurationApplication(options);
     const request = {
+        allowRestart: true,
         id: "request-1",
         validationId: "validation-1",
         base: { generationId: null, configRevision: snapshot.revision },
@@ -145,7 +146,7 @@ describe("configuration application transaction", () => {
     it("保持用户stopped意图，安装配置不自动启动", async () => {
         const test = fixture("stopped");
         expect((await test.application.apply(test.request)).status).toBe("succeeded");
-        expect(test.events).toEqual(["stop", "write:new"]);
+        expect(test.events).toEqual(["write:new"]);
     });
     it("并发请求在同一队列CAS，调用后输入变更不能修改提交快照", async () => {
         const test = fixture();

@@ -4,6 +4,7 @@ import {
     Adapter,
     BaseApp,
     readPackageVersion,
+    runWithAdapterRouteScope,
     type AdapterCapabilityManifest,
     type CommonTypes,
 } from "onebots";
@@ -205,8 +206,9 @@ export class FacebookMessengerAdapter extends Adapter<
                 }),
             ),
         );
-        this.httpHost.mount(account.account_id, client);
+        runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async (signal: AbortSignal) => {
+            runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
             try {
                 await client.start(signal);
                 account.status = AccountStatus.Online;
@@ -221,6 +223,7 @@ export class FacebookMessengerAdapter extends Adapter<
             }
         });
         account.on("stop", async () => {
+            this.httpHost.unmount(account.account_id);
             try {
                 await client.stop();
             } finally {

@@ -20,6 +20,7 @@ import {
     type ConfigurationTracking as Tracking,
 } from "./control-configuration-recovery.js";
 import type { SchemaFieldDef } from "./config/types.js";
+import { configurationOperationMessage } from "./control-configuration-impact.js";
 import {
     configurationGroups,
     configurationEdits,
@@ -36,6 +37,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
     const draft = ref<ControlConfigurationDraft>();
     const validation = ref<ControlConfigurationValidation>();
     const operation = ref<ControlConfigurationOperation>();
+    const appliedOperation = ref<ControlConfigurationOperation>();
     const tracking = ref<Tracking>({});
     const values = ref<Record<string, unknown>>({});
     const modes = ref<Record<string, "keep" | "set" | "clear">>({});
@@ -337,6 +339,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
             operation.value = result;
             if (result.status === "running" && !disposed) timer = setTimeout(query, 2000);
             if (result.status === "succeeded") {
+                appliedOperation.value = result;
                 if (lastAppliedOperationId !== result.id) {
                     lastAppliedOperationId = result.id;
                     onApplied();
@@ -344,16 +347,15 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
                 // 保留服务端原操作作为事实，浏览器自动准备下一次编辑，无须用户管理草稿。
                 await createFresh();
                 if (draft.value && !tracking.value.operationId)
-                    message.value = "设置已保存并生效。";
+                    message.value = configurationOperationMessage(result);
                 else
-                    message.value =
-                        "设置已保存并生效，但暂未准备好下一次编辑；请查询原操作或重新读取配置。";
+                    message.value = `${configurationOperationMessage(result)}暂未准备好下一次编辑；请查询原操作或重新读取配置。`;
             }
         } catch {
             error.value = "暂时无法确认应用结果。请查询原操作，不要重新创建应用请求。";
         }
     }
-    async function apply() {
+    async function apply(options?: { allowRestart?: boolean }) {
         if (!validation.value?.receiptId || !draft.value || tracking.value.operationId) return;
         const next = {
             draftId: draft.value.id,
@@ -370,7 +372,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
         error.value = "";
         try {
             operation.value = await bounded(
-                client.applyConfiguration(next.operationId, next.receiptId),
+                client.applyConfiguration(next.operationId, next.receiptId, options),
             );
         } catch (caught) {
             const recovery = await resolveConfigurationConflict({
@@ -422,6 +424,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
         draft,
         validation,
         operation,
+        appliedOperation,
         tracking,
         values,
         modes,

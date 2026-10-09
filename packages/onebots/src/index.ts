@@ -51,6 +51,7 @@ export {
     Account,
     Protocol,
     BaseApp,
+    runWithAdapterRouteScope,
     SqliteDB,
     Router,
     // Types
@@ -68,6 +69,7 @@ export {
     ValidationError,
     type Schema,
     type RouterContext,
+    type RouterRegistrationScope,
     type Next,
     type Dict,
     type WsServer,

@@ -115,6 +115,7 @@ describe("损坏配置的统一管理恢复入口", () => {
             const result = await test.client.applyConfiguration(
                 `repair-${desired}`,
                 validation.receiptId!,
+                desired === "running" ? { allowRestart: true } : undefined,
             );
             expect(result.status).toBe("succeeded");
             expect(await test.client.configurationSource()).toMatchObject({ state: "ready" });

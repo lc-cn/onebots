@@ -1,13 +1,32 @@
-import { parseConfigurationDocument } from "./configuration-document.js";
-const HASH = /^[a-f0-9]{64}$/;
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID, createHash } from "node:crypto";
+import { parseConfigurationDocument } from "./configuration-document.js";
+import { canonicalConfiguration } from "./configuration-store.js";
 import type {
     ConfigurationApplicationJournal,
     ConfigurationApplicationOptions,
 } from "./configuration-application.js";
 const invalid = () => new Error("配置应用私有存储无效");
+const HASH = /^[a-f0-9]{64}$/;
+
+/** 同时满足恢复读取与纯数据解析限制，不能在派发后才发现意图不可读。 */
+export function writeApplicationJournal(
+    file: string,
+    operation: ConfigurationApplicationJournal,
+): void {
+    const content = JSON.stringify(operation);
+    if (Buffer.byteLength(content) > 4_200_000) throw invalid();
+    parseConfigurationDocument(JSON.parse(content));
+    atomic(file, content);
+}
+
+export function applicationDocumentBytes(document: unknown): string {
+    return canonicalConfiguration(parseConfigurationDocument(document));
+}
+export function applicationDigest(content: string | Uint8Array): string {
+    return createHash("sha256").update(content).digest("hex");
+}
 /** 日志摘要不是覆盖许可；必须重新绑定已验证的候选正文。 */
 export function checkRepairRevisions(
     operation: ConfigurationApplicationJournal,

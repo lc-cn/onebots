@@ -1,4 +1,4 @@
-import type { BaseApp } from "onebots";
+import type { BaseApp, RouterRegistrationScope } from "onebots";
 import type { MatrixClient } from "./client.js";
 import { MatrixError } from "./errors.js";
 import { matrixErrorResponse } from "./http.js";
@@ -20,7 +20,7 @@ interface MatrixKoaContext {
 export class MatrixAppserviceHost {
     private readonly owners = new Map<string, string>();
     private readonly accountRoots = new Map<string, string>();
-    private readonly mounted = new Set<string>();
+    private readonly mounted = new Map<string, RouterRegistrationScope>();
 
     constructor(
         private readonly app: BaseApp,
@@ -36,18 +36,34 @@ export class MatrixAppserviceHost {
                 { code: "MATRIX_APPSERVICE_PATH_CONFLICT" },
             );
         }
+        if (this.accountRoots.get(accountId) !== root) this.unmount(accountId);
         this.owners.set(root, accountId);
         this.accountRoots.set(accountId, root);
         if (this.mounted.has(root)) return;
-        this.mounted.add(root);
-        this.app.router.put(`${root}/_matrix/app/v1/transactions/:txnId`, ctx =>
-            this.accept(root, ctx),
-        );
-        this.app.router.post(`${root}/_matrix/app/v1/ping`, ctx => this.accept(root, ctx));
-        this.app.router.get(`${root}/_matrix/app/v1/users/:userId`, ctx => this.accept(root, ctx));
-        this.app.router.get(`${root}/_matrix/app/v1/rooms/:roomAlias`, ctx =>
-            this.accept(root, ctx),
-        );
+        const scope = this.app.router.createRegistrationScope();
+        this.mounted.set(root, scope);
+        scope.run(() => {
+            this.app.router.put(`${root}/_matrix/app/v1/transactions/:txnId`, ctx =>
+                this.accept(root, ctx),
+            );
+            this.app.router.post(`${root}/_matrix/app/v1/ping`, ctx => this.accept(root, ctx));
+            this.app.router.get(`${root}/_matrix/app/v1/users/:userId`, ctx =>
+                this.accept(root, ctx),
+            );
+            this.app.router.get(`${root}/_matrix/app/v1/rooms/:roomAlias`, ctx =>
+                this.accept(root, ctx),
+            );
+        });
+    }
+
+    /** 移除账号及其 HTTP layer，迟到请求不保留旧客户端。 */
+    unmount(accountId: string): void {
+        const root = this.accountRoots.get(accountId);
+        this.accountRoots.delete(accountId);
+        if (root === undefined || this.owners.get(root) !== accountId) return;
+        this.owners.delete(root);
+        this.mounted.get(root)?.close();
+        this.mounted.delete(root);
     }
 
     private async accept(root: string, ctx: MatrixKoaContext): Promise<void> {

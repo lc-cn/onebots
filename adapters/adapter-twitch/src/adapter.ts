@@ -14,6 +14,7 @@ import { TwitchClient } from "./client.js";
 import { TwitchError } from "./errors.js";
 import { projectTwitchEvent } from "./events.js";
 import { TwitchHttpHost } from "./http-host.js";
+import { runWithAdapterRouteScope } from "onebots";
 import { compileTwitchMessage } from "./messages.js";
 import { executeTwitchPlatformAction, TWITCH_PLATFORM_ACTIONS } from "./platform-actions.js";
 import type { TwitchChannel, TwitchChatter, TwitchDelivery, TwitchUser } from "./types.js";
@@ -261,8 +262,9 @@ export class TwitchAdapter extends Adapter<TwitchClient, "twitch"> {
                 account_id: String(account.account_id),
             });
         });
-        this.httpHost.mount(account.account_id, client);
+        runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async (signal: AbortSignal) => {
+            runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
             try {
                 await client.start(signal);
                 account.status = AccountStatus.Online;
@@ -275,6 +277,7 @@ export class TwitchAdapter extends Adapter<TwitchClient, "twitch"> {
             }
         });
         account.on("stop", async () => {
+            this.httpHost.unmount(account.account_id);
             try {
                 await client.stop();
             } finally {

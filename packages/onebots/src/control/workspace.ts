@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import { acquireExclusiveFileLock } from "../exclusive-file-lock.js";
 import yaml from "js-yaml";
 import { getConfiguredPluginSelection } from "../runtime-plugin-selection.js";
 import packageMetadata from "../../package.json" with { type: "json" };
 import type { ServiceHost } from "../service-host.js";
+import { createGatewayConfigurationSnapshot } from "./gateway-configuration-snapshot.js";
 import {
     inspectWindowsServiceDirectorySecurity,
     inspectWindowsServiceFileSecurity,
@@ -97,12 +97,10 @@ export function prepareGatewayWorkspace(root: string, runtimeRoot = process.cwd(
     delete runtime.username;
     delete runtime.password;
     delete runtime.access_token;
-    const content = yaml.dump(runtime);
-    const configVersion = createHash("sha256").update(content).digest("hex");
-    const snapshots = path.join(controlDirectory(root), "configurations");
-    fs.mkdirSync(snapshots, { recursive: true, mode: 0o700 });
-    const snapshot = path.join(snapshots, `${configVersion}.yaml`);
-    if (!fs.existsSync(snapshot)) fs.writeFileSync(snapshot, content, { flag: "wx", mode: 0o600 });
+    const { configPath: snapshot, configVersion } = createGatewayConfigurationSnapshot(
+        root,
+        runtime,
+    );
     const selection = getConfiguredPluginSelection(runtime, true) ?? {
         adapters: [],
         protocols: [],

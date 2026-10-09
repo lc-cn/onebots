@@ -31,6 +31,7 @@ import { GenerationStore } from "../installation/generation-store.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
 import { createHostInstallation } from "./host-installation.js";
 import { ConfigurationApplication } from "../configuration/configuration-application.js";
+import { createGatewayConfigurationSnapshot } from "./gateway-configuration-snapshot.js";
 import { ConfigurationRecoveryStore } from "../configuration/configuration-recovery-store.js";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
 import {
@@ -251,6 +252,14 @@ export async function startControlHost(options: ControlHostOptions) {
         verifyActivation: (generation, revision) =>
             activationVerification.verify(generation, revision),
         hasLiveChildren: () => driver.hasLiveChildren(),
+        runtimeConfiguration: {
+            context: () => {
+                const instance = controller.status().instance;
+                return instance ? driver.runtimeContext(instance.id) : undefined;
+            },
+            apply: input => driver.applyRuntimeConfiguration(input),
+            query: input => driver.queryRuntimeConfiguration(input),
+        },
         configurationRecoveryRequired: () =>
             configurationStorageUnavailable ||
             Boolean(configurationApplication?.health().recoveryRequired),
@@ -268,6 +277,16 @@ export async function startControlHost(options: ControlHostOptions) {
         configurationApplication = new ConfigurationApplication({
             directory: path.join(controlDirectory(workspace), "configuration-applications"),
             source: new ConfigurationFile(path.join(workspace, "config.yaml")),
+            runtime: {
+                snapshot: document => createGatewayConfigurationSnapshot(workspace, document),
+            },
+            planImpact: (before, after) =>
+                activationVerification.planImpact(
+                    lifecycle.activeGeneration(),
+                    options.runtimeRoot ?? process.cwd(),
+                    before,
+                    after,
+                ),
             recovery: new ConfigurationRecoveryStore(
                 path.join(controlDirectory(workspace), "configuration/recovery"),
             ),

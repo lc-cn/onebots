@@ -1,4 +1,9 @@
-import type { BaseApp, Adapter } from "@onebots/core";
+import {
+    AccountOperationRejectedError,
+    runAccountOperation,
+    type BaseApp,
+    type Adapter,
+} from "@onebots/core";
 import { supportsSendScene } from "./send-scene-capability.js";
 import { AccountExploreError } from "./account-explore-errors.js";
 import {
@@ -106,7 +111,8 @@ export class GatewayAccountExploreExecutor {
         const platform = request.account.slice(0, separator);
         const accountId = request.account.slice(separator + 1);
         const adapter = [...this.app.adapters].find(([name]) => String(name) === platform)?.[1];
-        if (!adapter || adapter.accounts.get(accountId)?.status !== "online")
+        const account = adapter?.accounts.get(accountId);
+        if (!adapter || !account || account.status !== "online")
             throw new AccountExploreError("account_unavailable");
         const capability = {
             friends: "get_friend_list",
@@ -140,7 +146,9 @@ export class GatewayAccountExploreExecutor {
         }
         this.active++;
         try {
-            const values = await this.query(adapter, accountId, request);
+            const values = await runAccountOperation(account, () =>
+                this.query(adapter, accountId, request),
+            );
             const kind: ControlAccountItemKind =
                 request.action === "friends"
                     ? "friend"
@@ -183,6 +191,8 @@ export class GatewayAccountExploreExecutor {
             }
             return result;
         } catch (error) {
+            if (error instanceof AccountOperationRejectedError)
+                throw new AccountExploreError("account_unavailable");
             // 只记录错误分类，第三方异常正文可能含 Cookie、Token 或聊天资料。
             adapter.logger.error("账号资料查询失败", {
                 account: request.account,

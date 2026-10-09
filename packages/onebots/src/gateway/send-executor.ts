@@ -1,4 +1,4 @@
-import { sendAccountMessage, type BaseApp } from "@onebots/core";
+import { AccountOperationRejectedError, sendAccountMessage, type BaseApp } from "@onebots/core";
 import {
     isControlSendRequest,
     type ControlSendRequest,
@@ -66,7 +66,8 @@ export class GatewaySendExecutor {
             )
                 return { outcome: "unknown" };
             return { outcome: "succeeded", result: { messageId: messageId.string } };
-        } catch {
+        } catch (error) {
+            if (error instanceof AccountOperationRejectedError) return { outcome: "rejected" };
             return { outcome: "unknown" };
         } finally {
             this.active--;

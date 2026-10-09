@@ -31,6 +31,10 @@ describe("MatrixAppserviceHost", () => {
     it("路由热重载后解析当前 Client，不捕获旧实例", async () => {
         const routes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             put: vi.fn((path: string, handler: Handler) => routes.set(`PUT ${path}`, handler)),
             post: vi.fn((path: string, handler: Handler) => routes.set(`POST ${path}`, handler)),
             get: vi.fn((path: string, handler: Handler) => routes.set(`GET ${path}`, handler)),
@@ -62,6 +66,10 @@ describe("MatrixAppserviceHost", () => {
     it("路径变更后旧路由失活，并拒绝活跃账号之间的路径冲突", async () => {
         const routes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             put: (path: string, handler: Handler) => routes.set(`PUT ${path}`, handler),
             post: (path: string, handler: Handler) => routes.set(`POST ${path}`, handler),
             get: (path: string, handler: Handler) => routes.set(`GET ${path}`, handler),

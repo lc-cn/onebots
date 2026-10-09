@@ -797,7 +797,13 @@ onUnmounted(() => {
             :mutation-block="mutationBlock"
             :configuration="configurationSnapshot"
             :status="state"
-            :gateway-running="state?.gateway.actual === 'running'"
+            :gateway-running="
+                state?.gateway.actual === 'running'
+                    ? true
+                    : state?.gateway.actual === 'stopped' || state?.gateway.actual === 'failed'
+                      ? false
+                      : undefined
+            "
             @applied="refreshProductState"
             @category-change="openExtensionCategory" />
         <AccountsView
@@ -991,7 +997,13 @@ onUnmounted(() => {
             <ConfigurationView
                 :client="client"
                 :mutation-block="mutationBlock"
-                :gateway-running="state?.gateway.actual === 'running'"
+                :gateway-running="
+                    state?.gateway.actual === 'running'
+                        ? true
+                        : state?.gateway.actual === 'stopped' || state?.gateway.actual === 'failed'
+                          ? false
+                          : undefined
+                "
                 :target="configurationTarget"
                 :scope="configurationScope"
                 @select="selectWorkspace"

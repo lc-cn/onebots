@@ -20,7 +20,7 @@ export const CONFIGURATION_HELP = `onebots config <命令> [--data-dir 工作区
   protocol --draft UUID --stdin  管道JSON：expectedRevision、accountKey、protocol、enabled
                                 accountKey 为 null 时修改通用协议配置
   validate --draft UUID --revision SHA256
-  apply --request 操作ID --receipt UUID
+  apply --request 操作ID --receipt UUID [--allow-restart]
   operation --request 操作ID
 秘密与修改值只接受非终端 stdin（最多1MiB），不接受命令行参数。
 应用必须显式提供验证收据；重试沿用同一操作ID，不自动重新应用。`;
@@ -88,8 +88,16 @@ export async function runConfigurationCommand(
     const options = new Map<string, string>();
     for (let index = 0; index < rest.length; index++) {
         const key = rest[index];
-        if (![...allowed[action], "--data-dir"].includes(key) || options.has(key)) invalid();
-        if (key === "--stdin") options.set(key, "true");
+        if (
+            ![
+                ...allowed[action],
+                "--data-dir",
+                ...(action === "apply" ? ["--allow-restart"] : []),
+            ].includes(key) ||
+            options.has(key)
+        )
+            invalid();
+        if (key === "--stdin" || key === "--allow-restart") options.set(key, "true");
         else {
             const value = rest[++index];
             if (!value || value.startsWith("--")) invalid();
@@ -229,6 +237,7 @@ export async function runConfigurationCommand(
             result = await client.applyConfiguration(
                 options.get("--request")!,
                 options.get("--receipt")!,
+                ...(options.has("--allow-restart") ? [{ allowRestart: true }] : []),
             );
         else result = await client.configurationOperation(options.get("--request")!);
         output(JSON.stringify(result));

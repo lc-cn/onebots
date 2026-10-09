@@ -19,6 +19,10 @@ describe("TwitchHttpHost", () => {
     it("热重载后把原始请求体交给当前 Client", async () => {
         const routes = new Map<string, Handler>();
         const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
             post: vi.fn((path: string, handler: Handler) => routes.set(path, handler)),
         };
         const oldClient = client();
@@ -43,7 +47,13 @@ describe("TwitchHttpHost", () => {
 
     it("缺少 rawBody 时拒绝验签，而不是使用空请求体", async () => {
         const routes = new Map<string, Handler>();
-        const router = { post: (path: string, handler: Handler) => routes.set(path, handler) };
+        const router = {
+            createRegistrationScope: () => ({
+                run: <T>(operation: () => T) => operation(),
+                close: () => undefined,
+            }),
+            post: (path: string, handler: Handler) => routes.set(path, handler),
+        };
         const currentClient = client();
         const host = new TwitchHttpHost({ router } as unknown as BaseApp, () => currentClient);
         host.mount("account", currentClient);
