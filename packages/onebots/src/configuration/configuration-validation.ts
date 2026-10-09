@@ -153,14 +153,18 @@ export class ConfigurationValidation {
         receiptId: string,
         options?: { allowRestart?: boolean },
     ): Promise<ConfigurationApplicationOperation> {
+        // 每次异步上下文返回后都重新查持久回执；并发首个调用可能已推进 base。
+        const existing = () => {
+            if (!this.options.application.hasOperation(operationId)) return undefined;
+            const operation = this.options.application.status(operationId);
+            if (operation.validationId !== receiptId) throw new ConfigurationConflictError();
+            return operation;
+        };
         try {
             const receipt = this.read(receiptId);
             // 已执行的同一操作是只读查询；不能因应用后base变化而重新执行。
-            if (this.options.application.hasOperation(operationId)) {
-                const operation = this.options.application.status(operationId);
-                if (operation.validationId !== receiptId) throw new ConfigurationConflictError();
-                return operation;
-            }
+            const completed = existing();
+            if (completed) return completed;
             const draft = this.options.store.read(receipt.draftId);
             if (
                 draft.revision !== receipt.draftRevision ||
@@ -170,7 +174,17 @@ export class ConfigurationValidation {
             )
                 throw new ConfigurationConflictError();
             this.assertBase(receipt.base);
-            const context = await this.context(draft);
+            let context: ConfigurationRuntimeContext;
+            try {
+                context = await this.context(draft);
+            } catch (error) {
+                // 上下文自身可能因首个请求提交而报 base 变化；只读原回执不能重派。
+                const concurrent = existing();
+                if (concurrent) return concurrent;
+                throw error;
+            }
+            const concurrent = existing();
+            if (concurrent) return concurrent;
             if (context.fingerprint !== receipt.runtimeFingerprint)
                 throw new ConfigurationConflictError();
             this.assertDraft(draft);

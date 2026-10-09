@@ -8,6 +8,7 @@ interface HostLifecycleState {
     queuedPlatforms?: Set<string>;
     controller?: AbortController;
     starting?: Promise<void>;
+    startupSettled?: boolean;
     managed?: Promise<ManagedRuntimeStart>;
     stopping?: Promise<void>;
 }

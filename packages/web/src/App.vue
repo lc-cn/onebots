@@ -49,6 +49,17 @@ import { browserAccountSendStorage, writePendingAccountSends } from "./account-s
 const token = ref(localStorage.getItem("onebots.control.token") ?? "");
 const code = ref("");
 const state = ref<ControlStatus>();
+const gatewayRunning = computed<boolean | undefined>(() => {
+    switch (state.value?.gateway.actual) {
+        case "running":
+            return true;
+        case "stopped":
+        case "failed":
+            return false;
+        default:
+            return undefined;
+    }
+});
 const statusError = ref("");
 const actionError = ref("");
 const error = computed(() => actionError.value || statusError.value);
@@ -797,13 +808,7 @@ onUnmounted(() => {
             :mutation-block="mutationBlock"
             :configuration="configurationSnapshot"
             :status="state"
-            :gateway-running="
-                state?.gateway.actual === 'running'
-                    ? true
-                    : state?.gateway.actual === 'stopped' || state?.gateway.actual === 'failed'
-                      ? false
-                      : undefined
-            "
+            :gateway-running="gatewayRunning"
             @applied="refreshProductState"
             @category-change="openExtensionCategory" />
         <AccountsView
@@ -997,13 +1002,7 @@ onUnmounted(() => {
             <ConfigurationView
                 :client="client"
                 :mutation-block="mutationBlock"
-                :gateway-running="
-                    state?.gateway.actual === 'running'
-                        ? true
-                        : state?.gateway.actual === 'stopped' || state?.gateway.actual === 'failed'
-                          ? false
-                          : undefined
-                "
+                :gateway-running="gatewayRunning"
                 :target="configurationTarget"
                 :scope="configurationScope"
                 @select="selectWorkspace"

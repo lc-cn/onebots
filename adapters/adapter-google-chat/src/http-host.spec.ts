@@ -1,4 +1,6 @@
 import type { BaseApp } from "onebots";
+import { createServer } from "node:http";
+import { Router, HttpRouteConflictError } from "../../../packages/core/src/router.js";
 import { describe, expect, it, vi } from "vitest";
 import { GoogleChatClient } from "./client.js";
 import { GoogleChatHttpHost } from "./http-host.js";
@@ -17,6 +19,35 @@ interface TestContext {
 type Handler = (ctx: TestContext) => Promise<void>;
 
 describe("GoogleChatHttpHost", () => {
+    it("真实路由冲突保留双方平台归属，失败不遗留挂载且修正后可重试", () => {
+        const router = new Router(createServer());
+        const current = new GoogleChatClient(config("bot", "/events"));
+        const host = new GoogleChatHttpHost({ router } as unknown as BaseApp, () => current);
+        const blocker = router.createRegistrationScope({ platform: "other" });
+        try {
+            blocker.run(() => router.post("/events", () => undefined));
+            try {
+                host.mount("bot", current);
+                throw new Error("应拒绝重复路由");
+            } catch (error) {
+                expect(error).toBeInstanceOf(HttpRouteConflictError);
+                expect(error).toMatchObject({
+                    registeringOwner: { platform: "google-chat" },
+                    existingOwner: { platform: "other" },
+                });
+            }
+            expect(router.stack).toHaveLength(1);
+            blocker.close();
+            host.mount("bot", current);
+            expect(router.stack).toHaveLength(1);
+            host.unmount("bot");
+            expect(router.stack).toHaveLength(0);
+            host.mount("bot", current);
+            expect(router.stack).toHaveLength(1);
+        } finally {
+            router.cleanup();
+        }
+    });
     it("热重载后解析当前 Client，不捕获旧实例", async () => {
         const routes = new Map<string, Handler>();
         const router = {

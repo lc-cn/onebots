@@ -157,7 +157,10 @@ export async function startControlHost(options: ControlHostOptions) {
     const driver = new NodeGatewayDriver({
         controlInstanceId: id,
         prepare: async () => {
-            const prepared = prepareGatewayWorkspace(workspace, options.runtimeRoot);
+            const prepared = prepareGatewayWorkspace(
+                workspace,
+                options.runtimeRoot ?? path.resolve(import.meta.dirname, "../.."),
+            );
             const generation = lifecycle.activeGeneration();
             return {
                 ...prepared,
@@ -283,7 +286,7 @@ export async function startControlHost(options: ControlHostOptions) {
             planImpact: (before, after) =>
                 activationVerification.planImpact(
                     lifecycle.activeGeneration(),
-                    options.runtimeRoot ?? process.cwd(),
+                    options.runtimeRoot ?? path.resolve(import.meta.dirname, "../.."),
                     before,
                     after,
                 ),
@@ -297,7 +300,7 @@ export async function startControlHost(options: ControlHostOptions) {
             configuration = new ControlConfigurationService({
                 directory: path.join(controlDirectory(workspace), "configuration"),
                 configFile: path.join(workspace, "config.yaml"),
-                runtimeRoot: options.runtimeRoot ?? process.cwd(),
+                runtimeRoot: options.runtimeRoot ?? path.resolve(import.meta.dirname, "../.."),
                 generations,
                 application: configurationApplication,
                 activeGeneration: () => lifecycle.activeGeneration(),

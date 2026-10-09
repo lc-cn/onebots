@@ -228,6 +228,12 @@ export function hasPendingRuntimeStop(app: BaseApp): boolean {
     return Boolean(pendingStops.get(app)?.size);
 }
 
+/** 全局关闭不能重发仍在执行的第三方 stop；等待其原始任务后才进入适配器清理。 */
+export async function waitForPendingRuntimeStops(app: BaseApp): Promise<void> {
+    const active = pendingStops.get(app);
+    while (active?.size) await Promise.allSettled([...active]);
+}
+
 function accountStopTimeout(account: Account): number {
     return Math.min(account.startupTimeoutSeconds * 1000, 5_000);
 }

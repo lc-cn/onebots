@@ -66,6 +66,15 @@ function fixture(desired: "running" | "stopped" = "running") {
     return { application, request, source, file, original, options, recovery, state, calls };
 }
 describe("配置修复共用应用事务", () => {
+    it("运行中修复未明确授权重启时零停机零写入", async () => {
+        const test = fixture();
+        await expect(
+            test.application.apply({ ...test.request, allowRestart: false }),
+        ).rejects.toThrow("明确确认重启");
+        expect(fs.readFileSync(test.file)).toEqual(test.original);
+        expect(test.calls).toEqual([]);
+        expect(test.application.hasOperation(test.request.id)).toBe(false);
+    });
     it.each(["candidateRevision", "configRevision"])(
         "损坏日志的 %s 不能授权覆盖第三方配置",
         async field => {

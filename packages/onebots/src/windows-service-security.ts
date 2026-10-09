@@ -1,6 +1,7 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
 import type { ServiceHost } from "./service-host.js";
+import { protectedWindowsDirectoryAclScript } from "./windows-acl-script.js";
 
 const SID = /^S-1-(?:[0-9]+-)+[0-9]+$/;
 const failure = () => new Error("Windows 服务状态目录 ACL 无法确认");
@@ -93,17 +94,7 @@ while($ancestor){
   $ancestor=$next
 }
 $stage='acl-build'
-$acl=New-Object System.Security.AccessControl.DirectorySecurity
-$acl.SetAccessRuleProtection($true,$false)
-$inherit=[System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
-$prop=[System.Security.AccessControl.PropagationFlags]::None
-$allow=[System.Security.AccessControl.AccessControlType]::Allow
-foreach($identity in $allowedSids){
-  $principal=New-Object System.Security.Principal.SecurityIdentifier($identity)
-  $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($principal,'FullControl',$inherit,$prop,$allow)
-  $acl.AddAccessRule($rule)|Out-Null
-}
-$acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($ownerSid)))
+${protectedWindowsDirectoryAclScript}
 $stage='exclusive-create'
 if([IO.Directory]::Exists($p)){throw 'target exists'}
 $temporary=[IO.Path]::Combine($parentPath,'.onebots-directory-'+[Guid]::NewGuid().ToString('N'))
@@ -186,17 +177,7 @@ while($ancestor){
 }
 
 $stage='acl-build'
-$acl=New-Object System.Security.AccessControl.DirectorySecurity
-$acl.SetAccessRuleProtection($true,$false)
-$inherit=[System.Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit'
-$prop=[System.Security.AccessControl.PropagationFlags]::None
-$allow=[System.Security.AccessControl.AccessControlType]::Allow
-foreach($identity in $allowedSids){
-  $principal=New-Object System.Security.Principal.SecurityIdentifier($identity)
-  $rule=New-Object System.Security.AccessControl.FileSystemAccessRule($principal,'FullControl',$inherit,$prop,$allow)
-  $acl.AddAccessRule($rule)|Out-Null
-}
-$acl.SetOwner((New-Object System.Security.Principal.SecurityIdentifier($ownerSid)))
+${protectedWindowsDirectoryAclScript}
 $stage='create'
 $item=New-Object System.IO.DirectoryInfo($p)
 if(-not $item.Exists){

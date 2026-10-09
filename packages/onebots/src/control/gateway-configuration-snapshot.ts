@@ -24,6 +24,23 @@ export function createGatewayConfigurationSnapshot(
     if (fs.realpathSync(directory) !== directory) throw new Error("网关快照目录无效");
     if (process.platform === "win32") secureGatewaySnapshotDirectory(directory);
     else if ((fs.statSync(directory).mode & 0o077) !== 0) throw new Error("网关快照目录权限无效");
+    // 调用方持工作区锁，且发布为同步操作：这些未发布文件不可能被网关或事务引用。
+    for (const entry of fs.readdirSync(directory)) {
+        if (
+            !/^\.snapshot-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+                entry,
+            )
+        )
+            continue;
+        const temporary = path.join(directory, entry);
+        const stat = fs.lstatSync(temporary);
+        if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1)
+            throw new Error("网关快照存储无效");
+        assertGatewaySnapshotFileSecurity(temporary);
+        if (process.platform !== "win32" && (stat.mode & 0o077) !== 0)
+            throw new Error("网关快照存储无效");
+        fs.unlinkSync(temporary);
+    }
     const configPath = path.join(directory, `${configVersion}.yaml`);
     if (!fs.existsSync(configPath)) {
         // 不淘汰可能仍被子进程或恢复事务引用的快照；显式容量边界代替无界留存。

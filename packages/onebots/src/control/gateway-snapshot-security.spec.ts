@@ -33,5 +33,21 @@ it("无法证明 DACL 时关闭快照入口，不暴露原始 PowerShell 输出"
     vi.mocked(execFileSync).mockImplementationOnce(() => {
         throw new Error("secret raw output");
     });
-    expect(() => secureGatewaySnapshotDirectory("C:\\private")).toThrow("网关快照目录权限无法确认");
+    expect(() => secureGatewaySnapshotDirectory("C:\\private")).toThrow(
+        /^网关快照目录权限无法确认（阶段：process）$/,
+    );
+});
+it.each(["inspect", "acl-build", "acl-apply", "verify"])("只允许固定阶段诊断：%s", stage => {
+    vi.stubGlobal("process", { ...process, platform: "win32" });
+    vi.mocked(execFileSync).mockReturnValueOnce(`unsafe:${stage}`);
+    expect(() => secureGatewaySnapshotDirectory("C:\\private")).toThrow(
+        new RegExp(`^网关快照目录权限无法确认（阶段：${stage}）$`),
+    );
+});
+it("伪造或秘密阶段输出被固定 process 错误取代", () => {
+    vi.stubGlobal("process", { ...process, platform: "win32" });
+    vi.mocked(execFileSync).mockReturnValueOnce("unsafe:secret raw output");
+    expect(() => secureGatewaySnapshotDirectory("C:\\private")).toThrow(
+        /^网关快照目录权限无法确认（阶段：process）$/,
+    );
 });

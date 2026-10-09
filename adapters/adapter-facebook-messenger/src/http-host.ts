@@ -35,18 +35,27 @@ export class FacebookMessengerHttpHost {
             );
         }
         if (this.accountPaths.get(accountId) !== path) this.unmount(accountId);
+        if (!this.mounted.has(path)) {
+            const scope = this.app.router.createRegistrationScope({
+                platform: "facebook-messenger",
+            });
+            try {
+                scope.run(() => {
+                    this.app.router.get(path, ctx => this.accept(path, ctx));
+                    this.app.router.post(path, ctx => this.accept(path, ctx));
+                });
+            } catch (error) {
+                // 部分注册也必须全部释放；所有权仅在完整注册成功后提交。
+                scope.close();
+                throw error;
+            }
+            this.mounted.set(path, scope);
+        }
         this.owners.set(path, accountId);
         this.accountPaths.set(accountId, path);
-        if (this.mounted.has(path)) return;
-        const scope = this.app.router.createRegistrationScope();
-        this.mounted.set(path, scope);
-        scope.run(() => {
-            this.app.router.get(path, ctx => this.accept(path, ctx));
-            this.app.router.post(path, ctx => this.accept(path, ctx));
-        });
     }
 
-    /** 释放已移除账号的路径；重连重新挂载，不累积失效 HTTP layer。 */
+    /** 释放旧账号的路径；工厂创建的新实例重新挂载，不累积失效 HTTP layer。 */
     unmount(accountId: string): void {
         const path = this.accountPaths.get(accountId);
         this.accountPaths.delete(accountId);

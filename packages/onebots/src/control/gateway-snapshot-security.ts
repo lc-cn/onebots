@@ -1,4 +1,12 @@
 import { execFileSync } from "node:child_process";
+import { protectedWindowsDirectoryAclScript } from "../windows-acl-script.js";
+
+type SnapshotSecurityStage = "process" | "inspect" | "acl-build" | "acl-apply" | "verify";
+class SnapshotSecurityError extends Error {
+    constructor(readonly stage: SnapshotSecurityStage) {
+        super(`网关快照目录权限无法确认（阶段：${stage}）`);
+    }
+}
 
 /** Windows POSIX mode 不限制 DACL；快照私有目录只授权当前宿主与系统管理员。 */
 export function secureGatewaySnapshotDirectory(directory: string): void {
@@ -15,24 +23,24 @@ function verifyWindowsSnapshotPermissions(location: string, secureDirectory: boo
     const encodedPath = Buffer.from(location, "utf8").toString("base64");
     const script = String.raw`
 $ErrorActionPreference='Stop'
+$stage='inspect'
+try {
 $p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedPath}'))
 $item=Get-Item -LiteralPath $p -Force
 if($item.PSIsContainer -ne $${secureDirectory ? "true" : "false"} -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw 'unsafe entry'}
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
 $ids=@($sid.Value,'S-1-5-18','S-1-5-32-544')|Sort-Object -Unique
+$ownerSid=$sid.Value
+$allowedSids=$ids
 ${
     secureDirectory
-        ? String.raw`$acl=New-Object Security.AccessControl.DirectorySecurity
-$acl.SetAccessRuleProtection($true,$false)
-$acl.SetOwner($sid)
-foreach($id in $ids){
-  $principal=New-Object Security.Principal.SecurityIdentifier($id)
-  $rule=New-Object Security.AccessControl.FileSystemAccessRule($principal,'FullControl','ContainerInherit,ObjectInherit','None','Allow')
-  $acl.AddAccessRule($rule)|Out-Null
-}
+        ? String.raw`$stage='acl-build'
+${protectedWindowsDirectoryAclScript}
+$stage='acl-apply'
 Set-Acl -LiteralPath $p -AclObject $acl`
         : ""
 }
+$stage='verify'
 $check=Get-Acl -LiteralPath $p
 $rules=@($check.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]))
 if(${secureDirectory ? "-not $check.AreAccessRulesProtected -or " : ""}$check.GetOwner([Security.Principal.SecurityIdentifier]).Value -notin $ids -or $rules.Count -ne $ids.Count){throw 'unsafe acl'}
@@ -40,6 +48,9 @@ foreach($rule in $rules){
  if($rule.IdentityReference.Value -notin $ids -or $rule.AccessControlType -ne 'Allow' -or $rule.FileSystemRights -ne [Security.AccessControl.FileSystemRights]::FullControl){throw 'unsafe rule'}
 }
 [Console]::Out.Write('private')
+} catch {
+  [Console]::Out.Write('unsafe:'+$stage)
+}
 `;
     try {
         const proof = execFileSync(
@@ -53,9 +64,20 @@ foreach($rule in $rules){
             ],
             { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15_000 },
         );
-        if (proof !== "private") throw new Error();
-    } catch {
+        if (proof !== "private") {
+            const stage = proof.startsWith("unsafe:") ? proof.slice(7) : "process";
+            if (
+                stage === "inspect" ||
+                stage === "acl-build" ||
+                stage === "acl-apply" ||
+                stage === "verify"
+            )
+                throw new SnapshotSecurityError(stage);
+            throw new SnapshotSecurityError("process");
+        }
+    } catch (error) {
         // 不发布子进程输出，避免工作区或凭据进入诊断。
-        throw new Error("网关快照目录权限无法确认");
+        if (error instanceof SnapshotSecurityError) throw error;
+        throw new SnapshotSecurityError("process");
     }
 }

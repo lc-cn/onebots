@@ -271,6 +271,7 @@ describe("configuration recovery serialized readonly port", () => {
                 "activeGenerationId",
                 "gatewayStatus",
                 "hasLiveChildren",
+                "runtimeStopped",
             ]);
             expect(port.hasLiveChildren()).toBe(false);
             expect(port.activeGenerationId()).toBeNull();

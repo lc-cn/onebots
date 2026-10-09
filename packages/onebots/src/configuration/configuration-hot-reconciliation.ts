@@ -67,7 +67,9 @@ export async function reconcileHotConfiguration(
     const validRevision = /^[a-f0-9]{64}$/.test(source.revision);
     if (!validRevision) return false;
     if (operation.executionMode === "stored") {
-        if (port.hasLiveChildren()) return false;
+        if (operation.desired === "running" && operation.impact?.mode !== "none") return false;
+        // 在线 none 的 stored 路径只确认磁盘保存，不声称执行过实例动作。
+        if (operation.desired === "stopped" && port.runtimeStopped?.() !== true) return false;
         const committed =
             sourceDigest === operation.documentDigest &&
             (operation.candidateRevision === undefined ||
@@ -89,14 +91,12 @@ export async function reconcileHotConfiguration(
     // restoring 意图允许识别已提交的旧文档，不重复覆盖或重派原操作。
     if (["accepted", "writing", "restoring"].includes(operation.phase)) {
         // 已有新实例可能从候选磁盘配置启动；不能仅凭旧意图修改文件并留下运行态漂移。
-        if (
-            port.hasLiveChildren() &&
-            (!operation.runtimeBefore ||
-                port.runtimeContext?.()?.gatewayInstanceId !==
-                    operation.runtimeBefore.gatewayInstanceId ||
-                port.runtimeContext?.()?.configVersion !== operation.runtimeBefore.configVersion)
-        )
-            return false;
+        const runtime = port.runtimeContext?.();
+        const originalRuntimeUnchanged =
+            operation.runtimeBefore &&
+            runtime?.gatewayInstanceId === operation.runtimeBefore.gatewayInstanceId &&
+            runtime?.configVersion === operation.runtimeBefore.configVersion;
+        if (!originalRuntimeUnchanged && port.runtimeStopped?.() !== true) return false;
         if (sourceDigest !== operation.previousDigest && sourceDigest !== operation.documentDigest)
             return false;
         if (sourceDigest === operation.documentDigest) {

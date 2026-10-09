@@ -1,7 +1,10 @@
 import path from "node:path";
 import { ConfigurationFile } from "../configuration/configuration-file.js";
 import { ConfigurationConflictError } from "../configuration/configuration-store.js";
-import { verifyConfiguration } from "../configuration/configuration-verify.js";
+import {
+    verifyConfiguration,
+    recoverConfigurationVerifications,
+} from "../configuration/configuration-verify.js";
 import { resolveGenerationRuntime } from "../installation/generation-runtime.js";
 import type { VerifiedGeneration } from "../installation/generation-store.js";
 import { getConfiguredPluginSelection } from "../runtime-plugin-selection.js";
@@ -12,16 +15,20 @@ export class GenerationConfigurationVerifier {
     private readonly source: ConfigurationFile;
     private readonly abort = new AbortController();
     private readonly pending = new Set<Promise<unknown>>();
+    private workersBlocked = false;
     constructor(
         private readonly workspace: string,
         private readonly readVerified: (id: string) => VerifiedGeneration,
         private readonly verifyRuntime = verifyConfiguration,
     ) {
         this.source = new ConfigurationFile(path.join(workspace, "config.yaml"));
+        // 宿主在工作区独占锁下构造本服务；冷恢复不能遗漏影响规划的独立私有目录。
+        this.recoverWorkers();
     }
 
     verify(generation: VerifiedGeneration, expectedConfigRevision?: string): Promise<() => void> {
         if (this.abort.signal.aborted) return Promise.reject(new Error("版本验证已关闭"));
+        if (this.workersBlocked) return Promise.reject(new Error("配置验证进程归属尚待核实"));
         const work = this.validate(generation, expectedConfigRevision);
         this.pending.add(work);
         void work
@@ -45,6 +52,7 @@ export class GenerationConfigurationVerifier {
         after: Record<string, unknown>,
     ): Promise<ConfigurationImpact> {
         if (this.abort.signal.aborted) return Promise.reject(new Error("版本验证已关闭"));
+        if (this.workersBlocked) return Promise.reject(new Error("配置验证进程归属尚待核实"));
         const configured = getConfiguredPluginSelection(after, true);
         const selection = {
             adapters: configured?.adapters ?? [],
@@ -63,6 +71,8 @@ export class GenerationConfigurationVerifier {
             document: after,
             previousDocument: before,
             signal: this.abort.signal,
+            // 队列必须覆盖权威规划与CAS提交；明确限制规划时间，不使用不可信回执缓存。
+            timeoutMs: 10_000,
         }).then(result => {
             if (!result.valid || !result.impact) throw new Error("配置影响无法确认，请重新验证");
             return result.impact;
@@ -74,6 +84,25 @@ export class GenerationConfigurationVerifier {
                 // 异常交给应用事务处理，这里只清理生命周期登记。
             });
         return work;
+    }
+
+    private recoverWorkers(): void {
+        if (process.platform === "win32") return; // 当前隔离验证不创建 Windows worker。
+        for (const name of [
+            "activation-verification-workers",
+            "application-verification-workers",
+        ]) {
+            try {
+                if (
+                    recoverConfigurationVerifications(path.join(this.workspace, ".control", name))
+                        .blocked.length
+                )
+                    this.workersBlocked = true;
+            } catch {
+                // 保留所有权记录与敏感请求，不推断历史进程已经退出。
+                this.workersBlocked = true;
+            }
+        }
     }
 
     private async validate(

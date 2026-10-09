@@ -37,23 +37,32 @@ export class MatrixAppserviceHost {
             );
         }
         if (this.accountRoots.get(accountId) !== root) this.unmount(accountId);
+        if (!this.mounted.has(root)) {
+            const scope = this.app.router.createRegistrationScope({ platform: "matrix" });
+            try {
+                scope.run(() => {
+                    this.app.router.put(`${root}/_matrix/app/v1/transactions/:txnId`, ctx =>
+                        this.accept(root, ctx),
+                    );
+                    this.app.router.post(`${root}/_matrix/app/v1/ping`, ctx =>
+                        this.accept(root, ctx),
+                    );
+                    this.app.router.get(`${root}/_matrix/app/v1/users/:userId`, ctx =>
+                        this.accept(root, ctx),
+                    );
+                    this.app.router.get(`${root}/_matrix/app/v1/rooms/:roomAlias`, ctx =>
+                        this.accept(root, ctx),
+                    );
+                });
+            } catch (error) {
+                // 回滚完整路由组，避免部分挂载和无法重试的幽灵所有权。
+                scope.close();
+                throw error;
+            }
+            this.mounted.set(root, scope);
+        }
         this.owners.set(root, accountId);
         this.accountRoots.set(accountId, root);
-        if (this.mounted.has(root)) return;
-        const scope = this.app.router.createRegistrationScope();
-        this.mounted.set(root, scope);
-        scope.run(() => {
-            this.app.router.put(`${root}/_matrix/app/v1/transactions/:txnId`, ctx =>
-                this.accept(root, ctx),
-            );
-            this.app.router.post(`${root}/_matrix/app/v1/ping`, ctx => this.accept(root, ctx));
-            this.app.router.get(`${root}/_matrix/app/v1/users/:userId`, ctx =>
-                this.accept(root, ctx),
-            );
-            this.app.router.get(`${root}/_matrix/app/v1/rooms/:roomAlias`, ctx =>
-                this.accept(root, ctx),
-            );
-        });
     }
 
     /** 移除账号及其 HTTP layer，迟到请求不保留旧客户端。 */

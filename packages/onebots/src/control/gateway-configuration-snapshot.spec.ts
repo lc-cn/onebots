@@ -69,6 +69,54 @@ it("容量边界拒绝新增，不删除旧快照或损坏已有版本", () => {
     expect(createGatewayConfigurationSnapshot(root, { log_level: "off" })).toEqual(first);
     expect(fs.readdirSync(directory)).toHaveLength(512);
 });
+it("单个快照超过 8 MiB 时不发布文件", () => {
+    const root = workspace();
+    expect(() =>
+        createGatewayConfigurationSnapshot(root, { value: "x".repeat(8 * 1024 * 1024) }),
+    ).toThrow(/^网关快照超过大小限制$/);
+    expect(fs.existsSync(path.join(root, ".control/configurations"))).toBe(false);
+});
+it("总容量超过 64 MiB 时保留旧快照并拒绝新增", () => {
+    const root = workspace();
+    const first = createGatewayConfigurationSnapshot(root, {});
+    const filler = path.join(path.dirname(first.configPath), "reserved-capacity");
+    const descriptor = fs.openSync(filler, "wx", 0o600);
+    try {
+        fs.ftruncateSync(descriptor, 64 * 1024 * 1024);
+    } finally {
+        fs.closeSync(descriptor);
+    }
+    expect(() => createGatewayConfigurationSnapshot(root, { log_level: "debug" })).toThrow(
+        /容量限制/,
+    );
+    expect(fs.statSync(filler).size).toBe(64 * 1024 * 1024);
+    expect(createGatewayConfigurationSnapshot(root, {})).toEqual(first);
+});
+it("冷中断的未发布临时文件被回收，已发布版本不删除", () => {
+    const root = workspace();
+    const first = createGatewayConfigurationSnapshot(root, {});
+    const directory = path.dirname(first.configPath);
+    const temporary = path.join(directory, ".snapshot-12345678-1234-4234-8234-123456789abc");
+    fs.writeFileSync(temporary, "incomplete", { mode: 0o600 });
+    const next = createGatewayConfigurationSnapshot(root, { log_level: "debug" });
+    expect(fs.existsSync(temporary)).toBe(false);
+    expect(fs.existsSync(first.configPath)).toBe(true);
+    expect(fs.existsSync(next.configPath)).toBe(true);
+});
+it("临时路径的硬链接不能作为孤儿文件自动删除", () => {
+    const root = workspace();
+    const first = createGatewayConfigurationSnapshot(root, {});
+    const temporary = path.join(
+        path.dirname(first.configPath),
+        ".snapshot-12345678-1234-4234-8234-123456789abc",
+    );
+    fs.linkSync(first.configPath, temporary);
+    expect(() => createGatewayConfigurationSnapshot(root, { log_level: "debug" })).toThrow(
+        /^网关快照存储无效$/,
+    );
+    expect(fs.existsSync(temporary)).toBe(true);
+    expect(fs.existsSync(first.configPath)).toBe(true);
+});
 it.skipIf(process.platform === "win32")("既有公开目录不能靠新文件的 0600 掩盖权限风险", () => {
     const root = workspace();
     const directory = path.join(root, ".control/configurations");

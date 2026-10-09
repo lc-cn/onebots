@@ -36,10 +36,45 @@ function protocol(overrides: Partial<Protocol> = {}): Protocol {
 }
 
 describe("Account lifecycle", () => {
+    it("并发停止只调用一次清理，停止期间及之后禁止同实例重新启动", async () => {
+        const account = createAccount();
+        let release!: () => void;
+        const pending = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        const cleanup = vi.fn(() => pending);
+        const startup = vi.fn();
+        account.on("start", startup);
+        account.on("stop", cleanup);
+        const selected = protocol();
+        account.protocols = [selected];
+        const first = account.stop();
+        const second = account.stop(true);
+        expect(second).toBe(first);
+        await expect(account.start()).rejects.toThrow("账号资源已释放");
+        try {
+            await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce());
+            expect(selected.stop).toHaveBeenCalledOnce();
+            expect(startup).not.toHaveBeenCalled();
+        } finally {
+            release();
+            await first;
+        }
+        expect(account.stop()).toBe(first);
+        await expect(account.start()).rejects.toThrow("账号资源已释放");
+        expect(cleanup).toHaveBeenCalledOnce();
+        expect(startup).not.toHaveBeenCalled();
+    });
     it("停止后不执行已快照但尚未开始的启动监听器", async () => {
         const account = createAccount();
         let release!: () => void;
-        account.on("start", () => new Promise<void>(resolve => { release = resolve; }));
+        account.on(
+            "start",
+            () =>
+                new Promise<void>(resolve => {
+                    release = resolve;
+                }),
+        );
         const next = vi.fn();
         account.on("start", next);
         account.protocols = [protocol()];
@@ -53,8 +88,12 @@ describe("Account lifecycle", () => {
 
     it("普通启动监听器失败仍尝试其他监听器，once 语义保持不变", async () => {
         const account = createAccount();
-        account.on("start", () => { throw new Error("first failed"); });
-        const next = vi.fn(function (this: Account) { expect(this).toBe(account); });
+        account.on("start", () => {
+            throw new Error("first failed");
+        });
+        const next = vi.fn(function (this: Account) {
+            expect(this).toBe(account);
+        });
         account.once("start", next);
         await expect(account.start()).rejects.toThrow("first failed");
         expect(next).toHaveBeenCalledOnce();

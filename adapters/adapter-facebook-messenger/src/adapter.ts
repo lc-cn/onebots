@@ -208,7 +208,6 @@ export class FacebookMessengerAdapter extends Adapter<
         );
         runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
         account.on("start", async (signal: AbortSignal) => {
-            runWithAdapterRouteScope(this, () => this.httpHost.mount(account.account_id, client));
             try {
                 await client.start(signal);
                 account.status = AccountStatus.Online;
@@ -217,6 +216,7 @@ export class FacebookMessengerAdapter extends Adapter<
                     `Facebook Messenger ${account.account_id} 已就绪（${client.receiveMode}）`,
                 );
             } catch (error) {
+                this.httpHost.unmount(account.account_id);
                 account.status = AccountStatus.OffLine;
                 this.logger.error(`启动 Facebook Messenger ${account.account_id} 失败`, error);
                 throw error;

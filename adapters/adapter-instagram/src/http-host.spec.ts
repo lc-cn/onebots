@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
-import { createServer } from "node:http";
-import { Router } from "../../../packages/core/src/router.js";
 import type { BaseApp } from "onebots";
+import { createServer } from "node:http";
+import { Router, HttpRouteConflictError } from "../../../packages/core/src/router.js";
 import { describe, expect, it, vi } from "vitest";
 import { InstagramClient } from "./client.js";
 import { InstagramHttpHost } from "./http-host.js";
@@ -20,6 +20,36 @@ interface TestContext {
 type Handler = (ctx: TestContext) => Promise<void>;
 
 describe("InstagramHttpHost", () => {
+    it("真实路由部分注册失败完整回滚，修正冲突后可重试并释放、重新挂载", () => {
+        const router = new Router(createServer());
+        const current = new InstagramClient(config("account", "100", "/events"));
+        const host = new InstagramHttpHost({ router } as unknown as BaseApp, () => current);
+        const blocker = router.createRegistrationScope({ platform: "other" });
+        try {
+            blocker.run(() => router.post("/events", () => undefined));
+            try {
+                host.mount("current", current);
+                throw new Error("应拒绝重复路由");
+            } catch (error) {
+                expect(error).toBeInstanceOf(HttpRouteConflictError);
+                expect(error).toMatchObject({
+                    registeringOwner: { platform: "instagram" },
+                    existingOwner: { platform: "other" },
+                });
+            }
+            expect(router.stack).toHaveLength(1);
+            blocker.close();
+            expect(router.stack).toHaveLength(0);
+            host.mount("current", current);
+            expect(router.stack).toHaveLength(2);
+            host.unmount("current");
+            expect(router.stack).toHaveLength(0);
+            host.mount("current", current);
+            expect(router.stack).toHaveLength(2);
+        } finally {
+            router.cleanup();
+        }
+    });
     it("账号迁移、删除与重新挂载只保留当前 HTTP layer", () => {
         const router = new Router(createServer());
         const clients = new Map<string, InstagramClient>();
@@ -81,30 +111,29 @@ describe("InstagramHttpHost", () => {
     });
 
     it("拒绝活跃账号路径冲突，路径迁移后旧路由失活", async () => {
-        const routes = new Map<string, Handler>();
-        const router = {
-            createRegistrationScope: () => ({
-                run: <T>(operation: () => T) => operation(),
-                close: () => undefined,
-            }),
-            get: (path: string, handler: Handler) => routes.set(`GET ${path}`, handler),
-            post: (path: string, handler: Handler) => routes.set(`POST ${path}`, handler),
-        };
-        const clients = new Map<string, InstagramClient>();
-        const host = new InstagramHttpHost({ router } as unknown as BaseApp, id => clients.get(id));
-        const first = new InstagramClient(config("first", "101", "/shared"));
-        clients.set("first", first);
-        host.mount("first", first);
-        const second = new InstagramClient(config("second", "102", "/shared"));
-        clients.set("second", second);
-        expect(() => host.mount("second", second)).toThrow(/已由账号/u);
+        const router = new Router(createServer());
+        try {
+            const clients = new Map<string, InstagramClient>();
+            const host = new InstagramHttpHost({ router } as unknown as BaseApp, id =>
+                clients.get(id),
+            );
+            const first = new InstagramClient(config("first", "101", "/shared"));
+            clients.set("first", first);
+            host.mount("first", first);
+            const second = new InstagramClient(config("second", "102", "/shared"));
+            clients.set("second", second);
+            expect(() => host.mount("second", second)).toThrow(/已由账号/u);
 
-        const moved = new InstagramClient(config("first", "101", "/new"));
-        clients.set("first", moved);
-        host.mount("first", moved);
-        const ctx = context("GET", "/shared", undefined);
-        await routes.get("GET /shared")?.(ctx);
-        expect(ctx.status).toBe(404);
+            const moved = new InstagramClient(config("first", "101", "/new"));
+            clients.set("first", moved);
+            host.mount("first", moved);
+            expect(router.stack).toHaveLength(2);
+            expect(router.stack.every(layer => layer.path === "/new")).toBe(true);
+            host.unmount("first");
+            expect(router.stack).toHaveLength(0);
+        } finally {
+            router.cleanup();
+        }
     });
 });
 
