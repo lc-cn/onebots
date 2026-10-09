@@ -3,6 +3,7 @@ import path from "node:path";
 
 const stages = new Set(["process", "inspect", "acl-build", "acl-apply", "verify"]);
 const states = new Set(["starting", "running", "stopping", "stopped", "failed"]);
+const aclReasons = new Set(["owner", "protection", "count", "identity", "rights", "read"]);
 
 /** 只读取隔离验收工作区的管理状态，不发布异常正文、路径或任何凭据。 */
 export function windowsGatewayEvidence(workspace) {
@@ -14,7 +15,9 @@ export function windowsGatewayEvidence(workspace) {
         const value = JSON.parse(fs.readFileSync(file, "utf8"));
         const match =
             typeof value.error === "string"
-                ? /^网关快照目录权限无法确认（阶段：([^）]+)）$/u.exec(value.error)
+                ? /^网关快照目录权限无法确认（阶段：([^；）]+)(?:；对象：(directory|file)；原因：([^）]+))?）$/u.exec(
+                      value.error,
+                  )
                 : null;
         return {
             readable: true,
@@ -22,6 +25,9 @@ export function windowsGatewayEvidence(workspace) {
             recoveryRequired:
                 typeof value.recoveryRequired === "boolean" ? value.recoveryRequired : null,
             snapshotStage: match && stages.has(match[1]) ? match[1] : "unclassified",
+            ...(match?.[2] && aclReasons.has(match[3])
+                ? { snapshotKind: match[2], snapshotAclReason: match[3] }
+                : {}),
         };
     } catch {
         // 诊断不可读不应改写管理状态或退化到输出未知文件正文。

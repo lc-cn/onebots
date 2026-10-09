@@ -54,3 +54,20 @@ it("伪造或秘密阶段输出被固定 process 错误取代", () => {
         /^网关快照目录权限无法确认（阶段：process）$/,
     );
 });
+it.each(["owner", "protection", "count", "identity", "rights", "read"])(
+    "核验失败只发布固定 ACL 原因：%s",
+    reason => {
+        vi.stubGlobal("process", { ...process, platform: "win32" });
+        vi.mocked(execFileSync).mockReturnValueOnce(`unsafe:verify:${reason}`);
+        expect(() => assertGatewaySnapshotFileSecurity("C:\\private\\config.yaml")).toThrow(
+            `网关快照目录权限无法确认（阶段：verify；对象：file；原因：${reason}）`,
+        );
+    },
+);
+it("未知 ACL 原因不能进入公开错误", () => {
+    vi.stubGlobal("process", { ...process, platform: "win32" });
+    vi.mocked(execFileSync).mockReturnValueOnce("unsafe:verify:secret raw output");
+    expect(() => assertGatewaySnapshotFileSecurity("C:\\private\\config.yaml")).toThrow(
+        /^网关快照目录权限无法确认（阶段：verify）$/,
+    );
+});

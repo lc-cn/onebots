@@ -47,3 +47,19 @@ it("未知阶段、命令和缺失工作区不外发原文，失败不会被当�
     );
     expect(() => assertWindowsCliSuccess({ status: 0 }, "status", root)).not.toThrow();
 });
+it("只接收固定对象和 ACL 原因，未知原因不外发", () => {
+    const root = workspace("网关快照目录权限无法确认（阶段：verify；对象：file；原因：owner）");
+    expect(() => assertWindowsCliSuccess({ status: 1 }, "status", root)).toThrow(
+        '"snapshotKind":"file","snapshotAclReason":"owner"',
+    );
+    const unknown = workspace(
+        "网关快照目录权限无法确认（阶段：verify；对象：file；原因：private-value）",
+    );
+    try {
+        assertWindowsCliSuccess({ status: 1 }, "status", unknown);
+    } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect(String(error)).not.toContain("private-value");
+        expect(String(error)).not.toContain("snapshotAclReason");
+    }
+});

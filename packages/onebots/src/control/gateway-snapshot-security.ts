@@ -6,9 +6,16 @@ import {
 } from "../windows-closed-acl.js";
 
 type SnapshotSecurityStage = "process" | "inspect" | "acl-build" | "acl-apply" | "verify";
+const aclReasons = new Set(["owner", "protection", "count", "identity", "rights", "read"]);
 class SnapshotSecurityError extends Error {
-    constructor(readonly stage: SnapshotSecurityStage) {
-        super(`网关快照目录权限无法确认（阶段：${stage}）`);
+    constructor(
+        readonly stage: SnapshotSecurityStage,
+        kind?: "directory" | "file",
+        reason?: string,
+    ) {
+        super(
+            `网关快照目录权限无法确认（阶段：${stage}${kind && reason ? `；对象：${kind}；原因：${reason}` : ""}）`,
+        );
     }
 }
 
@@ -58,7 +65,16 @@ $check=Get-Acl -LiteralPath $p
 ${verifier}
 [Console]::Out.Write('private')
 } catch {
-  [Console]::Out.Write('unsafe:'+$stage)
+  # 按固定优先级报告首个不匹配项，不发布异常、路径或身份。
+  $reason='read'
+  if($stage -eq 'verify' -and $null -ne $owner){
+    if($owner -ne $ownerSid){$reason='owner'}
+    elseif(-not $protectionOk){$reason='protection'}
+    elseif($rules.Count -ne $allowedSids.Count -or $ids.Count -ne $allowedSids.Count){$reason='count'}
+    elseif(@($ids|Where-Object{$_ -notin $allowedSids}).Count -ne 0){$reason='identity'}
+    elseif($bad.Count -ne 0){$reason='rights'}
+  }
+  [Console]::Out.Write('unsafe:'+$stage+':'+$reason)
 }
 `;
     try {
@@ -74,14 +90,20 @@ ${verifier}
             { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15_000 },
         );
         if (proof !== "private") {
-            const stage = proof.startsWith("unsafe:") ? proof.slice(7) : "process";
+            const [stage, reason] = proof.startsWith("unsafe:")
+                ? proof.slice(7).split(":")
+                : ["process"];
             if (
                 stage === "inspect" ||
                 stage === "acl-build" ||
                 stage === "acl-apply" ||
                 stage === "verify"
             )
-                throw new SnapshotSecurityError(stage);
+                throw new SnapshotSecurityError(
+                    stage,
+                    secureDirectory ? "directory" : "file",
+                    reason && aclReasons.has(reason) ? reason : undefined,
+                );
             throw new SnapshotSecurityError("process");
         }
     } catch (error) {

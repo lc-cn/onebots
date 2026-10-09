@@ -30,7 +30,9 @@ for (const desired of ['stopped', 'running']) {
     const validation = await web.validateConfigurationDraft(context.draft.id, context.draft.revision);
     assert.equal(validation.valid, true);
     const id = `ci-repair-${randomUUID()}`;
-    assert.equal((await web.applyConfiguration(id, validation.receiptId)).status, 'succeeded');
+    // 修复运行意图需要进程级重启；许可来自本次校验，重复编号仍只读原回执。
+    const options = validation.impact?.mode === 'restart' ? { allowRestart: true } : undefined;
+    assert.equal((await web.applyConfiguration(id, validation.receiptId, options)).status, 'succeeded');
     assert.equal((await web.applyConfiguration(id, validation.receiptId)).status, 'succeeded');
     assert.equal((await web.configurationSource()).state, 'ready');
     const status = await web.status();
