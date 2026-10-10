@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 import {
     windowsAclPrincipals,
     windowsFullControlAclBuilder,
@@ -6,9 +8,16 @@ import {
 } from "../windows-closed-acl.js";
 
 type SnapshotSecurityStage = "process" | "inspect" | "acl-build" | "acl-apply" | "verify";
+const aclReasons = new Set(["owner", "protection", "count", "identity", "rights", "read"]);
 class SnapshotSecurityError extends Error {
-    constructor(readonly stage: SnapshotSecurityStage) {
-        super(`网关快照目录权限无法确认（阶段：${stage}）`);
+    constructor(
+        readonly stage: SnapshotSecurityStage,
+        kind?: "directory" | "file",
+        reason?: string,
+    ) {
+        super(
+            `网关快照目录权限无法确认（阶段：${stage}${kind && reason ? `；对象：${kind}；原因：${reason}` : ""}）`,
+        );
     }
 }
 
@@ -21,7 +30,27 @@ export function assertGatewaySnapshotFileSecurity(file: string): void {
     verifyWindowsSnapshotPermissions(file, false);
 }
 
-function verifyWindowsSnapshotPermissions(location: string, secureDirectory: boolean): void {
+/** 仅初始化调用方以 wx 新建的私有 staging 文件，既有摘要文件不得走此入口。 */
+export function secureGatewaySnapshotStagingFile(file: string): void {
+    if (process.platform !== "win32") return;
+    const stat = fs.lstatSync(file);
+    if (
+        !/^\.snapshot-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+            path.basename(file),
+        ) ||
+        !stat.isFile() ||
+        stat.isSymbolicLink() ||
+        stat.nlink !== 1
+    )
+        throw new Error("网关临时快照无效");
+    verifyWindowsSnapshotPermissions(file, false, true);
+}
+
+function verifyWindowsSnapshotPermissions(
+    location: string,
+    secureDirectory: boolean,
+    initializeFile = false,
+): void {
     if (process.platform !== "win32") return;
     // 路径通过 Base64 传入固定脚本，不能把工作区名插入 PowerShell 源码。
     const encodedPath = Buffer.from(location, "utf8").toString("base64");
@@ -30,11 +59,12 @@ function verifyWindowsSnapshotPermissions(location: string, secureDirectory: boo
         "'S-1-5-18'",
         "'S-1-5-32-544'",
     ]);
-    const builder = windowsFullControlAclBuilder("directory");
-    // Node 创建的快照继承私有目录权限；只接受身份、数量和权限完全闭合的继承规则。
+    const builder = windowsFullControlAclBuilder(secureDirectory ? "directory" : "file");
+    const fileSystem = secureDirectory ? "Directory" : "File";
+    // DACL 可继承但 owner 来自创建令牌。新文件显式初始化；既有文件只读核验。
     const verifier = windowsFullControlAclVerifier(
         secureDirectory ? "directory" : "file",
-        !secureDirectory,
+        !secureDirectory && !initializeFile,
     );
     const script = String.raw`
 $ErrorActionPreference='Stop'
@@ -46,19 +76,28 @@ if($item.PSIsContainer -ne $${secureDirectory ? "true" : "false"} -or (($item.At
 $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
 ${principals}
 ${
-    secureDirectory
+    secureDirectory || initializeFile
         ? String.raw`$stage='acl-build'
 ${builder}
 $stage='acl-apply'
-Set-Acl -LiteralPath $p -AclObject $acl`
+[System.IO.${fileSystem}]::SetAccessControl($p,$acl)`
         : ""
 }
 $stage='verify'
-$check=Get-Acl -LiteralPath $p
+$check=[System.IO.${fileSystem}]::GetAccessControl($p)
 ${verifier}
 [Console]::Out.Write('private')
 } catch {
-  [Console]::Out.Write('unsafe:'+$stage)
+  # 按固定优先级报告首个不匹配项，不发布异常、路径或身份。
+  $reason='read'
+  if($stage -eq 'verify' -and $null -ne $owner){
+    if($owner -ne $ownerSid){$reason='owner'}
+    elseif(-not $protectionOk){$reason='protection'}
+    elseif($rules.Count -ne $allowedSids.Count -or $ids.Count -ne $allowedSids.Count){$reason='count'}
+    elseif(@($ids|Where-Object{$_ -notin $allowedSids}).Count -ne 0){$reason='identity'}
+    elseif($bad.Count -ne 0){$reason='rights'}
+  }
+  [Console]::Out.Write('unsafe:'+$stage+':'+$reason)
 }
 `;
     try {
@@ -74,14 +113,20 @@ ${verifier}
             { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 15_000 },
         );
         if (proof !== "private") {
-            const stage = proof.startsWith("unsafe:") ? proof.slice(7) : "process";
+            const [stage, reason] = proof.startsWith("unsafe:")
+                ? proof.slice(7).split(":")
+                : ["process"];
             if (
                 stage === "inspect" ||
                 stage === "acl-build" ||
                 stage === "acl-apply" ||
                 stage === "verify"
             )
-                throw new SnapshotSecurityError(stage);
+                throw new SnapshotSecurityError(
+                    stage,
+                    secureDirectory ? "directory" : "file",
+                    reason && aclReasons.has(reason) ? reason : undefined,
+                );
             throw new SnapshotSecurityError("process");
         }
     } catch (error) {
