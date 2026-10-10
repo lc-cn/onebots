@@ -1,6 +1,11 @@
 import { createRenderer } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ControlClient, ControlConfigurationOperation } from "@onebots/core/control";
+import {
+    ControlRequestError,
+    type ControlClient,
+    type ControlConfigurationOperation,
+} from "@onebots/core/control";
+import { useControlConfigurationPanel } from "./use-control-configuration-panel.js";
 import ControlConfigurationPanel from "./ControlConfigurationPanel.vue";
 import type { ConfigurationImpact } from "./control-configuration-impact.js";
 
@@ -134,6 +139,35 @@ function fixture(
 afterEach(() => vi.unstubAllGlobals());
 
 describe("配置保存的实例影响与重启确认", () => {
+    it("普通 HTTP 页面没有 randomUUID 时仍可应用配置", async () => {
+        vi.stubGlobal("crypto", {
+            getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+        });
+        const f = fixture(hot);
+        try {
+            await f.clickSave();
+            expect(f.apply).toHaveBeenCalledWith(
+                expect.stringMatching(
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+                ),
+                "receipt",
+                undefined,
+            );
+        } finally {
+            f.close();
+        }
+    });
+    it("没有安全随机数时显示错误并保留草稿，不发起应用", async () => {
+        vi.stubGlobal("crypto", undefined);
+        const f = fixture(hot);
+        try {
+            await f.clickSave();
+            expect(f.apply).not.toHaveBeenCalled();
+            expect(text(f.root)).toContain("无法生成安全操作编号");
+        } finally {
+            f.close();
+        }
+    });
     it("热更新先检测再发送应用，不弹全局断连确认，并保留结果", async () => {
         const f = fixture(hot);
         try {
@@ -223,6 +257,69 @@ describe("配置保存的实例影响与重启确认", () => {
             expect(text(f.root)).not.toContain("重连账号");
         } finally {
             f.close();
+        }
+    });
+});
+
+describe("配置秘密保存错误", () => {
+    it.each([
+        [
+            new ControlRequestError(403, "配置秘密仅接受本地控制连接或受保护的传输"),
+            "配置秘密仅接受本地控制连接或受保护的传输",
+        ],
+        [new ControlRequestError(409, "草稿版本已变化"), "草稿版本已变化"],
+        [new Error("network error"), "保存未确认。请重读草稿核对"],
+    ])("显示明确拒绝，网络结果未知时保留核对提示 %#", async (failure, expected) => {
+        const path = ["general", "satori.v1", "token"];
+        const draft = {
+            id: "00000000-0000-4000-8000-000000000001",
+            revision: "revision",
+            base: { generationId: null, configRevision: "base" },
+            document: { general: { "satori.v1": {} } },
+            secretStates: [],
+            unknownPaths: [],
+        };
+        const schemas = {
+            protocols: { "satori.v1": { token: { type: "string", sensitive: true } } },
+        };
+        const store = new Map([
+            ["onebots.control.configuration", JSON.stringify({ draftId: draft.id })],
+        ]);
+        vi.stubGlobal("localStorage", {
+            getItem: (key: string) => store.get(key) ?? null,
+            setItem: (key: string, value: string) => store.set(key, value),
+        });
+        const edit = vi.fn().mockRejectedValue(failure);
+        const client = {
+            configurationSnapshot: vi.fn(async () => ({ ...draft, schemas })),
+            configurationDraftContext: vi.fn(async () => ({ draft, schemas })),
+            editConfigurationDraft: edit,
+        } as unknown as ControlClient;
+        let panel!: ReturnType<typeof useControlConfigurationPanel>;
+        const app = renderer.createApp({
+            setup() {
+                panel = useControlConfigurationPanel(client, () => {});
+                return () => null;
+            },
+        });
+        app.mount(node("root"));
+        try {
+            await vi.waitFor(() => expect(panel.groups.value.length).toBeGreaterThan(0));
+            const field = panel.groups.value
+                .flatMap(group => group.fields)
+                .find(field => field.path.join(".") === path.join("."))!;
+            panel.message.value = "previous success";
+            panel.mode(field, "set");
+            panel.change(field, "private-test-token");
+            expect(await panel.save()).toBe(false);
+            expect(edit).toHaveBeenCalledOnce();
+            expect(panel.error.value).toContain(expected);
+            expect(panel.message.value).toBe("");
+            expect(panel.values.value[field.key]).toBeUndefined();
+            expect(panel.busy.value).toBe(false);
+            expect(JSON.stringify([...store.values()])).not.toContain("private-test-token");
+        } finally {
+            app.unmount();
         }
     });
 });

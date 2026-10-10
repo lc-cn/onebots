@@ -115,7 +115,10 @@ async function handle(input: InstallationRequest): Promise<{ status: number; bod
         if (body.token !== undefined && !input.allowCredentials)
             return {
                 status: 403,
-                body: { message: "私有仓库授权仅接受本地控制连接或受保护的传输" },
+                body: {
+                    message:
+                        "私有仓库授权仅接受本地控制连接或受保护的传输。请使用 HTTPS；远程反向代理需配置 ONEBOTS_TRUSTED_PROXY_ADDRESSES。",
+                },
             };
         if (
             typeof body.id !== "string" ||

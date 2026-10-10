@@ -1,3 +1,4 @@
+import { createControlOperationId } from "./control-operation-id.js";
 export const notificationEvents = [
     { id: "gateway.failed", label: "网关故障" },
     { id: "generation.failed", label: "运行版本激活失败" },
@@ -98,7 +99,7 @@ export function notificationStatusLabel(snapshot?: NotificationSnapshot): string
 
 export function addChannel(type: NotificationChannel["type"]): NotificationChannel {
     const base = {
-        id: crypto.randomUUID(),
+        id: createControlOperationId(),
         name: "新渠道",
         enabled: true,
         includeChallengeLink: false,

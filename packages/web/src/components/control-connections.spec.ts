@@ -1,5 +1,6 @@
 import type { ControlConfigurationSnapshot } from "@onebots/core/control";
 import { describe, expect, it } from "vitest";
+import { reactive } from "vue";
 import { buildControlConnectionGuides, normalizeConnectionOrigin } from "./control-connections.js";
 
 const snapshot: ControlConfigurationSnapshot = {
@@ -36,6 +37,38 @@ const snapshot: ControlConfigurationSnapshot = {
 };
 
 describe("协议出口连接指引", () => {
+    it("响应式全局默认值与账号覆盖能合并，且不修改源配置", () => {
+        const value = structuredClone(snapshot);
+        value.document.general = {
+            "satori.v1": { use_http: true, use_ws: true },
+            "onebot.v11": {
+                ws_reverse: ["wss://receiver.example.com/a"],
+                nested: { inherited: true },
+            },
+        };
+        value.document["icqq.123456"] = {
+            "satori.v1": { use_ws: false },
+            "onebot.v11": {
+                ws_reverse: ["wss://receiver.example.com/b"],
+                nested: { account: true },
+            },
+        };
+        const before = structuredClone(value);
+        const guides = buildControlConnectionGuides(reactive(value), "http://192.0.2.10:6727");
+        expect(guides.find(guide => guide.protocolKey === "satori.v1")?.endpoints).toEqual([
+            expect.objectContaining({
+                url: "http://192.0.2.10:6727/icqq/123456/satori/v1",
+                transport: "http",
+            }),
+        ]);
+        expect(
+            guides.find(guide => guide.protocolKey === "onebot.v11")?.reverseTargets,
+        ).toContainEqual({ label: "反向 WebSocket", count: 2 });
+        expect(value).toEqual(before);
+        expect(buildControlConnectionGuides(reactive(value), "http://192.0.2.10:6727")).toEqual(
+            guides,
+        );
+    });
     it("按真实协议路由生成可复制地址", () => {
         const guides = buildControlConnectionGuides(snapshot, "https://bot.example.com/console");
         expect(guides.find(item => item.protocolKey === "onebot.v11")).toMatchObject({

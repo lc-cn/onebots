@@ -42,6 +42,16 @@ const protocolLabels: Record<string, string> = {
 const record = (value: unknown): JsonRecord =>
     value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
 
+// 配置来自 JSON，但 Vue 会递归代理它；按值复制可避开 structuredClone 对 Proxy 的限制。
+function copyConfigurationValue(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(copyConfigurationValue);
+    if (value && typeof value === "object")
+        return Object.fromEntries(
+            Object.entries(value).map(([key, item]) => [key, copyConfigurationValue(item)]),
+        );
+    return value;
+}
+
 function booleanSetting(config: JsonRecord, schema: JsonRecord, key: string): boolean {
     if (typeof config[key] === "boolean") return config[key];
     const rule = record(schema[key]);
@@ -193,8 +203,8 @@ export function buildControlConnectionGuides(
             // 与 Account.protocolConfigs 使用同一合并规则，数组继承也必须一致。
             const config = record(
                 deepMerge(
-                    structuredClone(record(general[protocolKey])),
-                    record(account[protocolKey]),
+                    copyConfigurationValue(record(general[protocolKey])),
+                    copyConfigurationValue(record(account[protocolKey])),
                 ),
             );
             const useHttp = booleanSetting(config, protocolSchema, "use_http");

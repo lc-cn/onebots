@@ -87,6 +87,16 @@ Use `onebots stop`, `restart`, and `uninstall` only for manager or system-defini
 - Enable HMAC or protocol-required callback verification and constrain destinations and retry policy.
 - Keep real credentials out of images, repositories, command history, build logs, and diagnostic bundles.
 
+### Submitting secrets behind an HTTPS proxy
+
+Remote HTTP pages may manage non-secret settings, but cannot submit platform credentials, protocol tokens or private registry credentials. Use HTTPS. By default the manager accepts secrets over loopback connections. If your TLS proxy connects over a container network or another host, set its actual source IP in the **manager process environment** (comma-separated for multiple proxies):
+
+```bash
+ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2 onebots serve --data-dir /srv/onebots
+```
+
+For Docker, pass `-e ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2`. For an OS service, configure its runtime environment and restart the manager. Use the IPv4/IPv6 source address seen by the manager; hostnames, wildcards and subnets are rejected. The proxy must overwrite `X-Forwarded-Proto` with a single `https` value for HTTPS requests (for example, Nginx `proxy_set_header X-Forwarded-Proto $scheme;`), never forward a client-supplied value, and preserve the original `Host`. Trust only proxies you control and restrict network access between them and the manager. This grants no local terminal, authentication bootstrap or private control privileges.
+
 ## Operations and recovery
 
 ```bash

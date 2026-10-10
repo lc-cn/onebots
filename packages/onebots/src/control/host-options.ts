@@ -4,6 +4,8 @@ export interface ControlHostOptions {
     workspace: string;
     host?: string;
     port?: number;
+    /** 允许通过这些明确的代理 IP 接受 X-Forwarded-Proto: https；默认不信任远程代理。 */
+    trustedProxyAddresses?: string[];
     runtimeRoot?: string;
     webRoot?: string;
     gatewayEntrypoint?: string;

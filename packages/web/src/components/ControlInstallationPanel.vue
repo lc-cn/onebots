@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import {
+    installationStorageKey as STORAGE_KEY,
+    validInstallationSelection as validSelection,
+    readInstallationTracking,
+    persistInstallationTracking,
+    type InstallationTracking as Tracking,
+} from "./control-installation-tracking.js";
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { IconRefresh } from "@tabler/icons-vue";
 import type {
@@ -13,6 +20,7 @@ import UiButton from "../ui/UiButton.vue";
 import UiInfoTip from "../ui/UiInfoTip.vue";
 import ControlAdapterCatalogBrowser from "./ControlAdapterCatalogBrowser.vue";
 import ControlInstallPlanPreview from "./ControlInstallPlanPreview.vue";
+import ControlInstallationOperation from "./ControlInstallationOperation.vue";
 import ControlUpdatePreview from "./ControlUpdatePreview.vue";
 import type { ControlMutationBlock } from "../control-product-state.js";
 import type { ExtensionCategory } from "../control-workspace.js";
@@ -27,11 +35,6 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ applied: []; categoryChange: [category: ExtensionCategory] }>();
 type Catalog = ControlInstallationCatalog;
-type Tracking = Pick<ControlInstallOperation, "id" | "planDigest"> & {
-    planId: string;
-    activationRequested?: boolean;
-};
-const STORAGE_KEY = "onebots.control.installation";
 const catalog = ref<Catalog>();
 const selected = ref<ControlExtensionSelection>({ adapters: [], protocols: [], applications: [] });
 const plan = ref<ControlInstallPlan>();
@@ -72,21 +75,6 @@ const secondarySection = computed(() =>
         ? { key: "protocols" as const, label: "协议" }
         : { key: "applications" as const, label: "框架" },
 );
-const phaseLabels = {
-    queued: "等待安装",
-    downloading: "下载依赖",
-    verifying: "验证宿主、依赖与扩展",
-    verified: "验证通过，尚未应用",
-    failed: "安装失败",
-    interrupted: "操作中断，需要核查",
-};
-function validSelection(value: unknown): value is ControlExtensionSelection {
-    if (!value || typeof value !== "object") return false;
-    return ["adapters", "protocols", "applications"].every(key => {
-        const items = (value as Record<string, unknown>)[key];
-        return Array.isArray(items) && items.every(item => typeof item === "string");
-    });
-}
 const updateCheck = createControlUpdateCheck({
     client: () => props.client,
     blocked: () => busy.value || !!tracking.value || disposed || !!props.mutationBlock,
@@ -197,15 +185,11 @@ async function install() {
         error.value = "私有仓库授权需要 HTTPS 或本机连接。";
         return;
     }
-    const next = tracking.value ?? {
-        id: crypto.randomUUID(),
-        planId: plan.value!.id,
-        planDigest: plan.value!.planDigest,
-    };
+    let next: Tracking;
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-        error.value = "无法保存操作标识，请允许浏览器本地存储后再安装。";
+        next = persistInstallationTracking(localStorage, tracking.value, plan.value);
+    } catch (caught) {
+        error.value = caught instanceof Error ? caught.message : "无法保存安装操作标识";
         return;
     }
     tracking.value = next;
@@ -312,24 +296,8 @@ watch(
 watch(watching, schedule);
 onMounted(async () => {
     try {
-        const value = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
-        if (
-            value &&
-            typeof value.id === "string" &&
-            /^[a-zA-Z0-9_-]{1,128}$/.test(value.id) &&
-            typeof value.planId === "string" &&
-            /^[a-f0-9]{64}$/.test(value.planId) &&
-            typeof value.planDigest === "string" &&
-            /^[a-f0-9]{64}$/.test(value.planDigest)
-        ) {
-            tracking.value = {
-                id: value.id,
-                planId: value.planId,
-                planDigest: value.planDigest,
-                activationRequested: value.activationRequested === true,
-            };
-            applied.value = tracking.value.activationRequested === true;
-        }
+        tracking.value = readInstallationTracking(localStorage);
+        applied.value = tracking.value?.activationRequested === true;
     } catch {
         error.value = "无法读取浏览器中的安装记录。";
     }
@@ -488,68 +456,24 @@ onUnmounted(() => {
             :busy="busy"
             :blocked="!!mutationBlock"
             @install="install" />
-        <section
+        <ControlInstallationOperation
             v-if="tracking"
-            class="border border-border rounded-panel p-4 space-y-4"
-            aria-live="polite">
-            <p class="font-medium">
-                {{
-                    applied
-                        ? "请查看当前网关状态"
-                        : operation
-                          ? phaseLabels[operation.phase]
-                          : "正在核实安装操作"
-                }}
-            </p>
-            <p class="text-xs text-fg-muted break-all">操作标识：{{ tracking.id }}</p>
-            <p v-if="operation?.phase === 'failed'" class="text-sm text-danger">
-                依赖未通过安装或验证，当前运行版本未改变。请检查网络、授权与依赖兼容性。
-            </p>
-            <p v-if="operation?.phase === 'interrupted'" class="text-sm text-danger">
-                安装过程被中断。保留了操作记录，请先核查，不会自动重新安装或应用。
-            </p>
-            <p v-if="tracking.activationRequested" class="text-sm text-fg-secondary">
-                已提交过应用请求，请核查上方网关状态。刷新页面不会再次提交应用。
-            </p>
-            <label v-if="!operation && secureTransport" class="block space-y-2 text-sm"
-                ><span>重新提供下载授权（仅私有依赖需要）</span
-                ><input
-                    v-model="privateToken"
-                    type="password"
-                    autocomplete="off"
-                    maxlength="512"
-                    class="w-full rounded-control border border-border bg-surface p-3"
-            /></label>
-            <div class="flex flex-wrap gap-3">
-                <UiButton :loading="querying" @click="query">查询状态</UiButton>
-                <UiButton v-if="pending" @click="watching = !watching">{{
-                    watching ? "暂停自动刷新" : "恢复自动刷新"
-                }}</UiButton>
-                <UiButton v-if="pending" :loading="busy" :disabled="!!mutationBlock" @click="cancel"
-                    >取消安装</UiButton
-                >
-                <UiButton
-                    v-if="!operation"
-                    :loading="busy"
-                    :disabled="!!mutationBlock"
-                    @click="install"
-                    >重新提交同一操作</UiButton
-                >
-                <UiButton
-                    v-if="operation?.phase === 'verified' && !tracking.activationRequested"
-                    variant="primary"
-                    :loading="busy"
-                    :disabled="!!mutationBlock"
-                    @click="apply"
-                    >应用此运行版本</UiButton
-                >
-                <UiButton v-if="terminal" :disabled="busy" @click="newPlan"
-                    >准备下一次安装</UiButton
-                >
-            </div>
-            <p v-if="pending && !watching" class="text-xs text-fg-muted">
-                已暂停刷新，后台安装仍继续；恢复刷新会查询同一操作。
-            </p>
-        </section>
+            v-model="privateToken"
+            :tracking="tracking"
+            :operation="operation"
+            :applied="applied"
+            :secure-transport="secureTransport"
+            :querying="querying"
+            :pending="pending"
+            :watching="watching"
+            :busy="busy"
+            :blocked="!!mutationBlock"
+            :terminal="terminal"
+            @query="query"
+            @toggle-watching="watching = !watching"
+            @cancel="cancel"
+            @install="install"
+            @apply="apply"
+            @new-plan="newPlan" />
     </section>
 </template>
