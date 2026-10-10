@@ -1,0 +1,28 @@
+protocols/satori-v1/protocol/src/index.ts
+  s_efe26f87c3b074::t_514a0051517329 9
+  s_efe26f87c3b074::t_33afb24041e2c8 92-96,98
+protocols/satori-v1/protocol/src/__tests__/channel-routes.test.ts
+  s_efe26f87c3b074::t_33afb24041e2c8 13-21
+  s_efe26f87c3b074::t_514a0051517329 6
+protocols/satori-v1/protocol/src/channel-routes.ts
+  s_efe26f87c3b074::t_514a0051517329 3,21-28
+  s_efe26f87c3b074::t_33afb24041e2c8 31-35,44,47,78-81,103
+  s_efe26f87c3b074::t_a122f02649c2fc 48,51-53
+  s_efe26f87c3b074::t_3a69dcb1ad9c8d 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f1036b07966b16c30f5f7972d9a336fe97912800",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
