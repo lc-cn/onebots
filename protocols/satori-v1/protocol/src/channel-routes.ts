@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Adapter, CommonEvent, CommonTypes } from "onebots";
 
 export interface SatoriChannelRoute {
@@ -18,10 +20,49 @@ export class SatoriChannelRouteRegistry {
     constructor(
         private readonly adapter: Adapter,
         private readonly accountId: string,
-    ) {}
+        private readonly storeFile?: string,
+    ) {
+        this.load();
+    }
+
+    private load(): void {
+        if (!this.storeFile) return;
+        try {
+            const data = JSON.parse(fs.readFileSync(this.storeFile, "utf8")) as Record<
+                string,
+                SatoriChannelRoute
+            >;
+            for (const [id, route] of Object.entries(data)) {
+                if (route && typeof route.scene_type === "string" && route.scene_id) {
+                    this.routes.set(id, route);
+                }
+            }
+        } catch {
+            // 文件不存在或损坏时视为没有已持久化的路由
+        }
+    }
+
+    private save(): void {
+        if (!this.storeFile) return;
+        try {
+            fs.mkdirSync(path.dirname(this.storeFile), { recursive: true });
+            fs.writeFileSync(this.storeFile, JSON.stringify(Object.fromEntries(this.routes)));
+        } catch {
+            // 持久化失败不影响消息收发，路由仍保留在内存中
+        }
+    }
 
     remember(channelId: string, route: SatoriChannelRoute): void {
+        const old = this.routes.get(channelId);
         this.routes.set(channelId, route);
+        if (
+            !old ||
+            old.scene_type !== route.scene_type ||
+            old.scene_id !== route.scene_id ||
+            old.guild_id !== route.guild_id
+        ) {
+            this.save();
+        }
     }
 
     rememberEvent(event: CommonEvent.Message): SatoriChannelRoute {

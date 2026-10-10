@@ -1,3 +1,4 @@
+import path from "node:path";
 import { emitAllAwaited, Protocol, ProtocolRegistry } from "onebots";
 import type { Dict, Schema } from "onebots";
 import { Account } from "onebots";
@@ -84,7 +85,20 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             protocol: "satori",
             version: "v1",
         });
-        this.channelRoutes = new SatoriChannelRouteRegistry(adapter, account.account_id);
+        this.channelRoutes = new SatoriChannelRouteRegistry(
+            adapter,
+            account.account_id,
+            adapter.app?.dataDir
+                ? path.join(
+                      adapter.app.dataDir,
+                      "satori-routes",
+                      `${String(adapter.platform)}-${account.account_id}.json`.replace(
+                          /[^\w.-]/g,
+                          "_",
+                      ),
+                  )
+                : undefined,
+        );
         this.actions = new SatoriActionService(
             adapter,
             account,
