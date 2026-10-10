@@ -209,31 +209,35 @@ async function install() {
         error.value = "私有仓库授权需要 HTTPS 或本机连接。";
         return;
     }
-    let next: Tracking;
+    const client = props.client;
+    const token = privateToken.value;
+    privateToken.value = "";
+    let next: Tracking | undefined;
     busy.value = true;
     try {
         next = await withInstallationTrackingLock(() =>
-            persistInstallationTracking(localStorage, tracking.value, plan.value),
+            disposed || props.mutationBlock || trackingUnavailable.value
+                ? undefined
+                : persistInstallationTracking(localStorage, tracking.value, plan.value),
         );
     } catch (caught) {
         error.value = installationTrackingError(caught);
         busy.value = false;
         return;
     }
-    if (disposed) {
+    if (!next) {
         busy.value = false;
         return;
     }
+    // 记录写入后即使页面关闭也完成同编号提交，防止留下不存在的待查询操作。
     tracking.value = next;
     busy.value = true;
     error.value = "";
     note.value = "";
     watching.value = true;
-    const token = privateToken.value;
-    privateToken.value = "";
     try {
         operation.value = await bounded(
-            props.client.install({ id: next.id, planId: next.planId, ...(token ? { token } : {}) }),
+            client.install({ id: next.id, planId: next.planId, ...(token ? { token } : {}) }),
         );
     } catch {
         error.value = "提交结果暂不可确认，正在查询同一安装操作。";

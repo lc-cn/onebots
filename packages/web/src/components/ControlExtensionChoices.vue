@@ -40,7 +40,9 @@ const selected = defineModel<string[]>({ required: true });
                     </span>
                     <em>{{
                         installed.includes(entry.name)
-                            ? "已安装"
+                            ? selected.includes(entry.name)
+                                ? "已安装"
+                                : "待移除"
                             : selected.includes(entry.name)
                               ? "待安装"
                               : "未安装"

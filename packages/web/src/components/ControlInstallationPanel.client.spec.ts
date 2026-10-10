@@ -114,7 +114,14 @@ async function fixture(record: string | null, blocked = false) {
         ...(blocked ? { mutationBlock: { title: "只读" } } : {}),
     });
     app.mount(root);
-    unmounts.push(() => app.unmount());
+    let mounted = true;
+    const unmount = () => {
+        if (mounted) {
+            app.unmount();
+            mounted = false;
+        }
+    };
+    unmounts.push(unmount);
     await settle();
     const button = (label: string) => {
         const found = flatten(root).find(item => item.tag === "button" && text(item) === label);
@@ -126,7 +133,7 @@ async function fixture(record: string | null, blocked = false) {
         handler();
         await settle();
     };
-    return { root, storage, client, button, click };
+    return { root, storage, client, button, click, unmount };
 }
 describe("安装面板提交边界", () => {
     it("损坏记录使页面保持只读，直接触发处理器也不能生成计划", async () => {
@@ -165,5 +172,41 @@ describe("安装面板提交边界", () => {
         expect(text(view.root)).toContain("本地存储");
         expect(text(view.root)).not.toContain("Access denied");
         expect(view.client.install).not.toHaveBeenCalled();
+    });
+    it("页面在等待锁时关闭，不创建未提交的操作记录", async () => {
+        const view = await fixture(null);
+        await view.click("确认选择");
+        let release!: () => void;
+        lock.mockImplementation(
+            (action: () => unknown) =>
+                new Promise(resolve => {
+                    release = () => resolve(action());
+                }),
+        );
+        await view.click("确认并安装");
+        view.unmount();
+        release();
+        await settle();
+        expect(view.storage.setItem).not.toHaveBeenCalled();
+        expect(view.client.install).not.toHaveBeenCalled();
+    });
+    it("记录已写入而页面关闭时仍完成同编号提交", async () => {
+        const view = await fixture(null);
+        await view.click("确认选择");
+        let release!: () => void;
+        lock.mockImplementation(
+            (action: () => unknown) =>
+                new Promise(resolve => {
+                    const result = action();
+                    release = () => resolve(result);
+                }),
+        );
+        await view.click("确认并安装");
+        const record = JSON.parse(view.storage.getItem()!);
+        view.unmount();
+        release();
+        await settle();
+        expect(view.client.install).toHaveBeenCalledWith({ id: record.id, planId: plan.id });
+        expect(view.storage.removeItem).not.toHaveBeenCalled();
     });
 });
