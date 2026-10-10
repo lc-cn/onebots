@@ -1,0 +1,67 @@
+packages/onebots/src/control/host-credential-transport.spec.ts
+  s_efe26f87c3b074::t_6e2090bdea18b1 1-61
+  s_efe26f87c3b074::t_a3841629863b89 62-94
+packages/web/src/components/control-installation-tracking.spec.ts
+  s_efe26f87c3b074::t_ccf62981cfdca8 1-35
+  s_efe26f87c3b074::t_f346cc2a7a049d 36-47
+packages/onebots/src/control/credential-transport.ts
+  s_efe26f87c3b074::t_9ba28fa10c31c7 1-38
+  s_efe26f87c3b074::t_816e9d403ae341 39-41
+packages/onebots/src/control/credential-transport.spec.ts
+  s_efe26f87c3b074::t_d09bd51574880b 1-45
+  s_efe26f87c3b074::t_fbfb9760934174 46-51
+.changeset/fix-web-management-ip-and-defaults.md
+  s_efe26f87c3b074::t_48a9c1e5856dc9 1-6
+docs/src/en/guide/production.md
+  s_efe26f87c3b074::t_583d99fa2b9880 90-99
+docs/src/guide/production.md
+  s_efe26f87c3b074::t_d2799207d3baff 90-99
+packages/onebots/src/control/configuration-api.ts
+  s_efe26f87c3b074::t_0370b72e4dfab2 259-265
+packages/onebots/src/control/host-http.ts
+  s_efe26f87c3b074::t_346fea7ca3958c 44-45,47,264-268,280-284
+packages/onebots/src/control/host-options.ts
+  s_efe26f87c3b074::t_523d0baafa0344 7-8
+packages/onebots/src/control/host.ts
+  s_efe26f87c3b074::t_2eeb7368ebe910 57,63,415
+packages/onebots/src/control/installation-api.ts
+  s_efe26f87c3b074::t_14b9dd7b963184 118-121
+packages/web/src/components/ControlConfigurationPanel.client.spec.ts
+  s_efe26f87c3b074::t_fe334176d85007 3-8,142-170,263-325
+packages/web/src/components/ControlInstallationOperation.vue
+  s_efe26f87c3b074::t_43f08ebe3235d8 1-87
+packages/web/src/components/ControlInstallationPanel.vue
+  s_efe26f87c3b074::t_bad6f438b7ba93 2-8,23,188,190-192,299-300,459,461-477
+packages/web/src/components/NotificationChannelsPanel.vue
+  s_efe26f87c3b074::t_a28638c5781619 2,15
+packages/web/src/components/NotificationRulesPanel.vue
+  s_efe26f87c3b074::t_7e045503d4d634 2,24
+packages/web/src/components/control-connections.spec.ts
+  s_efe26f87c3b074::t_ff73125d1323f6 3,40-71
+packages/web/src/components/control-connections.ts
+  s_efe26f87c3b074::t_1dfc74bc14866a 45-54,206-207
+packages/web/src/components/control-installation-tracking.ts
+  s_efe26f87c3b074::t_73a3b99f7be060 1-70
+packages/web/src/components/use-control-configuration-panel.ts
+  s_efe26f87c3b074::t_06f3d5eb7d1b68 1,9-15,215,223-228,367-373,376
+packages/web/src/notification-model.spec.ts
+  s_efe26f87c3b074::t_3a380383fa8ef4 1-6,68-80
+packages/web/src/notification-model.ts
+  s_efe26f87c3b074::t_97000e64f4a773 1,102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4cd3259af6c5204f94e80d87e84d42ef740df671",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
