@@ -14,42 +14,83 @@ export interface SatoriChannelRoute {
  * Satori 的 channel_id 是不透明标识，不能从前缀或分隔符推断私聊、群聊或频道。
  * 路由优先从真实事件和目录 API 学习；只有能力清单能唯一确定场景时才允许推导。
  */
+const SCENE_TYPES: ReadonlySet<string> = new Set(["private", "group", "channel", "direct"]);
+const SAVE_DELAY_MS = 200;
+
+export interface SatoriRouteLogger {
+    warn(...args: unknown[]): void;
+}
+
+function parseRoutes(raw: unknown): Map<string, SatoriChannelRoute> {
+    const result = new Map<string, SatoriChannelRoute>();
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return result;
+    for (const [id, value] of Object.entries(raw)) {
+        if (!value || typeof value !== "object") continue;
+        const route = value as Record<string, unknown>;
+        if (typeof route.scene_type !== "string" || !SCENE_TYPES.has(route.scene_type)) continue;
+        if (typeof route.scene_id !== "string" || !route.scene_id) continue;
+        if (route.guild_id !== undefined && typeof route.guild_id !== "string") continue;
+        result.set(id, {
+            scene_type: route.scene_type as CommonTypes.Scene,
+            scene_id: route.scene_id,
+            guild_id: route.guild_id,
+        });
+    }
+    return result;
+}
+
 export class SatoriChannelRouteRegistry {
     private readonly routes = new Map<string, SatoriChannelRoute>();
+    private dirty = false;
+    private timer?: NodeJS.Timeout;
 
     constructor(
         private readonly adapter: Adapter,
         private readonly accountId: string,
         private readonly storeFile?: string,
+        private readonly logger?: SatoriRouteLogger,
     ) {
-        this.load();
+        for (const [id, route] of this.readStore()) this.routes.set(id, route);
     }
 
-    private load(): void {
-        if (!this.storeFile) return;
+    private readStore(): Map<string, SatoriChannelRoute> {
+        if (!this.storeFile) return new Map();
         try {
-            const data = JSON.parse(fs.readFileSync(this.storeFile, "utf8")) as Record<
-                string,
-                SatoriChannelRoute
-            >;
-            for (const [id, route] of Object.entries(data)) {
-                if (route && typeof route.scene_type === "string" && route.scene_id) {
-                    this.routes.set(id, route);
-                }
+            return parseRoutes(JSON.parse(fs.readFileSync(this.storeFile, "utf8")));
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
+                this.logger?.warn(`读取 Satori 路由存档失败：${this.storeFile}`, error);
             }
-        } catch {
-            // 文件不存在或损坏时视为没有已持久化的路由
+            return new Map();
         }
     }
 
-    private save(): void {
-        if (!this.storeFile) return;
-        try {
-            fs.mkdirSync(path.dirname(this.storeFile), { recursive: true });
-            fs.writeFileSync(this.storeFile, JSON.stringify(Object.fromEntries(this.routes)));
-        } catch {
-            // 持久化失败不影响消息收发，路由仍保留在内存中
+    /** 立即写盘：与磁盘上的最新内容合并后，经临时文件原子替换。 */
+    flush(): void {
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = undefined;
         }
+        if (!this.storeFile || !this.dirty) return;
+        const tmpFile = `${this.storeFile}.${process.pid}.tmp`;
+        try {
+            const merged = this.readStore();
+            for (const [id, route] of this.routes) merged.set(id, route);
+            fs.mkdirSync(path.dirname(this.storeFile), { recursive: true });
+            fs.writeFileSync(tmpFile, JSON.stringify(Object.fromEntries(merged)));
+            fs.renameSync(tmpFile, this.storeFile);
+            this.dirty = false;
+        } catch (error) {
+            this.logger?.warn(`写入 Satori 路由存档失败：${this.storeFile}`, error);
+            fs.rmSync(tmpFile, { force: true });
+            this.scheduleSave();
+        }
+    }
+
+    private scheduleSave(): void {
+        if (!this.storeFile || this.timer) return;
+        this.timer = setTimeout(() => this.flush(), SAVE_DELAY_MS);
+        this.timer.unref?.();
     }
 
     remember(channelId: string, route: SatoriChannelRoute): void {
@@ -61,8 +102,9 @@ export class SatoriChannelRouteRegistry {
             old.scene_id !== route.scene_id ||
             old.guild_id !== route.guild_id
         ) {
-            this.save();
+            this.dirty = true;
         }
+        if (this.dirty) this.scheduleSave();
     }
 
     rememberEvent(event: CommonEvent.Message): SatoriChannelRoute {

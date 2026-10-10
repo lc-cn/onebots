@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { emitAllAwaited, Protocol, ProtocolRegistry } from "onebots";
 import type { Dict, Schema } from "onebots";
@@ -62,6 +63,17 @@ const satoriSchema: Schema = {
 
 ProtocolRegistry.registerSchema("satori.v1", satoriSchema);
 
+/** 以平台与账户标识的哈希保证文件名无碰撞，可读前缀仅便于排查。 */
+function routeStoreName(adapter: Adapter, account: Account): string {
+    const platform = String(adapter.platform);
+    const hash = createHash("sha256")
+        .update(JSON.stringify([platform, account.account_id]))
+        .digest("hex")
+        .slice(0, 16);
+    const label = `${platform}-${account.account_id}`.replace(/[^\w.-]/g, "_").slice(0, 48);
+    return `${label}-${hash}.json`;
+}
+
 /**
  * Satori Protocol V1 Implementation
  * Satori is a cross-platform chatbot protocol
@@ -89,15 +101,9 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             adapter,
             account.account_id,
             adapter.app?.dataDir
-                ? path.join(
-                      adapter.app.dataDir,
-                      "satori-routes",
-                      `${String(adapter.platform)}-${account.account_id}.json`.replace(
-                          /[^\w.-]/g,
-                          "_",
-                      ),
-                  )
+                ? path.join(adapter.app.dataDir, "satori-routes", routeStoreName(adapter, account))
                 : undefined,
+            { warn: (...args) => this.logger.warn(...args) },
         );
         this.actions = new SatoriActionService(
             adapter,
@@ -127,6 +133,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         this.logger.info(`Stopping Satori protocol v1`);
         for (const cleanup of this.webhookCleanups) cleanup();
         this.webhookCleanups.clear();
+        this.channelRoutes.flush();
         this.removeAllListeners();
     }
 
