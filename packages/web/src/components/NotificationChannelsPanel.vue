@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createControlOperationId } from "../control-operation-id.js";
 import { IconPlus, IconTrash } from "@tabler/icons-vue";
 import {
     addChannel,
@@ -11,7 +12,7 @@ import UiInfoTip from "../ui/UiInfoTip.vue";
 const props = defineProps<{ config: NotificationConfig; busy: boolean; dirty: boolean }>();
 const emit = defineEmits<{ test: [id: string] }>();
 function uuid() {
-    return crypto.randomUUID();
+    return createControlOperationId();
 }
 function kind(channel: NotificationChannel) {
     return { webhook: "Webhook", email: "邮件", bark: "Bark" }[channel.type];

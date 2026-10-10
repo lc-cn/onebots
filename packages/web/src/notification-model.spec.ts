@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { notificationStatusLabel, type NotificationSnapshot } from "./notification-model.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+    addChannel,
+    notificationStatusLabel,
+    type NotificationSnapshot,
+} from "./notification-model.js";
 
 function snapshot(): NotificationSnapshot {
     return {
@@ -60,4 +64,17 @@ describe("notificationStatusLabel", () => {
         current.droppedDeliveries = 2;
         expect(notificationStatusLabel(current)).toBe("2 条未排队");
     });
+});
+
+afterEach(() => vi.unstubAllGlobals());
+it("HTTP 页面没有 randomUUID 时仍可添加通知渠道", () => {
+    vi.stubGlobal("crypto", {
+        getRandomValues: globalThis.crypto.getRandomValues.bind(globalThis.crypto),
+    });
+    const ids = ["webhook", "email", "bark"].map(
+        type => addChannel(type as "webhook" | "email" | "bark").id,
+    );
+    expect(new Set(ids).size).toBe(3);
+    for (const id of ids)
+        expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 });

@@ -87,6 +87,16 @@ onebots control restart --data-dir /srv/onebots
 - 回调协议启用 HMAC 或规范要求的签名校验，并限制目标地址与重试策略。
 - 不把真实凭据写入镜像、仓库、命令历史、构建日志或诊断包。
 
+### HTTPS 反向代理的秘密提交
+
+远程 HTTP 页面可以管理非秘密设置，但不能提交平台密钥、协议 token 或私有仓库授权；请使用 HTTPS。管理服务默认只接受本机回环连接的秘密提交。若 TLS 代理通过容器网络或另一台主机连接管理服务，在**管理进程的运行环境**设置代理的实际来源 IP（逗号分隔）：
+
+```bash
+ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2 onebots serve --data-dir /srv/onebots
+```
+
+Docker 可通过 `-e ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2` 传入；系统服务请配置对应的运行环境并重启管理服务。只填写管理服务实际看到的代理 IPv4/IPv6 地址，不支持域名、通配符、网段或带 scope ID 的 IPv6 地址。代理必须覆盖 `X-Forwarded-Proto`，HTTPS 请求发送唯一的 `https` 值（例如 Nginx 的 `proxy_set_header X-Forwarded-Proto $scheme;`），不能透传客户端提供的值；同时保留原始 `Host`。仅信任受你控制的代理，并限制代理至管理服务之间的网络访问。本机 HTTP 直连还需 Host 为回环地址（localhost、127.0.0.0/8 或 ::1）。即使代理运行在同一台主机，也必须覆盖为唯一的 HTTPS 声明并保留原始 Host；明文或缺失声明不能提交秘密。这不会授予本机终端、认证引导或本地控制权限。
+
 ## 运维与恢复
 
 ```bash

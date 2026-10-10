@@ -41,7 +41,10 @@ import { handleTerminalHttp, isTerminalHttpPath } from "./terminal-http.js";
 import { respondControlNotifications } from "./notification-http.js";
 import type { ControlNotificationService } from "./notification-service.js";
 
+import { allowsControlCredentials } from "./credential-transport.js";
+
 interface ControlRequestHandlerOptions {
+    trustedProxyAddresses: readonly string[];
     workspace: string;
     webRoot: string;
     manager: { id: string; version: string; pid: number };
@@ -252,35 +255,33 @@ export function createControlRequestHandler(options: ControlRequestHandlerOption
                 )
                     return;
                 if (isInstallationPath(pathname)) {
-                    const address = request.socket.remoteAddress;
                     const result = await handleInstallationRequest({
                         pathname,
                         method: request.method,
                         body: () => readBody(request),
                         service: options.installation?.service,
                         catalog: options.installation?.catalog,
-                        allowCredentials:
-                            local ||
-                            address === "127.0.0.1" ||
-                            address === "::1" ||
-                            address === "::ffff:127.0.0.1",
+                        allowCredentials: allowsControlCredentials(
+                            request,
+                            local,
+                            options.trustedProxyAddresses,
+                        ),
                     });
                     json(response, result.status, result.body);
                     return;
                 }
                 if (isConfigurationPath(pathname)) {
-                    const address = request.socket.remoteAddress;
                     const result = await handleConfigurationRequest({
                         pathname,
                         method: request.method,
                         body: () => readBody(request, 1_048_576),
                         service: options.configuration,
                         local,
-                        allowCredentials:
-                            local ||
-                            address === "127.0.0.1" ||
-                            address === "::1" ||
-                            address === "::ffff:127.0.0.1",
+                        allowCredentials: allowsControlCredentials(
+                            request,
+                            local,
+                            options.trustedProxyAddresses,
+                        ),
                     });
                     json(response, result.status, result.body);
                     return;

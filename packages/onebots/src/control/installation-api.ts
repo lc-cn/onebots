@@ -1,3 +1,4 @@
+import { controlCredentialTransportHint } from "./credential-transport.js";
 import { GenerationConflictError } from "./generation-activation.js";
 import { ConfigurationConflictError } from "../configuration/configuration-store.js";
 import type { GenerationSelection } from "../installation/generation-plan.js";
@@ -115,7 +116,9 @@ async function handle(input: InstallationRequest): Promise<{ status: number; bod
         if (body.token !== undefined && !input.allowCredentials)
             return {
                 status: 403,
-                body: { message: "私有仓库授权仅接受本地控制连接或受保护的传输" },
+                body: {
+                    message: `私有仓库授权${controlCredentialTransportHint}`,
+                },
             };
         if (
             typeof body.id !== "string" ||

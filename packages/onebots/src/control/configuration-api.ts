@@ -1,3 +1,4 @@
+import { controlCredentialTransportHint } from "./credential-transport.js";
 import {
     ConfigurationConflictError,
     type ConfigurationBase,
@@ -256,7 +257,12 @@ async function handle(input: ConfigurationRequest): Promise<{ status: number; bo
         const changes = edits(body.changes, false) as ConfigurationChange[];
         const secrets = edits(body.secrets, true) as SecretChange[];
         if (!input.allowCredentials && secrets.some(change => change.op === "set"))
-            return { status: 403, body: { message: "配置秘密仅接受本地控制连接或受保护的传输" } };
+            return {
+                status: 403,
+                body: {
+                    message: `配置秘密${controlCredentialTransportHint}`,
+                },
+            };
         return {
             status: 200,
             body: await service.edit({

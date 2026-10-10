@@ -54,11 +54,13 @@ import {
 import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
 import { connectWindowsManagerRPC } from "../windows-manager-rpc.js";
 import { createControlRequestHandler } from "./host-http.js";
+import { trustedControlProxyAddresses } from "./credential-transport.js";
 import { ControlTerminalService } from "./terminal-service.js";
 import { ControlNotificationService } from "./notification-service.js";
 import { ChatHistoryStore } from "../chat-history-store.js";
 export type { ControlHostOptions } from "./host-options.js";
 export async function startControlHost(options: ControlHostOptions) {
+    const trustedProxyAddresses = trustedControlProxyAddresses(options.trustedProxyAddresses);
     if (
         options.windowsHostPipe &&
         (process.platform !== "win32" || options.windowsHostPipe !== WINDOWS_HOST_PIPE_NAME)
@@ -410,6 +412,7 @@ export async function startControlHost(options: ControlHostOptions) {
     });
     let server: http.Server;
     const handle = createControlRequestHandler({
+        trustedProxyAddresses,
         workspace,
         webRoot,
         manager: { id, version: packageMetadata.version, pid: process.pid },

@@ -1,3 +1,4 @@
+import { createControlOperationId } from "../control-operation-id.js";
 import {
     loadConfigurationPanelSource,
     createConfirmedConfigurationRepair,
@@ -5,12 +6,13 @@ import {
 } from "./control-configuration-source.js";
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import type {
-    ControlClient,
-    ControlConfigurationSnapshot,
-    ControlConfigurationDraft,
-    ControlConfigurationValidation,
-    ControlConfigurationOperation,
+import {
+    ControlRequestError,
+    type ControlClient,
+    type ControlConfigurationSnapshot,
+    type ControlConfigurationDraft,
+    type ControlConfigurationValidation,
+    type ControlConfigurationOperation,
 } from "@onebots/core/control";
 import {
     resolveConfigurationConflict,
@@ -210,6 +212,7 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
         }
         busy.value = true;
         error.value = "";
+        message.value = "";
         const request = { expectedRevision: draft.value.revision, ...edits };
         // 请求副本仅保留到本次传输；输入控件立即清除秘密，不写入浏览器存储。
         for (const field of fields.value) if (secret(field)) values.value[field.key] = undefined;
@@ -217,8 +220,14 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
             adopt(await bounded(client.editConfigurationDraft(draft.value.id, request)));
             message.value = "";
             return true;
-        } catch {
-            error.value = "保存未确认或版本冲突。请重读草稿核对；不会自动覆盖或重复提交。";
+        } catch (caught) {
+            // 明确拒绝与传输结果未知必须区分；不重试可能已经写入的请求。
+            error.value =
+                caught instanceof ControlRequestError && caught.status === 403
+                    ? caught.message
+                    : caught instanceof ControlRequestError && caught.status === 409
+                      ? `${caught.message}。请重读草稿核对；不会自动覆盖或重复提交。`
+                      : "保存未确认。请重读草稿核对；不会自动覆盖或重复提交。";
             return false;
         } finally {
             busy.value = false;
@@ -357,9 +366,16 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
     }
     async function apply(options?: { allowRestart?: boolean }) {
         if (!validation.value?.receiptId || !draft.value || tracking.value.operationId) return;
+        let operationId: string;
+        try {
+            operationId = createControlOperationId();
+        } catch (caught) {
+            error.value = caught instanceof Error ? caught.message : "无法生成安全操作编号";
+            return;
+        }
         const next = {
             draftId: draft.value.id,
-            operationId: crypto.randomUUID(),
+            operationId,
             receiptId: validation.value.receiptId,
         };
         try {

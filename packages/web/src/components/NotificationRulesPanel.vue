@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { createControlOperationId } from "../control-operation-id.js";
 import { computed, ref } from "vue";
 import { IconPlus, IconTrash } from "@tabler/icons-vue";
 import {
@@ -20,7 +21,7 @@ const accountChoices = computed(() =>
 );
 const openRuleId = ref<string>();
 function addRule() {
-    const id = crypto.randomUUID();
+    const id = createControlOperationId();
     props.config.rules.push({
         id,
         name: "新规则",
