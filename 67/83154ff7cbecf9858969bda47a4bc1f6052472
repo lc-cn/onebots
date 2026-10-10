@@ -1,0 +1,27 @@
+packages/web/src/components/ControlConfigurationPanel.client.spec.ts
+  s_efe26f87c3b074::t_6c67d22ffa7079 276,278-282
+packages/web/src/components/ControlExtensionChoices.vue
+  s_efe26f87c3b074::t_956c51dca04b59 43-45
+packages/web/src/components/ControlInstallationPanel.client.spec.ts
+  s_efe26f87c3b074::t_0f764f805f1cd9 117-124,136,176-211
+packages/web/src/components/ControlInstallationPanel.vue
+  s_efe26f87c3b074::t_f32064cecd976b 212-215,219-221,228,232,240
+packages/web/src/components/control-installation-lock.spec.ts
+  s_efe26f87c3b074::t_5f7276e40f72eb 17-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6783154ff7cbecf9858969bda47a4bc1f6052472",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
