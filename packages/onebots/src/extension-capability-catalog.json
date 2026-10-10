@@ -2,109 +2,109 @@
   "schemaVersion": 2,
   "packages": {
     "@onebots/adapter-dingtalk": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/adapter-discord": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/adapter-douyin": {
-      "version": "1.0.0"
+      "version": "1.0.1"
     },
     "@onebots/adapter-email": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/adapter-facebook-messenger": {
-      "version": "0.1.10"
+      "version": "0.1.11"
     },
     "@onebots/adapter-feishu": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/adapter-google-chat": {
-      "version": "0.1.10"
+      "version": "0.1.11"
     },
     "@onebots/adapter-heychat": {
-      "version": "4.0.17"
+      "version": "4.0.18"
     },
     "@onebots/adapter-icqq": {
-      "version": "3.0.19",
+      "version": "3.0.20",
       "peerDependencies": {
         "@icqqjs/icqq": "^1.10.18"
       }
     },
     "@onebots/adapter-instagram": {
-      "version": "0.1.10"
+      "version": "0.1.11"
     },
     "@onebots/adapter-ircv3": {
-      "version": "0.1.8"
-    },
-    "@onebots/adapter-kook": {
-      "version": "3.0.18"
-    },
-    "@onebots/adapter-line": {
-      "version": "3.0.18"
-    },
-    "@onebots/adapter-matrix": {
-      "version": "0.1.10"
-    },
-    "@onebots/adapter-mattermost": {
-      "version": "0.1.10"
-    },
-    "@onebots/adapter-mock": {
-      "version": "1.0.27"
-    },
-    "@onebots/adapter-qq": {
-      "version": "3.0.20"
-    },
-    "@onebots/adapter-slack": {
-      "version": "3.0.18"
-    },
-    "@onebots/adapter-teams": {
-      "version": "3.0.18"
-    },
-    "@onebots/adapter-telegram": {
-      "version": "3.0.18"
-    },
-    "@onebots/adapter-twitch": {
       "version": "0.1.9"
     },
+    "@onebots/adapter-kook": {
+      "version": "3.0.19"
+    },
+    "@onebots/adapter-line": {
+      "version": "3.0.19"
+    },
+    "@onebots/adapter-matrix": {
+      "version": "0.1.11"
+    },
+    "@onebots/adapter-mattermost": {
+      "version": "0.1.11"
+    },
+    "@onebots/adapter-mock": {
+      "version": "1.0.28"
+    },
+    "@onebots/adapter-qq": {
+      "version": "3.0.21"
+    },
+    "@onebots/adapter-slack": {
+      "version": "3.0.19"
+    },
+    "@onebots/adapter-teams": {
+      "version": "3.0.19"
+    },
+    "@onebots/adapter-telegram": {
+      "version": "3.0.19"
+    },
+    "@onebots/adapter-twitch": {
+      "version": "0.1.10"
+    },
     "@onebots/adapter-wechat": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/adapter-wechat-clawbot": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/adapter-wecom": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/adapter-wecom-kf": {
-      "version": "2.0.18"
+      "version": "2.0.19"
     },
     "@onebots/adapter-whatsapp": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/adapter-zulip": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/protocol-mcp-v1": {
-      "version": "0.1.15"
+      "version": "0.1.16"
     },
     "@onebots/protocol-milky-v1": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/protocol-onebot-v11": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/protocol-onebot-v12": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     },
     "@onebots/protocol-satori-v1": {
-      "version": "3.0.18"
+      "version": "3.0.19"
     }
   },
   "adapters": {
     "dingtalk": {
       "packageName": "@onebots/adapter-dingtalk",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -442,7 +442,7 @@
     },
     "discord": {
       "packageName": "@onebots/adapter-discord",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -1003,7 +1003,7 @@
     },
     "douyin": {
       "packageName": "@onebots/adapter-douyin",
-      "packageVersion": "1.0.0",
+      "packageVersion": "1.0.1",
       "manifest": {
         "version": 1,
         "actions": {
@@ -1206,7 +1206,7 @@
     },
     "email": {
       "packageName": "@onebots/adapter-email",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -1435,7 +1435,7 @@
     },
     "facebook-messenger": {
       "packageName": "@onebots/adapter-facebook-messenger",
-      "packageVersion": "0.1.10",
+      "packageVersion": "0.1.11",
       "manifest": {
         "version": 1,
         "actions": {
@@ -1781,7 +1781,7 @@
     },
     "feishu": {
       "packageName": "@onebots/adapter-feishu",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -2182,7 +2182,7 @@
     },
     "google-chat": {
       "packageName": "@onebots/adapter-google-chat",
-      "packageVersion": "0.1.10",
+      "packageVersion": "0.1.11",
       "manifest": {
         "version": 1,
         "actions": {
@@ -2515,7 +2515,7 @@
     },
     "heychat": {
       "packageName": "@onebots/adapter-heychat",
-      "packageVersion": "4.0.17",
+      "packageVersion": "4.0.18",
       "manifest": {
         "version": 1,
         "actions": {
@@ -2892,7 +2892,7 @@
     },
     "icqq": {
       "packageName": "@onebots/adapter-icqq",
-      "packageVersion": "3.0.19",
+      "packageVersion": "3.0.20",
       "manifest": {
         "version": 1,
         "actions": {
@@ -3617,7 +3617,7 @@
     },
     "instagram": {
       "packageName": "@onebots/adapter-instagram",
-      "packageVersion": "0.1.10",
+      "packageVersion": "0.1.11",
       "manifest": {
         "version": 1,
         "actions": {
@@ -3958,7 +3958,7 @@
     },
     "ircv3": {
       "packageName": "@onebots/adapter-ircv3",
-      "packageVersion": "0.1.8",
+      "packageVersion": "0.1.9",
       "manifest": {
         "version": 1,
         "actions": {
@@ -4248,7 +4248,7 @@
     },
     "kook": {
       "packageName": "@onebots/adapter-kook",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -4947,7 +4947,7 @@
     },
     "line": {
       "packageName": "@onebots/adapter-line",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -5716,7 +5716,7 @@
     },
     "matrix": {
       "packageName": "@onebots/adapter-matrix",
-      "packageVersion": "0.1.10",
+      "packageVersion": "0.1.11",
       "manifest": {
         "version": 1,
         "actions": {
@@ -5992,7 +5992,7 @@
     },
     "mattermost": {
       "packageName": "@onebots/adapter-mattermost",
-      "packageVersion": "0.1.10",
+      "packageVersion": "0.1.11",
       "manifest": {
         "version": 1,
         "actions": {
@@ -6477,7 +6477,7 @@
     },
     "mock": {
       "packageName": "@onebots/adapter-mock",
-      "packageVersion": "1.0.27",
+      "packageVersion": "1.0.28",
       "manifest": {
         "version": 1,
         "actions": {
@@ -6574,7 +6574,7 @@
     },
     "qq": {
       "packageName": "@onebots/adapter-qq",
-      "packageVersion": "3.0.20",
+      "packageVersion": "3.0.21",
       "manifest": {
         "version": 1,
         "actions": {
@@ -7214,7 +7214,7 @@
     },
     "slack": {
       "packageName": "@onebots/adapter-slack",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -7842,7 +7842,7 @@
     },
     "teams": {
       "packageName": "@onebots/adapter-teams",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -8222,7 +8222,7 @@
     },
     "telegram": {
       "packageName": "@onebots/adapter-telegram",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -8668,7 +8668,7 @@
     },
     "twitch": {
       "packageName": "@onebots/adapter-twitch",
-      "packageVersion": "0.1.9",
+      "packageVersion": "0.1.10",
       "manifest": {
         "version": 1,
         "actions": {
@@ -9251,7 +9251,7 @@
     },
     "wechat": {
       "packageName": "@onebots/adapter-wechat",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -10075,7 +10075,7 @@
     },
     "wechat-clawbot": {
       "packageName": "@onebots/adapter-wechat-clawbot",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -10194,7 +10194,7 @@
     },
     "wecom": {
       "packageName": "@onebots/adapter-wecom",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -11203,7 +11203,7 @@
     },
     "wecom-kf": {
       "packageName": "@onebots/adapter-wecom-kf",
-      "packageVersion": "2.0.18",
+      "packageVersion": "2.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -11569,7 +11569,7 @@
     },
     "whatsapp": {
       "packageName": "@onebots/adapter-whatsapp",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
@@ -12573,7 +12573,7 @@
     },
     "zulip": {
       "packageName": "@onebots/adapter-zulip",
-      "packageVersion": "3.0.18",
+      "packageVersion": "3.0.19",
       "manifest": {
         "version": 1,
         "actions": {
