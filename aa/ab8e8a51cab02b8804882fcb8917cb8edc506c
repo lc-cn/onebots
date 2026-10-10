@@ -1,0 +1,56 @@
+packages/onebots/src/control/credential-transport.ts
+  s_efe26f87c3b074::t_bbc44dae079d15 1,4-30,33-34,56,58,63-65,67
+  s_efe26f87c3b074::t_38f5f99489e3dc 72-74
+.changeset/fix-web-management-ip-and-defaults.md
+  s_efe26f87c3b074::t_b430efa7b62cd9 7-8
+docs/src/en/guide/production.md
+  s_efe26f87c3b074::t_d0a6ec60cd3028 98
+docs/src/guide/production.md
+  s_efe26f87c3b074::t_ac6ed92dd95b7d 98
+packages/onebots/src/control/configuration-api.ts
+  s_efe26f87c3b074::t_9ce6df8dd97d2b 1,263
+packages/onebots/src/control/credential-transport.spec.ts
+  s_efe26f87c3b074::t_dec7dde5dce94b 8,16-24,53-71,73,75
+packages/onebots/src/control/host-credential-transport.spec.ts
+  s_efe26f87c3b074::t_e10ef51536a862 3,15-18,27,29
+packages/onebots/src/control/installation-api.ts
+  s_efe26f87c3b074::t_1288f5002492f5 1,120
+packages/onebots/src/control/installation-service.ts
+  s_efe26f87c3b074::t_24b57b1c04b2de 1,168
+packages/web/src/components/ControlConfigurationPanel.client.spec.ts
+  s_efe26f87c3b074::t_60c7b43e5a783a 270-278
+packages/web/src/components/ControlExtensionChoices.vue
+  s_efe26f87c3b074::t_aafeb70b196cbd 1-58
+packages/web/src/components/ControlInstallationOperation.vue
+  s_efe26f87c3b074::t_86871a004e4402 79
+packages/web/src/components/ControlInstallationPanel.client.spec.ts
+  s_efe26f87c3b074::t_8795138f50c24d 1-169
+packages/web/src/components/ControlInstallationPanel.vue
+  s_efe26f87c3b074::t_b2d833e8f90fb1 6-8,11,24,47,85-90,165-172,200-207,213,215-217,219-224,262-263,271,273-278,304-312,314-318,320-321,348-350,384-387,394,434,436-442,452,465
+packages/web/src/components/control-installation-lock.spec.ts
+  s_efe26f87c3b074::t_0175ab1699b256 1-16
+packages/web/src/components/control-installation-lock.ts
+  s_efe26f87c3b074::t_94aaa8dd42e53f 1-56
+packages/web/src/components/control-installation-tracking.spec.ts
+  s_efe26f87c3b074::t_8bf69cf9e08667 5-7,34,38,51-131
+packages/web/src/components/control-installation-tracking.ts
+  s_efe26f87c3b074::t_982d37b017817b 32-41,49-51,53,62,64,68-79,87-125
+packages/web/src/components/use-control-configuration-panel.ts
+  s_efe26f87c3b074::t_84a0f447dae0e0 226,228-230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aaab8e8a51cab02b8804882fcb8917cb8edc506c",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
