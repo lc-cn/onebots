@@ -1,0 +1,21 @@
+packages/web/src/components/ControlInstallationPanel.client.spec.ts
+  s_efe26f87c3b074::t_997147ee2b5007 1,10-48,114,126,251-275
+packages/web/src/components/ControlInstallationPanel.vue
+  s_efe26f87c3b074::t_ad14a69005d659 237
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cde226e49091b222e8fcbca1b10b1a0c7ed0eba0",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
