@@ -1,3 +1,4 @@
+import path from "node:path";
 import { emitAllAwaited, Protocol, ProtocolRegistry } from "onebots";
 import type { Dict, Schema } from "onebots";
 import { Account } from "onebots";
@@ -5,7 +6,7 @@ import { Adapter } from "onebots";
 import { CommonEvent, CommonTypes } from "onebots";
 import { WebSocket } from "ws";
 import { SatoriActionService } from "./actions.js";
-import { SatoriChannelRouteRegistry } from "./channel-routes.js";
+import { routeStoreName, SatoriChannelRouteRegistry } from "./channel-routes.js";
 import { projectSatoriNotice } from "./notice-projector.js";
 import { Satori } from "./types.js";
 import { SatoriConfig } from "./config.js";
@@ -84,7 +85,18 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             protocol: "satori",
             version: "v1",
         });
-        this.channelRoutes = new SatoriChannelRouteRegistry(adapter, account.account_id);
+        this.channelRoutes = new SatoriChannelRouteRegistry(
+            adapter,
+            account.account_id,
+            adapter.app?.dataDir
+                ? path.join(
+                      adapter.app.dataDir,
+                      "satori-routes",
+                      routeStoreName(String(adapter.platform), account.account_id),
+                  )
+                : undefined,
+            { warn: (message, context) => this.logger.warn(message, context) },
+        );
         this.actions = new SatoriActionService(
             adapter,
             account,
@@ -113,6 +125,7 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
         this.logger.info(`Stopping Satori protocol v1`);
         for (const cleanup of this.webhookCleanups) cleanup();
         this.webhookCleanups.clear();
+        this.channelRoutes.flush();
         this.removeAllListeners();
     }
 
