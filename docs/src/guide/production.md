@@ -95,7 +95,7 @@ onebots control restart --data-dir /srv/onebots
 ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2 onebots serve --data-dir /srv/onebots
 ```
 
-Docker 可通过 `-e ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2` 传入；系统服务请配置对应的运行环境并重启管理服务。只填写管理服务实际看到的代理 IPv4/IPv6 地址，不支持域名、通配符或网段。代理必须覆盖 `X-Forwarded-Proto`，HTTPS 请求发送唯一的 `https` 值（例如 Nginx 的 `proxy_set_header X-Forwarded-Proto $scheme;`），不能透传客户端提供的值；同时保留原始 `Host`。仅信任受你控制的代理，并限制代理至管理服务之间的网络访问。这不会授予本机终端、认证引导或本地控制权限。
+Docker 可通过 `-e ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2` 传入；系统服务请配置对应的运行环境并重启管理服务。只填写管理服务实际看到的代理 IPv4/IPv6 地址，不支持域名、通配符、网段或带 scope ID 的 IPv6 地址。代理必须覆盖 `X-Forwarded-Proto`，HTTPS 请求发送唯一的 `https` 值（例如 Nginx 的 `proxy_set_header X-Forwarded-Proto $scheme;`），不能透传客户端提供的值；同时保留原始 `Host`。仅信任受你控制的代理，并限制代理至管理服务之间的网络访问。本机 HTTP 直连还需 Host 为回环地址（localhost、127.0.0.0/8 或 ::1）。即使代理运行在同一台主机，也必须覆盖为唯一的 HTTPS 声明并保留原始 Host；明文或缺失声明不能提交秘密。这不会授予本机终端、认证引导或本地控制权限。
 
 ## 运维与恢复
 

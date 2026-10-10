@@ -267,7 +267,15 @@ describe("配置秘密保存错误", () => {
             new ControlRequestError(403, "配置秘密仅接受本地控制连接或受保护的传输"),
             "配置秘密仅接受本地控制连接或受保护的传输",
         ],
-        [new ControlRequestError(409, "草稿版本已变化"), "草稿版本已变化"],
+        [
+            new ControlRequestError(409, "草稿版本已变化"),
+            "草稿版本已变化。请重读草稿核对；不会自动覆盖或重复提交。",
+        ],
+        [
+            new ControlRequestError(400, "配置请求失败，请检查本地状态"),
+            "保存未确认。请重读草稿核对",
+        ],
+        [new ControlRequestError(500, "服务器内部错误"), "保存未确认。请重读草稿核对"],
         [new Error("network error"), "保存未确认。请重读草稿核对"],
     ])("显示明确拒绝，网络结果未知时保留核对提示 %#", async (failure, expected) => {
         const path = ["general", "satori.v1", "token"];

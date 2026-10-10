@@ -1,3 +1,4 @@
+import { controlCredentialTransportHint } from "./credential-transport.js";
 import { ConfigurationConflictError } from "../configuration/configuration-store.js";
 import { activeInstallationResolver } from "./installation-active-resolver.js";
 import { prepareInstallationUpdate, type UpdateBase } from "./installation-update.js";
@@ -164,7 +165,7 @@ export class ControlInstallationService {
             request.token !== undefined &&
             (typeof request.token !== "string" || request.token.length > 512 || !allowCredentials)
         )
-            throw new Error("私有仓库授权仅接受本地控制连接或受保护的传输");
+            throw new Error(`私有仓库授权${controlCredentialTransportHint}`);
         const confirmation = this.plans.read(request.planId);
         const plan = confirmation.plan;
         const bindingFile = this.bindingFile(request.id);

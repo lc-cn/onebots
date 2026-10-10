@@ -223,9 +223,11 @@ export function useControlConfigurationPanel(client: ControlClient, onApplied: (
         } catch (caught) {
             // 明确拒绝与传输结果未知必须区分；不重试可能已经写入的请求。
             error.value =
-                caught instanceof ControlRequestError && caught.status < 500
+                caught instanceof ControlRequestError && caught.status === 403
                     ? caught.message
-                    : "保存未确认。请重读草稿核对；不会自动覆盖或重复提交。";
+                    : caught instanceof ControlRequestError && caught.status === 409
+                      ? `${caught.message}。请重读草稿核对；不会自动覆盖或重复提交。`
+                      : "保存未确认。请重读草稿核对；不会自动覆盖或重复提交。";
             return false;
         } finally {
             busy.value = false;

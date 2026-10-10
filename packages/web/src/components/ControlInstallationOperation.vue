@@ -76,7 +76,7 @@ const emit = defineEmits<{
                 @click="emit('apply')"
                 >应用此运行版本</UiButton
             >
-            <UiButton v-if="terminal" :disabled="busy" @click="emit('newPlan')"
+            <UiButton v-if="terminal" :disabled="busy || blocked" @click="emit('newPlan')"
                 >准备下一次安装</UiButton
             >
         </div>

@@ -1,3 +1,4 @@
+import { controlCredentialTransportHint } from "./credential-transport.js";
 import {
     ConfigurationConflictError,
     type ConfigurationBase,
@@ -259,8 +260,7 @@ async function handle(input: ConfigurationRequest): Promise<{ status: number; bo
             return {
                 status: 403,
                 body: {
-                    message:
-                        "配置秘密仅接受本地控制连接或受保护的传输。请使用 HTTPS；远程反向代理需配置 ONEBOTS_TRUSTED_PROXY_ADDRESSES。",
+                    message: `配置秘密${controlCredentialTransportHint}`,
                 },
             };
         return {

@@ -5,7 +5,7 @@ import { allowsControlCredentials, trustedControlProxyAddresses } from "./creden
 function request(address: string, proto?: string, encrypted = false): IncomingMessage {
     return {
         socket: { remoteAddress: address, encrypted },
-        headers: proto ? { "x-forwarded-proto": proto } : {},
+        headers: { host: "localhost", ...(proto ? { "x-forwarded-proto": proto } : {}) },
         rawHeaders: proto ? ["X-Forwarded-Proto", proto] : [],
     } as unknown as IncomingMessage;
 }
@@ -13,7 +13,15 @@ function request(address: string, proto?: string, encrypted = false): IncomingMe
 describe("控制秘密传输边界", () => {
     it("私有控制、本机回环及直接 TLS 可提交秘密", () => {
         expect(allowsControlCredentials(request("192.0.2.10"), true, [])).toBe(true);
-        for (const address of ["127.0.0.1", "::1", "::ffff:127.0.0.1"])
+        for (const address of [
+            "127.0.0.1",
+            "127.0.0.2",
+            "127.1.2.3",
+            "::1",
+            "::ffff:127.0.0.1",
+            "::ffff:127.1.2.3",
+            "::ffff:7f01:203",
+        ])
             expect(allowsControlCredentials(request(address), false, [])).toBe(true);
         expect(allowsControlCredentials(request("192.0.2.10", undefined, true), false, [])).toBe(
             true,
@@ -42,10 +50,29 @@ describe("控制秘密传输边界", () => {
         expect(allowsControlCredentials(duplicate, false, trusted)).toBe(false);
     });
 
+    it("同机代理的明文、缺失声明和重复声明不能借回环地址提交秘密", () => {
+        for (const peer of ["127.0.0.1", "::1", "::ffff:127.1.2.3"]) {
+            for (const proto of [undefined, "http", "https,http"]) {
+                const value = request(peer, proto);
+                value.headers.host = "bot.example";
+                expect(allowsControlCredentials(value, false, [])).toBe(false);
+            }
+            const secure = request(peer, "https");
+            secure.headers.host = "bot.example";
+            expect(allowsControlCredentials(secure, false, [])).toBe(true);
+            secure.rawHeaders.push("X-Forwarded-Proto", "https");
+            expect(allowsControlCredentials(secure, false, [])).toBe(false);
+            const plaintext = request(peer, "http");
+            expect(allowsControlCredentials(plaintext, false, [])).toBe(false);
+        }
+        const scoped = request("fe80::1%en0", "https");
+        expect(allowsControlCredentials(scoped, false, [])).toBe(false);
+    });
+
     it("默认不信任代理，拒绝通配、网段或主机名配置", () => {
-        expect(trustedControlProxyAddresses(undefined, undefined)).toEqual([]);
+        expect(trustedControlProxyAddresses(undefined, "")).toEqual([]);
         expect(trustedControlProxyAddresses([], "192.0.2.20")).toEqual([]);
-        for (const invalid of ["*", "192.0.2.0/24", "proxy.example", "192.0.2.20,"])
+        for (const invalid of ["*", "192.0.2.0/24", "proxy.example", "192.0.2.20,", "fe80::1%en0"])
             expect(() => trustedControlProxyAddresses(undefined, invalid)).toThrow("可信代理地址");
     });
 });

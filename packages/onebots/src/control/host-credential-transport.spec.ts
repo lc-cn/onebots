@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { afterEach, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { createLocalControlClient } from "../client/local-control.js";
@@ -11,7 +12,10 @@ afterEach(async () => {
 });
 
 it("可信 HTTPS 代理能保存 Satori token，HTTP 和伪造声明仍拒绝且不获得本机权限", async () => {
-    const workspace = fs.mkdtempSync("/tmp/ob-credential-");
+    // macOS 的 Unix socket 路径长度有限，保留短 /tmp 前缀；其他系统使用系统临时目录。
+    const workspace = fs.mkdtempSync(
+        path.join(process.platform === "darwin" ? "/tmp" : os.tmpdir(), "ob-credential-"),
+    );
     cleanups.push(async () => fs.rmSync(workspace, { recursive: true, force: true }));
     const runtimeRoot = path.join(workspace, "runtime");
     fs.mkdirSync(path.join(runtimeRoot, "node_modules/@onebots"), { recursive: true });
@@ -20,9 +24,9 @@ it("可信 HTTPS 代理能保存 Satori token，HTTP 和伪造声明仍拒绝且
         ["@onebots/protocol-satori-v1", "protocols/satori-v1/protocol"],
     ])
         fs.symlinkSync(
-            path.resolve(directory),
+            path.resolve(import.meta.dirname, "../../../..", directory),
             path.join(runtimeRoot, "node_modules", name),
-            "dir",
+            process.platform === "win32" ? "junction" : "dir",
         );
     fs.writeFileSync(
         path.join(workspace, "config.yaml"),
