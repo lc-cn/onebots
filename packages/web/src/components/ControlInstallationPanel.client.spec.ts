@@ -1,4 +1,4 @@
-import { createRenderer, nextTick } from "vue";
+import { createRenderer, nextTick, type Component } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ControlClient, ControlInstallPlan } from "@onebots/core/control";
 import ControlInstallationPanel from "./ControlInstallationPanel.vue";
@@ -7,6 +7,45 @@ const lock = vi.hoisted(() => vi.fn());
 vi.mock("./control-installation-lock.js", () => ({ withInstallationTrackingLock: lock }));
 vi.mock("../ui/UiInfoTip.vue", () => ({ default: { render: () => null } }));
 vi.mock("./ControlAdapterCatalogBrowser.vue", () => ({ default: { render: () => null } }));
+// 计划预览的字段展示不在此处测试；保留真实父组件的 v-model 与提交事件。
+vi.mock("./ControlInstallPlanPreview.vue", async () => {
+    const { defineComponent, h } = await import("vue");
+    return {
+        default: defineComponent({
+            props: ["modelValue"],
+            emits: ["update:modelValue", "install"],
+            setup(props, { emit }) {
+                return () =>
+                    h("section", [
+                        h("input", { value: props.modelValue }),
+                        h(
+                            "button",
+                            { onClick: () => emit("update:modelValue", "fixture-private-token") },
+                            "输入测试授权",
+                        ),
+                        h("button", { onClick: () => emit("install") }, "确认并安装"),
+                    ]);
+            },
+        }),
+    };
+});
+// 无 DOM 宿主不运行原生密码框指令；已确认操作仍使用真实组件验证按钮门禁。
+vi.mock("./ControlInstallationOperation.vue", async importOriginal => {
+    const { default: Operation } =
+        await importOriginal<typeof import("./ControlInstallationOperation.vue")>();
+    const { defineComponent, h } = await import("vue");
+    return {
+        default: defineComponent({
+            inheritAttrs: false,
+            setup(_props, { attrs }) {
+                return () =>
+                    attrs.operation
+                        ? h(Operation as Component, attrs)
+                        : h("input", { value: attrs.modelValue });
+            },
+        }),
+    };
+});
 interface ViewNode {
     tag: string;
     text: string;
@@ -72,7 +111,7 @@ async function settle() {
         await nextTick();
     }
 }
-async function fixture(record: string | null, blocked = false) {
+async function fixture(record: string | null, blocked = false, secure = false) {
     let value = record;
     const storage = {
         getItem: () => value,
@@ -84,7 +123,7 @@ async function fixture(record: string | null, blocked = false) {
         }),
     };
     vi.stubGlobal("localStorage", storage);
-    vi.stubGlobal("location", { protocol: "http:", hostname: "192.0.2.10" });
+    vi.stubGlobal("location", { protocol: "http:", hostname: secure ? "localhost" : "192.0.2.10" });
     lock.mockImplementation((action: () => unknown) => Promise.resolve().then(action));
     const client = {
         installationCatalog: vi.fn(async () => ({
@@ -208,5 +247,30 @@ describe("安装面板提交边界", () => {
         await settle();
         expect(view.client.install).toHaveBeenCalledWith({ id: record.id, planId: plan.id });
         expect(view.storage.removeItem).not.toHaveBeenCalled();
+    });
+    it("持久化失败保留授权输入，重试提交后清空且不落盘", async () => {
+        const view = await fixture(null, false, true);
+        await view.click("确认选择");
+        await view.click("输入测试授权");
+        const inputValue = () => flatten(view.root).find(item => item.tag === "input")?.props.value;
+        Object.defineProperty(globalThis, "localStorage", {
+            configurable: true,
+            get: () => {
+                throw new DOMException("Access denied", "SecurityError");
+            },
+        });
+        await view.click("确认并安装");
+        expect(inputValue()).toBe("fixture-private-token");
+        expect(view.client.install).not.toHaveBeenCalled();
+        vi.stubGlobal("localStorage", view.storage);
+        // 返回未确认，留在操作视图，检查输入仍于提交前清空。
+        view.client.install.mockRejectedValueOnce(new Error("network"));
+        view.client.installation.mockRejectedValueOnce(new Error("network"));
+        await view.click("确认并安装");
+        expect(view.client.install).toHaveBeenCalledWith(
+            expect.objectContaining({ token: "fixture-private-token" }),
+        );
+        expect(inputValue()).toBe("");
+        expect(view.storage.getItem()).not.toContain("fixture-private-token");
     });
 });

@@ -211,7 +211,6 @@ async function install() {
     }
     const client = props.client;
     const token = privateToken.value;
-    privateToken.value = "";
     let next: Tracking | undefined;
     busy.value = true;
     try {
@@ -235,6 +234,7 @@ async function install() {
     error.value = "";
     note.value = "";
     watching.value = true;
+    privateToken.value = "";
     try {
         operation.value = await bounded(
             client.install({ id: next.id, planId: next.planId, ...(token ? { token } : {}) }),
