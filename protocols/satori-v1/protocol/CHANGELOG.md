@@ -1,5 +1,18 @@
 # @onebots/protocol-satori-v1
 
+## 3.0.19
+
+### Patch Changes
+
+- a2712e9: 持久化 Satori channel 路由，修复重启后无法向已有 channel_id 发送消息的问题。
+- Updated dependencies [3fb37d2]
+- Updated dependencies [2264929]
+- Updated dependencies [7a510a9]
+- Updated dependencies [6d9322a]
+- Updated dependencies [f3cbc5a]
+- Updated dependencies [1162324]
+  - onebots@1.2.19
+
 ## 3.0.18
 
 ### Patch Changes

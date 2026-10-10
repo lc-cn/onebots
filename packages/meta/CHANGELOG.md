@@ -1,5 +1,12 @@
 # @onebots/meta
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [f3cbc5a]
+  - @onebots/core@1.2.13
+
 ## 0.1.7
 
 ### Patch Changes
