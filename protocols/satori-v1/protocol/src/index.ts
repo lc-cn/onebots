@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
 import { emitAllAwaited, Protocol, ProtocolRegistry } from "onebots";
 import type { Dict, Schema } from "onebots";
@@ -7,7 +6,7 @@ import { Adapter } from "onebots";
 import { CommonEvent, CommonTypes } from "onebots";
 import { WebSocket } from "ws";
 import { SatoriActionService } from "./actions.js";
-import { SatoriChannelRouteRegistry } from "./channel-routes.js";
+import { routeStoreName, SatoriChannelRouteRegistry } from "./channel-routes.js";
 import { projectSatoriNotice } from "./notice-projector.js";
 import { Satori } from "./types.js";
 import { SatoriConfig } from "./config.js";
@@ -63,17 +62,6 @@ const satoriSchema: Schema = {
 
 ProtocolRegistry.registerSchema("satori.v1", satoriSchema);
 
-/** 以平台与账户标识的哈希保证文件名无碰撞，可读前缀仅便于排查。 */
-function routeStoreName(adapter: Adapter, account: Account): string {
-    const platform = String(adapter.platform);
-    const hash = createHash("sha256")
-        .update(JSON.stringify([platform, account.account_id]))
-        .digest("hex")
-        .slice(0, 16);
-    const label = `${platform}-${account.account_id}`.replace(/[^\w.-]/g, "_").slice(0, 48);
-    return `${label}-${hash}.json`;
-}
-
 /**
  * Satori Protocol V1 Implementation
  * Satori is a cross-platform chatbot protocol
@@ -101,9 +89,13 @@ export class SatoriV1 extends Protocol<"v1", SatoriConfig.Config> {
             adapter,
             account.account_id,
             adapter.app?.dataDir
-                ? path.join(adapter.app.dataDir, "satori-routes", routeStoreName(adapter, account))
+                ? path.join(
+                      adapter.app.dataDir,
+                      "satori-routes",
+                      routeStoreName(String(adapter.platform), account.account_id),
+                  )
                 : undefined,
-            { warn: (...args) => this.logger.warn(...args) },
+            { warn: (message, context) => this.logger.warn(message, context) },
         );
         this.actions = new SatoriActionService(
             adapter,

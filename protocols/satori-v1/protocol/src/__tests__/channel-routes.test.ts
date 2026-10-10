@@ -3,13 +3,22 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
 import type { Adapter } from "onebots";
-import { SatoriChannelRouteRegistry } from "../channel-routes.js";
+import { routeStoreName, SatoriChannelRouteRegistry } from "../channel-routes.js";
 
 const adapter = {
     describeCapabilities: () => ({ actions: { get_group_info: true, get_channel_info: true } }),
 } as unknown as Adapter;
 
 describe("SatoriChannelRouteRegistry 持久化", () => {
+    test("清理后同名的账户仍使用不同路由文件", () => {
+        const first = routeStoreName("qq", "bot/a");
+        const second = routeStoreName("qq", "bot?a");
+
+        expect(first).not.toBe(second);
+        expect(first).toMatch(/^qq-bot_a-[a-f0-9]{64}\.json$/);
+        expect(second).toMatch(/^qq-bot_a-[a-f0-9]{64}\.json$/);
+    });
+
     test("重启后可恢复已登记的路由", () => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), "satori-routes-"));
         const file = path.join(dir, "nested", "qq-bot.json");

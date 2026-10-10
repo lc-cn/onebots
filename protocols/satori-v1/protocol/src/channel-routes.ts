@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import type { Adapter, CommonEvent, CommonTypes } from "onebots";
 
 export interface SatoriChannelRoute {
@@ -17,8 +18,21 @@ export interface SatoriChannelRoute {
 const SCENE_TYPES: ReadonlySet<string> = new Set(["private", "group", "channel", "direct"]);
 const SAVE_DELAY_MS = 200;
 
+/** 以平台与账户标识的完整摘要隔离路由文件，可读前缀仅便于排查。 */
+export function routeStoreName(platform: string, accountId: string): string {
+    const hash = createHash("sha256")
+        .update(JSON.stringify([platform, accountId]))
+        .digest("hex");
+    const label = `${platform}-${accountId}`.replace(/[^\w.-]/g, "_").slice(0, 48);
+    return `${label}-${hash}.json`;
+}
+
 export interface SatoriRouteLogger {
-    warn(...args: unknown[]): void;
+    warn(message: string, context?: Record<string, unknown>): void;
+}
+
+function errorContext(error: unknown): Record<string, unknown> {
+    return { error: error instanceof Error ? error.message : String(error) };
 }
 
 function parseRoutes(raw: unknown): Map<string, SatoriChannelRoute> {
@@ -27,14 +41,16 @@ function parseRoutes(raw: unknown): Map<string, SatoriChannelRoute> {
     for (const [id, value] of Object.entries(raw)) {
         if (!value || typeof value !== "object") continue;
         const route = value as Record<string, unknown>;
+        const guildId = route.guild_id;
         if (typeof route.scene_type !== "string" || !SCENE_TYPES.has(route.scene_type)) continue;
         if (typeof route.scene_id !== "string" || !route.scene_id) continue;
-        if (route.guild_id !== undefined && typeof route.guild_id !== "string") continue;
-        result.set(id, {
+        if (guildId !== undefined && typeof guildId !== "string") continue;
+        const parsed: SatoriChannelRoute = {
             scene_type: route.scene_type as CommonTypes.Scene,
             scene_id: route.scene_id,
-            guild_id: route.guild_id,
-        });
+        };
+        if (typeof guildId === "string") parsed.guild_id = guildId;
+        result.set(id, parsed);
     }
     return result;
 }
@@ -59,7 +75,10 @@ export class SatoriChannelRouteRegistry {
             return parseRoutes(JSON.parse(fs.readFileSync(this.storeFile, "utf8")));
         } catch (error) {
             if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
-                this.logger?.warn(`读取 Satori 路由存档失败：${this.storeFile}`, error);
+                this.logger?.warn(
+                    `读取 Satori 路由存档失败：${this.storeFile}`,
+                    errorContext(error),
+                );
             }
             return new Map();
         }
@@ -81,7 +100,7 @@ export class SatoriChannelRouteRegistry {
             fs.renameSync(tmpFile, this.storeFile);
             this.dirty = false;
         } catch (error) {
-            this.logger?.warn(`写入 Satori 路由存档失败：${this.storeFile}`, error);
+            this.logger?.warn(`写入 Satori 路由存档失败：${this.storeFile}`, errorContext(error));
             fs.rmSync(tmpFile, { force: true });
             this.scheduleSave();
         }
