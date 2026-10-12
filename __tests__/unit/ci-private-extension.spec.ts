@@ -17,6 +17,7 @@ const roots: string[] = [];
 afterEach(() => {
     roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true }));
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 });
 
 function fixture(archiveVersion = version, hostPeer = "99.0.1") {
@@ -167,6 +168,23 @@ it("CLI 只使用剩余时间，超过期限不会再调用，保留最后错误
     ).rejects.toBe(error);
     expect(read.mock.calls).toEqual([[1_000], [50]]);
     expect(time).toBe(1_150);
+});
+
+it("默认使用单调时钟，系统日期跳变不会跳过就绪重试", async () => {
+    const wallClock = vi
+        .spyOn(Date, "now")
+        .mockReturnValueOnce(0)
+        .mockReturnValue(Number.MAX_SAFE_INTEGER);
+    const status = { manager: { id: "test" } };
+    const read = vi
+        .fn()
+        .mockImplementationOnce(() => {
+            throw new Error("not ready");
+        })
+        .mockReturnValue(status);
+    await expect(waitForCLIStatus(read, { sleep: async () => {} })).resolves.toBe(status);
+    expect(wallClock).not.toHaveBeenCalled();
+    for (const [budget] of read.mock.calls) expect(Number.isInteger(budget)).toBe(true);
 });
 
 it("空状态不空转或突破总期限，重试成功返回真实状态", async () => {

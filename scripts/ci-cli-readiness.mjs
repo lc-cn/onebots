@@ -3,14 +3,14 @@ export async function waitForCLIStatus(
     readStatus,
     {
         timeout = 30_000,
-        now = Date.now,
+        now = () => performance.now(),
         sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
     } = {},
 ) {
     const deadline = now() + timeout;
     let lastError = new Error("管理服务 CLI 未在期限内就绪");
     while (true) {
-        const budget = deadline - now();
+        const budget = Math.floor(deadline - now());
         if (budget <= 0) throw lastError;
         try {
             const status = readStatus(Math.min(1_000, budget));
