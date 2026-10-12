@@ -1,0 +1,22 @@
+scripts/ci-cli-readiness.mjs
+  s_efe26f87c3b074::t_60d8aef9dc6d81 6,13
+__tests__/unit/ci-private-extension.spec.ts
+  s_efe26f87c3b074::t_60d8aef9dc6d81 20,173-181
+  s_efe26f87c3b074::t_b88ac5672d3a71 182-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "53166ca6348c928dd8d3a3c5fba20278c21499f6",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
