@@ -1,6 +1,6 @@
 {
     "name": "@onebots/adapter-douyin",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "OneBots 抖音 IM 适配器，基于 douyin-im",
     "type": "module",
     "main": "lib/index.js",
