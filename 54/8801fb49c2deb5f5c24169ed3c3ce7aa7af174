@@ -1,0 +1,32 @@
+scripts/ci-command-diagnostic.mjs
+  s_efe26f87c3b074::t_827843e3dd97f5 1-9
+  s_efe26f87c3b074::t_7b9bd9893fd802 10-11
+scripts/stage-ci-private-extension.mjs
+  s_efe26f87c3b074::t_5409005b651aee 1-9,11-35,37-61
+  s_efe26f87c3b074::t_827843e3dd97f5 10,36
+  s_efe26f87c3b074::t_2a96fe2ef0f946 62-67
+.github/workflows/service-architecture.yml
+  s_efe26f87c3b074::t_827843e3dd97f5 234-243,250
+scripts/verify-private-installation-cli.mjs
+  s_efe26f87c3b074::t_827843e3dd97f5 11,35,37,47-51,130
+  s_efe26f87c3b074::t_428d9164abfa1c 137-147
+__tests__/unit/ci-private-extension.spec.ts
+  s_efe26f87c3b074::t_428d9164abfa1c 1-105
+  s_efe26f87c3b074::t_d5e9ec1d484883 106-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "548801fb49c2deb5f5c24169ed3c3ce7aa7af174",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
