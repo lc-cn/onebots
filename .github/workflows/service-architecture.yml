@@ -231,12 +231,24 @@ jobs:
           docker exec -i --user 1000:1000 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs
           docker restart onebots-control-ci
           docker exec -i --user 1000:1000 -e CONTROL_VERIFY_RESTART=1 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs
+      # 发布和验收并行：ICQQ 本体使用当前提交工件，私有 peer 仍从 GitHub Packages 真实下载。
+      # 只修改临时验收容器，正式 Docker 镜像继续排除 ICQQ。
+      - name: Stage current ICQQ artifact in disposable verification container
+        run: |
+          mkdir -p "$RUNNER_TEMP/icqq-artifact"
+          pnpm --filter @onebots/adapter-icqq pack --pack-destination "$RUNNER_TEMP/icqq-artifact"
+          docker cp "$RUNNER_TEMP/icqq-artifact" onebots-control-ci:/tmp/icqq-artifact
+          docker cp scripts/stage-ci-private-extension.mjs onebots-control-ci:/app/scripts/stage-ci-private-extension.mjs
+          docker exec --user 1000:1000 -e ONEBOTS_CI_PRIVATE_ARTIFACT=1 onebots-control-ci node /app/scripts/stage-ci-private-extension.mjs
+          docker restart onebots-control-ci
       - name: Verify ICQQ private peer installation through public CLI
         env:
           GH_PKG_TOKEN: ${{ secrets.GH_PKG_TOKEN }}
         run: |
           test -n "$GH_PKG_TOKEN"
           docker cp scripts/verify-private-installation-cli.mjs onebots-control-ci:/tmp/verify-private-installation-cli.mjs
+          docker cp scripts/ci-command-diagnostic.mjs onebots-control-ci:/tmp/ci-command-diagnostic.mjs
+          docker cp scripts/ci-cli-readiness.mjs onebots-control-ci:/tmp/ci-cli-readiness.mjs
           printf '%s' "$GH_PKG_TOKEN" | docker exec -i --user 1000:1000 onebots-control-ci node /tmp/verify-private-installation-cli.mjs
           docker logs onebots-control-ci 2>&1 | node -e '
             const chunks = [];
