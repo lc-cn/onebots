@@ -248,6 +248,7 @@ jobs:
           test -n "$GH_PKG_TOKEN"
           docker cp scripts/verify-private-installation-cli.mjs onebots-control-ci:/tmp/verify-private-installation-cli.mjs
           docker cp scripts/ci-command-diagnostic.mjs onebots-control-ci:/tmp/ci-command-diagnostic.mjs
+          docker cp scripts/ci-cli-readiness.mjs onebots-control-ci:/tmp/ci-cli-readiness.mjs
           printf '%s' "$GH_PKG_TOKEN" | docker exec -i --user 1000:1000 onebots-control-ci node /tmp/verify-private-installation-cli.mjs
           docker logs onebots-control-ci 2>&1 | node -e '
             const chunks = [];

@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import { stageCIPrivateExtension } from "../../scripts/stage-ci-private-extension.mjs";
 import { ciCommandDiagnostic } from "../../scripts/ci-command-diagnostic.mjs";
+import { waitForCLIStatus } from "../../scripts/ci-cli-readiness.mjs";
 import { resolveGenerationPlan } from "../../packages/onebots/lib/installation/generation-resolver.js";
 import { loadRuntimeArtifacts } from "../../packages/onebots/lib/installation/runtime-artifacts.js";
 import { getExtensionPackageCatalogEntry } from "../../packages/onebots/lib/extension-capability-catalog.js";
@@ -140,7 +141,55 @@ it("CI 诊断保留退出原因，脱敏在截断之前完成", () => {
     expect(output).toContain("元数据不可用");
     expect(output).toContain("[REDACTED]");
     expect(output).not.toContain(secret);
+    const colored = secret.replace("synthetic", "\x1b[31msynthetic\x1b[0m");
+    const normalized = ciCommandDiagnostic({ stderr: colored }, [secret]);
+    expect(normalized).toBe("[REDACTED]");
     const boundary = ciCommandDiagnostic({ stdout: `${"x".repeat(2040)}${secret}` }, [secret]);
     expect(boundary).not.toContain("github");
     expect(boundary.length).toBeLessThanOrEqual(2048);
+});
+
+it("CLI 只使用剩余时间，超过期限不会再调用，保留最后错误", async () => {
+    let time = 0;
+    const error = new Error("CLI connection unavailable");
+    const read = vi.fn((budget: number) => {
+        time += budget;
+        throw error;
+    });
+    await expect(
+        waitForCLIStatus(read, {
+            timeout: 1_150,
+            now: () => time,
+            sleep: async (delay: number) => {
+                time += delay;
+            },
+        }),
+    ).rejects.toBe(error);
+    expect(read.mock.calls).toEqual([[1_000], [50]]);
+    expect(time).toBe(1_150);
+});
+
+it("空状态不空转或突破总期限，重试成功返回真实状态", async () => {
+    let time = 0;
+    const options = {
+        timeout: 250,
+        now: () => time,
+        sleep: async (delay: number) => {
+            time += delay;
+        },
+    };
+    const empty = vi.fn(() => null);
+    await expect(waitForCLIStatus(empty, options)).rejects.toThrow("无效状态");
+    expect(time).toBe(250);
+    expect(empty).toHaveBeenCalledTimes(3);
+    time = 0;
+    const status = { manager: { id: "test" }, gateway: { actual: "stopped" } };
+    const read = vi
+        .fn()
+        .mockImplementationOnce(() => {
+            throw new Error("not ready");
+        })
+        .mockReturnValue(status);
+    await expect(waitForCLIStatus(read, options)).resolves.toBe(status);
+    expect(time).toBe(100);
 });

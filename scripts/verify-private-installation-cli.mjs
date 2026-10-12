@@ -9,6 +9,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { ciCommandDiagnostic } from "./ci-command-diagnostic.mjs";
+import { waitForCLIStatus } from "./ci-cli-readiness.mjs";
 
 const CLI = "/app/packages/onebots/lib/bin.js";
 const WORKSPACE = "/data";
@@ -33,14 +34,15 @@ for (const name of Object.keys(cleanEnvironment)) {
 
 const transcript = [];
 const secrets = [];
-function invoke(args, input) {
+function invoke(args, input, timeout = 75_000) {
     if (input) secrets.push(input);
     const result = spawnSync(process.execPath, [CLI, ...args, "--data-dir", WORKSPACE], {
         cwd: "/app/development",
         encoding: "utf8",
         env: cleanEnvironment,
         ...(input === undefined ? {} : { input }),
-        timeout: 75_000,
+        timeout,
+        killSignal: "SIGKILL",
         maxBuffer: 1024 * 1024,
     });
     transcript.push(result.stdout ?? "", result.stderr ?? "");
@@ -134,17 +136,10 @@ assert.equal(
     "CI 未提供有效的 GitHub Packages 下载授权",
 );
 
-let initialStatus;
-const readyDeadline = Date.now() + 30_000;
-while (!initialStatus) {
-    try {
-        initialStatus = control("status");
-    } catch (error) {
-        if (Date.now() >= readyDeadline) throw error;
-        // Docker restart 返回时管理 socket 可能仍在创建；只等待公开 CLI 就绪。
-        await wait(100);
-    }
-}
+// Docker restart 返回时管理 socket 可能仍在创建；只等待公开 CLI 就绪。
+const initialStatus = await waitForCLIStatus(timeout =>
+    invoke(["control", "status"], undefined, timeout),
+);
 assert.equal(initialStatus.generation.active, null, "私有依赖验收必须在首次激活前执行");
 assert.equal(initialStatus.gateway.desired, "stopped");
 assert.equal(initialStatus.gateway.actual, "stopped");
