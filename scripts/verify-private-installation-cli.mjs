@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { ciCommandDiagnostic } from "./ci-command-diagnostic.mjs";
 
 const CLI = "/app/packages/onebots/lib/bin.js";
 const WORKSPACE = "/data";
@@ -31,7 +32,9 @@ for (const name of Object.keys(cleanEnvironment)) {
 }
 
 const transcript = [];
+const secrets = [];
 function invoke(args, input) {
+    if (input) secrets.push(input);
     const result = spawnSync(process.execPath, [CLI, ...args, "--data-dir", WORKSPACE], {
         cwd: "/app/development",
         encoding: "utf8",
@@ -41,7 +44,11 @@ function invoke(args, input) {
         maxBuffer: 1024 * 1024,
     });
     transcript.push(result.stdout ?? "", result.stderr ?? "");
-    assert.equal(result.status, 0, `公开 CLI 命令失败：onebots ${args[0]} ${args[1] ?? ""}`);
+    assert.equal(
+        result.status,
+        0,
+        `公开 CLI 命令失败：onebots ${args[0]} ${args[1] ?? ""}\n${ciCommandDiagnostic(result, secrets)}`,
+    );
     try {
         return JSON.parse((result.stdout ?? "").trim());
     } catch {
@@ -120,13 +127,24 @@ for await (const chunk of process.stdin) {
     if (Buffer.byteLength(authorization) > 512) assert.fail("CI 下载授权格式无效");
 }
 authorization = authorization.trim();
+secrets.push(authorization);
 assert.equal(
     /^[A-Za-z0-9_]+$/.test(authorization),
     true,
     "CI 未提供有效的 GitHub Packages 下载授权",
 );
 
-const initialStatus = control("status");
+let initialStatus;
+const readyDeadline = Date.now() + 30_000;
+while (!initialStatus) {
+    try {
+        initialStatus = control("status");
+    } catch (error) {
+        if (Date.now() >= readyDeadline) throw error;
+        // Docker restart 返回时管理 socket 可能仍在创建；只等待公开 CLI 就绪。
+        await wait(100);
+    }
+}
 assert.equal(initialStatus.generation.active, null, "私有依赖验收必须在首次激活前执行");
 assert.equal(initialStatus.gateway.desired, "stopped");
 assert.equal(initialStatus.gateway.actual, "stopped");
