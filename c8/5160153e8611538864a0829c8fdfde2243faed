@@ -1,0 +1,29 @@
+__tests__/unit/ci-private-extension.spec.ts
+  s_efe26f87c3b074::t_993cdbdebccf9c 9,144-146,151-182
+  s_efe26f87c3b074::t_29cd7e4476d325 183-195
+.github/workflows/service-architecture.yml
+  s_efe26f87c3b074::t_993cdbdebccf9c 251
+scripts/ci-command-diagnostic.mjs
+  s_efe26f87c3b074::t_993cdbdebccf9c 2-3,5-7,11
+scripts/verify-private-installation-cli.mjs
+  s_efe26f87c3b074::t_993cdbdebccf9c 12,37,44-45,139-142
+scripts/ci-cli-readiness.mjs
+  s_efe26f87c3b074::t_993cdbdebccf9c 1,10-11,15,17-26
+  s_efe26f87c3b074::t_23c15f34668958 2-9,12-14,16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c85160153e8611538864a0829c8fdfde2243faed",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Class Liu <chunlang.liu@rdc-west.com>"
+    }
+  }
+}
