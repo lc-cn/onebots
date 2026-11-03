@@ -1,5 +1,12 @@
 # @onebots/adapter-douyin
 
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies [21e3181]
+  - onebots@1.2.20
+
 ## 1.0.1
 
 ### Patch Changes
