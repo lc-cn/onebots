@@ -10,6 +10,16 @@ const packageVersion = (createRequire(import.meta.url)("../package.json") as { v
 
 /** 启动文件路由 CLI；系统服务的内部入口会绕过 Pastel 和 Ink。 */
 export async function runCli(argv = process.argv): Promise<void> {
+    if (argv[2] === "workspace") {
+        try {
+            const { runWorkspaceCommand } = await import("./workspace-admission/command.js");
+            await runWorkspaceCommand(argv.slice(3));
+        } catch (error) {
+            writeCliError(`[onebots] ${error instanceof Error ? error.message : String(error)}`);
+            process.exitCode = 1;
+        }
+        return;
+    }
     try {
         const interactive = process.stdin.isTTY === true && process.stdout.isTTY === true;
         const { isDirectControlTuiInvocation, runControlTuiCommand } =

@@ -6,12 +6,14 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { waitForComposeState } from "./compose-recreation-readiness.mjs";
+import { registerContainerWorkspace } from "./prepare-container-workspace.mjs";
 
 const image = process.argv[2];
 assert.ok(image && /^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/.test(image), "必须指定已构建的测试镜像");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-compose-recreation-"));
 const project = `ob-recreation-${randomUUID().replaceAll("-", "")}`;
 const data = path.join(root, "data");
+const authorityVolume = `${project}-authority`;
 const composeFile = path.join(root, "compose.json");
 fs.mkdirSync(data);
 fs.writeFileSync(
@@ -22,9 +24,13 @@ fs.writeFileSync(
                 image,
                 pull_policy: "never",
                 stop_grace_period: "30s",
-                volumes: [{ type: "bind", source: data, target: "/data" }],
+                volumes: [
+                    { type: "bind", source: data, target: "/data" },
+                    { type: "volume", source: "authority", target: "/var/lib/onebots-authority" },
+                ],
             },
         },
+        volumes: { authority: { name: authorityVolume } },
     }),
 );
 const docker = (args, input, timeout = 120_000) =>
@@ -128,6 +134,12 @@ async function readyProtocol(container) {
 
 let container;
 try {
+    registerContainerWorkspace(
+        image,
+        `type=bind,source=${data},target=/data`,
+        `type=volume,source=${authorityVolume},target=/var/lib/onebots-authority`,
+        docker,
+    );
     container = await up({ ownership: true, desired: "running", actual: "running" });
     // 创建真实管理认证状态，配对码只在子命令内存中，不输出、不写入验收日志。
     docker([
@@ -203,4 +215,5 @@ try {
         false,
     );
     fs.rmSync(root, { recursive: true, force: true });
+    docker(["volume", "rm", authorityVolume]);
 }

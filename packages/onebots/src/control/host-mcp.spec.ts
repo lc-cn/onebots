@@ -3,7 +3,10 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 
 const roots: string[] = [];
@@ -20,6 +23,7 @@ function directory() {
 async function fixture() {
     const workspace = directory(),
         runtimeRoot = directory();
+    await registerControlTestWorkspace(workspace);
     fs.writeFileSync(
         path.join(workspace, "config.yaml"),
         [

@@ -106,11 +106,12 @@ function installationEvidence() {
         "package-identity",
         "workspace",
         "authentication",
+        "source-contract",
         "management-startup",
         "management-state",
         "web-page",
         "web-asset",
-        "authentication-v2",
+        "authentication-v3",
         "anonymous-denied",
         "management-close",
         "authentication-preserved",
@@ -426,6 +427,40 @@ try {
     }
     assert.match(installOutput, /succeeded.*completed/s);
     installed = true;
+    const registrationPlan = JSON.parse(
+        cli(
+            bin,
+            [
+                "workspace",
+                "plan",
+                "--data-dir",
+                workspace,
+                "--authority-dir",
+                path.join(stateDirectory, "authority"),
+            ],
+            "",
+            env,
+        ),
+    );
+    assert.equal(registrationPlan.kind, "new");
+    const registrationPlanFile = path.join(temporary, "workspace-registration.json");
+    fs.writeFileSync(registrationPlanFile, JSON.stringify(registrationPlan), { mode: 0o600 });
+    const registered = JSON.parse(
+        cli(
+            bin,
+            [
+                "workspace",
+                "register",
+                "--plan-file",
+                registrationPlanFile,
+                "--confirm",
+                registrationPlan.digest,
+            ],
+            "",
+            env,
+        ),
+    );
+    assert.equal(registered.status, "committed");
     installedDefinition = fs.readFileSync(definitionPath);
     installedScmPathName = JSON.parse(servicePresence()).PathName;
     const refusedRecovery = spawnSync(

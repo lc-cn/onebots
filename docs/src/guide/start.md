@@ -1,7 +1,7 @@
 # 快速开始
 
 ::: tip 版本边界
-本文适用于包含常驻管理服务的 OneBots 版本。旧安装应先执行迁移，不要混用旧入口、旧脚本和新管理运行时。
+本文适用于支持工作区来源登记的 OneBots 版本。旧 control v1 服务按[离线升级流程](/guide/workspace-admission)处理；更早的单进程 legacy 不能直接执行严格版 `onebots migrate`。不要混用旧入口、旧脚本和新运行时。
 :::
 
 ## 从源码启动管理端（Linux/macOS）
@@ -11,10 +11,20 @@
 ```sh
 pnpm install --frozen-lockfile
 pnpm build
-node packages/onebots/lib/bin.js serve --data-dir ./workspace
+umask 077
+mkdir -m 700 ./workspace ./workspace-authority
+node packages/onebots/lib/bin.js workspace plan --data-dir ./workspace \
+  --authority-dir ./workspace-authority > workspace-plan.json
+# 阅读计划和会话失效影响，使用计划中的实际 digest 明确确认。
+node packages/onebots/lib/bin.js workspace register \
+  --plan-file workspace-plan.json --confirm '<plan.digest>'
+node packages/onebots/lib/bin.js serve --data-dir ./workspace \
+  --authority-dir ./workspace-authority
 ```
 
-保持此终端运行。空工作区不需要预填平台账号、协议或框架；管理服务会提供 Web 控制台。另开终端生成首次配对码：
+上例只适用于全新空目录；计划文件留在 `workspace/` 之外。authority 必须独立持久保存，重启沿用同一路径，不随业务备份复制。登记本身不启动管理服务或网关；未登记的服务只提供只读维护页，不能配对。
+
+保持最后一条命令的终端运行。空工作区不需要预填账号、协议或框架。另开终端生成首次配对码：
 
 ```sh
 node packages/onebots/lib/bin.js auth bootstrap --data-dir ./workspace
@@ -22,18 +32,7 @@ node packages/onebots/lib/bin.js auth bootstrap --data-dir ./workspace
 
 访问管理地址（默认 `http://127.0.0.1:6727`），输入设备码。配对后使用会话登录，不使用旧用户名密码或手工配置的管理 `access_token`。详见[管理端登录与恢复](/guide/management-login)。
 
-Windows 的普通 PowerShell/CMD 不提供 `rm`；本仓库构建脚本使用 Node.js 清理产物，无需 Git Bash。Windows 前台 `serve` 可用于本地 Web 开发，但它不会创建仅供 SCM 系统服务使用的受保护管理管道，因此不能再运行 `auth bootstrap`。在**全新工作区**首次前台启动时，可在 PowerShell 中生成一次性部署码并复制到剪贴板：
-
-```powershell
-pnpm install --frozen-lockfile
-pnpm build
-$code = node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.stdout.write(randomBytes(32).toString('base64url'))"
-$env:ONEBOTS_BOOTSTRAP_CODE = $code
-$code | Set-Clipboard
-node packages/onebots/lib/bin.js serve --data-dir .\workspace
-```
-
-然后打开管理地址，从剪贴板粘贴配对码（5 分钟内、仅一次）。不要把码发到聊天、提交到仓库或放在命令参数中。已授权浏览器可在「系统 → 设备与访问」给新设备生成码；凭据丢失时才使用全新的 `ONEBOTS_RECOVERY_CODE` 重启前台进程进行恢复。前台模式的本地 CLI/TUI 管理管道不可用，正式 Windows 部署请使用下方安装脚本创建 SCM 服务。不要对已有工作区重复设置初始化码。
+Windows 构建由 Node.js 清理产物，无需 Git Bash。全新 Windows 部署请使用下方的**管理员安装脚本**准备私有目录 ACL、SCM 服务及离线登记指引，不照搬 POSIX `mkdir` 命令。普通前台 `serve` 不提供 SCM 的受保护本地管理管道；一次性部署码也不能代替来源登记或授权接管旧工作区。现有 native 安装缺完整退出证明时不支持直接首次登记，详见[Windows 边界](/guide/workspace-admission#windows-与证明边界)。
 
 在 Web「扩展」选择平台适配器、输出协议和框架，核对完整安装清单后确认。私有模块的下载授权只用于本次安装；必需 peer 一起安装并验证。验证通过后单独应用运行版本。随后在「账号」添加并保存账号，再到「协议」为该账号添加并保存出口；平台要求扫码或验证时，在「待办」完成。安装依赖不会自动启用平台连接。
 
@@ -66,9 +65,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 可以先查看下载的脚本再执行。Windows 的 `Bypass` 仅作用于本次 PowerShell 进程，不修改系统执行策略。脚本默认使用用户目录下的 `.onebots`，已有安装请按升级或迁移流程处理。
 
-`install.sh` 用于 Linux/macOS 首次安装，安装主程序和匹配 Web 产物后调用管理服务的用户级安装、启动与状态命令。它不选择默认协议、不生成虚构账号、不输出长期凭据。Windows 使用具有相同边界的 `install.ps1`，并额外校验随包 SCM 原生宿主。
+`install.sh` 安装公开主程序与匹配 Web 产物，检查来源登记能力后安装用户级服务，并确认服务保持停止，再打印需你阅读、确认和执行的计划、登记、启动及配对命令。它不代为确认登记，不生成账号或长期凭据。Windows 的 `install.ps1` 额外校验随包 SCM 原生宿主并安装系统级服务。源码均位于 `docs/src/public`。
 
-**脚本从公开 npm 下载程序，只有发布包含新管理服务的版本后才能完成安装。** 缺少新架构产物时会保留候选目录并明确失败，不运行旧 CLI。当前工作流会在 GitHub 托管的 Ubuntu 和 macOS runner 上，使用源码打包产物执行真实 systemd 系统级、launchd 用户级生命周期、旧服务迁移与管理进程异常退出恢复验收。只有对应任务通过才构成平台证据；这不等同于公开 npm 已发布。
+**脚本从公开 npm 下载程序，只有发布包含来源登记能力的版本后才能完成安装。** 缺工件或能力不匹配时会保留候选目录并失败，不退回旧 CLI。当前工作流使用源码打包产物检查真实 systemd、launchd 和管理进程恢复；只有对应任务通过才构成该版本的平台证据，不等同于 npm 已发布。
 
 重复执行已完成的安装不会更新程序或重启服务。发现旧配置、旧运行目录或未完成安装时不会覆盖，请先核查状态并使用迁移/恢复流程。管理程序升级使用 `onebots update --manager`，不能通过重复执行安装脚本完成；网关运行版本则由管理端统一升级。详见[升级网关与管理程序](/guide/runtime-update)。
 
@@ -76,8 +75,20 @@ Windows 的 SCM 原生宿主、命名管道、访问控制、首次引导和服�
 
 ## 系统托管
 
-从已安装的新架构 CLI 执行 `onebots install --data-dir <工作区>` 安装用户级服务，之后执行 `onebots start`。首次服务安装不会启动网关账号或改写业务配置；已有旧服务应先迁移，不能用首次安装覆盖。
+全新 Linux/macOS 用户级服务示例（工作区与 authority 互不包含，计划放在业务目录之外）：
 
-系统托管维护管理服务；CLI、TUI 和 Web 通过同一控制接口管理独立网关。Linux systemd、macOS launchd 和 Windows SCM 的原生生命周期、旧服务迁移、故障回退和 patch 升级均已通过对应平台 CI。完整机器重启和真实业务账号恢复仍需部署环境验收。
+```sh
+onebots install --data-dir "$HOME/onebots-data" --authority-dir "$HOME/onebots-authority"
+# 服务保持停止。阅读计划，确认会话失效影响后再登记。
+onebots workspace plan --data-dir "$HOME/onebots-data" \
+  --authority-dir "$HOME/onebots-authority" > "$HOME/onebots-plan.json"
+onebots workspace register --plan-file "$HOME/onebots-plan.json" --confirm '<plan.digest>'
+onebots start
+onebots auth bootstrap --data-dir "$HOME/onebots-data"
+```
+
+已按上方源码流程登记、现在改为系统托管时，先正常关闭前台进程，再用相同 `--data-dir` 和 `--authority-dir` 执行 `install`、`start`，不重复登记。更换 authority 不属于程序升级。旧安装不要覆盖服务定义，按[离线升级与恢复边界](/guide/workspace-admission)处理。
+
+系统托管维护管理服务；CLI、TUI 和 Web 通过同一控制接口管理独立网关。平台生命周期、故障回退和升级的实际支持以该版本对应 CI 与部署验收为准；源码实现不等于 Windows、完整机器重启或真实业务账号恢复已通过验收。普通数据卷副本防双开不提供跨主机 HA 或整机克隆之间的全局互斥。
 
 继续阅读[首次安装与工作台](/local/first-run)和[系统服务](/local/service)，按运行方式完成扩展选择、账号配置和日常启停。

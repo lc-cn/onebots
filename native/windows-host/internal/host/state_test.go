@@ -24,9 +24,10 @@ func TestControlStatusIsBoundToCurrentManagerGeneration(t *testing.T) {
 	store := newStateStore(time.Now())
 	store.set("running", "running", 42)
 	control := protocol.ControlState{
-		Revision: 1,
-		Manager:  protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 42},
-		Gateway:  protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
+		Revision:  1,
+		Manager:   protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 42},
+		Admission: protocol.ControlAdmissionState{State: "verified"},
+		Gateway:   &protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
 	}
 	if err := store.publish(control); err != nil {
 		t.Fatal(err)
@@ -51,9 +52,10 @@ func TestControlInvalidationRevisionAndFreshnessFailClosed(t *testing.T) {
 	store.set("running", "running", 42)
 	manager := protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 42}
 	control := protocol.ControlState{
-		Revision: 1,
-		Manager:  manager,
-		Gateway:  protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
+		Revision:  1,
+		Manager:   manager,
+		Admission: protocol.ControlAdmissionState{State: "verified"},
+		Gateway:   &protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
 	}
 	if err := store.publish(control); err != nil {
 		t.Fatal(err)
@@ -87,7 +89,7 @@ func TestControlRequestBindingRejectsReplacementAndAllowsConfirmedRevisionAdvanc
 	store.now = func() time.Time { return now }
 	store.set("running", "running", 42)
 	manager := protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 42}
-	control := protocol.ControlState{Revision: 1, Manager: manager, Gateway: protocol.ControlGatewayState{Desired: "running", Actual: "stopped"}}
+	control := protocol.ControlState{Revision: 1, Manager: manager, Admission: protocol.ControlAdmissionState{State: "verified"}, Gateway: &protocol.ControlGatewayState{Desired: "running", Actual: "stopped"}}
 	if err := store.publish(control); err != nil {
 		t.Fatal(err)
 	}

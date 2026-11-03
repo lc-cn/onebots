@@ -17,6 +17,14 @@ import type { ServicePlatformState } from "./service-platform.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
 import { migrateInstalledWindowsService } from "./service-migration-windows.js";
 
+export class StrictLegacyMigrationUnsupportedError extends Error {
+    constructor() {
+        super(
+            "严格来源版不支持从旧单进程架构直接迁移。请先由支持旧迁移的版本完成 legacy 到 control v1 的迁移并正常关闭，再用新 CLI 受控离线更新和 workspace 首次登记；未记录操作、备份或改变旧服务。",
+        );
+    }
+}
+
 /** 实际旧服务迁移入口；保留旧工件、准备独立管理候选后切换，不更换业务工作区。 */
 export async function migrateInstalledService(
     input: ManagerServiceSpec,
@@ -24,6 +32,7 @@ export async function migrateInstalledService(
     options: { restart?: boolean } = {},
 ) {
     const target = parseManagerServiceSpec(input);
+    if (target.schemaVersion === 2) throw new StrictLegacyMigrationUnsupportedError();
     if (host.platform === "win32") return migrateInstalledWindowsService(target, host, options);
     if (!["linux", "darwin"].includes(host.platform)) throw new Error("此系统尚未通过服务迁移验收");
     const paths = getServiceFiles(target.scope, host);

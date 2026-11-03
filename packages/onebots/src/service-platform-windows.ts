@@ -22,7 +22,8 @@ export {
 } from "./windows-native-status.js";
 
 export interface WindowsServiceDefinition {
-    schemaVersion: 1;
+    schemaVersion: 1 | 2;
+    controlProtocol?: 3;
     serviceName: typeof SERVICE_NAME;
     hostExecutable: string;
     managerExecutable: string;
@@ -163,9 +164,14 @@ function parseDefinitionBytes(bytes: Buffer): WindowsServiceDefinition {
         "workingDirectory",
         "pipeName",
     ];
-    if (!plainObject(value) || !exactKeys(value, keys)) unavailable();
     if (
-        value.schemaVersion !== 1 ||
+        !plainObject(value) ||
+        !exactKeys(value, [...keys, ...(value.schemaVersion === 2 ? ["controlProtocol"] : [])])
+    )
+        unavailable();
+    if (
+        ![1, 2].includes(value.schemaVersion as number) ||
+        (value.schemaVersion === 2 && value.controlProtocol !== 3) ||
         value.serviceName !== SERVICE_NAME ||
         value.pipeName !== WINDOWS_HOST_PIPE_NAME ||
         ![value.hostExecutable, value.managerExecutable, value.workingDirectory].every(
@@ -209,6 +215,9 @@ function serviceCommand(definition: WindowsServiceDefinition, controlSid: string
         definition.pipeName,
         "--control-sid",
         controlSid,
+        ...(definition.schemaVersion === 2
+            ? ["--protocol-version", String(definition.controlProtocol)]
+            : []),
     ];
     return args.map(quoteWindows).join(" ");
 }
@@ -226,7 +235,8 @@ export function renderWindowsManagerServiceDefinition(input: unknown): string {
     return (
         JSON.stringify(
             {
-                schemaVersion: 1,
+                schemaVersion: spec.schemaVersion,
+                ...(spec.schemaVersion === 2 ? { controlProtocol: 3 as const } : {}),
                 serviceName: SERVICE_NAME,
                 hostExecutable,
                 managerExecutable: spec.nodePath,

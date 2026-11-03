@@ -82,6 +82,27 @@ function fixture() {
     };
 }
 describe("manager service readonly status", () => {
+    it("诊断 manager 可达但来源拒绝，status保留未知网关并说明需本机登记", async () => {
+        const f = fixture();
+        f.ipc.mockRejectedValue(new Error("full diagnostics blocked by source gate"));
+        const result = await inspectManagerServiceStatus("user", f.host, {
+            ...f.dependencies,
+            inspectReadiness: async () => ({
+                schemaVersion: 1,
+                manager: f.manager.manager,
+                admission: {
+                    schemaVersion: 1,
+                    state: "unbound",
+                    reason: "EXPLICIT_REGISTRATION_REQUIRED",
+                },
+                gateway: null,
+            }),
+        });
+        expect(result.manager.ipc).toBe("available");
+        expect(result.diagnostic).toBe("admission-rejected");
+        expect(result.gateway.actual).toBe("unknown");
+        expect(result.gateway.desired).toBe("unknown");
+    });
     it("正常running IPC不掩盖未完成系统操作，状态查询不coldmark或写盘", async () => {
         const f = fixture();
         f.manager.gateway = { desired: "running", actual: "running", recoveryRequired: false };

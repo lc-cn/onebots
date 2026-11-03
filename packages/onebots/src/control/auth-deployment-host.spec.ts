@@ -2,7 +2,10 @@ import fs from "node:fs";
 import { randomBytes } from "node:crypto";
 import { afterEach, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 
 let host: Awaited<ReturnType<typeof startControlHost>> | undefined;
@@ -21,6 +24,7 @@ afterEach(async () => {
 
 it("部署码在网关启动前消费，HTTP配对一次后重启不能替换已有会话", async () => {
     directory = fs.realpathSync(fs.mkdtempSync("/tmp/ob-deploy-auth-"));
+    await registerControlTestWorkspace(directory);
     const code = randomBytes(32).toString("base64url");
     process.env.ONEBOTS_BOOTSTRAP_CODE = code;
     host = await startControlHost({ workspace: directory, port: 0 });
@@ -54,6 +58,7 @@ it("部署码在网关启动前消费，HTTP配对一次后重启不能替换已
 
 it("无终端部署通过新Secret恢复，成功兑换才撤销旧会话且重启不重放", async () => {
     directory = fs.realpathSync(fs.mkdtempSync("/tmp/ob-deploy-recovery-"));
+    await registerControlTestWorkspace(directory);
     process.env.ONEBOTS_BOOTSTRAP_CODE = randomBytes(32).toString("base64url");
     const initialCode = process.env.ONEBOTS_BOOTSTRAP_CODE;
     host = await startControlHost({ workspace: directory, port: 0 });

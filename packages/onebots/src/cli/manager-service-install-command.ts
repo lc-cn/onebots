@@ -3,6 +3,8 @@ import path from "node:path";
 import { bootstrapManagerService } from "../manager-service-bootstrap.js";
 import { bundledRuntimeArtifacts } from "../installation/bundled-runtime-artifacts.js";
 import { parseManagerServiceSpec } from "../manager-service-spec.js";
+import { defaultServiceAuthorityDirectory } from "../service-authority.js";
+import { createDefaultServiceHost } from "../service-host.js";
 import type { CommandResult } from "./command-application.js";
 import {
     ManagerBootstrapCandidateError,
@@ -15,6 +17,7 @@ export interface ManagerServiceInstallCommandOptions {
     host?: string;
     port?: number;
     system?: boolean;
+    authorityDir?: string;
 }
 /** 只读解析现有祖先；不存在的后缀留给已授权安装事务创建。 */
 function futureWorkspace(input: string): string {
@@ -55,16 +58,17 @@ export async function installManagerServiceCommand(
             typeof options !== "object" ||
             Array.isArray(options) ||
             Object.keys(options).some(
-                key => !["dataDir", "host", "port", "system"].includes(key),
+                key => !["dataDir", "host", "port", "system", "authorityDir"].includes(key),
             ) ||
             (options.dataDir !== undefined && typeof options.dataDir !== "string") ||
             (options.host !== undefined && typeof options.host !== "string") ||
             (options.port !== undefined && typeof options.port !== "number") ||
-            (options.system !== undefined && typeof options.system !== "boolean")
+            (options.system !== undefined && typeof options.system !== "boolean") ||
+            (options.authorityDir !== undefined && typeof options.authorityDir !== "string")
         )
             throw new Error();
         spec = parseManagerServiceSpec({
-            schemaVersion: 1,
+            schemaVersion: 2,
             runtimeKind: "control",
             scope: options.system ? "system" : "user",
             workspace: futureWorkspace(
@@ -75,6 +79,12 @@ export async function installManagerServiceCommand(
             binPath: process.execPath,
             host: options.host ?? "127.0.0.1",
             port: options.port ?? 6727,
+            authorityDirectory: options.authorityDir
+                ? path.resolve(options.authorityDir)
+                : defaultServiceAuthorityDirectory(
+                      options.system ? "system" : "user",
+                      createDefaultServiceHost(),
+                  ),
         });
     } catch {
         return { output: "管理服务安装选项或目录无法确认，未执行安装。", exitCode: 2 };
@@ -88,6 +98,7 @@ export async function installManagerServiceCommand(
             nodePath: spec.nodePath,
             host: spec.host,
             port: spec.port,
+            ...(spec.schemaVersion === 2 ? { authorityDirectory: spec.authorityDirectory } : {}),
         };
         const operation = await bootstrapManagerService(
             { service },
@@ -95,6 +106,7 @@ export async function installManagerServiceCommand(
         );
         const label =
             "操作 " + operation.id + "：" + operation.status + "（" + operation.phase + "）";
+        const planFile = path.join(path.dirname(spec.authorityDirectory), "workspace-plan.json");
         if (
             operation.status === "succeeded" &&
             operation.phase === "completed" &&
@@ -103,7 +115,15 @@ export async function installManagerServiceCommand(
             return {
                 output:
                     label +
-                    "\n管理服务已注册；本命令不会启动服务。启动：\nonebots start" +
+                    "\n管理服务已注册；本命令不会启动服务。未登记的工作区先核对并确认来源计划：\nonebots workspace plan --data-dir " +
+                    quote(spec.workspace) +
+                    " --authority-dir " +
+                    quote(spec.schemaVersion === 2 ? spec.authorityDirectory : "") +
+                    " > " +
+                    quote(planFile) +
+                    "\nonebots workspace register --plan-file " +
+                    quote(planFile) +
+                    " --confirm '<plan.digest>'\n登记后启动：\nonebots start" +
                     (spec.scope === "system" ? " --system" : "") +
                     "\n启动后在本机签发配对码：\nonebots auth bootstrap --data-dir " +
                     quote(spec.workspace),

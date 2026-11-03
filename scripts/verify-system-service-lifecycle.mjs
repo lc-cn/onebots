@@ -10,8 +10,14 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { installedManagerVersion } from "./manager-upgrade-acceptance-helpers.mjs";
 import { managerCandidateStates } from "./service-acceptance-diagnostics.mjs";
+import {
+    registerStoppedServiceWorkspace,
+    snapshotFixtureTree,
+    verifyRegisteredServiceColdStart,
+} from "./service-workspace-admission-acceptance.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SERVICE = "onebots-gateway.service";
@@ -448,18 +454,27 @@ function migrationServiceErrors() {
     }
 }
 
-async function invokeMigration(args) {
-    const result = invokeCli(args, [0, 1]);
-    if (result.status === 0) return result.stdout;
-    const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
-    const id = /操作 ([0-9a-f-]{36})：/iu.exec(text)?.[1];
-    throw new Error(
-        `公开 CLI migrate 失败（exit ${String(result.status)}）；操作编号已报告=${Boolean(id)}；迁移记录=${JSON.stringify(migrationJournalStates())}；管理候选阶段=${JSON.stringify(managerCandidateStates(STATE_DIRECTORY))}；捕获阶段=${JSON.stringify(id ? migrationCaptureState(id) : { operation: false })}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}；服务错误=${JSON.stringify(migrationServiceErrors())}`,
-    );
-}
-
-function spawnMigration(args) {
-    const child = spawn(cli, args, {
+// Compatibility fixture only: a v1 retained transaction interrupted before any target host starts.
+// The public strict migrate entry is separately asserted to refuse without writing anything.
+function spawnHistoricalMigration(target) {
+    const migrationModule = pathToFileURL(
+        path.join(runtime, "node_modules/onebots/lib/service-migration.js"),
+    ).href;
+    const hostModule = pathToFileURL(
+        path.join(runtime, "node_modules/onebots/lib/service-host.js"),
+    ).href;
+    const source = `import { migrateInstalledService } from ${JSON.stringify(migrationModule)};
+import { createDefaultServiceHost } from ${JSON.stringify(hostModule)};
+const host = createDefaultServiceHost();
+const exec = host.exec;
+host.exec = (file, args, options) => {
+    if (file === "systemctl" && ["start", "restart", "kickstart"].includes(args[0]))
+        throw new Error("历史中断夹具禁止启动任何目标服务");
+    return exec(file, args, options);
+};
+const result = await migrateInstalledService(${JSON.stringify(target)}, host);
+process.exit(result.status === "succeeded" ? 0 : 1);`;
+    const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
         cwd: runtime,
         env: cliEnvironment,
         stdio: "ignore",
@@ -677,14 +692,35 @@ async function verifyLegacyMigration(port, operationIds) {
     const originalIdentity = /^InvocationID=([0-9a-f]{32})$/mu.exec(originalService)?.[1];
     assert.ok(Number.isInteger(originalProcessId) && originalProcessId > 0);
     assert.ok(originalIdentity);
-    const interrupted = spawnMigration([
-        "migrate",
-        "--system",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(port),
-    ]);
+    const originalServiceTree = snapshotFixtureTree(STATE_DIRECTORY);
+    const originalWorkspaceTree = snapshotFixtureTree(legacyData);
+    const rejected = invokeCli(
+        ["migrate", "--system", "--host", "127.0.0.1", "--port", String(port)],
+        [1],
+    );
+    assert.match(rejected.stdout, /严格来源版不支持从旧单进程架构直接迁移/u);
+    assert.equal(
+        execute("systemctl", ["show", SERVICE, "--property=MainPID", "--property=InvocationID"])
+            .stdout,
+        originalService,
+        "预flight拒绝不得停止或重启旧进程",
+    );
+    assert.deepEqual(fs.readFileSync(DEFINITION), originalDefinition);
+    assert.deepEqual(snapshotFixtureTree(STATE_DIRECTORY), originalServiceTree);
+    assert.deepEqual(snapshotFixtureTree(legacyData), originalWorkspaceTree);
+    assert.equal(migrationJournalStates().length, 0, "预flight拒绝不得分配迁移日志");
+
+    const interrupted = spawnHistoricalMigration({
+        schemaVersion: 1,
+        runtimeKind: "control",
+        scope: "system",
+        workspace: legacyData,
+        workingDirectory: legacyRuntime,
+        nodePath: fs.realpathSync(process.execPath),
+        binPath: fs.realpathSync(path.join(runtime, "node_modules/onebots/lib/bin.js")),
+        host: "127.0.0.1",
+        port,
+    });
     const stopping = await Promise.race([
         eventually(
             () => singleMigrationJournal(),
@@ -695,9 +731,10 @@ async function verifyLegacyMigration(port, operationIds) {
             "未能在真实 systemd 停服窗口稳定观察到 stopping-old",
             2400,
         ),
-        interrupted.closed.then(result => {
+        interrupted.closed.then(async result => {
+            const journal = singleMigrationJournal();
             throw new Error(
-                `迁移 CLI 在故障注入窗口前退出（exit ${String(result.status)}，signal ${String(result.signal)}）`,
+                `历史v1夹具在故障注入窗口前退出（exit ${String(result.status)}，signal ${String(result.signal)}）；迁移记录=${JSON.stringify(migrationJournalStates())}；管理候选阶段=${JSON.stringify(managerCandidateStates(STATE_DIRECTORY))}；捕获阶段=${JSON.stringify(journal ? migrationCaptureState(journal.id) : { operation: false })}；Node捕获=${JSON.stringify(await linuxNodeCaptureState())}；服务错误=${JSON.stringify(migrationServiceErrors())}`,
             );
         }),
     ]);
@@ -883,80 +920,23 @@ async function verifyLegacyMigration(port, operationIds) {
     );
     assert.deepEqual(fs.readFileSync(legacyConfig), originalConfiguration);
 
-    const migrationOutput = await invokeMigration([
-        "migrate",
-        "--system",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(port),
-    ]);
-    const migrationId = operation(migrationOutput, "migrate");
-    operationIds.push(migrationId);
-    const migrationJournal = path.join(
-        STATE_DIRECTORY,
-        "migrations",
-        `${migrationId}.journal.json`,
+    // Strict v2 deliberately has no legacy success migration. The real cold-start check below
+    // runs only after an empty v2 installation has been explicitly registered.
+    execute("systemctl", ["disable", "--now", SERVICE]);
+    const absent = await eventually(
+        () =>
+            execute("systemctl", ["show", SERVICE, "--property=ActiveState", "--property=MainPID"])
+                .stdout,
+        value => value.includes("ActiveState=inactive") && value.includes("MainPID=0"),
+        "测试创建的 legacy systemd 进程未退出，不能进入新安装验收",
     );
-    const journalBeforeColdStart = fs.readFileSync(migrationJournal);
-    const beforeColdStart = await eventually(
-        () => ({
-            os: cliJson(["status", "--system", "--json"]),
-            control: cliJson(["control", "status", "--data-dir", legacyData]),
-        }),
-        value =>
-            value.os.installation === "control" &&
-            value.os.manager.state === "running" &&
-            value.os.manager.ipc === "available" &&
-            value.control.gateway.desired === "running" &&
-            value.control.gateway.actual === "running",
-        "旧 systemd 服务迁移后管理进程或网关未稳定运行",
-    );
-    assert.equal(
-        JSON.parse(journalBeforeColdStart).id,
-        migrationId,
-        "迁移完成记录必须持久化公开 CLI 返回的 operation ID",
-    );
-    await assertManagementOnline(port);
-
-    execute("systemctl", ["kill", "--kill-who=all", "--signal=SIGKILL", SERVICE]);
-    const afterColdStart = await eventually(
-        () => ({
-            os: cliJson(["status", "--system", "--json"]),
-            control: cliJson(["control", "status", "--data-dir", legacyData]),
-        }),
-        value =>
-            value.os.manager.state === "running" &&
-            value.os.manager.ipc === "available" &&
-            value.os.manager.pid !== beforeColdStart.os.manager.pid &&
-            value.control.manager.id !== beforeColdStart.control.manager.id &&
-            value.control.gateway.desired === "running" &&
-            value.control.gateway.actual === "running" &&
-            value.control.gateway.instance?.id !== beforeColdStart.control.gateway.instance?.id,
-        "systemd 未在管理进程异常退出后完成冷启动恢复",
-    );
-    assert.ok(afterColdStart.os.manager.pid);
-    assert.deepEqual(
-        fs.readFileSync(migrationJournal),
-        journalBeforeColdStart,
-        "冷启动不得改写或重派已完成的迁移 operation",
-    );
-    assert.equal(
-        fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
-        "legacy-preserve-me\n",
-    );
-    await assertManagementOnline(port);
-
-    operationIds.push(operation(invokeCli(["stop", "--system"]).stdout, "stop migrated service"));
-    await eventually(
-        () => cliJson(["status", "--system", "--json"]),
-        value => value.manager.state === "stopped" && value.manager.pid === null,
-        "迁移后的 systemd 管理服务未稳定停止",
-    );
-    operationIds.push(
-        operation(invokeCli(["uninstall", "--system"]).stdout, "uninstall migrated service"),
-    );
+    assert.ok(absent);
+    fs.unlinkSync(DEFINITION);
+    fs.unlinkSync(METADATA);
+    execute("systemctl", ["daemon-reload"]);
+    execute("systemctl", ["reset-failed", SERVICE], { statuses: [0, 1] });
     assertSystemServiceAbsent();
+    assert.deepEqual(fs.readFileSync(legacyConfig), originalConfiguration);
     assert.equal(
         fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
         "legacy-preserve-me\n",
@@ -1022,12 +1002,27 @@ try {
     assert.equal(installed.manager.state, "stopped");
     assert.equal(installed.manager.enabled, true);
     assert.equal(installed.manager.pid, null);
+    assert.equal(installedMetadata.schemaVersion, 2);
+    assert.equal(installedMetadata.authorityDirectory, path.join(STATE_DIRECTORY, "authority"));
+    effectUnknown = true;
+    await registerStoppedServiceWorkspace({
+        workspace: dataDirectory,
+        authorityDirectory: installedMetadata.authorityDirectory,
+        planFile: path.join(temporary, "workspace-registration.json"),
+        system: true,
+        invokeCli,
+        cliJson,
+        operation,
+        operationIds,
+        eventually,
+    });
+    effectUnknown = false;
 
     effectUnknown = true;
     const startedOutput = invokeCli(["start", "--system"]).stdout;
     effectUnknown = false;
     operationIds.push(operation(startedOutput, "start"));
-    const beforeRestart = await eventually(
+    let beforeRestart = await eventually(
         () => ({
             os: cliJson(["status", "--system", "--json"]),
             control: cliJson(["control", "status", "--data-dir", dataDirectory]),
@@ -1043,6 +1038,19 @@ try {
     assert.ok(Number.isInteger(beforeRestart.os.manager.pid) && beforeRestart.os.manager.pid > 0);
     assert.ok(beforeRestart.control.manager.id);
     assert.ok(beforeRestart.control.gateway.instance?.id);
+    await assertManagementOnline(port);
+    effectUnknown = true;
+    beforeRestart = await verifyRegisteredServiceColdStart({
+        workspace: dataDirectory,
+        stateDirectory: STATE_DIRECTORY,
+        before: beforeRestart,
+        cliJson,
+        statusArgs: ["status", "--system", "--json"],
+        killManager: () =>
+            execute("systemctl", ["kill", "--kill-who=all", "--signal=SIGKILL", SERVICE]),
+        eventually,
+    });
+    effectUnknown = false;
     await assertManagementOnline(port);
 
     fs.writeFileSync(path.join(dataDirectory, "acceptance-user-data.txt"), "preserve-me\n", {
@@ -1350,7 +1358,7 @@ try {
     assert.equal(new Set(operationIds).size, operationIds.length, "生命周期操作 ID 必须互不相同");
     completed = true;
     process.stdout.write(
-        "✓ 真实 systemd 系统级验收：旧服务迁移中断冷回退、完成迁移后的异常退出冷启动、旧 patch 到当前 patch 的管理程序不可变升级与重启恢复、operation 幂等对账、新安装生命周期及卸载保留数据均通过\n",
+        "✓ 真实 systemd 系统级验收：公开旧迁移无写入拒绝、历史v1中断记录冷回退、v2未登记诊断与显式首登、异常退出冷启动、旧 patch 到当前 patch 的不可变升级与重启恢复、operation 幂等对账及卸载保留数据均通过\n",
     );
 } finally {
     if (completed) fs.rmSync(temporary, { recursive: true, force: true });

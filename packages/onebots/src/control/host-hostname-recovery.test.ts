@@ -5,7 +5,10 @@ import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { afterEach, expect, it, vi } from "vitest";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { acquireControlWorkspace } from "./workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 import {
@@ -51,6 +54,7 @@ function receipt(root: string) {
 
 posix("正常关闭后 hostname 改变，保留运行意图并恢复真实网关，不修改配置或配对身份", async () => {
     const root = workspace();
+    await registerControlTestWorkspace(root);
     const initial = await start(root);
     const initialStatus = await initial.client.status();
     expect(initialStatus.gateway.actual).toBe("running");
@@ -83,6 +87,7 @@ posix("正常关闭后 hostname 改变，保留运行意图并恢复真实网关
 
 posix("跨 hostname 接管保留 stopped 意图，不自动启动网关", async () => {
     const root = workspace();
+    await registerControlTestWorkspace(root);
     const initial = await start(root);
     expect((await initial.client.gateway("stop")).status).toBe("succeeded");
     await initial.host.close();
@@ -99,6 +104,7 @@ posix.each(["active", "never-started"])(
     "跨 hostname 的 %s 记录仍拒绝接管且不改写证据",
     async phase => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         const initial = await start(root);
         await initial.host.close();
         const previous = receipt(root);
@@ -123,6 +129,7 @@ posix.each(["active", "never-started"])(
 
 posix("closed 历史 manager PID 在新容器复用时，不据此认定旧 manager 存活", async () => {
     const root = workspace();
+    await registerControlTestWorkspace(root);
     const initial = await start(root);
     await initial.host.close();
     const previous = receipt(root);
@@ -139,6 +146,7 @@ posix("closed 历史 manager PID 在新容器复用时，不据此认定旧 mana
 
 posix("跨 hostname closed 只允许普通接管，不能作为迁移静止证明", async () => {
     const root = workspace();
+    await registerControlTestWorkspace(root);
     const initial = await start(root);
     await initial.host.close();
     const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
@@ -154,6 +162,7 @@ posix.each([{ actual: "failed", recoveryRequired: true }, { operations: [{ statu
     "closed 与未静止网关状态不一致时拒绝跨 hostname 接管 (%j)",
     async patch => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         const initial = await start(root);
         await initial.host.close();
         const gateway = path.join(root, ".control/gateway.json");
@@ -176,6 +185,7 @@ posix.each([{ actual: "failed", recoveryRequired: true }, { operations: [{ statu
 
 posix("closed 跨 hostname 仍检查当前 hostname 的存活 worker，不清理或发信号", async () => {
     const root = workspace();
+    await registerControlTestWorkspace(root);
     const initial = await start(root);
     await initial.host.close();
     vi.spyOn(os, "hostname").mockReturnValue(`rebuilt-${randomUUID()}`);
@@ -210,6 +220,7 @@ posix("closed 跨 hostname 仍检查当前 hostname 的存活 worker，不清理
 
 posix("跨 hostname closed 凭据权限异常不能自动修复或接管", async () => {
     const root = workspace();
+    await registerControlTestWorkspace(root);
     const initial = await start(root);
     await initial.host.close();
     const previous = receipt(root);
@@ -226,6 +237,7 @@ posix("跨 hostname closed 凭据权限异常不能自动修复或接管", async
 
 posix("closed 即使记录的旧网关 PID 已退出，也不能跨 hostname 接管含实例的状态", async () => {
     const root = workspace();
+    await registerControlTestWorkspace(root);
     const initial = await start(root);
     await initial.host.close();
     const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
@@ -249,6 +261,7 @@ posix("closed 即使记录的旧网关 PID 已退出，也不能跨 hostname 接
 
 posix("实际 closed 记录不替代残留旧 hostname worker 的归属证明", async () => {
     const root = workspace();
+    await registerControlTestWorkspace(root);
     const initial = await start(root);
     const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
     await once(exited, "exit");

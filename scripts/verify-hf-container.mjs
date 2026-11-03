@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
+import { registerContainerWorkspace } from "./prepare-container-workspace.mjs";
 
 const image = process.argv[2] || process.env.ONEBOTS_HF_TEST_IMAGE;
 if (!image || image.startsWith("-") || /[\s\0]/.test(image))
@@ -9,6 +10,7 @@ if (!image || image.startsWith("-") || /[\s\0]/.test(image))
 const prefix = `onebots-hf-check-${randomUUID()}`;
 const containers = [],
     volumes = [];
+const authorities = new Map();
 const code = randomBytes(32).toString("base64url");
 const recoveryCode = randomBytes(32).toString("base64url");
 const downloadToken = randomBytes(32).toString("base64url");
@@ -67,6 +69,8 @@ function start(name, storage, recovery = false) {
         "127.0.0.1::7860",
         "--volume",
         `${storage}:/data`,
+        "--volume",
+        `${authorities.get(storage)}:/var/lib/onebots-authority`,
         image,
     ]);
 }
@@ -106,7 +110,8 @@ async function httpStatus(url, route, expected) {
     await response.body?.cancel();
 }
 function seed(storage, source) {
-    // Explicit entrypoint bypass is restricted to this script's new private test volume.
+    // These fault fixtures are already registered and belong to the real node manager user.
+    // Root-created 0600 files would test an ownership failure and previously relied on chown-R.
     const name = `${prefix}-seed-${containers.length}`;
     containers.push(name);
     docker([
@@ -115,13 +120,25 @@ function seed(storage, source) {
         name,
         "--entrypoint",
         "node",
-        "--volume",
-        `${storage}:/data`,
+        "--user",
+        "1000:1000",
+        "--mount",
+        `type=volume,source=${storage},target=/data,volume-nocopy`,
         image,
         "--input-type=module",
         "-e",
         source,
     ]);
+}
+function register(storage) {
+    const authority = volume(`authority-${authorities.size}`);
+    authorities.set(storage, authority);
+    registerContainerWorkspace(
+        image,
+        `type=volume,source=${storage},target=/data`,
+        `type=volume,source=${authority},target=/var/lib/onebots-authority`,
+        docker,
+    );
 }
 function noCredentialLogs(name, ...tokens) {
     const result = spawnSync("docker", ["logs", name], {
@@ -138,11 +155,100 @@ function noCredentialLogs(name, ...tokens) {
         "credential appeared in container logs",
     );
 }
+function restoreMounts(storage, authority) {
+    // Docker may copy image directory metadata onto an empty named volume on every mount.
+    // The rejection fixture compares application effects, so seed/inspect/run use identical
+    // real targets with copy-up disabled; retain root ctime and ownership in the assertion.
+    return [
+        "--mount",
+        `type=volume,source=${storage},target=/data,volume-nocopy`,
+        "--mount",
+        `type=volume,source=${authority},target=/var/lib/onebots-authority,volume-nocopy`,
+    ];
+}
+function restoreFixture(storage, authority, source) {
+    return docker([
+        "run",
+        "--rm",
+        "--entrypoint",
+        "node",
+        ...restoreMounts(storage, authority),
+        image,
+        "--input-type=module",
+        "-e",
+        source,
+    ]);
+}
+function restoreFingerprint(storage, authority) {
+    return restoreFixture(
+        storage,
+        authority,
+        `
+import fs from 'node:fs'; const result=[];
+function visit(file,label) { const stat=fs.lstatSync(file,{bigint:true});
+if(stat.isSymbolicLink()) throw new Error('unexpected-link');
+result.push({label,uid:String(stat.uid),gid:String(stat.gid),mode:String(stat.mode),
+ctimeNs:String(stat.ctimeNs),bytes:stat.isFile()?fs.readFileSync(file).toString('hex'):null});
+if(stat.isDirectory()) for(const name of fs.readdirSync(file).sort()) visit(file+'/'+name,label+'/'+name); }
+visit('/data','data'); visit('/var/lib/onebots-authority','authority'); process.stdout.write(JSON.stringify(result));`,
+    );
+}
+async function rejectAutomaticRestore(storage, authority) {
+    const before = restoreFingerprint(storage, authority);
+    const dataRoot = JSON.parse(before).find(item => item.label === "data");
+    assert.equal(dataRoot.uid, "0", "采样不能被 Docker image copy-up 改回 node 属主");
+    assert.equal(Number(dataRoot.mode) & 0o777, 0o700);
+    const name = `${prefix}-disabled-restore-${containers.length}`;
+    containers.push(name);
+    docker([
+        "run",
+        "-d",
+        "--name",
+        name,
+        "--env",
+        "HF_REPO_ID=disabled-fixture",
+        "--env",
+        "HF_TOKEN",
+        ...restoreMounts(storage, authority),
+        image,
+    ]);
+    const state = await waitFor(() => {
+        const value = JSON.parse(docker(["inspect", "--format", "{{json .State}}", name]));
+        return !value.Running ? value : null;
+    });
+    assert.equal(state.ExitCode, 1);
+    assert.ok(docker(["logs", name]).includes("首期禁用 HF_REPO_ID 自动恢复"));
+    assert.equal(restoreFingerprint(storage, authority), before);
+    noCredentialLogs(name);
+}
 try {
+    stage = "HF_REPO_ID refuses before empty-root handoff or authority initialization";
+    const restoreEmpty = volume("restore-empty"),
+        restoreEmptyAuthority = volume("restore-empty-authority");
+    restoreFixture(
+        restoreEmpty,
+        restoreEmptyAuthority,
+        "import fs from 'node:fs'; fs.chownSync('/data',0,0); fs.chmodSync('/data',0o700);",
+    );
+    await rejectAutomaticRestore(restoreEmpty, restoreEmptyAuthority);
+    stage = "HF_REPO_ID preserves existing authentication, account and authority metadata";
+    const restoreExisting = volume("restore-existing"),
+        restoreExistingAuthority = volume("restore-existing-authority");
+    restoreFixture(
+        restoreExisting,
+        restoreExistingAuthority,
+        `import fs from 'node:fs'; fs.chownSync('/data',0,0); fs.chmodSync('/data',0o700);
+fs.mkdirSync('/data/.control',{mode:0o700}); fs.writeFileSync('/data/.control/auth.json','synthetic-auth',{mode:0o600});
+fs.mkdirSync('/data/data',{mode:0o700}); fs.writeFileSync('/data/data/account.bin','synthetic-session',{mode:0o600});
+fs.mkdirSync('/var/lib/onebots-authority/authority',{mode:0o700});
+fs.writeFileSync('/var/lib/onebots-authority/authority/authority.sqlite','synthetic-authority',{mode:0o600});`,
+    );
+    await rejectAutomaticRestore(restoreExisting, restoreExistingAuthority);
     stage = "empty volume";
     const storage = volume("empty"),
         name = `${prefix}-empty`;
     stage = "empty container launch";
+    register(storage);
     start(name, storage);
     stage = "empty manager HTTP readiness";
     let url = await base(name);
@@ -223,6 +329,7 @@ process.stdout.write(JSON.stringify({safe: keys.includes('PATH') && !keys.includ
     const brokenVolume = volume("damaged"),
         broken = `${prefix}-damaged`;
     const original = "synthetic-private-value: [\r\n";
+    register(brokenVolume);
     seed(
         brokenVolume,
         `import fs from 'node:fs'; fs.writeFileSync('/data/config.yaml',${JSON.stringify(original)},{mode:0o600});`,
@@ -241,6 +348,7 @@ process.stdout.write(JSON.stringify({safe: keys.includes('PATH') && !keys.includ
     stage = "interrupted restore gate";
     const interruptedVolume = volume("interrupted"),
         interrupted = `${prefix}-interrupted`;
+    register(interruptedVolume);
     seed(
         interruptedVolume,
         "import fs from 'node:fs'; fs.mkdirSync('/data/.hf-restore-pending',{mode:0o700});",
@@ -253,7 +361,7 @@ process.stdout.write(JSON.stringify({safe: keys.includes('PATH') && !keys.includ
     assert.notEqual(state.ExitCode, 0);
     noCredentialLogs(interrupted);
     console.log(
-        "HF container acceptance passed: pairing, restart, private gateway, damaged configuration and restore gate",
+        "HF container acceptance passed: disabled automatic restore preserves empty/existing volumes; pairing, restart, private gateway, damaged configuration and pending-restore gate",
     );
 } catch {
     process.exitCode = 1;

@@ -2,8 +2,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LegacyServiceInspection } from "../legacy-service-inspection.js";
 import { createDefaultServiceHost } from "../service-host.js";
-import { migrateInstalledService } from "../service-migration.js";
+import {
+    migrateInstalledService,
+    StrictLegacyMigrationUnsupportedError,
+} from "../service-migration.js";
 import { parseManagerServiceSpec } from "../manager-service-spec.js";
+import { defaultServiceAuthorityDirectory } from "../service-authority.js";
 import type { CommandResult } from "./command-application.js";
 import {
     readWindowsServiceMigrationResult,
@@ -15,6 +19,7 @@ export interface ServiceMigrationCommandOptions {
     restart?: boolean;
     host?: string;
     port?: number;
+    authorityDir?: string;
 }
 
 /** 只把旧服务位置与当前CLI工件交给统一迁移事务，不在命令层实现停机或恢复。 */
@@ -37,7 +42,7 @@ export async function migrateServiceCommand(
             const spec = new LegacyServiceInspection(scope, host).readSpec();
             if (!spec) return { output: "未找到已安装的旧服务，未执行迁移。", exitCode: 1 };
             target = parseManagerServiceSpec({
-                schemaVersion: 1,
+                schemaVersion: 2,
                 runtimeKind: "control",
                 scope,
                 workspace: path.dirname(spec.configPath),
@@ -46,6 +51,9 @@ export async function migrateServiceCommand(
                 binPath: fileURLToPath(new URL("../bin.js", import.meta.url)),
                 host: options.host ?? "127.0.0.1",
                 port: options.port ?? 6727,
+                authorityDirectory: options.authorityDir
+                    ? path.resolve(options.authorityDir)
+                    : defaultServiceAuthorityDirectory(scope, host),
             });
         }
     } catch {
@@ -87,7 +95,9 @@ export async function migrateServiceCommand(
             }`,
             exitCode: 1,
         };
-    } catch {
+    } catch (error) {
+        if (error instanceof StrictLegacyMigrationUnsupportedError)
+            return { output: error.message, exitCode: 1 };
         // 底层可能包含OS输出及路径，固定诊断不泄漏配置；不猜测是否已派发。
         if (host.platform === "win32") {
             try {

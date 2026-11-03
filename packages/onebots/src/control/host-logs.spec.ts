@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 const roots: string[] = [];
 const cleanups: Array<() => Promise<void>> = [];
@@ -12,6 +15,7 @@ afterEach(async () => {
 });
 it("已停止网关仍可通过HTTP和本机读取日志，匿名与撤销设备均拒绝", async () => {
     const workspace = fs.realpathSync(fs.mkdtempSync("/tmp/ob-host-logs-"));
+    await registerControlTestWorkspace(workspace);
     roots.push(workspace);
     const host = await startControlHost({
         workspace,

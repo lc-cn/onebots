@@ -1,5 +1,5 @@
 export interface WindowsNativeStatus {
-    version: 2;
+    version: 2 | 3;
     requestId: string;
     ok: true;
     state: {
@@ -10,10 +10,12 @@ export interface WindowsNativeStatus {
             revision: number;
             publishedAt: string;
             manager: { id: string; version: string; pid: number };
+            /** v2 只用于历史 inspection，不能视为新生产准入证明。 */
+            admission?: { state: "verified" | "rejected" };
             gateway: {
                 desired: "running" | "stopped";
                 actual: "starting" | "running" | "stopping" | "stopped" | "failed";
-            };
+            } | null;
         };
     };
 }
@@ -24,9 +26,7 @@ export function windowsServiceUnavailable(): never {
     throw new Error("无法安全确认 Windows SCM 管理服务状态");
 }
 
-export function isPlainWindowsStatusObject(
-    value: unknown,
-): value is Record<string, unknown> {
+export function isPlainWindowsStatusObject(value: unknown): value is Record<string, unknown> {
     return (
         !!value &&
         typeof value === "object" &&
@@ -74,7 +74,7 @@ export function parseWindowsNativeStatus(
     )
         windowsServiceUnavailable();
     if (
-        value.version !== 2 ||
+        ![2, 3].includes(value.version as number) ||
         value.ok !== true ||
         typeof value.requestId !== "string" ||
         !/^[A-Za-z0-9._:-]{1,64}$/.test(value.requestId)
@@ -94,13 +94,14 @@ export function parseWindowsNativeStatus(
     const manager = state.manager;
     if (
         !isPlainWindowsStatusObject(manager) ||
-        !hasExactWindowsStatusKeys(manager, manager.pid === undefined ? ["state"] : ["state", "pid"])
+        !hasExactWindowsStatusKeys(
+            manager,
+            manager.pid === undefined ? ["state"] : ["state", "pid"],
+        )
     )
         windowsServiceUnavailable();
     if (
-        !["starting", "running", "stopping", "stopped", "failed"].includes(
-            String(state.service),
-        ) ||
+        !["starting", "running", "stopping", "stopped", "failed"].includes(String(state.service)) ||
         !["running", "stopping", "stopped", "exited"].includes(String(manager.state)) ||
         typeof state.startedAt !== "string" ||
         !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(state.startedAt) ||
@@ -116,11 +117,29 @@ export function parseWindowsNativeStatus(
         const control = state.control;
         if (
             !isPlainWindowsStatusObject(control) ||
-            !hasExactWindowsStatusKeys(control, ["revision", "publishedAt", "manager", "gateway"])
+            !hasExactWindowsStatusKeys(control, [
+                "revision",
+                "publishedAt",
+                "manager",
+                "gateway",
+                ...(value.version === 3 ? ["admission"] : []),
+            ])
         )
             windowsServiceUnavailable();
         const controlManager = control.manager;
         const gateway = control.gateway;
+        const admission = control.admission;
+        if (
+            value.version === 3 &&
+            (!isPlainWindowsStatusObject(admission) ||
+                !hasExactWindowsStatusKeys(admission, ["state"]) ||
+                !["verified", "rejected"].includes(String(admission.state)))
+        )
+            windowsServiceUnavailable();
+        const rejected =
+            value.version === 3 &&
+            isPlainWindowsStatusObject(admission) &&
+            admission.state === "rejected";
         if (
             typeof control.revision !== "number" ||
             !Number.isSafeInteger(control.revision) ||
@@ -141,13 +160,18 @@ export function parseWindowsNativeStatus(
             !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(
                 controlManager.version,
             ) ||
-            controlManager.pid !== manager.pid ||
-            !isPlainWindowsStatusObject(gateway) ||
-            !hasExactWindowsStatusKeys(gateway, ["desired", "actual"]) ||
-            !["running", "stopped"].includes(String(gateway.desired)) ||
-            !["starting", "running", "stopping", "stopped", "failed"].includes(
-                String(gateway.actual),
-            )
+            controlManager.pid !== manager.pid
+        )
+            windowsServiceUnavailable();
+        if (
+            rejected
+                ? gateway !== null
+                : !isPlainWindowsStatusObject(gateway) ||
+                  !hasExactWindowsStatusKeys(gateway, ["desired", "actual"]) ||
+                  !["running", "stopped"].includes(String(gateway.desired)) ||
+                  !["starting", "running", "stopping", "stopped", "failed"].includes(
+                      String(gateway.actual),
+                  )
         )
             windowsServiceUnavailable();
     }

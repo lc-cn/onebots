@@ -11,10 +11,11 @@ Docker 只托管常驻管理服务，管理服务负责独立网关的启停。�
 ```bash
 docker build -t onebots-control .
 docker run -d --name onebots --restart unless-stopped \
-  -p 6727:6727 -v "$(pwd)/data:/data" onebots-control
+  -p 6727:6727 -v "$(pwd)/data:/data" \
+  -v onebots-authority:/var/lib/onebots-authority onebots-control
 ```
 
-访问 `http://localhost:6727`，在宿主终端签发一次性配对码：
+首次启动只提供来源诊断，尚不能配对。先停止服务，通过挂载相同两个卷的离线容器执行 [工作区计划与显式登记](/guide/workspace-admission)，再正常启动。登记完成后访问 `http://localhost:6727`，在宿主终端签发一次性配对码：
 
 ```bash
 docker exec --user 1000:1000 onebots \
@@ -37,7 +38,7 @@ ICQQ 及其私有 SDK 不预置于基础镜像；需要时通过统一安装界�
 
 ## 数据与权限
 
-必须挂载整个 `/data`，以便容器重建后保留：
+必须挂载整个 `/data`，并独立持久挂载 `/var/lib/onebots-authority`。后者不能与数据备份一起复制。数据卷在重建后保留：
 
 | 路径 | 内容 |
 | --- | --- |
@@ -47,13 +48,15 @@ ICQQ 及其私有 SDK 不预置于基础镜像；需要时通过统一安装界�
 
 同机持久化需要保留 `.control`。同一持久卷正常执行 `docker compose down` 后再 `docker compose up -d`，无需固定 `hostname`：只有管理服务完成正常关闭、写入 `closed` 所有权记录，且网关已停止、没有未决实例、worker 检查通过时，新容器才能接管。原有网关运行/停止意图、配置和管理认证会保留。
 
-强制终止、宿主掉电或关闭未完成可能留下 `active` 记录；若同时发生 hostname 改变，服务仍只开放读取与诊断，不会把无法确认的历史进程当作已退出。先运行 `docker exec --user 1000:1000 onebots node /app/packages/onebots/lib/bin.js doctor --data-dir /data --json --strict` 并保留现场，勿删除或手改 `.control/process-ownership.json` 来绕过检查。
+强制终止、宿主掉电或关闭未完成可能留下 `active` 记录；若同时发生 hostname 改变，服务保留诊断，不会把无法确认的历史进程当作已退出。先运行 `docker exec --user 1000:1000 onebots node /app/packages/onebots/lib/bin.js doctor --data-dir /data --authority-dir /var/lib/onebots-authority/authority --json --strict` 并保留现场，勿删除或手改 `.control/process-ownership.json` 来绕过检查。
 
-上述正常重建不等同于向另一主机迁移备份。**不支持复制 `.control` 跨主机**，即使其中记录为 `closed`：当前版本不能区分同卷重建与保留权限的卷副本，两份独立工作区的本地锁也不能互相排斥，因此不能保证副本不会与原服务同时启动。跨主机备份必须排除 `.control`，保留业务数据，在目标机重新配对并通过管理端安装、验证扩展；确认原服务已停止后再启用目标账号。旧 `/data/extensions` 不会作为新运行版本直接加载。
+上述正常重建不等同于向另一主机迁移备份。**不支持复制 `.control` 跨主机**，即使其中记录为 `closed`：严格版核验独立 authority 登记与目录物理身份，普通数据卷副本不能自行运行；复制 authority 或整机克隆不在证明范围。
+
+手动转移业务配置前，目标必须先作为独立新安装完成空工作区登记，再通过管理端配置、安装和验证扩展；已有业务数据不能放进未登记目录后当作 fresh 首登。必须先核实源实例及其受管进程已停止，不拷贝 `.control`、authority 或旧 `/data/extensions` 作为目标运行版本。这里不承诺完整归档导入、自动接管或全局 fencing；旧 control v1 升级与更早 legacy 的兼容阶段见[工作区登记与离线升级](/guide/workspace-admission)。
 
 若旧 hostname 的下载或配置验证 worker 记录仍残留，即使顶层记录为 `closed`，现有归属检查仍会拒绝接管；不能在新容器中用同号 PID 证明旧 worker 已退出。请保留这些记录并人工核实，不通过删除记录或跳过 hostname 校验来强行恢复。
 
-入口以 root 准备卷并交给 `node` 用户（uid/gid 1000），随后降权运行管理服务。若卷不允许调整属主则明确失败；指定 `--user` 时须提前保证该用户可写 `/data`。不要通过开放管理目录给所有用户来绕过权限错误。
+入口只会把**真正为空的** `/data` 挂载目录本身交给 `node` 用户（uid/gid 1000），随后降权运行；包含隐藏文件也算已有内容。已有卷不递归 `chown` 或 `chmod`，来源拒绝时保留认证和业务现场。运行用户无法访问时应先停止服务，离线核对原有卷的所有者和权限，入口不会自动修复或清理。指定 `--user` 时也须预先准备相应权限。HF 独立归档工具不会由入口自动执行，也不提供事后递归修复属主。不要通过开放管理目录给所有用户来绕过权限错误。
 
 ## 健康、端口与排查
 
@@ -63,63 +66,27 @@ ICQQ 及其私有 SDK 不预置于基础镜像；需要时通过统一安装界�
 docker logs --tail 100 onebots
 docker inspect --format '{{json .State.Health}}' onebots
 docker exec --user 1000:1000 onebots \
-  node /app/packages/onebots/lib/bin.js doctor --data-dir /data
+  node /app/packages/onebots/lib/bin.js doctor --data-dir /data \
+  --authority-dir /var/lib/onebots-authority/authority
 ```
 
 管理监听默认 `6727`，使用 `PORT` 环境变量修改并同步端口映射；覆盖 `--port` 时也须让 `PORT` 与其一致。业务配置中的端口不决定管理服务监听。
 
 Docker 的 restart 策略托管管理进程，网关生命周期由管理服务维护。不要通过容器重启反复重试状态未知的安装或恢复操作，先检查操作记录和诊断。
 
-## 部署到 Hugging Face Spaces
+## Hugging Face 镜像模板与支持边界
 
-仓库内提供了面向 [Hugging Face Spaces](https://huggingface.co/docs/hub/spaces-sdks-docker) 的 Docker 配置，使用端口 **7860**（HF 默认），无需在 HF 上从源码构建。
+`Dockerfile.hf` 保留端口 **7860**、部署码隔离和受限业务备份恢复工具，但不代表已完成 HF 平台的来源 provider 验收。
 
-**使用步骤：**
+HF 的 [Storage Buckets 可挂载一个或多个存储桶到自定义路径](https://huggingface.co/docs/hub/spaces-storage)。这些挂载是否提供稳定目录物理身份、可靠的本地 SQLite 文件锁和持久化屏障，当前尚未验证。**不能把 Bucket 或其 FUSE 挂载、两个目录路径直接当作可靠本地卷使用**；未验收的来源存储不支持启动业务，不自动退回 `/data` 子目录或容器可写层保存 authority。本机 OrbStack 的本地 virtiofs 共享目录属于另一种 provider，其 bind mount 验收不能外推到云端存储桶挂载。
 
-1. 在 Hugging Face 创建 Space，SDK 选择 **Docker**。
-2. 在 Space 仓库中放入以下四个文件（可从本仓库复制，并保留 `scripts/` 子目录）：
-   - **Dockerfile**：复制自仓库的 `Dockerfile.hf`（或把 `Dockerfile.hf` 重命名为 `Dockerfile`）。
-   - **docker-entrypoint-hf.sh**：与 `Dockerfile.hf` 同目录的入口脚本。
-   - **scripts/hf-repository-download.mjs**：有界恢复下载器，路径需与 `Dockerfile` 中的 `COPY` 保持一致。
-   - **scripts/hf-data-archive-restore.mjs**：数据归档检查与隔离恢复器，同样保留该相对路径。
-3. 在 Space → **Settings** → **Secrets** 中新增 `ONEBOTS_BOOTSTRAP_CODE`。用 `node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.stdout.write(randomBytes(32).toString('base64url'))"` 生成随机码，启动后五分钟内在配对页输入。不要放在公开 Variables 中，配对成功后删除该 Secret。
-4. 如需持久化配置与数据，见下方「HF 上持久化并查看 /data」。
+使用该模板的部署必须另行满足与标准镜像相同的两个独立、可靠本地持久卷，完成离线来源计划和显式登记，之后才可启动并使用部署码配对。本仓库的 `verify-hf-container.mjs` 在本机 Docker 的独立 named volumes 上验证入口、配对、重建与拒绝路径；它不是 HF 实机、Bucket/FUSE 或宿主重启验收。
 
-`Dockerfile.hf` 基于官方镜像 `ghcr.io/lc-cn/onebots:master`，仅增加 HF 的端口、入口脚本与两个无外部依赖的恢复边界，构建快且不需要 GitHub Packages 的 build secret。
+复制模板时须同时保留 `docker-entrypoint-hf.sh`、`docker-workspace.sh`、`docker-authority.sh`、`scripts/hf-repository-download.mjs`、`scripts/hf-data-archive-restore.mjs`，且基础镜像与脚本为同一版本。缺少独立 authority 挂载时入口明确失败。
 
-部署码只用于首次配对，持久化时只保存摘要，启动后立即从进程环境删除，不传给网关。相同码重启不会延长有效期；未配对时可以换全新随机码后重启（最多 16 次）。已有会话不会被部署码替换；有终端时使用本机 `onebots auth recover`。无终端时，删除旧 `ONEBOTS_BOOTSTRAP_CODE` Secret，按上面的命令生成全新随机码，作为私有 `ONEBOTS_RECOVERY_CODE` Secret 保存并重启，在五分钟内到配对页输入，成功后删除该 Secret。新码兑换成功才撤销旧会话；同码重启不会重发或续期。恢复码不能用于首次初始化，两种 Secret 不能同时设置，也不能复用旧部署码。有效本地恢复码优先；若此前刚申请过本地恢复码，请使用该码，或等它过期后再换全新部署恢复码。恢复历史最多保存 16 次，超过上限需本机恢复；不要删除认证文件绕过限制。管理端不再接受 `ONEBOTS_ACCESS_TOKEN` 或旧用户名密码。
+**首期禁用 `HF_REPO_ID` 自动恢复。** 只要此变量非空，入口就在下载、工作区或 authority 初始化、权限修改之前明确退出；移除此变量后才能继续正常来源登记与启动。受控恢复将另行补齐，不能通过先恢复再登记、忽略 `.control` 或自动绑定绕过来源证明。
 
-构建 HF 镜像时应使用包含常驻管理服务的同版本基础镜像；需要固定版本时传入 `--build-arg ONEBOTS_BASE_IMAGE=<镜像标签>`，不能混用旧镜像与新入口。
-
-### HF 上挂载并查看持久化的 /data
-
-- **挂载**：Hugging Face 的持久化存储由平台在**运行时**自动挂载，路径固定为 **`/data`**（与 OneBots 使用的目录一致）。  
-  1. 打开你的 Space → **Settings** → **Storage**（或 Billing / 存储相关设置）。  
-  2. 若提供 **Persistent storage** 升级项，开通后 HF 会把持久化卷挂载到容器的 `/data`，无需在 Dockerfile 里写 `VOLUME` 或挂载命令。  
-  3. 若当前账号/区域未提供持久化存储，重启或重建 Space 后 `/data` 内的内容会丢失；可将重要配置备份到 [Dataset](https://huggingface.co/docs/hub/spaces-storage#dataset-storage) 或外部存储。
-
-- **查看**：HF 不提供“在网页上浏览容器内 `/data` 文件”的功能；Space 的 **Files** 页只显示仓库（Dockerfile、脚本等），不显示运行时卷里的内容。  
-  - 完成配对后，可在 OneBots 的配置界面检查和编辑配置。
-  - 首次运行且未挂载持久化卷时，管理服务会在 `/data` 下生成不含账号和协议的 `config.yaml`，仅当启用持久化后该文件才会在重启后保留。
-
-### 从已有备份恢复
-
-优先使用持久化卷。新管理服务尚未接入旧版“Web 保存即上传 Space 仓库”的自动备份，不要据此假定数据已经备份，也不要将明文配置或账号数据库上传到公开仓库。
-
-可设置 `HF_REPO_ID`，私有仓库下载使用 Secrets 中只读的 `HF_TOKEN`。入口仅在 `/data` 完全为空时尝试下载 `data_backup.tar.gz`；未取得归档时再尝试 `config_backup.yaml`。已有卷不会被远端快照覆盖；无备份或配置损坏时仍保留管理端供配置修复。
-
-归档可包含 `config.yaml`、`data/` 下的账号数据和数据库、`static/`。必须排除 `.control`、依赖目录、包管理授权、缓存和临时文件；不能恢复旧管理会话、历史 PID 或已验证运行版本收据。扩展恢复后须在管理端重新安装与验证。备份数据库前应停止网关并确认退出，不能把活跃数据库的普通文件复制当作一致备份。
-
-恢复检查路径、链接、条目数量与大小限制，通过后才发布文件。取得归档但校验或恢复失败时直接终止，不用另一份配置掩盖失败。残留 `.hf-restore-*` 会阻止启动：先保留卷检查恢复结果，确认无运行进程后在全新空卷重新恢复，不要反复重启或直接清除标记。
-
-管理监听使用 `PORT`（默认 7860），不会改写业务 YAML。DNS 与出网限制应在部署环境排查，入口不覆盖系统 DNS。
-
-本地测试 HF 镜像（基础镜像须与入口版本一致）：
-
-```bash
-docker build -f Dockerfile.hf -t onebots-hf .
-docker run -p 7860:7860 -v $(pwd)/data:/data onebots-hf
-```
+独立 `hf-repository-download.mjs` / `hf-data-archive-restore.mjs` 工具仍保留，但工具存在不代表归档可直接首次登记或覆盖一个已登记工作区。归档必须排除 `.control`、authority、依赖与下载授权，不能恢复管理会话或 PID 收据；没有完整受支持的导入流程时，保留备份，不直接覆盖运行卷。不要把明文账号数据上传到公开仓库。已有 `.hf-restore-*` 或下载临时标记仍阻止入口启动，必须保留现场诊断，不自动重试或清理。
 
 ## 生产环境建议
 

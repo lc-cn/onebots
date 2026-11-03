@@ -74,19 +74,9 @@ export class GenerationInstaller {
     }
 
     status(id: string): GenerationInstallOperation {
-        const file = this.file(id);
-        const stat = fs.lstatSync(file);
-        if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 16_384)
-            throw new Error("安装操作记录无效");
-        const value: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
-        if (!isOperation(value) || value.id !== id) throw new Error("安装操作记录无效");
-        if (value.phase === "verified") {
-            if (!value.candidateId) throw new Error("已验证安装缺少候选版本");
-            const generation = this.options.store.readVerified(value.candidateId);
-            if (generation.operationId !== id || generation.planDigest !== value.planDigest)
-                throw new Error("安装结果与版本验证收据不一致");
-        }
-        return value;
+        return readGenerationInstallOperation(this.directory, id, key =>
+            this.options.store.readVerified(key),
+        );
     }
 
     install(
@@ -266,7 +256,12 @@ export class GenerationInstaller {
 }
 
 function verifyLocalArtifacts(plan: GenerationPlan): void {
-    for (const artifact of [plan.host, plan.core, ...(plan.web ? [plan.web] : []), ...plan.extensions]) {
+    for (const artifact of [
+        plan.host,
+        plan.core,
+        ...(plan.web ? [plan.web] : []),
+        ...plan.extensions,
+    ]) {
         if (!artifact.spec.startsWith("file:")) continue;
         const file = artifact.spec.slice(5);
         const stat = fs.lstatSync(file);
@@ -304,4 +299,26 @@ function isOperation(value: unknown): value is GenerationInstallOperation {
             item.error === "INSTALL_FAILED" ||
             item.error === "INTERRUPTED")
     );
+}
+
+/** 离线登记复用相同收据校验，不运行构造器的中断修复。 */
+export function readGenerationInstallOperation(
+    directory: string,
+    id: string,
+    readVerified: (id: string) => ReturnType<GenerationStore["readVerified"]>,
+): GenerationInstallOperation {
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(id)) throw new Error("安装操作标识无效");
+    const file = path.join(directory, `${id}.json`);
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > 16_384)
+        throw new Error("安装操作记录无效");
+    const value: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!isOperation(value) || value.id !== id) throw new Error("安装操作记录无效");
+    if (value.phase === "verified") {
+        if (!value.candidateId) throw new Error("已验证安装缺少候选版本");
+        const generation = readVerified(value.candidateId);
+        if (generation.operationId !== id || generation.planDigest !== value.planDigest)
+            throw new Error("安装结果与版本验证收据不一致");
+    }
+    return value;
 }

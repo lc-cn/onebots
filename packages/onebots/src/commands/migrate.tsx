@@ -7,6 +7,10 @@ export const description = "将已安装的旧服务迁移到常驻管理服务�
 export const options = z
     .object({
         system: z.boolean().describe(option({ description: "迁移系统级服务（默认用户级）" })),
+        authorityDir: z
+            .string()
+            .optional()
+            .describe(option({ description: "卷外持久身份目录", valueDescription: "path" })),
         restart: z
             .boolean()
             .default(false)

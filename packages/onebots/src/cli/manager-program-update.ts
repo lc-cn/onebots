@@ -36,6 +36,7 @@ export interface ManagerProgramUpdateOptions {
     version?: string;
     operationId?: string;
     artifacts?: string;
+    authorityDir?: string;
 }
 
 interface InstalledManager {
@@ -106,6 +107,12 @@ export async function runManagerProgramUpdate(
                 host,
                 options.version,
             );
+            if (
+                options.authorityDir &&
+                candidate.authorityDirectory &&
+                options.authorityDir !== candidate.authorityDirectory
+            )
+                throw new Error("原升级计划的卷外身份目录不能在续办时改变");
             dependencies.output(
                 JSON.stringify({
                     scope: "manager",
@@ -124,6 +131,12 @@ export async function runManagerProgramUpdate(
                     candidateDirectory: candidate.candidateDirectory,
                     candidateDigest: candidate.candidateDigest,
                     expectedPreviousDigest: current.digest,
+                    ...((candidate.authorityDirectory ?? options.authorityDir)
+                        ? {
+                              authorityDirectory:
+                                  candidate.authorityDirectory ?? options.authorityDir,
+                          }
+                        : {}),
                 },
                 host,
             );
@@ -202,6 +215,7 @@ export async function runManagerProgramUpdate(
                 id,
                 scope,
                 expectedPreviousDigest: current.digest,
+                ...(options.authorityDir ? { authorityDirectory: options.authorityDir } : {}),
                 archiveSha256: release.archiveSha256,
                 artifacts: {
                     host: {
@@ -235,6 +249,9 @@ export async function runManagerProgramUpdate(
                 candidateDirectory: candidate.candidateDirectory,
                 candidateDigest: candidate.candidateDigest,
                 expectedPreviousDigest: current.digest,
+                ...((candidate.authorityDirectory ?? options.authorityDir)
+                    ? { authorityDirectory: candidate.authorityDirectory ?? options.authorityDir }
+                    : {}),
             },
             host,
         );

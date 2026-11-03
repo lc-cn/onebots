@@ -221,6 +221,8 @@ describe("管理服务迁移进程证明", () => {
             pid = await deadPid();
         for (const relative of [
             "generation-verifications",
+            "activation-verification-workers",
+            "application-verification-workers",
             "configuration/verification-workers",
             "configuration/schema-workers",
         ]) {
@@ -243,6 +245,29 @@ describe("管理服务迁移进程证明", () => {
             expect(await verifyServiceMigrationProcesses(f.workspace)).toBe(true);
         }
     });
+    it.each(["activation-verification-workers", "application-verification-workers"])(
+        "%s 的活worker同时阻断认领与closed落盘，不清理其证据",
+        async relative => {
+            const first = fixture();
+            const allocated = allocateConfigurationVerification(path.join(first.control, relative));
+            const ownerFile = path.join(allocated.directory, "owner.json");
+            const before = fs.readFileSync(ownerFile);
+            expect(await claimServiceProcessOwnership(first.workspace, randomUUID(), false)).toBe(
+                false,
+            );
+            expect(fs.readFileSync(ownerFile)).toEqual(before);
+
+            const second = fixture(),
+                id = randomUUID();
+            expect(await claimServiceProcessOwnership(second.workspace, id, false)).toBe(true);
+            const running = allocateConfigurationVerification(path.join(second.control, relative));
+            const receiptFile = path.join(second.control, "process-ownership.json");
+            const receipt = fs.readFileSync(receiptFile);
+            await expect(closeServiceProcessOwnership(second.workspace, id)).rejects.toThrow();
+            expect(fs.readFileSync(receiptFile)).toEqual(receipt);
+            expect(fs.existsSync(path.join(running.directory, "owner.json"))).toBe(true);
+        },
+    );
     it("下载worker与downloader都检查，未知权限不能解释为退出", async () => {
         const f = fixture(),
             pid = await deadPid();

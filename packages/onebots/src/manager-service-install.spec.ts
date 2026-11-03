@@ -24,6 +24,10 @@ import { acquireControlWorkspace } from "./control/workspace.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform } from "./service-platform.js";
+import {
+    planWorkspaceRegistration,
+    isEmptyBusinessWorkspace,
+} from "./workspace-admission/registration-plan.js";
 // 仅测试安装事务；产品入口必须先完成 bootstrap 候选验证。
 async function installManagerService(
     spec: ManagerServiceSpec,
@@ -123,6 +127,22 @@ function fixture(platformName: "linux" | "darwin" = "linux") {
     return { root, workspace, spec, host, files, platform, controls, effects, queries };
 }
 describe("manager installation transaction", () => {
+    it("v2 安装只留空目录与管理锁，后续正规登记仍识别为新工作区", async () => {
+        const test = fixture();
+        const authorityDirectory = path.join(test.files.stateDir, "authority");
+        const spec = { ...test.spec, schemaVersion: 2 as const, authorityDirectory };
+        const result = await installManagerService(spec, test.host, { platform: test.platform });
+        expect(result.status).toBe("succeeded");
+        expect(isEmptyBusinessWorkspace(test.workspace)).toBe(true);
+        expect(fs.readdirSync(test.workspace)).toEqual([".control"]);
+        expect(fs.readdirSync(path.join(test.workspace, ".control"))).toEqual([
+            "manager-lock.sqlite",
+        ]);
+        expect((await planWorkspaceRegistration(test.workspace, authorityDirectory)).kind).toBe(
+            "new",
+        );
+        expect(test.effects).toEqual(["reload:true"]);
+    });
     it.each(["blank", "damaged"])(
         "%s business configuration is neither created nor rewritten; installation never starts manager",
         async mode => {

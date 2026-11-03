@@ -4,10 +4,12 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { startControlHost } from "./host.js";
-import { controlSocket, acquireControlWorkspace } from "./workspace.js";
+import { controlSocket } from "./workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
-import { prepareServiceMigrationWorkspace } from "../service-migration-workspace.js";
-import { prepareServiceProcessOwnershipSeed } from "../service-migration-processes.js";
+import {
+    registerControlTestWorkspace,
+    controlTestAuthority,
+} from "../../test-utils/control-test-workspace.js";
 
 const directories: string[] = [];
 const cleanups: Array<() => Promise<void>> = [];
@@ -19,6 +21,7 @@ afterEach(async () => {
 async function start(workspace: string) {
     const host = await startControlHost({
         workspace,
+        authorityDirectory: controlTestAuthority(workspace),
         port: 0,
         gatewayEntrypoint: path.resolve(import.meta.dirname, "../../lib/gateway/entry.js"),
     });
@@ -80,11 +83,13 @@ async function setup(damaged = false) {
     const root = fs.mkdtempSync("/tmp/ob-mig-host-");
     directories.push(root);
     const operationId = "migration-host-test";
-    prepareServiceMigrationWorkspace(root, operationId, "stopped");
-    const release = acquireControlWorkspace(root);
-    try { prepareServiceProcessOwnershipSeed(fs.realpathSync(root)); }
-    finally { release(); }
+    await registerControlTestWorkspace(root, "stopped");
     const marker = path.join(root, ".control/migration-pending.json");
+    fs.writeFileSync(
+        marker,
+        JSON.stringify({ schemaVersion: 1, operationId, desired: "stopped" }),
+        { mode: 0o600 },
+    );
     if (damaged) fs.writeFileSync(marker, '{"private-marker-secret":');
     const running = await start(root);
     const { code } = await createLocalControlClient(root).bootstrap();

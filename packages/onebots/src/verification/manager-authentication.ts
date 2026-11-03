@@ -2,17 +2,38 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { ControlAuth } from "../control/auth.js";
+import {
+    verifyAuthenticationBinding,
+    type AuthenticationBindingContext,
+} from "../control/auth-binding.js";
 
 /** 使用验证器自己的认证格式创建样本，不能让候选用旧格式自行生成通过样本。 */
-export function prepareManagerAuthenticationProbe(workspace: string) {
+export function prepareManagerAuthenticationProbe(
+    workspace: string,
+    bindingContext: AuthenticationBindingContext,
+) {
     const statePath = path.join(workspace, ".control/auth.json");
-    if (fs.existsSync(statePath)) throw new Error("认证兼容验证需要独立空白工作区");
-    const auth = new ControlAuth({ statePath });
+    if (!verifyAuthenticationBinding(workspace, bindingContext))
+        throw new Error("认证兼容验证需要已登记的独立空白工作区");
+    const initial: unknown = JSON.parse(fs.readFileSync(statePath, "utf8"));
+    if (
+        !initial ||
+        typeof initial !== "object" ||
+        Array.isArray(initial) ||
+        (initial as Record<string, unknown>).paired !== false ||
+        !Array.isArray((initial as Record<string, unknown>).sessions) ||
+        ((initial as Record<string, unknown>).sessions as unknown[]).length !== 0 ||
+        ["bootstrap", "recovery", "device", "deploymentBootstrap", "deploymentRecovery"].some(
+            key => (initial as Record<string, unknown>)[key] !== null,
+        )
+    )
+        throw new Error("认证兼容验证需要已登记的独立空白工作区");
+    const auth = new ControlAuth({ statePath, bindingContext });
     const first = auth.pair(auth.issueBootstrap());
     const second = auth.pair(auth.issueDevice());
     const bytes = fs.readFileSync(statePath, "utf8");
     const state = JSON.parse(bytes);
-    if (state.version !== 2 || state.sessions.length !== 2)
+    if (state.version !== 3 || state.sessions.length !== 2)
         throw new Error("认证兼容验证样本格式无效");
     const assertPreserved = () => {
         if (fs.readFileSync(statePath, "utf8") !== bytes)

@@ -1,6 +1,6 @@
 # Docker Deployment
 
-Docker hosts the persistent OneBots manager without requiring Node.js on the host. The manager controls a separate gateway process, so Web management remains available when the gateway is stopped or fails. An empty volume starts without preselected adapters, protocols, accounts, or frameworks.
+Docker hosts the persistent OneBots manager without requiring Node.js on the host. The manager controls a separate gateway process, so Web management remains available when the gateway stops or fails. A new empty workspace requires explicit offline registration; until then it exposes a read-only maintenance page without pairing or business access.
 
 ## Prerequisites
 
@@ -12,12 +12,11 @@ Docker hosts the persistent OneBots manager without requiring Node.js on the hos
 
 ### Option 1: Docker Compose (recommended)
 
-Create a `docker-compose.yml` in your project directory. **You must mount `./data` to `/data`** so that user config (`config.yaml`) and data are persisted; otherwise they are lost when the container restarts.
+Create a `docker-compose.yml` in your project directory. Persist **both `./data:/data` and a separate named authority volume**. Do not copy the authority with the business backup. The image and CLI must include workspace admission support.
 
 ```yaml
 # OneBots gateway - Docker Compose (official image)
-# Usage: docker compose up -d
-# Mount ./data to persist user config.yaml and data
+# Register the empty workspace offline before docker compose up -d.
 
 services:
   onebots:
@@ -29,6 +28,7 @@ services:
     volumes:
       # Persist user config config.yaml and data (SQLite, logs)
       - ./data:/data
+      - onebots-authority:/var/lib/onebots-authority
     environment:
       - NODE_ENV=production
       # Optional for deployments without a terminal; leave unset otherwise
@@ -39,12 +39,22 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
+
+volumes:
+  onebots-authority:
 ```
 
-Then run:
+For a new empty workspace, keep the service stopped and save the plan outside `data/`:
 
 ```bash
-# Start (runs in background; config and data are in ./data)
+umask 077
+mkdir -p ./data
+docker compose run --rm --no-deps -T onebots workspace plan \
+  --data-dir /data --authority-dir /var/lib/onebots-authority/authority > onebots-plan.json
+# Read the plan and revocation impact; substitute its actual digest.
+docker compose run --rm --no-deps -T onebots workspace register \
+  --plan-file - --confirm '<plan.digest>' < onebots-plan.json
+# Registration does not start the manager or gateway.
 docker compose up -d
 
 # View logs
@@ -54,7 +64,7 @@ docker compose logs -f onebots
 docker compose down
 ```
 
-The container runs a persistent management service, which owns the gateway subprocess. An empty workspace starts without platform accounts or protocol outputs. A damaged business configuration does not remove access to the management console.
+The registered manager starts without platform accounts or protocol outputs. After it is running, pair a browser. Existing control v1 deployments need the [offline upgrade procedure](/guide/workspace-admission); do not reuse this fresh-install flow for an existing business directory or directly run strict-version `onebots migrate` on a monolithic legacy installation.
 
 Authorize the browser with a device pairing code issued locally:
 
@@ -62,7 +72,7 @@ Authorize the browser with a device pairing code issued locally:
 docker exec -u node onebots node /app/packages/onebots/lib/bin.js auth bootstrap --data-dir /data
 ```
 
-Enter the returned code within five minutes on the pairing page to create a management session. If browser authorization is lost, issue a local code with `auth recover` instead; the previous session is invalidated only when that code is redeemed. Keep it private. Management authentication no longer uses a token in `config.yaml`, `ONEBOTS_ACCESS_TOKEN`, or the old username/password login. Protocol access tokens remain separate business settings. Without a terminal, use the one-time deployment Secret described in the HF section below.
+Enter the returned code within five minutes on the pairing page to create a management session. If browser authorization is lost, issue a local code with `auth recover` instead; the previous session is invalidated only when that code is redeemed. Keep it private. Management authentication no longer uses a token in `config.yaml`, `ONEBOTS_ACCESS_TOKEN`, or the old username/password login. Protocol access tokens remain separate business settings. After source registration, deployments without an interactive terminal can pair with the one-time deployment Secret described in the HF section below; it does not authorize registration.
 
 Use Web or TUI to select extensions, review the installation plan, install and verify a candidate generation, then explicitly activate it. Configure accounts and protocol connections separately; choosing a framework does not automatically enable a protocol. Configuration changes use validation and explicit application, with the management service remaining available during gateway restarts.
 
@@ -70,9 +80,9 @@ The deployment code in `.env.example` is commented out by default; do not set it
 
 ### Container user and volume permissions
 
-The entrypoint creates `/data` if needed, assigns it to the built-in `node` user (uid/gid `1000`) when started as root, then drops privileges with `su-exec`. The manager and gateway do not remain running as root. Existing volume ownership may change to `1000:1000`.
+The entrypoint assigns only a **truly empty** `/data` mount point to the built-in `node` user (uid/gid `1000`) when started as root, then drops privileges with `su-exec`. Existing workspace contents and ownership are not recursively repaired. The independent authority mount initializes only a new private `authority` subdirectory; invalid existing permissions cause failure without repair.
 
-If ownership changes fail, startup stops. An explicit Docker `--user` or Compose `user:` is preserved and must already have access to the workspace. Installed dependencies and verified generations are managed under `/data/.control`; do not use the old `/data/extensions` or `ONEBOTS_EXTENSION_ROOT` mechanism.
+If access checks fail, stop the service and inspect the original volume offline. An explicit Docker `--user` or Compose `user:` is preserved and must already have access to both stores. Installed dependencies and verified generations remain under `/data/.control`; do not use the old `/data/extensions` or `ONEBOTS_EXTENSION_ROOT` mechanism.
 
 ### Container health status
 
@@ -87,13 +97,16 @@ Management readiness is separate from gateway and account health. An empty or st
 
 ### Option 2: docker run
 
+First complete offline plan and registration using the same two mounts, as shown in the [repository quick start](https://github.com/lc-cn/onebots/blob/master/README.en.md#a-docker-recommended). Then run the registered workspace:
+
 ```bash
-# Run official image (use -v to persist user config)
+# Use the same data and named authority volume as registration.
 docker run -d \
   --name onebots \
   --restart unless-stopped \
   -p 6727:6727 \
-  -v $(pwd)/data:/data \
+  -v "$(pwd)/data:/data" \
+  -v onebots-authority:/var/lib/onebots-authority \
   ghcr.io/lc-cn/onebots:master
 
 # View logs
@@ -105,18 +118,19 @@ docker stop onebots && docker rm onebots
 
 ## Using pre-built images from GitHub
 
-Published images are available through [GitHub Actions](https://github.com/lc-cn/onebots/actions). Use `master` for the current branch build or pin a released version tag in production:
+Published images are available through [GitHub Actions](https://github.com/lc-cn/onebots/actions). Use a release containing workspace admission support, and pin its tag or digest in production. After offline registration, reuse the same two mounts:
 
 ```bash
 docker run -d \
   --name onebots \
   --restart unless-stopped \
   -p 6727:6727 \
-  -v $(pwd)/data:/data \
+  -v "$(pwd)/data:/data" \
+  -v onebots-authority:/var/lib/onebots-authority \
   ghcr.io/lc-cn/onebots:master
 ```
 
-Released versions use version tags, e.g. `ghcr.io/lc-cn/onebots:1.0.0`.
+An older tag without the registration capability cannot follow this startup flow; do not fall back to its legacy entrypoint.
 
 ## Data and configuration
 
@@ -125,8 +139,9 @@ Released versions use version tags, e.g. `ghcr.io/lc-cn/onebots:1.0.0`.
 | `/data/config.yaml` | User config file; **must** be mounted or it is lost on container restart |
 | `/data/data/`       | Database and audit logs; created by the app |
 | `/data/.control/` | Management authentication, operations and verified dependency generations; not a portable backup format |
+| `/var/lib/onebots-authority/authority` | Private source registry and per-workspace locks, on a separate persistent mount |
 
-**Always** mount a host directory to `/data` (e.g. `-v $(pwd)/data:/data` or `./data:/data` in docker-compose) so that:
+**Always** preserve `/data` and the independent authority mount. The data mount preserves:
 
 - User config `config.yaml` is persisted on the host and survives restarts or rebuilds
 - Database and logs are not lost when the container is removed
@@ -134,9 +149,11 @@ Released versions use version tags, e.g. `ghcr.io/lc-cn/onebots:1.0.0`.
 
 On the same persistent volume, a graceful `docker compose down` followed by `docker compose up -d` does not require a fixed hostname. A new container may claim a valid `closed` ownership receipt only when the gateway is stopped, no unresolved gateway instance remains, and worker checks pass. The gateway's running/stopped intent, configuration, and management authentication are preserved.
 
-A forced stop, host failure, or incomplete shutdown can leave an `active` receipt. If the hostname also changes, the manager stays available for reads and diagnosis but does not assume historical processes have exited. Run `docker exec --user 1000:1000 onebots node /app/packages/onebots/lib/bin.js doctor --data-dir /data --json --strict` and preserve the workspace; do not delete or edit `.control/process-ownership.json` to bypass the check. This same-volume recreation path does not make historical PIDs or verification receipts valid proof for migration to another host.
+A forced stop, host failure, or incomplete shutdown can leave an `active` receipt. If the hostname also changes, preserve diagnostic access without assuming old processes have exited. Run `docker exec --user 1000:1000 onebots node /app/packages/onebots/lib/bin.js doctor --data-dir /data --authority-dir /var/lib/onebots-authority/authority --json --strict`; do not delete or edit `.control/process-ownership.json` to bypass the check. Same-volume recreation does not prove migration ownership on another host.
 
-**Copying `.control` across hosts is unsupported, even with a `closed` receipt.** This version cannot distinguish recreation on the same volume from a permission-preserving copy. Independent local workspace locks do not exclude each other, so the original and copy may both start. Exclude `.control` from cross-host backups, retain business data, pair again and install/verify extensions on the target, and confirm the original service has stopped before enabling target accounts.
+**Copying `.control` across hosts is unsupported, even with a `closed` receipt.** The strict version checks the external authority and physical directory identity, so an ordinary data-volume copy cannot silently acquire runtime rights. This is not global exclusion between authority or machine clones, and does not provide cross-host HA.
+
+Before manually transferring business configuration, the target must independently complete a new empty-workspace registration, then configure and install/verify extensions through its manager. An existing business directory cannot be treated as fresh registration. Confirm that the source instance and its managed processes have stopped; do not copy `.control`, authority or old `/data/extensions` as the target runtime. This is not a complete archive-import, forced-takeover or global-fencing workflow. See [workspace registration and offline upgrade](/guide/workspace-admission).
 
 Retained download or configuration-verification worker records from the old hostname still block takeover, even when the manager receipt is `closed`. A matching PID in the new container cannot prove the historical worker has exited. Preserve these records for operator inspection; do not remove them or bypass hostname checks to force recovery.
 
@@ -153,55 +170,17 @@ Supply required package-download authorization through the installation workflow
 - The management listener defaults to **6727**. Set `PORT` and map the corresponding container port when changing it.
 - Business YAML does not determine the manager listener. HF uses **7860** without rewriting YAML.
 
-## Deploy to Hugging Face Spaces
+## Hugging Face template and support boundary
 
-The repo includes Docker files for [Hugging Face Spaces](https://huggingface.co/docs/hub/spaces-sdks-docker): they use port **7860** (HF default) and do not require building from source on HF.
+`Dockerfile.hf` retains port **7860**, deployment pairing codes, and standalone archive tools. It does **not** mean the HF storage provider has been validated. HF supports [one or more Storage Buckets mounted at custom paths](https://huggingface.co/docs/hub/spaces-storage), but stable physical directory identity, reliable SQLite local locks, and persistence barriers on those mounts remain unverified. Bucket/FUSE paths are not accepted as reliable local volumes. Local OrbStack virtiofs tests do not prove cloud bucket behavior.
 
-**Steps:**
+A deployment using this template must supply two independent, reliable local persistent volumes at `/data` and `/var/lib/onebots-authority`, perform an offline workspace plan and explicit registration, and only then start and pair. The local Docker acceptance uses named volumes; it is not an HF cloud or bucket acceptance. Keep `docker-entrypoint-hf.sh`, `docker-workspace.sh`, `docker-authority.sh` and both archive scripts in the same version as the base image. Missing authority storage is an explicit startup error.
 
-1. Create a Space on Hugging Face and choose **Docker** as the SDK.
-2. In the Space repo, add these four files (copy from this repo and preserve the `scripts/` subdirectory):
-   - **Dockerfile**: copy from `Dockerfile.hf` (or rename `Dockerfile.hf` to `Dockerfile`).
-   - **docker-entrypoint-hf.sh**: the entrypoint script next to `Dockerfile.hf`.
-   - **scripts/hf-repository-download.mjs**: the bounded restore downloader; keep its path aligned with the `COPY` instruction in the Dockerfile.
-   - **scripts/hf-data-archive-restore.mjs**: the data archive inspector and isolated restorer; preserve this relative path as well.
-3. In Space → **Settings** → **Secrets**, add `ONEBOTS_BOOTSTRAP_CODE`. Generate 32 random bytes as a 43-character base64url code with `node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.stdout.write(randomBytes(32).toString('base64url'))"`. Enter it on the pairing page within five minutes of startup. Never put it in public Variables; remove the Secret after pairing.
-4. To persist config and data, see **Mounting and viewing /data on HF** below.
+**Automatic `HF_REPO_ID` restoration is disabled for this first release.** Any nonempty value causes the entrypoint to exit before downloading, initializing either directory, changing ownership, or writing data. Remove the variable to continue the normal registration and startup flow. A controlled restore flow will be delivered separately; neither restoring before registration nor ignoring `.control` is a supported workaround.
 
-`Dockerfile.hf` is based on the official image `ghcr.io/lc-cn/onebots:master` and only adds the HF port, entrypoint, and two dependency-free restore boundaries, so builds are fast and no GitHub Packages build secret is needed.
+The standalone `hf-repository-download.mjs` and `hf-data-archive-restore.mjs` tools remain available. Their presence does not make an archive eligible for first registration or for overwriting a registered workspace. Backups must exclude `.control`, authority data, dependencies, and download credentials. Preserve backups until a supported import flow is available; do not restore management sessions or PID receipts, and never upload plaintext account state to a public repository. Existing `.hf-restore-*` or download temporary markers still block startup without cleanup or automatic retries.
 
-The deployment code only authorizes initial pairing. Only its digest is persisted; the code is removed from the manager environment and is not passed to the gateway. Restarting with the same code does not extend its expiry. Before pairing, you may rotate to a fresh random code and restart, with at most 16 distinct deployment codes. An existing paired session is never replaced by this Secret. With terminal access, use local `onebots auth recover`. Without it, remove the old `ONEBOTS_BOOTSTRAP_CODE` Secret, generate a fresh random code using the command above, save it as the private `ONEBOTS_RECOVERY_CODE` Secret, and restart. Enter it on the pairing page within five minutes, then remove the Secret. Only successful redemption revokes the old session. Restarting cannot reissue or extend the same code. Recovery cannot initialize an unpaired workspace; do not set both Secrets or reuse an earlier deployment code. An unexpired local recovery code takes priority; use it or wait until it expires before injecting another fresh deployment code. At most 16 recovery codes are recorded; beyond that use local recovery, never delete authentication files to bypass the limit. There is no permanent deployment-token login.
-
-Use a base image from the same manager release. Pass `--build-arg ONEBOTS_BASE_IMAGE=<matching-image>` when pinning the base for `Dockerfile.hf`.
-
-### Mounting and viewing persistent /data on HF
-
-- **Mount**: Hugging Face mounts persistent storage at **`/data`** at **runtime** (same path OneBots uses). You do not add a `VOLUME` or mount in the Dockerfile.  
-  1. Open your Space → **Settings** → **Storage** (or Billing / storage).  
-  2. If **Persistent storage** is available, enable it; the platform will attach the volume to `/data`.  
-  3. If persistent storage is not offered for your account/region, anything under `/data` is lost on Space restart; back up important config to a [Dataset](https://huggingface.co/docs/hub/spaces-storage#dataset-storage) or external store.
-
-- **View**: HF does not provide a file browser for the container’s `/data`. The Space **Files** tab shows only the repo (Dockerfile, scripts), not the runtime volume.  
-  - After pairing, use the OneBots configuration interface to inspect and edit configuration.
-  - On first run without persistent storage, the entrypoint creates a default `config.yaml` under `/data`; it will persist across restarts only if persistent storage is enabled.
-
-### Restoring an existing backup
-
-Prefer persistent storage. The new manager has **not** integrated the old automatic “save in Web and upload to the Space repository” backup workflow. Do not assume a backup exists, and never upload plaintext configuration or account databases to a public repository.
-
-Set `HF_REPO_ID` to restore an existing backup; use a read-only `HF_TOKEN` Secret for private repository downloads. The entrypoint attempts `data_backup.tar.gz` only when `/data` is completely empty, and tries `config_backup.yaml` if no archive was obtained. Existing volumes are never overwritten by a remote snapshot. No backup or damaged YAML still leaves the manager available for configuration repair.
-
-Portable archives may contain `config.yaml`, account state and databases under `data/`, and `static/`. They must exclude `.control`, dependencies, package credentials, caches and temporary state. Do not restore management sessions, historical PIDs or verified-generation receipts. Reinstall and verify extensions through the manager after restoration. Stop the gateway and confirm its exit before backing up databases; copying live SQLite files is not proof of a consistent backup.
-
-Restore retains limits of 15 MiB compressed, 128 MiB expanded and 10,000 entries, rejects traversal and links, and uses private staging. A downloaded archive that fails validation or restoration stops startup instead of falling back to configuration. Any residual `.hf-restore-*` blocks startup: preserve the volume and inspect the failure; restore into a fresh empty volume after confirming no process is running. Do not repeatedly restart or simply remove the marker.
-
-`PORT` sets the manager listener, defaulting to 7860. The entrypoint neither rewrites business YAML nor replaces system DNS. Diagnose DNS and outbound access in the deployment environment.
-
-```bash
-docker build -t onebots-manager .
-docker build -f Dockerfile.hf --build-arg ONEBOTS_BASE_IMAGE=onebots-manager -t onebots-hf .
-docker run -p 7860:7860 -v $(pwd)/data:/data onebots-hf
-```
+`HF_TOKEN` is removed before starting the manager or gateway. Initial pairing and recovery codes retain the same limited lifetime and one-use behavior as the standard manager. `PORT` controls the manager listener and defaults to 7860; it does not rewrite business YAML or DNS.
 
 ## Production tips
 

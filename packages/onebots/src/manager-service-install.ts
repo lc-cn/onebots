@@ -31,6 +31,8 @@ import { WindowsServicePlatform } from "./service-platform-windows.js";
 import { secureWindowsServiceDirectory } from "./windows-service-security.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
 import type { PersistedOperationObserver } from "./persisted-operation-observer.js";
+import { isEmptyBusinessWorkspace } from "./workspace-admission/registration-plan.js";
+import { createWindowsPrivateDirectory } from "./windows-private-file.js";
 
 export interface ManagerServiceInstallDependencies {
     assertAbsent?: typeof assertServiceAbsent;
@@ -74,7 +76,10 @@ export async function installManagerServiceWhileLocked(
             throw new Error("旧服务迁移尚待对账，禁止新安装");
         const journal = new FileManagerServiceJournal(
             path.join(files.stateDir, "manager-operations"),
-            dependencies.onOperation ?? createControlOperationObserver(spec.workspace),
+            dependencies.onOperation ??
+                (spec.schemaVersion === 1
+                    ? createControlOperationObserver(spec.workspace)
+                    : undefined),
         );
         if (journal.health().recoveryRequired) throw new Error("前次系统服务操作尚待对账");
         assertNoPendingManagerUpgrade(spec.workspace);
@@ -87,6 +92,7 @@ export async function installManagerServiceWhileLocked(
             throw new Error("目标工作区仍在服务迁移中，禁止首次安装");
         if (
             exists(path.join(spec.workspace, ".control")) &&
+            !(spec.schemaVersion === 2 && isEmptyBusinessWorkspace(spec.workspace)) &&
             !(await verifyServiceMigrationProcesses(spec.workspace))
         )
             throw new Error("已有工作区进程归属或退出状态未确认，禁止首次安装");
@@ -113,7 +119,17 @@ export async function installManagerServiceWhileLocked(
             phase("initializing-workspace");
             // 共用一次性工作区初始化与维护门禁；已有工作区不重置、不修改认证。
             const created = !exists(path.join(spec.workspace, ".control"));
-            if (created) {
+            if (spec.schemaVersion === 2) {
+                // 来源登记拥有 genesis；安装仅准备目录/锁，不生成旧 seed、gateway 或迁移门禁。
+                if (!exists(spec.workspace)) {
+                    if (host.platform === "win32") createWindowsPrivateDirectory(spec.workspace);
+                    else fs.mkdirSync(spec.workspace, { recursive: true, mode: 0o700 });
+                }
+                if (host.platform === "win32" && created)
+                    createWindowsPrivateDirectory(path.join(spec.workspace, ".control"));
+                const unlock = acquireControlWorkspace(spec.workspace, host);
+                unlock();
+            } else if (created) {
                 prepareServiceMigrationWorkspace(spec.workspace, record.id, "running", host);
                 const unlock = acquireControlWorkspace(spec.workspace, host);
                 try {
@@ -133,7 +149,7 @@ export async function installManagerServiceWhileLocked(
             if (!plan.verify()) throw new Error("新管理服务定义未通过验收");
             // 放开之后不可盲回退：另一个入口可能已开始使用新工作区。
             phase("releasing");
-            if (created) {
+            if (created && spec.schemaVersion === 1) {
                 const unlock = acquireControlWorkspace(spec.workspace, host);
                 try {
                     releaseServiceMigrationPending(spec.workspace, record.id);

@@ -7,32 +7,35 @@ Production OneBots consists of a persistent manager service, an on-demand gatewa
 Choose a persistent, permission-restricted workspace. Do not place configuration or runtime versions in a temporary directory.
 
 ```bash
-# User service
-onebots install --data-dir /srv/onebots
+# New Linux/macOS user service, with separate persistent directories.
+umask 077
+onebots install --data-dir "$HOME/onebots-data" --authority-dir "$HOME/onebots-authority"
+onebots workspace plan --data-dir "$HOME/onebots-data" \
+  --authority-dir "$HOME/onebots-authority" > "$HOME/onebots-plan.json"
+# Read the plan and its revocation impact; substitute the actual digest.
+onebots workspace register --plan-file "$HOME/onebots-plan.json" --confirm '<plan.digest>'
 onebots start
-
-# Linux system service
-sudo onebots install --system --data-dir /var/lib/onebots
-sudo onebots start --system
 ```
 
-`install` creates the manager service definition and immutable runtime candidate. It does not prefill accounts, protocols, or platform credentials and does not connect a platform. In Docker, run `onebots serve --data-dir /data` as the foreground container process and persist `/data`; do not install another system service inside the container.
+`install` creates the service definition and immutable runtime candidate, leaving the service stopped. Registration does not start the manager or gateway; explicitly confirm it before `start`, then pair devices. The workspace and authority must not contain each other, and the plan file stays outside the workspace. Reuse the original authority for a registered workspace without registering again. Linux system services require `--system` and the appropriate administrator permissions; choose persistent paths using the installer output. On Windows, use the [elevated installer](/en/guide/start#bootstrap-installation) to prepare private ACLs.
 
-Run `onebots migrate` for an old deployment. Migration inspects the old service definition, data directory, and configuration and creates a recoverable operation record. Do not overwrite an old service definition directly.
+In Docker, run `onebots serve --data-dir /data --authority-dir /var/lib/onebots-authority/authority` and persist `/data` and `/var/lib/onebots-authority` as separate mounts. Confirm offline registration before normal startup; do not install another system service in the container. See the [Docker guide](/en/guide/docker).
+
+Existing control v1 services require the [offline upgrade procedure](/guide/workspace-admission). Earlier monolithic legacy deployments cannot directly run strict-version `onebots migrate`; use a compatible migration stage first. Do not overwrite old service definitions or start an old binary to bypass admission.
 
 ## Manager authentication
 
 The manager only accepts device pairing and revocable device sessions. Issue the first one-time code on the manager host:
 
 ```bash
-onebots auth bootstrap --data-dir /srv/onebots
+onebots auth bootstrap --data-dir "$HOME/onebots-data"
 ```
 
 Deliver the code over a trusted operator channel and redeem it before expiry. Adding a browser or recovering access also begins on the manager host:
 
 ```bash
-onebots auth device --data-dir /srv/onebots
-onebots auth recover --data-dir /srv/onebots
+onebots auth device --data-dir "$HOME/onebots-data"
+onebots auth recover --data-dir "$HOME/onebots-data"
 ```
 
 Root `username`, `password`, and `access_token` fields in business configuration are not manager credentials and are excluded from the gateway configuration snapshot.
@@ -44,7 +47,7 @@ Protocol `access_token`, `token`, and HMAC secret values for OneBot, Milky, Sato
 Create an installation plan in Web or TUI and select platform adapters, output protocols, and framework extensions. The plan resolves the package, required peer dependencies, download authorization, and target runtime version.
 
 ```bash
-onebots ui --data-dir /srv/onebots
+onebots ui --data-dir "$HOME/onebots-data"
 ```
 
 Use these production boundaries:
@@ -63,9 +66,9 @@ Installation, activation, configuration, and startup are separate operations. A 
 Before any platform connection, OneBots validates configuration against schemas from the active extensions. An invalid draft cannot replace active configuration. If runtime application fails, the file and running state return to the previous revision.
 
 ```bash
-onebots doctor --data-dir /srv/onebots --json --strict
-onebots control start --data-dir /srv/onebots
-onebots control status --data-dir /srv/onebots
+onebots doctor --data-dir "$HOME/onebots-data" --authority-dir "$HOME/onebots-authority" --json --strict
+onebots control start --data-dir "$HOME/onebots-data"
+onebots control status --data-dir "$HOME/onebots-data"
 ```
 
 Use `doctor --strict` as a deployment gate. It checks workspace permissions, the active runtime version, plugin entries and registration contracts, configuration schemas, database paths, and service state. Validate real platform credentials separately in the target environment.
@@ -73,8 +76,8 @@ Use `doctor --strict` as a deployment gate. It checks workspace permissions, the
 Gateway lifecycle commands keep the manager running:
 
 ```bash
-onebots control stop --data-dir /srv/onebots
-onebots control restart --data-dir /srv/onebots
+onebots control stop --data-dir "$HOME/onebots-data"
+onebots control restart --data-dir "$HOME/onebots-data"
 ```
 
 Use `onebots stop`, `restart`, and `uninstall` only for manager or system-definition maintenance. Uninstalling the service must preserve the workspace, account configuration, and operation records.
@@ -92,8 +95,11 @@ Use `onebots stop`, `restart`, and `uninstall` only for manager or system-defini
 Remote HTTP pages may manage non-secret settings, but cannot submit platform credentials, protocol tokens or private registry credentials. Use HTTPS. By default the manager accepts secrets over loopback connections. If your TLS proxy connects over a container network or another host, set its actual source IP in the **manager process environment** (comma-separated for multiple proxies):
 
 ```bash
-ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2 onebots serve --data-dir /srv/onebots
+ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2 onebots serve \
+  --data-dir "$HOME/onebots-data" --authority-dir "$HOME/onebots-authority"
 ```
+
+This foreground example requires stopping the same registered system service normally first. Reuse its authority; do not run both managers or register again.
 
 For Docker, pass `-e ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2`. For an OS service, configure its runtime environment and restart the manager. Use the IPv4/IPv6 source address seen by the manager; hostnames, wildcards, subnets and scoped IPv6 addresses are rejected. The proxy must overwrite `X-Forwarded-Proto` with a single `https` value for HTTPS requests (for example, Nginx `proxy_set_header X-Forwarded-Proto $scheme;`), never forward a client-supplied value, and preserve the original `Host`. Trust only proxies you control and restrict network access between them and the manager. Direct local HTTP connections require a loopback Host (localhost, 127.0.0.0/8 or ::1). Even a proxy on the same machine must overwrite X-Forwarded-Proto with a single https value and preserve the original Host; plaintext or missing declarations cannot submit secrets. This grants no local terminal, authentication bootstrap or private control privileges.
 
@@ -102,7 +108,7 @@ For Docker, pass `-e ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2`. For an OS serv
 ```bash
 onebots status --json
 onebots logs
-onebots update --check --data-dir /srv/onebots
+onebots update --check --data-dir "$HOME/onebots-data"
 ```
 
 Installation, migration, update, and configuration apply operations should expose a queryable operation ID. After an interruption or unknown result, inspect the operation record and recover before repeating an external install or switch:

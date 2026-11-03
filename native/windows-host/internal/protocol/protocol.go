@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const Version = 2
+const Version = 3
 
 const MaxMessageBytes = 64 * 1024
 const MaxControlResultBytes = 1024 * 1024
@@ -69,10 +69,15 @@ type ControlGatewayState struct {
 }
 
 type ControlState struct {
-	Revision    uint64              `json:"revision"`
-	PublishedAt time.Time           `json:"publishedAt,omitempty"`
-	Manager     ControlManagerState `json:"manager"`
-	Gateway     ControlGatewayState `json:"gateway"`
+	Revision    uint64                `json:"revision"`
+	PublishedAt time.Time             `json:"publishedAt,omitempty"`
+	Manager     ControlManagerState   `json:"manager"`
+	Admission   ControlAdmissionState `json:"admission"`
+	Gateway     *ControlGatewayState  `json:"gateway"`
+}
+
+type ControlAdmissionState struct {
+	State string `json:"state"`
 }
 
 type ManagerState struct {
@@ -184,6 +189,15 @@ func ValidateControlState(state ControlState) error {
 	}
 	if err := ValidateControlManagerState(state.Manager); err != nil {
 		return err
+	}
+	if state.Admission.State == "rejected" {
+		if state.Gateway != nil {
+			return errors.New("rejected admission must not report a gateway")
+		}
+		return nil
+	}
+	if state.Admission.State != "verified" || state.Gateway == nil {
+		return errors.New("control admission is invalid")
 	}
 	if _, ok := validGatewayDesiredStates[state.Gateway.Desired]; !ok {
 		return errors.New("control gateway desired state is invalid")

@@ -7,32 +7,35 @@
 为工作区选择持久、权限受限的目录。不要把配置和运行版本放在临时目录中。
 
 ```bash
-# 用户级服务
-onebots install --data-dir /srv/onebots
+# Linux/macOS 用户级服务；以下示例使用全新空目录。
+umask 077
+onebots install --data-dir "$HOME/onebots-data" --authority-dir "$HOME/onebots-authority"
+onebots workspace plan --data-dir "$HOME/onebots-data" \
+  --authority-dir "$HOME/onebots-authority" > "$HOME/onebots-plan.json"
+# 阅读计划和会话失效影响，替换成实际 digest。
+onebots workspace register --plan-file "$HOME/onebots-plan.json" --confirm '<plan.digest>'
 onebots start
-
-# Linux 系统级服务
-sudo onebots install --system --data-dir /var/lib/onebots
-sudo onebots start --system
 ```
 
-`install` 创建管理服务定义和不可变运行候选，但不预填账号、协议或平台密钥，也不自动连接平台。Docker 中以前台 `onebots serve --data-dir /data` 作为容器主进程，并持久挂载 `/data`；不要在容器内再安装系统服务。
+`install` 创建管理服务定义和不可变运行候选并保持停止；登记不启动管理服务或网关。用户确认登记后再 `start`、配对。工作区与 authority 必须互不包含，计划放在工作区之外；已有登记沿用原 authority，不重新登记。Linux 系统级服务使用 `--system` 和相应管理员权限，按安装输出选择持久目录；Windows 使用[管理员安装脚本](/guide/start#首次引导脚本)准备私有 ACL。
 
-旧部署先执行 `onebots migrate`。迁移会检查旧服务定义、数据目录和配置，形成可恢复操作记录；不要直接覆盖旧服务定义。
+Docker 以 `onebots serve --data-dir /data --authority-dir /var/lib/onebots-authority/authority` 为容器主进程，必须分别持久挂载 `/data` 和 `/var/lib/onebots-authority`，在离线容器中先明确登记再正常启动；不要在容器内安装系统服务，完整命令见[Docker 部署](/guide/docker)。
+
+首次登记、旧 control v1 离线升级以及更早 legacy 架构的兼容阶段，见 [工作区登记与离线升级](/guide/workspace-admission)。严格版不会直接执行缺少关闭证明的 legacy 迁移；不要覆盖旧服务定义或自动启动旧程序绕过来源检查。
 
 ## 管理端认证
 
 管理端只接受设备配对和可撤销的设备会话。首次部署时在管理服务所在机器签发一次性设备码：
 
 ```bash
-onebots auth bootstrap --data-dir /srv/onebots
+onebots auth bootstrap --data-dir "$HOME/onebots-data"
 ```
 
 设备码应通过可信的运维通道交给管理员，并在有效期内使用。增加浏览器或恢复访问时也必须从管理服务所在机器发起：
 
 ```bash
-onebots auth device --data-dir /srv/onebots
-onebots auth recover --data-dir /srv/onebots
+onebots auth device --data-dir "$HOME/onebots-data"
+onebots auth recover --data-dir "$HOME/onebots-data"
 ```
 
 业务配置中的根级 `username`、`password` 和 `access_token` 不用于管理端登录，也不会进入网关配置快照。
@@ -44,7 +47,7 @@ OneBot、Milky、Satori、MCP 等协议的 `access_token`、`token` 与 HMAC 密
 通过 Web 或 TUI 创建安装计划，选择平台适配器、输出协议和框架扩展。计划应同时解析主包、必要 peer 依赖、下载授权和目标运行版本。
 
 ```bash
-onebots ui --data-dir /srv/onebots
+onebots ui --data-dir "$HOME/onebots-data"
 ```
 
 生产操作按以下边界执行：
@@ -63,9 +66,9 @@ onebots ui --data-dir /srv/onebots
 配置在连接平台前按活动扩展提供的 Schema 校验。无效草稿不能替换活动配置；运行态应用失败时，文件和运行态都恢复到上一版本。
 
 ```bash
-onebots doctor --data-dir /srv/onebots --json --strict
-onebots control start --data-dir /srv/onebots
-onebots control status --data-dir /srv/onebots
+onebots doctor --data-dir "$HOME/onebots-data" --authority-dir "$HOME/onebots-authority" --json --strict
+onebots control start --data-dir "$HOME/onebots-data"
+onebots control status --data-dir "$HOME/onebots-data"
 ```
 
 `doctor --strict` 适合作为部署门禁。它检查工作区权限、活动运行版本、插件入口与注册契约、配置 Schema、数据库路径以及服务状态。平台真实凭据仍需在目标环境做独立连通性验证。
@@ -73,8 +76,8 @@ onebots control status --data-dir /srv/onebots
 网关生命周期命令不会停止管理服务：
 
 ```bash
-onebots control stop --data-dir /srv/onebots
-onebots control restart --data-dir /srv/onebots
+onebots control stop --data-dir "$HOME/onebots-data"
+onebots control restart --data-dir "$HOME/onebots-data"
 ```
 
 只有需要维护管理面或系统定义时才使用 `onebots stop`、`restart` 和 `uninstall`。卸载系统服务不应删除工作区、账号配置或操作记录。
@@ -92,8 +95,11 @@ onebots control restart --data-dir /srv/onebots
 远程 HTTP 页面可以管理非秘密设置，但不能提交平台密钥、协议 token 或私有仓库授权；请使用 HTTPS。管理服务默认只接受本机回环连接的秘密提交。若 TLS 代理通过容器网络或另一台主机连接管理服务，在**管理进程的运行环境**设置代理的实际来源 IP（逗号分隔）：
 
 ```bash
-ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2 onebots serve --data-dir /srv/onebots
+ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2 onebots serve \
+  --data-dir "$HOME/onebots-data" --authority-dir "$HOME/onebots-authority"
 ```
+
+上述前台示例只用于已正常停止系统服务的同一登记实例，不能与托管进程同时运行；复用原 authority，不重新登记。
 
 Docker 可通过 `-e ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2` 传入；系统服务请配置对应的运行环境并重启管理服务。只填写管理服务实际看到的代理 IPv4/IPv6 地址，不支持域名、通配符、网段或带 scope ID 的 IPv6 地址。代理必须覆盖 `X-Forwarded-Proto`，HTTPS 请求发送唯一的 `https` 值（例如 Nginx 的 `proxy_set_header X-Forwarded-Proto $scheme;`），不能透传客户端提供的值；同时保留原始 `Host`。仅信任受你控制的代理，并限制代理至管理服务之间的网络访问。本机 HTTP 直连还需 Host 为回环地址（localhost、127.0.0.0/8 或 ::1）。即使代理运行在同一台主机，也必须覆盖为唯一的 HTTPS 声明并保留原始 Host；明文或缺失声明不能提交秘密。这不会授予本机终端、认证引导或本地控制权限。
 
@@ -102,7 +108,7 @@ Docker 可通过 `-e ONEBOTS_TRUSTED_PROXY_ADDRESSES=172.18.0.2` 传入；系统
 ```bash
 onebots status --json
 onebots logs
-onebots update --check --data-dir /srv/onebots
+onebots update --check --data-dir "$HOME/onebots-data"
 ```
 
 安装、迁移、更新和配置应用都应具有可查询的操作 ID。进程中断或结果未知时，先查看操作记录并执行恢复，不要盲目重复外部安装或切换：

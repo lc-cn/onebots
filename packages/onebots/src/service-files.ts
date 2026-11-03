@@ -10,7 +10,10 @@ export interface ServiceFiles {
     metadata: string;
 }
 
-export function getServiceFiles(scope: ServiceScope, host: ServiceHost): ServiceFiles {
+export function getServiceFiles(
+    scope: ServiceScope,
+    host: Pick<ServiceHost, "platform" | "homedir" | "env">,
+): ServiceFiles {
     if (host.platform === "linux") {
         const stateDir =
             scope === "system"

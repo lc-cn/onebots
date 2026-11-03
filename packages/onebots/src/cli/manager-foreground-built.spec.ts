@@ -7,6 +7,9 @@ import { once } from "node:events";
 import { yaml } from "@onebots/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { createLocalControlClient } from "../client/local-control.js";
+import { getServiceFiles } from "../service-files.js";
+import { planWorkspaceRegistration } from "../workspace-admission/registration-plan.js";
+import { registerWorkspace } from "../workspace-admission/registration.js";
 const bin = fileURLToPath(new URL("../../lib/bin.js", import.meta.url));
 const roots: string[] = [];
 afterEach(() => {
@@ -70,13 +73,23 @@ describe("built public manager foreground", () => {
         "nonTTY explicit run=%s starts a manager without configured platforms or protocols",
         async explicit => {
             const root = directory();
+            const homeRoot = directory();
+            const env = { ...environment(homeRoot), ONEBOTS_WORKSPACE: root };
+            const stateDir = getServiceFiles("user", {
+                platform: process.platform,
+                homedir: homeRoot,
+                env,
+            }).stateDir;
+            fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+            const plan = await planWorkspaceRegistration(root, path.join(stateDir, "authority"));
+            await registerWorkspace(plan, plan.digest);
             const listeningPort = await port();
             const child = spawn(
                 process.execPath,
                 [bin, ...(explicit ? ["--data-dir", root, "run"] : [])],
                 {
                     cwd: root,
-                    env: { ...environment(root), PORT: String(listeningPort) },
+                    env: { ...env, PORT: String(listeningPort) },
                     stdio: ["ignore", "pipe", "pipe"],
                 },
             );

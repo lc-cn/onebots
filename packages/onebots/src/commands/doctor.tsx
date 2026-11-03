@@ -13,6 +13,12 @@ export const options = z
                 option({ description: "现有工作区（前台或 Docker）", valueDescription: "path" }),
             ),
         system: z.boolean().describe(option({ description: "诊断系统级管理服务" })),
+        authorityDir: z
+            .string()
+            .optional()
+            .describe(
+                option({ description: "前台 serve 使用的卷外身份目录", valueDescription: "path" }),
+            ),
         fix: z.boolean().describe(option({ description: "旧自动修复已停用；使用显式修复流程" })),
         json: z.boolean().describe(option({ description: "输出单一 JSON 报告" })),
         strict: z.boolean().describe(option({ description: "将未验证或警告视为失败" })),

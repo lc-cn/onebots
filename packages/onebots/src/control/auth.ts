@@ -1,16 +1,22 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { randomBytes } from "node:crypto";
-import { digest, matches, HASH } from "./auth-crypto.js";
+import { digest, matches } from "./auth-crypto.js";
 import {
     ATTEMPT_LIMIT,
     DEFAULT_SESSION_POLICY,
     SESSION_DAY,
-    SESSION_TTL,
     validSessionPolicy,
     type SessionPolicy,
 } from "./auth-policy.js";
 import { validState } from "./auth-state-validation.js";
+import { decodeLegacyAuthenticationState, emptyAuthenticationState } from "./auth-state-codec.js";
+import {
+    sameAuthenticationBindingContext,
+    validAuthenticationBindingContext,
+    type AuthenticationBindingContext,
+} from "./auth-binding-context.js";
+import { readAuthenticationSnapshot, replaceAuthenticationState } from "./auth-binding-file.js";
 
 const FAILURE = "控制认证失败";
 const BOOTSTRAP_TTL = 5 * 60 * 1000;
@@ -19,6 +25,7 @@ const ATTEMPT_WINDOW = 60 * 1000;
 export interface ControlAuthOptions {
     statePath: string;
     now?: () => number;
+    bindingContext?: AuthenticationBindingContext;
 }
 
 export interface ControlSession {
@@ -37,7 +44,8 @@ interface StoredSession {
 }
 
 export interface AuthState {
-    version: 2;
+    version: 2 | 3;
+    bindingContext?: AuthenticationBindingContext;
     paired: boolean;
     deploymentBootstrap: { hash: string; expiresAt: number } | null;
     deploymentBootstrapHistory: string[];
@@ -57,10 +65,16 @@ export class ControlAuth {
     private readonly statePath: string;
     private readonly now: () => number;
     private writeFailed = false;
+    private readonly bindingContext?: AuthenticationBindingContext;
 
     constructor(options: ControlAuthOptions) {
         this.statePath = path.resolve(options.statePath);
         this.now = options.now ?? Date.now;
+        if (options.bindingContext !== undefined) {
+            if (!validAuthenticationBindingContext(options.bindingContext))
+                throw new Error(FAILURE);
+            this.bindingContext = { ...options.bindingContext };
+        }
         this.read();
     }
 
@@ -291,71 +305,33 @@ export class ControlAuth {
     private read(): AuthState {
         if (this.writeFailed) throw new Error(FAILURE);
         try {
+            if (this.bindingContext) {
+                const snapshot = readAuthenticationSnapshot(this.statePath);
+                if (!snapshot) throw new Error(FAILURE);
+                const state: unknown = JSON.parse(snapshot.bytes.toString("utf8"));
+                if (
+                    !validState(state) ||
+                    state.version !== 3 ||
+                    !sameAuthenticationBindingContext(state.bindingContext!, this.bindingContext)
+                )
+                    throw new Error(FAILURE);
+                return state;
+            }
             const stat = fs.lstatSync(this.statePath);
             if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 16384) {
                 throw new Error(FAILURE);
             }
             const state: unknown = JSON.parse(fs.readFileSync(this.statePath, "utf8"));
-            // 补齐旧结构，保留配对及限流；无签发时间的旧会话必须本机恢复。
-            if (record(state)) {
-                if (state.version === 1 && !Object.hasOwn(state, "sessionLifetime"))
-                    state.sessionLifetime = null;
-                if (!Object.hasOwn(state, "deploymentBootstrap")) state.deploymentBootstrap = null;
-                if (!Object.hasOwn(state, "deploymentBootstrapHistory"))
-                    state.deploymentBootstrapHistory = record(state.deploymentBootstrap)
-                        ? [state.deploymentBootstrap.hash]
-                        : [];
-                if (!Object.hasOwn(state, "deploymentRecovery")) state.deploymentRecovery = null;
-                if (!Object.hasOwn(state, "deploymentRecoveryHistory"))
-                    state.deploymentRecoveryHistory = [];
-                if (!Object.hasOwn(state, "recovery")) state.recovery = null;
-                if (!Object.hasOwn(state, "issuance"))
-                    state.issuance = { startedAt: this.now(), count: 0 };
-            }
-            if (record(state) && state.version === 1) {
-                if (
-                    Object.hasOwn(state, "sessions") ||
-                    Object.hasOwn(state, "device") ||
-                    !validLegacySession(state) ||
-                    (!state.paired && state.sessionHash !== null)
-                )
-                    throw new Error(FAILURE);
-                const lifetime = state.sessionLifetime;
-                state.sessions =
-                    typeof state.sessionHash === "string" && record(lifetime)
-                        ? [
-                              {
-                                  id: digest(`device:${state.sessionHash}`).slice(0, 32),
-                                  hash: state.sessionHash,
-                                  issuedAt: lifetime.issuedAt,
-                                  expiresAt: lifetime.expiresAt,
-                              },
-                          ]
-                        : [];
-                delete state.sessionHash;
-                delete state.sessionLifetime;
-                state.device = null;
-                state.version = 2;
-            }
-            if (!validState(state)) throw new Error(FAILURE);
-            return state;
+            const legacy = decodeLegacyAuthenticationState(state, this.now());
+            return legacy;
         } catch (error) {
-            if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-                return {
-                    version: 2,
-                    paired: false,
-                    deploymentBootstrap: null,
-                    deploymentBootstrapHistory: [],
-                    deploymentRecovery: null,
-                    deploymentRecoveryHistory: [],
-                    bootstrap: null,
-                    recovery: null,
-                    issuance: { startedAt: this.now(), count: 0 },
-                    device: null,
-                    sessions: [],
-                    sessionPolicy: DEFAULT_SESSION_POLICY,
-                    attempts: { startedAt: this.now(), count: 0 },
-                };
+            if (
+                !this.bindingContext &&
+                error instanceof Error &&
+                "code" in error &&
+                error.code === "ENOENT"
+            ) {
+                return emptyAuthenticationState(this.now());
             }
             // 认证边界统一拒绝，不把磁盘内容或解析错误带入响应/日志。
             throw new Error(FAILURE);
@@ -372,6 +348,23 @@ export class ControlAuth {
     }
 
     private write(state: AuthState): void {
+        if (this.bindingContext) {
+            try {
+                const current = readAuthenticationSnapshot(this.statePath);
+                if (
+                    !current ||
+                    state.version !== 3 ||
+                    !validState(state) ||
+                    !sameAuthenticationBindingContext(state.bindingContext!, this.bindingContext)
+                )
+                    throw new Error(FAILURE);
+                replaceAuthenticationState(this.statePath, current.digest, state);
+                return;
+            } catch {
+                this.writeFailed = true;
+                throw new Error(FAILURE);
+            }
+        }
         const directory = path.dirname(this.statePath);
         const temporary = `${this.statePath}.${randomBytes(12).toString("hex")}.tmp`;
         let descriptor: number | undefined;
@@ -402,31 +395,4 @@ export class ControlAuth {
             }
         }
     }
-}
-
-function record(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function validLegacySession(value: Record<string, unknown>): boolean {
-    if (
-        value.sessionHash !== null &&
-        (typeof value.sessionHash !== "string" || !HASH.test(value.sessionHash))
-    )
-        return false;
-    if (value.sessionLifetime !== null) {
-        const lifetime = value.sessionLifetime;
-        if (
-            value.sessionHash === null ||
-            !record(lifetime) ||
-            typeof lifetime.issuedAt !== "number" ||
-            !Number.isSafeInteger(lifetime.issuedAt) ||
-            lifetime.issuedAt < 0 ||
-            typeof lifetime.expiresAt !== "number" ||
-            !Number.isSafeInteger(lifetime.expiresAt) ||
-            lifetime.expiresAt - lifetime.issuedAt !== SESSION_TTL
-        )
-            return false;
-    }
-    return true;
 }

@@ -1,6 +1,7 @@
 import { controlManagerService, type ManagerControlAction } from "../manager-service-controller.js";
 import type { CommandResult } from "./command-application.js";
 import type { ScopeOptions } from "./command-options.js";
+import { LegacyManagerSourceRegistrationRequiredError } from "../manager-service-preflight.js";
 
 const labels = { start: "启动", stop: "停止", restart: "重启" };
 /** 系统服务命令只管理manager，不修改网关desired，不回退旧gateway服务路径。 */
@@ -21,10 +22,12 @@ export async function managerServiceCommand(
             exitCode: 1,
         };
     } catch (error) {
+        if (error instanceof LegacyManagerSourceRegistrationRequiredError)
+            return { output: error.userGuidance(), exitCode: 1 };
         const message = error instanceof Error ? error.message : "";
         const known =
             message === "旧服务须先执行 onebots migrate"
-                ? "检测到旧服务，请先执行 onebots migrate；未回退旧服务控制路径。"
+                ? "检测到旧单进程服务。严格来源版不能直接迁移；请先使用支持旧迁移的版本完成 legacy 到 control v1 并正常关闭，再用新 CLI 受控离线更新及 workspace 首次登记。未回退旧服务控制路径。"
                 : message === "尚未安装管理服务"
                   ? "尚未安装管理服务。"
                   : message === "系统级服务需要管理员权限"

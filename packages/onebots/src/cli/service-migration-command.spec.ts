@@ -5,7 +5,10 @@ import { LegacyServiceInspection } from "../legacy-service-inspection.js";
 import { migrateInstalledService } from "../service-migration.js";
 import { migrateServiceCommand } from "./service-migration-command.js";
 import type { ServiceMigrationRecord } from "../service-migration-types.js";
-vi.mock("../service-migration.js", () => ({ migrateInstalledService: vi.fn() }));
+vi.mock("../service-migration.js", () => ({
+    migrateInstalledService: vi.fn(),
+    StrictLegacyMigrationUnsupportedError: class extends Error {},
+}));
 afterEach(() => {
     vi.restoreAllMocks();
     vi.mocked(migrateInstalledService).mockReset();
@@ -37,7 +40,8 @@ describe("migration CLI command", () => {
         vi.mocked(migrateInstalledService).mockResolvedValue(result());
         const output = await migrateServiceCommand({ system: false });
         expect(vi.mocked(migrateInstalledService).mock.calls[0][0]).toEqual({
-            schemaVersion: 1,
+            schemaVersion: 2,
+            authorityDirectory: expect.stringMatching(/[\\/]authority$/),
             runtimeKind: "control",
             scope: "user",
             workspace: path.dirname(legacy.configPath),

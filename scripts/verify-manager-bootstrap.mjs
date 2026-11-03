@@ -4,9 +4,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { spawnSync } from "node:child_process";
 
 export async function verifyManagerBootstrap(runtime, archives, temporary) {
-    const load = name => import(pathToFileURL(path.join(runtime, "node_modules/onebots/lib", name)).href);
+    const load = name =>
+        import(pathToFileURL(path.join(runtime, "node_modules/onebots/lib", name)).href);
     const { bootstrapManagerService } = await load("manager-service-bootstrap.js");
     const { reconcileManagerServiceOperation } = await load("manager-service-recovery.js");
     const { FileManagerServiceJournal } = await load("manager-service-journal.js");
@@ -17,7 +19,10 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     const effects = [];
     let unregistered = false;
     const host = {
-        platform: "linux", homedir: home, uid: process.getuid(), env: {},
+        platform: "linux",
+        homedir: home,
+        uid: process.getuid(),
+        env: {},
         exec(command, args) {
             if (command === "systemctl" && args.includes("show")) {
                 assert.equal(unregistered, true);
@@ -27,38 +32,85 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
             assert.deepEqual(args, ["--version"]);
             return process.version;
         },
-        spawn() { throw new Error("不允许启动 OS 服务"); },
+        spawn() {
+            throw new Error("不允许启动 OS 服务");
+        },
     };
     const files = getServiceFiles("user", host);
     let enabled = true;
     const platform = {
         async inspect() {
-            return { state: "stopped", running: false, enabled, loaded: true,
-                definitionPath: files.definition, processId: null, identity: null, quiescent: true };
+            return {
+                state: "stopped",
+                running: false,
+                enabled,
+                loaded: true,
+                definitionPath: files.definition,
+                processId: null,
+                identity: null,
+                quiescent: true,
+            };
         },
-        async reload(value) { assert.equal(value, true); enabled = value; effects.push("reload"); },
-        async start() { throw new Error("首次安装不能启动服务"); },
-        async quiesce() { enabled = false; effects.push("quiesce"); },
+        async reload(value) {
+            assert.equal(value, true);
+            enabled = value;
+            effects.push("reload");
+        },
+        async start() {
+            throw new Error("首次安装不能启动服务");
+        },
+        async quiesce() {
+            enabled = false;
+            effects.push("quiesce");
+        },
     };
     const artifact = (name, prefix) => {
-        const version = JSON.parse(fs.readFileSync(path.join(runtime, "node_modules", name, "package.json"))).version;
+        const version = JSON.parse(
+            fs.readFileSync(path.join(runtime, "node_modules", name, "package.json")),
+        ).version;
         const file = path.join(archives, `${prefix}-${version}.tgz`);
-        return { name, version, spec: `file:${file}`,
-            sha256: createHash("sha256").update(fs.readFileSync(file)).digest("hex") };
+        return {
+            name,
+            version,
+            spec: `file:${file}`,
+            sha256: createHash("sha256").update(fs.readFileSync(file)).digest("hex"),
+        };
     };
-    const request = { id: "initial-install", service: { schemaVersion: 1, runtimeKind: "control",
-        scope: "user", workspace, nodePath: process.execPath, host: "127.0.0.1", port: 6727 } };
-    const dependencies = { platform, assertAbsent: () => {}, artifacts: {
-        host: artifact("onebots", "onebots"), web: artifact("@onebots/web", "onebots-web"), core: artifact("@onebots/core", "onebots-core"),
-    } };
+    const authorityDirectory = path.join(files.stateDir, "authority");
+    const request = {
+        id: "initial-install",
+        service: {
+            schemaVersion: 2,
+            runtimeKind: "control",
+            authorityDirectory,
+            scope: "user",
+            workspace,
+            nodePath: process.execPath,
+            host: "127.0.0.1",
+            port: 6727,
+        },
+    };
+    const dependencies = {
+        platform,
+        assertAbsent: () => {},
+        artifacts: {
+            host: artifact("onebots", "onebots"),
+            web: artifact("@onebots/web", "onebots-web"),
+            core: artifact("@onebots/core", "onebots-core"),
+        },
+    };
     const result = await bootstrapManagerService({ service: request.service }, dependencies, host);
     assert.equal(result.status, "succeeded");
     assert.equal(result.id, request.id);
-    assert.ok(result.managerSpec.workingDirectory.startsWith(path.join(files.stateDir, "manager-artifacts/versions") + path.sep));
+    assert.ok(
+        result.managerSpec.workingDirectory.startsWith(
+            path.join(files.stateDir, "manager-artifacts/versions") + path.sep,
+        ),
+    );
     assert.equal(fs.existsSync(path.join(workspace, "config.yaml")), false);
     const definition = fs.readFileSync(files.definition);
     const metadata = fs.readFileSync(files.metadata);
-    const gateway = fs.readFileSync(path.join(workspace, ".control/gateway.json"));
+    assert.deepEqual(fs.readdirSync(path.join(workspace, ".control")), ["manager-lock.sqlite"]);
     assert.deepEqual(effects, ["reload"]);
     const journal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
     journal.save({ ...result, status: "interrupted", recoveryRequired: true });
@@ -67,15 +119,45 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     assert.equal(pending.status, "interrupted");
     assert.equal(pending.recoveryRequired, true);
     assert.deepEqual(effects, ["reload"]);
-    const recovered = await reconcileManagerServiceOperation(request.id, "user", host, { platform });
+    const recovered = await reconcileManagerServiceOperation(request.id, "user", host, {
+        platform,
+    });
     assert.equal(recovered.status, "succeeded");
     assert.equal(recovered.recoveryRequired, false);
     assert.deepEqual(await bootstrapManagerService(request, dependencies, host), recovered);
     assert.deepEqual(effects, ["reload"]);
     assert.deepEqual(fs.readFileSync(files.definition), definition);
     assert.deepEqual(fs.readFileSync(files.metadata), metadata);
-    assert.deepEqual(fs.readFileSync(path.join(workspace, ".control/gateway.json")), gateway);
+    assert.equal(fs.existsSync(path.join(workspace, ".control/gateway.json")), false);
     assert.equal(fs.existsSync(path.join(workspace, "config.yaml")), false);
+    const { planWorkspaceRegistration } = await load("workspace-admission/registration-plan.js");
+    const { registerWorkspace } = await load("workspace-admission/registration.js");
+    const registration = await planWorkspaceRegistration(workspace, authorityDirectory, {
+        desired: "stopped",
+    });
+    assert.equal(registration.kind, "new");
+    assert.equal((await registerWorkspace(registration, registration.digest)).status, "committed");
+    const boot = spawnSync(
+        process.execPath,
+        [
+            "--input-type=module",
+            "-e",
+            `
+        import assert from 'node:assert/strict';
+        const {startControlHost}=await import(${JSON.stringify(pathToFileURL(path.join(runtime, "node_modules/onebots/lib/control/host.js")).href)});
+        const manager=await startControlHost(${JSON.stringify({ workspace, authorityDirectory, runtimeRoot: runtime, host: "127.0.0.1", port: 0 })});
+        try {assert.equal(manager.admission.state,'verified');assert.equal(manager.controller.status().actual,'stopped');}
+        finally {await manager.close();}
+    `,
+        ],
+        { cwd: workspace, encoding: "utf8", timeout: 30_000, maxBuffer: 1024 * 1024 },
+    );
+    assert.equal(
+        boot.status,
+        0,
+        "independent bootstrap manager must close and exit before upgrade PID/PGID proof",
+    );
+    const gateway = fs.readFileSync(path.join(workspace, ".control/gateway.json"));
     // 从首次安装的真实候选升级到另一份独立候选，不使用模拟候选证明。
     const { ManagerCandidateInstaller } = await load("manager-runtime/installer.js");
     const { GenerationStore } = await load("installation/generation-store.js");
@@ -91,21 +173,39 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     try {
         installer = new ManagerCandidateInstaller({
             operationsDirectory: path.join(targetHome, "operations"),
-            store: new GenerationStore({ root: path.join(targetHome, "versions"), isActive: () => false }),
+            store: new GenerationStore({
+                root: path.join(targetHome, "versions"),
+                isActive: () => false,
+            }),
             ...bundledPnpmExecutor(),
         });
-        const installed = await installer.install("next-manager", createGenerationPlan({
-            ...dependencies.artifacts, extensions: [],
-            selection: { adapters: [], protocols: [], applications: [] },
-        }));
+        const installed = await installer.install(
+            "next-manager",
+            createGenerationPlan({
+                ...dependencies.artifacts,
+                extensions: [],
+                selection: { adapters: [], protocols: [], applications: [] },
+            }),
+        );
         assert.equal(installed.phase, "verified");
         candidate = installer.readCandidate(installed.candidateId);
     } finally {
-        try { await installer?.close(); } finally { unlock(); }
+        try {
+            await installer?.close();
+        } finally {
+            unlock();
+        }
     }
-    const upgraded = await upgradeManagerService({ id: "installed-manager-upgrade", scope: "user",
-        candidateDirectory: candidate.directory, candidateDigest: managerCandidateDigest(candidate),
-    }, host, { platform });
+    const upgraded = await upgradeManagerService(
+        {
+            id: "installed-manager-upgrade",
+            scope: "user",
+            candidateDirectory: candidate.directory,
+            candidateDigest: managerCandidateDigest(candidate),
+        },
+        host,
+        { platform },
+    );
     assert.equal(upgraded.status, "succeeded");
     assert.deepEqual(effects, ["reload", "quiesce", "reload"]);
     assert.equal(JSON.parse(fs.readFileSync(files.metadata)).workingDirectory, candidate.directory);
@@ -116,19 +216,33 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     await assert.rejects(bootstrapManagerService(request, dependencies, host));
     assert.deepEqual(effects, ["reload", "quiesce", "reload"]);
     const { uninstallManagerService } = await load("manager-service-uninstall.js");
-    const candidateProof = fs.readFileSync(path.join(candidate.directory, "manager-verification.json"));
-    const removed = await uninstallManagerService("user", host, { platform,
-        unregister: () => { unregistered = true; effects.push("unregister"); },
+    const candidateProof = fs.readFileSync(
+        path.join(candidate.directory, "manager-verification.json"),
+    );
+    const removed = await uninstallManagerService("user", host, {
+        platform,
+        unregister: () => {
+            unregistered = true;
+            effects.push("unregister");
+        },
     });
     assert.equal(removed.status, "succeeded");
     assert.equal(fs.existsSync(files.definition), false);
     assert.equal(fs.existsSync(files.metadata), false);
-    assert.deepEqual(fs.readFileSync(path.join(candidate.directory, "manager-verification.json")), candidateProof);
+    assert.deepEqual(
+        fs.readFileSync(path.join(candidate.directory, "manager-verification.json")),
+        candidateProof,
+    );
     assert.deepEqual(fs.readFileSync(path.join(workspace, ".control/gateway.json")), gateway);
-    const removalJournal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
+    const removalJournal = new FileManagerServiceJournal(
+        path.join(files.stateDir, "manager-operations"),
+    );
     removalJournal.save({ ...removed, status: "interrupted", recoveryRequired: true });
     const effectsAfterRemoval = [...effects];
-    assert.equal((await reconcileManagerServiceOperation(removed.id, "user", host)).status, "succeeded");
+    assert.equal(
+        (await reconcileManagerServiceOperation(removed.id, "user", host)).status,
+        "succeeded",
+    );
     assert.deepEqual(effects, effectsAfterRemoval);
     assert.equal(fs.existsSync(files.definition), false);
     assert.equal(fs.existsSync(files.metadata), false);
@@ -142,15 +256,24 @@ export async function verifyManagerBootstrap(runtime, archives, temporary) {
     assert.equal(reinstalled.status, "succeeded");
     assert.notEqual(reinstalled.managerSpec.workingDirectory, result.managerSpec.workingDirectory);
     assert.deepEqual(fs.readFileSync(path.join(initialBinding, "intent.json")), initialIntent);
-    assert.deepEqual(fs.readFileSync(path.join(initialBinding, "candidate.json")), initialCandidate);
+    assert.deepEqual(
+        fs.readFileSync(path.join(initialBinding, "candidate.json")),
+        initialCandidate,
+    );
     assert.deepEqual(fs.readFileSync(path.join(workspace, ".control/gateway.json")), gateway);
-    const cycleJournal = new FileManagerServiceJournal(path.join(files.stateDir, "manager-operations"));
+    const cycleJournal = new FileManagerServiceJournal(
+        path.join(files.stateDir, "manager-operations"),
+    );
     cycleJournal.save({ ...reinstalled, status: "interrupted", recoveryRequired: true });
-    const newCycle = await reconcileManagerServiceOperation(reinstalled.id, "user", host, { platform });
+    const newCycle = await reconcileManagerServiceOperation(reinstalled.id, "user", host, {
+        platform,
+    });
     assert.equal(newCycle.status, "succeeded");
     assert.deepEqual(await bootstrapManagerService(nextRequest, dependencies, host), newCycle);
     assert.deepEqual(effects, [...effectsAfterRemoval, "reload"]);
     await assert.rejects(reconcileManagerServiceOperation(request.id, "user", host, { platform }));
     assert.deepEqual(effects, [...effectsAfterRemoval, "reload"]);
-    process.stdout.write("✓ 真实首次安装候选：自带 pnpm 下载、双证明、稳定注册绑定、冷对账、重复只读、另一真实候选升级、卸载保留数据及卸载冷对账及独立安装周期通过（OS 驱动注入，未安装原生系统服务）\n");
+    process.stdout.write(
+        "✓ 真实首次安装候选：自带 pnpm 下载、双证明、稳定注册绑定、冷对账、重复只读、另一真实候选升级、卸载保留数据及卸载冷对账及独立安装周期通过（OS 驱动注入，未安装原生系统服务）\n",
+    );
 }

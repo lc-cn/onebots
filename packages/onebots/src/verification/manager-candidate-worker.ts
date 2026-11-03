@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { randomUUID } from "node:crypto";
-import { prepareServiceMigrationWorkspace } from "../service-migration-workspace.js";
-import { prepareServiceProcessOwnershipSeed } from "../service-migration-processes.js";
+import { planWorkspaceRegistration } from "../workspace-admission/registration-plan.js";
+import { registerWorkspace } from "../workspace-admission/registration.js";
+import { readWorkspaceBinding } from "../workspace-admission/admission.js";
+import { authenticationContext } from "../workspace-admission/types.js";
+import { createWindowsPrivateDirectory } from "../windows-private-file.js";
 import type { ManagerCandidateVerification } from "./manager-candidate.js";
 import type { startControlHost } from "../control/host.js";
 import { prepareManagerAuthenticationProbe } from "./manager-authentication.js";
@@ -23,11 +25,12 @@ type CandidateVerificationStage =
     | "package-identity"
     | "workspace"
     | "authentication"
+    | "source-contract"
     | "management-startup"
     | "management-state"
     | "web-page"
     | "web-asset"
-    | "authentication-v2"
+    | "authentication-v3"
     | "anonymous-denied"
     | "management-close"
     | "authentication-preserved";
@@ -38,11 +41,12 @@ const verificationStages: readonly CandidateVerificationStage[] = [
     "package-identity",
     "workspace",
     "authentication",
+    "source-contract",
     "management-startup",
     "management-state",
     "web-page",
     "web-asset",
-    "authentication-v2",
+    "authentication-v3",
     "anonymous-denied",
     "management-close",
     "authentication-preserved",
@@ -126,23 +130,38 @@ async function verify(
         )
             throw new Error();
         stage = enterStage("workspace");
-        prepareServiceMigrationWorkspace(input.workspace, randomUUID(), "stopped");
-        if (process.platform !== "win32") prepareServiceProcessOwnershipSeed(input.workspace);
+        const authorityDirectory = path.join(path.dirname(input.workspace), "authority");
+        if (process.platform === "win32") createWindowsPrivateDirectory(input.workspace);
+        else fs.mkdirSync(input.workspace, { mode: 0o700 });
+        const registration = await planWorkspaceRegistration(input.workspace, authorityDirectory, {
+            desired: "stopped",
+        });
+        await registerWorkspace(registration, registration.digest);
+        const binding = readWorkspaceBinding(input.workspace);
+        if (!binding) throw new Error();
+        const bindingContext = authenticationContext(binding);
         stage = enterStage("authentication");
-        const authentication = prepareManagerAuthenticationProbe(input.workspace);
+        const authentication = prepareManagerAuthenticationProbe(input.workspace, bindingContext);
         process.chdir(input.workspace);
-        const { startControlHost: start } = await import(
-            pathToFileURL(path.join(lib, "control/host.js")).href
-        );
+        stage = enterStage("source-contract");
+        const candidate = await import(pathToFileURL(path.join(lib, "control/host.js")).href);
+        if (
+            candidate.WORKSPACE_ADMISSION_CAPABILITY !== 1 ||
+            typeof candidate.startControlHost !== "function"
+        )
+            throw new Error();
+        const start: typeof startControlHost = candidate.startControlHost;
         stage = enterStage("management-startup");
         host = await start({
             workspace: input.workspace,
+            authorityDirectory,
             runtimeRoot: input.root,
             host: "127.0.0.1",
             port: 0,
             gatewayEntrypoint: path.join(input.workspace, "forbidden-gateway.js"),
         });
         stage = enterStage("management-state");
+        if (host.admission.state !== "verified") throw new Error();
         const state = host.controller.status();
         if (state.actual !== "stopped" || state.desired !== "stopped" || state.instance)
             throw new Error();
@@ -161,7 +180,7 @@ async function verify(
                 200
         )
             throw new Error();
-        stage = enterStage("authentication-v2");
+        stage = enterStage("authentication-v3");
         await authentication.verify(origin);
         stage = enterStage("anonymous-denied");
         const rejected = await fetch(`${origin}/api/control/gateway/start`, {

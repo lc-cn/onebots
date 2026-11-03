@@ -15,6 +15,38 @@ function spec() {
     };
 }
 describe("管理服务持久化目标契约", () => {
+    it("v2 显式保存卷外来源并在三平台共用 argv 中传递，v1 原字节结构不补默认", () => {
+        const old = spec();
+        expect(parseManagerServiceSpec(old)).not.toHaveProperty("authorityDirectory");
+        const authorityDirectory = path.resolve("private authority");
+        const current = { ...old, schemaVersion: 2, authorityDirectory };
+        expect(parseManagerServiceSpec(current)).toEqual(current);
+        expect(buildManagerServiceArgs(parseManagerServiceSpec(current))).toEqual([
+            old.binPath,
+            "serve",
+            "--data-dir",
+            old.workspace,
+            "--authority-dir",
+            authorityDirectory,
+            "--host",
+            old.host,
+            "--port",
+            String(old.port),
+        ]);
+        expect(() => parseManagerServiceSpec({ ...old, authorityDirectory })).toThrow();
+        for (const authority of [undefined, "relative", "", "bad\npath"])
+            expect(() =>
+                parseManagerServiceSpec({ ...current, authorityDirectory: authority }),
+            ).toThrow();
+        for (const authorityDirectory of [
+            old.workspace,
+            path.join(old.workspace, "authority"),
+            path.dirname(old.workspace),
+        ])
+            expect(() => parseManagerServiceSpec({ ...current, authorityDirectory })).toThrow(
+                "必须与工作区分离",
+            );
+    });
     it("保留绝对路径空格并生成固定serve argv，不夹带旧业务参数", () => {
         const input = spec();
         expect(parseManagerServiceSpec(input)).toEqual(input);

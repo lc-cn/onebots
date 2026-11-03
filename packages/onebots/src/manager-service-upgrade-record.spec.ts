@@ -53,6 +53,24 @@ function journal() {
     return { root, journal: new FileManagerServiceJournal(root) };
 }
 describe("manager upgrade durable identity", () => {
+    it("rejects authority changes and protocol downgrade during an established v2 upgrade", () => {
+        const { spec, upgrade } = fixture();
+        const current = {
+            ...spec,
+            schemaVersion: 2 as const,
+            authorityDirectory: "/tmp/authority",
+        };
+        const from = { ...upgrade, previousSpec: { ...current, binPath: "/tmp/old/bin.js" } };
+        expect(parseManagerServiceUpgrade(from, current, true)).toEqual(from);
+        expect(() =>
+            parseManagerServiceUpgrade(
+                from,
+                { ...current, authorityDirectory: "/tmp/other" },
+                true,
+            ),
+        ).toThrow();
+        expect(() => parseManagerServiceUpgrade(from, spec, true)).toThrow();
+    });
     it.each([true, false])("preserves initial enablement %s through cold recovery", enabled => {
         const test = journal();
         const input = fixture(enabled);
@@ -232,10 +250,7 @@ describe("manager upgrade durable identity", () => {
             ]),
             { ...upgrade, token: "synthetic-secret" },
             { ...upgrade, snapshot: { ...upgrade.snapshot, platform: "win32" } },
-            ...[
-                { processId: 123, identity: null },
-                { enabled: false },
-            ].map(initial => ({
+            ...[{ processId: 123, identity: null }, { enabled: false }].map(initial => ({
                 ...upgrade,
                 snapshot: {
                     ...upgrade.snapshot,

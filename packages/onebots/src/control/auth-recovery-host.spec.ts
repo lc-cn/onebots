@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import { afterEach, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 let host: Awaited<ReturnType<typeof startControlHost>> | undefined;
 let directory: string | undefined;
@@ -11,6 +14,7 @@ afterEach(async () => {
 });
 it("恢复码仅本地签发，HTTP匿名和已有token均无重置权限，兑换后旧token失效", async () => {
     directory = fs.mkdtempSync("/tmp/ob-recover-");
+    await registerControlTestWorkspace(directory);
     host = await startControlHost({ workspace: directory, port: 0 });
     const address = host.server.address();
     if (!address || typeof address === "string") throw new Error("missing listener");
@@ -38,6 +42,7 @@ it("恢复码仅本地签发，HTTP匿名和已有token均无重置权限，兑�
 });
 it("退出撤销跨管理服务重启保持，本地恢复可以重新配对", async () => {
     directory = fs.mkdtempSync("/tmp/ob-logout-host-");
+    await registerControlTestWorkspace(directory);
     host = await startControlHost({ workspace: directory, port: 0 });
     const endpoint = () => {
         const address = host?.server.address();
