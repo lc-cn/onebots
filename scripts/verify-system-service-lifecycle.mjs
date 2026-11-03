@@ -12,7 +12,10 @@ import net from "node:net";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { installedManagerVersion } from "./manager-upgrade-acceptance-helpers.mjs";
-import { managerCandidateStates } from "./service-acceptance-diagnostics.mjs";
+import {
+    managerCandidateStates,
+    unboundStopFailureEvidence,
+} from "./service-acceptance-diagnostics.mjs";
 import {
     registerStoppedServiceWorkspace,
     snapshotFixtureTree,
@@ -1084,6 +1087,15 @@ try {
         operation,
         operationIds,
         eventually,
+        readStopFailureEvidence: () =>
+            unboundStopFailureEvidence({
+                service: SERVICE,
+                definition: DEFINITION,
+                workspace: dataDirectory,
+                stateDirectory: STATE_DIRECTORY,
+                runtime,
+                execute,
+            }),
     });
     effectUnknown = false;
 

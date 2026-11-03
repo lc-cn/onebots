@@ -36,6 +36,7 @@ export async function registerStoppedServiceWorkspace({
     operation,
     operationIds,
     eventually,
+    readStopFailureEvidence,
 }) {
     const scope = system ? ["--system"] : [];
     const absentBusinessState = () => {
@@ -62,7 +63,34 @@ export async function registerStoppedServiceWorkspace({
     assert.notEqual(after.manager.pid, before.manager.pid, "拒绝态 restart 必须确认新的 manager");
     assert.equal(after.gateway.actual, "unknown");
     assert.equal(after.gateway.desired, "unknown");
-    operationIds.push(operation(invokeCli(["stop", ...scope]).stdout, "unbound stop"));
+    const stopped = invokeCli(["stop", ...scope], [0, 1]);
+    if (stopped.status !== 0) {
+        const summary = stopped.stdout?.match(
+            /^操作 ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})：(running|succeeded|failed|interrupted)（(prepared|stopping|restoring-enablement|verifying|completed)）$/mu,
+        );
+        let evidence = "not-provided";
+        if (readStopFailureEvidence) {
+            try {
+                evidence = await readStopFailureEvidence();
+            } catch {
+                // Evidence lookup failure remains unknown; never print arbitrary exception text.
+                evidence = "unavailable";
+            }
+        }
+        assert.equal(
+            stopped.status,
+            0,
+            `拒绝态 stop 未确认；${JSON.stringify({
+                operation: summary
+                    ? { id: summary[1], status: summary[2], phase: summary[3] }
+                    : "summary-unavailable",
+                beforePid: Number.isSafeInteger(before.manager.pid) ? before.manager.pid : null,
+                restartedPid: Number.isSafeInteger(after.manager.pid) ? after.manager.pid : null,
+                evidence,
+            })}`,
+        );
+    }
+    operationIds.push(operation(stopped.stdout, "unbound stop"));
     await eventually(
         () => cliJson(["status", ...scope, "--json"]),
         value => value.manager.state === "stopped" && value.manager.pid === null,
