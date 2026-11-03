@@ -37,16 +37,31 @@ if defined NODE_AUTH_TOKEN exit /b 8
 if defined NPM_TOKEN exit /b 8
 if defined SYNTHETIC_AUTH exit /b 8
 if "%~1"=="install" (
-  if "%ONEBOTS_TEST_MODE%"=="install-fail" exit /b 3
+  >>"%ONEBOTS_TEST_LOG%" echo cli-command install
+  if "%ONEBOTS_TEST_MODE%"=="install-fail" (
+    >>"%ONEBOTS_TEST_LOG%" echo cli-mode install-fail
+    >>"%ONEBOTS_TEST_LOG%" echo cli-exit 3
+    exit /b 3
+  )
+  >>"%ONEBOTS_TEST_LOG%" echo cli-mode other
+  >>"%ONEBOTS_TEST_LOG%" echo cli-exit 0
   exit /b 0
 )
 if "%~1"=="status" (
-  if "%ONEBOTS_TEST_MODE%"=="status-fail" exit /b 3
+  >>"%ONEBOTS_TEST_LOG%" echo cli-command status
+  if "%ONEBOTS_TEST_MODE%"=="status-fail" (
+    >>"%ONEBOTS_TEST_LOG%" echo cli-mode status-fail
+    >>"%ONEBOTS_TEST_LOG%" echo cli-exit 3
+    exit /b 3
+  )
   if "%ONEBOTS_TEST_MODE%"=="invalid-status" echo {}
   if "%ONEBOTS_TEST_MODE%"=="unexpected-running" echo {}
   if not "%ONEBOTS_TEST_MODE%"=="invalid-status" if not "%ONEBOTS_TEST_MODE%"=="unexpected-running" echo {"schemaVersion":1,"installation":"control","manager":{"state":"stopped","ipc":"not-queried"},"serviceRecoveryRequired":false,"diagnostic":null,"gateway":{"actual":"unknown","desired":"unknown","recoveryRequired":null}}
+  >>"%ONEBOTS_TEST_LOG%" echo cli-exit 0
   exit /b 0
 )
+>>"%ONEBOTS_TEST_LOG%" echo cli-command unknown
+>>"%ONEBOTS_TEST_LOG%" echo cli-exit 10
 exit /b 10
 :capability-joined
 >>"%ONEBOTS_TEST_LOG%" echo capability-argument joined
@@ -121,12 +136,16 @@ exit /b 0
     fs.writeFileSync(
         probeScript,
         String.raw`$ErrorActionPreference = 'Stop'
-$Arguments = @('--input-type=module', '-e', "process.exit( $env:ONEBOTS_TEST_EXPECTED_EXIT );")
+if ($env:ONEBOTS_TEST_PROBE_KIND -eq 'install') {
+    $Arguments = @((Join-Path $env:ONEBOTS_HOME 'runtime/node_modules/onebots/lib/bin.js'), 'install', '--system', '--data-dir', (Join-Path $env:ONEBOTS_HOME 'data'))
+} else {
+    $Arguments = @('--input-type=module', '-e', "process.exit( $env:ONEBOTS_TEST_EXPECTED_EXIT );")
+}
 & (Join-Path $PSScriptRoot 'bin/node.cmd') @Arguments
 exit $LASTEXITCODE
 `,
     );
-    const probe = exitCode => {
+    const probe = (exitCode, kind = "capability") => {
         const env = { ...process.env };
         for (const name of Object.keys(env))
             if (
@@ -153,6 +172,9 @@ exit $LASTEXITCODE
                     ONEBOTS_TEST_REAL_NODE: process.execPath,
                     ONEBOTS_TEST_LOG: log,
                     ONEBOTS_TEST_EXPECTED_EXIT: String(exitCode),
+                    ONEBOTS_TEST_PROBE_KIND: kind,
+                    ONEBOTS_TEST_MODE: mode,
+                    ONEBOTS_HOME: home,
                 },
             },
         );
@@ -164,6 +186,24 @@ exit $LASTEXITCODE
         probe,
         commands: () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8") : ""),
     };
+}
+
+function failureDiagnostic(test, result) {
+    return JSON.stringify({
+        trace: test
+            .commands()
+            .split(/\r?\n/u)
+            .filter(line =>
+                /^(?:capability-argument (?:joined|split)|capability-exit (?:0|1|7|8|10)|cli-command (?:install|status|unknown)|cli-mode (?:install-fail|status-fail|other)|cli-exit (?:0|3|8|10))$/u.test(
+                    line,
+                ),
+            ),
+        successMessage: (result.stdout ?? "").includes("管理服务已安装并保持停止"),
+        installationFailure: ((result.stdout ?? "") + (result.stderr ?? "")).includes(
+            "安装未完成：",
+        ),
+        markerExists: fs.existsSync(path.join(test.home, ".manager-installed")),
+    });
 }
 
 try {
@@ -188,9 +228,23 @@ try {
     assert.doesNotMatch(bridge.commands(), /^cli /mu);
     process.stdout.write(`Windows capability bridge argument forms: ${forms.join(",")}\n`);
 
+    for (const [mode, exitCode] of [
+        ["ok", 0],
+        ["install-fail", 3],
+    ]) {
+        const direct = fixture(mode);
+        const result = direct.probe(exitCode, "install");
+        assert.equal(result.error, undefined);
+        assert.equal(result.status, exitCode, failureDiagnostic(direct, result));
+        assert.match(direct.commands(), /^cli-command install\r?$/mu);
+        assert.match(direct.commands(), new RegExp(`^cli-exit ${exitCode}\\r?$`, "mu"));
+        assert.equal(fs.existsSync(path.join(direct.home, ".manager-installed")), false);
+    }
+    process.stdout.write("Windows install bridge exit checks: 0,3\n");
+
     const success = fixture();
     const installed = success.run();
-    assert.equal(installed.status, 0, installed.stderr);
+    assert.equal(installed.status, 0, failureDiagnostic(success, installed));
     assert.match(installed.stdout, /管理服务已安装并保持停止/);
     assert.match(success.commands(), /--registry=https:\/\/registry\.npmjs\.org onebots@latest/);
     assert.match(success.commands(), /bin\.js install --system --data-dir/);
@@ -210,7 +264,7 @@ try {
     assert.doesNotMatch(installed.stdout + installed.stderr + success.commands(), /private-/);
     const before = success.commands();
     const repeated = success.run();
-    assert.equal(repeated.status, 0, repeated.stderr);
+    assert.equal(repeated.status, 0, failureDiagnostic(success, repeated));
     assert.match(repeated.stdout, /已有安装成功/);
     assert.equal(success.commands(), before);
 
@@ -225,7 +279,11 @@ try {
     ]) {
         const failed = fixture(mode);
         const result = failed.run();
-        assert.notEqual(result.status, 0, `${mode} unexpectedly succeeded`);
+        assert.notEqual(
+            result.status,
+            0,
+            `${mode} unexpectedly succeeded; ${failureDiagnostic(failed, result)}`,
+        );
         assert.doesNotMatch(result.stdout, /管理服务已安装并保持停止/);
         assert.equal(fs.existsSync(path.join(failed.home, ".manager-installed")), false);
         assert.equal(fs.existsSync(path.join(failed.home, "runtime")), true);
@@ -233,6 +291,11 @@ try {
             assert.equal([...failed.commands().matchAll(/^capability-argument /gmu)].length, 1);
             assert.match(failed.commands(), /^capability-exit 1\r?$/mu);
             assert.doesNotMatch(failed.commands(), /bin\.js (?:install|status|start) /u);
+        }
+        if (mode === "install-fail") {
+            assert.match(failed.commands(), /^cli-mode install-fail\r?$/mu);
+            assert.match(failed.commands(), /^cli-exit 3\r?$/mu);
+            assert.doesNotMatch(failed.commands(), /^cli-command status\r?$/mu);
         }
     }
     process.stdout.write("Windows bootstrap installation acceptance passed\n");
