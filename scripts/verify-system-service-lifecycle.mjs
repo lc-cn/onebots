@@ -814,7 +814,21 @@ async function verifyLegacyMigration(port, operationIds) {
         stoppedState,
         "恢复门禁检查不得重派 systemd 动作",
     );
-    const interruptedRecord = JSON.parse(fs.readFileSync(stopping.file, "utf8"));
+    assert.deepEqual(
+        fs.readFileSync(stopping.file),
+        stoppingJournal,
+        "严格版迁移/安装门禁只读拒绝，不应顺便将旧 running 记录落成中断状态",
+    );
+    // The owner has closed above. Explicitly reopen the historical journal under the installed
+    // service lock: strict public gates intentionally do not perform this recovery write.
+    // Public recover also performs the same cold-open itself; this is a fixture assertion of
+    // that owner contract, not an extra recovery prerequisite for real installations.
+    const { inspectServiceMigration } = await import(
+        pathToFileURL(
+            path.join(runtime, "node_modules/onebots/lib/service-migration-coordinator.js"),
+        ).href
+    );
+    const interruptedRecord = inspectServiceMigration(STATE_DIRECTORY, stopping.id);
     assert.deepEqual(
         {
             phase: interruptedRecord.phase,

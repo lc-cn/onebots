@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -27,6 +28,40 @@ func privateWorkspaceFixture(t *testing.T) string {
 func replacementRequest(directory string, expected *string, contents string) *bytes.Reader {
 	encoded, _ := json.Marshal(map[string]interface{}{"version": 1, "directory": directory, "fileName": "auth.json", "expectedDigest": expected, "bytes": base64.StdEncoding.EncodeToString([]byte(contents))})
 	return bytes.NewReader(encoded)
+}
+
+type privateTestFileIdentity struct {
+	VolumeSerial uint64
+	FileID       [16]byte
+}
+
+func readPrivateTestFileIdentity(t *testing.T, handle windows.Handle) privateTestFileIdentity {
+	t.Helper()
+	var identity privateTestFileIdentity
+	if err := windows.GetFileInformationByHandleEx(handle, windows.FileIdInfo, (*byte)(unsafe.Pointer(&identity)), uint32(unsafe.Sizeof(identity))); err != nil {
+		t.Fatal(err)
+	}
+	return identity
+}
+
+func openPrivateTestFileIdentity(t *testing.T, name string) (windows.Handle, privateTestFileIdentity) {
+	t.Helper()
+	pointer, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Keep the original object alive without blocking MoveFileEx. os.Stat may defer
+	// loading a Windows file ID until SameFile, which would reopen the replaced path.
+	handle, err := windows.CreateFile(pointer, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := windows.CloseHandle(handle); err != nil {
+			t.Error(err)
+		}
+	})
+	return handle, readPrivateTestFileIdentity(t, handle)
 }
 
 func TestWorkspaceIdentityPersistsRenameAndRejectsOtherObjects(t *testing.T) {
@@ -65,10 +100,7 @@ func TestPrivateReplacementChecksExpectedStateAndFlushesSameBytesAgain(t *testin
 		t.Fatal(err)
 	}
 	file := filepath.Join(root, "auth.json")
-	before, err := os.Stat(file)
-	if err != nil {
-		t.Fatal(err)
-	}
+	beforeHandle, before := openPrivateTestFileIdentity(t, file)
 	if err := runWorkspaceStorage("private-file-inspect", file, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
@@ -84,12 +116,15 @@ func TestPrivateReplacementChecksExpectedStateAndFlushesSameBytesAgain(t *testin
 	if err := runPrivateFileReplace(replacementRequest(root, &digest, "first"), &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	after, err := os.Stat(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if os.SameFile(before, after) {
+	_, after := openPrivateTestFileIdentity(t, file)
+	if before == after {
 		t.Fatal("same bytes skipped durable replacement")
+	}
+	if readPrivateTestFileIdentity(t, beforeHandle) != before {
+		t.Fatal("replacement changed the original open file identity")
+	}
+	if err := runWorkspaceStorage("private-file-inspect", file, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
 	}
 	if err := runPrivateFileReplace(replacementRequest(root, &digest, "second"), &bytes.Buffer{}); err != nil {
 		t.Fatal(err)

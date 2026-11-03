@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -95,15 +96,24 @@ func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
 	if !response.OK || response.State == nil || response.State.Control == nil || response.State.Control.Manager.ID != control.Manager.ID {
 		t.Fatalf("publish did not return closed control state: %#v", response)
 	}
+	published := response.State.Control
+	expected := control
+	expected.PublishedAt = published.PublishedAt
+	if published.PublishedAt.IsZero() || !reflect.DeepEqual(published, &expected) {
+		t.Fatalf("publish changed the supplied control state: %#v", published)
+	}
 	var output bytes.Buffer
 	if err := queryStatus(config.PipeName, 5*time.Second, &output); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(output.Bytes(), &response); err != nil {
+	var observed protocol.Response
+	if err := json.Unmarshal(output.Bytes(), &observed); err != nil {
 		t.Fatal(err)
 	}
-	if response.State == nil || response.State.Control == nil || response.State.Control.Gateway != control.Gateway {
-		t.Fatalf("status reader did not observe published control state: %#v", response)
+	// The reader receives a separate JSON message, so compare the complete published
+	// value (including admission and gateway), never pointers allocated by decoding.
+	if !observed.OK || observed.State == nil || !reflect.DeepEqual(observed.State.Control, published) {
+		t.Fatalf("status reader did not observe published control state: %#v", observed)
 	}
 	invalidate := nativeExchangePipeRequest(t, config.PipeName, protocol.Request{
 		Version: protocol.Version, RequestID: "invalidate:2", Operation: "invalidate_status", Manager: &control.Manager, Revision: 2,
