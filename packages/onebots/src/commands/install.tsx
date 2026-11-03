@@ -10,6 +10,10 @@ export const options = z
             .string()
             .optional()
             .describe(option({ description: "管理服务工作区目录", valueDescription: "path" })),
+        authorityDir: z
+            .string()
+            .optional()
+            .describe(option({ description: "卷外持久身份目录", valueDescription: "path" })),
         host: z
             .string()
             .default("127.0.0.1")

@@ -6,6 +6,7 @@ ONEBOTS_HOME=${ONEBOTS_HOME:-"$HOME/.onebots"}
 case "$ONEBOTS_HOME" in /*) ;; *) printf '%s\n' '[OneBots] ONEBOTS_HOME 必须是绝对路径' >&2; exit 1 ;; esac
 RUNTIME_DIR="$ONEBOTS_HOME/runtime"
 NODE_DIR="$ONEBOTS_HOME/node"
+WORKSPACE_DIR="$ONEBOTS_HOME/data"
 MARKER="$ONEBOTS_HOME/.manager-installed"
 LOCK="$ONEBOTS_HOME/.install-lock"
 work_dir=""
@@ -25,7 +26,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 [ ! -L "$ONEBOTS_HOME" ] || fail "安装目录不能是符号链接"
-if [ -f "$MARKER" ] && [ ! -L "$MARKER" ] && [ "$(cat "$MARKER")" = "onebots-manager-install-v1" ]; then
+if [ -f "$MARKER" ] && [ ! -L "$MARKER" ] && { [ "$(cat "$MARKER")" = "onebots-manager-install-v1" ] || [ "$(cat "$MARKER")" = "onebots-manager-install-v2-pending" ]; }; then
     say "此目录已有安装成功的管理程序。未修改依赖或重启服务，请使用现有 CLI 管理。"
     exit 0
 fi
@@ -106,26 +107,33 @@ done
 WEB_ENTRY="$RUNTIME_DIR/node_modules/@onebots/web/dist/index.html"
 NESTED_WEB_ENTRY="$PACKAGE_DIR/node_modules/@onebots/web/dist/index.html"
 if [ ! -s "$WEB_ENTRY" ] && [ ! -s "$NESTED_WEB_ENTRY" ]; then fail "发布包缺少 Web 管理端工件"; fi
+env -i PATH="$NODE_PATH_ENV" HOME="$ONEBOTS_HOME/.bootstrap/home" LANG=C "$NODE_BIN" --input-type=module -e '
+import { pathToFileURL } from "node:url";
+const host = await import(pathToFileURL(process.argv[1]).href);
+if (host.WORKSPACE_ADMISSION_CAPABILITY !== 1) process.exit(1);
+' "$PACKAGE_DIR/lib/control/host.js" || fail "发布包尚不支持工作区来源登记，未安装或启动系统服务"
 
 # install 只登记用户级管理服务；空白工作区由管理服务初始化，不预填业务配置。
 run_cli() (
     cd "$RUNTIME_DIR"
     env -u NODE_OPTIONS "$NODE_BIN" "$ONEBOTS_BIN" "$@"
 )
-say "正在登记并启动用户级管理服务…"
-run_cli install --data-dir "$ONEBOTS_HOME" || fail "系统服务安装失败"
-run_cli start || fail "系统服务启动结果未确认"
+say "正在安装用户级管理服务；首次来源登记需要你单独确认…"
+run_cli install --data-dir "$WORKSPACE_DIR" || fail "系统服务安装失败"
 STATUS_FILE="$ONEBOTS_HOME/.bootstrap/status.json"
 run_cli status --json > "$STATUS_FILE" || fail "系统服务状态检查失败"
 env -i PATH="$NODE_PATH_ENV" "$NODE_BIN" --input-type=module -e '
 import fs from "node:fs";
 try {
     const state = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    if (state.schemaVersion !== 1 || state.installation !== "control" || state.manager?.state !== "running" || state.manager?.ipc !== "available" || state.serviceRecoveryRequired !== false || state.diagnostic !== null || state.gateway?.recoveryRequired !== false) process.exit(1);
+    if (state.schemaVersion !== 1 || state.installation !== "control" || state.manager?.state !== "stopped" || state.manager?.ipc !== "not-queried" || state.serviceRecoveryRequired !== false || state.diagnostic !== null || state.gateway?.actual !== "unknown") process.exit(1);
 } catch { process.exit(1); }
-' "$STATUS_FILE" || fail "管理服务尚未确认运行，不能报告成功"
-printf '%s\n' 'onebots-manager-install-v1' > "$MARKER.tmp"
+' "$STATUS_FILE" || fail "管理服务尚未确认安全停止，不能报告安装完成"
+printf '%s\n' 'onebots-manager-install-v2-pending' > "$MARKER.tmp"
 mv "$MARKER.tmp" "$MARKER"
-say "管理服务已安装并确认运行。未安装平台或输出协议，未自动启动业务账号。"
-say "使用设备码配对：\"$NODE_BIN\" \"$ONEBOTS_BIN\" auth bootstrap --data-dir \"$ONEBOTS_HOME\""
-say "配置和管理：\"$NODE_BIN\" \"$ONEBOTS_BIN\" ui --data-dir \"$ONEBOTS_HOME\""
+say "管理服务已安装并保持停止；尚未取得工作区运行权，当前不能配对。请核对计划并明确确认："
+say "\"$NODE_BIN\" \"$ONEBOTS_BIN\" workspace plan --data-dir \"$WORKSPACE_DIR\" > \"$ONEBOTS_HOME/.bootstrap/workspace-plan.json\""
+say "\"$NODE_BIN\" \"$ONEBOTS_BIN\" workspace register --plan-file \"$ONEBOTS_HOME/.bootstrap/workspace-plan.json\" --confirm '<plan.digest>'"
+say "确认登记成功后：\"$NODE_BIN\" \"$ONEBOTS_BIN\" start"
+say "服务启动后再配对：\"$NODE_BIN\" \"$ONEBOTS_BIN\" auth bootstrap --data-dir \"$WORKSPACE_DIR\""
+say "配置和管理：\"$NODE_BIN\" \"$ONEBOTS_BIN\" ui --data-dir \"$WORKSPACE_DIR\""

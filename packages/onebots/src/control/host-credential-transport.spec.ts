@@ -4,7 +4,10 @@ import os from "node:os";
 import { afterEach, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { createLocalControlClient } from "../client/local-control.js";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -16,6 +19,7 @@ it("可信 HTTPS 代理能保存 Satori token，HTTP 和伪造声明仍拒绝且
     const workspace = fs.mkdtempSync(
         path.join(process.platform === "darwin" ? "/tmp" : os.tmpdir(), "ob-credential-"),
     );
+    await registerControlTestWorkspace(workspace);
     cleanups.push(async () => fs.rmSync(workspace, { recursive: true, force: true }));
     const runtimeRoot = path.join(workspace, "runtime");
     fs.mkdirSync(path.join(runtimeRoot, "node_modules/@onebots"), { recursive: true });

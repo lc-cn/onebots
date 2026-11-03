@@ -8,6 +8,7 @@ import {
 const pipe = "\\\\.\\pipe\\onebots-gateway-control";
 const publishedAt = new Date().toISOString();
 const control = {
+    admission: { state: "verified" as const },
     revision: 1,
     manager: {
         id: "123e4567-e89b-42d3-a456-426614174000",
@@ -21,7 +22,7 @@ describe("Windows named pipe ControlClient边界", () => {
     it("本地 CLI 通过随包原生桥以 stdin 传输请求", async () => {
         const runner = vi.fn(async () => Buffer.from("response"));
         const exchange = createWindowsNativeHostExchange("C:\\OneBots\\host.exe", runner);
-        const request = Buffer.from('{"version":2}\n');
+        const request = Buffer.from('{"version":3}\n');
         await expect(exchange(pipe, request, 120_000)).resolves.toEqual(Buffer.from("response"));
         expect(runner).toHaveBeenCalledWith(
             "C:\\OneBots\\host.exe",
@@ -35,14 +36,14 @@ describe("Windows named pipe ControlClient边界", () => {
         const exchange = vi.fn(async (_pipe: string, bytes: Buffer) => {
             const request = JSON.parse(bytes.toString("utf8"));
             expect(request).toEqual({
-                version: 2,
+                version: 3,
                 requestId: expect.stringMatching(/^publish:/),
                 operation: "publish_status",
                 control,
             });
             return Buffer.from(
                 JSON.stringify({
-                    version: 2,
+                    version: 3,
                     requestId: request.requestId,
                     ok: true,
                     state: {
@@ -66,7 +67,7 @@ describe("Windows named pipe ControlClient边界", () => {
         const exchange = vi.fn(async (_pipe: string, bytes: Buffer) => {
             const request = JSON.parse(bytes.toString("utf8"));
             expect(request).toEqual({
-                version: 2,
+                version: 3,
                 requestId: expect.stringMatching(/^invalidate:/),
                 operation: "invalidate_status",
                 manager: control.manager,
@@ -74,7 +75,7 @@ describe("Windows named pipe ControlClient边界", () => {
             });
             return Buffer.from(
                 JSON.stringify({
-                    version: 2,
+                    version: 3,
                     requestId: request.requestId,
                     ok: true,
                     state: {
@@ -96,7 +97,7 @@ describe("Windows named pipe ControlClient边界", () => {
             const request = JSON.parse(bytes.toString("utf8"));
             return Buffer.from(
                 JSON.stringify({
-                    version: 2,
+                    version: 3,
                     requestId: request.requestId,
                     ok: false,
                     error: { code: "state_mismatch", message: "private host detail" },
@@ -117,7 +118,7 @@ describe("Windows named pipe ControlClient边界", () => {
         const mismatch = new WindowsHostControlClient(pipe, async () =>
             Buffer.from(
                 JSON.stringify({
-                    version: 2,
+                    version: 3,
                     requestId: "status:other",
                     ok: true,
                     state: {
@@ -140,7 +141,7 @@ describe("Windows named pipe ControlClient边界", () => {
             if (request.operation === "status")
                 return Buffer.from(
                     JSON.stringify({
-                        version: 2,
+                        version: 3,
                         requestId: request.requestId,
                         ok: true,
                         state: {
@@ -153,7 +154,7 @@ describe("Windows named pipe ControlClient边界", () => {
                 );
             expect(timeout).toBe(120_000);
             expect(request).toEqual({
-                version: 2,
+                version: 3,
                 requestId: expect.stringMatching(/^control:/),
                 operation: "control_request",
                 binding: { revision: 1, manager: control.manager },
@@ -163,7 +164,7 @@ describe("Windows named pipe ControlClient边界", () => {
             });
             return Buffer.from(
                 JSON.stringify({
-                    version: 2,
+                    version: 3,
                     requestId: request.requestId,
                     ok: true,
                     result: { status: 201, body: { code: "123456" } },
@@ -186,7 +187,7 @@ describe("Windows named pipe ControlClient边界", () => {
             if (request.operation === "status")
                 return Buffer.from(
                     JSON.stringify({
-                        version: 2,
+                        version: 3,
                         requestId: request.requestId,
                         ok: true,
                         state: {
@@ -199,7 +200,7 @@ describe("Windows named pipe ControlClient边界", () => {
                 );
             return Buffer.from(
                 JSON.stringify({
-                    version: 2,
+                    version: 3,
                     requestId: request.requestId,
                     ok: false,
                     error: { code: "stale_binding", message: "manager changed" },
@@ -218,7 +219,7 @@ describe("Windows named pipe ControlClient边界", () => {
             if (request.operation === "status")
                 return Buffer.from(
                     JSON.stringify({
-                        version: 2,
+                        version: 3,
                         requestId: request.requestId,
                         ok: true,
                         state: {
@@ -231,7 +232,7 @@ describe("Windows named pipe ControlClient边界", () => {
                 );
             return Buffer.from(
                 JSON.stringify({
-                    version: 2,
+                    version: 3,
                     requestId: request.requestId,
                     ok: true,
                     result: { status: 200, body: { payload } },

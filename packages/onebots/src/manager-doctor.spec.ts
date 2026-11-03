@@ -86,7 +86,13 @@ function fixture() {
         ],
     );
     const inspectTerminal = vi.fn(async () => true);
-    const deps = { inspectDiagnostics, inspectService, probe, inspectTerminal };
+    // 本文件隔离 doctor 汇总逻辑；来源文件/复制/崩溃边界由 admission.spec 的真实夹具覆盖。
+    const inspectAdmission = vi.fn(() => ({
+        schemaVersion: 1 as const,
+        state: "verified" as const,
+        reason: "REGISTERED_LOCAL_OBJECT",
+    }));
+    const deps = { inspectDiagnostics, inspectService, probe, inspectTerminal, inspectAdmission };
     function service() {
         const files = getServiceFiles("user", host);
         fs.mkdirSync(files.stateDir, { recursive: true, mode: 0o700 });

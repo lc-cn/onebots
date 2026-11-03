@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { createLocalControlClient } from "../client/local-control.js";
 
@@ -11,6 +14,7 @@ afterEach(async () => {
 });
 async function fixture() {
     const root = fs.mkdtempSync("/tmp/ob-repair-http-");
+    await registerControlTestWorkspace(root);
     cleanups.push(async () => {
         fs.rmSync(root, { recursive: true, force: true });
     });

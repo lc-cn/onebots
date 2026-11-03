@@ -1,6 +1,9 @@
 import { assertNoPendingManagerUpgrade } from "./service-upgrade-workspace.js";
 import fs from "node:fs";
-import { assertManagerServiceRuntime } from "./manager-service-preflight.js";
+import {
+    assertManagerServiceRuntime,
+    LegacyManagerSourceRegistrationRequiredError,
+} from "./manager-service-preflight.js";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
@@ -28,11 +31,18 @@ import { assertManagerServiceTransactionsSupported } from "./windows-manager-sup
 import { WindowsServicePlatform } from "./service-platform-windows.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
 import type { PersistedOperationObserver } from "./persisted-operation-observer.js";
+import { isEmptyBusinessWorkspace } from "./workspace-admission/registration-plan.js";
+import { inspectWorkspaceAdmission } from "./workspace-admission/admission.js";
+import {
+    inspectManagerReadiness,
+    inspectManagerServiceIdentity,
+} from "./manager-service-readiness.js";
 
 export type ManagerControlAction = "start" | "stop" | "restart";
 export interface ManagerControllerDependencies {
     platform?(spec: ManagerServiceSpec): ServicePlatform;
     inspectManager?: typeof inspectMigrationManager;
+    inspectReadiness?: typeof inspectManagerReadiness;
     confirmStopped?: typeof verifyServiceMigrationProcesses;
     now?(): number;
     sleep?(milliseconds: number): Promise<void>;
@@ -70,6 +80,8 @@ export async function controlManagerService(
         if (metadata.kind !== "control" || metadata.spec.scope !== scope)
             throw new Error("服务元数据无效，禁止覆盖或猜测运行契约");
         const spec = metadata.spec;
+        if (action !== "stop" && spec.schemaVersion === 1)
+            throw new LegacyManagerSourceRegistrationRequiredError(scope);
         const migrationDirectory = path.join(files.stateDir, "migrations");
         if (
             exists(migrationDirectory) &&
@@ -81,10 +93,19 @@ export async function controlManagerService(
             throw new Error("系统服务迁移尚未确认，禁止新的服务操作");
         const journal = new FileManagerServiceJournal(
             path.join(files.stateDir, "manager-operations"),
-            dependencies.onOperation ?? createControlOperationObserver(spec.workspace),
+            dependencies.onOperation ??
+                (spec.schemaVersion === 1 ||
+                inspectWorkspaceAdmission(spec.workspace, spec.authorityDirectory).state ===
+                    "verified"
+                    ? createControlOperationObserver(spec.workspace)
+                    : undefined),
         );
         if (journal.health().recoveryRequired) throw new Error("前次系统服务操作尚待对账");
-        const confirmStopped = dependencies.confirmStopped ?? verifyServiceMigrationProcesses;
+        const confirmStopped =
+            dependencies.confirmStopped ??
+            (async (workspace: string) =>
+                (spec.schemaVersion === 2 && isEmptyBusinessWorkspace(workspace)) ||
+                verifyServiceMigrationProcesses(workspace));
         const platform =
             dependencies.platform?.(spec) ??
             (host.platform === "linux"
@@ -162,11 +183,15 @@ export async function controlManagerService(
                                 return true;
                             throw new Error();
                         }
-                        const manager = await inspect(spec.workspace);
+                        const manager = await inspectManagerServiceIdentity(
+                            spec.workspace,
+                            inspect,
+                            dependencies.inspectReadiness,
+                        );
                         if (
                             isDeepStrictEqual(first, second) &&
-                            manager.manager.pid === first.processId &&
-                            (!previousId || manager.manager.id !== previousId)
+                            manager.pid === first.processId &&
+                            (!previousId || manager.id !== previousId)
                         )
                             return true;
                     }
@@ -194,10 +219,13 @@ export async function controlManagerService(
                         throw new Error("管理实例身份不符");
                     previousId = native.control.manager.id;
                 } else {
-                    const manager = await inspect(spec.workspace);
-                    if (manager.manager.pid !== initial.processId)
-                        throw new Error("管理实例身份不符");
-                    previousId = manager.manager.id;
+                    const manager = await inspectManagerServiceIdentity(
+                        spec.workspace,
+                        inspect,
+                        dependencies.inspectReadiness,
+                    );
+                    if (manager.pid !== initial.processId) throw new Error("管理实例身份不符");
+                    previousId = manager.id;
                 }
             }
             if (action !== "start" || initial.state === "failed") {

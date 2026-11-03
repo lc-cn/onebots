@@ -6,7 +6,10 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 import { NodeGatewayDriver } from "./gateway-driver.js";
 import { GatewayRequestError } from "./gateway-request-client.js";
@@ -25,6 +28,7 @@ function directory() {
 }
 async function fixture(secret: string) {
     const workspace = directory();
+    await registerControlTestWorkspace(workspace);
     const runtimeRoot = directory();
     const calls = path.join(runtimeRoot, "verification-calls");
     const core = JSON.stringify(pathToFileURL(path.resolve("packages/core/lib/index.js")).href);

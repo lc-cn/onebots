@@ -2,11 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 
 it("实际管理HTTP和本地客户端共用调试，设备撤销关闭流，停止网关保留管理", async () => {
     const workspace = fs.realpathSync(fs.mkdtempSync("/tmp/ob-debug-host-"));
+    await registerControlTestWorkspace(workspace);
     const host = await startControlHost({
         workspace,
         port: 0,
@@ -23,9 +27,13 @@ it("实际管理HTTP和本地客户端共用调试，设备撤销关闭流，停
         const { token } = await anonymous.pair((await local.bootstrap()).code);
         const web = new ControlClient(createHttpControlTransport(url, () => token));
         const snapshot = await web.messageDebugHistory();
-        expect((await fetch(`${url}/api/message-debug/history`, {
-            headers: { Authorization: `Bearer ${token}` },
-        })).status).toBe(404);
+        expect(
+            (
+                await fetch(`${url}/api/message-debug/history`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                })
+            ).status,
+        ).toBe(404);
         expect(snapshot.entries).toEqual([]);
         expect(await local.messageDebugHistory()).toEqual(snapshot);
         expect(await web.clearMessageDebug(snapshot.gatewayInstanceId)).toEqual({

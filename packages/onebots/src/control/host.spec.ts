@@ -8,7 +8,12 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { afterEach, describe, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
+import { startControlHost as startUnregisteredControlHost } from "./host.js";
+import { ControlAuth } from "./auth.js";
 import { createLocalControlClient } from "../client/local-control.js";
 
 const directories: string[] = [];
@@ -86,6 +91,7 @@ async function upgrade(port: number, target: string): Promise<string> {
 describe("control host integration", () => {
     it("首次进程级配置需要显式重启许可；拒绝不重启，再确认只执行一次", async () => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         fs.writeFileSync(
             path.join(root, "config.yaml"),
             "plugins:\n  adapters: []\n  protocols: []\n  applications: []\n",
@@ -123,6 +129,7 @@ describe("control host integration", () => {
     });
     it("先查看平台Schema，再通过草稿添加账号和协议完成真实协议调用", async () => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         fs.writeFileSync(
             path.join(root, "config.yaml"),
             "plugins:\n  adapters: [mock]\n  protocols: [onebot-v11]\n  applications: []\n",
@@ -203,6 +210,7 @@ describe("control host integration", () => {
     });
     it("空白工作区通过统一HTTP客户端完成草稿校验应用，保持停止意图", async () => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         const running = await start(root);
         const client = await pair(running);
         await client.gateway("stop");
@@ -235,22 +243,35 @@ describe("control host integration", () => {
     it("旧管理目录无进程所有权凭据仅保留诊断，不静默升级自证", async () => {
         const root = workspace();
         fs.mkdirSync(path.join(root, ".control"), { mode: 0o700 });
-        const running = await start(root);
-        const client = await pair(running);
-        const status = await client.status();
-        expect(status).toHaveProperty("processOwnership.available", false);
-        await expect(client.installationCatalog()).resolves.toMatchObject({
-            adapters: expect.any(Array),
-            protocols: expect.any(Array),
-            applications: expect.any(Array),
+        const authPath = path.join(root, ".control/auth.json");
+        const legacy = new ControlAuth({ statePath: authPath });
+        const token = legacy.pair(legacy.issueBootstrap());
+        const before = fs.readFileSync(authPath);
+        const host = await startUnregisteredControlHost({ workspace: root, port: 0 });
+        cleanups.push(() => host.close());
+        const address = host.server.address();
+        if (!address || typeof address === "string") throw new Error("控制宿主未监听 TCP");
+        const url = `http://127.0.0.1:${address.port}`;
+        const client = new ControlClient(createHttpControlTransport(url, () => token));
+        expect(
+            await fetch(`${url}/api/control/workspace-admission`).then(response => response.json()),
+        ).toMatchObject({ state: "authority-unavailable" });
+        await expect(client.status()).rejects.toMatchObject({ status: 503 });
+        await expect(client.installationCatalog()).rejects.toMatchObject({ status: 503 });
+        await expect(createLocalControlClient(root).bootstrap()).rejects.toMatchObject({
+            status: 503,
         });
         for (const action of ["start", "stop", "restart"] as const)
-            await expect(client.gateway(action)).rejects.toThrow("历史管理进程所有权不可确认");
-        expect((await fetch(`${running.url}/ready`)).status).toBe(200);
+            await expect(client.gateway(action)).rejects.toMatchObject({ status: 503 });
+        expect((await fetch(`${url}/ready`)).status).toBe(200);
+        await host.close();
+        expect(fs.readFileSync(authPath)).toEqual(before);
         expect(fs.existsSync(path.join(root, ".control/process-ownership.json"))).toBe(false);
+        expect(fs.existsSync(path.join(root, "config.yaml"))).toBe(false);
     });
     it("旧管理进程和网关都已退出时自动接管并完成网关对账", async () => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         const initial = await start(root);
         await initial.host.close();
         const pid = await deadPid();
@@ -287,6 +308,7 @@ describe("control host integration", () => {
     });
     it("配置应用记录损坏时保留管理端并拒绝启动，停止仍可执行", async () => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         const initial = await start(root);
         await initial.host.close();
         const records = path.join(root, ".control/configuration-applications");
@@ -307,6 +329,7 @@ describe("control host integration", () => {
     });
     it("网关ready后的状态写入失败仍保留Web并允许修复存储后安全关闭", async () => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         const entrypoint = path.join(root, "fault-gateway.mjs");
         fs.writeFileSync(
             entrypoint,
@@ -341,7 +364,8 @@ process.on('message', message => {
 
     it("版本指针初始化失败不会关闭Web或启动未验证网关", async () => {
         const root = workspace();
-        fs.mkdirSync(path.join(root, ".control"));
+        await registerControlTestWorkspace(root);
+        fs.mkdirSync(path.join(root, ".control"), { recursive: true });
         fs.writeFileSync(path.join(root, ".control/active-generation.json"), "{invalid-pointer");
         const running = await start(root);
         expect((await fetch(`${running.url}/`)).status).toBe(200);
@@ -354,7 +378,8 @@ process.on('message', message => {
 
     it("冷启动中断的版本切换阻止自动启动，但管理端可诊断", async () => {
         const root = workspace();
-        fs.mkdirSync(path.join(root, ".control"));
+        await registerControlTestWorkspace(root);
+        fs.mkdirSync(path.join(root, ".control"), { recursive: true });
         fs.writeFileSync(
             path.join(root, ".control/active-generation.json"),
             JSON.stringify({
@@ -386,6 +411,7 @@ process.on('message', message => {
 
     it("本地配对引导后 Web 控制真实网关，停止仍保留管理页且重启宿主维持停止意图", async () => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         const running = await start(root);
         const web = await pair(running);
         const initial = await web.status();
@@ -422,6 +448,7 @@ process.on('message', message => {
 
     it("坏配置不关闭管理端，修好后无需重启管理服务即可启动", async () => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         fs.writeFileSync(path.join(root, "config.yaml"), "[synthetic-secret");
         const running = await start(root);
         expect((await running.local.status()).gateway.actual).toBe("failed");
@@ -440,6 +467,7 @@ process.on('message', message => {
 
     it("恢复历史 localhost 地址不能被 HTTP 或 WS 代理", async () => {
         const root = workspace();
+        await registerControlTestWorkspace(root);
         let requests = 0;
         const unrelated = http.createServer((_request, response) => {
             requests++;
@@ -458,7 +486,7 @@ process.on('message', message => {
         );
         const address = unrelated.address();
         if (!address || typeof address === "string") throw new Error("本地服务未监听");
-        fs.mkdirSync(path.join(root, ".control"));
+        fs.mkdirSync(path.join(root, ".control"), { recursive: true });
         fs.writeFileSync(
             path.join(root, ".control", "gateway.json"),
             JSON.stringify({
@@ -483,7 +511,9 @@ process.on('message', message => {
     });
 
     it("匿名 TCP 无法获取配对码或控制状态，非法 Upgrade 不影响管理服务", async () => {
-        const running = await start(workspace());
+        const root = workspace();
+        await registerControlTestWorkspace(root);
+        const running = await start(root);
         expect(
             (
                 await fetch(`${running.url}/api/control/auth/bootstrap`, {

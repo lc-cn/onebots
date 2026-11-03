@@ -189,6 +189,37 @@ function fixture(action: ManagerServiceAction = "stop") {
     };
 }
 describe("manager service explicit target-state reconciliation", () => {
+    it("冷对账已启动的诊断 manager，仅核验身份/候选/OS且保留未知网关", async () => {
+        const f = fixture("start");
+        Object.assign(f.state, {
+            state: "running",
+            running: true,
+            loaded: true,
+            processId: 321,
+            identity: "manager-instance",
+            quiescent: false,
+        });
+        const result = await reconcileManagerServiceOperation("operation", "user", f.host, {
+            platform: f.platform,
+            inspectManager: async () => {
+                throw new Error("diagnostic manager");
+            },
+            inspectReadiness: async () => ({
+                schemaVersion: 1,
+                manager: { id: "10000000-0000-4000-8000-000000000001", pid: 321, version: "1.0.0" },
+                admission: {
+                    schemaVersion: 1,
+                    state: "unbound",
+                    reason: "EXPLICIT_REGISTRATION_REQUIRED",
+                },
+                gateway: null,
+            }),
+            inspectRuntime: f.inspectRuntime,
+        });
+        expect(result.status).toBe("succeeded");
+        expect(f.effects).toEqual([]);
+        for (const saved of f.saved) expect(fs.readFileSync(saved.file)).toEqual(saved.bytes);
+    });
     it("reconciles an achieved start by matching stable OS and live manager identity", async () => {
         const f = fixture("start");
         Object.assign(f.state, {

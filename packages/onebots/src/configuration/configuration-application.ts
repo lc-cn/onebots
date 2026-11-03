@@ -1,9 +1,11 @@
 import {
+    readConfigurationApplicationJournal,
+    readApplicationDocument,
+} from "./configuration-application-reader.js";
+import {
     privateDirectory,
-    readFile,
     atomic,
     checkRepair,
-    checkRepairRevisions,
     writeApplicationJournal,
     applicationDocumentBytes as bytes,
     applicationDigest as digest,
@@ -445,60 +447,9 @@ export class ConfigurationApplication {
             );
     }
     private read(id: string): ConfigurationApplicationJournal {
-        try {
-            const raw = parseConfigurationDocument(JSON.parse(readFile(this.file(id), 4_200_000)));
-            checkBase(raw.base);
-            checkApplicationRuntimeFields(raw);
-            if (
-                raw.schemaVersion !== 1 ||
-                raw.id !== id ||
-                typeof raw.validationId !== "string" ||
-                !ID.test(raw.validationId) ||
-                typeof raw.documentDigest !== "string" ||
-                !HASH.test(raw.documentDigest) ||
-                typeof raw.previousDigest !== "string" ||
-                !HASH.test(raw.previousDigest) ||
-                !["running", "succeeded", "failed", "interrupted"].includes(String(raw.status)) ||
-                ![
-                    "accepted",
-                    "stopping",
-                    "writing",
-                    "starting",
-                    "applying",
-                    "restoring",
-                    "completed",
-                    "failed",
-                ].includes(String(raw.phase)) ||
-                !["running", "stopped"].includes(String(raw.desired)) ||
-                typeof raw.recoveryRequired !== "boolean" ||
-                (raw.configRevision !== undefined &&
-                    (typeof raw.configRevision !== "string" || !HASH.test(raw.configRevision))) ||
-                (raw.candidateRevision !== undefined &&
-                    (typeof raw.candidateRevision !== "string" ||
-                        !HASH.test(raw.candidateRevision))) ||
-                (raw.rolledBack !== undefined && typeof raw.rolledBack !== "boolean") ||
-                (raw.restoreRolledBack !== undefined &&
-                    typeof raw.restoreRolledBack !== "boolean") ||
-                (raw.error !== undefined &&
-                    !["CONFIG_APPLY_FAILED", "CONFIG_RECOVERY_REQUIRED"].includes(
-                        String(raw.error),
-                    ))
-            )
-                throw invalid();
-            const operation = raw as unknown as ConfigurationApplicationJournal;
-            const document = this.readDocument(operation.documentDigest);
-            if (operation.mode !== undefined || operation.repair !== undefined) {
-                if (operation.mode !== "repair") throw invalid();
-                checkRepair(operation.repair, operation.base);
-                checkRepairRevisions(operation, document, this.options.source);
-                const original = this.options.recovery?.read(operation.repair!);
-                if (!original || digest(original) !== operation.previousDigest) throw invalid();
-            } else this.readDocument(operation.previousDigest);
-            return operation;
-        } catch {
-            throw invalid();
-        }
+        return readConfigurationApplicationJournal(this.directory, id, this.options);
     }
+
     private saveDocument(hash: string, content: string): void {
         const file = path.join(this.directory, "documents", `${hash}.json`);
         if (fs.existsSync(file)) {
@@ -508,9 +459,6 @@ export class ConfigurationApplication {
         atomic(file, content);
     }
     private readDocument(hash: string): ConfigurationDocument {
-        if (!HASH.test(hash)) throw invalid();
-        const content = readFile(path.join(this.directory, "documents", `${hash}.json`), 4_200_000);
-        if (digest(content) !== hash) throw invalid();
-        return parseConfigurationDocument(JSON.parse(content));
+        return readApplicationDocument(this.directory, hash);
     }
 }

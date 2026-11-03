@@ -35,6 +35,7 @@ import {
     WindowsServiceSecurityError,
 } from "./windows-service-security.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
+import { createWindowsPrivateDirectory } from "./windows-private-file.js";
 import {
     deriveManagerBootstrapStageError,
     ManagerBootstrapCandidateError,
@@ -45,7 +46,9 @@ import {
 
 export interface ManagerBootstrapRequest {
     id?: string;
-    service: Omit<ManagerServiceSpec, "binPath" | "workingDirectory">;
+    service: Omit<ManagerServiceSpec, "binPath" | "workingDirectory"> & {
+        authorityDirectory?: string;
+    };
 }
 export interface ManagerBootstrapDependencies extends ManagerServiceInstallDependencies {
     /** 仅可信产品工件配置；不能来自 Web 请求中的 URL 或包名。 */
@@ -94,6 +97,7 @@ async function bootstrapManagerServiceImpl(
         "nodePath",
         "host",
         "port",
+        ...(request.service.schemaVersion === 2 ? ["authorityDirectory"] : []),
     ]);
     if (
         Object.hasOwn(request, "id") &&
@@ -125,7 +129,11 @@ async function bootstrapManagerServiceImpl(
         }
         // Windows 空白工作区与服务状态使用同一最小 ACL；已存在但边界不同的目录拒绝接管。
         try {
-            secureWindowsServiceDirectory(host, template.workspace);
+            if (template.schemaVersion === 2) {
+                if (fs.existsSync(template.workspace))
+                    inspectWindowsServiceDirectorySecurity(host, template.workspace);
+                else createWindowsPrivateDirectory(template.workspace);
+            } else secureWindowsServiceDirectory(host, template.workspace);
         } catch (error) {
             throw new ManagerBootstrapSetupError(
                 "windows-workspace-security",
@@ -225,7 +233,10 @@ async function bootstrapManagerServiceImpl(
         }
         const journal = new FileManagerServiceJournal(
             path.join(files.stateDir, "manager-operations"),
-            dependencies.onOperation ?? createControlOperationObserver(template.workspace),
+            dependencies.onOperation ??
+                (template.schemaVersion === 1
+                    ? createControlOperationObserver(template.workspace)
+                    : undefined),
         );
         const operations = new ServiceOperationStorage(
             path.join(files.stateDir, "manager-operations"),

@@ -5,6 +5,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import yaml from "js-yaml";
 import { expect, it } from "vitest";
+import { registerControlTestWorkspace } from "../../test-utils/control-test-workspace.js";
 
 it("已安装 bundle 从无依赖工作目录启动仍使用安装根规划及热应用", async () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ob-bundle-cwd-")));
@@ -54,6 +55,7 @@ it("已安装 bundle 从无依赖工作目录启动仍使用安装根规划及�
         }
         const workspace = path.join(root, "workspace");
         fs.mkdirSync(workspace);
+        const authorityDirectory = await registerControlTestWorkspace(workspace);
         fs.writeFileSync(
             path.join(workspace, "config.yaml"),
             yaml.dump({
@@ -71,7 +73,7 @@ it("已安装 bundle 从无依赖工作目录启动仍使用安装根规划及�
             let phase='host';
             let host;
             try {
-                host = await startControlHost({ workspace, port: 0 });
+                host = await startControlHost({ workspace, authorityDirectory: ${JSON.stringify(authorityDirectory)}, port: 0 });
                 const address = host.server.address();
                 let token = '';
                 const client = new ControlClient(createHttpControlTransport('http://127.0.0.1:'+address.port,()=>token));

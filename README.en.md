@@ -95,38 +95,70 @@ flowchart LR
 
 ### A) Docker (recommended)
 
-**Mount a data volume** or config is lost on restart:
+For a **new, empty workspace**, persist both `/data` and an independent authority volume. Register offline first; keep the plan file on the host, outside `data/`:
 
 ```bash
-docker run -d -p 6727:6727 -v $(pwd)/data:/data --name onebots ghcr.io/lc-cn/onebots:master
+umask 077
+mkdir -p ./data
+docker volume create onebots-authority
+docker run --rm -v "$(pwd)/data:/data" \
+  -v onebots-authority:/var/lib/onebots-authority \
+  ghcr.io/lc-cn/onebots:master workspace plan --data-dir /data \
+  --authority-dir /var/lib/onebots-authority/authority > onebots-plan.json
+
+# Read the plan and its session-revocation impact; substitute its actual digest.
+docker run --rm -i -v "$(pwd)/data:/data" \
+  -v onebots-authority:/var/lib/onebots-authority \
+  ghcr.io/lc-cn/onebots:master workspace register \
+  --plan-file - --confirm '<plan.digest>' < onebots-plan.json
+
+docker run -d --name onebots --restart unless-stopped -p 6727:6727 \
+  -v "$(pwd)/data:/data" -v onebots-authority:/var/lib/onebots-authority \
+  ghcr.io/lc-cn/onebots:master
+docker exec --user 1000:1000 onebots \
+  node /app/packages/onebots/lib/bin.js auth bootstrap --data-dir /data
 ```
 
-See **[Docker guide](https://onebots.pages.dev/guide/docker)**.
+Use the same image version with workspace admission support for every step. Without registration, the manager exposes a read-only maintenance page and cannot pair devices. Registration does not start the manager or gateway. Existing control v1 installations need the [offline upgrade procedure](https://onebots.pages.dev/guide/workspace-admission); earlier monolithic deployments cannot directly run strict-version `onebots migrate`.
+
+Do not copy the authority with the business volume. This mechanism does not provide global exclusion for full-machine clones or cross-host HA. `HF_REPO_ID` automatic restore is disabled in this first release. See the **[Docker guide](https://onebots.pages.dev/guide/docker)** for deployment and storage boundaries.
 
 ### B) npm installation
 
-Install the management program, register its user-level OS service, then start it:
+On Linux/macOS with Node.js 24 or later, register a new empty workspace before starting the foreground manager:
 
 ```bash
-pnpm add onebots
-npx onebots install --data-dir ./data
-npx onebots start
-npx onebots status
+npm install --global onebots
+umask 077
+mkdir -m 700 ./onebots-data ./onebots-authority
+onebots workspace plan --data-dir ./onebots-data \
+  --authority-dir ./onebots-authority > onebots-plan.json
+# Read the plan; replace the placeholder with its actual digest.
+onebots workspace register --plan-file onebots-plan.json --confirm '<plan.digest>'
+onebots serve --data-dir ./onebots-data --authority-dir ./onebots-authority
 ```
 
-The empty installation exposes the management console without creating a platform account or enabling a protocol. Generate a one-time device code and pair the browser:
+Keep the foreground manager running. In another terminal, generate a device code and pair the browser:
 
 ```bash
-npx onebots auth bootstrap --data-dir ./data
+onebots auth bootstrap --data-dir ./onebots-data
 ```
 
 Use the Web **Install dependencies** page to select adapters, output protocols and framework integrations. OneBots installs required peers into an immutable runtime generation, verifies it, and activates it only after confirmation. The terminal uses the same control API:
 
 ```bash
-npx onebots ui --data-dir ./data --setup
+onebots ui --data-dir ./onebots-data --setup
 ```
 
-Use `--system` with lifecycle commands for a system-level service. `doctor` diagnoses the installed manager and gateway; `update` plans or installs gateway runtime updates. The gateway can stop or fail while the management console remains available.
+To host this registered workspace as an OS service, stop the foreground manager normally, then reuse its authority without registering again:
+
+```bash
+onebots install --data-dir ./onebots-data --authority-dir ./onebots-authority
+onebots start
+onebots status
+```
+
+A completely new service installation remains stopped until you explicitly confirm its registration plan. Use `--system` with lifecycle commands for a system-level service. On Windows, use the [elevated installer](https://onebots.pages.dev/en/guide/start); it prepares private ACLs, verifies the package capability and prints the offline registration steps. Installer sources are in `docs/src/public`. `doctor` diagnoses the manager and gateway; `update` handles runtime updates. The gateway can stop or fail while the management console remains available.
 
 ### C) From source
 
@@ -134,11 +166,10 @@ Use `--system` with lifecycle commands for a system-level service. `doctor` diag
 git clone https://github.com/lc-cn/onebots.git
 cd onebots
 pnpm install
-pnpm dev
 pnpm build && pnpm test
 ```
 
-**Requires Node.js ≥ 24.**
+**Requires Node.js ≥ 24.** Follow the [source quick start](https://onebots.pages.dev/en/guide/start) to register an empty development workspace and start it with the same authority directory.
 
 ---
 

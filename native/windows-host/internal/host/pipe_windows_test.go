@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ func TestStatusPipeHasVerifiedSecurityAndServesState(t *testing.T) {
 	}
 
 	output.Reset()
-	request := []byte(`{"version":2,"requestId":"control-client:1","operation":"status"}`)
+	request := []byte(`{"version":3,"requestId":"control-client:1","operation":"status"}`)
 	if err := exchangeControlRequest(config.PipeName, 5*time.Second, bytes.NewReader(request), &output); err != nil {
 		t.Fatal(err)
 	}
@@ -57,11 +58,11 @@ func TestStatusPipeHasVerifiedSecurityAndServesState(t *testing.T) {
 }
 
 func TestNativeExchangeRejectsUnknownOperationsAndRemoteNames(t *testing.T) {
-	unknown := []byte(`{"version":2,"requestId":"unknown:1","operation":"unknown"}`)
+	unknown := []byte(`{"version":3,"requestId":"unknown:1","operation":"unknown"}`)
 	if err := exchangeControlRequest(`\\.\pipe\unused`, time.Second, bytes.NewReader(unknown), io.Discard); err == nil {
 		t.Fatal("native client exchange accepted an unknown operation")
 	}
-	status := []byte(`{"version":2,"requestId":"status:1","operation":"status"}`)
+	status := []byte(`{"version":3,"requestId":"status:1","operation":"status"}`)
 	if err := exchangeControlRequest(`\\localhost\pipe\unused`, time.Second, bytes.NewReader(status), io.Discard); err == nil {
 		t.Fatal("native client exchange accepted a remote pipe name")
 	}
@@ -84,9 +85,10 @@ func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
 	}
 	defer server.Close()
 	control := protocol.ControlState{
-		Revision: 1,
-		Manager:  protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: managerPID},
-		Gateway:  protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
+		Revision:  1,
+		Manager:   protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: managerPID},
+		Admission: protocol.ControlAdmissionState{State: "verified"},
+		Gateway:   &protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
 	}
 	response := nativeExchangePipeRequest(t, config.PipeName, protocol.Request{
 		Version: protocol.Version, RequestID: "publish:1", Operation: "publish_status", Control: &control,
@@ -94,15 +96,24 @@ func TestServiceSIDPublishesClosedControlStatusForControlReaders(t *testing.T) {
 	if !response.OK || response.State == nil || response.State.Control == nil || response.State.Control.Manager.ID != control.Manager.ID {
 		t.Fatalf("publish did not return closed control state: %#v", response)
 	}
+	published := response.State.Control
+	expected := control
+	expected.PublishedAt = published.PublishedAt
+	if published.PublishedAt.IsZero() || !reflect.DeepEqual(published, &expected) {
+		t.Fatalf("publish changed the supplied control state: %#v", published)
+	}
 	var output bytes.Buffer
 	if err := queryStatus(config.PipeName, 5*time.Second, &output); err != nil {
 		t.Fatal(err)
 	}
-	if err := json.Unmarshal(output.Bytes(), &response); err != nil {
+	var observed protocol.Response
+	if err := json.Unmarshal(output.Bytes(), &observed); err != nil {
 		t.Fatal(err)
 	}
-	if response.State == nil || response.State.Control == nil || response.State.Control.Gateway != control.Gateway {
-		t.Fatalf("status reader did not observe published control state: %#v", response)
+	// The reader receives a separate JSON message, so compare the complete published
+	// value (including admission and gateway), never pointers allocated by decoding.
+	if !observed.OK || observed.State == nil || !reflect.DeepEqual(observed.State.Control, published) {
+		t.Fatalf("status reader did not observe published control state: %#v", observed)
 	}
 	invalidate := nativeExchangePipeRequest(t, config.PipeName, protocol.Request{
 		Version: protocol.Version, RequestID: "invalidate:2", Operation: "invalidate_status", Manager: &control.Manager, Revision: 2,
@@ -134,9 +145,10 @@ func TestConsoleWorkerPipeRejectsControlRequestWhenManagerRPCIsDisabled(t *testi
 	}
 	defer server.Close()
 	control := protocol.ControlState{
-		Revision: 1,
-		Manager:  protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: managerPID},
-		Gateway:  protocol.ControlGatewayState{Desired: "stopped", Actual: "stopped"},
+		Revision:  1,
+		Manager:   protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: managerPID},
+		Admission: protocol.ControlAdmissionState{State: "verified"},
+		Gateway:   &protocol.ControlGatewayState{Desired: "stopped", Actual: "stopped"},
 	}
 	published := exchangePipeRequest(t, config.PipeName, protocol.Request{
 		Version: protocol.Version, RequestID: "publish:no-rpc", Operation: "publish_status", Control: &control,
@@ -170,9 +182,10 @@ func TestPublishRequiresServiceSIDAndRunningManagerPID(t *testing.T) {
 	state := newStateStore(time.Now())
 	state.set("running", "running", 42)
 	if err := state.publish(protocol.ControlState{
-		Revision: 1,
-		Manager:  protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 41},
-		Gateway:  protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
+		Revision:  1,
+		Manager:   protocol.ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 41},
+		Admission: protocol.ControlAdmissionState{State: "verified"},
+		Gateway:   &protocol.ControlGatewayState{Desired: "running", Actual: "stopped"},
 	}); err == nil {
 		t.Fatal("mismatched manager pid unexpectedly published")
 	}

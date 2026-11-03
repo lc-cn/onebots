@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
 import { afterEach, expect, it } from "vitest";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
 import { createLocalControlClient } from "../client/local-control.js";
 
@@ -12,6 +15,7 @@ afterEach(async () => {
 });
 async function fixture() {
     const workspace = fs.mkdtempSync("/tmp/ob-hot-host-");
+    await registerControlTestWorkspace(workspace);
     cleanups.push(async () => fs.rmSync(workspace, { recursive: true, force: true }));
     const runtimeRoot = path.join(workspace, "runtime");
     fs.mkdirSync(path.join(runtimeRoot, "node_modules/@onebots"), { recursive: true });

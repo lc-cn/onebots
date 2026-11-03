@@ -65,7 +65,7 @@ node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.
 
 同码重启不会重新签发或延长有效期。初始码和恢复码不能相互复用。有效的本地恢复码优先；如曾申请本地恢复码，请使用它，或等它过期后再注入全新的部署恢复码。每类部署码最多记录 16 次，超过上限使用本机恢复入口。
 
-HF 操作示例见 [Docker 部署](/guide/docker)。本地 HF 容器恢复已验证，真实 HF 云端环境仍未实测。
+HF 操作示例见 [Docker 部署](/guide/docker)。本机 Docker 已验证部署码配对与拒绝路径；`HF_REPO_ID` 自动备份恢复首期禁用，HF 云端存储 provider 仍未实测。
 
 ## 排查
 

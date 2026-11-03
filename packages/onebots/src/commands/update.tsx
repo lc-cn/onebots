@@ -10,6 +10,10 @@ export const options = z
             .string()
             .optional()
             .describe(option({ description: "管理服务工作区" })),
+        authorityDir: z
+            .string()
+            .optional()
+            .describe(option({ description: "首次离线管理升级的卷外身份目录" })),
         check: z.boolean().describe(option({ description: "只检查网关更新，有更新退出 2" })),
         manager: z.boolean().describe(option({ description: "检查或升级本机常驻管理程序" })),
         version: z
@@ -41,6 +45,7 @@ export default function UpdateCommand({ options: input }: { options: z.infer<typ
                     ...(input.system ? ["--system"] : []),
                     ...(input.operation ? ["--operation", input.operation] : []),
                     ...(input.artifacts ? ["--artifacts", input.artifacts] : []),
+                    ...(input.authorityDir ? ["--authority-dir", input.authorityDir] : []),
                 ]),
             })}
             pending="正在检查网关运行版本…"

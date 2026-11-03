@@ -12,7 +12,7 @@ vi.mock("./owned-worker.js", () => ({
         decode(value: unknown): unknown;
     }) => {
         const proof = structuredClone(options.request.expected);
-        if (behavior.omitAuthentication) Reflect.deleteProperty(proof.checks, "authenticationV2");
+        if (behavior.omitAuthentication) Reflect.deleteProperty(proof.checks, "authenticationV3");
         return options.decode(proof);
     },
 }));
@@ -20,7 +20,7 @@ const roots: string[] = [];
 afterEach(() => {
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
-it.each([false, true])("父进程严格拒绝缺少认证 v2 检查的返回值：%s", async omit => {
+it.each([false, true])("父进程严格拒绝缺少认证 v3 检查的返回值：%s", async omit => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ob-manager-proof-"));
     roots.push(root);
     behavior.omitAuthentication = omit;
@@ -32,5 +32,5 @@ it.each([false, true])("父进程严格拒绝缺少认证 v2 检查的返回值�
     });
     const result = verifyManagerCandidate(root, plan, { privateRoot: path.join(root, "private") });
     if (omit) await expect(result).rejects.toThrow("管理程序候选验证未完成");
-    else expect((await result).checks.authenticationV2).toBe(true);
+    else expect((await result).checks.authenticationV3).toBe(true);
 });

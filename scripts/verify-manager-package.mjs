@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
+import { registerInstalledWorkspace } from "./workspace-admission-fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const temporary = fs.mkdtempSync("/tmp/ob-npm-");
@@ -73,6 +74,13 @@ try {
         environment,
     );
     const packageRoot = path.join(runtime, "node_modules/onebots");
+    fs.mkdirSync(workspace, { mode: 0o700 });
+    const authorityDirectory = registerInstalledWorkspace({
+        packageRoot,
+        workspace,
+        authorityDirectory: path.join(temporary, "authority"),
+        environment,
+    });
     for (const relative of ["lib/bin.js", "lib/control/host.js", "lib/gateway/entry.js"]) {
         assert.ok(fs.statSync(path.join(packageRoot, relative)).size > 0);
     }
@@ -126,6 +134,7 @@ try {
     const client = createLocalControlClient(workspace);
     const options = {
         workspace,
+        authorityDirectory,
         port: 0,
         host: "127.0.0.1",
         runtimeRoot: runtime,
@@ -170,7 +179,7 @@ try {
     await verifyManagerMigration(runtime, archives, temporary);
     safeToRemove = true;
     process.stdout.write(
-        "✓ 实际 npm 产物：候选维护启动与损坏入口拒绝、验证进程回收、Web入口及资源、匿名控制拒绝、零扩展、网关启停、停止意图跨重启保持及真实管理候选迁移通过（未安装原生系统服务）\n",
+        "✓ 实际 npm 产物：候选维护启动与损坏入口拒绝、验证进程回收、Web资源、匿名控制拒绝、网关启停及停止意图跨重启保持通过；首次服务事务与冷对账、旧迁移历史契约和新入口安全拒绝通过（OS 驱动注入，未安装宿主系统服务）\n",
     );
 } finally {
     if (host) {

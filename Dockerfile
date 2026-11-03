@@ -70,8 +70,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["nod
 
 # 管理服务独立于网关运行，空数据卷直接提供控制台
 COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY docker-authority.sh /app/docker-authority.sh
+COPY docker-workspace.sh /app/docker-workspace.sh
 RUN chmod +x /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
 # 仅管理服务持有公共入口和网关生命周期。
-CMD ["serve", "--data-dir", "/data", "--host", "0.0.0.0"]
+CMD ["serve", "--data-dir", "/data", "--authority-dir", "/var/lib/onebots-authority/authority", "--host", "0.0.0.0"]

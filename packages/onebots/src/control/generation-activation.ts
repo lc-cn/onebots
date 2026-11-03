@@ -130,7 +130,9 @@ export class GenerationActivationController {
         return this.serial(async () => {
             if (this.initialized) return;
             try {
-                this.state = parseState(JSON.parse(await readFile(this.options.statePath, "utf8")));
+                this.state = parseGenerationActivationState(
+                    JSON.parse(await readFile(this.options.statePath, "utf8")),
+                );
             } catch (error) {
                 if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
                 // A missing pointer record is the initial bundled runtime.
@@ -569,7 +571,7 @@ function samePointer(
     return left?.id === right?.id && left?.planDigest === right?.planDigest;
 }
 
-function parseState(value: unknown): GenerationActivationState {
+export function parseGenerationActivationState(value: unknown): GenerationActivationState {
     if (!value || typeof value !== "object") throw new Error("版本指针记录损坏");
     const state = value as GenerationActivationState;
     const validPointer = (item: ActiveGenerationPointer | null) =>

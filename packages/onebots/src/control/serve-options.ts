@@ -1,7 +1,9 @@
 import path from "node:path";
 import { WINDOWS_HOST_PIPE_NAME } from "../service-platform-windows.js";
+import { defaultServiceAuthorityDirectory } from "../service-authority.js";
+import os from "node:os";
 
-export const SERVE_HELP = `onebots serve [--data-dir 工作区] [--host 监听地址] [--port 管理端口]
+export const SERVE_HELP = `onebots serve [--data-dir 工作区] [--authority-dir 卷外持久身份目录] [--host 监听地址] [--port 管理端口]
 启动常驻管理服务，网关由控制客户端独立管理。
 默认工作区为当前目录，监听 127.0.0.1:6727。
 平台、协议和框架通过安装及配置界面选择，不接受 -r/-p/-t。
@@ -17,6 +19,7 @@ export function parseServeOptions(args: string[], env = process.env) {
         if (
             ![
                 "--data-dir",
+                "--authority-dir",
                 "--host",
                 "--port",
                 "--windows-host-pipe",
@@ -47,6 +50,13 @@ export function parseServeOptions(args: string[], env = process.env) {
         workspace: path.resolve(values.get("--data-dir") ?? env.ONEBOTS_WORKSPACE ?? process.cwd()),
         host: values.get("--host") ?? "127.0.0.1",
         port,
+        authorityDirectory: values.has("--authority-dir")
+            ? path.resolve(values.get("--authority-dir")!)
+            : defaultServiceAuthorityDirectory("user", {
+                  platform: process.platform,
+                  homedir: os.homedir(),
+                  env,
+              }),
         ...(windowsHostPipe ? { windowsHostPipe } : {}),
         ...(windowsHostRpcPipe ? { windowsHostRpcPipe } : {}),
     };

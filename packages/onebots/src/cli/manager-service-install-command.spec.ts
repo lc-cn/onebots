@@ -107,7 +107,8 @@ describe("首次管理服务安装CLI", () => {
         expect(vi.mocked(bootstrapManagerService).mock.calls[0]).toEqual([
             {
                 service: {
-                    schemaVersion: 1,
+                    schemaVersion: 2,
+                    authorityDirectory: expect.stringMatching(/[\\/]authority$/),
                     runtimeKind: "control",
                     scope: "user",
                     workspace,

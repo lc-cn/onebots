@@ -12,6 +12,7 @@ import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
+import { registerInstalledWorkspace } from "./workspace-admission-fixture.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const temporary = fs.mkdtempSync("/tmp/ob-installed-cross-entry-race-");
@@ -162,13 +163,29 @@ try {
 
     const packageRoot = path.join(runtime, "node_modules/onebots");
     const bin = path.join(packageRoot, "lib/bin.js");
+    const authorityDirectory = registerInstalledWorkspace({
+        packageRoot,
+        workspace,
+        authorityDirectory: path.join(temporary, "authority"),
+        environment,
+    });
     const data = ["--data-dir", workspace];
     const port = await reservePort();
     const baseUrl = `http://127.0.0.1:${port}`;
     const managerOutput = [];
     manager = spawn(
         process.execPath,
-        [bin, "serve", ...data, "--host", "127.0.0.1", "--port", String(port)],
+        [
+            bin,
+            "serve",
+            ...data,
+            "--authority-dir",
+            authorityDirectory,
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+        ],
         { cwd: runtime, env: environment, stdio: ["ignore", "pipe", "pipe"] },
     );
     for (const stream of [manager.stdout, manager.stderr])

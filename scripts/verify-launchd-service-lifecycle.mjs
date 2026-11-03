@@ -13,9 +13,14 @@ import os from "node:os";
 import path from "node:path";
 import {
     installedManagerVersion,
-    preparePreviousPatchArtifacts,
-    verifyManagerPatchUpgrade,
+    preparePreviousVersionArtifacts,
+    verifyManagerVersionUpgrade,
 } from "./manager-upgrade-acceptance-helpers.mjs";
+import {
+    registerStoppedServiceWorkspace,
+    snapshotFixtureTree,
+    verifyRegisteredServiceColdStart,
+} from "./service-workspace-admission-acceptance.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const LABEL = "com.onebots.onebots-gateway";
@@ -136,7 +141,7 @@ const tarballs = fs
     .map(name => path.join(artifacts, name));
 assert.equal(tarballs.length, 3, "必须安装当前 core、web 和 onebots 三个打包工件");
 const manifest = JSON.parse(fs.readFileSync(path.join(artifacts, "manifest.json"), "utf8"));
-const previous = preparePreviousPatchArtifacts({ temporary, artifacts, manifest, execute });
+const previous = preparePreviousVersionArtifacts({ temporary, artifacts, manifest, execute });
 fs.writeFileSync(
     path.join(runtime, "package.json"),
     JSON.stringify({ name: "onebots-launchd-acceptance", private: true, version: "1.0.0" }),
@@ -234,15 +239,6 @@ function migrationJournalStates() {
         });
 }
 
-function invokeMigration(args) {
-    const result = invokeCli(args, [0, 1]);
-    if (result.status === 0) return result.stdout;
-    const text = [result.stdout, result.stderr].filter(Boolean).join("\n").slice(0, 4096);
-    throw new Error(
-        `公开 CLI migrate 失败（exit ${String(result.status)}）：${text || "无输出"}；迁移记录=${JSON.stringify(migrationJournalStates())}`,
-    );
-}
-
 function launchdState() {
     const output = execute("/bin/launchctl", ["print", `${DOMAIN}/${LABEL}`], {
         statuses: [0],
@@ -315,7 +311,7 @@ async function assertManagementOnline(port) {
     assert.equal((await fetch(`http://127.0.0.1:${port}/api/control/status`)).status, 401);
 }
 
-async function verifyLegacyMigration(port, operationIds) {
+async function verifyLegacyMigration(port) {
     let legacyRuntime = path.join(temporary, "legacy-launchd-runtime");
     let legacyData = path.join(temporary, "legacy-launchd-data");
     const legacyCore = path.join(legacyRuntime, "node_modules/@onebots/core");
@@ -393,76 +389,27 @@ async function verifyLegacyMigration(port, operationIds) {
     assert.equal(legacyStatus.installation, "legacy");
     assert.equal(legacyStatus.diagnostic, "migration-required");
 
-    const migrationOutput = invokeMigration([
-        "migrate",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(port),
-    ]);
-    const migrationId = operation(migrationOutput, "migrate");
-    operationIds.push(migrationId);
-    const migrationJournal = path.join(
-        STATE_DIRECTORY,
-        "migrations",
-        `${migrationId}.journal.json`,
-    );
-    const journalBeforeColdStart = fs.readFileSync(migrationJournal);
-    const beforeColdStart = await eventually(
-        () => ({
-            os: cliJson(["status", "--json"]),
-            control: cliJson(["control", "status", "--data-dir", legacyData]),
-        }),
-        value =>
-            value.os.installation === "control" &&
-            value.os.manager.state === "running" &&
-            value.os.manager.ipc === "available" &&
-            value.control.gateway.desired === "running" &&
-            value.control.gateway.actual === "running",
-        "旧 launchd 服务迁移后管理进程或网关未稳定运行",
-    );
-    assert.equal(
-        JSON.parse(journalBeforeColdStart).id,
-        migrationId,
-        "迁移完成记录必须持久化公开 CLI 返回的 operation ID",
-    );
-    await assertManagementOnline(port);
+    const originalState = launchdStrongIdentity();
+    const originalDefinition = fs.readFileSync(DEFINITION);
+    const originalServiceTree = snapshotFixtureTree(STATE_DIRECTORY);
+    const originalWorkspaceTree = snapshotFixtureTree(legacyData);
+    const rejected = invokeCli(["migrate", "--host", "127.0.0.1", "--port", String(port)], [1]);
+    assert.match(rejected.stdout, /严格来源版不支持从旧单进程架构直接迁移/u);
+    assert.deepEqual(launchdStrongIdentity(), originalState, "拒绝迁移不得停止或重启旧进程");
+    assert.deepEqual(fs.readFileSync(DEFINITION), originalDefinition);
+    assert.deepEqual(snapshotFixtureTree(STATE_DIRECTORY), originalServiceTree);
+    assert.deepEqual(snapshotFixtureTree(legacyData), originalWorkspaceTree);
+    assert.equal(migrationJournalStates().length, 0, "预flight拒绝不得分配迁移日志");
 
-    execute("/bin/kill", ["-KILL", String(beforeColdStart.os.manager.pid)]);
-    const afterColdStart = await eventually(
-        () => ({
-            os: cliJson(["status", "--json"]),
-            control: cliJson(["control", "status", "--data-dir", legacyData]),
-        }),
-        value =>
-            value.os.manager.state === "running" &&
-            value.os.manager.ipc === "available" &&
-            value.os.manager.pid !== beforeColdStart.os.manager.pid &&
-            value.control.manager.id !== beforeColdStart.control.manager.id &&
-            value.control.gateway.desired === "running" &&
-            value.control.gateway.actual === "running" &&
-            value.control.gateway.instance?.id !== beforeColdStart.control.gateway.instance?.id,
-        "launchd 未在管理进程异常退出后完成冷启动恢复",
-    );
-    assert.ok(afterColdStart.os.manager.pid);
-    assert.deepEqual(
-        fs.readFileSync(migrationJournal),
-        journalBeforeColdStart,
-        "冷启动不得改写或重派已完成的迁移 operation",
-    );
-    assert.equal(
-        fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
-        "legacy-preserve-me\n",
-    );
-    await assertManagementOnline(port);
-
-    operationIds.push(operation(invokeCli(["stop"]).stdout, "stop migrated service"));
+    // Remove only the synthetic legacy job created above; never ask the strict CLI to migrate it.
+    execute("/bin/launchctl", ["bootout", `${DOMAIN}/${LABEL}`]);
     await eventually(
-        () => cliJson(["status", "--json"]),
-        value => value.manager.state === "stopped" && value.manager.pid === null,
-        "迁移后的 launchd 管理服务未稳定停止",
+        () => execute("/bin/ps", ["-o", "pid=", "-p", originalState.pid], { statuses: [0, 1] }),
+        value => value.status === 1 && value.stdout === "",
+        "测试创建的 legacy launchd 进程未退出，不能进入新安装验收",
     );
-    operationIds.push(operation(invokeCli(["uninstall"]).stdout, "uninstall migrated service"));
+    fs.unlinkSync(DEFINITION);
+    fs.unlinkSync(METADATA);
     assertLaunchdAbsent();
     assert.equal(
         fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
@@ -477,7 +424,8 @@ function ownedInstallation() {
         return (
             metadata.scope === "user" &&
             metadata.workspace === fs.realpathSync(dataDirectory) &&
-            metadata.schemaVersion === 1 &&
+            metadata.schemaVersion === 2 &&
+            metadata.authorityDirectory === path.join(STATE_DIRECTORY, "authority") &&
             definition.isFile() &&
             !definition.isSymbolicLink()
         );
@@ -493,7 +441,7 @@ let installedByThisRun = false;
 let effectUnknown = false;
 try {
     effectUnknown = true;
-    await verifyLegacyMigration(port, operationIds);
+    await verifyLegacyMigration(port);
     effectUnknown = false;
 
     effectUnknown = true;
@@ -549,12 +497,27 @@ try {
     assert.equal(installed.manager.state, "stopped");
     assert.equal(installed.manager.enabled, true);
     assert.equal(installed.manager.pid, null);
+    assert.equal(installedMetadata.schemaVersion, 2);
+    assert.equal(installedMetadata.authorityDirectory, path.join(STATE_DIRECTORY, "authority"));
+    effectUnknown = true;
+    await registerStoppedServiceWorkspace({
+        workspace: dataDirectory,
+        authorityDirectory: installedMetadata.authorityDirectory,
+        planFile: path.join(temporary, "workspace-registration.json"),
+        system: false,
+        invokeCli,
+        cliJson,
+        operation,
+        operationIds,
+        eventually,
+    });
+    effectUnknown = false;
 
     effectUnknown = true;
     const startedOutput = invokeCli(["start"]).stdout;
     effectUnknown = false;
     operationIds.push(operation(startedOutput, "start"));
-    const beforeRestart = await eventually(
+    let beforeRestart = await eventually(
         () => ({
             os: cliJson(["status", "--json"]),
             control: cliJson(["control", "status", "--data-dir", dataDirectory]),
@@ -573,6 +536,18 @@ try {
     assert.ok(beforeRestart.control.manager.id);
     assert.ok(beforeRestart.control.gateway.instance?.id);
     await assertManagementOnline(port);
+    effectUnknown = true;
+    beforeRestart = await verifyRegisteredServiceColdStart({
+        workspace: dataDirectory,
+        stateDirectory: STATE_DIRECTORY,
+        before: beforeRestart,
+        cliJson,
+        statusArgs: ["status", "--json"],
+        killManager: pid => execute("/bin/kill", ["-KILL", String(pid)]),
+        eventually,
+    });
+    effectUnknown = false;
+    await assertManagementOnline(port);
 
     const blankConfiguration = fs.readFileSync(path.join(dataDirectory, "config.yaml"), "utf8");
     assert.equal(
@@ -583,7 +558,7 @@ try {
     fs.writeFileSync(path.join(dataDirectory, "acceptance-user-data.txt"), "preserve-me\n", {
         mode: 0o600,
     });
-    const upgrade = await verifyManagerPatchUpgrade({
+    const upgrade = await verifyManagerVersionUpgrade({
         cli,
         cliEnvironment,
         runtime,
@@ -701,7 +676,7 @@ try {
     assert.equal(new Set(operationIds).size, operationIds.length, "生命周期操作 ID 必须互不相同");
     completed = true;
     process.stdout.write(
-        "✓ 真实 launchd 用户级验收：旧服务迁移、异常退出冷启动、旧 patch 升级故障回退与重启恢复、operation 幂等、空白新安装生命周期及卸载保留数据均通过\n",
+        "✓ 真实 launchd 用户级验收：旧服务迁移无写入拒绝、v2未登记诊断与显式首登、异常退出冷启动、合成较早版本升级故障回退与重启恢复、operation 幂等及卸载保留数据均通过\n",
     );
 } finally {
     // 仅在最近一次外部效果结果已知且元数据仍绑定本次临时工作区时尝试公开卸载。

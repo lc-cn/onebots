@@ -3,6 +3,7 @@ import * as os from "node:os";
 import { execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { nativeHelperEnvironment } from "./native-helper-environment.js";
 
 export interface ServiceHost {
     platform: NodeJS.Platform;
@@ -68,6 +69,7 @@ function readWindowsIdentity(): WindowsIdentityProof | undefined {
             "onebots-windows-host.exe",
         );
         const output = execFileSync(executable, ["identity"], {
+            env: nativeHelperEnvironment(),
             encoding: "utf8",
             stdio: ["ignore", "pipe", "ignore"],
             timeout: 5000,

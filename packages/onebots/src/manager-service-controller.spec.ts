@@ -32,7 +32,8 @@ function fixture(running = false) {
     const files = getServiceFiles("user", host),
         workspace = path.join(root, "workspace");
     const spec: ManagerServiceSpec = {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        authorityDirectory: path.join(root, "authority"),
         runtimeKind: "control",
         scope: "user",
         workspace,
@@ -159,6 +160,91 @@ function fixture(running = false) {
     };
 }
 describe("ordinary manager lifecycle through persistent journal", () => {
+    it("诊断 manager restart 使用同一本机身份读取，不依赖完整网关诊断", async () => {
+        const test = fixture(true);
+        let calls = 0;
+        const result = await controlManagerService("restart", "user", test.host, {
+            ...test.dependencies,
+            inspectManager: async () => {
+                throw new Error("diagnostic manager");
+            },
+            inspectReadiness: async () => ({
+                schemaVersion: 1,
+                manager: {
+                    id:
+                        calls++ === 0
+                            ? "10000000-0000-4000-8000-000000000001"
+                            : "10000000-0000-4000-8000-000000000002",
+                    pid: calls === 1 ? 100 : 200,
+                    version: "1.0.0",
+                },
+                admission: {
+                    schemaVersion: 1,
+                    state: "unbound",
+                    reason: "EXPLICIT_REGISTRATION_REQUIRED",
+                },
+                gateway: null,
+            }),
+        });
+        expect(result.status).toBe("succeeded");
+        expect(test.events).toEqual(["quiesce", "proof", "reload:true", "proof", "start"]);
+        expect(JSON.parse(fs.readFileSync(test.gateway, "utf8"))).toEqual({
+            desired: "running",
+            actual: "failed",
+        });
+    });
+    it("未登记服务可由最小本机证明确认 manager 启动，不伪造网关状态", async () => {
+        const test = fixture();
+        const inspectReadiness = vi.fn(async () => ({
+            schemaVersion: 1 as const,
+            manager: { id: "20000000-0000-4000-8000-000000000002", version: "1.2.13", pid: 200 },
+            admission: {
+                schemaVersion: 1 as const,
+                state: "unbound",
+                reason: "EXPLICIT_REGISTRATION_REQUIRED",
+            },
+            gateway: null,
+        }));
+        const result = await controlManagerService("start", "user", test.host, {
+            ...test.dependencies,
+            inspectManager: async () => {
+                throw new Error("full diagnostics unavailable");
+            },
+            inspectReadiness,
+        });
+        expect(result.status).toBe("succeeded");
+        expect(inspectReadiness).toHaveBeenCalled();
+        expect(JSON.parse(fs.readFileSync(test.gateway, "utf8"))).toEqual({
+            desired: "running",
+            actual: "failed",
+        });
+    });
+    it.each(["start", "restart"] as const)(
+        "historical v1 forbids %s before any OS effects",
+        async action => {
+            const test = fixture();
+            const previous: ManagerServiceSpec = {
+                schemaVersion: 1,
+                runtimeKind: "control",
+                scope: test.spec.scope,
+                workspace: test.spec.workspace,
+                nodePath: test.spec.nodePath,
+                binPath: test.spec.binPath,
+                workingDirectory: test.spec.workingDirectory,
+                host: test.spec.host,
+                port: test.spec.port,
+            };
+            fs.writeFileSync(test.files.metadata, JSON.stringify(previous), { mode: 0o600 });
+            fs.writeFileSync(test.files.definition, renderManagerSystemdUnit(previous), {
+                mode: 0o600,
+            });
+            await expect(
+                controlManagerService(action, "user", test.host, test.dependencies),
+            ).rejects.toThrow("受控离线升级");
+            expect(test.events).toEqual([]);
+            expect(test.platform.inspect).not.toHaveBeenCalled();
+        },
+    );
     it("start ignores bad YAML and verifies only the manager, persisting intent before start", async () => {
         const test = fixture();
         const result = await controlManagerService("start", "user", test.host, test.dependencies);

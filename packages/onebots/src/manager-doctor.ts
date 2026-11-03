@@ -8,6 +8,8 @@ import { inspectManagerDiagnostics } from "./manager-doctor-client.js";
 import { probeManagerWeb } from "./manager-doctor-probes.js";
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
 import { processOwnershipHostnameDiagnostic } from "./service-migration-processes.js";
+import { inspectWorkspaceAdmission } from "./workspace-admission/admission.js";
+import { defaultServiceAuthorityDirectory } from "./service-authority.js";
 
 export interface ManagerDoctorCheck {
     id: string;
@@ -19,6 +21,7 @@ export interface ManagerDoctorOptions {
     system?: boolean;
     strict?: boolean;
     fix?: boolean;
+    authorityDir?: string;
 }
 export interface ManagerDoctorReport {
     schemaVersion: 1;
@@ -26,6 +29,7 @@ export interface ManagerDoctorReport {
     exitCode: 0 | 1;
 }
 export interface ManagerDoctorDependencies {
+    inspectAdmission?: typeof inspectWorkspaceAdmission;
     inspectService?: typeof inspectManagerServiceStatus;
     inspectDiagnostics?: (workspace: string) => Promise<ControlDiagnostics>;
     probe?: (state: ControlDiagnostics) => Promise<ManagerDoctorCheck[]>;
@@ -108,6 +112,23 @@ export async function runManagerDoctor(
     } catch {
         add("control-directory", "fail", "管理目录不存在或不可访问，未自动创建或修复。");
     }
+    const authority =
+        options.authorityDir ??
+        (target.kind === "service" && target.spec.schemaVersion === 2
+            ? target.spec.authorityDirectory
+            : defaultServiceAuthorityDirectory(target.scope, host));
+    const admission = (dependencies.inspectAdmission ?? inspectWorkspaceAdmission)(
+        target.workspace,
+        authority,
+    );
+    add(
+        "workspace-admission",
+        admission.state === "verified" ? "pass" : "fail",
+        admission.state === "verified"
+            ? "工作区卷外登记与本地目录身份匹配。"
+            : `工作区来源不可确认（${admission.state}/${admission.reason}）。请保留数据，在本机运行 workspace inspect/plan；不要删除证明、改权限或使用旧程序绕过检查。`,
+    );
+    if (admission.state !== "verified") return result();
     let expectedPid: number | null = null;
     if (target.kind === "service") {
         try {
@@ -123,7 +144,9 @@ export async function runManagerDoctor(
                     state.manager.state !== "failed"
                     ? "pass"
                     : "fail",
-                "系统服务身份、状态与操作记录检查。",
+                state.diagnostic === "admission-rejected"
+                    ? "管理服务可达，但工作区来源尚未获准；请停止服务后在本机执行 workspace inspect / plan / register。"
+                    : "系统服务身份、状态与操作记录检查。",
             );
             if (
                 !state.diagnostic &&

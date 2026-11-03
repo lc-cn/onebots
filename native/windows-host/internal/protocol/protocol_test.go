@@ -8,7 +8,10 @@ import (
 )
 
 func TestDecodeStatusRequest(t *testing.T) {
-	request, err := DecodeRequest([]byte(`{"version":2,"requestId":"doctor:1","operation":"status"}`))
+	if _, err := DecodeRequest([]byte(`{"version":2,"requestId":"old:1","operation":"status"}`)); err == nil {
+		t.Fatal("old protocol must not enter the new production host")
+	}
+	request, err := DecodeRequest([]byte(`{"version":3,"requestId":"doctor:1","operation":"status"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,11 +20,32 @@ func TestDecodeStatusRequest(t *testing.T) {
 	}
 }
 
+func TestRejectedAdmissionHasNoGateway(t *testing.T) {
+	state := controlState()
+	state.Admission.State = "rejected"
+	if err := ValidateControlState(state); err == nil {
+		t.Fatal("rejected admission retained a gateway")
+	}
+	state.Gateway = nil
+	if err := ValidateControlState(state); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(state)
+	if err != nil || !strings.Contains(string(encoded), `"gateway":null`) {
+		t.Fatal("rejected gateway was fabricated")
+	}
+	state.Admission.State = "verified"
+	if err := ValidateControlState(state); err == nil {
+		t.Fatal("verified admission omitted gateway")
+	}
+}
+
 func controlState() ControlState {
 	return ControlState{
-		Revision: 1,
-		Manager:  ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 42},
-		Gateway:  ControlGatewayState{Desired: "running", Actual: "stopped"},
+		Revision:  1,
+		Manager:   ControlManagerState{ID: "123e4567-e89b-42d3-a456-426614174000", Version: "1.2.12", PID: 42},
+		Admission: ControlAdmissionState{State: "verified"},
+		Gateway:   &ControlGatewayState{Desired: "running", Actual: "stopped"},
 	}
 }
 
@@ -36,8 +60,8 @@ func TestDecodeInvalidateStatusRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalid := []string{
-		`{"version":2,"requestId":"invalidate:2","operation":"invalidate_status","revision":2}`,
-		`{"version":2,"requestId":"invalidate:2","operation":"invalidate_status","manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}}`,
+		`{"version":3,"requestId":"invalidate:2","operation":"invalidate_status","revision":2}`,
+		`{"version":3,"requestId":"invalidate:2","operation":"invalidate_status","manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}}`,
 	}
 	for _, input := range invalid {
 		if _, err := DecodeRequest([]byte(input)); err == nil {
@@ -61,8 +85,8 @@ func TestDecodePublishStatusRequest(t *testing.T) {
 	}
 
 	invalid := []string{
-		`{"version":2,"requestId":"publish:1","operation":"publish_status"}`,
-		`{"version":2,"requestId":"status:1","operation":"status","control":{"revision":1,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42},"gateway":{"desired":"running","actual":"stopped"}}}`,
+		`{"version":3,"requestId":"publish:1","operation":"publish_status"}`,
+		`{"version":3,"requestId":"status:1","operation":"status","control":{"revision":1,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42},"gateway":{"desired":"running","actual":"stopped"}}}`,
 		strings.Replace(string(encoded), `"pid":42`, `"pid":0`, 1),
 		strings.Replace(string(encoded), `"version":"1.2.12"`, `"version":"latest"`, 1),
 		strings.Replace(string(encoded), `"actual":"stopped"`, `"actual":"unknown"`, 1),
@@ -104,10 +128,10 @@ func TestDecodeResponseRequiresExactContract(t *testing.T) {
 func TestDecodeRequestRejectsUnknownContract(t *testing.T) {
 	tests := []string{
 		`{"version":1,"requestId":"a","operation":"status"}`,
-		`{"version":2,"requestId":"../unsafe","operation":"status"}`,
-		`{"version":2,"requestId":"a","operation":"stop"}`,
-		`{"version":2,"requestId":"a","operation":"status","unknown":true}`,
-		`{"version":2,"requestId":"a","operation":"status"}{}`,
+		`{"version":3,"requestId":"../unsafe","operation":"status"}`,
+		`{"version":3,"requestId":"a","operation":"stop"}`,
+		`{"version":3,"requestId":"a","operation":"status","unknown":true}`,
+		`{"version":3,"requestId":"a","operation":"status"}{}`,
 	}
 	for _, input := range tests {
 		if _, err := DecodeRequest([]byte(input)); err == nil {
@@ -123,14 +147,14 @@ func TestDecodeRequestEnforcesBound(t *testing.T) {
 }
 
 func TestDecodeBoundControlRequest(t *testing.T) {
-	request, err := DecodeRequest([]byte(`{"version":2,"requestId":"control:1","operation":"control_request","binding":{"revision":7,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"POST","route":"/api/control/auth/bootstrap","body":{}}`))
+	request, err := DecodeRequest([]byte(`{"version":3,"requestId":"control:1","operation":"control_request","binding":{"revision":7,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"POST","route":"/api/control/auth/bootstrap","body":{}}`))
 	if err != nil || request.Binding == nil || request.Binding.Revision != 7 {
 		t.Fatalf("valid bound request rejected: %#v, %v", request, err)
 	}
 	for _, input := range []string{
-		`{"version":2,"requestId":"control:2","operation":"control_request","binding":{"revision":7,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"POST","route":"/api/control/auth/bootstrap\r\nX: bad"}`,
-		`{"version":2,"requestId":"control:3","operation":"control_request","binding":{"revision":0,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"GET","route":"/api/control/status"}`,
-		`{"version":2,"requestId":"control:4","operation":"control_request","binding":{"revision":7,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"GET","route":"/api/control/status","body":{}}`,
+		`{"version":3,"requestId":"control:2","operation":"control_request","binding":{"revision":7,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"POST","route":"/api/control/auth/bootstrap\r\nX: bad"}`,
+		`{"version":3,"requestId":"control:3","operation":"control_request","binding":{"revision":0,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"GET","route":"/api/control/status"}`,
+		`{"version":3,"requestId":"control:4","operation":"control_request","binding":{"revision":7,"manager":{"id":"123e4567-e89b-42d3-a456-426614174000","version":"1.2.12","pid":42}},"method":"GET","route":"/api/control/status","body":{}}`,
 	} {
 		if _, err := DecodeRequest([]byte(input)); err == nil {
 			t.Fatalf("invalid bound request accepted: %s", input)
@@ -139,7 +163,7 @@ func TestDecodeBoundControlRequest(t *testing.T) {
 }
 
 func TestDecodeControlResponse(t *testing.T) {
-	response, err := DecodeResponse([]byte(`{"version":2,"requestId":"control:1","ok":true,"result":{"status":201,"body":{"code":"123456"}}}`), "control:1")
+	response, err := DecodeResponse([]byte(`{"version":3,"requestId":"control:1","ok":true,"result":{"status":201,"body":{"code":"123456"}}}`), "control:1")
 	if err != nil || response.Result == nil || response.Result.Status != 201 {
 		t.Fatalf("valid control response rejected: %#v, %v", response, err)
 	}

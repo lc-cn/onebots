@@ -26,10 +26,25 @@ describe("管理服务命令边界", () => {
     });
     it("显式设置优先于环境变量，保留工作区空格", () => {
         expect(
-            parseServeOptions(["--data-dir", "/tmp/onebots test", "--port", "8080"], {
-                PORT: "9000",
-            }),
-        ).toEqual({ workspace: "/tmp/onebots test", host: "127.0.0.1", port: 8080 });
+            parseServeOptions(
+                [
+                    "--data-dir",
+                    "/tmp/onebots test",
+                    "--port",
+                    "8080",
+                    "--authority-dir",
+                    "/tmp/outside-authority",
+                ],
+                {
+                    PORT: "9000",
+                },
+            ),
+        ).toEqual({
+            workspace: "/tmp/onebots test",
+            host: "127.0.0.1",
+            port: 8080,
+            authorityDirectory: "/tmp/outside-authority",
+        });
     });
     it("Windows原生状态管道必须与宿主生成的私有RPC管道成对", () => {
         const rpc = "\\\\.\\pipe\\onebots-manager-rpc-0123456789abcdef0123456789abcdef";

@@ -15,7 +15,7 @@ const manager = {
 
 function response(control?: WindowsPublishedControlStatus): WindowsNativeStatus {
     return {
-        version: 2,
+        version: 3,
         requestId: "publish:test",
         ok: true,
         state: {
@@ -28,6 +28,25 @@ function response(control?: WindowsPublishedControlStatus): WindowsNativeStatus 
 }
 
 describe("Windows manager状态发布", () => {
+    it("来源拒绝可独立发布，gateway 必须为 null", async () => {
+        const publish = vi.fn(async (control: WindowsPublishedControlStatus) => response(control));
+        const publisher = new WindowsManagerStatusPublisher(
+            "\\\\.\\pipe\\onebots-gateway-control",
+            manager,
+            {
+                status: vi.fn(async () => response()),
+                publish,
+                invalidate: vi.fn(async () => response()),
+            },
+        );
+        await publisher.publishRejected();
+        expect(publish).toHaveBeenCalledWith({
+            revision: 1,
+            manager,
+            admission: { state: "rejected" },
+            gateway: null,
+        });
+    });
     it("发布真实manager身份与gateway状态并要求原生宿主回读确认", async () => {
         const publish = vi.fn(async (control: WindowsPublishedControlStatus) => response(control));
         const invalidate = vi.fn(async () => response());
@@ -44,6 +63,7 @@ describe("Windows manager状态发布", () => {
         expect(publish).toHaveBeenCalledWith({
             revision: 1,
             manager,
+            admission: { state: "verified" },
             gateway: { desired: "running", actual: "stopped" },
         });
     });
@@ -241,7 +261,7 @@ describe("Windows manager状态发布", () => {
             const published = request.operation === "publish_status" ? request.control : undefined;
             return Buffer.from(
                 JSON.stringify({
-                    version: 2,
+                    version: 3,
                     requestId: request.requestId,
                     ok: true,
                     state: {

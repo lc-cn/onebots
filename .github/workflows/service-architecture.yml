@@ -101,6 +101,8 @@ jobs:
       - name: Verify snapshot owner initialization and existing-file rejection
         run: node scripts/verify-windows-snapshot-security.mjs
       - run: node scripts/build-windows-host.mjs ${{ runner.arch == 'X64' && 'x64' || 'arm64' }}
+      - name: Verify compiled workspace admission and native durable replacement
+        run: node scripts/verify-windows-workspace-admission.mjs
       - name: Verify blank Windows bootstrap installer
         run: node scripts/verify-windows-bootstrap-install.mjs
       - name: Verify installed Windows SCM lifecycle through public CLI
@@ -229,7 +231,8 @@ jobs:
         run: node scripts/verify-docker-compose-recreation.mjs onebots-control-ci
       - name: Verify blank Docker CLI and HTTP control service
         run: |
-          docker run -d --name onebots-control-ci --mount type=volume,source=onebots-control-ci-data,target=/data onebots-control-ci
+          node scripts/prepare-container-workspace.mjs onebots-control-ci onebots-control-ci-data onebots-control-ci-authority
+          docker run -d --name onebots-control-ci --mount type=volume,source=onebots-control-ci-data,target=/data --mount type=volume,source=onebots-control-ci-authority,target=/var/lib/onebots-authority onebots-control-ci
           docker exec -i --user 1000:1000 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs
           docker restart onebots-control-ci
           docker exec -i --user 1000:1000 -e CONTROL_VERIFY_RESTART=1 onebots-control-ci node --input-type=module < scripts/verify-control-container.mjs
@@ -264,7 +267,9 @@ jobs:
           '
           docker rm -f onebots-control-ci
           docker volume rm onebots-control-ci-data
-          docker run -d --name onebots-control-ci --mount type=volume,source=onebots-control-ci-data,target=/data onebots-control-ci
+          docker volume rm onebots-control-ci-authority
+          node scripts/prepare-container-workspace.mjs onebots-control-ci onebots-control-ci-data onebots-control-ci-authority
+          docker run -d --name onebots-control-ci --mount type=volume,source=onebots-control-ci-data,target=/data --mount type=volume,source=onebots-control-ci-authority,target=/var/lib/onebots-authority onebots-control-ci
       - name: Verify dependency generation and protocol API
         run: docker exec -i --user 1000:1000 onebots-control-ci node --input-type=module < scripts/verify-control-installation.mjs
       - name: Verify damaged configuration repair
@@ -272,9 +277,11 @@ jobs:
       - name: Verify HF management and deployment pairing
         run: |
           docker build --build-arg ONEBOTS_BASE_IMAGE=onebots-control-ci -f Dockerfile.hf -t onebots-hf-ci .
+          node scripts/verify-container-workspace-preservation.mjs onebots-control-ci onebots-hf-ci
           node scripts/verify-hf-container.mjs onebots-hf-ci
       - name: Clean verification container
         if: always()
         run: |
           docker rm -f onebots-control-ci || true
           docker volume rm onebots-control-ci-data || true
+          docker volume rm onebots-control-ci-authority || true

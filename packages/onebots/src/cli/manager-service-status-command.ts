@@ -16,10 +16,13 @@ const stateNames = {
 const diagnostics: Record<NonNullable<ManagerServiceStatus["diagnostic"]>, string> = {
     "definition-mismatch": "管理服务定义与元数据不匹配，拒绝认领当前 OS 服务。",
     "not-installed": "尚未安装管理服务。",
-    "migration-required": "检测到旧服务，请先执行 onebots migrate。",
+    "migration-required":
+        "检测到旧单进程服务。严格来源版不能直接迁移；请先使用支持旧迁移的版本完成 legacy 到 control v1 并正常关闭，再用新 CLI 受控离线更新及 workspace 首次登记。参见文档的工作区来源登记指引。",
     "invalid-metadata": "服务元数据无效，拒绝猜测服务状态；请在本机检查安装记录。",
     "os-unavailable": "OS 服务状态无法确认。",
     "ipc-unavailable": "管理服务 IPC 不可达，网关状态未知。",
+    "admission-rejected":
+        "管理服务可达，但工作区来源未获准，网关状态未知。请先停止服务，在本机执行 workspace inspect / plan / register；不要删除来源记录。",
     "identity-mismatch": "OS 与 IPC 实例身份不匹配，网关状态未知。",
     "baseline-changed": "查询期间服务实例或元数据变化，请重新查询。",
 };

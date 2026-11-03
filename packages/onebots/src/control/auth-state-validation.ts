@@ -1,6 +1,7 @@
 import { HASH } from "./auth-crypto.js";
 import { ATTEMPT_LIMIT, validSessionLifetime, validSessionPolicy } from "./auth-policy.js";
 import type { AuthState } from "./auth.js";
+import { validAuthenticationBindingContext } from "./auth-binding-context.js";
 
 function record(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -10,10 +11,16 @@ function record(value: unknown): value is Record<string, unknown> {
 export function validState(value: unknown): value is AuthState {
     if (
         !record(value) ||
-        value.version !== 2 ||
+        (value.version !== 2 && value.version !== 3) ||
         typeof value.paired !== "boolean" ||
         Object.hasOwn(value, "sessionHash") ||
         Object.hasOwn(value, "sessionLifetime")
+    )
+        return false;
+    if (
+        value.version === 3
+            ? !validAuthenticationBindingContext(value.bindingContext)
+            : value.version !== 2 || Object.hasOwn(value, "bindingContext")
     )
         return false;
     if (

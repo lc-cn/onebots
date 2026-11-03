@@ -152,7 +152,7 @@ describe("manager status CLI", () => {
             expect(result.exitCode).toBe(1);
             expect(result.output).toContain(
                 installation === "legacy"
-                    ? "onebots migrate"
+                    ? "严格来源版不能直接迁移"
                     : installation === "missing"
                       ? "尚未安装"
                       : "元数据无效",

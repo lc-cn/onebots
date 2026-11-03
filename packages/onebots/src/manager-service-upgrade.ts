@@ -28,6 +28,7 @@ import {
 import { runManagerServiceUpgrade } from "./manager-service-upgrade-transaction.js";
 import { createControlOperationObserver } from "./control/gateway-log.js";
 import { inspectWindowsServiceDirectorySecurity } from "./windows-service-security.js";
+import { upgradeServiceAuthority } from "./service-authority.js";
 
 export interface ManagerServiceUpgradeRequest {
     id: string;
@@ -36,6 +37,7 @@ export interface ManagerServiceUpgradeRequest {
     candidateDigest: string;
     /** CLI 准备候选前读取的活动管理版本；存在时在服务锁内做 CAS。 */
     expectedPreviousDigest?: string;
+    authorityDirectory?: string;
 }
 export type ManagerServiceUpgradeRejectionCode =
     | "INVALID_REQUEST"
@@ -88,6 +90,7 @@ export async function upgradeManagerService(
         "candidateDirectory",
         "candidateDigest",
         ...(Object.hasOwn(input, "expectedPreviousDigest") ? ["expectedPreviousDigest"] : []),
+        ...(Object.hasOwn(input, "authorityDirectory") ? ["authorityDirectory"] : []),
     ]);
     if (
         typeof value.id !== "string" ||
@@ -100,6 +103,9 @@ export async function upgradeManagerService(
         (value.expectedPreviousDigest !== undefined &&
             (typeof value.expectedPreviousDigest !== "string" ||
                 !/^[a-f0-9]{64}$/.test(value.expectedPreviousDigest))) ||
+        (value.authorityDirectory !== undefined &&
+            (typeof value.authorityDirectory !== "string" ||
+                !path.isAbsolute(value.authorityDirectory))) ||
         (host.platform !== "linux" && host.platform !== "darwin" && host.platform !== "win32") ||
         (host.platform === "win32"
             ? value.scope !== "system" || host.isElevated !== true
@@ -174,7 +180,11 @@ export async function upgradeManagerService(
         )
             throw failure("SERVICE_STATE_CHANGED");
         const spec = {
-            ...previousSpec,
+            ...upgradeServiceAuthority(
+                previousSpec,
+                host,
+                value.authorityDirectory as string | undefined,
+            ),
             workingDirectory: target.directory,
             binPath: path.join(target.directory, "node_modules/onebots/lib/bin.js"),
         };
@@ -212,6 +222,13 @@ export async function upgradeManagerService(
                       initial.running ||
                       initial.processId !== null ||
                       !initial.quiescent)
+            )
+                throw failure("PLATFORM_INITIAL_INVALID");
+            if (
+                previousSpec.schemaVersion === 1 &&
+                (host.platform === "win32" ||
+                    initial.state !== "stopped" ||
+                    !(await confirm(spec.workspace)))
             )
                 throw failure("PLATFORM_INITIAL_INVALID");
             let confirmed;

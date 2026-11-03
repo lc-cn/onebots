@@ -5,10 +5,22 @@ import fs from "node:fs";
 import path from "node:path";
 import { managerCandidateStates } from "./service-acceptance-diagnostics.mjs";
 
-export function preparePreviousPatchArtifacts({ temporary, artifacts, manifest, execute }) {
-    const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(manifest.host.version);
-    assert.ok(match && Number(match[3]) > 0, "验收目标必须能构造前一个 patch 版本");
-    const previousVersion = `${match[1]}.${match[2]}.${Number(match[3]) - 1}`;
+/** A lower stable label for the same supported code, never an actual previous release. */
+export function previousSyntheticVersion(version) {
+    const match =
+        typeof version === "string" && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.exec(version);
+    assert.ok(match, "验收目标必须是规范的稳定版本 x.y.z");
+    const parts = match.slice(1).map(Number);
+    assert.ok(parts.every(Number.isSafeInteger), "验收版本各数字必须是安全整数");
+    const [major, minor, patch] = parts;
+    if (patch > 0) return `${major}.${minor}.${patch - 1}`;
+    if (minor > 0) return `${major}.${minor - 1}.0`;
+    assert.ok(major > 0, "0.0.0 没有更小的稳定验收版本");
+    return `${major - 1}.0.0`;
+}
+
+export function preparePreviousVersionArtifacts({ temporary, artifacts, manifest, execute }) {
+    const previousVersion = previousSyntheticVersion(manifest.host.version);
     const directory = path.join(temporary, "previous-artifacts");
     const staging = path.join(temporary, "previous-package");
     fs.mkdirSync(directory, { mode: 0o700 });
@@ -137,7 +149,7 @@ export function installedManagerVersion(metadata) {
     return manifest.version;
 }
 
-export async function verifyManagerPatchUpgrade(options) {
+export async function verifyManagerVersionUpgrade(options) {
     const {
         cli,
         cliEnvironment,

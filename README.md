@@ -372,14 +372,30 @@ OneBots 的生态分成三层，职责不同：
 
 ### 方式 A：Docker（推荐）
 
-**务必挂载整个 `/data`**，否则容器重建后会丢失配置、账号数据、管理会话和已验证运行版本：
+首次使用空工作区时，必须分别持久挂载整个 `/data` 和卷外 authority。先离线生成登记计划；计划文件放在宿主当前目录，不能放进 `data/`：
 
 ```bash
+umask 077
+mkdir -p ./data
+docker volume create onebots-authority
+docker run --rm -v "$(pwd)/data:/data" \
+  -v onebots-authority:/var/lib/onebots-authority \
+  ghcr.io/lc-cn/onebots:master workspace plan --data-dir /data \
+  --authority-dir /var/lib/onebots-authority/authority > onebots-plan.json
+
+# 阅读计划，确认会话失效影响，将占位符换成计划中的实际 digest。
+docker run --rm -i -v "$(pwd)/data:/data" \
+  -v onebots-authority:/var/lib/onebots-authority \
+  ghcr.io/lc-cn/onebots:master workspace register \
+  --plan-file - --confirm '<plan.digest>' < onebots-plan.json
+
+# 登记成功后，以相同两个持久卷正常启动。
 docker run -d --name onebots --restart unless-stopped \
-  -p 6727:6727 -v "$(pwd)/data:/data" ghcr.io/lc-cn/onebots:master
+  -p 6727:6727 -v "$(pwd)/data:/data" \
+  -v onebots-authority:/var/lib/onebots-authority ghcr.io/lc-cn/onebots:master
 ```
 
-空数据卷会直接启动常驻管理服务并提供 Web 控制台，不预填平台账号、协议或框架。首次使用时在宿主终端签发五分钟有效的一次性设备码：
+以上命令需要包含工作区登记能力的同版本镜像；不认识 `workspace` 命令时请停止，不要退回旧启动方式。已有安装按[工作区登记与离线升级](https://onebots.pages.dev/guide/workspace-admission)处理。未登记时仅提供只读维护页，不能配对；登记本身不会启动管理服务或网关，也不会预填账号、协议或框架。管理服务正常启动后，再在宿主终端签发五分钟有效的一次性设备码：
 
 ```bash
 docker exec --user 1000:1000 onebots \
@@ -388,15 +404,21 @@ docker exec --user 1000:1000 onebots \
 
 打开 `http://127.0.0.1:6727` 并输入设备码。之后在 Web 中选择适配器、输出协议和框架，确认依赖与必需 peer，安装并激活候选运行版本，再填写账号和协议配置。安装扩展不会自动连接平台或开启协议。
 
-ICQQ 等私有模块也走同一安装流程；下载授权只交给本次安装操作，不要写进镜像、业务配置或挂载到容器的 `.npmrc`。网关停止、崩溃或配置失败时，管理端仍保持在线。部署、权限、恢复和无终端配对见 **[Docker 部署](https://onebots.pages.dev/guide/docker)**。
+ICQQ 等私有模块也走同一安装流程；下载授权只交给本次安装操作，不要写进镜像、业务配置或挂载到容器的 `.npmrc`。网关停止、崩溃或配置失败时，管理端仍保持在线。authority 不随业务卷复制，本机制不提供整机克隆或跨主机 HA 保证。HF 模板首期禁用 `HF_REPO_ID` 自动恢复；部署与存储边界见 **[Docker 部署](https://onebots.pages.dev/guide/docker)**。
 
 ### 方式 B：npm 安装（Mock 试跑）
 
-Node.js 需要 24 或更高版本。安装主程序并以前台方式启动空白管理服务：
+Linux/macOS 需要 Node.js 24 或更高版本。安装主程序，为全新空工作区显式登记，再以前台方式启动管理服务：
 
 ```bash
 npm install --global onebots
-onebots serve --data-dir ./onebots-data
+umask 077
+mkdir -m 700 ./onebots-data ./onebots-authority
+onebots workspace plan --data-dir ./onebots-data \
+  --authority-dir ./onebots-authority > onebots-plan.json
+# 阅读计划，使用实际 digest 明确确认；计划文件留在业务工作区之外。
+onebots workspace register --plan-file onebots-plan.json --confirm '<plan.digest>'
+onebots serve --data-dir ./onebots-data --authority-dir ./onebots-authority
 ```
 
 另开终端完成首次配对，并启动 TUI 安装向导：
@@ -415,16 +437,16 @@ onebots control status --data-dir ./onebots-data
 
 `adapter-mock` 只用于打通安装、配置、HTTP/WS 与协议层，**不会连接真实 IM**。公开前台入口 `serve`（别名 `run`）只启动管理服务，不接受旧 `-c/-r/-p/-t` 参数。
 
-需要系统托管时执行：
+将上述已登记前台实例改为系统托管时，先在前台终端正常关闭管理服务，再复用原 authority 安装；不重复登记：
 
 ```bash
-onebots install --data-dir ./onebots-data
+onebots install --data-dir ./onebots-data --authority-dir ./onebots-authority
 onebots start
 onebots status
 onebots logs
 ```
 
-默认安装用户级服务；加 `--system` 操作系统级服务。已有旧版服务先运行 `onebots migrate`，不要覆盖原服务定义。
+默认安装用户级服务；加 `--system` 操作系统级服务。全新服务安装保持停止，须按安装输出完成首次计划和登记后再 `start`。旧 control v1 服务使用[离线升级流程](https://onebots.pages.dev/guide/workspace-admission)；更早的单进程 legacy 不能直接执行严格版 `onebots migrate`，不要覆盖旧服务定义。
 
 也可直接从文档站下载首次安装脚本，无需克隆仓库：
 
@@ -439,7 +461,7 @@ Invoke-WebRequest https://onebots.pages.dev/install.ps1 -OutFile install.ps1 -Er
 powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-可先检查下载的脚本再执行；`Bypass` 仅影响本次 PowerShell 进程。脚本只安装并确认管理端，不会预填平台、协议、框架或账号；Windows 管理服务固定为系统级。脚本源码统一位于 `docs/public`。首次安装仍要求公开 npm 已发布包含新管理服务的版本，详见[快速开始](https://onebots.pages.dev/guide/start)。
+可先检查下载的脚本再执行；`Bypass` 仅影响本次 PowerShell 进程。脚本检查公开包的来源登记能力，安装并确认管理服务保持停止，再打印需你核对的计划、登记、启动和配对命令，不自动代为确认。Windows 管理服务固定为系统级，由管理员安装器准备私有 ACL。脚本源码位于 `docs/src/public`；公开 npm 必须已发布相应版本，详见[快速开始](https://onebots.pages.dev/guide/start)。
 
 ### 方式 C：源码开发
 
@@ -448,13 +470,14 @@ git clone https://github.com/lc-cn/onebots.git
 cd onebots
 pnpm install --frozen-lockfile
 pnpm build
-pnpm dev              # 启动当前开发工作区的管理服务
+# 先按快速开始为全新开发工作区登记；服务复用该卷外 authority。
 pnpm docs:dev         # 文档站点（可选）
 pnpm web:dev          # Web 前端（可选）
 pnpm test
 ```
 
 **要求：Node.js ≥24**（`.node-version` / `.nvmrc` 为推荐版本）和仓库锁定的 pnpm 版本。
+开发管理端的完整登记及启动命令见[快速开始](https://onebots.pages.dev/guide/start)，不要直接向已有业务目录补写来源证明。
 
 ---
 
@@ -464,11 +487,12 @@ pnpm test
 
 ```bash
 npm install --global onebots
-onebots install --data-dir /path/to/onebots-data
+onebots install --data-dir /path/to/onebots-data --authority-dir /path/to/onebots-authority
+# install 保持服务停止。按其输出生成并阅读计划，显式 register 成功后再启动。
 onebots start
 ```
 
-`install` 建立系统托管和不可变管理程序候选，不预选插件、不生成账号，也不启动网关。Docker 直接运行同一个前台管理服务，无需在容器内安装系统服务。
+`install` 建立系统托管和不可变管理程序候选，不预选插件、不生成账号，也不启动管理服务。两个目录须互不包含，authority 的父目录由部署预先准备；计划文件放在业务目录之外。已有登记直接复用原 authority，不重新登记。Docker 须同时持久挂载 `/data` 和独立 authority，无需在容器内安装系统服务。
 
 Windows 原生安装须在管理员 PowerShell 中使用 `install.ps1`；后续服务命令追加 `--system`。
 

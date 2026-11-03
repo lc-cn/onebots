@@ -11,19 +11,37 @@ import { secureWindowsServiceDirectory } from "../windows-service-security.js";
 import { verifyGeneration } from "../installation/generation-verify.js";
 import type { GenerationVerification } from "../installation/generation-store.js";
 
-export interface ManagerCandidateVerification {
-    schemaVersion: 1;
+interface ManagerCandidateVerificationBase {
     planDigest: string;
     hostVersion: string;
     coreVersion: string;
     nodeAbi: string;
     platform: string;
     arch: string;
+}
+
+/** 仅历史只读；不能用于新的来源准入候选激活。 */
+export interface LegacyManagerCandidateVerification extends ManagerCandidateVerificationBase {
+    schemaVersion: 1;
     checks: {
         managementStartup: true;
         webAssets: true;
         anonymousDenied: true;
         authenticationV2: true;
+        maintenance: true;
+        closed: true;
+    };
+}
+
+export interface ManagerCandidateVerification extends ManagerCandidateVerificationBase {
+    schemaVersion: 2;
+    contracts: { workspaceAdmission: 1; authenticationContext: 1 };
+    checks: {
+        managementStartup: true;
+        webAssets: true;
+        anonymousDenied: true;
+        authenticationV3: true;
+        workspaceAdmission: true;
         maintenance: true;
         closed: true;
     };
@@ -84,7 +102,8 @@ export async function verifyManagerCandidate(
     const root = fs.realpathSync(directory);
     if (fs.lstatSync(directory).isSymbolicLink()) throw new Error("管理程序候选目录无效");
     const expected: ManagerCandidateVerification = {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        contracts: { workspaceAdmission: 1, authenticationContext: 1 },
         planDigest: plan.digest,
         hostVersion: plan.host.version,
         coreVersion: plan.core.version,
@@ -95,7 +114,8 @@ export async function verifyManagerCandidate(
             managementStartup: true,
             webAssets: true,
             anonymousDenied: true,
-            authenticationV2: true,
+            authenticationV3: true,
+            workspaceAdmission: true,
             maintenance: true,
             closed: true,
         },
@@ -159,7 +179,8 @@ function verifyWindowsManagerCandidate(
     )
         throw new Error("管理程序候选计划或验证环境无效");
     const expected: ManagerCandidateVerification = {
-        schemaVersion: 1,
+        schemaVersion: 2,
+        contracts: { workspaceAdmission: 1, authenticationContext: 1 },
         planDigest: plan.digest,
         hostVersion: plan.host.version,
         coreVersion: plan.core.version,
@@ -170,7 +191,8 @@ function verifyWindowsManagerCandidate(
             managementStartup: true,
             webAssets: true,
             anonymousDenied: true,
-            authenticationV2: true,
+            authenticationV3: true,
+            workspaceAdmission: true,
             maintenance: true,
             closed: true,
         },
@@ -303,11 +325,12 @@ function isWindowsVerificationFailure(value: unknown): boolean {
             "package-identity",
             "workspace",
             "authentication",
+            "source-contract",
             "management-startup",
             "management-state",
             "web-page",
             "web-asset",
-            "authentication-v2",
+            "authentication-v3",
             "anonymous-denied",
             "management-close",
             "authentication-preserved",

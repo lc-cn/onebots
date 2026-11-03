@@ -34,12 +34,12 @@ function Invoke-Checked([string]$FilePath, [string[]]$Arguments) {
     }
 }
 
-function Invoke-IsolatedNpm([string]$NpmPath, [string[]]$Arguments, [string]$BootstrapRoot) {
+function Invoke-IsolatedBootstrapCommand([string]$NpmPath, [string[]]$Arguments, [string]$BootstrapRoot) {
     $Saved = @{}
     $Names = @(Get-ChildItem Env: | Where-Object {
         $_.Name -match '(?i)(token|auth)' -or
         $_.Name -match '(?i)^npm_config_' -or
-        $_.Name -eq 'NODE_OPTIONS'
+        $_.Name -eq 'NODE_OPTIONS' -or $_.Name -in @('ONEBOTS_BOOTSTRAP_CODE', 'ONEBOTS_RECOVERY_CODE')
     } | ForEach-Object { $_.Name })
     foreach ($Name in $Names) {
         $Saved[$Name] = [Environment]::GetEnvironmentVariable($Name, "Process")
@@ -73,6 +73,9 @@ if (-not [System.IO.Path]::IsPathRooted($OneBotsHome)) {
 $OneBotsHome = [System.IO.Path]::GetFullPath($OneBotsHome)
 $RuntimeDir = Join-Path $OneBotsHome "runtime"
 $NodeDir = Join-Path $OneBotsHome "node"
+$WorkspaceDir = Join-Path $OneBotsHome "data"
+$RegistrationPlanFile = Join-Path $OneBotsHome ".bootstrap/workspace-plan.json"
+$AuthorityDirectory = Join-Path $(if ($env:ProgramData) { $env:ProgramData } else { "C:\ProgramData" }) "OneBots/authority"
 $BootstrapRoot = Join-Path $OneBotsHome ".bootstrap"
 $Marker = Join-Path $OneBotsHome ".manager-installed"
 $Lock = Join-Path $OneBotsHome ".install-lock"
@@ -86,7 +89,7 @@ try {
     }
     if (Test-ReparsePoint $OneBotsHome) { Fail-Install "安装目录不能是重解析点" }
     if ((Test-Path -LiteralPath $Marker -PathType Leaf) -and -not (Test-ReparsePoint $Marker)) {
-        if ((Get-Content -LiteralPath $Marker -Raw).Trim() -eq "onebots-manager-install-v1") {
+        if ((Get-Content -LiteralPath $Marker -Raw).Trim() -in @("onebots-manager-install-v1", "onebots-manager-install-v2-pending")) {
             Write-Step "此目录已有安装成功的管理程序。未修改依赖或重启服务，请使用现有 CLI 管理。"
             exit 0
         }
@@ -162,7 +165,7 @@ try {
     Write-Step "正在安装公开发布的 OneBots 管理程序…"
     Push-Location $RuntimeDir
     try {
-        Invoke-IsolatedNpm $NpmPath @(
+        Invoke-IsolatedBootstrapCommand $NpmPath @(
             "install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--save-exact",
             "--registry=https://registry.npmjs.org", "onebots@latest"
         ) $BootstrapRoot
@@ -187,6 +190,8 @@ try {
     if (-not (Test-RegularArtifact $WebEntry) -and -not (Test-RegularArtifact $NestedWebEntry)) {
         Fail-Install "发布包缺少 Web 管理端工件"
     }
+    $CapabilityProbe = "import {pathToFileURL} from 'node:url'; const host=await import(pathToFileURL(process.argv[1]).href); if(host.WORKSPACE_ADMISSION_CAPABILITY!==1) process.exit(1);"
+    Invoke-IsolatedBootstrapCommand $NodePath @('--input-type=module', '-e', $CapabilityProbe, (Join-Path $PackageDir 'lib/control/host.js')) $BootstrapRoot
 
     $DownloadEnvironment = @(Get-ChildItem Env: | Where-Object {
         $_.Name -match '(?i)(token|auth)' -or
@@ -196,11 +201,10 @@ try {
     foreach ($Name in $DownloadEnvironment) {
         [Environment]::SetEnvironmentVariable($Name, $null, "Process")
     }
-    Write-Step "正在登记并启动用户级管理服务…"
+    Write-Step "正在安装系统级管理服务；首次来源登记需要你单独确认…"
     Push-Location $RuntimeDir
     try {
-        Invoke-Checked $NodePath @($OneBotsBin, "install", "--system", "--data-dir", $OneBotsHome)
-        Invoke-Checked $NodePath @($OneBotsBin, "start", "--system")
+        Invoke-Checked $NodePath @($OneBotsBin, "install", "--system", "--data-dir", $WorkspaceDir)
         $StatusOutput = @(& $NodePath $OneBotsBin status --system --json 2>&1)
         if ($LASTEXITCODE -ne 0) { Fail-Install "系统服务状态检查失败" }
     } finally {
@@ -209,10 +213,10 @@ try {
     try {
         $Status = ($StatusOutput -join [Environment]::NewLine) | ConvertFrom-Json
         if ($Status.schemaVersion -ne 1 -or $Status.installation -ne "control" -or
-            $Status.manager.state -ne "running" -or $Status.manager.ipc -ne "available" -or
+            $Status.manager.state -ne "stopped" -or $Status.manager.ipc -ne "not-queried" -or
             $Status.serviceRecoveryRequired -ne $false -or $null -ne $Status.diagnostic -or
-            $Status.gateway.recoveryRequired -ne $false) {
-            Fail-Install "管理服务尚未确认运行，不能报告成功"
+            $Status.gateway.actual -ne "unknown") {
+            Fail-Install "管理服务尚未确认安全停止，不能报告安装完成"
         }
     } catch {
         if ($_.Exception.Message -like "安装未完成：*") { throw }
@@ -220,11 +224,14 @@ try {
     }
 
     $MarkerTemporary = "$Marker.tmp"
-    Set-Content -LiteralPath $MarkerTemporary -Encoding ASCII -Value "onebots-manager-install-v1"
+    Set-Content -LiteralPath $MarkerTemporary -Encoding ASCII -Value "onebots-manager-install-v2-pending"
     Move-Item -LiteralPath $MarkerTemporary -Destination $Marker
-    Write-Step "管理服务已安装并确认运行。未安装平台或输出协议，未自动启动业务账号。"
-    Write-Step "使用设备码配对：`"$NodePath`" `"$OneBotsBin`" auth bootstrap --data-dir `"$OneBotsHome`""
-    Write-Step "配置和管理：`"$NodePath`" `"$OneBotsBin`" ui --system --data-dir `"$OneBotsHome`""
+    Write-Step "管理服务已安装并保持停止；尚未取得工作区运行权，当前不能配对。请核对计划并明确确认："
+    Write-Step "`"$NodePath`" `"$OneBotsBin`" workspace plan --data-dir `"$WorkspaceDir`" --authority-dir `"$AuthorityDirectory`" > `"$RegistrationPlanFile`""
+    Write-Step "`"$NodePath`" `"$OneBotsBin`" workspace register --plan-file `"$RegistrationPlanFile`" --confirm '<plan.digest>'"
+    Write-Step "确认登记成功后：`"$NodePath`" `"$OneBotsBin`" start --system"
+    Write-Step "服务启动后再配对：`"$NodePath`" `"$OneBotsBin`" auth bootstrap --data-dir `"$WorkspaceDir`""
+    Write-Step "配置和管理：`"$NodePath`" `"$OneBotsBin`" ui --system --data-dir `"$WorkspaceDir`""
 } catch {
     [Console]::Error.WriteLine("[OneBots] $($_.Exception.Message)")
     $ExitCode = 1

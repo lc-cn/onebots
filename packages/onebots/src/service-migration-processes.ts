@@ -179,6 +179,8 @@ async function workersQuiet(control: string): Promise<boolean> {
     for (const [relative, download] of [
         ["downloads", true],
         ["generation-verifications", false],
+        ["activation-verification-workers", false],
+        ["application-verification-workers", false],
         ["configuration/verification-workers", false],
         ["configuration/schema-workers", false],
     ] as const) {
@@ -291,6 +293,29 @@ export async function verifyServiceMigrationProcessesWhileLocked(
     }
 }
 
+/** 首次来源登记只接受完整 closed 证明；不复用迁移的 hostname/PID 推断。 */
+export async function verifyWorkspaceRegistrationProcessesWhileLocked(
+    workspace: string,
+): Promise<boolean> {
+    try {
+        const control = root(workspace);
+        const receipt = readReceipt(control);
+        const gateway = json(path.join(control, "gateway.json"));
+        if (
+            receipt.phase !== "closed" ||
+            gateway.actual !== "stopped" ||
+            gateway.instance !== undefined ||
+            gateway.recoveryRequired !== false
+        )
+            return false;
+        if (receipt.hostname === os.hostname() && receipt.pid !== null && !gone(receipt.pid))
+            return false;
+        return await quiet(control);
+    } catch {
+        return false;
+    }
+}
+
 /**
  * 调用方持workspace锁；只接受迁移写目标时创建、且从未被manager认领的进程种子。
  * active/closed都表示目标管理程序可能执行过业务动作，不能用于冷回退证明。
@@ -354,6 +379,7 @@ export async function claimServiceProcessOwnership(
     workspace: string,
     managerId: string,
     fresh: boolean,
+    initialProcessState?: { receiptDigest: string; gatewayDigest: string },
 ): Promise<boolean> {
     try {
         const control = root(workspace);
@@ -364,7 +390,14 @@ export async function claimServiceProcessOwnership(
         } else {
             previous = readReceipt(control);
             const sameHost = previous.hostname === os.hostname();
-            if (!sameHost) {
+            // 仅正规登记的不可变初始种子可跨登记容器 hostname；不是 verified/fresh bypass。
+            const registeredGenesis =
+                previous.phase === "never-started" &&
+                initialProcessState !== undefined &&
+                revisions.get(previous) === initialProcessState.receiptDigest &&
+                new ConfigurationFile(path.join(control, "gateway.json")).readRaw().revision ===
+                    initialProcessState.gatewayDigest;
+            if (!sameHost && !registeredGenesis) {
                 // closed 只在宿主完成关闭且全部受管进程静止后写入。容器重建会改变
                 // hostname/PID 命名空间，旧 manager PID 不能与当前容器的 PID 比较。
                 // 仍要求明确停止、无历史网关实例；不把异常退出升级成跨主机接管证明。

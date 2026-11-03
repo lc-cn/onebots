@@ -24,6 +24,40 @@ func RunCLI(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	switch args[0] {
+	case "workspace-identity", "workspace-anchor", "private-file-inspect", "private-directory-create":
+		set := flag.NewFlagSet(args[0], flag.ContinueOnError)
+		set.SetOutput(stderr)
+		name := "directory"
+		if args[0] == "private-file-inspect" {
+			name = "file"
+		}
+		value := set.String(name, "", "absolute private local path")
+		if err := set.Parse(args[1:]); err != nil || set.NArg() != 0 || *value == "" {
+			return 2
+		}
+		if err := runWorkspaceStorage(args[0], *value, stdout); err != nil {
+			fmt.Fprintln(stderr, "private workspace storage unavailable")
+			return 1
+		}
+		return 0
+	case "workspace-anchor-release":
+		if len(args) != 1 {
+			return 2
+		}
+		if err := runWorkspaceAnchorRelease(os.Stdin, stdout); err != nil {
+			fmt.Fprintln(stderr, "private workspace anchor release outcome unknown")
+			return 1
+		}
+		return 0
+	case "private-file-replace":
+		if len(args) != 1 {
+			return 2
+		}
+		if err := runPrivateFileReplace(os.Stdin, stdout); err != nil {
+			fmt.Fprintln(stderr, "private workspace replacement outcome unknown")
+			return 1
+		}
+		return 0
 	case "identity":
 		if len(args) != 1 {
 			fmt.Fprintln(stderr, "identity accepts no options")
@@ -134,6 +168,7 @@ func parseRunConfig(command string, args []string, output io.Writer) (Config, er
 	set := flag.NewFlagSet(command, flag.ContinueOnError)
 	set.SetOutput(output)
 	var managerArgs repeatedString
+	protocolVersion := set.Int("protocol-version", 3, "required control protocol version")
 	config := Config{}
 	set.StringVar(&config.ServiceName, "service-name", "onebots-manager", "Windows SCM service name")
 	set.StringVar(&config.ManagerPath, "manager", "", "absolute manager executable path")
@@ -148,6 +183,9 @@ func parseRunConfig(command string, args []string, output io.Writer) (Config, er
 	}
 	if set.NArg() != 0 {
 		return Config{}, errors.New("unexpected positional arguments")
+	}
+	if *protocolVersion != 3 {
+		return Config{}, errors.New("unsupported control protocol version")
 	}
 	config.ManagerArgs = managerArgs
 	if config.NoManagerRPC && command != "console-run" {

@@ -6,6 +6,7 @@ import http from "node:http";
 import { fork } from "node:child_process";
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { registerInstalledWorkspace } from "./workspace-admission-fixture.mjs";
 
 export async function verifyManagerUpgrade(runtime, archives, temporary) {
     const lib = path.join(runtime, "node_modules/onebots/lib");
@@ -39,7 +40,8 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
         };
         const plan = createGenerationPlan({
             host: artifact("onebots", "onebots"),
-            web: artifact("@onebots/web", "onebots-web"), core: artifact("@onebots/core", "onebots-core"),
+            web: artifact("@onebots/web", "onebots-web"),
+            core: artifact("@onebots/core", "onebots-core"),
             extensions: [],
             selection: { adapters: [], protocols: [], applications: [] },
         });
@@ -58,8 +60,13 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
         const workspace = path.join(temporary, "upgrade-workspace");
         fs.mkdirSync(workspace, { mode: 0o700 });
         const canonical = fs.realpathSync(workspace);
+        const authorityDirectory = registerInstalledWorkspace({
+            packageRoot: path.join(runtime, "node_modules/onebots"),
+            workspace: canonical,
+            authorityDirectory: path.join(temporary, "upgrade-authority"),
+        });
         const client = createLocalControlClient(canonical);
-        running = await launch(runtime, canonical, temporary);
+        running = await launch(runtime, canonical, temporary, authorityDirectory);
         assert.equal((await client.status()).gateway.actual, "running");
         await client.pair((await client.bootstrap()).code);
         const auth = fs.readFileSync(path.join(canonical, ".control/auth.json"));
@@ -70,12 +77,13 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
             operationId: "actual-upgrade",
             candidateDigest: digest,
         });
-        running = await launch(candidate.directory, canonical, temporary);
+        running = await launch(candidate.directory, canonical, temporary, authorityDirectory);
         const status = await client.status();
         const verifyIdentity = async () => {
             const current = await client.status();
             const identity = await createLocalControlTransport(canonical).request(
-                "GET", "/api/control/service-upgrade/identity",
+                "GET",
+                "/api/control/service-upgrade/identity",
             );
             assert.deepEqual(identity, { managerId: current.manager.id, candidateDigest: digest });
             return identity;
@@ -101,7 +109,7 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
         assert.deepEqual(fs.readFileSync(path.join(canonical, ".control/auth.json")), auth);
         await running.close();
         running = undefined;
-        running = await launch(candidate.directory, canonical, temporary);
+        running = await launch(candidate.directory, canonical, temporary, authorityDirectory);
         const restartedIdentity = await verifyIdentity();
         assert.notEqual(restartedIdentity.managerId, initialIdentity.managerId);
         assert.equal(await release(), 200);
@@ -115,7 +123,7 @@ export async function verifyManagerUpgrade(runtime, archives, temporary) {
             candidateDigest: digest,
         });
         assert.equal(readManagerUpgradeHistory(canonical, "actual-upgrade").phase, "released");
-        running = await launch(candidate.directory, canonical, temporary);
+        running = await launch(candidate.directory, canonical, temporary, authorityDirectory);
         assert.equal(await release(), 409);
         assert.equal((await client.status()).serviceMigration.pending, true);
         assert.equal(await release("next-upgrade"), 200);
@@ -153,13 +161,13 @@ async function post(socketPath, body) {
     }
 }
 
-async function launch(runtime, workspace, temporary) {
+async function launch(runtime, workspace, temporary, authorityDirectory) {
     const entry = path.join(temporary, "manager-acceptance-worker.mjs");
     fs.writeFileSync(
         entry,
         `import { pathToFileURL } from "node:url";
 const { startControlHost } = await import(pathToFileURL(process.argv[2] + "/node_modules/onebots/lib/control/host.js").href);
-const host = await startControlHost({workspace: process.argv[3], runtimeRoot: process.argv[2], host:"127.0.0.1", port:0,
+const host = await startControlHost({workspace: process.argv[3], authorityDirectory: process.argv[4], runtimeRoot: process.argv[2], host:"127.0.0.1", port:0,
 gatewayEntrypoint: process.argv[2] + "/node_modules/onebots/lib/gateway/entry.js"});
 let closing=false;
 async function close(){if(closing)return; closing=true; try{await host.close();process.exit(0);}catch{process.exit(1);}}
@@ -168,7 +176,7 @@ process.send({ready:true});`,
         { mode: 0o600 },
     );
     const env = { PATH: process.env.PATH, HOME: workspace, NODE_ENV: "production" };
-    const child = fork(entry, [runtime, workspace], {
+    const child = fork(entry, [runtime, workspace, authorityDirectory], {
         execArgv: [],
         env,
         stdio: ["ignore", "ignore", "ignore", "ipc"],

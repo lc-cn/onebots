@@ -62,15 +62,21 @@ export class WindowsManagerStatusPublisher {
         return this.enqueuePublish(gateway, true);
     }
 
+    /** 来源拒绝态不构造 gateway/controller，也不能发布虚假的 stopped。 */
+    publishRejected(): Promise<void> {
+        return this.enqueuePublish(null, false);
+    }
+
     private enqueuePublish(
-        gateway: Pick<GatewayControllerState, "desired" | "actual">,
+        gateway: Pick<GatewayControllerState, "desired" | "actual"> | null,
         confirmsInvalidation: boolean,
     ): Promise<void> {
         const revision = this.nextRevision();
         const control: WindowsPublishedControlStatus = {
             revision,
             manager: structuredClone(this.manager),
-            gateway: { desired: gateway.desired, actual: gateway.actual },
+            admission: { state: gateway ? "verified" : "rejected" },
+            gateway: gateway ? { desired: gateway.desired, actual: gateway.actual } : null,
         };
         const result = this.queue.then(async () => {
             try {
@@ -136,6 +142,7 @@ export class WindowsManagerStatusPublisher {
                 {
                     revision: confirmed.revision,
                     manager: confirmed.manager,
+                    admission: confirmed.admission,
                     gateway: confirmed.gateway,
                 },
                 expected,

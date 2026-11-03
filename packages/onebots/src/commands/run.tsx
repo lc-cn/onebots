@@ -6,12 +6,22 @@ export const description = "启动常驻管理服务（serve 别名）";
 export const isDefault = true;
 export const options = z.object({
     dataDir: z.string().optional(),
+    authorityDir: z.string().optional(),
     host: z.string().optional(),
     port: z.string().optional(),
 });
 function RunCommand({ options: input }: { options: z.infer<typeof options> }) {
     const args = Object.entries(input).flatMap(([key, value]) =>
-        value === undefined ? [] : [key === "dataDir" ? "--data-dir" : `--${key}`, value],
+        value === undefined
+            ? []
+            : [
+                  key === "dataDir"
+                      ? "--data-dir"
+                      : key === "authorityDir"
+                        ? "--authority-dir"
+                        : `--${key}`,
+                  value,
+              ],
     );
     return (
         <CommandRunner

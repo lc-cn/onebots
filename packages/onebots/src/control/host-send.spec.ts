@@ -9,7 +9,10 @@ import {
     createHttpControlTransport,
     type ControlSendRequest,
 } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 const exec = promisify(execFile);
 const roots: string[] = [];
@@ -23,9 +26,10 @@ function directory() {
     roots.push(root);
     return root;
 }
-function fixture() {
+async function fixture() {
     const workspace = directory(),
         runtimeRoot = directory();
+    await registerControlTestWorkspace(workspace);
     fs.writeFileSync(
         path.join(workspace, "config.yaml"),
         "plugins:\n  adapters: [mock]\n  protocols: []\n  applications: []\nmock.bot: {}\n",
@@ -41,7 +45,7 @@ function fixture() {
         fs.symlinkSync(path.resolve(target), path.join(runtimeRoot, "node_modules", name), "dir");
     return { workspace, runtimeRoot };
 }
-async function start(f: ReturnType<typeof fixture>) {
+async function start(f: Awaited<ReturnType<typeof fixture>>) {
     const host = await startControlHost({
         ...f,
         port: 0,
@@ -78,7 +82,7 @@ async function request(client: ControlClient): Promise<ControlSendRequest> {
 }
 describe("管理服务发送真实集成", () => {
     it("无协议发送成功、同ID回执持久复用、同ID不同正文拒绝、重启不重放", async () => {
-        const f = fixture(),
+        const f = await fixture(),
             running = await start(f),
             web = await pair(running);
         await expect(running.anonymous.sendContext()).rejects.toThrow();
@@ -108,7 +112,7 @@ describe("管理服务发送真实集成", () => {
         expect((await reopened.local.status()).gateway.actual).toBe("running");
     });
     it("真实CLI JSON发送后查询原ID，实例保持不变且无旧登录", async () => {
-        const f = fixture(),
+        const f = await fixture(),
             running = await start(f),
             before = await running.local.status(),
             id = randomUUID();

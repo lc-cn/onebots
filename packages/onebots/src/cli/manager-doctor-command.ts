@@ -7,6 +7,7 @@ export interface ManagerDoctorCommandOptions {
     strict?: boolean;
     fix?: boolean;
     json?: boolean;
+    authorityDir?: string;
 }
 export async function managerDoctorCommand(
     options: ManagerDoctorCommandOptions,
@@ -31,6 +32,7 @@ export async function managerDoctorCommand(
             report = await runManagerDoctor(
                 {
                     dataDir: options.dataDir,
+                    authorityDir: options.authorityDir,
                     system: options.system,
                     strict: options.strict,
                     fix: false,

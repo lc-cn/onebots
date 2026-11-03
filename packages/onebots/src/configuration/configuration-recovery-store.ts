@@ -93,12 +93,7 @@ export class ConfigurationRecoveryStore {
     read(ref: ConfigurationRecoveryReference): Buffer {
         try {
             this.checkDirectory();
-            const file = this.file(ref);
-            const stat = fs.lstatSync(file);
-            if (process.platform !== "win32" && (stat.mode & 0o777) !== 0o400) throw invalid();
-            const snapshot = new ConfigurationFile(file).readRaw();
-            if (snapshot.revision !== ref.originalRevision) throw invalid();
-            return snapshot.bytes;
+            return readConfigurationRecoveryBackup(this.directory, ref);
         } catch {
             throw invalid();
         }
@@ -125,6 +120,35 @@ export class ConfigurationRecoveryStore {
         )
             throw invalid();
     }
+}
+/** 离线只读检查不运行 store 构造器，不创建目录或改变权限。 */
+export function readConfigurationRecoveryBackup(
+    directory: string,
+    ref: ConfigurationRecoveryReference,
+): Buffer {
+    if (
+        !ref ||
+        typeof ref.backupId !== "string" ||
+        !UUID.test(ref.backupId) ||
+        typeof ref.originalRevision !== "string" ||
+        !HASH.test(ref.originalRevision)
+    )
+        throw invalid();
+    const parent = fs.lstatSync(directory);
+    if (
+        !parent.isDirectory() ||
+        parent.isSymbolicLink() ||
+        (process.platform !== "win32" &&
+            ((parent.mode & 0o777) !== 0o700 ||
+                (process.getuid && parent.uid !== process.getuid())))
+    )
+        throw invalid();
+    const file = path.join(directory, `${ref.backupId}.yaml`);
+    const stat = fs.lstatSync(file);
+    if (process.platform !== "win32" && (stat.mode & 0o777) !== 0o400) throw invalid();
+    const snapshot = new ConfigurationFile(file).readRaw();
+    if (snapshot.revision !== ref.originalRevision) throw invalid();
+    return snapshot.bytes;
 }
 function hash(bytes: Uint8Array): string {
     return createHash("sha256").update(bytes).digest("hex");

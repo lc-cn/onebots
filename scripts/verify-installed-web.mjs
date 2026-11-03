@@ -1,8 +1,9 @@
 /**
  * Pack and production-install the published management runtime, then drive its actual Web UI
  * through a real Chromium browser. The browser performs pairing, extension installation and
- * activation, account/protocol configuration, and a real protocol request. The installed CLI only
- * observes the same manager workspace; it never performs a product mutation for this fixture.
+ * activation, account/protocol configuration, and a real protocol request. The installed CLI
+ * explicitly enrolls the empty fixture offline before startup; after that it only observes the
+ * same manager workspace, while configuration and extension changes use the Web UI.
  */
 import assert from "node:assert/strict";
 import { waitForBrowserPort } from "./browser-startup.mjs";
@@ -10,6 +11,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { registerInstalledWorkspace } from "./workspace-admission-fixture.mjs";
 import { pathToFileURL } from "node:url";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -236,6 +238,12 @@ try {
 
     const packageRoot = path.join(runtime, "node_modules/onebots");
     const bin = path.join(packageRoot, "lib/bin.js");
+    const authorityDirectory = registerInstalledWorkspace({
+        packageRoot,
+        workspace,
+        authorityDirectory: path.join(temporary, "authority"),
+        environment,
+    });
     const { startControlHost } = await import(
         pathToFileURL(path.join(packageRoot, "lib/control/host.js")).href
     );
@@ -252,6 +260,7 @@ try {
     safeToRemove = false;
     host = await startControlHost({
         workspace,
+        authorityDirectory,
         host: "127.0.0.1",
         port: 0,
         runtimeRoot: runtime,

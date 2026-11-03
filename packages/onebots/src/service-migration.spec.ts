@@ -198,6 +198,30 @@ function fixture(previousRunning = false, stopInitiallyConfirmed = true) {
     };
 }
 describe("installed service migration entry", () => {
+    it("strict v2 legacy migration rejects before snapshots, logs, candidate work or OS changes", async () => {
+        const test = fixture(true);
+        const definition = fs.readFileSync(test.files.definition);
+        const metadata = fs.readFileSync(test.files.metadata);
+        const workspaceEntries = fs.readdirSync(test.target.workspace);
+        const scopeEntries = fs.readdirSync(test.files.stateDir);
+        await expect(
+            migrateInstalledService(
+                {
+                    ...test.target,
+                    schemaVersion: 2,
+                    authorityDirectory: path.join(test.root, "authority"),
+                },
+                test.host,
+            ),
+        ).rejects.toThrow("不支持从旧单进程架构直接迁移");
+        expect(test.osEffects).toEqual([]);
+        expect(test.inspect).not.toHaveBeenCalled();
+        expect(prepareServiceMigrationManagerCandidate).not.toHaveBeenCalled();
+        expect(fs.readFileSync(test.files.definition)).toEqual(definition);
+        expect(fs.readFileSync(test.files.metadata)).toEqual(metadata);
+        expect(fs.readdirSync(test.target.workspace)).toEqual(workspaceEntries);
+        expect(fs.readdirSync(test.files.stateDir)).toEqual(scopeEntries);
+    });
     it.each(["missing-bin", "missing-node", "directory-bin", "old-node", "malformed-node"])(
         "%s fails before any platform mutation",
         async scenario => {

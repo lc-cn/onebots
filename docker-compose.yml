@@ -15,6 +15,8 @@ services:
     volumes:
       # 持久化用户配置 config.yaml 与数据（SQLite、日志等）
       - ./data:/data
+      # 独立来源证明，不随 data 备份复制；已有卷不可自动重建或改权限。
+      - onebots-authority:/var/lib/onebots-authority
     environment:
       - NODE_ENV=production
       # 可选的一次性部署配对码；未设置时使用本机 auth bootstrap
@@ -25,3 +27,6 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
+
+volumes:
+  onebots-authority:

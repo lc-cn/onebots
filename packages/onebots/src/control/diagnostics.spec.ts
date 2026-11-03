@@ -1,11 +1,12 @@
-import { prepareServiceProcessOwnershipSeed } from "../service-migration-processes.js";
-import { acquireControlWorkspace } from "./workspace.js";
+import {
+    registerControlTestWorkspace,
+    controlTestAuthority,
+} from "../../test-utils/control-test-workspace.js";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { ControlClient, createHttpControlTransport } from "../../../core/src/control.js";
 import { startControlHost } from "./host.js";
-import { prepareServiceMigrationWorkspace } from "../service-migration-workspace.js";
 import { createLocalControlTransport } from "../client/local-control.js";
 import { runManagerDoctor } from "../manager-doctor.js";
 
@@ -17,15 +18,23 @@ afterEach(async () => {
 it("diagnostics is authenticated, closed and readonly for empty and damaged configuration", async () => {
     const root = fs.realpathSync(fs.mkdtempSync("/tmp/ob-diag-"));
     cleanup.push(async () => fs.rmSync(root, { recursive: true, force: true }));
-    prepareServiceMigrationWorkspace(root, "11111111-1111-4111-8111-111111111111", "stopped");
-    const release = acquireControlWorkspace(root);
-    try {
-        prepareServiceProcessOwnershipSeed(root);
-    } finally {
-        release();
-    }
+    await registerControlTestWorkspace(root, "stopped");
+    // 已登记来源下保留原测试关注的迁移标记/只读诊断契约，不借旧seed绕过来源校验。
+    fs.writeFileSync(
+        path.join(root, ".control/migration-pending.json"),
+        JSON.stringify({
+            schemaVersion: 1,
+            operationId: "11111111-1111-4111-8111-111111111111",
+            desired: "stopped",
+        }),
+        { mode: 0o600 },
+    );
     fs.writeFileSync(path.join(root, "config.yaml"), "{}\n", { mode: 0o600 });
-    const host = await startControlHost({ workspace: root, port: 0 });
+    const host = await startControlHost({
+        workspace: root,
+        authorityDirectory: controlTestAuthority(root),
+        port: 0,
+    });
     cleanup.push(() => host.close());
     const address = host.server.address();
     if (!address || typeof address === "string") throw new Error("missing address");
@@ -87,7 +96,10 @@ it("diagnostics is authenticated, closed and readonly for empty and damaged conf
     const damaged = await local.diagnostics();
     expect(damaged.configuration.state).toBe("damaged");
     expect(JSON.stringify(damaged)).not.toMatch(/synthetic-secret|plugin\.mjs|config\.yaml/);
-    const report = await runManagerDoctor({ dataDir: root });
+    const report = await runManagerDoctor({
+        dataDir: root,
+        authorityDir: controlTestAuthority(root),
+    });
     expect(report.checks).toEqual(
         expect.arrayContaining([
             expect.objectContaining({ id: "configuration", status: "fail" }),

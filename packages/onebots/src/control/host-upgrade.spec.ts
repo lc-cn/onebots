@@ -5,7 +5,11 @@ import { fork } from "node:child_process";
 import { once } from "node:events";
 import { pathToFileURL } from "node:url";
 import { afterEach, expect, it } from "vitest";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+    controlTestAuthority,
+} from "../../test-utils/control-test-workspace.js";
 import { controlSocket } from "./workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 import {
@@ -25,9 +29,11 @@ const pending = {
 };
 async function initial() {
     const root = fs.realpathSync(fs.mkdtempSync("/tmp/ob-upg-"));
+    await registerControlTestWorkspace(root);
     roots.push(root);
     const options = {
         workspace: root,
+        authorityDirectory: controlTestAuthority(root),
         host: "127.0.0.1",
         port: 0,
         gatewayEntrypoint: path.resolve(import.meta.dirname, "../../lib/gateway/entry.js"),
@@ -47,9 +53,11 @@ it.each(["running", "stopped"] as const)(
     "已有%s意图跨两次维护启动保持停止，配置与认证不被重写",
     async desired => {
         const root = fs.realpathSync(fs.mkdtempSync("/tmp/ob-upg-"));
+        await registerControlTestWorkspace(root);
         roots.push(root);
         const options = {
             workspace: root,
+            authorityDirectory: controlTestAuthority(root),
             host: "127.0.0.1",
             port: 0,
             gatewayEntrypoint: path.resolve(import.meta.dirname, "../../lib/gateway/entry.js"),

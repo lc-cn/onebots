@@ -42,6 +42,7 @@ export async function runManagerUpdate(
     let version: string | undefined;
     let operationId: string | undefined;
     let artifacts: string | undefined;
+    let authorityDir: string | undefined;
     let dataDirProvided = false;
     for (let index = 0; index < args.length; index++) {
         const value = args[index];
@@ -63,6 +64,11 @@ export async function runManagerUpdate(
             const file = value === "--artifacts" ? args[++index] : value.slice(12);
             if (!file || file.startsWith("-")) throw new Error("--artifacts 需要运行工件清单路径");
             artifacts = path.resolve(file);
+        } else if (value === "--authority-dir" || value.startsWith("--authority-dir=")) {
+            const directory = value === "--authority-dir" ? args[++index] : value.slice(16);
+            if (!directory || directory.startsWith("-"))
+                throw new Error("--authority-dir 需要卷外身份目录");
+            authorityDir = path.resolve(directory);
         } else if (value === "--data-dir" || value.startsWith("--data-dir=")) {
             dataDirProvided = true;
             const directory = value === "--data-dir" ? args[++index] : value.slice(11);
@@ -94,6 +100,7 @@ export async function runManagerUpdate(
                 ...(version ? { version } : {}),
                 ...(operationId ? { operationId } : {}),
                 ...(artifacts ? { artifacts } : {}),
+                ...(authorityDir ? { authorityDir } : {}),
             },
             {
                 ...options.managerDependencies,
@@ -103,7 +110,7 @@ export async function runManagerUpdate(
             },
         );
     }
-    if (yes || system || version || operationId || artifacts)
+    if (yes || system || version || operationId || artifacts || authorityDir)
         throw new Error(
             "--yes、--system、--version、--operation 和 --artifacts 仅可与 --manager 一起使用；未执行更新",
         );

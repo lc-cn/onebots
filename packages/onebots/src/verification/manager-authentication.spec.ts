@@ -5,24 +5,36 @@ import http from "node:http";
 import { afterEach, expect, it } from "vitest";
 import { ControlAuth } from "../control/auth.js";
 import { prepareManagerAuthenticationProbe } from "./manager-authentication.js";
+import { registerControlTestWorkspace } from "../../test-utils/control-test-workspace.js";
+import { readWorkspaceBinding } from "../workspace-admission/admission.js";
+import { authenticationContext } from "../workspace-admission/types.js";
 
 const roots: string[] = [];
 afterEach(() => {
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
-function fixture() {
+async function fixture() {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ob-auth-probe-"));
     roots.push(root);
-    const probe = prepareManagerAuthenticationProbe(root);
+    await registerControlTestWorkspace(root, "stopped");
+    const binding = readWorkspaceBinding(root)!;
+    const bindingContext = authenticationContext(binding);
+    const probe = prepareManagerAuthenticationProbe(root, bindingContext);
     const statePath = path.join(root, ".control/auth.json");
-    return { root, probe, statePath, auth: new ControlAuth({ statePath }) };
+    return {
+        root,
+        probe,
+        statePath,
+        bindingContext,
+        auth: new ControlAuth({ statePath, bindingContext }),
+    };
 }
 it.each(["valid", "old-single-session", "anonymous-open", "unknown-device-open", "rewrites-state"])(
     "通过真实 HTTP 检查候选认证行为：%s",
     async mode => {
-        const f = fixture();
+        const f = await fixture();
         const bytes = fs.readFileSync(f.statePath, "utf8");
-        expect(JSON.parse(bytes).version).toBe(2);
+        expect(JSON.parse(bytes).version).toBe(3);
         expect(JSON.parse(bytes).sessions).toHaveLength(2);
         expect(fs.statSync(f.statePath).mode & 0o777).toBe(0o600);
         let firstToken: string | undefined;
@@ -60,9 +72,11 @@ it.each(["valid", "old-single-session", "anonymous-open", "unknown-device-open",
         }
     },
 );
-it("拒绝覆盖工作区既有认证数据", () => {
-    const f = fixture();
+it("拒绝覆盖工作区既有认证数据", async () => {
+    const f = await fixture();
     const before = fs.readFileSync(f.statePath, "utf8");
-    expect(() => prepareManagerAuthenticationProbe(f.root)).toThrow("独立空白工作区");
+    expect(() => prepareManagerAuthenticationProbe(f.root, f.bindingContext)).toThrow(
+        "独立空白工作区",
+    );
     expect(fs.readFileSync(f.statePath, "utf8")).toBe(before);
 });

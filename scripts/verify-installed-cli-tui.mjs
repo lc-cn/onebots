@@ -10,6 +10,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { registerInstalledWorkspace } from "./workspace-admission-fixture.mjs";
 import { pathToFileURL } from "node:url";
 const root = path.resolve(import.meta.dirname, "..");
 const temporary = fs.mkdtempSync("/tmp/ob-installed-entries-");
@@ -87,6 +88,12 @@ try {
 
     const packageRoot = path.join(runtime, "node_modules/onebots");
     const bin = path.join(packageRoot, "lib/bin.js");
+    const authorityDirectory = registerInstalledWorkspace({
+        packageRoot,
+        workspace,
+        authorityDirectory: path.join(temporary, "authority"),
+        environment,
+    });
     const { startControlHost } = await import(
         pathToFileURL(path.join(packageRoot, "lib/control/host.js")).href
     );
@@ -108,6 +115,7 @@ try {
     safeToRemove = false;
     host = await startControlHost({
         workspace,
+        authorityDirectory,
         host: "127.0.0.1",
         port: 0,
         runtimeRoot: runtime,

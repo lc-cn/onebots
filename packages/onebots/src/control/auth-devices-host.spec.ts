@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import { afterEach, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 
 let host: Awaited<ReturnType<typeof startControlHost>> | undefined;
@@ -13,11 +16,14 @@ afterEach(async () => {
 
 it("本机追加设备不挤掉旧设备，逐设备撤销跨重启保持，恢复撤销所有旧设备", async () => {
     directory = fs.mkdtempSync("/tmp/ob-devices-");
+    await registerControlTestWorkspace(directory);
     host = await startControlHost({ workspace: directory, port: 0 });
     const client = (token = "") => {
         const address = host?.server.address();
         if (!address || typeof address === "string") throw new Error("missing listener");
-        return new ControlClient(createHttpControlTransport(`http://127.0.0.1:${address.port}`, () => token));
+        return new ControlClient(
+            createHttpControlTransport(`http://127.0.0.1:${address.port}`, () => token),
+        );
     };
     const local = createLocalControlClient(directory);
     const first = await client().pair((await local.bootstrap()).code);
@@ -34,8 +40,13 @@ it("本机追加设备不挤掉旧设备，逐设备撤销跨重启保持，恢�
     expect(listed.sessions).toHaveLength(2);
     expect(listed.sessions.filter(session => session.current)).toHaveLength(1);
     expect(JSON.stringify(listed)).not.toContain(first.token);
-    expect(await client(first.token).sessionPolicy()).toEqual({ durationDays: 30, autoRenew: true });
-    expect(await client(first.token).updateSessionPolicy({ durationDays: 90, autoRenew: true })).toEqual({ durationDays: 90, autoRenew: true });
+    expect(await client(first.token).sessionPolicy()).toEqual({
+        durationDays: 30,
+        autoRenew: true,
+    });
+    expect(
+        await client(first.token).updateSessionPolicy({ durationDays: 90, autoRenew: true }),
+    ).toEqual({ durationDays: 90, autoRenew: true });
     const renewed = await client(first.token).renewSession();
     expect(renewed.session.expiresAt).toBeGreaterThan(Date.now() + 89 * 24 * 60 * 60 * 1000);
     for (const session of listed.sessions)

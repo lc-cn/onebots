@@ -10,19 +10,23 @@ Node.js 需要 24 或更高版本。
 npm install --global onebots
 ```
 
-首次安装系统托管时指定一个持久工作区：
+Linux/macOS 首次安装用户级服务时，指定全新工作区和独立的卷外 authority；计划文件留在工作区之外：
 
 ```bash
-# 默认安装用户级服务
-onebots install --data-dir /path/to/onebots-data
+umask 077
+onebots install --data-dir "$HOME/onebots-data" --authority-dir "$HOME/onebots-authority"
+# install 保持服务停止。阅读计划，确认会话失效影响后用实际 digest 登记。
+onebots workspace plan --data-dir "$HOME/onebots-data" \
+  --authority-dir "$HOME/onebots-authority" > "$HOME/onebots-plan.json"
+onebots workspace register --plan-file "$HOME/onebots-plan.json" --confirm '<plan.digest>'
 onebots start
-
-# Linux 系统级服务
-sudo onebots install --system --data-dir /var/lib/onebots
-sudo onebots start --system
 ```
 
-`install` 只安装管理服务及其不可变运行候选，不预填平台账号、协议或框架，也不启动进程。`start` 启动受系统托管的管理服务。Docker 部署直接以前台 `onebots serve` 作为容器主进程，不在容器内安装系统服务。
+`install` 只安装管理服务及其不可变运行候选并保持停止；`register` 不启动管理服务或网关。登记成功后才能 `start`，管理服务运行后再签发配对码。后文的 `/path/to/onebots-data` 与 `/path/to/onebots-authority` 均须换成实际路径；两者互不包含且持久保存，authority 的父目录由部署准备。
+
+系统级服务追加 `--system` 并使用相应管理员权限。Windows 请使用[管理员安装脚本](https://onebots.pages.dev/guide/start)，由安装器准备私有 ACL 并打印登记步骤，不套用 POSIX 目录命令。脚本会验证公开包的来源登记能力，源码位于 `docs/src/public`，不会自动确认登记。
+
+Docker 直接运行前台管理服务，不在容器内安装系统服务；必须持久挂载整个 `/data` 和独立 authority 卷，离线登记时复用两个卷并从宿主 stdin 传入计划，详见[Docker 部署](https://onebots.pages.dev/guide/docker)。本机制不提供 authority/整机克隆的全局互斥或跨机 HA；HF 模板首期禁用 `HF_REPO_ID` 自动恢复。
 
 ## 首次登录
 
@@ -90,14 +94,15 @@ onebots control restart --data-dir /path/to/onebots-data
 
 停止网关不会关闭管理服务或 Web。管理服务重启后会保留网关的期望状态。
 
-前台运行管理服务：
+将同一已登记实例改为前台运行时，先正常停止系统服务，再沿用原 authority：
 
 ```bash
-onebots serve --data-dir /path/to/onebots-data --host 127.0.0.1 --port 6727
+onebots serve --data-dir /path/to/onebots-data \
+  --authority-dir /path/to/onebots-authority --host 127.0.0.1 --port 6727
 # onebots run 是同一入口的别名
 ```
 
-公开前台入口不接受旧 `-c/-r/-p/-t` 运行参数。旧安装先执行 `onebots migrate`，不要直接覆盖既有系统服务定义。
+已登记前台实例改托管也须先正常关闭前台，再用相同数据和 authority 路径 `install`、`start`，不重复登记。新空目录的前台登记示例见[快速开始](https://onebots.pages.dev/guide/start)。公开前台入口不接受旧 `-c/-r/-p/-t` 参数。旧 control v1 服务按[离线升级流程](https://onebots.pages.dev/guide/workspace-admission)处理；更早的单进程 legacy 不能直接执行严格版 `onebots migrate`，不要覆盖旧服务定义。
 
 ## 配置模型
 
@@ -137,20 +142,22 @@ qq.my_bot:
 ## 常用命令
 
 ```text
-onebots install [--system] [--data-dir PATH] [--host HOST] [--port PORT]
+onebots install [--system] [--data-dir PATH] [--authority-dir PATH] [--host HOST] [--port PORT]
 onebots uninstall [--system]
 onebots start|stop|restart [--system]
 onebots status [--system] [--json]
 onebots logs [--system]
-onebots migrate [--system]
 onebots recover --operation ID [--system]
 
-onebots serve|run [--data-dir PATH] [--host HOST] [--port PORT]
+onebots workspace plan|inspect --data-dir PATH [--authority-dir PATH]
+onebots workspace register --plan-file FILE|- --confirm DIGEST
+onebots workspace resume --request ID --data-dir PATH [--authority-dir PATH]
+onebots serve|run [--data-dir PATH] [--authority-dir PATH] [--host HOST] [--port PORT]
 onebots ui [--data-dir PATH]
 onebots setup [--data-dir PATH]
 onebots auth bootstrap|device|recover [--data-dir PATH]
 onebots control status|start|stop|restart [--data-dir PATH]
-onebots doctor [--data-dir PATH] [--json] [--strict]
+onebots doctor [--data-dir PATH] [--authority-dir PATH] [--json] [--strict]
 onebots update [--check] [--data-dir PATH]
 onebots send [--data-dir PATH] ...
 onebots mcp [--data-dir PATH] [--account 平台/账号]

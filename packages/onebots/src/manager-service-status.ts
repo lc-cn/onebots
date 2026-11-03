@@ -20,6 +20,7 @@ import {
 import type { ServiceScope } from "./service-definition.js";
 import type { ManagerServiceSpec } from "./manager-service-spec.js";
 import type { ServicePlatform, ServicePlatformState } from "./service-platform.js";
+import { inspectManagerReadiness } from "./manager-service-readiness.js";
 
 export interface ManagerServiceStatus {
     schemaVersion: 1;
@@ -54,6 +55,7 @@ export interface ManagerServiceStatus {
         | "invalid-metadata"
         | "os-unavailable"
         | "ipc-unavailable"
+        | "admission-rejected"
         | "identity-mismatch"
         | "baseline-changed"
         | "definition-mismatch"
@@ -66,6 +68,7 @@ export interface ManagerServiceStatusDependencies {
         definitionPath: string,
     ): Pick<WindowsServicePlatform, "inspectNative">;
     inspectManager?: typeof inspectMigrationManager;
+    inspectReadiness?: typeof inspectManagerReadiness;
     now?(): number;
 }
 
@@ -227,6 +230,10 @@ async function inspectManagerServiceStatusSnapshot(
             return result;
         }
         result.manager.ipc = "available";
+        if (!before.control.gateway) {
+            result.diagnostic = "admission-rejected";
+            return result;
+        }
         result.gateway = {
             actual: before.control.gateway.actual,
             desired: before.control.gateway.desired,
@@ -342,8 +349,31 @@ async function inspectManagerServiceStatusSnapshot(
         };
         result.accounts = parseAccountStatuses(manager.accounts);
     } catch {
-        result.manager.ipc = "unavailable";
-        result.diagnostic = "ipc-unavailable";
+        try {
+            const minimal = await (dependencies.inspectReadiness ?? inspectManagerReadiness)(
+                spec.workspace,
+            );
+            const after = await platform.inspect();
+            const current = readServiceMetadata(files.metadata);
+            if (
+                !definitionCurrent() ||
+                current.kind !== "control" ||
+                !isDeepStrictEqual(current.spec, spec) ||
+                !isDeepStrictEqual(before, after)
+            ) {
+                result.manager.ipc = "mismatch";
+                result.diagnostic = "baseline-changed";
+            } else if (minimal.manager.pid !== before.processId) {
+                result.manager.ipc = "mismatch";
+                result.diagnostic = "identity-mismatch";
+            } else {
+                result.manager.ipc = "available";
+                result.diagnostic = "admission-rejected";
+            }
+        } catch {
+            result.manager.ipc = "unavailable";
+            result.diagnostic = "ipc-unavailable";
+        }
     }
     return result;
 }

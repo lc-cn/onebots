@@ -18,8 +18,11 @@ func queryStatus(string, time.Duration, io.Writer) error { return errWindowsOnly
 func exchangeControlRequest(string, time.Duration, io.Reader, io.Writer) error {
 	return errWindowsOnly
 }
-func runSCMControl(string, io.Writer) error          { return errWindowsOnly }
-func runLegacySCMInspect(io.Writer) error            { return errWindowsOnly }
-func runLegacyRebootControl(string, io.Writer) error { return errWindowsOnly }
-func runLegacyRebootReceipt(string) error            { return errWindowsOnly }
-func runIdentity(io.Writer) error                    { return errWindowsOnly }
+func runSCMControl(string, io.Writer) error                { return errWindowsOnly }
+func runLegacySCMInspect(io.Writer) error                  { return errWindowsOnly }
+func runLegacyRebootControl(string, io.Writer) error       { return errWindowsOnly }
+func runLegacyRebootReceipt(string) error                  { return errWindowsOnly }
+func runIdentity(io.Writer) error                          { return errWindowsOnly }
+func runWorkspaceStorage(string, string, io.Writer) error  { return errWindowsOnly }
+func runPrivateFileReplace(io.Reader, io.Writer) error     { return errWindowsOnly }
+func runWorkspaceAnchorRelease(io.Reader, io.Writer) error { return errWindowsOnly }

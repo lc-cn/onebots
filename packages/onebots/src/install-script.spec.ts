@@ -30,8 +30,8 @@ case "$1" in
  start) [ ${quote(mode)} != start-fail ] || exit 3 ;;
  status)
   [ ${quote(mode)} != status-fail ] || exit 3
-  if [ ${quote(mode)} = invalid-status ]; then printf '{}\\n'; else
-   printf '%s\\n' '{"schemaVersion":1,"installation":"control","manager":{"state":"running","ipc":"available"},"serviceRecoveryRequired":false,"diagnostic":null,"gateway":{"actual":"stopped","desired":"stopped","recoveryRequired":false}}'
+  if [ ${quote(mode)} = invalid-status ] || [ ${quote(mode)} = unexpected-running ]; then printf '{}\\n'; else
+   printf '%s\\n' '{"schemaVersion":1,"installation":"control","manager":{"state":"stopped","ipc":"not-queried"},"serviceRecoveryRequired":false,"diagnostic":null,"gateway":{"actual":"unknown","desired":"unknown","recoveryRequired":null}}'
   fi ;;
  *) exit 9 ;;
 esac
@@ -53,8 +53,12 @@ printf 'npm %s\\n' "$*" >> ${quote(log)}
 [ ! -s "$NPM_CONFIG_USERCONFIG" ] && [ ! -s "$NPM_CONFIG_GLOBALCONFIG" ] || exit 8
 [ ${quote(mode)} != npm-fail ] || exit 3
 mkdir -p node_modules/onebots/lib/control node_modules/onebots/lib/gateway node_modules/@onebots/web/dist
+printf '%s' '{"name":"onebots","type":"module"}' > node_modules/onebots/package.json
 cp ${quote(cli)} node_modules/onebots/lib/bin.js
-if [ ${quote(mode)} != missing-host ]; then printf 'host' > node_modules/onebots/lib/control/host.js; fi
+if [ ${quote(mode)} != missing-host ]; then
+ if [ ${quote(mode)} = missing-capability ]; then printf 'export {};' > node_modules/onebots/lib/control/host.js;
+ else printf 'export const WORKSPACE_ADMISSION_CAPABILITY=1;' > node_modules/onebots/lib/control/host.js; fi
+fi
 if [ ${quote(mode)} != missing-gateway ]; then printf 'gateway' > node_modules/onebots/lib/gateway/entry.js; fi
 if [ ${quote(mode)} != missing-web ]; then printf '<html></html>' > node_modules/@onebots/web/dist/index.html; fi
 `,
@@ -119,14 +123,19 @@ esac
         commands: () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8") : ""),
     };
 }
-it("首次空白安装只装管理程序，安装/启动/只读状态确认后引导设备配对", () => {
+it("首次安装保持停止，明确展示来源确认后启动/配对，不自动登记", () => {
     const f = fixture();
     const result = f.run();
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("管理服务已安装并确认运行");
+    expect(result.stdout).toContain("管理服务已安装并保持停止");
     expect(f.commands()).toContain("--registry=https://registry.npmjs.org onebots@latest");
-    expect(f.commands()).toContain(`cli install --data-dir ${f.home}`);
-    expect(f.commands()).toContain("cli start\ncli status --json");
+    expect(f.commands()).toContain(`cli install --data-dir ${path.join(f.home, "data")}`);
+    expect(f.commands()).toContain("cli status --json");
+    expect(f.commands()).not.toMatch(/cli (start|workspace) /);
+    expect(result.stdout).toContain("workspace plan");
+    expect(result.stdout).toContain(
+        `workspace register --plan-file "${path.join(f.home, ".bootstrap/workspace-plan.json")}" --confirm`,
+    );
     expect(f.commands()).not.toMatch(
         /cli (setup|update|auth|ui|restart)|service-runtime|preflight/,
     );
@@ -174,19 +183,23 @@ it.each(["missing-host", "missing-gateway", "missing-web"])(
         expect(fs.existsSync(path.join(f.home, ".manager-installed"))).toBe(false);
     },
 );
-it.each(["npm-fail", "install-fail", "start-fail", "status-fail", "invalid-status"])(
-    "%s不宣告成功且不自动重试或回滚",
-    mode => {
-        const f = fixture(mode);
-        const result = f.run();
-        expect(result.status).not.toBe(0);
-        expect(result.stdout).not.toContain("管理服务已安装并确认运行");
-        expect(fs.existsSync(path.join(f.home, ".manager-installed"))).toBe(false);
-        const before = f.commands();
-        expect(f.run().status).not.toBe(0);
-        expect(f.commands()).toBe(before);
-    },
-);
+it.each([
+    "npm-fail",
+    "missing-capability",
+    "install-fail",
+    "unexpected-running",
+    "status-fail",
+    "invalid-status",
+])("%s不宣告成功且不自动重试或回滚", mode => {
+    const f = fixture(mode);
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).not.toContain("管理服务已安装并保持停止");
+    expect(fs.existsSync(path.join(f.home, ".manager-installed"))).toBe(false);
+    const before = f.commands();
+    expect(f.run().status).not.toBe(0);
+    expect(f.commands()).toBe(before);
+});
 it("Node24下载经过摘要校验，测试完全使用合成文件而非网络", () => {
     const f = fixture("download");
     const result = f.run();

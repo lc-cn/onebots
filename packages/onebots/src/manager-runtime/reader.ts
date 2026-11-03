@@ -4,15 +4,18 @@ import {
     readVerifiedGeneration,
     type VerifiedGeneration,
 } from "../installation/generation-store.js";
-import type { ManagerCandidateVerification } from "../verification/manager-candidate.js";
+import type {
+    ManagerCandidateVerification,
+    LegacyManagerCandidateVerification,
+} from "../verification/manager-candidate.js";
 const PROOF = "manager-verification.json";
 interface ManagerProof {
     schemaVersion: 1;
     candidateId: string;
-    verification: ManagerCandidateVerification;
+    verification: ManagerCandidateVerification | LegacyManagerCandidateVerification;
 }
 export interface VerifiedManagerCandidate extends VerifiedGeneration {
-    management: ManagerCandidateVerification;
+    management: ManagerCandidateVerification | LegacyManagerCandidateVerification;
 }
 /** 只读核对依赖收据和管理启动证明；不实例化安装器或改变恢复状态。 */
 export function readVerifiedManagerCandidate(root: string, id: string): VerifiedManagerCandidate {
@@ -49,7 +52,35 @@ export function readVerifiedManagerCandidate(root: string, id: string): Verified
             },
         },
     };
-    if (JSON.stringify(JSON.parse(fs.readFileSync(file, "utf8"))) !== JSON.stringify(expected))
+    const value: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        (value as { verification?: { schemaVersion?: unknown } }).verification?.schemaVersion === 2
+    ) {
+        const legacy = expected.verification as LegacyManagerCandidateVerification;
+        expected.verification = {
+            schemaVersion: 2,
+            contracts: { workspaceAdmission: 1, authenticationContext: 1 },
+            planDigest: legacy.planDigest,
+            hostVersion: legacy.hostVersion,
+            coreVersion: legacy.coreVersion,
+            nodeAbi: legacy.nodeAbi,
+            platform: legacy.platform,
+            arch: legacy.arch,
+            checks: {
+                managementStartup: true,
+                webAssets: true,
+                anonymousDenied: true,
+                authenticationV3: true,
+                workspaceAdmission: true,
+                maintenance: true,
+                closed: true,
+            },
+        };
+    }
+    if (JSON.stringify(value) !== JSON.stringify(expected))
         throw new Error("管理程序候选启动证明与版本收据不一致");
     return { ...candidate, management: expected.verification };
 }

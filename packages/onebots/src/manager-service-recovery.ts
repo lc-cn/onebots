@@ -21,17 +21,23 @@ import { LaunchdServicePlatform } from "./service-platform-launchd.js";
 import { WindowsServicePlatform } from "./service-platform-windows.js";
 import { verifyServiceMigrationProcessesWhileLocked } from "./service-migration-processes.js";
 import { acquireControlWorkspace } from "./control/workspace.js";
+import { isEmptyBusinessWorkspace } from "./workspace-admission/registration-plan.js";
 import { readRunningManagerCandidate, managerCandidateDigest } from "./manager-runtime/identity.js";
 import { verifyManagerServiceCandidate } from "./manager-service-upgrade-candidate.js";
 import { pathToFileURL } from "node:url";
 import type { ServicePlatform } from "./service-platform.js";
 import type { ServiceScope } from "./service-definition.js";
 import { inspectWindowsServiceDirectorySecurity } from "./windows-service-security.js";
+import {
+    inspectManagerReadiness,
+    inspectManagerServiceIdentity,
+} from "./manager-service-readiness.js";
 
 export interface ManagerServiceRecoveryDependencies {
     platform?: ServicePlatform;
     confirmStopped?: typeof verifyServiceMigrationProcessesWhileLocked;
     inspectManager?: typeof inspectMigrationManager;
+    inspectReadiness?: typeof inspectManagerReadiness;
     inspectRuntime?: typeof inspectManagerRuntime;
 }
 const failure = () => new Error("尚不能证明原操作已完成，保留恢复记录；未重放系统动作");
@@ -197,15 +203,17 @@ export async function reconcileManagerServiceOperation(
                     )
                         throw failure();
                 } else {
-                    const manager = await (dependencies.inspectManager ?? inspectMigrationManager)(
+                    const manager = await inspectManagerServiceIdentity(
                         spec.workspace,
+                        dependencies.inspectManager,
+                        dependencies.inspectReadiness,
                     );
-                    const runtime = inspectRuntime(spec, manager.manager.version);
+                    const runtime = inspectRuntime(spec, manager.version);
                     const after = await platform.inspect();
                     if (
-                        manager.manager.pid !== before.processId ||
+                        manager.pid !== before.processId ||
                         !isDeepStrictEqual(before, after) ||
-                        inspectRuntime(spec, manager.manager.version) !== runtime ||
+                        inspectRuntime(spec, manager.version) !== runtime ||
                         !captured.verifyRemaining()
                     )
                         throw failure();
@@ -234,6 +242,7 @@ export async function reconcileManagerServiceOperation(
             const pending = readServiceMigrationPending(spec.workspace);
             const installMayHaveGate =
                 record.action === "install" &&
+                spec.schemaVersion === 1 &&
                 ["restoring-enablement", "verifying", "releasing"].includes(record.phase);
             const releaseInstallGate = installMayHaveGate && pending !== null;
             if (
@@ -255,21 +264,25 @@ export async function reconcileManagerServiceOperation(
                         : new WindowsServicePlatform(host, scope, files.definition));
             const confirm =
                 dependencies.confirmStopped ??
-                (host.platform === "win32"
-                    ? async () => {
-                          if (record.action === "uninstall") {
-                              assertServiceAbsent(scope, host);
-                              return true;
-                          }
-                          const state = await platform!.inspect();
-                          return (
-                              state.state === "stopped" &&
-                              !state.running &&
-                              state.quiescent &&
-                              state.processId === null
-                          );
-                      }
-                    : verifyServiceMigrationProcessesWhileLocked);
+                (record.action === "install" &&
+                spec.schemaVersion === 2 &&
+                isEmptyBusinessWorkspace(spec.workspace)
+                    ? async () => true // 全新安装尚无运行权，只允许目录/锁；下方仍核验 OS 服务明确停止。
+                    : host.platform === "win32"
+                      ? async () => {
+                            if (record.action === "uninstall") {
+                                assertServiceAbsent(scope, host);
+                                return true;
+                            }
+                            const state = await platform!.inspect();
+                            return (
+                                state.state === "stopped" &&
+                                !state.running &&
+                                state.quiescent &&
+                                state.processId === null
+                            );
+                        }
+                      : verifyServiceMigrationProcessesWhileLocked);
             if (!(await confirm(spec.workspace))) throw failure();
             if (record.action === "uninstall") {
                 if (

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { nativeHelperEnvironment } from "./native-helper-environment.js";
 import { parseWindowsNativeStatus, type WindowsNativeStatus } from "./service-platform-windows.js";
 
 const MAX_STATUS_BYTES = 64 * 1024;
@@ -12,14 +13,15 @@ const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/;
 export interface WindowsPublishedControlStatus {
     revision: number;
     manager: { id: string; version: string; pid: number };
+    admission: { state: "verified" | "rejected" };
     gateway: {
         desired: "running" | "stopped";
         actual: "starting" | "running" | "stopping" | "stopped" | "failed";
-    };
+    } | null;
 }
 
 interface PipeRequest {
-    version: 2;
+    version: 3;
     requestId: string;
     operation: "status" | "publish_status" | "invalidate_status" | "control_request";
     control?: WindowsPublishedControlStatus;
@@ -86,6 +88,7 @@ function runWindowsNativeExchange(
             args,
             {
                 encoding: "buffer",
+                env: nativeHelperEnvironment(),
                 timeout: timeoutMs + 2000,
                 maxBuffer: MAX_CONTROL_RESULT_BYTES + 64 * 1024,
                 windowsHide: true,
@@ -159,12 +162,12 @@ export class WindowsHostControlClient {
     }
 
     async status(): Promise<WindowsNativeStatus> {
-        return this.send({ version: 2, requestId: this.id("status"), operation: "status" });
+        return this.send({ version: 3, requestId: this.id("status"), operation: "status" });
     }
 
     async publish(control: WindowsPublishedControlStatus): Promise<WindowsNativeStatus> {
         return this.send({
-            version: 2,
+            version: 3,
             requestId: this.id("publish"),
             operation: "publish_status",
             control: structuredClone(control),
@@ -176,7 +179,7 @@ export class WindowsHostControlClient {
         revision: number,
     ): Promise<WindowsNativeStatus> {
         return this.send({
-            version: 2,
+            version: 3,
             requestId: this.id("invalidate"),
             operation: "invalidate_status",
             manager: structuredClone(manager),
@@ -197,7 +200,7 @@ export class WindowsHostControlClient {
         const status = await this.status();
         if (!status.state.control) throw new Error("Windows 管理服务尚未发布可用控制状态");
         const request: PipeRequest = {
-            version: 2,
+            version: 3,
             requestId: this.id("control"),
             operation: "control_request",
             binding: {
@@ -225,6 +228,7 @@ export class WindowsHostControlClient {
             throw new Error("Windows 管理管道状态响应超过 64KiB");
         throwHostFailure(response, request.requestId);
         const parsed = parseWindowsNativeStatus(response.toString("utf8"));
+        if (parsed.version !== 3) throw new Error("Windows 原生宿主不支持来源准入协议");
         if (parsed.requestId !== request.requestId)
             throw new Error("Windows 管理管道响应与请求不匹配");
         return parsed;
@@ -240,7 +244,7 @@ function throwHostFailure(bytes: Buffer, requestId: string): void {
     }
     if (!value || typeof value !== "object" || Array.isArray(value)) return;
     const response = value as Record<string, unknown>;
-    if (response.version !== 2 || response.requestId !== requestId || response.ok !== false) return;
+    if (response.version !== 3 || response.requestId !== requestId || response.ok !== false) return;
     const error = response.error;
     if (!error || typeof error !== "object" || Array.isArray(error))
         throw new Error("Windows 管理管道失败响应无效");
@@ -275,7 +279,7 @@ function parsePipeResponse(
         throw new Error("Windows 管理管道响应无效");
     const response = value as Record<string, unknown>;
     if (
-        response.version !== 2 ||
+        response.version !== 3 ||
         response.requestId !== requestId ||
         typeof response.ok !== "boolean"
     )

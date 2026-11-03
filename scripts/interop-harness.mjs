@@ -6,6 +6,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
+import { registerInstalledWorkspace } from "./workspace-admission-fixture.mjs";
 
 const MAX_LOG_BYTES = 64 * 1024;
 const LOCAL_PROTOCOL_DIRECTORIES = Object.freeze({
@@ -41,9 +42,11 @@ export async function startManagedGateway({
         throw new Error("互操作协议选择无效");
     const managerPort = gatewayPort;
     const artifacts = path.join(workspace, "runtime-artifacts");
-    const managerWorkspace = fs.mkdtempSync(
+    const managerFixtureRoot = fs.mkdtempSync(
         path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "ob-i-"),
     );
+    const managerWorkspace = path.join(managerFixtureRoot, "workspace");
+    fs.mkdirSync(managerWorkspace, { mode: 0o700 });
     const { packControlRuntime } = await import(
         pathToFileURL(path.join(root, "scripts/pack-control-runtime.mjs")).href
     );
@@ -58,6 +61,11 @@ export async function startManagedGateway({
         // CI 必须验证同一提交的宿主和协议，不能混用 npm 上一版工件。
         extensionDirectories: ["adapters/adapter-mock", ...protocolDirectories],
     });
+    const authorityDirectory = registerInstalledWorkspace({
+        packageRoot: path.join(root, "packages/onebots"),
+        workspace: managerWorkspace,
+        authorityDirectory: path.join(managerFixtureRoot, "authority"),
+    });
     const manager = startProcess(
         process.execPath,
         [
@@ -65,6 +73,8 @@ export async function startManagedGateway({
             "run",
             "--data-dir",
             managerWorkspace,
+            "--authority-dir",
+            authorityDirectory,
             "--host",
             "127.0.0.1",
             "--port",
@@ -75,6 +85,7 @@ export async function startManagedGateway({
         root,
     );
     manager.workspace = managerWorkspace;
+    manager.workspaceFixtureRoot = managerFixtureRoot;
     children.push(manager);
 
     const { createLocalControlClient } = await import(
@@ -530,8 +541,11 @@ export async function stopProcess(processHandle) {
             }
         }
     } finally {
-        if (processHandle.workspace)
-            fs.rmSync(processHandle.workspace, { recursive: true, force: true });
+        if (processHandle.workspaceFixtureRoot || processHandle.workspace)
+            fs.rmSync(processHandle.workspaceFixtureRoot ?? processHandle.workspace, {
+                recursive: true,
+                force: true,
+            });
     }
 }
 

@@ -2,7 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { ControlClient, createHttpControlTransport } from "@onebots/core/control";
-import { startControlHost } from "./host.js";
+import {
+    startRegisteredControlHost as startControlHost,
+    registerControlTestWorkspace,
+} from "../../test-utils/control-test-workspace.js";
 import { createLocalControlClient } from "../client/local-control.js";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -14,6 +17,7 @@ it.each(["stopped", "running"] as const)(
     "真实 HTTP 修复保留 %s 意图，并遵守显式重启许可和幂等回执",
     async desired => {
         const root = fs.mkdtempSync("/tmp/ob-repair-http-");
+        await registerControlTestWorkspace(root);
         cleanups.push(async () => fs.rmSync(root, { recursive: true, force: true }));
         const host = await startControlHost({
             workspace: root,

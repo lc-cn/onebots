@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { controlManagerService } from "../manager-service-controller.js";
 import { managerServiceCommand } from "./manager-service-command.js";
 import type { ManagerServiceRecord } from "../manager-service-journal.js";
+import { LegacyManagerSourceRegistrationRequiredError } from "../manager-service-preflight.js";
 vi.mock("../manager-service-controller.js", () => ({ controlManagerService: vi.fn() }));
 afterEach(() => {
     vi.mocked(controlManagerService).mockReset();
@@ -72,10 +73,26 @@ describe("manager lifecycle CLI mapping", () => {
         );
         expect(await managerServiceCommand("start", { system: false })).toMatchObject({
             exitCode: 1,
-            output: expect.stringContaining("先执行 onebots migrate"),
+            output: expect.stringContaining("严格来源版不能直接迁移"),
         });
         expect(controlManagerService).toHaveBeenCalledTimes(1);
     });
+    it.each(["start", "restart"] as const)(
+        "%s shows the typed v1 offline prerequisite without inventing an operation id",
+        async action => {
+            const error = new LegacyManagerSourceRegistrationRequiredError("system");
+            error.message = "synthetic-unknown-secret /private/third-party";
+            vi.mocked(controlManagerService).mockRejectedValue(error);
+            const result = await managerServiceCommand(action, { system: true });
+            expect(result.exitCode).toBe(1);
+            expect(result.output).toContain("未创建操作记录或派发系统动作");
+            expect(result.output).toContain("update --manager --yes --system");
+            expect(result.output).toContain("workspace plan/register");
+            expect(result.output).not.toMatch(
+                /操作标识暂不可用|synthetic-unknown-secret|third-party/,
+            );
+        },
+    );
     it("unknown exceptions do not leak OS output or private paths", async () => {
         vi.mocked(controlManagerService).mockRejectedValue(
             new Error("synthetic-secret /private/spec"),

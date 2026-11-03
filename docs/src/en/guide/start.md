@@ -1,7 +1,7 @@
 # Quick start
 
 ::: tip Version boundary
-This guide applies to OneBots versions that include the persistent manager. Migrate legacy installations first; do not combine legacy entrypoints or installers with the new managed runtime.
+This guide requires a OneBots version with workspace admission support. Existing control v1 services need the [offline upgrade procedure](/guide/workspace-admission); earlier monolithic deployments cannot directly run strict-version `onebots migrate`. Do not mix legacy entrypoints or installers with the new runtime.
 :::
 
 ## Start from source (Linux/macOS)
@@ -11,10 +11,20 @@ Use Node.js 24 and the repository's pinned pnpm version. From the repository roo
 ```sh
 pnpm install --frozen-lockfile
 pnpm build
-node packages/onebots/lib/bin.js serve --data-dir ./workspace
+umask 077
+mkdir -m 700 ./workspace ./workspace-authority
+node packages/onebots/lib/bin.js workspace plan --data-dir ./workspace \
+  --authority-dir ./workspace-authority > workspace-plan.json
+# Read the plan and its session-revocation impact; substitute the actual digest.
+node packages/onebots/lib/bin.js workspace register \
+  --plan-file workspace-plan.json --confirm '<plan.digest>'
+node packages/onebots/lib/bin.js serve --data-dir ./workspace \
+  --authority-dir ./workspace-authority
 ```
 
-Keep that terminal running. An empty workspace needs no platform accounts, protocols or frameworks. In another terminal, obtain a pairing code:
+Use new, empty directories for this example. Keep the plan outside `workspace/`; persist the authority separately and reuse it on restart without copying it with the business backup. Registration does not start the manager or gateway. An unregistered manager only serves a read-only maintenance page and cannot pair devices.
+
+Keep the last command running. An empty workspace needs no accounts, protocols or frameworks. In another terminal, obtain a pairing code:
 
 ```sh
 node packages/onebots/lib/bin.js auth bootstrap --data-dir ./workspace
@@ -22,18 +32,7 @@ node packages/onebots/lib/bin.js auth bootstrap --data-dir ./workspace
 
 Open the management address (default `http://127.0.0.1:6727`) and enter the code. Management authentication uses pairing and sessions, not legacy username/password or a manually configured management token. See [login and recovery](/en/guide/management-login).
 
-On Windows, repository builds use Node.js for cleanup, so PowerShell/CMD does not need Git Bash. A foreground `serve` is suitable for local Web development, but it does not create the protected management pipe used by the SCM service; `auth bootstrap` cannot connect to that foreground process. For a **new workspace**, use a one-time deployment code in PowerShell:
-
-```powershell
-pnpm install --frozen-lockfile
-pnpm build
-$code = node --input-type=module -e "import { randomBytes } from 'node:crypto'; process.stdout.write(randomBytes(32).toString('base64url'))"
-$env:ONEBOTS_BOOTSTRAP_CODE = $code
-$code | Set-Clipboard
-node packages/onebots/lib/bin.js serve --data-dir .\workspace
-```
-
-Open the manager URL and paste the code within five minutes. Do not share it in chats, commit it, or pass it as a CLI argument. An authorized Web browser can generate codes for additional devices in **System → Devices & Access**. If all sessions are lost, restart with a fresh `ONEBOTS_RECOVERY_CODE` instead. The local CLI/TUI control pipe is unavailable in Windows foreground mode; use the installer below for a production SCM service. Do not reuse an initial code for an already paired workspace.
+On Windows, builds use Node.js for cleanup and do not require Git Bash. Use the **elevated installer below** for a new deployment: it prepares private ACLs, installs the SCM service and prints offline registration steps. Do not copy the POSIX directory commands. Foreground `serve` does not expose the protected SCM management pipe, and a deployment pairing code does not replace source registration or authorize takeover. Existing native installations without complete shutdown evidence cannot register directly; see the [Windows boundary](/guide/workspace-admission#windows-与证明边界).
 
 Select adapters, protocols and frameworks in **Extensions**. Confirm the complete dependency list; private download authorization is used only for that installation, and required peers are installed and verified together. Apply the verified runtime separately. Then add and save an account in **Accounts**, and add and save its outlet in **Protocols**. Complete platform login challenges in **Tasks**. Installing packages does not enable connections.
 
@@ -66,11 +65,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 
 You can inspect the downloaded script before executing it. `Bypass` applies only to this PowerShell process, without changing the system execution policy. Installers default to `.onebots` in your user directory; use the upgrade or migration workflow for existing installations.
 
-`install.sh` handles first-time Linux/macOS bootstrap: it installs the manager and matching Web assets, then delegates user-service installation, startup and status checks to the CLI. It does not select a default protocol or print permanent credentials. Windows uses `install.ps1` with the same boundary and additionally verifies the bundled native SCM host.
+`install.sh` installs the public manager and matching Web assets, verifies workspace admission capability, installs the user service and confirms that it remains stopped. It then prints the plan, explicit registration, startup and pairing commands for you to review and execute. It does not confirm registration for you or generate accounts or permanent credentials. `install.ps1` additionally verifies the bundled native SCM host and installs a system service. Sources are in `docs/src/public`.
 
 The installer downloads the published npm package; it does **not** install unpublished changes in your local checkout.
 
-**The script downloads from public npm and requires a published package containing the new architecture.** Missing management artifacts cause a clear failure while preserving the candidate directory; the legacy CLI is not executed. The workflow uses packages built from source to exercise real system-level systemd and user-level launchd lifecycle, legacy migration, and manager crash recovery on GitHub-hosted Ubuntu and macOS runners. Only a passing platform job is acceptance evidence. This does not mean that the architecture has been published to npm.
+**Public npm must contain a version with workspace admission support.** Missing artifacts or capabilities cause a clear failure while preserving the candidate; there is no fallback to the legacy CLI. CI uses source-built packages to test native systemd, launchd and manager recovery. Only a passing job is platform evidence for that version, and it does not prove npm publication.
 
 Repeating a completed bootstrap does not upgrade packages or restart services. Legacy configuration, existing runtimes, and interrupted installations are preserved for explicit migration or recovery. Re-running the installer is not a manager update; use `onebots update --manager`. Gateway runtime updates use the manager workflow described in [Update the gateway and manager](/en/guide/runtime-update).
 
@@ -78,6 +77,18 @@ The Windows SCM host, named-pipe transport, access controls, bootstrap installer
 
 ## System hosting
 
-With an installed architecture CLI, use `onebots install --data-dir <workspace>` to install a user service, then `onebots start`. Existing legacy services require migration and are never overwritten by first-time installation.
+For a new Linux/macOS user service, keep the workspace, authority and plan file separate:
 
-The OS hosts the manager service; CLI, TUI, and Web control the separate gateway through one control API. Native systemd, launchd, and Windows SCM lifecycle, legacy migration, injected-failure rollback, and patch upgrade have passed their platform CI jobs. Full machine reboot and recovery of real platform accounts still require deployment-environment acceptance.
+```sh
+onebots install --data-dir "$HOME/onebots-data" --authority-dir "$HOME/onebots-authority"
+# The service stays stopped. Review the plan and substitute its actual digest.
+onebots workspace plan --data-dir "$HOME/onebots-data" \
+  --authority-dir "$HOME/onebots-authority" > "$HOME/onebots-plan.json"
+onebots workspace register --plan-file "$HOME/onebots-plan.json" --confirm '<plan.digest>'
+onebots start
+onebots auth bootstrap --data-dir "$HOME/onebots-data"
+```
+
+To host an already registered foreground workspace, stop it normally first, then run `install` and `start` with the same data and authority directories; do not register again. Changing the authority is not a program update. Do not overwrite an old service definition; follow the [offline upgrade and recovery boundaries](/guide/workspace-admission).
+
+The OS hosts the manager; CLI, TUI and Web control the gateway through one API. Platform lifecycle, rollback and upgrade support require the corresponding version's CI and deployment evidence. Source implementation does not prove Windows, full-machine reboot or real-account recovery acceptance. Ordinary data-volume copy protection is not cross-host HA or global exclusion between machine clones.

@@ -32,6 +32,12 @@ export function parseManagerServiceUpgrade(
         if (previousSpec[key] !== target[key]) throw fail();
     }
     if (
+        previousSpec.schemaVersion === 2 &&
+        (target.schemaVersion !== 2 ||
+            previousSpec.authorityDirectory !== target.authorityDirectory)
+    )
+        throw fail();
+    if (
         typeof value.previousCandidateDigest !== "string" ||
         !/^[0-9a-f]{64}$/.test(value.previousCandidateDigest) ||
         typeof value.candidateDigest !== "string" ||
