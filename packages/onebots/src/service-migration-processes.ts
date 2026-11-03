@@ -75,7 +75,8 @@ function readReceipt(control: string): Receipt {
     if (
         Object.keys(value).sort().join() !== "hostname,managerId,phase,pid,schemaVersion" ||
         value.schemaVersion !== 1 ||
-        value.hostname !== os.hostname() ||
+        typeof value.hostname !== "string" ||
+        !value.hostname.trim() ||
         !["never-started", "active", "closed"].includes(String(value.phase))
     )
         throw fail();
@@ -90,6 +91,12 @@ function readReceipt(control: string): Receipt {
     )
         throw fail();
     return value as unknown as Receipt;
+}
+/** 迁移/关闭证明依赖历史 PID，必须属于当前主机；普通 closed 接管另行判断。 */
+function readLocalReceipt(control: string): Receipt {
+    const receipt = readReceipt(control);
+    if (receipt.hostname !== os.hostname()) throw fail();
+    return receipt;
 }
 function writeReceipt(control: string, value: Receipt, previous?: Receipt): void {
     const file = path.join(control, "process-ownership.json");
@@ -265,7 +272,7 @@ export async function verifyServiceMigrationProcessesWhileLocked(
 ): Promise<boolean> {
     try {
         const control = root(workspace);
-        const receipt = readReceipt(control);
+        const receipt = readLocalReceipt(control);
         if (receipt.pid !== null && !gone(receipt.pid)) return false;
         return await quiet(control, receipt.phase === "never-started");
     } catch {
@@ -289,10 +296,10 @@ export async function verifyNeverStartedServiceMigrationProcessesWhileLocked(
             expectedDesired,
         );
         const control = root(workspace);
-        const receipt = readReceipt(control);
+        const receipt = readLocalReceipt(control);
         if (receipt.phase !== "never-started" || !neverStartedQuiet(control)) return false;
         return (
-            readReceipt(control).phase === "never-started" &&
+            readLocalReceipt(control).phase === "never-started" &&
             inspectServiceMigrationRollbackWorkspace(workspace, operationId, expectedDesired) ===
                 workspaceState
         );
@@ -345,10 +352,25 @@ export async function claimServiceProcessOwnership(
             // acquireControlWorkspace has created this new directory while holding its lock.
         } else {
             previous = readReceipt(control);
+            const sameHost = previous.hostname === os.hostname();
+            if (!sameHost) {
+                // closed 只在宿主完成关闭且全部受管进程静止后写入。容器重建会改变
+                // hostname/PID 命名空间，旧 manager PID 不能与当前容器的 PID 比较。
+                // 仍要求明确停止、无历史网关实例；不把异常退出升级成跨主机接管证明。
+                const gateway = json(path.join(control, "gateway.json"));
+                if (
+                    previous.phase !== "closed" ||
+                    gateway.actual !== "stopped" ||
+                    gateway.instance !== undefined ||
+                    gateway.recoveryRequired !== false
+                )
+                    return false;
+            }
             if (previous.phase === "active" && previous.pid !== null && !gone(previous.pid))
                 return false;
             if (
                 previous.phase === "closed" &&
+                sameHost &&
                 previous.pid !== process.pid &&
                 previous.pid !== null &&
                 !gone(previous.pid)
@@ -358,7 +380,7 @@ export async function claimServiceProcessOwnership(
                 !(await quiet(
                     control,
                     previous.phase === "never-started",
-                    previous.phase !== "never-started",
+                    sameHost && previous.phase !== "never-started",
                 ))
             )
                 return false;
@@ -386,7 +408,7 @@ export async function closeServiceProcessOwnership(
     managerId: string,
 ): Promise<void> {
     const control = root(workspace),
-        receipt = readReceipt(control);
+        receipt = readLocalReceipt(control);
     if (
         receipt.phase !== "active" ||
         receipt.managerId !== managerId ||

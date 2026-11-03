@@ -225,6 +225,8 @@ jobs:
       - name: Verify installed npm management runtime
         run: node scripts/verify-manager-package.mjs
       - run: docker build -t onebots-control-ci .
+      - name: Verify Compose recreation with persistent bind mount and changed hostname
+        run: node scripts/verify-docker-compose-recreation.mjs onebots-control-ci
       - name: Verify blank Docker CLI and HTTP control service
         run: |
           docker run -d --name onebots-control-ci --mount type=volume,source=onebots-control-ci-data,target=/data onebots-control-ci

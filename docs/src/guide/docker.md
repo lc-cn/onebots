@@ -45,7 +45,11 @@ ICQQ 及其私有 SDK 不预置于基础镜像；需要时通过统一安装界�
 | `/data/data/` | 账号数据、数据库和业务日志 |
 | `/data/.control/` | 管理会话、操作、配置草稿及不可变依赖版本 |
 
-同机持久化需要保留 `.control`；跨容器备份恢复不能复制其中的历史 PID、会话和验证收据。旧 `/data/extensions` 不会作为新运行版本直接加载，应保留原数据并通过管理端重新安装所需扩展。
+同机持久化需要保留 `.control`。同一持久卷正常执行 `docker compose down` 后再 `docker compose up -d`，无需固定 `hostname`：只有管理服务完成正常关闭、写入 `closed` 所有权记录，且网关已停止、没有未决实例、worker 检查通过时，新容器才能接管。原有网关运行/停止意图、配置和管理认证会保留。
+
+强制终止、宿主掉电或关闭未完成可能留下 `active` 记录；若同时发生 hostname 改变，服务仍只开放读取与诊断，不会把无法确认的历史进程当作已退出。先运行 `docker exec --user 1000:1000 onebots node /app/packages/onebots/lib/bin.js doctor --data-dir /data --json --strict` 并保留现场，勿删除或手改 `.control/process-ownership.json` 来绕过检查。
+
+上述正常重建不等同于向另一主机迁移备份；跨主机恢复不能直接复制历史 PID、会话和验证收据作为当前主机的进程证明。旧 `/data/extensions` 不会作为新运行版本直接加载，应保留原数据并通过管理端重新安装所需扩展。
 
 入口以 root 准备卷并交给 `node` 用户（uid/gid 1000），随后降权运行管理服务。若卷不允许调整属主则明确失败；指定 `--user` 时须提前保证该用户可写 `/data`。不要通过开放管理目录给所有用户来绕过权限错误。
 
