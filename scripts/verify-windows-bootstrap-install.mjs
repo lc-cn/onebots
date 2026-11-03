@@ -27,69 +27,88 @@ function fixture(mode = "ok") {
 if "%~1"=="--input-type=module" goto capability-joined
 if "%~1"=="--input-type" if "%~2"=="module" goto capability-split
 if "%~1"=="-p" (
-  if not "%~2"=="parseInt(process.versions.node, 10)" exit /b 9
+  if not "%~2"=="parseInt(process.versions.node, 10)" goto exit-nine
   echo 24
-  exit /b 0
+  goto exit-zero
 )
 shift
 echo cli %*>>"%ONEBOTS_TEST_LOG%"
-if defined NODE_AUTH_TOKEN exit /b 8
-if defined NPM_TOKEN exit /b 8
-if defined SYNTHETIC_AUTH exit /b 8
+if defined NODE_AUTH_TOKEN goto exit-eight
+if defined NPM_TOKEN goto exit-eight
+if defined SYNTHETIC_AUTH goto exit-eight
 if "%~1"=="install" (
   >>"%ONEBOTS_TEST_LOG%" echo cli-command install
   if "%ONEBOTS_TEST_MODE%"=="install-fail" (
     >>"%ONEBOTS_TEST_LOG%" echo cli-mode install-fail
     >>"%ONEBOTS_TEST_LOG%" echo cli-exit 3
-    exit /b 3
+    goto exit-three
   )
   >>"%ONEBOTS_TEST_LOG%" echo cli-mode other
   >>"%ONEBOTS_TEST_LOG%" echo cli-exit 0
-  exit /b 0
+  goto exit-zero
 )
 if "%~1"=="status" (
   >>"%ONEBOTS_TEST_LOG%" echo cli-command status
   if "%ONEBOTS_TEST_MODE%"=="status-fail" (
     >>"%ONEBOTS_TEST_LOG%" echo cli-mode status-fail
     >>"%ONEBOTS_TEST_LOG%" echo cli-exit 3
-    exit /b 3
+    goto exit-three
   )
   if "%ONEBOTS_TEST_MODE%"=="invalid-status" echo {}
   if "%ONEBOTS_TEST_MODE%"=="unexpected-running" echo {}
   if not "%ONEBOTS_TEST_MODE%"=="invalid-status" if not "%ONEBOTS_TEST_MODE%"=="unexpected-running" echo {"schemaVersion":1,"installation":"control","manager":{"state":"stopped","ipc":"not-queried"},"serviceRecoveryRequired":false,"diagnostic":null,"gateway":{"actual":"unknown","desired":"unknown","recoveryRequired":null}}
   >>"%ONEBOTS_TEST_LOG%" echo cli-exit 0
-  exit /b 0
+  goto exit-zero
 )
 >>"%ONEBOTS_TEST_LOG%" echo cli-command unknown
 >>"%ONEBOTS_TEST_LOG%" echo cli-exit 10
-exit /b 10
+goto exit-ten
 :capability-joined
 >>"%ONEBOTS_TEST_LOG%" echo capability-argument joined
 goto capability
 :capability-split
 >>"%ONEBOTS_TEST_LOG%" echo capability-argument split
 :capability
-if defined NODE_AUTH_TOKEN exit /b 8
-if defined NPM_TOKEN exit /b 8
-if defined SYNTHETIC_AUTH exit /b 8
-if defined ONEBOTS_BOOTSTRAP_CODE exit /b 8
-if defined ONEBOTS_RECOVERY_CODE exit /b 8
+if defined NODE_AUTH_TOKEN goto exit-eight
+if defined NPM_TOKEN goto exit-eight
+if defined SYNTHETIC_AUTH goto exit-eight
+if defined ONEBOTS_BOOTSTRAP_CODE goto exit-eight
+if defined ONEBOTS_RECOVERY_CODE goto exit-eight
 "%ONEBOTS_TEST_REAL_NODE%" %*
 set "ONEBOTS_TEST_PROBE_RESULT=%ERRORLEVEL%"
 >>"%ONEBOTS_TEST_LOG%" echo capability-exit %ONEBOTS_TEST_PROBE_RESULT%
 exit /b %ONEBOTS_TEST_PROBE_RESULT%
+:exit-zero
+set "ONEBOTS_TEST_EXIT_CODE=0"
+goto return-result
+:exit-three
+set "ONEBOTS_TEST_EXIT_CODE=3"
+goto return-result
+:exit-eight
+set "ONEBOTS_TEST_EXIT_CODE=8"
+goto return-result
+:exit-nine
+set "ONEBOTS_TEST_EXIT_CODE=9"
+goto return-result
+:exit-ten
+set "ONEBOTS_TEST_EXIT_CODE=10"
+:return-result
+"%ONEBOTS_TEST_REAL_NODE%" -e "process.exit(%ONEBOTS_TEST_EXIT_CODE%)"
+set "ONEBOTS_TEST_EXIT_RESULT=%ERRORLEVEL%"
+>>"%ONEBOTS_TEST_LOG%" echo node-exit %ONEBOTS_TEST_EXIT_RESULT%
+exit /b %ONEBOTS_TEST_EXIT_RESULT%
 `),
     );
     fs.writeFileSync(
         path.join(bin, "npm.cmd"),
         batch(String.raw`@echo off
 echo npm %*>>"%ONEBOTS_TEST_LOG%"
-if defined NODE_AUTH_TOKEN exit /b 8
-if defined NPM_TOKEN exit /b 8
-if defined SYNTHETIC_AUTH exit /b 8
-if not exist "%NPM_CONFIG_USERCONFIG%" exit /b 8
-if not exist "%NPM_CONFIG_GLOBALCONFIG%" exit /b 8
-if "%ONEBOTS_TEST_MODE%"=="npm-fail" exit /b 3
+if defined NODE_AUTH_TOKEN goto exit-eight
+if defined NPM_TOKEN goto exit-eight
+if defined SYNTHETIC_AUTH goto exit-eight
+if not exist "%NPM_CONFIG_USERCONFIG%" goto exit-eight
+if not exist "%NPM_CONFIG_GLOBALCONFIG%" goto exit-eight
+if "%ONEBOTS_TEST_MODE%"=="npm-fail" goto exit-three
 mkdir node_modules\onebots\lib\control
 mkdir node_modules\onebots\lib\gateway
 mkdir node_modules\onebots\lib\native\win32-x64
@@ -101,7 +120,20 @@ if not "%ONEBOTS_TEST_MODE%"=="missing-capability" echo export const WORKSPACE_A
 echo gateway>node_modules\onebots\lib\gateway\entry.js
 if not "%ONEBOTS_TEST_MODE%"=="missing-native" echo native>node_modules\onebots\lib\native\win32-x64\onebots-windows-host.exe
 echo web>node_modules\@onebots\web\dist\index.html
-exit /b 0
+goto exit-zero
+:exit-zero
+set "ONEBOTS_TEST_EXIT_CODE=0"
+goto return-result
+:exit-three
+set "ONEBOTS_TEST_EXIT_CODE=3"
+goto return-result
+:exit-eight
+set "ONEBOTS_TEST_EXIT_CODE=8"
+:return-result
+"%ONEBOTS_TEST_REAL_NODE%" -e "process.exit(%ONEBOTS_TEST_EXIT_CODE%)"
+set "ONEBOTS_TEST_EXIT_RESULT=%ERRORLEVEL%"
+>>"%ONEBOTS_TEST_LOG%" echo npm-exit %ONEBOTS_TEST_EXIT_RESULT%
+exit /b %ONEBOTS_TEST_EXIT_RESULT%
 `),
     );
     const run = () =>
@@ -136,10 +168,16 @@ exit /b 0
     fs.writeFileSync(
         probeScript,
         String.raw`$ErrorActionPreference = 'Stop'
-if ($env:ONEBOTS_TEST_PROBE_KIND -eq 'install') {
-    $Arguments = @((Join-Path $env:ONEBOTS_HOME 'runtime/node_modules/onebots/lib/bin.js'), 'install', '--system', '--data-dir', (Join-Path $env:ONEBOTS_HOME 'data'))
-} else {
+$Bin = Join-Path $env:ONEBOTS_HOME 'runtime/node_modules/onebots/lib/bin.js'
+$Arguments = @($Bin, 'install', '--system', '--data-dir', (Join-Path $env:ONEBOTS_HOME 'data'))
+if ($env:ONEBOTS_TEST_PROBE_KIND -eq 'capability') {
     $Arguments = @('--input-type=module', '-e', "process.exit( $env:ONEBOTS_TEST_EXPECTED_EXIT );")
+} elseif ($env:ONEBOTS_TEST_PROBE_KIND -eq 'version') {
+    $Arguments = @('-p', 'unsupported-version-expression')
+} elseif ($env:ONEBOTS_TEST_PROBE_KIND -eq 'unknown') {
+    $Arguments = @($Bin, 'unknown')
+} elseif ($env:ONEBOTS_TEST_PROBE_KIND -eq 'secret') {
+    $env:SYNTHETIC_AUTH = 'synthetic-probe-secret'
 }
 & (Join-Path $PSScriptRoot 'bin/node.cmd') @Arguments
 exit $LASTEXITCODE
@@ -194,7 +232,7 @@ function failureDiagnostic(test, result) {
             .commands()
             .split(/\r?\n/u)
             .filter(line =>
-                /^(?:capability-argument (?:joined|split)|capability-exit (?:0|1|7|8|10)|cli-command (?:install|status|unknown)|cli-mode (?:install-fail|status-fail|other)|cli-exit (?:0|3|8|10))$/u.test(
+                /^(?:capability-argument (?:joined|split)|capability-exit (?:0|1|7|8|10)|cli-command (?:install|status|unknown)|cli-mode (?:install-fail|status-fail|other)|cli-exit (?:0|3|8|10)|(?:node|npm)-exit (?:0|3|8|9|10))$/u.test(
                     line,
                 ),
             ),
@@ -228,19 +266,26 @@ try {
     assert.doesNotMatch(bridge.commands(), /^cli /mu);
     process.stdout.write(`Windows capability bridge argument forms: ${forms.join(",")}\n`);
 
-    for (const [mode, exitCode] of [
-        ["ok", 0],
-        ["install-fail", 3],
+    for (const [mode, kind, exitCode] of [
+        ["ok", "install", 0],
+        ["install-fail", "install", 3],
+        ["ok", "secret", 8],
+        ["ok", "version", 9],
+        ["ok", "unknown", 10],
     ]) {
         const direct = fixture(mode);
-        const result = direct.probe(exitCode, "install");
+        const result = direct.probe(exitCode, kind);
         assert.equal(result.error, undefined);
         assert.equal(result.status, exitCode, failureDiagnostic(direct, result));
-        assert.match(direct.commands(), /^cli-command install\r?$/mu);
-        assert.match(direct.commands(), new RegExp(`^cli-exit ${exitCode}\\r?$`, "mu"));
+        assert.match(direct.commands(), new RegExp(`^node-exit ${exitCode}\\r?$`, "mu"));
+        if (kind === "install") {
+            assert.match(direct.commands(), /^cli-command install\r?$/mu);
+            assert.match(direct.commands(), new RegExp(`^cli-exit ${exitCode}\\r?$`, "mu"));
+        }
+        assert.doesNotMatch(direct.commands(), /synthetic-probe-secret/u);
         assert.equal(fs.existsSync(path.join(direct.home, ".manager-installed")), false);
     }
-    process.stdout.write("Windows install bridge exit checks: 0,3\n");
+    process.stdout.write("Windows mock executable exit checks: 0,3,8,9,10\n");
 
     const success = fixture();
     const installed = success.run();
@@ -291,6 +336,17 @@ try {
             assert.equal([...failed.commands().matchAll(/^capability-argument /gmu)].length, 1);
             assert.match(failed.commands(), /^capability-exit 1\r?$/mu);
             assert.doesNotMatch(failed.commands(), /bin\.js (?:install|status|start) /u);
+        }
+        if (mode === "npm-fail" || mode === "install-fail" || mode === "status-fail") {
+            const expectedExit = mode === "npm-fail" ? "npm" : "node";
+            assert.match(failed.commands(), new RegExp(`^${expectedExit}-exit 3\\r?$`, "mu"));
+            const expectedFailure =
+                mode === "status-fail" ? "系统服务状态检查失败" : "命令执行失败（退出码 3）";
+            assert.equal(
+                ((result.stdout ?? "") + (result.stderr ?? "")).includes(expectedFailure),
+                true,
+                "nonzero command must fail at its exit check, without a later fallback failure",
+            );
         }
         if (mode === "install-fail") {
             assert.match(failed.commands(), /^cli-mode install-fail\r?$/mu);
