@@ -97,6 +97,7 @@ assert.equal(
 );
 
 const temporary = fs.realpathSync(fs.mkdtempSync("/tmp/onebots-systemd-acceptance-"));
+const legacyHistoryDirectory = `${STATE_DIRECTORY}-acceptance-legacy-${path.basename(temporary)}`;
 const artifacts = path.join(temporary, "artifacts");
 const previousArtifacts = path.join(temporary, "previous-artifacts");
 const runtime = path.join(temporary, "runtime");
@@ -657,6 +658,7 @@ async function verifyLegacyMigration(port, operationIds) {
         workingDirectory: legacyRuntime,
     };
     fs.mkdirSync(STATE_DIRECTORY, { recursive: true, mode: 0o700 });
+    const legacyStateIdentity = fs.lstatSync(STATE_DIRECTORY);
     fs.writeFileSync(METADATA, `${JSON.stringify(legacy)}\n`, { mode: 0o600 });
     fs.writeFileSync(DEFINITION, renderSystemdUnit(legacy), { mode: 0o600 });
     execute("systemctl", ["daemon-reload"]);
@@ -939,12 +941,21 @@ async function verifyLegacyMigration(port, operationIds) {
     execute("systemctl", ["disable", "--now", SERVICE]);
     const absent = await eventually(
         () =>
-            execute("systemctl", ["show", SERVICE, "--property=ActiveState", "--property=MainPID"])
-                .stdout,
-        value => value.includes("ActiveState=inactive") && value.includes("MainPID=0"),
+            execute("systemctl", [
+                "show",
+                SERVICE,
+                "--property=ActiveState",
+                "--property=MainPID",
+                "--property=ControlPID",
+            ]).stdout,
+        value =>
+            value.includes("ActiveState=inactive") &&
+            value.includes("MainPID=0") &&
+            value.includes("ControlPID=0"),
         "测试创建的 legacy systemd 进程未退出，不能进入新安装验收",
     );
     assert.ok(absent);
+    assert.throws(() => process.kill(recoveredProcessId, 0), { code: "ESRCH" });
     fs.unlinkSync(DEFINITION);
     fs.unlinkSync(METADATA);
     execute("systemctl", ["daemon-reload"]);
@@ -955,6 +966,41 @@ async function verifyLegacyMigration(port, operationIds) {
         fs.readFileSync(path.join(legacyData, "acceptance-user-data.txt"), "utf8"),
         "legacy-preserve-me\n",
     );
+    const { inspectServiceRecoveryDetails } = await import(
+        pathToFileURL(path.join(runtime, "node_modules/onebots/lib/service-recovery-inspection.js"))
+            .href
+    );
+    assert.deepEqual(inspectServiceRecoveryDetails(STATE_DIRECTORY), {
+        serviceRecoveryRequired: false,
+        readable: true,
+        truncated: false,
+        operations: [],
+    });
+    const candidates = managerCandidateStates(STATE_DIRECTORY);
+    assert.ok(candidates.length > 0);
+    assert.ok(candidates.every(candidate => candidate.phase === "verified" && !candidate.error));
+    const currentState = fs.lstatSync(STATE_DIRECTORY);
+    assert.equal(currentState.isDirectory() && !currentState.isSymbolicLink(), true);
+    assert.equal(currentState.uid, 0);
+    assert.equal(currentState.dev, legacyStateIdentity.dev);
+    assert.equal(currentState.ino, legacyStateIdentity.ino);
+    assert.equal(fs.statSync(path.dirname(STATE_DIRECTORY)).dev, currentState.dev);
+    assert.throws(() => fs.lstatSync(legacyHistoryDirectory), { code: "ENOENT" });
+    // Both scenarios own this initially absent state directory on an isolated CI runner.
+    // Preserve the complete finished legacy fixture history on the same filesystem. A fresh
+    // install must not reinterpret its migration-only candidate repository as bootstrap state.
+    fs.renameSync(STATE_DIRECTORY, legacyHistoryDirectory);
+    const archived = fs.lstatSync(legacyHistoryDirectory);
+    assert.equal(archived.dev, currentState.dev);
+    assert.equal(archived.ino, currentState.ino);
+    assert.deepEqual(
+        fs.readFileSync(
+            path.join(legacyHistoryDirectory, "migrations", `${stopping.id}.journal.json`),
+        ),
+        recoveredJournal,
+    );
+    assert.throws(() => fs.lstatSync(STATE_DIRECTORY), { code: "ENOENT" });
+    process.stdout.write(`合成 legacy 迁移完整历史留档：${legacyHistoryDirectory}\n`);
 }
 
 const port = await freePort();
@@ -967,16 +1013,25 @@ try {
     effectUnknown = false;
 
     effectUnknown = true;
-    const installedOutput = invokeCli([
-        "install",
-        "--system",
-        "--data-dir",
-        dataDirectory,
-        "--host",
-        "127.0.0.1",
-        "--port",
-        String(port),
-    ]).stdout;
+    const installedResult = invokeCli(
+        [
+            "install",
+            "--system",
+            "--data-dir",
+            dataDirectory,
+            "--host",
+            "127.0.0.1",
+            "--port",
+            String(port),
+        ],
+        [0, 1],
+    );
+    assert.equal(
+        installedResult.status,
+        0,
+        `全新管理服务安装失败；候选阶段=${JSON.stringify(managerCandidateStates(STATE_DIRECTORY))}；迁移记录=${JSON.stringify(migrationJournalStates())}`,
+    );
+    const installedOutput = installedResult.stdout;
     effectUnknown = false;
     operationIds.push(operation(installedOutput, "install"));
     assert.equal(fs.existsSync(DEFINITION), true);

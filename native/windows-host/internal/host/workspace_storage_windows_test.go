@@ -35,33 +35,29 @@ type privateTestFileIdentity struct {
 	FileID       [16]byte
 }
 
-func readPrivateTestFileIdentity(t *testing.T, handle windows.Handle) privateTestFileIdentity {
-	t.Helper()
-	var identity privateTestFileIdentity
-	if err := windows.GetFileInformationByHandleEx(handle, windows.FileIdInfo, (*byte)(unsafe.Pointer(&identity)), uint32(unsafe.Sizeof(identity))); err != nil {
-		t.Fatal(err)
-	}
-	return identity
-}
-
-func openPrivateTestFileIdentity(t *testing.T, name string) (windows.Handle, privateTestFileIdentity) {
+func snapshotPrivateTestFileIdentity(t *testing.T, name string) privateTestFileIdentity {
 	t.Helper()
 	pointer, err := windows.UTF16PtrFromString(name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Keep the original object alive without blocking MoveFileEx. os.Stat may defer
-	// loading a Windows file ID until SameFile, which would reopen the replaced path.
+	// Capture the ID now: os.Stat may defer this read until SameFile reopens the
+	// replaced path. Close before replacement: legacy rename can reject an open
+	// destination even when the observer specified FILE_SHARE_DELETE.
 	handle, err := windows.CreateFile(pointer, windows.FILE_READ_ATTRIBUTES, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
+	defer func() {
 		if err := windows.CloseHandle(handle); err != nil {
 			t.Error(err)
 		}
-	})
-	return handle, readPrivateTestFileIdentity(t, handle)
+	}()
+	var identity privateTestFileIdentity
+	if err := windows.GetFileInformationByHandleEx(handle, windows.FileIdInfo, (*byte)(unsafe.Pointer(&identity)), uint32(unsafe.Sizeof(identity))); err != nil {
+		t.Fatal(err)
+	}
+	return identity
 }
 
 func TestWorkspaceIdentityPersistsRenameAndRejectsOtherObjects(t *testing.T) {
@@ -100,7 +96,7 @@ func TestPrivateReplacementChecksExpectedStateAndFlushesSameBytesAgain(t *testin
 		t.Fatal(err)
 	}
 	file := filepath.Join(root, "auth.json")
-	beforeHandle, before := openPrivateTestFileIdentity(t, file)
+	before := snapshotPrivateTestFileIdentity(t, file)
 	if err := runWorkspaceStorage("private-file-inspect", file, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
@@ -111,17 +107,23 @@ func TestPrivateReplacementChecksExpectedStateAndFlushesSameBytesAgain(t *testin
 	if err := runPrivateFileReplace(replacementRequest(root, &wrong, "overwrite"), &bytes.Buffer{}); err == nil {
 		t.Fatal("wrong digest overwrote target")
 	}
+	if snapshotPrivateTestFileIdentity(t, file) != before {
+		t.Fatal("rejected replacement changed target identity")
+	}
+	if content, err := os.ReadFile(file); err != nil || string(content) != "first" {
+		t.Fatal("rejected replacement changed target contents")
+	}
 	sum := sha256.Sum256([]byte("first"))
 	digest := hex.EncodeToString(sum[:])
 	if err := runPrivateFileReplace(replacementRequest(root, &digest, "first"), &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
-	_, after := openPrivateTestFileIdentity(t, file)
+	after := snapshotPrivateTestFileIdentity(t, file)
+	// runPrivateFileReplace allocates its CREATE_NEW temporary while the old target
+	// still exists. Their live IDs must differ; closing this observer cannot cause
+	// the new temporary to reuse the old target's identity.
 	if before == after {
 		t.Fatal("same bytes skipped durable replacement")
-	}
-	if readPrivateTestFileIdentity(t, beforeHandle) != before {
-		t.Fatal("replacement changed the original open file identity")
 	}
 	if err := runWorkspaceStorage("private-file-inspect", file, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)

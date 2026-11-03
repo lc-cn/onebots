@@ -12,6 +12,9 @@ import { inspectServiceMigrationRecovery } from "./service-recovery-inspection.j
 import { getServiceFiles } from "./service-files.js";
 import type { ServiceHost } from "./service-host.js";
 import type { ServiceMigrationBackup } from "./service-migration-types.js";
+import { FileServiceMigrationJournal } from "./service-migration-journal.js";
+import { readManagerMigrationOrigin } from "./manager-migration-origin.js";
+import { managerBootstrapBindingDirectory } from "./manager-bootstrap-binding.js";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -179,6 +182,44 @@ describe.skipIf(process.platform === "win32")("历史迁移的进程退出与显
             status: "interrupted",
             recoveryRequired: true,
         });
+        expect(test.host.exec).not.toHaveBeenCalled();
+        expect(test.host.spawn).not.toHaveBeenCalled();
+    });
+
+    it("完整留档已结束的合成迁移历史后，新 bootstrap 不会消费旧候选仓库", async () => {
+        const test = await killedOwnerFixture();
+        const interrupted = inspectServiceMigration(test.files.stateDir, "cold-owner");
+        const journal = new FileServiceMigrationJournal(path.dirname(test.journalFile));
+        journal.save({
+            ...interrupted,
+            phase: "completed",
+            status: "failed",
+            recoveryRequired: false,
+            rolledBack: true,
+        });
+        const home = path.join(test.files.stateDir, "manager-artifacts");
+        fs.mkdirSync(path.join(home, "operations"), { recursive: true, mode: 0o700 });
+        expect(inspectServiceMigrationRecovery(test.files.stateDir)).toBe(false);
+        expect(readManagerMigrationOrigin(test.files.stateDir)).toBeNull();
+        expect(() => managerBootstrapBindingDirectory(home, "initial-install")).toThrow(
+            "已有安装历史但初始绑定缺失",
+        );
+
+        const archive = `${test.files.stateDir}-finished-legacy-fixture`;
+        const original = fs.lstatSync(test.files.stateDir);
+        const finishedBytes = fs.readFileSync(test.journalFile);
+        expect(fs.lstatSync(path.dirname(archive)).dev).toBe(original.dev);
+        expect(fs.existsSync(archive)).toBe(false);
+        fs.renameSync(test.files.stateDir, archive);
+        expect(fs.lstatSync(archive).ino).toBe(original.ino);
+        expect(fs.readFileSync(path.join(archive, "migrations/cold-owner.journal.json"))).toEqual(
+            finishedBytes,
+        );
+        expect(fs.existsSync(test.files.stateDir)).toBe(false);
+        fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+        expect(managerBootstrapBindingDirectory(home, "initial-install")).toBe(
+            path.join(home, "bootstrap"),
+        );
         expect(test.host.exec).not.toHaveBeenCalled();
         expect(test.host.spawn).not.toHaveBeenCalled();
     });
