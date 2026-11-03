@@ -1,0 +1,23 @@
+scripts/verify-windows-bootstrap-install.mjs
+  s_efe26f87c3b074::t_8972cdfcc029b3 52,55,64
+  s_efe26f87c3b074::t_f1f01870416997 124,140-148
+  s_efe26f87c3b074::t_cecb1eedb782b7 57-59
+  s_efe26f87c3b074::t_52fe9f61412c47 120-123,125-139,149-159,164,170-190,203-204,232-236
+  s_efe26f87c3b074::t_bf704608c667f4 27-28,39-42,48,50-51,53-54,63,65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ae1e3584af1842380351b1edfc26e29521339de9",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
