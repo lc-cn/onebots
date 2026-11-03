@@ -98,6 +98,17 @@ function readLocalReceipt(control: string): Receipt {
     if (receipt.hostname !== os.hostname()) throw fail();
     return receipt;
 }
+/** 只读本地诊断：不改变接管结果、不暴露主机名称或跳过收据权限/结构校验。 */
+export function processOwnershipHostnameDiagnostic(workspace: string): string | undefined {
+    try {
+        const receipt = readReceipt(root(workspace));
+        if (receipt.hostname === os.hostname()) return undefined;
+        return `历史 hostname 与当前主机不一致（历史收据阶段：${receipt.phase}）。请保留完整 /data，在原主机确认管理服务和受管进程正常关闭；同卷重建仅接受无未决进程的 closed 记录。当前不提供跨主机强制接管，请勿删除或手改所有权/worker 记录；无法确认时保持维护状态并人工核实。`;
+    } catch {
+        // 诊断不是修复入口；损坏、未知归属或不可读文件仍由原诊断检查报告，不能当作缺失。
+        return undefined;
+    }
+}
 function writeReceipt(control: string, value: Receipt, previous?: Receipt): void {
     const file = path.join(control, "process-ownership.json");
     if (previous) {

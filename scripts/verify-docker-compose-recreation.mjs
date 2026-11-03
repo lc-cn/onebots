@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { waitForComposeState } from "./compose-recreation-readiness.mjs";
 
 const image = process.argv[2];
 assert.ok(image && /^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$/.test(image), "必须指定已构建的测试镜像");
@@ -26,10 +27,10 @@ fs.writeFileSync(
         },
     }),
 );
-const docker = (args, input) =>
+const docker = (args, input, timeout = 120_000) =>
     execFileSync("docker", args, {
         encoding: "utf8",
-        timeout: 120_000,
+        timeout,
         maxBuffer: 4 * 1024 * 1024,
         stdio: ["pipe", "pipe", "pipe"],
         ...(input === undefined ? {} : { input }),
@@ -50,40 +51,39 @@ const dataNode = (script, readonly = true) =>
         ],
         script,
     );
-const node = (container, script) =>
-    docker(["exec", "-i", "--user", "1000:1000", container, "node", "--input-type=module"], script);
-const cli = (container, ...args) =>
-    JSON.parse(
-        docker([
-            "exec",
-            "--user",
-            "1000:1000",
-            container,
-            "node",
-            "/app/packages/onebots/lib/bin.js",
-            "control",
-            ...args,
-            "--data-dir",
-            "/data",
-        ]),
+const node = (container, script, timeout) =>
+    docker(
+        ["exec", "-i", "--user", "1000:1000", container, "node", "--input-type=module"],
+        script,
+        timeout,
     );
+const control = (container, args, timeout) =>
+    JSON.parse(
+        docker(
+            [
+                "exec",
+                "--user",
+                "1000:1000",
+                container,
+                "node",
+                "/app/packages/onebots/lib/bin.js",
+                "control",
+                ...args,
+                "--data-dir",
+                "/data",
+            ],
+            undefined,
+            timeout,
+        ),
+    );
+const cli = (container, ...args) => control(container, args);
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-async function up() {
+async function up(expected) {
     compose("up", "-d");
     const container = compose("ps", "-q", "onebots").trim();
     assert.ok(container, "测试容器未创建");
-    const deadline = performance.now() + 60_000;
-    let lastError;
-    while (performance.now() < deadline) {
-        try {
-            cli(container, "status");
-            return container;
-        } catch (error) {
-            lastError = error;
-        }
-        await sleep(200);
-    }
-    throw lastError ?? new Error("测试管理服务未就绪");
+    await waitForComposeState(timeout => control(container, ["status"], timeout), expected);
+    return container;
 }
 function snapshot(container) {
     return JSON.parse(
@@ -128,7 +128,7 @@ async function readyProtocol(container) {
 
 let container;
 try {
-    container = await up();
+    container = await up({ ownership: true, desired: "running", actual: "running" });
     // 创建真实管理认证状态，配对码只在子命令内存中，不输出、不写入验收日志。
     docker([
         "exec",
@@ -145,6 +145,8 @@ try {
     node(
         container,
         fs.readFileSync(new URL("./prepare-compose-recreation.mjs", import.meta.url), "utf8"),
+        // 安装自身允许 10 分钟，其后还有激活、配置验证与应用；普通 Docker 命令仍为 2 分钟。
+        15 * 60_000,
     );
     assert.equal(cli(container, "start").status, "succeeded");
     await readyProtocol(container);
@@ -163,7 +165,7 @@ try {
         assert.equal(receipt.phase, "closed", "正常关闭必须写入 closed 记录");
         assert.equal(receipt.hostname, before.hostname);
         assert.equal(receipt.pid, 1, "验收须覆盖管理服务 PID 1 在容器重建时复用");
-        container = await up();
+        container = await up({ ownership: true, desired, actual: desired });
         const after = snapshot(container);
         assert.notEqual(after.hostname, before.hostname, "必须由 Docker 分配新的默认 hostname");
         const status = cli(container, "status");
@@ -181,7 +183,7 @@ try {
     const beforeCrash = snapshot(container);
     compose("kill", "-s", "SIGKILL");
     compose("down");
-    container = await up();
+    container = await up({ ownership: false, desired: "stopped", actual: "failed" });
     const afterCrash = snapshot(container);
     assert.notEqual(afterCrash.hostname, beforeCrash.hostname);
     assert.deepEqual(cli(container, "status").processOwnership, { available: false });

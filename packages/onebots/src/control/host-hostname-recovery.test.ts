@@ -11,9 +11,13 @@ import { createLocalControlClient } from "../client/local-control.js";
 import {
     claimServiceProcessOwnership,
     verifyServiceMigrationProcesses,
-    verifyNeverStartedServiceMigrationProcessesWhileLocked,
 } from "../service-migration-processes.js";
-import { allocateConfigurationVerification } from "../configuration/configuration-verify-ownership.js";
+import {
+    allocateConfigurationVerification,
+    writeConfigurationVerificationOwner,
+} from "../configuration/configuration-verify-ownership.js";
+
+const posix = it.skipIf(process.platform === "win32");
 
 const directories: string[] = [];
 const hosts: Array<Awaited<ReturnType<typeof startControlHost>>> = [];
@@ -45,7 +49,7 @@ function receipt(root: string) {
     return { file, value: JSON.parse(fs.readFileSync(file, "utf8")) };
 }
 
-it("正常关闭后 hostname 改变，保留运行意图并恢复真实网关，不修改配置或配对身份", async () => {
+posix("正常关闭后 hostname 改变，保留运行意图并恢复真实网关，不修改配置或配对身份", async () => {
     const root = workspace();
     const initial = await start(root);
     const initialStatus = await initial.client.status();
@@ -77,7 +81,7 @@ it("正常关闭后 hostname 改变，保留运行意图并恢复真实网关，
     expect(fs.readFileSync(path.join(root, ".control/auth.json"))).toEqual(auth);
 });
 
-it("跨 hostname 接管保留 stopped 意图，不自动启动网关", async () => {
+posix("跨 hostname 接管保留 stopped 意图，不自动启动网关", async () => {
     const root = workspace();
     const initial = await start(root);
     expect((await initial.client.gateway("stop")).status).toBe("succeeded");
@@ -91,7 +95,7 @@ it("跨 hostname 接管保留 stopped 意图，不自动启动网关", async () 
     expect((await reopened.client.status()).processOwnership).toEqual({ available: true });
 });
 
-it.each(["active", "never-started"])(
+posix.each(["active", "never-started"])(
     "跨 hostname 的 %s 记录仍拒绝接管且不改写证据",
     async phase => {
         const root = workspace();
@@ -117,7 +121,7 @@ it.each(["active", "never-started"])(
     },
 );
 
-it("closed 历史 manager PID 在新容器复用时，不据此认定旧 manager 存活", async () => {
+posix("closed 历史 manager PID 在新容器复用时，不据此认定旧 manager 存活", async () => {
     const root = workspace();
     const initial = await start(root);
     await initial.host.close();
@@ -133,7 +137,7 @@ it("closed 历史 manager PID 在新容器复用时，不据此认定旧 manager
     }
 });
 
-it("跨 hostname closed 只允许普通接管，不能作为迁移静止或冷回退证明", async () => {
+posix("跨 hostname closed 只允许普通接管，不能作为迁移静止证明", async () => {
     const root = workspace();
     const initial = await start(root);
     await initial.host.close();
@@ -144,61 +148,67 @@ it("跨 hostname closed 只允许普通接管，不能作为迁移静止或冷�
     expect(await verifyServiceMigrationProcesses(root)).toBe(true);
     vi.spyOn(os, "hostname").mockReturnValue(`rebuilt-${randomUUID()}`);
     expect(await verifyServiceMigrationProcesses(root)).toBe(false);
-    const release = acquireControlWorkspace(root);
-    try {
-        expect(await verifyNeverStartedServiceMigrationProcessesWhileLocked(root, "test")).toBe(
-            false,
+});
+
+posix.each([{ actual: "failed", recoveryRequired: true }, { operations: [{ status: "running" }] }])(
+    "closed 与未静止网关状态不一致时拒绝跨 hostname 接管 (%j)",
+    async patch => {
+        const root = workspace();
+        const initial = await start(root);
+        await initial.host.close();
+        const gateway = path.join(root, ".control/gateway.json");
+        fs.writeFileSync(
+            gateway,
+            JSON.stringify({ ...JSON.parse(fs.readFileSync(gateway, "utf8")), ...patch }),
         );
-    } finally {
-        release();
-    }
-});
+        const previous = receipt(root);
+        const before = fs.readFileSync(previous.file);
+        vi.spyOn(os, "hostname").mockReturnValue(`rebuilt-${randomUUID()}`);
+        const release = acquireControlWorkspace(root);
+        try {
+            expect(await claimServiceProcessOwnership(root, randomUUID(), false)).toBe(false);
+            expect(fs.readFileSync(previous.file)).toEqual(before);
+        } finally {
+            release();
+        }
+    },
+);
 
-it.each([
-    { actual: "failed", recoveryRequired: true },
-    { instance: { id: randomUUID(), pid: process.pid } },
-    { operations: [{ status: "running" }] },
-])("closed 与未静止网关状态不一致时拒绝跨 hostname 接管 (%j)", async patch => {
+posix("closed 跨 hostname 仍检查当前 hostname 的存活 worker，不清理或发信号", async () => {
     const root = workspace();
     const initial = await start(root);
     await initial.host.close();
-    const gateway = path.join(root, ".control/gateway.json");
-    fs.writeFileSync(
-        gateway,
-        JSON.stringify({ ...JSON.parse(fs.readFileSync(gateway, "utf8")), ...patch }),
-    );
-    const previous = receipt(root);
-    const before = fs.readFileSync(previous.file);
     vi.spyOn(os, "hostname").mockReturnValue(`rebuilt-${randomUUID()}`);
-    const release = acquireControlWorkspace(root);
-    try {
-        expect(await claimServiceProcessOwnership(root, randomUUID(), false)).toBe(false);
-        expect(fs.readFileSync(previous.file)).toEqual(before);
-    } finally {
-        release();
-    }
-});
-
-it("closed 跨 hostname 仍检查 worker，保留未知/存活 owner 不清理或发信号", async () => {
-    const root = workspace();
-    const initial = await start(root);
-    await initial.host.close();
-    const { directory } = allocateConfigurationVerification(
+    const { directory, owner: allocation } = allocateConfigurationVerification(
         path.join(root, ".control/generation-verifications"),
     );
+    const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+    await once(exited, "exit");
+    writeConfigurationVerificationOwner(directory, {
+        ...allocation,
+        parentPid: exited.pid!,
+        workerPid: process.pid,
+        phase: "running",
+    });
     const owner = path.join(directory, "owner.json");
     const before = fs.readFileSync(owner);
-    vi.spyOn(os, "hostname").mockReturnValue(`rebuilt-${randomUUID()}`);
     const release = acquireControlWorkspace(root);
     try {
         expect(await claimServiceProcessOwnership(root, randomUUID(), false)).toBe(false);
         expect(fs.readFileSync(owner)).toEqual(before);
+        writeConfigurationVerificationOwner(directory, {
+            ...allocation,
+            parentPid: exited.pid!,
+            workerPid: exited.pid!,
+            phase: "running",
+        });
+        expect(await claimServiceProcessOwnership(root, randomUUID(), false)).toBe(true);
     } finally {
         release();
     }
 });
 
-it("跨 hostname closed 凭据权限异常不能自动修复或接管", async () => {
+posix("跨 hostname closed 凭据权限异常不能自动修复或接管", async () => {
     const root = workspace();
     const initial = await start(root);
     await initial.host.close();
@@ -209,6 +219,56 @@ it("跨 hostname closed 凭据权限异常不能自动修复或接管", async ()
     try {
         expect(await claimServiceProcessOwnership(root, randomUUID(), false)).toBe(false);
         expect(fs.statSync(previous.file).mode & 0o777).toBe(0o644);
+    } finally {
+        release();
+    }
+});
+
+posix("closed 即使记录的旧网关 PID 已退出，也不能跨 hostname 接管含实例的状态", async () => {
+    const root = workspace();
+    const initial = await start(root);
+    await initial.host.close();
+    const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+    await once(exited, "exit");
+    const gateway = path.join(root, ".control/gateway.json");
+    fs.writeFileSync(
+        gateway,
+        JSON.stringify({
+            ...JSON.parse(fs.readFileSync(gateway, "utf8")),
+            instance: { id: randomUUID(), pid: exited.pid },
+        }),
+    );
+    vi.spyOn(os, "hostname").mockReturnValue(`rebuilt-${randomUUID()}`);
+    const release = acquireControlWorkspace(root);
+    try {
+        expect(await claimServiceProcessOwnership(root, randomUUID(), false)).toBe(false);
+    } finally {
+        release();
+    }
+});
+
+posix("实际 closed 记录不替代残留旧 hostname worker 的归属证明", async () => {
+    const root = workspace();
+    const initial = await start(root);
+    const exited = spawn(process.execPath, ["-e", ""], { stdio: "ignore" });
+    await once(exited, "exit");
+    const { directory, owner } = allocateConfigurationVerification(
+        path.join(root, ".control/generation-verifications"),
+    );
+    writeConfigurationVerificationOwner(directory, {
+        ...owner,
+        parentPid: exited.pid!,
+        workerPid: exited.pid!,
+        phase: "running",
+    });
+    await initial.host.close();
+    expect(receipt(root).value.phase).toBe("closed");
+    const before = fs.readFileSync(path.join(directory, "owner.json"));
+    vi.spyOn(os, "hostname").mockReturnValue(`rebuilt-${randomUUID()}`);
+    const release = acquireControlWorkspace(root);
+    try {
+        expect(await claimServiceProcessOwnership(root, randomUUID(), false)).toBe(false);
+        expect(fs.readFileSync(path.join(directory, "owner.json"))).toEqual(before);
     } finally {
         release();
     }

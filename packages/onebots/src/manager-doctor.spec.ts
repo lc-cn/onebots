@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runManagerDoctor, type ManagerDoctorCheck } from "./manager-doctor.js";
 import type { ManagerServiceStatus } from "./manager-service-status.js";
@@ -107,6 +108,54 @@ function fixture() {
     return { root, workspace, host, diagnostics, deps, service };
 }
 describe("manager doctor read-only diagnostics", () => {
+    it("hostname 不匹配时说明阶段与安全边界，但不改变诊断失败、文件或进程状态", async () => {
+        const f = fixture();
+        f.diagnostics.processOwnership.available = false;
+        const file = path.join(f.workspace, ".control/process-ownership.json");
+        const content = JSON.stringify({
+            schemaVersion: 1,
+            hostname: "historical-hostname-private",
+            phase: "active",
+            managerId: randomUUID(),
+            pid: 1,
+        });
+        fs.writeFileSync(file, content, { mode: 0o600 });
+        const report = await runManagerDoctor(
+            { dataDir: f.workspace, strict: true },
+            f.host,
+            f.deps,
+        );
+        const check = report.checks.find(item => item.id === "process-ownership");
+        expect(check?.status).toBe("fail");
+        expect(check?.message).toContain("hostname 与当前主机不一致");
+        expect(check?.message).toContain("active");
+        expect(check?.message).toContain("请勿删除或手改");
+        expect(JSON.stringify(report)).not.toContain("historical-hostname-private");
+        expect(fs.readFileSync(file, "utf8")).toBe(content);
+        expect(f.host.spawn).not.toHaveBeenCalled();
+    });
+    it("权限无效的收据不读取 hostname，也不会把不可读归属当作缺失或修复", async () => {
+        const f = fixture();
+        f.diagnostics.processOwnership.available = false;
+        const file = path.join(f.workspace, ".control/process-ownership.json");
+        fs.writeFileSync(
+            file,
+            JSON.stringify({
+                schemaVersion: 1,
+                hostname: "sensitive-hostname",
+                phase: "active",
+                managerId: randomUUID(),
+                pid: 1,
+            }),
+            { mode: 0o644 },
+        );
+        const report = await runManagerDoctor({ dataDir: f.workspace }, f.host, f.deps);
+        expect(report.checks.find(item => item.id === "process-ownership")).toMatchObject({
+            status: "fail",
+            message: "管理服务进程所有权证据检查失败，历史记录不可确认。",
+        });
+        expect(fs.statSync(file).mode & 0o777).toBe(0o644);
+    });
     it("原生终端缺失只给出可操作警告，不把管理服务误报为失败", async () => {
         const f = fixture();
         f.deps.inspectTerminal.mockResolvedValue(false);

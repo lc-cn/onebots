@@ -302,6 +302,27 @@ describe("管理服务迁移进程证明", () => {
 });
 
 describe("caller-owned workspace lock process verification", () => {
+    it("untouched never-started rollback proof rejects only a hostname mismatch", async () => {
+        const f = rollbackFixture();
+        const release = acquireControlWorkspace(f.workspace);
+        try {
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(true);
+            vi.spyOn(os, "hostname").mockReturnValue(`rebuilt-${randomUUID()}`);
+            expect(
+                await verifyNeverStartedServiceMigrationProcessesWhileLocked(
+                    f.workspace,
+                    "migration-test",
+                ),
+            ).toBe(false);
+        } finally {
+            release();
+        }
+    });
     it("the strict rollback proof accepts only an untouched never-started receipt", async () => {
         const f = rollbackFixture();
         const unlock = acquireControlWorkspace(f.workspace);
