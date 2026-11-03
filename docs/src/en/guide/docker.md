@@ -132,6 +132,14 @@ Released versions use version tags, e.g. `ghcr.io/lc-cn/onebots:1.0.0`.
 - Database and logs are not lost when the container is removed
 - Adapters and protocols installed by the extension center survive container recreation
 
+On the same persistent volume, a graceful `docker compose down` followed by `docker compose up -d` does not require a fixed hostname. A new container may claim a valid `closed` ownership receipt only when the gateway is stopped, no unresolved gateway instance remains, and worker checks pass. The gateway's running/stopped intent, configuration, and management authentication are preserved.
+
+A forced stop, host failure, or incomplete shutdown can leave an `active` receipt. If the hostname also changes, the manager stays available for reads and diagnosis but does not assume historical processes have exited. Run `docker exec --user 1000:1000 onebots node /app/packages/onebots/lib/bin.js doctor --data-dir /data --json --strict` and preserve the workspace; do not delete or edit `.control/process-ownership.json` to bypass the check. This same-volume recreation path does not make historical PIDs or verification receipts valid proof for migration to another host.
+
+**Copying `.control` across hosts is unsupported, even with a `closed` receipt.** This version cannot distinguish recreation on the same volume from a permission-preserving copy. Independent local workspace locks do not exclude each other, so the original and copy may both start. Exclude `.control` from cross-host backups, retain business data, pair again and install/verify extensions on the target, and confirm the original service has stopped before enabling target accounts.
+
+Retained download or configuration-verification worker records from the old hostname still block takeover, even when the manager receipt is `closed`. A matching PID in the new container cannot prove the historical worker has exited. Preserve these records for operator inspection; do not remove them or bypass hostname checks to force recovery.
+
 ## Custom adapters and protocols
 
 The empty manager does not preselect adapters or protocols. Install the required packages and their required peers through the management installation workflow, verify the candidate, and activate it explicitly. Do not replace the Docker command with legacy `-c/-r/-p` startup flags.

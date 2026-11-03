@@ -7,6 +7,7 @@ import { inspectManagerServiceStatus } from "./manager-service-status.js";
 import { inspectManagerDiagnostics } from "./manager-doctor-client.js";
 import { probeManagerWeb } from "./manager-doctor-probes.js";
 import { createDefaultServiceHost, type ServiceHost } from "./service-host.js";
+import { processOwnershipHostnameDiagnostic } from "./service-migration-processes.js";
 
 export interface ManagerDoctorCheck {
     id: string;
@@ -236,7 +237,10 @@ export async function runManagerDoctor(
         add(
             "process-ownership",
             before.processOwnership.available ? "pass" : "fail",
-            "管理服务进程所有权证据检查。",
+            before.processOwnership.available
+                ? "管理服务进程所有权证据检查。"
+                : (processOwnershipHostnameDiagnostic(target.workspace) ??
+                      "管理服务进程所有权证据检查失败，历史记录不可确认。"),
         );
         add(
             "migration",
