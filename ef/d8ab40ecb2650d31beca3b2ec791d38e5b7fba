@@ -1,0 +1,33 @@
+__tests__/unit/docker-build-context.spec.ts
+  s_efe26f87c3b074::t_1cfe649fa53138 3,10-11,102-104,108,119-122,126,134,154,158,163,167,170,175-181
+  s_efe26f87c3b074::t_46a428df699b09 123-125,193-198,220-237,240-243,264-277,292-294
+  s_efe26f87c3b074::t_e61a923e03ad37 189-192,199-200,211,238-239,263,278,280-291,296-298,300
+native/windows-host/internal/host/workspace_storage_windows_test.go
+  s_efe26f87c3b074::t_d640c2bda45f30 14,33-66,103,119-120,123-128
+native/windows-host/internal/host/pipe_windows_test.go
+  s_efe26f87c3b074::t_204c8502ad0706 100-104
+  s_efe26f87c3b074::t_d640c2bda45f30 12,99,109-110,113-116
+scripts/verify-system-service-lifecycle.mjs
+  s_efe26f87c3b074::t_596bad3cc4ca53 817-831
+packages/onebots/src/service-migration-cold-inspection.spec.ts
+  s_efe26f87c3b074::t_bc5d39469f8815 132-141
+  s_efe26f87c3b074::t_f4d3f47609e9b2 1-30,37-64,71-72,74-77,91-92,104-121,125-131,155-160,166-173,177,181-185
+  s_efe26f87c3b074::t_5b1bd3784f8371 96-101
+  s_efe26f87c3b074::t_5db8505efa59e9 31-36,65-70,73,78-90,93-95,102-103,122-124,142-154,161-165,174-176,178-180
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "efd8ab40ecb2650d31beca3b2ec791d38e5b7fba",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
