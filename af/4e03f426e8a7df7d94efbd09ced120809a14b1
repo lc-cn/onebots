@@ -1,0 +1,745 @@
+scripts/verify-manager-package.mjs
+  s_efe26f87c3b074::t_04ea52d8a9f5ca 182
+  s_efe26f87c3b074::t_3577dedad7e59e 10,77,137
+  s_efe26f87c3b074::t_ae6f25d5fcbfb3 78-83
+packages/onebots/src/cli/manager-update.ts
+  s_efe26f87c3b074::t_0958be4cabbc11 45,67-68,71,103,113
+  s_efe26f87c3b074::t_43afce309ef2a1 69-70
+packages/onebots/src/windows-manager-startup.ts
+  s_efe26f87c3b074::t_52e141fbf159e3 1-10
+  s_efe26f87c3b074::t_c851657f775f98 11-12
+packages/onebots/src/cli/manager-foreground-built.spec.ts
+  s_efe26f87c3b074::t_bc503514f590cf 10-12,76-80,82-85,92
+  s_efe26f87c3b074::t_0a9b61424d6adc 81
+packages/onebots/src/cli/manager-service-install-command.spec.ts
+  s_efe26f87c3b074::t_87c06760d58c30 110-111
+packages/onebots/src/workspace-admission/command.ts
+  s_efe26f87c3b074::t_765ca3b33c65f6 13-15,20-30,35-36,40-43,53-68,72-74
+  s_efe26f87c3b074::t_f33b9ce3eadbb5 44-49
+  s_efe26f87c3b074::t_856cec2d5c4dd4 1-12,16-19,31-34,37-39,50-52,69-71,75-76
+packages/onebots/src/control/auth.ts
+  s_efe26f87c3b074::t_0e6a85dfec9b63 14-18,74-75,312-316,328-333,354-359
+  s_efe26f87c3b074::t_8adc0df5cef421 4,13,19,28,47-48,68,73,76-77,308-311,317-319,325-326,334,351-353,360-367
+native/windows-host/internal/host/workspace_anchor_windows.go
+  s_efe26f87c3b074::t_109dd2860f3a60 1-5,12,14-15,17,41-45,79-80,124
+  s_efe26f87c3b074::t_11710602f4d89c 23-40
+  s_efe26f87c3b074::t_8ede5b979c3710 6-11,13,16,18-22,46-78,81-123
+packages/onebots/src/manager-runtime/reader.ts
+  s_efe26f87c3b074::t_6283e7714fba58 15,18,55,62-63,81-83
+  s_efe26f87c3b074::t_43afce309ef2a1 7-10,56-61,64-80
+docs/src/guide/production.md
+  s_efe26f87c3b074::t_f2dbfbd25a210d 24
+  s_efe26f87c3b074::t_50d9ac7cd70f60 10-16,20-22,31,37-38,50,69-71,79-80,98-99,102-103,111
+packages/onebots/src/commands/install.tsx
+  s_efe26f87c3b074::t_43afce309ef2a1 13-16
+native/windows-host/internal/protocol/protocol.go
+  s_efe26f87c3b074::t_848e4932cd9b57 14,72-80
+  s_efe26f87c3b074::t_a942df5455190e 193-201
+docs/src/public/install.sh
+  s_efe26f87c3b074::t_4af0bcd5bc69d9 135-136
+  s_efe26f87c3b074::t_4fe9fa4147d587 110-114
+  s_efe26f87c3b074::t_5b07df52676134 9,29,121-122,129,131-132,134,137-139
+native/windows-host/internal/host/pipe_windows_test.go
+  s_efe26f87c3b074::t_f9017b99d15459 47,60,64,87-90,138-141,175-178
+packages/onebots/src/commands/doctor.tsx
+  s_efe26f87c3b074::t_6283e7714fba58 16-19,21
+  s_efe26f87c3b074::t_164ebc6926ad72 20
+packages/onebots/src/windows-native-status.ts
+  s_efe26f87c3b074::t_43afce309ef2a1 29,97-100,104,120-126,132-137,139-142,164-174
+  s_efe26f87c3b074::t_848e4932cd9b57 2,13-14,18,77,131,138,163
+.github/workflows/service-architecture.yml
+  s_efe26f87c3b074::t_b7828a7233eea6 104-105,234-235,270-272,287
+  s_efe26f87c3b074::t_3ecc32fede50c8 280
+packages/onebots/src/verification/manager-candidate-worker.ts
+  s_efe26f87c3b074::t_255298b3576999 136-138,147-151
+  s_efe26f87c3b074::t_700d5fc1cbf1aa 164
+  s_efe26f87c3b074::t_4f9738606552d8 28,44
+  s_efe26f87c3b074::t_439660ac481411 8,142
+  s_efe26f87c3b074::t_0d116477da31ff 5-7,9,33,49,133-135,139-141,144,146,152-153,157,183
+scripts/verify-manager-bootstrap.mjs
+  s_efe26f87c3b074::t_5a6eb4f90e4767 10-11,22-25,35-37,43-64,68-70,72-78,80-100,105-109,122-124,135-137,176-179,182-189,193-197,199-208,219-227,232-235,237-239,242-245,259-262,264-266
+  s_efe26f87c3b074::t_6f45bd37e9da0f 79,113,131,133-134,138-139,148
+  s_efe26f87c3b074::t_65c5d3988ea75c 7,140-147
+  s_efe26f87c3b074::t_d584db108095aa 149-160,268-270,276-278
+packages/onebots/src/control/host-hostname-recovery.test.ts
+  s_efe26f87c3b074::t_255298b3576999 8-10,107,165
+  s_efe26f87c3b074::t_b93f99e418c98b 57,90,132,149,188,223,240,264
+  s_efe26f87c3b074::t_d24095306a4ef6 11
+scripts/verify-launchd-service-lifecycle.mjs
+  s_efe26f87c3b074::t_69a9416cc1b4f6 542
+  s_efe26f87c3b074::t_c9c23ae5efa73e 314,392-395,397-405,407-409,411-412,427-428,444,520,540-541,543-548,679
+  s_efe26f87c3b074::t_23210559889f05 396
+  s_efe26f87c3b074::t_5bc2dda930c789 19-23
+  s_efe26f87c3b074::t_ffec732a78b08d 500-501,503-513
+  s_efe26f87c3b074::t_6c7aa8c74f58a0 502,514,539,549-550
+packages/onebots/src/service-platform-windows.ts
+  s_efe26f87c3b074::t_ad97ea386937b9 25-26,173-174,238-239
+  s_efe26f87c3b074::t_43afce309ef2a1 168-172,218-220
+packages/onebots/src/workspace-admission/files.ts
+  s_efe26f87c3b074::t_f2311d4882b797 12-22,24-37,79-87,89
+  s_efe26f87c3b074::t_2becaab0127a5f 5,51,58
+  s_efe26f87c3b074::t_765ca3b33c65f6 53-57,61-64,68-72,74-75,92-102,112-116,119-123,139-143,147-151,160-165,172-177,197-201
+  s_efe26f87c3b074::t_9dfe4c22844652 6,128,154-159,166-167
+  s_efe26f87c3b074::t_3257eae0321946 1-4,7-11,38-50,52,59-60,65-67,73,76-78,90-91,103-111,117-118,124-127,129-138,144-146,152-153,168-171,178-196,202-203
+  s_efe26f87c3b074::t_0aa9914d43c421 23,88
+packages/onebots/src/install-script.spec.ts
+  s_efe26f87c3b074::t_21969cd5496f09 33-34,126,130,132-135
+  s_efe26f87c3b074::t_80d5fc4093b3e4 58-61,136-138
+  s_efe26f87c3b074::t_68317703f611e1 186-202
+  s_efe26f87c3b074::t_10c30133b34087 56
+packages/onebots/src/manager-service-install.ts
+  s_efe26f87c3b074::t_2e809288d0b128 34-35,95,122-132,152
+  s_efe26f87c3b074::t_24384c60772644 79-82
+packages/onebots/src/configuration/configuration-recovery-store.ts
+  s_efe26f87c3b074::t_928d02b8a82623 96,124-126,128-151
+  s_efe26f87c3b074::t_cc1019e5d1bed0 127,152
+native/windows-host/internal/host/workspace_identity_windows.go
+  s_efe26f87c3b074::t_109dd2860f3a60 77,81-87
+  s_efe26f87c3b074::t_d64b31f33c206f 1-5,12,14-16,21-23,88
+  s_efe26f87c3b074::t_99375ee747e851 6-11,13,17-20,24-76,78-80
+  s_efe26f87c3b074::t_4545f796f8096b 89-90
+packages/onebots/src/service-host.ts
+  s_efe26f87c3b074::t_92bd9ec4683e83 6,72
+packages/onebots/src/workspace-admission/admission.ts
+  s_efe26f87c3b074::t_fe887f49d85d7b 1-2,19-23,26,36-38,67-68,73-76,83-89,97,113-115,122-123,132-133,144-146,152-153,157-161,166-168,178-182,189,199-200,211-212
+  s_efe26f87c3b074::t_91947e32afc48d 5,17,44-58,60-64,66,90-93,119,169-177,186
+  s_efe26f87c3b074::t_f2311d4882b797 154-156,202,207-209
+  s_efe26f87c3b074::t_765ca3b33c65f6 3-4,6-16,18,24-25,27-35,39-43,69-72,77-82,94-96,98-112,116-118,120-121,124-131,134-143,147-151,162-165,183-185,187-188,190-198,201,203-206,210
+  s_efe26f87c3b074::t_16517d952475fb 59,65
+docker-workspace.sh
+  s_efe26f87c3b074::t_e7a061d26d30bc 8-11
+  s_efe26f87c3b074::t_d5399d9c4903db 1-7,12-27
+packages/onebots/src/workspace-admission/registration-quiet.ts
+  s_efe26f87c3b074::t_928d02b8a82623 6-11,28,33,44-48,50-59,62-69
+  s_efe26f87c3b074::t_21becbbc5af698 1-5,12-14,17-23,26-27,36-43,70-72
+  s_efe26f87c3b074::t_765ca3b33c65f6 15-16,24-25,29-32,34-35
+  s_efe26f87c3b074::t_eac183e04723fc 49,60-61
+packages/onebots/src/commands/run.tsx
+  s_efe26f87c3b074::t_43afce309ef2a1 15-24
+  s_efe26f87c3b074::t_34eabe05faa0e9 9
+scripts/service-workspace-admission-acceptance.mjs
+  s_efe26f87c3b074::t_5bc2dda930c789 109,114
+  s_efe26f87c3b074::t_56307cc3553c59 93-96,98-103,108,110-113,115-137,143-144
+  s_efe26f87c3b074::t_ea9f30ffe13b2b 1-4,28-80,87-92
+  s_efe26f87c3b074::t_a39c5a8b9b971c 81-86
+  s_efe26f87c3b074::t_eac3b00ac55649 5-27
+  s_efe26f87c3b074::t_e7a061d26d30bc 97,104-107,138-142
+packages/onebots/src/cli/manager-service-command.ts
+  s_efe26f87c3b074::t_a05431d242bcc7 4,25-26,30
+packages/onebots/src/windows-private-file.ts
+  s_efe26f87c3b074::t_43afce309ef2a1 5-10,13-15,17-31,48-57
+  s_efe26f87c3b074::t_92bd9ec4683e83 3,16
+  s_efe26f87c3b074::t_f23a755984ced1 1-2,4,11-12,32-47,58
+scripts/verify-windows-bootstrap-install.mjs
+  s_efe26f87c3b074::t_21969cd5496f09 43-44,118,121,130,144,151
+  s_efe26f87c3b074::t_bd26bdbf654fe7 27,47-51,70-71,97,122-125,142
+  s_efe26f87c3b074::t_10c30133b34087 68
+native/windows-host/internal/host/platform_stub.go
+  s_efe26f87c3b074::t_99375ee747e851 21-25,27
+  s_efe26f87c3b074::t_f23a755984ced1 26
+  s_efe26f87c3b074::t_c96d294fa100e3 28
+packages/onebots/src/windows-workspace-identity.spec.ts
+  s_efe26f87c3b074::t_1807daa535dac4 2,14,17-19,23,25-29,38,42-45
+  s_efe26f87c3b074::t_d78712aaf919b4 1,7-8,13,15-16,46,65-67,75-77,83-85
+  s_efe26f87c3b074::t_9de53a60375d3f 9-12,47-64,68-74,78-82
+  s_efe26f87c3b074::t_da821e36ed8379 3-6,20-22,24,30-37,39-41
+packages/onebots/src/service-migration.ts
+  s_efe26f87c3b074::t_e57b29f22942a2 20-21,25-27
+  s_efe26f87c3b074::t_da821e36ed8379 22-24,35
+packages/onebots/src/manager-service-recovery.ts
+  s_efe26f87c3b074::t_580f0cb93710a3 24,270-271
+  s_efe26f87c3b074::t_2e809288d0b128 245
+  s_efe26f87c3b074::t_da821e36ed8379 31-34,206,208-209
+  s_efe26f87c3b074::t_24384c60772644 267-269,272-285
+  s_efe26f87c3b074::t_c5c141819deb19 40,211,214,216
+packages/onebots/src/cli/manager-service-command.spec.ts
+  s_efe26f87c3b074::t_67af5e224ca650 91-93
+  s_efe26f87c3b074::t_a05431d242bcc7 5,76,80-90,94-95
+packages/onebots/src/commands/migrate.tsx
+  s_efe26f87c3b074::t_43afce309ef2a1 10-13
+native/windows-host/internal/host/state_test.go
+  s_efe26f87c3b074::t_f9017b99d15459 29-30,55-58,92
+  s_efe26f87c3b074::t_945c56ae9e468a 27-28
+packages/onebots/src/windows-native-status.spec.ts
+  s_efe26f87c3b074::t_9de53a60375d3f 6-28,34-37,47,52-54
+  s_efe26f87c3b074::t_d78712aaf919b4 1-5,29-33,38-46,48-51,55-56
+docs/src/guide/workspace-admission.md
+  s_efe26f87c3b074::t_54f7da63f86f26 7-8
+  s_efe26f87c3b074::t_5650a7780135db 1-6,9-50,61-67
+  s_efe26f87c3b074::t_f2dbfbd25a210d 51-56,58-60
+  s_efe26f87c3b074::t_b0c9b2af6ee5c9 57
+packages/onebots/src/control/admission-page.ts
+  s_efe26f87c3b074::t_6e8eac78ed9711 1-4,9-35
+  s_efe26f87c3b074::t_ed12e12b07f55e 5-8
+packages/onebots/src/manager-service-upgrade-preparation.spec.ts
+  s_efe26f87c3b074::t_6f4d52eae61186 111
+  s_efe26f87c3b074::t_afa98b211d091f 122-123
+  s_efe26f87c3b074::t_da821e36ed8379 202-206,213-222
+packages/onebots/src/control/host-windows-status.spec.ts
+  s_efe26f87c3b074::t_555fb7e063a7b1 1,12,44,46-47,51,57-58,69,95-96,112-113,120,140,150,153,156,164-168,171
+  s_efe26f87c3b074::t_da821e36ed8379 14-43,45,48-50,52-56,59-68,81-83,101,111,114-119,151-152,154-155,157-163,169-170,172-174
+  s_efe26f87c3b074::t_880c8d677bfcd4 175-176
+docs/src/en/guide/production.md
+  s_efe26f87c3b074::t_50d9ac7cd70f60 10-16,20-22,24,31,37-38,50,69-71,79-80,98-99,102-103,111
+scripts/workspace-admission-fixture.mjs
+  s_efe26f87c3b074::t_ae6f25d5fcbfb3 7-12,15-18,21-31
+  s_efe26f87c3b074::t_3577dedad7e59e 1-6,13-14,19-20,32-48
+native/windows-host/internal/protocol/protocol_test.go
+  s_efe26f87c3b074::t_f06f5927e28297 11-13,23-25,41,132
+  s_efe26f87c3b074::t_f9017b99d15459 14,45-48,63-64,88-89,131
+  s_efe26f87c3b074::t_1ef9c1cf786538 26-40,42,133-134,150,155-157,166
+scripts/verify-windows-service-lifecycle.mjs
+  s_efe26f87c3b074::t_3395d4b32dc148 109,114
+  s_efe26f87c3b074::t_8619b2fcc40563 445-446,463
+  s_efe26f87c3b074::t_da821e36ed8379 430-444,447-462
+packages/onebots/src/control/host-storage.ts
+  s_efe26f87c3b074::t_7cf253ced28c36 12-32
+  s_efe26f87c3b074::t_12fb050ac4aafa 120-145
+  s_efe26f87c3b074::t_875623a15b59ed 1-11,33-119
+packages/onebots/src/control/diagnostics.spec.ts
+  s_efe26f87c3b074::t_d24095306a4ef6 1-2,4
+  s_efe26f87c3b074::t_a85d1f69e65d3b 21-29,31,33-35,37,99-100,102
+  s_efe26f87c3b074::t_69eb5a28ed2c2f 3,30,36,101
+packages/onebots/src/manager-service-upgrade-record.ts
+  s_efe26f87c3b074::t_43afce309ef2a1 34-38
+  s_efe26f87c3b074::t_34eabe05faa0e9 39
+packages/onebots/src/control/auth-state-validation.ts
+  s_efe26f87c3b074::t_0e6a85dfec9b63 20-25
+  s_efe26f87c3b074::t_eabdd0157c96fc 14
+  s_efe26f87c3b074::t_ed62ba9abccb22 4
+packages/onebots/src/control/auth-deployment-host.spec.ts
+  s_efe26f87c3b074::t_b93f99e418c98b 27,61
+  s_efe26f87c3b074::t_255298b3576999 5-7
+  s_efe26f87c3b074::t_d24095306a4ef6 8
+docs/src/guide/docker.md
+  s_efe26f87c3b074::t_6633e3e5485904 14-15,18,41,77,79,83
+  s_efe26f87c3b074::t_8b3e9c156d174f 59,85,87,89
+  s_efe26f87c3b074::t_12f6417196ee0b 51,53-55,69-70
+  s_efe26f87c3b074::t_b21b4d484a3dd3 81
+packages/onebots/src/manager-service-preflight.ts
+  s_efe26f87c3b074::t_e26331041103e3 9,12,14-20
+  s_efe26f87c3b074::t_a05431d242bcc7 4-8,10-11,13,21
+README.md
+  s_efe26f87c3b074::t_000d49906601cc 375,379-392,394-395,398,407,411,415-421,440,443,449,464,473,480,490-491,495
+  s_efe26f87c3b074::t_bb33f9019729c0 378
+Dockerfile
+  s_efe26f87c3b074::t_69a73ec93c35d0 73
+  s_efe26f87c3b074::t_e7a061d26d30bc 74
+  s_efe26f87c3b074::t_b5ab3e9ad266b7 79
+scripts/verify-windows-workspace-admission.mjs
+  s_efe26f87c3b074::t_808bf162b3b426 1-13,16-23,28-43,52-54,60-69,73-81,85-86,94-97,105,116-121,132-135,144,146
+  s_efe26f87c3b074::t_24384c60772644 14-15,24-27,44-51,55-56,70-72,82-84,87-93,98-104,106-115,136-143,145
+  s_efe26f87c3b074::t_ac78e3e51fcc4a 122-124,129-130
+  s_efe26f87c3b074::t_495ba6ebba6c5b 57-59,125-128,131
+packages/onebots/src/manager-service-upgrade-resume.ts
+  s_efe26f87c3b074::t_eeddd351530f7f 1-14,22-190
+  s_efe26f87c3b074::t_a802f2916dfe09 15-21
+Dockerfile.hf
+  s_efe26f87c3b074::t_6efaa96e25d023 1,5-6
+  s_efe26f87c3b074::t_b5ccf797bd166f 7
+  s_efe26f87c3b074::t_b5ab3e9ad266b7 25
+  s_efe26f87c3b074::t_d5399d9c4903db 18
+  s_efe26f87c3b074::t_69a73ec93c35d0 17
+packages/onebots/src/workspace-admission/registry.ts
+  s_efe26f87c3b074::t_765ca3b33c65f6 6-10,17-23,29-32,35-36,38-39,49-57,60-64,76,78,84-87,89-97,109-112,117-119,128-129,131-136,138-140,142-146,152-154,158-165,169-173,175-177,185-191,196-197
+  s_efe26f87c3b074::t_c51cd9a0d9a36e 1-5,11-15,24-28,33-34,37,40,43-46,48,67-71,75,82-83,88,98,106-108,113-116,120-121,130,141,147-151,155-157,166-168,174,178-183,193-195,198-199
+  s_efe26f87c3b074::t_ff069eab9f2851 16,41-42,58-59,65,184,192
+  s_efe26f87c3b074::t_14f4f5de618ac2 47,66,72-74,77,79-81,99-102,104-105
+  s_efe26f87c3b074::t_8f0dc29df35b90 122-127,137
+  s_efe26f87c3b074::t_da309ee57c84cf 103
+packages/onebots/src/control/configuration-bundled-cwd.spec.ts
+  s_efe26f87c3b074::t_a423bc01aeff66 58,76
+  s_efe26f87c3b074::t_d24095306a4ef6 8
+packages/onebots/src/control/configuration-repair-host.spec.ts
+  s_efe26f87c3b074::t_d24095306a4ef6 7
+  s_efe26f87c3b074::t_b93f99e418c98b 17
+  s_efe26f87c3b074::t_255298b3576999 4-6
+packages/onebots/src/cli/manager-service-status-command.ts
+  s_efe26f87c3b074::t_23210559889f05 19-20
+  s_efe26f87c3b074::t_da821e36ed8379 24-25
+packages/onebots/src/control/host-options.ts
+  s_efe26f87c3b074::t_69fb9f04c3a0dc 7-8
+  s_efe26f87c3b074::t_58f8d8cc7db2a7 1-2,22-37
+packages/onebots/src/service-files.ts
+  s_efe26f87c3b074::t_92bd9ec4683e83 13-14,16
+  s_efe26f87c3b074::t_2b20c3d16be053 15
+packages/onebots/src/control/service-migration-host.spec.ts
+  s_efe26f87c3b074::t_a85d1f69e65d3b 24,86,88-90,92
+  s_efe26f87c3b074::t_836c8f6023d873 7
+  s_efe26f87c3b074::t_d24095306a4ef6 9-10,12
+  s_efe26f87c3b074::t_57dc402325ca60 11,91
+docker-compose.yml
+  s_efe26f87c3b074::t_b7828a7233eea6 18-19,32
+  s_efe26f87c3b074::t_b5ab3e9ad266b7 30-31
+packages/onebots/src/windows-manager-status-publisher.ts
+  s_efe26f87c3b074::t_848e4932cd9b57 65-69,71,78-79,145
+packages/onebots/src/cli/manager-doctor-command.ts
+  s_efe26f87c3b074::t_6283e7714fba58 10,35
+packages/onebots/src/control/host-credential-transport.spec.ts
+  s_efe26f87c3b074::t_255298b3576999 7-9
+  s_efe26f87c3b074::t_b93f99e418c98b 22
+  s_efe26f87c3b074::t_d24095306a4ef6 10
+packages/onebots/src/manager-service-readiness.spec.ts
+  s_efe26f87c3b074::t_7dd9ed720ecb5a 4,6-11,16,25-27
+  s_efe26f87c3b074::t_16a3d8fb1b1079 1-3,5,12-15,17-24,28-30
+packages/onebots/src/control/host-verification.spec.ts
+  s_efe26f87c3b074::t_255298b3576999 9-11
+  s_efe26f87c3b074::t_b93f99e418c98b 31
+  s_efe26f87c3b074::t_d24095306a4ef6 12
+packages/onebots/src/control/auth-recovery-host.spec.ts
+  s_efe26f87c3b074::t_b93f99e418c98b 17,45
+  s_efe26f87c3b074::t_255298b3576999 4-6
+  s_efe26f87c3b074::t_d24095306a4ef6 7
+docs/src/public/install.ps1
+  s_efe26f87c3b074::t_4fe9fa4147d587 37,42,168,194
+  s_efe26f87c3b074::t_0674a9d951fd6b 78
+  s_efe26f87c3b074::t_4af0bcd5bc69d9 77,230-231
+  s_efe26f87c3b074::t_5b07df52676134 76,92,204,207,216,218-219,227,229,232-234
+  s_efe26f87c3b074::t_bd26bdbf654fe7 193
+native/windows-host/internal/host/workspace_replace_windows.go
+  s_efe26f87c3b074::t_65a7c57555d110 1-5,15,17-18,20,24,30-31,62-64,83-86,188
+  s_efe26f87c3b074::t_99375ee747e851 6-14,16,19,21-23,25-29,32-61,65-82,87-187
+packages/onebots/src/manager-doctor.ts
+  s_efe26f87c3b074::t_a85d1f69e65d3b 11-12,32,115-121,123-128,130-131
+  s_efe26f87c3b074::t_6283e7714fba58 24
+  s_efe26f87c3b074::t_8ad826a1c908cf 147-149
+  s_efe26f87c3b074::t_1a69a8cbf876f6 122,129
+docs/design/workspace-admission.md
+  s_efe26f87c3b074::t_51ac70bf13f0a6 1-2,4-62,65-79,82-104,108-112,131-143,152-162,164-169,171-188,190-209,214,216-223,225-228
+  s_efe26f87c3b074::t_b1531a09b570d7 80-81,120,163
+  s_efe26f87c3b074::t_66ff2b223e246b 144-151
+  s_efe26f87c3b074::t_a3e7b3356e34f6 210
+  s_efe26f87c3b074::t_861eb1e73e9ca8 213,215,232-233
+  s_efe26f87c3b074::t_3e5265361d4d38 64,106-107,113-119,122,125-130
+  s_efe26f87c3b074::t_e18abaa38420e5 3,234-235
+  s_efe26f87c3b074::t_bb33f9019729c0 170
+  s_efe26f87c3b074::t_7a0cdb643a7f7b 123-124,189,229
+  s_efe26f87c3b074::t_1086d6e2151ef6 63,105,121,224
+  s_efe26f87c3b074::t_dd91ff81df661c 211-212,230-231
+packages/onebots/src/manager-service-status.ts
+  s_efe26f87c3b074::t_8ad826a1c908cf 352,356-357,364-376
+  s_efe26f87c3b074::t_45cf0e52eafbfa 23,58,71,234
+  s_efe26f87c3b074::t_da821e36ed8379 353-355,358-363
+  s_efe26f87c3b074::t_ad97ea386937b9 233,235-236
+packages/onebots/src/control/auth-binding-context.ts
+  s_efe26f87c3b074::t_0e6a85dfec9b63 10-12,16-23,25-26,34-39
+  s_efe26f87c3b074::t_ed62ba9abccb22 1-9,13-15,24,27-33,40
+packages/onebots/src/manager-service-readiness.ts
+  s_efe26f87c3b074::t_da821e36ed8379 12-13,17-24
+  s_efe26f87c3b074::t_7db14750a9f572 1,3-8,26-27,32-34,70-72
+  s_efe26f87c3b074::t_7dd9ed720ecb5a 28-31,35-69
+  s_efe26f87c3b074::t_5317a492ee2851 2,9-11,14-16,25
+packages/onebots/src/workspace-admission/admission.spec.ts
+  s_efe26f87c3b074::t_67c51fe6f3b223 12,278-285,288-292,295
+  s_efe26f87c3b074::t_2e44b0b1bb746c 11,19,159,208-211,233-234,241-243,262-277
+  s_efe26f87c3b074::t_ceb06d213ef1fd 65-66
+  s_efe26f87c3b074::t_9e0182f47546c7 24,50-60,90,195
+  s_efe26f87c3b074::t_b8f150e6509fc7 1-10,13-18,20-23,25-49,61-64,67-77,79-89,91-95,97-99,101-137,139-158,160-162,164-172,174-180,182-186,188-194,196-199,201-207,212-217,219-221,223-232,235-237,239-240,244-251,253-256,258-261,296
+  s_efe26f87c3b074::t_3beb7b80e18924 78,96,100,138,163,173,181,187,200,218,222,238,252,257,286-287,293-294
+scripts/verify-installed-cli-tui.mjs
+  s_efe26f87c3b074::t_3577dedad7e59e 13,118
+  s_efe26f87c3b074::t_ae6f25d5fcbfb3 91-96
+scripts/verify-installed-web.mjs
+  s_efe26f87c3b074::t_84c8d2855108fc 4-6
+  s_efe26f87c3b074::t_ae6f25d5fcbfb3 241-246
+  s_efe26f87c3b074::t_3577dedad7e59e 14,263
+scripts/verify-manager-migration.mjs
+  s_efe26f87c3b074::t_5a6eb4f90e4767 9-10,14-16,22-23,31-38,44-52,54-58,60-61,63-69,72-75,79-86,92-102,105-106,109-119,125-134,137-150,153-155,157-169,177-179,184-189,191-193,196-203,209-211,217-221,224-240,245-247,249-255,258-262,264-267,269-272,274-281
+  s_efe26f87c3b074::t_6f45bd37e9da0f 103-104,107-108,120-123
+packages/onebots/src/control/host-admitted.ts
+  s_efe26f87c3b074::t_2581a0aa359b51 1-36,38-40,44-67,69-72,76,79-82,88-144,146,149-179,184-186,188-467,469-487
+  s_efe26f87c3b074::t_15d29b8327bb46 180-181,183,187
+  s_efe26f87c3b074::t_96b3864ade2764 37,468
+  s_efe26f87c3b074::t_12fb050ac4aafa 42,145,147-148
+  s_efe26f87c3b074::t_7093de895b9e00 41,43,68,73-75,77-78,83-87,182
+packages/onebots/src/commands/update.tsx
+  s_efe26f87c3b074::t_43afce309ef2a1 13-16
+  s_efe26f87c3b074::t_0958be4cabbc11 48
+packages/onebots/src/control/serve-options.ts
+  s_efe26f87c3b074::t_92bd9ec4683e83 4
+  s_efe26f87c3b074::t_34eabe05faa0e9 3,6,22,53-54
+  s_efe26f87c3b074::t_da821e36ed8379 55-59
+packages/onebots/src/windows-manager-startup.spec.ts
+  s_efe26f87c3b074::t_96b3864ade2764 1-17
+  s_efe26f87c3b074::t_82c8e05a6daebd 18-20
+packages/onebots/src/control/auth-binding-file.ts
+  s_efe26f87c3b074::t_0e6a85dfec9b63 30-35,38-43,45-50,61-71,83-87,91-96,100-105,110-111,117-118,124-125
+  s_efe26f87c3b074::t_02d5c30ce3c9e3 2-29,36-37,44,51-60,72-82,88-90,97-99,106-109,112-116,119-123,126-132
+  s_efe26f87c3b074::t_df5d474c22a1f4 1
+packages/onebots/src/control/serve-command.spec.ts
+  s_efe26f87c3b074::t_bc503514f590cf 29-35,37-45,47
+  s_efe26f87c3b074::t_966c85149ad4c5 36,46
+scripts/verify-system-service-lifecycle.mjs
+  s_efe26f87c3b074::t_c9c23ae5efa73e 13,457-462,466,477,695-696,701,708-723,923-926,930-931,933-937,939,1025,1043-1044,1046-1048,1051-1052,1361
+  s_efe26f87c3b074::t_00a10ecec1f0ed 463-465,467-475
+  s_efe26f87c3b074::t_23210559889f05 476,697-700,702-707,734-735,737,927-929,1049-1050
+  s_efe26f87c3b074::t_ffec732a78b08d 1005-1006,1008-1018
+  s_efe26f87c3b074::t_69a9416cc1b4f6 1045
+  s_efe26f87c3b074::t_5bc2dda930c789 16-20
+  s_efe26f87c3b074::t_41b12ed18e6cfb 1007,1019,1042,1053-1054
+packages/onebots/src/cli/manager-program-update.ts
+  s_efe26f87c3b074::t_da821e36ed8379 110-114,134-139,218,252-254
+  s_efe26f87c3b074::t_af6c07a993f256 115
+  s_efe26f87c3b074::t_0958be4cabbc11 39
+packages/onebots/src/control/auth-binding.spec.ts
+  s_efe26f87c3b074::t_0e6a85dfec9b63 7-11,32-35,38-41,47,69-78,81-84,89-90,113-122,183-186,204-206,220-222
+  s_efe26f87c3b074::t_df5d474c22a1f4 1-6,12,14-16,18-31,36,48-51,53-68,79-80,85-87,91-92,94-106,108-111,123-142,144-153,155-179,181-182,187-203,219,243
+  s_efe26f87c3b074::t_29a8d20b9a6581 13,88,207-211,223-242
+  s_efe26f87c3b074::t_79db45dbbee5f6 17
+  s_efe26f87c3b074::t_d304b603f4222b 37,43,93
+  s_efe26f87c3b074::t_ee2a08e665b92e 42
+  s_efe26f87c3b074::t_ba28e7b337d764 52,107,112,143,154,180
+  s_efe26f87c3b074::t_6b968182dd704f 44-46
+  s_efe26f87c3b074::t_8ffed5840236ca 212-218
+packages/onebots/src/windows-host-control-client.spec.ts
+  s_efe26f87c3b074::t_43afce309ef2a1 11
+  s_efe26f87c3b074::t_88d9aa99c52ef7 25,39,46,70,78,100,121,144,157,167,190,203,222,235
+packages/onebots/src/verification/manager-candidate.ts
+  s_efe26f87c3b074::t_3395d4b32dc148 328,333
+  s_efe26f87c3b074::t_6283e7714fba58 14,21-25,36-39,48,105-106,117-118,182-183,194-195
+  s_efe26f87c3b074::t_43afce309ef2a1 40-46
+  s_efe26f87c3b074::t_88fd75a5f1278f 47,49
+packages/onebots/src/control/host-upgrade.spec.ts
+  s_efe26f87c3b074::t_255298b3576999 8-11,32,60
+  s_efe26f87c3b074::t_d24095306a4ef6 12
+  s_efe26f87c3b074::t_b93f99e418c98b 36,56
+scripts/verify-installed-cross-entry-race.mjs
+  s_efe26f87c3b074::t_ae6f25d5fcbfb3 166-171,178-188
+  s_efe26f87c3b074::t_3577dedad7e59e 15
+packages/onebots/src/service-migration.spec.ts
+  s_efe26f87c3b074::t_da821e36ed8379 207-216
+  s_efe26f87c3b074::t_e57b29f22942a2 201-206,217-224
+packages/onebots/src/manager-service-upgrade-candidate-contract.ts
+  s_efe26f87c3b074::t_eeddd351530f7f 1-79
+  s_efe26f87c3b074::t_2cac80075703c6 80
+scripts/verify-container-workspace-preservation.mjs
+  s_efe26f87c3b074::t_c715ce7c5a3846 3,157-159,164,167-171,191-194
+  s_efe26f87c3b074::t_c6ec33f3efd3ce 10-11,34-37,39-42,64-66,69-73,75-77,81-97,101-104,114-115,121-140,196-198
+  s_efe26f87c3b074::t_9ef56fbd655bf0 1-2,4-9,12-33,38,43-63,67-68,78-80,98-100,105-113,116-120,141-156,195,199-202
+  s_efe26f87c3b074::t_e26331041103e3 74
+  s_efe26f87c3b074::t_2810e3f3408bbe 160-163,165-166,172-190
+README.en.md
+  s_efe26f87c3b074::t_000d49906601cc 98,102-119,122-124,128,131-138,141,144,150-158,161,172
+  s_efe26f87c3b074::t_bb33f9019729c0 101
+packages/onebots/src/manager-service-upgrade.ts
+  s_efe26f87c3b074::t_b209256dd2c379 31,40,93
+  s_efe26f87c3b074::t_43afce309ef2a1 106-108,183-187,227-232
+  s_efe26f87c3b074::t_3a60d38e7b6173 233
+packages/onebots/src/control/host.ts
+  s_efe26f87c3b074::t_2581a0aa359b51 5,19,53-58,62-70,72-74,77-80,82,85-88,90-95
+  s_efe26f87c3b074::t_14f4f5de618ac2 35
+  s_efe26f87c3b074::t_69fb9f04c3a0dc 15-18,21,59,61
+packages/onebots/src/verification/manager-candidate-proof.spec.ts
+  s_efe26f87c3b074::t_75d6d0a23d2573 15,23,35
+packages/onebots/test-utils/control-test-workspace.ts
+  s_efe26f87c3b074::t_a07392503f55c2 1-42
+deploy/1panel/onebots/0.5.0/docker-compose.yml
+  s_efe26f87c3b074::t_3395d4b32dc148 22-23
+  s_efe26f87c3b074::t_b7828a7233eea6 13,24
+packages/onebots/src/workspace-admission/admission-process.spec.ts
+  s_efe26f87c3b074::t_8f25c4bea3fd15 6,8-9,17,21-43,45-55
+  s_efe26f87c3b074::t_7f39c9b890c200 151
+  s_efe26f87c3b074::t_31edddd4dea978 11,179-185,187-190,192-195,197-199,201-204
+  s_efe26f87c3b074::t_e2a250fa832679 1-5,7,10,12-16,18-20,56-106,108-122,124-150,157-165,167-172,174-178
+  s_efe26f87c3b074::t_34b0b33a04256b 44,107,123,152-156,166,173,186,191,196,200
+packages/onebots/src/verification/manager-authentication.spec.ts
+  s_efe26f87c3b074::t_439660ac481411 10,21
+  s_efe26f87c3b074::t_bc503514f590cf 8
+  s_efe26f87c3b074::t_4f9738606552d8 9,16,19-20,22,35,37,75-76
+  s_efe26f87c3b074::t_255298b3576999 24-30,78-80
+packages/onebots/src/manager-service-upgrade-candidate.spec.ts
+  s_efe26f87c3b074::t_9de53a60375d3f 31-34,38-46,54-56,60-67,76-92,95-97,109-111,117-119
+packages/onebots/src/manager-service-upgrade-offline.spec.ts
+  s_efe26f87c3b074::t_9dd5390cdeea14 28-29,31
+  s_efe26f87c3b074::t_74ff945bc602d8 9-18,30,35-39,41-54,59-64,67-71,74-86,88-92,94-96,98-122,124-139,145-148,152-154,158-160,162-184,191-197,204-212,221-227,229-231,240-247,252-254,261-263
+packages/onebots/src/control/host-mcp.spec.ts
+  s_efe26f87c3b074::t_d24095306a4ef6 9
+  s_efe26f87c3b074::t_255298b3576999 6-8
+  s_efe26f87c3b074::t_a423bc01aeff66 26
+scripts/verify-docker-compose-recreation.mjs
+  s_efe26f87c3b074::t_eae98c5783a3e1 9,16,218
+  s_efe26f87c3b074::t_da821e36ed8379 27-30,33,137-142
+packages/onebots/src/control/host-transports.ts
+  s_efe26f87c3b074::t_763b23b715a77e 1-9,15-22,29-30,33-41,44-45,49-53,58-59,64-65,70-76,81-83,89-91
+  s_efe26f87c3b074::t_2581a0aa359b51 10-14,23-28,31-32,42-43,46-48,54-57,60-63,66-69,77-80,84-88
+packages/onebots/src/manager-service-bootstrap.ts
+  s_efe26f87c3b074::t_34eabe05faa0e9 100
+  s_efe26f87c3b074::t_2e809288d0b128 38,132,135-136
+  s_efe26f87c3b074::t_43afce309ef2a1 49-51
+  s_efe26f87c3b074::t_24384c60772644 133-134,236-239
+packages/onebots/src/native-helper-environment.spec.ts
+  s_efe26f87c3b074::t_da821e36ed8379 4-8,10
+  s_efe26f87c3b074::t_1807daa535dac4 1-3,9,11-13
+packages/onebots/src/windows-manager-status-publisher.spec.ts
+  s_efe26f87c3b074::t_43afce309ef2a1 33-41,43-48,66
+  s_efe26f87c3b074::t_88d9aa99c52ef7 18,264
+  s_efe26f87c3b074::t_3d68fb0408e55c 31-32,42,49
+packages/onebots/src/control/host.spec.ts
+  s_efe26f87c3b074::t_b93f99e418c98b 94,132,213,274,311,332,367-368,381-382,414,451,470,489,514-516
+  s_efe26f87c3b074::t_3886f5e6c10734 256-258,261-262
+  s_efe26f87c3b074::t_c73d0ac7093f4f 15-16
+  s_efe26f87c3b074::t_c4ff1166d8f7ba 246-255,259-260,265-268,270
+  s_efe26f87c3b074::t_255298b3576999 11-13
+  s_efe26f87c3b074::t_d24095306a4ef6 14
+docs/src/guide/start.md
+  s_efe26f87c3b074::t_16b0e80e0acf27 4,14-22,25-27,35,68,70,78-90,92
+packages/onebots/src/cli/manager-service-install-command.ts
+  s_efe26f87c3b074::t_fbeaf05480745e 109,122
+  s_efe26f87c3b074::t_da821e36ed8379 119-121
+  s_efe26f87c3b074::t_34eabe05faa0e9 6-7,20,61,71,82-83,101
+  s_efe26f87c3b074::t_43afce309ef2a1 66-67,84-87
+  s_efe26f87c3b074::t_0674a9d951fd6b 118
+  s_efe26f87c3b074::t_8508e43bbbf4e5 123-126
+packages/onebots/src/control/host-send.spec.ts
+  s_efe26f87c3b074::t_b93f99e418c98b 29,32,48,85,115
+  s_efe26f87c3b074::t_d24095306a4ef6 15
+  s_efe26f87c3b074::t_255298b3576999 12-14
+scripts/verify-hf-container.mjs
+  s_efe26f87c3b074::t_da821e36ed8379 72-73,136-141
+  s_efe26f87c3b074::t_b1c3474b60f5fc 158-169,175,179-182,212,228,230,237,239,242-244
+  s_efe26f87c3b074::t_eae98c5783a3e1 5,13,133-135,142,251,332,351
+  s_efe26f87c3b074::t_034dc115f1bdaf 198-200
+  s_efe26f87c3b074::t_743b5427cd794f 183-186,193-194
+  s_efe26f87c3b074::t_b5ccf797bd166f 170,187-192,195-197,201-203,214-223,225,233-234,241,246,364
+  s_efe26f87c3b074::t_23c2b2b119f31f 113-114,123-126
+  s_efe26f87c3b074::t_3819919bae6f99 171-174,176-178,204-211,213,226-227,229,231-232,235-236,238,240,245
+packages/onebots/src/configuration/configuration-application-reader.ts
+  s_efe26f87c3b074::t_16112a44d51d40 1-3,5-9,11-15,17-24,26-29,31-62,64-85
+  s_efe26f87c3b074::t_d3b90feaec4807 4,10,16,25,30,63
+packages/onebots/src/control/serve-options.spec.ts
+  s_efe26f87c3b074::t_1807daa535dac4 2
+  s_efe26f87c3b074::t_43afce309ef2a1 12-16
+  s_efe26f87c3b074::t_e6131dc22b519d 1,3,9-11,17-27
+  s_efe26f87c3b074::t_da821e36ed8379 4-8
+scripts/prepare-container-workspace.mjs
+  s_efe26f87c3b074::t_da821e36ed8379 8-17,19-29,31-32,34-36,41-50
+  s_efe26f87c3b074::t_eae98c5783a3e1 1-3,6-7,18,30,37-39,51
+  s_efe26f87c3b074::t_9105582785ff80 4-5,40
+  s_efe26f87c3b074::t_68317703f611e1 33
+packages/onebots/src/control/host-message-debug.spec.ts
+  s_efe26f87c3b074::t_b93f99e418c98b 13
+  s_efe26f87c3b074::t_255298b3576999 5-7,30-36
+  s_efe26f87c3b074::t_d24095306a4ef6 8
+packages/onebots/src/service-migration-processes.spec.ts
+  s_efe26f87c3b074::t_31edddd4dea978 224-225,248-255,257-270
+  s_efe26f87c3b074::t_28799af895cf1e 256
+packages/onebots/src/control/host-logs.spec.ts
+  s_efe26f87c3b074::t_d24095306a4ef6 8
+  s_efe26f87c3b074::t_b93f99e418c98b 18
+  s_efe26f87c3b074::t_255298b3576999 5-7
+docs/src/en/guide/start.md
+  s_efe26f87c3b074::t_16b0e80e0acf27 4,14-22,25-27,35,68,72,80-92,94
+packages/onebots/src/cli.ts
+  s_efe26f87c3b074::t_856cec2d5c4dd4 13-22
+scripts/verify-manager-upgrade.mjs
+  s_efe26f87c3b074::t_ae6f25d5fcbfb3 43-44,64-65,85-86
+  s_efe26f87c3b074::t_3577dedad7e59e 9,63,66-67,69,80,112,126,164,170,179
+packages/onebots/src/native-helper-environment.ts
+  s_efe26f87c3b074::t_92bd9ec4683e83 1-7
+native/windows-host/internal/host/cli.go
+  s_efe26f87c3b074::t_99375ee747e851 31-33,35-37,51-53,60
+  s_efe26f87c3b074::t_c96d294fa100e3 27,43-49
+  s_efe26f87c3b074::t_f23a755984ced1 28-30,34,38-42,50,54-58
+  s_efe26f87c3b074::t_ec4ad7c0f9b9d8 59,171,187-189
+packages/onebots/src/manager-service-upgrade-preparation.ts
+  s_efe26f87c3b074::t_b209256dd2c379 2
+  s_efe26f87c3b074::t_da821e36ed8379 85-87,102-104
+  s_efe26f87c3b074::t_c62a1238fd1a3b 8,11,28-47
+  s_efe26f87c3b074::t_eeddd351530f7f 48
+  s_efe26f87c3b074::t_42478ccbd1acc0 66,76,120,231,309
+  s_efe26f87c3b074::t_af6c07a993f256 340
+packages/onebots/src/cli/service-migration-command.spec.ts
+  s_efe26f87c3b074::t_da821e36ed8379 8-11
+  s_efe26f87c3b074::t_87c06760d58c30 43-44
+scripts/interop-harness.mjs
+  s_efe26f87c3b074::t_d0f82275e6ac82 9,45,48-49,64,67-68,76-77,88,544
+  s_efe26f87c3b074::t_ae6f25d5fcbfb3 65-66,545-548
+docker-authority.sh
+  s_efe26f87c3b074::t_b5ab3e9ad266b7 1-24
+packages/onebots/src/workspace-admission/registration.ts
+  s_efe26f87c3b074::t_8f0dc29df35b90 19,80,115-116,179-181,191-195
+  s_efe26f87c3b074::t_4a86f0e420ca53 155
+  s_efe26f87c3b074::t_eecf50350123eb 208
+  s_efe26f87c3b074::t_f882f55e0ff925 88-105,108-111
+  s_efe26f87c3b074::t_bc503514f590cf 122-130
+  s_efe26f87c3b074::t_f837404ad410ad 1-3,9-12,23-24,32-33,36-40,45-54,57-58,65-73,78-79,81-82,87,112-114,117-121,131,134,148,156-161,168-174,182-184,198-202,209-211,217-219,230-232
+  s_efe26f87c3b074::t_765ca3b33c65f6 4-8,13-18,20-22,25-31,34-35,41-44,55-56,59-64,74-77,83-86,132-133,135-147,149-154,162-167,177-178,185-190,196-197,203-207,212-216,220-229
+  s_efe26f87c3b074::t_9dfe4c22844652 175-176
+  s_efe26f87c3b074::t_1426ab071f68c4 106-107
+packages/onebots/src/service-migration-processes.ts
+  s_efe26f87c3b074::t_eecf50350123eb 182-183
+  s_efe26f87c3b074::t_21becbbc5af698 296-297,299-318
+  s_efe26f87c3b074::t_9dfe4c22844652 382,393-400
+  s_efe26f87c3b074::t_750b91f28398b4 298
+packages/onebots/src/manager-service-upgrade-record.spec.ts
+  s_efe26f87c3b074::t_43afce309ef2a1 58-62,65-71,253
+  s_efe26f87c3b074::t_e6131dc22b519d 56-57,63-64,72-73
+packages/onebots/src/control/host-configuration-repair.spec.ts
+  s_efe26f87c3b074::t_d24095306a4ef6 8
+  s_efe26f87c3b074::t_255298b3576999 5-7,20
+packages/onebots/src/configuration/configuration-application.ts
+  s_efe26f87c3b074::t_16112a44d51d40 1-2,4,450,452,462
+  s_efe26f87c3b074::t_8436451a22ab22 3
+packages/onebots/src/workspace-admission/registration-plan.ts
+  s_efe26f87c3b074::t_26753d423ffb7e 1-6,15,17,24-34,42-43,46-47,53-67,74-77,81-82,94,98-102,105,122,127-131
+  s_efe26f87c3b074::t_ceb06d213ef1fd 16,84,107,111
+  s_efe26f87c3b074::t_765ca3b33c65f6 7-14,18-23,35-41,44-45,48-52,68-73,78-80,83,85-93,95-97,103-104,106,108-110,112-121,123-126
+packages/onebots/src/manager-service-spec.spec.ts
+  s_efe26f87c3b074::t_e6131dc22b519d 18-24,35-37,49
+  s_efe26f87c3b074::t_43afce309ef2a1 25-34,38-40
+  s_efe26f87c3b074::t_24384c60772644 41-48
+docker-entrypoint.sh
+  s_efe26f87c3b074::t_d5399d9c4903db 4
+  s_efe26f87c3b074::t_b5ab3e9ad266b7 5
+packages/onebots/src/manager-doctor.spec.ts
+  s_efe26f87c3b074::t_a85d1f69e65d3b 89-92,94-95
+  s_efe26f87c3b074::t_72a1df8ac5cee8 93
+packages/onebots/src/manager-service-spec.ts
+  s_efe26f87c3b074::t_4515e90964b4eb 93-94,101-102
+  s_efe26f87c3b074::t_43afce309ef2a1 50-53,72-78
+  s_efe26f87c3b074::t_24384c60772644 89-90,95-100,103-105
+  s_efe26f87c3b074::t_b3ca47c1b6916a 88,91-92,106
+  s_efe26f87c3b074::t_cf2838668dd182 6,16-24,49,56-57,61,67,137
+packages/onebots/src/control/configuration-hot-host.spec.ts
+  s_efe26f87c3b074::t_255298b3576999 5-7
+  s_efe26f87c3b074::t_b93f99e418c98b 18
+  s_efe26f87c3b074::t_d24095306a4ef6 8
+packages/onebots/src/control/auth-state-codec.ts
+  s_efe26f87c3b074::t_eabdd0157c96fc 1
+  s_efe26f87c3b074::t_fa8344089bb1ea 2-11,14,17-18,22-26,33-34,46-56,70-73,79-80,88,92-94
+  s_efe26f87c3b074::t_0e6a85dfec9b63 15-16,19-21,27-32,35-45,57-69,74-78,81-87,89-91
+  s_efe26f87c3b074::t_8ffed5840236ca 12-13
+packages/onebots/src/verification/manager-authentication.ts
+  s_efe26f87c3b074::t_255298b3576999 5-8,11-14,19-22,26-29
+  s_efe26f87c3b074::t_0d116477da31ff 16-18,23-25,30-31,36
+packages/onebots/src/control/auth-devices-host.spec.ts
+  s_efe26f87c3b074::t_b93f99e418c98b 19
+  s_efe26f87c3b074::t_d24095306a4ef6 7
+  s_efe26f87c3b074::t_255298b3576999 4-6,24-26,43-49
+packages/onebots/src/manager-service-install.spec.ts
+  s_efe26f87c3b074::t_67b244a4c19a82 130-133,135-137,144-145
+  s_efe26f87c3b074::t_24384c60772644 27-30,134,138-143
+.changeset/quiet-workspace-admission.md
+  s_efe26f87c3b074::t_861eb1e73e9ca8 8-9
+  s_efe26f87c3b074::t_1086d6e2151ef6 1-7
+packages/onebots/src/service-authority.ts
+  s_efe26f87c3b074::t_cf2838668dd182 1-4,10-11,16,37
+  s_efe26f87c3b074::t_b209256dd2c379 17-19,30-31
+  s_efe26f87c3b074::t_92bd9ec4683e83 12-13,15
+  s_efe26f87c3b074::t_43afce309ef2a1 5-9,20-29,32-36
+  s_efe26f87c3b074::t_472c1ddfc75df1 14
+native/windows-host/internal/host/workspace_security_windows.go
+  s_efe26f87c3b074::t_99375ee747e851 6-12,18-20,24-27,31-40,44-87,91-94,106-121,127-136,139-176,178-216
+  s_efe26f87c3b074::t_cd828b36508304 95-99,103-105
+  s_efe26f87c3b074::t_d64b31f33c206f 1-5,13-17,21-23,28-30,41-43,88-89,123-125,217
+  s_efe26f87c3b074::t_eb1a93284bed50 100-102
+  s_efe26f87c3b074::t_65a7c57555d110 126,137-138
+  s_efe26f87c3b074::t_5317a492ee2851 177
+  s_efe26f87c3b074::t_27a01fd592575b 90,122
+packages/onebots/src/control/generation-activation.ts
+  s_efe26f87c3b074::t_16112a44d51d40 133,135,574
+  s_efe26f87c3b074::t_cb6d562c49b98f 134
+packages/onebots/src/service-process-genesis.ts
+  s_efe26f87c3b074::t_765ca3b33c65f6 4-6,8-12,18-22
+  s_efe26f87c3b074::t_fe887f49d85d7b 1-3,7,13-17,23-25
+native/windows-host/internal/host/workspace_storage_windows_test.go
+  s_efe26f87c3b074::t_e202aedc227ebe 6-13,15,19-24,28-29,33-59,63-100,104-131
+  s_efe26f87c3b074::t_abdf5a1a1a847f 1-5,14,16-18,25-27,30-32,60-62,101-103,132
+packages/onebots/src/manager-service-controller.spec.ts
+  s_efe26f87c3b074::t_87c06760d58c30 35-36
+  s_efe26f87c3b074::t_7dd9ed720ecb5a 200-206,209-213,217-220
+  s_efe26f87c3b074::t_16a3d8fb1b1079 196-199,207-208,214-216,221
+  s_efe26f87c3b074::t_b1de3168ea7420 163-167,188-189,195
+  s_efe26f87c3b074::t_da821e36ed8379 168-187,190-194
+  s_efe26f87c3b074::t_43afce309ef2a1 222-225,237-247
+  s_efe26f87c3b074::t_e8de9b3e2c91c4 226-236
+packages/onebots/src/windows-host-control-client.ts
+  s_efe26f87c3b074::t_848e4932cd9b57 16,20,24,165,170,182,203,247,282
+  s_efe26f87c3b074::t_ad97ea386937b9 231
+  s_efe26f87c3b074::t_92bd9ec4683e83 6,91
+packages/onebots/src/installation/generation-installer.ts
+  s_efe26f87c3b074::t_16112a44d51d40 77,79,259-264,303-307,309-320,322
+  s_efe26f87c3b074::t_f612b7ff4cd674 78,308,321,323-324
+packages/onebots/src/manager-service-controller.ts
+  s_efe26f87c3b074::t_7db14750a9f572 45
+  s_efe26f87c3b074::t_a05431d242bcc7 3-6,84
+  s_efe26f87c3b074::t_c5c141819deb19 193-194,228
+  s_efe26f87c3b074::t_40b8ac3859cda8 35
+  s_efe26f87c3b074::t_da821e36ed8379 36-39,186-190,222-227
+  s_efe26f87c3b074::t_b209256dd2c379 83
+  s_efe26f87c3b074::t_7dd9ed720ecb5a 96-101,104-108
+  s_efe26f87c3b074::t_2568147c68e067 34
+docker-entrypoint-hf.sh
+  s_efe26f87c3b074::t_b5ab3e9ad266b7 10-11,23
+  s_efe26f87c3b074::t_8b3e9c156d174f 2,5-6
+  s_efe26f87c3b074::t_d5399d9c4903db 9
+packages/onebots/src/manager-service-recovery.spec.ts
+  s_efe26f87c3b074::t_b1de3168ea7420 192-193,202-203,217-222
+  s_efe26f87c3b074::t_da821e36ed8379 194-201,204-216
+packages/onebots/src/manager-service-status.spec.ts
+  s_efe26f87c3b074::t_52e141fbf159e3 85-96
+  s_efe26f87c3b074::t_3f72e043b26f21 97-105
+packages/onebots/src/windows-workspace-identity.ts
+  s_efe26f87c3b074::t_43afce309ef2a1 5-8,12-17,19-31,34-40
+  s_efe26f87c3b074::t_92bd9ec4683e83 3,18,55,100
+  s_efe26f87c3b074::t_f23a755984ced1 1-2,4,9-11,32-33,41-43
+  s_efe26f87c3b074::t_ac78e3e51fcc4a 44-45,69-70,86-88,118
+  s_efe26f87c3b074::t_495ba6ebba6c5b 46-54,56-68,71-85,89-99,101-117
+docs/src/guide/management-login.md
+  s_efe26f87c3b074::t_8b3e9c156d174f 68
+docs/src/en/guide/docker.md
+  s_efe26f87c3b074::t_bb33f9019729c0 75,100
+  s_efe26f87c3b074::t_8b3e9c156d174f 173,175,177,179,181,183
+  s_efe26f87c3b074::t_12f6417196ee0b 3,15,19,31,42-44,47,50-57,67,83,85,101,103,108-109,121,128-129,133,142,144,152,154-156
+packages/onebots/src/manager-service-upgrade-candidate.ts
+  s_efe26f87c3b074::t_75d6d0a23d2573 25-29
+  s_efe26f87c3b074::t_43afce309ef2a1 16-18,20-21,23-24,35-38
+  s_efe26f87c3b074::t_6283e7714fba58 22
+  s_efe26f87c3b074::t_9de53a60375d3f 30-31
+packages/onebots/src/control/auth-binding.ts
+  s_efe26f87c3b074::t_02d5c30ce3c9e3 1-3,15-23,25-30,69-71,95-96,102-106,111-114,120-122
+  s_efe26f87c3b074::t_af7c58e52112b6 24,35,66-68,97-101
+  s_efe26f87c3b074::t_0e6a85dfec9b63 4-14,31-34,36-46,53-65,72-94,107-110,115-119
+  s_efe26f87c3b074::t_eabdd0157c96fc 47-52
+packages/onebots/src/cli/service-migration-command.ts
+  s_efe26f87c3b074::t_e57b29f22942a2 98-99
+  s_efe26f87c3b074::t_b209256dd2c379 22,45
+  s_efe26f87c3b074::t_43afce309ef2a1 54-56
+  s_efe26f87c3b074::t_da821e36ed8379 5-8,100
+  s_efe26f87c3b074::t_3a61a6cb43d99a 10
+packages/onebots/README.md
+  s_efe26f87c3b074::t_50d9ac7cd70f60 13,16-21,25-29,97,100-101,105,145,152-155,160
+packages/onebots/src/workspace-admission/types.ts
+  s_efe26f87c3b074::t_b8f610fee2890d 6-7
+  s_efe26f87c3b074::t_3257eae0321946 1-5,8-16,25-31,33-71,73-74
+  s_efe26f87c3b074::t_ceb06d213ef1fd 32
+  s_efe26f87c3b074::t_9dfe4c22844652 17,24,72
+  s_efe26f87c3b074::t_765ca3b33c65f6 18-23
+packages/onebots/src/control/admission-host.ts
+  s_efe26f87c3b074::t_6e8eac78ed9711 10,63-72,74-75
+  s_efe26f87c3b074::t_765ca3b33c65f6 29-31,40-61,77-82,84-86,94-95,109-113,116-124,130-133,135-140,147-148,165-176
+  s_efe26f87c3b074::t_69fb9f04c3a0dc 1-9,12-28,37-39,62,76,83,87,90,93,96-98,101-106,108,114-115,125-129,134,141-145,151-155,157-164,177
+  s_efe26f87c3b074::t_12f9fa1031b41b 32-34,36,88-89
+  s_efe26f87c3b074::t_52e141fbf159e3 11,156
+  s_efe26f87c3b074::t_856cec2d5c4dd4 107,146,149-150
+  s_efe26f87c3b074::t_e23e2c82b34def 91-92,99-100
+  s_efe26f87c3b074::t_488cedd3675218 35,73
+packages/onebots/src/cli/manager-service-status-command.spec.ts
+  s_efe26f87c3b074::t_40c472c95a1a73 155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "af4e03f426e8a7df7d94efbd09ced120809a14b1",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
