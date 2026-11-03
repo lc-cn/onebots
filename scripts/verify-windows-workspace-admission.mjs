@@ -60,7 +60,8 @@ const { readWindowsWorkspaceIdentity, acquireWindowsWorkspaceIdentity } = await 
 const { planWorkspaceRegistration } = await load("workspace-admission/registration-plan.js");
 const { resumeWorkspaceRegistration } = await load("workspace-admission/registration.js");
 const { AuthorityRegistry } = await load("workspace-admission/registry.js");
-const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-admission-"));
+const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onebots-admission-"));
+const temporary = path.join(fixtureRoot, "private");
 const workspace = path.join(temporary, "original");
 const authority = path.join(temporary, "authority");
 const copy = path.join(temporary, "copy");
@@ -94,6 +95,11 @@ function privateCopy(source, target) {
     }
 }
 try {
+    // The Windows provider verifies a protected, closed ACL on the authority's parent too.
+    // mkdtemp supplies only a unique outer path; create the actual fixture boundary through
+    // the same native helper used by installations, without repairing inherited permissions.
+    createWindowsPrivateDirectory(temporary);
+    readWindowsWorkspaceIdentity(temporary);
     createWindowsPrivateDirectory(workspace);
     const plan = await planWorkspaceRegistration(workspace, authority, { desired: "stopped" });
     fs.writeFileSync(planFile, JSON.stringify(plan), { mode: 0o600 });
@@ -142,5 +148,5 @@ try {
         "Windows compiled native/Node registration, process-crash recovery, reopen and private-copy rejection passed.\n",
     );
 } finally {
-    fs.rmSync(temporary, { recursive: true, force: true });
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
 }
