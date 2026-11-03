@@ -13,8 +13,8 @@ import os from "node:os";
 import path from "node:path";
 import {
     installedManagerVersion,
-    preparePreviousPatchArtifacts,
-    verifyManagerPatchUpgrade,
+    preparePreviousVersionArtifacts,
+    verifyManagerVersionUpgrade,
 } from "./manager-upgrade-acceptance-helpers.mjs";
 import {
     registerStoppedServiceWorkspace,
@@ -141,7 +141,7 @@ const tarballs = fs
     .map(name => path.join(artifacts, name));
 assert.equal(tarballs.length, 3, "必须安装当前 core、web 和 onebots 三个打包工件");
 const manifest = JSON.parse(fs.readFileSync(path.join(artifacts, "manifest.json"), "utf8"));
-const previous = preparePreviousPatchArtifacts({ temporary, artifacts, manifest, execute });
+const previous = preparePreviousVersionArtifacts({ temporary, artifacts, manifest, execute });
 fs.writeFileSync(
     path.join(runtime, "package.json"),
     JSON.stringify({ name: "onebots-launchd-acceptance", private: true, version: "1.0.0" }),
@@ -558,7 +558,7 @@ try {
     fs.writeFileSync(path.join(dataDirectory, "acceptance-user-data.txt"), "preserve-me\n", {
         mode: 0o600,
     });
-    const upgrade = await verifyManagerPatchUpgrade({
+    const upgrade = await verifyManagerVersionUpgrade({
         cli,
         cliEnvironment,
         runtime,
@@ -676,7 +676,7 @@ try {
     assert.equal(new Set(operationIds).size, operationIds.length, "生命周期操作 ID 必须互不相同");
     completed = true;
     process.stdout.write(
-        "✓ 真实 launchd 用户级验收：旧服务迁移无写入拒绝、v2未登记诊断与显式首登、异常退出冷启动、旧 patch 升级故障回退与重启恢复、operation 幂等及卸载保留数据均通过\n",
+        "✓ 真实 launchd 用户级验收：旧服务迁移无写入拒绝、v2未登记诊断与显式首登、异常退出冷启动、合成较早版本升级故障回退与重启恢复、operation 幂等及卸载保留数据均通过\n",
     );
 } finally {
     // 仅在最近一次外部效果结果已知且元数据仍绑定本次临时工作区时尝试公开卸载。

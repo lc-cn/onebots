@@ -5,13 +5,15 @@
  * 和显式 ONEBOTS_SYSTEMD_ACCEPTANCE=1 同时成立时才允许执行；任何未知结果都保留现场，不重派动作。
  */
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { installedManagerVersion } from "./manager-upgrade-acceptance-helpers.mjs";
+import {
+    installedManagerVersion,
+    preparePreviousVersionArtifacts,
+} from "./manager-upgrade-acceptance-helpers.mjs";
 import {
     managerCandidateStates,
     unboundStopFailureEvidence,
@@ -102,7 +104,6 @@ assert.equal(
 const temporary = fs.realpathSync(fs.mkdtempSync("/tmp/onebots-systemd-acceptance-"));
 const legacyHistoryDirectory = `${STATE_DIRECTORY}-acceptance-legacy-${path.basename(temporary)}`;
 const artifacts = path.join(temporary, "artifacts");
-const previousArtifacts = path.join(temporary, "previous-artifacts");
 const runtime = path.join(temporary, "runtime");
 const dataDirectory = path.join(temporary, "data");
 const npmUserConfig = path.join(temporary, "user.npmrc");
@@ -132,54 +133,9 @@ const tarballs = fs
     .map(name => path.join(artifacts, name));
 assert.equal(tarballs.length, 3, "必须安装当前 core、web 和 onebots 三个打包工件");
 const manifest = JSON.parse(fs.readFileSync(path.join(artifacts, "manifest.json"), "utf8"));
-const versionMatch = /^(\d+)\.(\d+)\.(\d+)$/u.exec(manifest.host.version);
-assert.ok(versionMatch && Number(versionMatch[3]) > 0, "验收目标必须能构造前一个 patch 版本");
-const previousVersion = `${versionMatch[1]}.${versionMatch[2]}.${Number(versionMatch[3]) - 1}`;
-fs.mkdirSync(previousArtifacts, { mode: 0o700 });
-const previousStaging = path.join(temporary, "previous-package");
-fs.mkdirSync(previousStaging, { mode: 0o700 });
-execute("tar", ["-xzf", path.join(artifacts, manifest.host.file), "-C", previousStaging]);
-const previousPackage = path.join(previousStaging, "package/package.json");
-const previousPackageJson = JSON.parse(fs.readFileSync(previousPackage, "utf8"));
-previousPackageJson.version = previousVersion;
-fs.writeFileSync(previousPackage, `${JSON.stringify(previousPackageJson, null, 2)}\n`, {
-    mode: 0o600,
-});
-const previousHostFile = `onebots-${previousVersion}.tgz`;
-execute("tar", [
-    "-czf",
-    path.join(previousArtifacts, previousHostFile),
-    "-C",
-    previousStaging,
-    "package",
-]);
-for (const entry of [
-    manifest.core,
-    ...(manifest.web ? [manifest.web] : []),
-    ...manifest.extensions,
-])
-    fs.copyFileSync(path.join(artifacts, entry.file), path.join(previousArtifacts, entry.file));
-const previousManifest = {
-    ...manifest,
-    host: {
-        ...manifest.host,
-        version: previousVersion,
-        file: previousHostFile,
-        sha256: createHash("sha256")
-            .update(fs.readFileSync(path.join(previousArtifacts, previousHostFile)))
-            .digest("hex"),
-    },
-};
-fs.writeFileSync(
-    path.join(previousArtifacts, "manifest.json"),
-    `${JSON.stringify(previousManifest, null, 2)}\n`,
-    { mode: 0o600 },
-);
-const installTarballs = tarballs.map(file =>
-    path.basename(file) === manifest.host.file
-        ? path.join(previousArtifacts, previousHostFile)
-        : file,
-);
+// Synthetic labels exercise version ordering with identical supported code; not old-release compatibility.
+const previous = preparePreviousVersionArtifacts({ temporary, artifacts, manifest, execute });
+const previousVersion = previous.previousVersion;
 fs.writeFileSync(
     path.join(runtime, "package.json"),
     JSON.stringify({ name: "onebots-systemd-acceptance", private: true, version: "1.0.0" }),
@@ -195,7 +151,7 @@ execute(
         "--no-fund",
         "--save-exact",
         "--registry=https://registry.npmjs.org",
-        ...installTarballs,
+        ...previous.installTarballs,
     ],
     { cwd: runtime, env: npmEnvironment, statuses: [0] },
 );
@@ -218,7 +174,7 @@ const cliEnvironment = {
     ...npmEnvironment,
     LANG: "C",
     NO_COLOR: "1",
-    ONEBOTS_RUNTIME_ARTIFACTS: path.join(previousArtifacts, "manifest.json"),
+    ONEBOTS_RUNTIME_ARTIFACTS: previous.manifestFile,
 };
 
 const { renderSystemdUnit } = await import(
@@ -1439,7 +1395,7 @@ try {
     assert.equal(new Set(operationIds).size, operationIds.length, "生命周期操作 ID 必须互不相同");
     completed = true;
     process.stdout.write(
-        "✓ 真实 systemd 系统级验收：公开旧迁移无写入拒绝、历史v1中断记录冷回退、v2未登记诊断与显式首登、异常退出冷启动、旧 patch 到当前 patch 的不可变升级与重启恢复、operation 幂等对账及卸载保留数据均通过\n",
+        "✓ 真实 systemd 系统级验收：公开旧迁移无写入拒绝、历史v1中断记录冷回退、v2未登记诊断与显式首登、异常退出冷启动、合成较早版本到当前版本的不可变升级与重启恢复、operation 幂等对账及卸载保留数据均通过\n",
     );
 } finally {
     if (completed) fs.rmSync(temporary, { recursive: true, force: true });
