@@ -55,7 +55,7 @@ if "%~1"=="status" (
     goto exit-three
   )
   if "%ONEBOTS_TEST_MODE%"=="invalid-status" echo {}
-  if "%ONEBOTS_TEST_MODE%"=="unexpected-running" echo {}
+  if "%ONEBOTS_TEST_MODE%"=="unexpected-running" echo {"schemaVersion":1,"installation":"control","manager":{"state":"running","ipc":"available"},"serviceRecoveryRequired":false,"diagnostic":null,"gateway":{"actual":"unknown","desired":"unknown","recoveryRequired":null}}
   if not "%ONEBOTS_TEST_MODE%"=="invalid-status" if not "%ONEBOTS_TEST_MODE%"=="unexpected-running" echo {"schemaVersion":1,"installation":"control","manager":{"state":"stopped","ipc":"not-queried"},"serviceRecoveryRequired":false,"diagnostic":null,"gateway":{"actual":"unknown","desired":"unknown","recoveryRequired":null}}
   >>"%ONEBOTS_TEST_LOG%" echo cli-exit 0
   goto exit-zero
@@ -332,6 +332,19 @@ try {
         assert.doesNotMatch(result.stdout, /管理服务已安装并保持停止/);
         assert.equal(fs.existsSync(path.join(failed.home, ".manager-installed")), false);
         assert.equal(fs.existsSync(path.join(failed.home, "runtime")), true);
+        if (mode === "unexpected-running" || mode === "invalid-status") {
+            assert.match(failed.commands(), /^cli-command status\r?$/mu);
+            assert.match(failed.commands(), /^node-exit 0\r?$/mu);
+            assert.equal(
+                ((result.stdout ?? "") + (result.stderr ?? "")).includes(
+                    mode === "unexpected-running"
+                        ? "管理服务尚未确认安全停止"
+                        : "管理服务状态证据无效",
+                ),
+                true,
+                "status fixtures must exercise distinct semantic and schema rejection paths",
+            );
+        }
         if (mode === "missing-capability") {
             assert.equal([...failed.commands().matchAll(/^capability-argument /gmu)].length, 1);
             assert.match(failed.commands(), /^capability-exit 1\r?$/mu);
