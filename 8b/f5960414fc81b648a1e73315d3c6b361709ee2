@@ -1,0 +1,19 @@
+scripts/verify-windows-bootstrap-install.mjs
+  s_efe26f87c3b074::t_8ab95f551db39e 58,335-347
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8bf5960414fc81b648a1e73315d3c6b361709ee2",
+  "prompts": {},
+  "sessions": {
+    "s_efe26f87c3b074": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a05573-d991-7071-ac03-024f89a3d9a3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
