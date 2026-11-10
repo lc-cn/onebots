@@ -1,5 +1,11 @@
 import { ProtocolError, type Friend } from "imhelper";
-import type { SatoriFriend, SatoriGuildRole, SatoriList, SatoriUser } from "./types.js";
+import type {
+    SatoriFriend,
+    SatoriGuildRole,
+    SatoriList,
+    SatoriUser,
+    SatoriV1Event,
+} from "./types.js";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
@@ -45,7 +51,7 @@ export async function collectList(
 }
 
 function optionalString(value: unknown, operation: string, response: unknown): string | undefined {
-    if (value === undefined) return undefined;
+    if (value === undefined || value === null) return undefined;
     if (typeof value !== "string") return malformed(operation, response);
     return value;
 }
@@ -138,6 +144,21 @@ export function parseGuildRoles(value: unknown, operation: string): SatoriGuildR
             ...(name !== undefined ? { name } : {}),
         };
     });
+}
+
+/** 入站事件里的旧 string[] 角色规范成 GuildRole；非法形状保留原值，不中断事件。 */
+export function normalizeEventMember(event: SatoriV1Event): void {
+    const member = event.member;
+    if (!member || member.roles === undefined) return;
+    let roles: SatoriGuildRole[] | undefined;
+    try {
+        roles = parseGuildRoles(member.roles, "event.member.roles");
+    } catch {
+        // 目录读取会拒绝非法 roles；入站事件继续投递其余字段。
+        return;
+    }
+    if (!roles) return;
+    event.member = { ...member, roles };
 }
 
 export function parseSatoriUserList(value: unknown, operation: string): SatoriList<SatoriUser> {

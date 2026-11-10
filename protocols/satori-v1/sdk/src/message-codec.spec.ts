@@ -84,9 +84,12 @@ describe("Satori message codec", () => {
             { type: "emoji", attrs: { name: "wave" } },
         ]);
         expect(decodeSatoriContent("plain")).toBe("plain");
-        expect(renderSatoriEmoji({ id: 'a"b', name: "smile" })).toBe(
-            '<emoji id="a&quot;b" name="smile"/>',
+        expect(renderSatoriEmoji({ id: 'a>"b', name: "smile" })).toBe(
+            '<emoji id="a&gt;&quot;b" name="smile"/>',
         );
+        expect(decodeSatoriContent(renderSatoriEmoji({ id: 'a>"b', name: "smile" }))).toEqual([
+            { type: "emoji", data: { id: 'a>"b', name: "smile" } },
+        ]);
         expect(createSatoriEmojiElement({ id: "1" })).toEqual({
             type: "emoji",
             attrs: { id: "1" },

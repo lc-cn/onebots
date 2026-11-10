@@ -3,7 +3,8 @@ import type { SatoriElement, SatoriEmojiAttrs } from "./types.js";
 import { isRecord, malformed } from "./protocol-data.js";
 
 const SATORI_CHILDREN_KEY = "$children";
-const EMOJI_MARKUP = /<emoji\b([^>]*?)\/>|<emoji\b([^>]*?)><\/emoji>/gi;
+const EMOJI_MARKUP =
+    /<emoji\b((?:"[^"]*"|'[^']*'|[^>])*?)\/>|<emoji\b((?:"[^"]*"|'[^']*'|[^>])*?)><\/emoji>/gi;
 
 function assertEmojiAttrs(attrs: { id?: unknown; name?: unknown }, operation: string): void {
     if (attrs.id !== undefined && typeof attrs.id !== "string") {
@@ -76,7 +77,7 @@ function parseEmojiAttributes(source: string): Record<string, string> | undefine
         if (source.slice(last, index).trim() !== "") return undefined;
         const key = match[1];
         if (!key) return undefined;
-        attrs[key] = match[2] ?? match[3] ?? match[4] ?? "";
+        attrs[key] = unescapeAttribute(match[2] ?? match[3] ?? match[4] ?? "");
         last = index + match[0].length;
     }
     if (source.slice(last).trim() !== "") return undefined;
@@ -84,7 +85,20 @@ function parseEmojiAttributes(source: string): Record<string, string> | undefine
 }
 
 function escapeAttribute(value: string): string {
-    return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
+    return value
+        .replaceAll("&", "&amp;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+}
+
+function unescapeAttribute(value: string): string {
+    return value
+        .replaceAll("&quot;", '"')
+        .replaceAll("&apos;", "'")
+        .replaceAll("&lt;", "<")
+        .replaceAll("&gt;", ">")
+        .replaceAll("&amp;", "&");
 }
 
 /** 构造官方 `<emoji>` 元素对象。https://satori.chat/zh-CN/protocol/elements.html */

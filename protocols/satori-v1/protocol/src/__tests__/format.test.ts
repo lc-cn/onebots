@@ -375,13 +375,25 @@ describe("Satori V1 protocol", () => {
         await protocol.apply("reaction.create", {
             channel_id: "guild-channel",
             message_id: "message-1",
-            emoji: "👍",
+            emoji_id: "👍",
+        });
+        await protocol.apply("reaction.create", {
+            channel_id: "guild-channel",
+            message_id: "message-2",
+            emoji: "🔥",
         });
 
-        expect(adapter.sendGroupMessageReaction).toHaveBeenCalledWith("bot", {
+        expect(adapter.sendGroupMessageReaction).toHaveBeenNthCalledWith(1, "bot", {
             group_id: expect.objectContaining({ string: "guild-channel" }),
             message_id: expect.objectContaining({ string: "message-1" }),
             reaction: "👍",
+            reaction_type: "emoji",
+            is_add: true,
+        });
+        expect(adapter.sendGroupMessageReaction).toHaveBeenNthCalledWith(2, "bot", {
+            group_id: expect.objectContaining({ string: "guild-channel" }),
+            message_id: expect.objectContaining({ string: "message-2" }),
+            reaction: "🔥",
             reaction_type: "emoji",
             is_add: true,
         });

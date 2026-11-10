@@ -55,7 +55,7 @@ await channel.setName("general");
 
 好友、公会、成员和频道列表遵循 Satori `List<T>` 分页结构并自动读取全部页面。成功响应的数据结构不合法、游标循环或缺少必需 scope 时抛出 `ProtocolError`，不会返回伪造的空列表。
 
-[`friend.list`](https://satori.chat/zh-CN/resources/friend.html) 的元素是 `Friend`（`user?` 与 `nick?`），`client.listFriends()` 返回该形状。`getFriendInfo()` 用 `user.nick`、其次 `user.name` 作为展示名，并把好友 `nick` 放到 `remark`。旧服务端如果仍返回扁平 User，列表读取会继续兼容。`deleteFriend()` 调用 `/friend.delete`，`approveFriendRequest()` 调用 `/friend.approve`。
+[`friend.list`](https://satori.chat/zh-CN/resources/friend.html) 的元素是 `Friend`（`user?` 与 `nick?`），`client.listFriends()` 返回该形状。`getFriendInfo()` 用 `user.nick`、其次 `user.name` 作为展示名，并把好友 `nick` 放到 `remark`。群成员展示名优先使用群内 `nick`。可选字符串字段为 `null` 时视为缺省。旧服务端如果仍返回扁平 User，列表读取会继续兼容。`deleteFriend()` 调用 `/friend.delete`，`approveFriendRequest()` 调用 `/friend.approve`。
 
 [`GuildMember.roles`](https://satori.chat/zh-CN/resources/member.html) 的类型是 `GuildRole[]`。`adapter.getGroupMemberInfo()` / `getGroupMemberList()` 返回的 `roles` 为 `{ id, name? }`。只含角色 ID 的旧 `string[]` 会读成 `{ id }`；其他形状会抛出 `ProtocolError`。
 

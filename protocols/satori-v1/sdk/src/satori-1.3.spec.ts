@@ -87,7 +87,18 @@ describe("Satori 1.3 resources", () => {
 
         expectTypeOf(member.roles).toEqualTypeOf<SatoriGuildRole[] | undefined>();
         expect(member.roles).toEqual([{ id: "role-1", name: "管理员" }, { id: "role-2" }]);
-        expect(member.user_name).toBe("Alice");
+        expect(member.user_name).toBe("群名片");
+    });
+
+    test("rejects a guild member whose user name is not a string", async () => {
+        const client = createClient(async () => ({
+            user: { id: "user-1", name: 1 },
+        }));
+
+        await expect(client.adapter.getGroupMemberInfo("guild-1", "user-1")).rejects.toMatchObject({
+            name: "ProtocolError",
+            operation: "guild.member.get",
+        } satisfies Partial<ProtocolError>);
     });
 
     test("rejects guild member roles that are not GuildRole or role ids", async () => {
@@ -151,7 +162,10 @@ describe("Satori 1.3 resources", () => {
     });
 
     test("omits referrer when the source event did not provide one", async () => {
-        const call = vi.fn(async () => undefined);
+        const call = vi.fn(
+            async (_resource: string, _method: string, _params?: Record<string, unknown>) =>
+                undefined,
+        );
         const client = createClient(call);
         let message: ChannelMessageEvent<string> | undefined;
         client.on("message.channel", event => {
@@ -170,10 +184,80 @@ describe("Satori 1.3 resources", () => {
 
         await message?.reply("reply");
 
-        expect(call).toHaveBeenCalledWith("message", "create", {
+        expect(call.mock.calls[0]?.[2]).toStrictEqual({
             channel_id: "channel-1",
             content: "reply",
         });
+    });
+
+    test("keeps referrers for the same message id in different channels", async () => {
+        const referrerA = { source: "a" };
+        const referrerB = { source: "b" };
+        const call = vi.fn(
+            async (_resource: string, _method: string, _params?: Record<string, unknown>) =>
+                undefined,
+        );
+        const client = createClient(call);
+        const messages: ChannelMessageEvent<string>[] = [];
+        client.on("message.channel", event => {
+            messages.push(event);
+        });
+        const base = {
+            platform: "test",
+            timestamp: 1_700_000_000_000,
+            guild: { id: "guild-1" },
+            user: { id: "user-1" },
+            message: { id: "message-1", content: "hello", created_at: 1_700_000_000_000 },
+        };
+        client.ingest({
+            ...base,
+            id: "event-a",
+            type: "message-created",
+            channel: { id: "channel-a" },
+            referrer: referrerA,
+        });
+        client.ingest({
+            ...base,
+            id: "event-b",
+            type: "message-created",
+            channel: { id: "channel-b" },
+            referrer: referrerB,
+        });
+
+        await messages[0]?.reply("from-a");
+
+        expect(call.mock.calls[0]?.[2]).toMatchObject({
+            channel_id: "channel-a",
+            referrer: referrerA,
+        });
+        expect(call.mock.calls[0]?.[2]?.referrer).toBe(referrerA);
+    });
+
+    test("normalizes legacy member role ids on inbound events", () => {
+        const client = createClient(async () => undefined);
+        const raw = vi.fn();
+        client.on("event", raw);
+        client.ingest({
+            id: "event-1",
+            type: "guild-member-updated",
+            platform: "test",
+            timestamp: 1_700_000_000_000,
+            guild: { id: "guild-1" },
+            user: { id: "user-1" },
+            member: { roles: ["role-1"] },
+        } as unknown as SatoriV1Event);
+
+        expect(raw.mock.calls[0]?.[0]).toMatchObject({
+            member: { roles: [{ id: "role-1" }] },
+        });
+    });
+
+    test("treats null optional friend fields as absent", async () => {
+        const client = createClient(async () => ({
+            data: [{ user: { id: "user-1", name: null }, nick: null }],
+        }));
+
+        await expect(client.listFriends()).resolves.toEqual([{ user: { id: "user-1" } }]);
     });
 
     test("uses emoji_id for reaction clear, delete and list", async () => {

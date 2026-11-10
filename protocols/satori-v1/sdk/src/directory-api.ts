@@ -13,6 +13,7 @@ import {
     malformed,
     parseGuildRoles,
     parseSatoriFriend,
+    parseSatoriUser,
 } from "./protocol-data.js";
 import type { SatoriFriend, SatoriMemberData } from "./types.js";
 
@@ -149,21 +150,17 @@ export class SatoriDirectoryApi {
         groupId: string,
         fallbackUserId?: string,
     ): SatoriMemberData {
-        const user = isRecord(item.user) ? item.user : undefined;
-        const userId = user?.id ?? item.user_id ?? fallbackUserId;
+        const user = item.user === undefined ? undefined : parseSatoriUser(item.user, operation);
+        const userId =
+            user?.id ?? (typeof item.user_id === "string" ? item.user_id : fallbackUserId);
         if (typeof userId !== "string") return malformed(operation, item);
         const roles = parseGuildRoles(item.roles, operation);
-        const userName =
-            (typeof user?.nick === "string" && user.nick) ||
-            (typeof user?.name === "string" && user.name) ||
-            (typeof item.nick === "string" && item.nick) ||
-            (typeof item.nickname === "string" ? item.nickname : "");
+        const guildNick = typeof item.nick === "string" ? item.nick : undefined;
+        const legacyNick = typeof item.nickname === "string" ? item.nickname : undefined;
         return {
             user_id: userId,
-            user_name: userName,
-            avatar:
-                (typeof user?.avatar === "string" && user.avatar) ||
-                (typeof item.avatar === "string" ? item.avatar : ""),
+            user_name: guildNick || user?.nick || user?.name || legacyNick || "",
+            avatar: user?.avatar || (typeof item.avatar === "string" ? item.avatar : ""),
             group_id: groupId,
             ...(roles ? { roles } : {}),
         };

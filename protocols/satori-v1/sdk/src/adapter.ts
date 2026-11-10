@@ -19,7 +19,7 @@ import {
 } from "./types.js";
 import { HttpClient } from "./http-client.js";
 import { SatoriDirectoryApi, type SatoriSdkCaller } from "./directory-api.js";
-import { isRecord, malformed } from "./protocol-data.js";
+import { isRecord, malformed, normalizeEventMember } from "./protocol-data.js";
 import { decodeSatoriContent, encodeSatoriContent } from "./message-codec.js";
 import { SatoriReactionApi } from "./reaction-api.js";
 import { MessageReferrerStore } from "./referrer-store.js";
@@ -126,8 +126,11 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
         }
 
         private transformAndEmit(event: SatoriV1Event): void {
+            normalizeEventMember(event);
             if (event.message?.id && event.referrer) {
-                this.referrers.remember(event.message.id, event.referrer);
+                const channelId =
+                    typeof event.channel?.id === "string" ? event.channel.id : undefined;
+                this.referrers.remember(channelId, event.message.id, event.referrer);
             }
             // Satori 事件格式转换
             const eventType = event.type || "";
@@ -272,7 +275,8 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
 
         async replyMessage(options: SatoriReplyMessageOptions): Promise<unknown> {
             const channelId = this.resolveChannelId(options);
-            const referrer = options.referrer ?? this.referrers.recall(options.message_id);
+            const referrer =
+                options.referrer ?? this.referrers.recall(channelId, options.message_id);
             return channelId
                 ? this.createMessage(channelId, options.message, referrer)
                 : this.sendMessage({ ...options, referrer });
