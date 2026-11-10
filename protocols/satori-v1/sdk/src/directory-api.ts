@@ -4,10 +4,17 @@ import {
     type DirectoryQueryOptions,
     type Friend,
     type Group,
-    type GroupMember,
     type User,
 } from "imhelper";
-import { collectList, isRecord, malformed } from "./protocol-data.js";
+import {
+    collectList,
+    friendToDirectory,
+    isRecord,
+    malformed,
+    parseGuildRoles,
+    parseSatoriFriend,
+} from "./protocol-data.js";
+import type { SatoriFriend, SatoriMemberData } from "./types.js";
 
 export type SatoriSdkCaller = <T = unknown>(
     action: string,
@@ -70,49 +77,23 @@ export class SatoriDirectoryApi {
         });
     }
 
-    async getGroupMemberInfo(groupId: string, userId: string): Promise<GroupMember.Data<string>> {
+    async getGroupMemberInfo(groupId: string, userId: string): Promise<SatoriMemberData> {
         const data = await this.call<unknown>("guild.member.get", {
             guild_id: groupId,
             user_id: userId,
         });
         if (!isRecord(data)) return malformed("guild.member.get", data);
-        const user = isRecord(data.user) ? data.user : undefined;
-        return {
-            user_id: typeof user?.id === "string" ? user.id : userId,
-            user_name:
-                (typeof user?.name === "string" && user.name) ||
-                (typeof data.nick === "string" && data.nick) ||
-                (typeof data.nickname === "string" ? data.nickname : ""),
-            avatar:
-                (typeof user?.avatar === "string" && user.avatar) ||
-                (typeof data.avatar === "string" ? data.avatar : ""),
-            group_id: groupId,
-        };
+        return this.toMember(data, "guild.member.get", groupId, userId);
     }
 
-    async getGroupMemberList(groupId: string): Promise<GroupMember.Data<string>[]> {
+    async getGroupMemberList(groupId: string): Promise<SatoriMemberData[]> {
         const members = await collectList("guild.member.list", next =>
             this.call("guild.member.list", {
                 guild_id: groupId,
                 ...(next ? { next } : {}),
             }),
         );
-        return members.map(item => {
-            const user = isRecord(item.user) ? item.user : undefined;
-            const userId = user?.id ?? item.user_id;
-            if (typeof userId !== "string") return malformed("guild.member.list", item);
-            return {
-                user_id: userId,
-                user_name:
-                    (typeof user?.name === "string" && user.name) ||
-                    (typeof item.nick === "string" && item.nick) ||
-                    (typeof item.nickname === "string" ? item.nickname : ""),
-                avatar:
-                    (typeof user?.avatar === "string" && user.avatar) ||
-                    (typeof item.avatar === "string" ? item.avatar : ""),
-                group_id: groupId,
-            };
-        });
+        return members.map(item => this.toMember(item, "guild.member.list", groupId));
     }
 
     async getChannelList(options?: DirectoryQueryOptions<string>): Promise<Channel.Data<string>[]> {
@@ -149,20 +130,43 @@ export class SatoriDirectoryApi {
         );
     }
 
-    private async getFriendList(): Promise<Friend.Data<string>[]> {
+    /** 读取 /friend.list，保留官方 Friend 形状。 */
+    async listFriends(): Promise<SatoriFriend[]> {
         const friends = await collectList("friend.list", next =>
             this.call("friend.list", next ? { next } : {}),
         );
-        return friends.map(friend => {
-            if (typeof friend.id !== "string") return malformed("friend.list", friend);
-            return {
-                user_id: friend.id,
-                user_name:
-                    (typeof friend.name === "string" && friend.name) ||
-                    (typeof friend.username === "string" ? friend.username : ""),
-                avatar: typeof friend.avatar === "string" ? friend.avatar : "",
-            };
-        });
+        return friends.map(friend => parseSatoriFriend(friend, "friend.list"));
+    }
+
+    private async getFriendList(): Promise<Friend.Data<string>[]> {
+        const friends = await this.listFriends();
+        return friends.map(friend => friendToDirectory(friend, "friend.list"));
+    }
+
+    private toMember(
+        item: Record<string, unknown>,
+        operation: string,
+        groupId: string,
+        fallbackUserId?: string,
+    ): SatoriMemberData {
+        const user = isRecord(item.user) ? item.user : undefined;
+        const userId = user?.id ?? item.user_id ?? fallbackUserId;
+        if (typeof userId !== "string") return malformed(operation, item);
+        const roles = parseGuildRoles(item.roles, operation);
+        const userName =
+            (typeof user?.nick === "string" && user.nick) ||
+            (typeof user?.name === "string" && user.name) ||
+            (typeof item.nick === "string" && item.nick) ||
+            (typeof item.nickname === "string" ? item.nickname : "");
+        return {
+            user_id: userId,
+            user_name: userName,
+            avatar:
+                (typeof user?.avatar === "string" && user.avatar) ||
+                (typeof item.avatar === "string" ? item.avatar : ""),
+            group_id: groupId,
+            ...(roles ? { roles } : {}),
+        };
     }
 
     private toChannel(value: unknown, operation: string, guildId?: string): Channel.Data<string> {
