@@ -7,6 +7,7 @@ import { OneBotV11ActionService } from "./actions/index.js";
 import { CQCode } from "./cqcode.js";
 import { OneBotV11Config } from "./config.js";
 import { projectOneBotV11Notice } from "./notice-projector.js";
+import { convertSegmentsToV11, type V11Segment } from "./segments.js";
 import { OneBotV11Transport } from "./transport.js";
 
 function normalizeMilliseconds(value: unknown): number {
@@ -387,13 +388,12 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
     /**
      * Convert message segments to V11 format
      */
-    private convertSegmentsToV11(
-        segments: CommonTypes.Segment[],
-    ): { type: string; data: unknown }[] {
-        return segments.map(seg => ({
-            type: seg.type,
-            data: seg.data,
-        }));
+    private convertSegmentsToV11(segments: CommonTypes.Segment[]): V11Segment[] {
+        return convertSegmentsToV11(segments, {
+            createId: raw => this.adapter.createId(raw),
+            selfId: () => this.adapter.resolveAccountId(this.account.account_id),
+            onError: error => this.logger.error("at 段目标 ID 映射失败，已降级为文本", error),
+        });
     }
 
     /**

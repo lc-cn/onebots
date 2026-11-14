@@ -76,6 +76,11 @@ function createProtocol() {
             ...resolvedId,
             number: typeof id === "number" ? id : resolvedId.number,
         })),
+        createId: vi.fn((id: string | number) => ({
+            string: String(id),
+            source: id,
+            number: /^\d+$/.test(String(id)) ? Number(id) : 900001,
+        })),
         resolveAccountId: vi.fn(() => ({
             string: "12345678",
             number: 12345678,
@@ -334,6 +339,69 @@ describe("OneBot V11 message format conversion", () => {
         expect(msg[1]).toEqual({ type: "at", data: { qq: "10001" } });
         expect(msg[3]).toEqual({ type: "image", data: { file: "pic.jpg" } });
         expect(msg[4]).toEqual({ type: "face", data: { id: "14" } });
+    });
+
+    test("fills qq on at segments that only carry user_id (issue #281)", () => {
+        const { adapter, protocol } = createProtocol();
+        const event = textMsgEvent({
+            message_type: "group",
+            group: { id: { number: 20001, string: "g20001", source: "g20001" } },
+            message: [
+                {
+                    type: "at",
+                    data: {
+                        user_id: { number: 42, string: "dy_open_42", source: "dy_open_42" },
+                        name: "小明",
+                    },
+                },
+                { type: "at", data: { user_id: "staff-abc" } },
+                { type: "at", data: { user_id: "all", scope: "all" } },
+                { type: "at", data: { scope: "all" } },
+                { type: "at", data: { user_id: "staff-abc", scope: "all" } },
+                { type: "at", data: { qq: "10002", scope: "all" } },
+                { type: "at", data: { user_id: "self", is_self: true } },
+                { type: "at", data: { qq: "10001" } },
+                { type: "at", data: { role_id: { number: 7, string: "7", source: "7" } } },
+            ],
+            raw_message: "",
+        });
+        const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
+        const msg = result.message as { type: string; data: Record<string, unknown> }[];
+
+        expect(msg[0]!.data).toMatchObject({ qq: "42", name: "小明" });
+        expect(msg[1]!.data).toMatchObject({ qq: "900001", user_id: "staff-abc" });
+        expect(adapter.createId).toHaveBeenCalledWith("staff-abc");
+        expect(msg[2]!.data.qq).toBe("all");
+        expect(msg[3]!.data.qq).toBe("all");
+        expect(msg[4]!.data.qq).toBe("all");
+        expect(msg[5]!.data.qq).toBe("10002");
+        expect(msg[6]!.data.qq).toBe("12345678");
+        expect(adapter.createId).not.toHaveBeenCalledWith("self");
+        expect(msg[7]).toEqual({ type: "at", data: { qq: "10001" } });
+        expect(msg[8]).toEqual({ type: "text", data: { text: "@7" } });
+    });
+
+    test("degrades an at segment to text when ID mapping fails, keeping the message", () => {
+        const { adapter, protocol } = createProtocol();
+        adapter.createId.mockImplementationOnce(() => {
+            throw new Error("SQLITE_BUSY");
+        });
+        const event = textMsgEvent({
+            message_type: "group",
+            group: { id: { number: 20001, string: "g20001", source: "g20001" } },
+            message: [
+                { type: "text", data: { text: "hi " } },
+                { type: "at", data: { user_id: "staff-abc", name: "小红" } },
+            ],
+            raw_message: "",
+        });
+        const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
+
+        expect(result.message).toEqual([
+            { type: "text", data: { text: "hi " } },
+            { type: "text", data: { text: "@小红" } },
+        ]);
+        expect(protocol.logger.error).toHaveBeenCalled();
     });
 
     test("falls back to segmentsToString when raw_message is missing", () => {
