@@ -1,5 +1,12 @@
 # @onebots/protocol-satori-v1
 
+## 3.0.20
+
+### Patch Changes
+
+- Updated dependencies [21e3181]
+  - onebots@1.2.20
+
 ## 3.0.19
 
 ### Patch Changes
