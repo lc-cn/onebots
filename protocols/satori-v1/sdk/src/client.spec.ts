@@ -309,12 +309,12 @@ describe("Satori V1 client", () => {
         expect(call).toHaveBeenNthCalledWith(1, "reaction", "create", {
             channel_id: "channel-1",
             message_id: "message-1",
-            emoji: "👍",
+            emoji_id: "👍",
         });
         expect(call).toHaveBeenNthCalledWith(2, "reaction", "delete", {
             channel_id: "channel-1",
             message_id: "message-1",
-            emoji: "👍",
+            emoji_id: "👍",
         });
     });
 

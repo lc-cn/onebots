@@ -285,19 +285,19 @@ export namespace Satori {
             comment?: string,
         ): Promise<void>;
 
-        // Reaction methods
-        "reaction.create"(channel_id: string, message_id: string, emoji: string): Promise<void>;
+        // Reaction methods。运行时仍接受旧字段 emoji，官方字段是 emoji_id。
+        "reaction.create"(channel_id: string, message_id: string, emoji_id: string): Promise<void>;
         "reaction.delete"(
             channel_id: string,
             message_id: string,
-            emoji: string,
+            emoji_id: string,
             user_id?: string,
         ): Promise<void>;
-        "reaction.clear"(channel_id: string, message_id: string, emoji?: string): Promise<void>;
+        "reaction.clear"(channel_id: string, message_id: string, emoji_id?: string): Promise<void>;
         "reaction.list"(
             channel_id: string,
             message_id: string,
-            emoji: string,
+            emoji_id: string,
             next?: string,
         ): Promise<List<User>>;
 

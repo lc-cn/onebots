@@ -108,11 +108,19 @@ export class SatoriMessageActions {
 
     /** reaction.create / reaction.delete - Update a reaction through the resolved channel route. */
     async updateReaction(params: Record<string, unknown>, isAdd: boolean): Promise<void> {
-        const { channel_id, message_id, emoji } = params as {
+        const { channel_id, message_id } = params as {
             channel_id: string;
             message_id: string;
-            emoji: string;
         };
+        const emoji =
+            typeof params.emoji_id === "string" && params.emoji_id.length > 0
+                ? params.emoji_id
+                : typeof params.emoji === "string"
+                  ? params.emoji
+                  : undefined;
+        if (!emoji) {
+            throw new Error("Satori reaction 需要 emoji_id");
+        }
         const route = this.channelRoutes.resolve(channel_id);
         if (route.scene_type !== "group") {
             const action = isAdd ? "reaction.create" : "reaction.delete";

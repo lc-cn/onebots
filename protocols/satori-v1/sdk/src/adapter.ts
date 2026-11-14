@@ -9,15 +9,20 @@ import {
     type WebSocketReceiverOptions,
 } from "imhelper";
 import {
-    SatoriV1Event,
+    type SatoriAdapter,
     type SatoriActionUrlResolver,
     type SatoriCall,
     type SatoriGatewayPayload,
+    type SatoriReplyMessageOptions,
+    type SatoriSendMessageOptions,
+    type SatoriV1Event,
 } from "./types.js";
 import { HttpClient } from "./http-client.js";
-import { SatoriDirectoryApi } from "./directory-api.js";
-import { isRecord, malformed } from "./protocol-data.js";
+import { SatoriDirectoryApi, type SatoriSdkCaller } from "./directory-api.js";
+import { isRecord, malformed, normalizeEventMember } from "./protocol-data.js";
 import { decodeSatoriContent, encodeSatoriContent } from "./message-codec.js";
+import { SatoriReactionApi } from "./reaction-api.js";
+import { MessageReferrerStore } from "./referrer-store.js";
 
 export interface SatoriAdapterConfig {
     baseUrl: string;
@@ -32,18 +37,6 @@ export interface SatoriAdapterConfig {
     call?: SatoriCall;
     fetch?: typeof globalThis.fetch;
     webSocket?: Omit<WebSocketReceiverOptions, "accessToken">;
-}
-
-/**
- * 创建 Satori V1 适配器
- */
-export interface SatoriAdapter extends Adapter<string, SatoriV1Event> {
-    sendMessage(options: Adapter.SendMessageOptions<string>): Promise<unknown>;
-    call<T = unknown>(
-        resource: string,
-        method: string,
-        params?: Record<string, unknown>,
-    ): Promise<T>;
 }
 
 function isGatewayPayload(
@@ -70,6 +63,8 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
         public readonly selfId: string = selfId;
         private httpClient: HttpClient;
         private readonly directoryApi: SatoriDirectoryApi;
+        private readonly reactions: SatoriReactionApi;
+        private readonly referrers = new MessageReferrerStore();
         private readonly receiveTransport: ReceiveTransport<string, SatoriV1Event>;
 
         constructor() {
@@ -84,9 +79,12 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                 call: config.call,
                 fetch: config.fetch,
             });
-            this.directoryApi = new SatoriDirectoryApi((action, params) =>
-                this.httpClient.post(action, params),
-            );
+            const post: SatoriSdkCaller = <T = unknown>(
+                action: string,
+                params?: Record<string, unknown>,
+            ) => this.httpClient.post<T>(action, params);
+            this.directoryApi = new SatoriDirectoryApi(post);
+            this.reactions = new SatoriReactionApi(post);
 
             this.receiveTransport = new ReceiveTransport(this, {
                 mode: receiveMode,
@@ -128,6 +126,12 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
         }
 
         private transformAndEmit(event: SatoriV1Event): void {
+            normalizeEventMember(event);
+            if (event.message?.id && event.referrer) {
+                const channelId =
+                    typeof event.channel?.id === "string" ? event.channel.id : undefined;
+                this.referrers.remember(channelId, event.message.id, event.referrer);
+            }
             // Satori 事件格式转换
             const eventType = event.type || "";
             const botId = event.login?.user?.id ?? this.selfId;
@@ -253,9 +257,9 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
             this.emit("event", event);
         }
 
-        async sendMessage(options: Adapter.SendMessageOptions<string>): Promise<unknown> {
+        async sendMessage(options: SatoriSendMessageOptions): Promise<unknown> {
             if (options.scene_type === "channel") {
-                return this.createMessage(options.scene_id, options.message);
+                return this.createMessage(options.scene_id, options.message, options.referrer);
             }
             if (options.scene_type === "private") {
                 const directChannel = await this.httpClient.post<unknown>("/user.channel.create", {
@@ -264,16 +268,18 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
                 if (!isRecord(directChannel) || typeof directChannel.id !== "string") {
                     return malformed("user.channel.create", directChannel);
                 }
-                return this.createMessage(directChannel.id, options.message);
+                return this.createMessage(directChannel.id, options.message, options.referrer);
             }
             return this.unsupported("sendMessage:group");
         }
 
-        async replyMessage(options: Adapter.ReplyMessageOptions<string>): Promise<unknown> {
+        async replyMessage(options: SatoriReplyMessageOptions): Promise<unknown> {
             const channelId = this.resolveChannelId(options);
+            const referrer =
+                options.referrer ?? this.referrers.recall(channelId, options.message_id);
             return channelId
-                ? this.createMessage(channelId, options.message)
-                : this.sendMessage(options);
+                ? this.createMessage(channelId, options.message, referrer)
+                : this.sendMessage({ ...options, referrer });
         }
 
         async recallMessageIn(options: Adapter.MessageContextOptions<string>): Promise<boolean> {
@@ -296,22 +302,37 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
 
         async addMessageReactionIn(options: Adapter.MessageReactionOptions<string>): Promise<void> {
             const channelId = this.requireChannelId(options, "reaction.create");
-            await this.httpClient.post("/reaction.create", {
-                channel_id: channelId,
-                message_id: options.message_id,
-                emoji: options.reaction,
-            });
+            await this.reactions.create(channelId, options.message_id, options.reaction);
         }
 
         async deleteMessageReactionIn(
             options: Adapter.MessageReactionOptions<string>,
         ): Promise<void> {
             const channelId = this.requireChannelId(options, "reaction.delete");
-            await this.httpClient.post("/reaction.delete", {
-                channel_id: channelId,
-                message_id: options.message_id,
-                emoji: options.reaction,
-            });
+            await this.reactions.delete(channelId, options.message_id, options.reaction);
+        }
+
+        deleteReaction(
+            channelId: string,
+            messageId: string,
+            emojiId: string,
+            userId?: string,
+        ): Promise<void> {
+            return this.reactions
+                .delete(channelId, messageId, emojiId, userId)
+                .then(() => undefined);
+        }
+
+        clearReaction(channelId: string, messageId: string, emojiId?: string): Promise<void> {
+            return this.reactions.clear(channelId, messageId, emojiId).then(() => undefined);
+        }
+
+        listReactions(channelId: string, messageId: string, emojiId: string, next?: string) {
+            return this.reactions.list(channelId, messageId, emojiId, next);
+        }
+
+        listFriends() {
+            return this.directoryApi.listFriends();
         }
 
         getUserInfo(userId: string) {
@@ -404,10 +425,15 @@ export function createSatoriAdapter(config: SatoriAdapterConfig): SatoriAdapter 
             });
         }
 
-        private createMessage(channelId: string, content: Message.Content): Promise<unknown> {
+        private createMessage(
+            channelId: string,
+            content: Message.Content,
+            referrer?: object,
+        ): Promise<unknown> {
             return this.httpClient.post("/message.create", {
                 channel_id: channelId,
                 content: encodeSatoriContent(content),
+                ...(referrer !== undefined ? { referrer } : {}),
             });
         }
 
