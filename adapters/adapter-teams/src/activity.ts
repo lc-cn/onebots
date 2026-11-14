@@ -223,14 +223,20 @@ function tokenizeInlineEntities(text: string, entities: TeamsEntity[]): CommonTy
             segments.push({ type: "text", data: { text: text.slice(cursor, position) } });
         if (match[1] !== undefined) {
             const mention = mentions[mentionIndex++];
-            segments.push({
-                type: "at",
-                data: {
-                    id: mention?.mentioned?.id || match[1],
-                    name: mention?.mentioned?.name || match[1],
-                    aad_object_id: mention?.mentioned?.aadObjectId,
-                },
-            });
+            const mentionedId = mention?.mentioned?.id;
+            if (mentionedId) {
+                segments.push({
+                    type: "at",
+                    data: {
+                        id: mentionedId,
+                        name: mention?.mentioned?.name || match[1],
+                        aad_object_id: mention?.mentioned?.aadObjectId,
+                    },
+                });
+            } else {
+                // 没有 mention 实体时只有显示名，不能当作用户 ID，退化为可见文本。
+                segments.push({ type: "text", data: { text: `@${match[1]}` } });
+            }
         } else {
             const quote = quotes[quoteIndex++];
             const data = objectValue(quote?.quotedReply);

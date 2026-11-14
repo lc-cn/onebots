@@ -27,6 +27,19 @@ describe("Teams Activity 消息转换", () => {
         });
     });
 
+    it("接收时缺少 mention 实体的 <at> 退化为文本，不把显示名当作用户 ID", () => {
+        const activity = baseActivity({
+            text: "<at>Ada</at> 和 <at>Lin</at>",
+            entities: [{ type: "mention", mentioned: { id: "u1", name: "Ada" } }],
+        });
+
+        expect(projectTeamsSegments(activity)).toEqual([
+            { type: "at", data: { id: "u1", name: "Ada", aad_object_id: undefined } },
+            { type: "text", data: { text: " 和 " } },
+            { type: "text", data: { text: "@Lin" } },
+        ]);
+    });
+
     it("接收时恢复 mention 顺序并保留卡片结构", () => {
         const activity = baseActivity({
             text: "Hi <at>Ada</at>!",

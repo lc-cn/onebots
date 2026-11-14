@@ -389,7 +389,10 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
      * Convert message segments to V11 format
      */
     private convertSegmentsToV11(segments: CommonTypes.Segment[]): V11Segment[] {
-        return convertSegmentsToV11(segments, raw => this.adapter.createId(raw));
+        return convertSegmentsToV11(segments, {
+            createId: raw => this.adapter.createId(raw),
+            selfId: () => this.adapter.resolveAccountId(this.account.account_id),
+        });
     }
 
     /**

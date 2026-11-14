@@ -353,6 +353,8 @@ describe("OneBot V11 message format conversion", () => {
                 },
                 { type: "at", data: { user_id: "staff-abc" } },
                 { type: "at", data: { user_id: "all", scope: "all" } },
+                { type: "at", data: { scope: "all" } },
+                { type: "at", data: { user_id: "self", is_self: true } },
                 { type: "at", data: { qq: "10001" } },
                 { type: "at", data: { role_id: { number: 7, string: "7", source: "7" } } },
             ],
@@ -365,8 +367,11 @@ describe("OneBot V11 message format conversion", () => {
         expect(msg[1]!.data).toMatchObject({ qq: "900001", user_id: "staff-abc" });
         expect(adapter.createId).toHaveBeenCalledWith("staff-abc");
         expect(msg[2]!.data.qq).toBe("all");
-        expect(msg[3]).toEqual({ type: "at", data: { qq: "10001" } });
-        expect(msg[4]!.data).not.toHaveProperty("qq");
+        expect(msg[3]!.data.qq).toBe("all");
+        expect(msg[4]!.data.qq).toBe("12345678");
+        expect(adapter.createId).not.toHaveBeenCalledWith("self");
+        expect(msg[5]).toEqual({ type: "at", data: { qq: "10001" } });
+        expect(msg[6]!.data).not.toHaveProperty("qq");
     });
 
     test("falls back to segmentsToString when raw_message is missing", () => {

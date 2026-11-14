@@ -7,6 +7,13 @@ import type { CommonTypes } from "onebots";
 /** 将原始平台 ID 归一化为通用 ID（由协议所在适配器提供） */
 export type CreateId = (raw: string | number) => CommonTypes.Id;
 
+export interface SegmentIdContext {
+    /** 将原始平台 ID 归一化为通用 ID */
+    createId: CreateId;
+    /** 当前机器人账号的通用 ID（适配器用 `self` 标记 @机器人 时使用） */
+    selfId: () => CommonTypes.Id;
+}
+
 export interface V11Segment {
     type: string;
     data: unknown;
@@ -23,12 +30,13 @@ function isCommonId(value: unknown): value is CommonTypes.Id {
  * OneBot V11 规定 at 段必须带 `qq`（数字 ID 字符串或 `all`），
  * 而各适配器通常只给出 `user_id` / `id`，因此在协议层统一补齐。
  */
-function toV11AtTarget(value: unknown, createId: CreateId): string | undefined {
+function toV11AtTarget(value: unknown, context: SegmentIdContext): string | undefined {
     if (value === undefined || value === null || value === "") return undefined;
     if (value === "all") return "all";
+    if (value === "self") return String(context.selfId().number);
     if (isCommonId(value)) return String(value.number);
     if (typeof value === "number" || typeof value === "string") {
-        return String(createId(value).number);
+        return String(context.createId(value).number);
     }
     return undefined;
 }
@@ -41,13 +49,13 @@ function existingQq(value: unknown): string | undefined {
     return undefined;
 }
 
-function convertAtSegment(segment: CommonTypes.Segment, createId: CreateId): V11Segment {
+function convertAtSegment(segment: CommonTypes.Segment, context: SegmentIdContext): V11Segment {
     const data = (segment.data ?? {}) as Record<string, unknown>;
     const scope = data.scope === "all" || data.type === "all" ? "all" : undefined;
     const qq =
         existingQq(data.qq) ??
-        toV11AtTarget(data.user_id, createId) ??
-        toV11AtTarget(data.id, createId) ??
+        toV11AtTarget(data.user_id, context) ??
+        toV11AtTarget(data.id, context) ??
         scope;
     if (qq === undefined) return { type: segment.type, data: segment.data };
     return { type: "at", data: { ...data, qq } };
@@ -56,11 +64,11 @@ function convertAtSegment(segment: CommonTypes.Segment, createId: CreateId): V11
 /** 将通用消息段转换为 OneBot V11 消息段 */
 export function convertSegmentsToV11(
     segments: CommonTypes.Segment[],
-    createId: CreateId,
+    context: SegmentIdContext,
 ): V11Segment[] {
     return segments.map(segment =>
         segment.type === "at"
-            ? convertAtSegment(segment, createId)
+            ? convertAtSegment(segment, context)
             : { type: segment.type, data: segment.data },
     );
 }
