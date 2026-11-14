@@ -1,8 +1,4 @@
-import {
-    requireNonEmptyStringParam,
-    requirePositiveIntegerParam,
-    sendAccountMessage,
-} from "onebots";
+import { requireNonEmptyStringParam, requirePositiveIntegerParam, sendAccountMessage } from "onebots";
 import type { CommonTypes } from "onebots";
 import type { OneBotV11ActionContext, OneBotV11ActionHandler, OneBotV11Params } from "./types.js";
 
