@@ -76,6 +76,11 @@ function createProtocol() {
             ...resolvedId,
             number: typeof id === "number" ? id : resolvedId.number,
         })),
+        createId: vi.fn((id: string | number) => ({
+            string: String(id),
+            source: id,
+            number: /^\d+$/.test(String(id)) ? Number(id) : 900001,
+        })),
         resolveAccountId: vi.fn(() => ({
             string: "12345678",
             number: 12345678,
@@ -334,6 +339,34 @@ describe("OneBot V11 message format conversion", () => {
         expect(msg[1]).toEqual({ type: "at", data: { qq: "10001" } });
         expect(msg[3]).toEqual({ type: "image", data: { file: "pic.jpg" } });
         expect(msg[4]).toEqual({ type: "face", data: { id: "14" } });
+    });
+
+    test("fills qq on at segments that only carry user_id (issue #281)", () => {
+        const { adapter, protocol } = createProtocol();
+        const event = textMsgEvent({
+            message_type: "group",
+            group: { id: { number: 20001, string: "g20001", source: "g20001" } },
+            message: [
+                {
+                    type: "at",
+                    data: { user_id: { number: 42, string: "42", source: "42" }, name: "小明" },
+                },
+                { type: "at", data: { user_id: "staff-abc" } },
+                { type: "at", data: { user_id: "all", scope: "all" } },
+                { type: "at", data: { qq: "10001" } },
+                { type: "at", data: { role_id: { number: 7, string: "7", source: "7" } } },
+            ],
+            raw_message: "",
+        });
+        const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
+        const msg = result.message as { type: string; data: Record<string, unknown> }[];
+
+        expect(msg[0]!.data).toMatchObject({ qq: "42", name: "小明" });
+        expect(msg[1]!.data).toMatchObject({ qq: "900001", user_id: "staff-abc" });
+        expect(adapter.createId).toHaveBeenCalledWith("staff-abc");
+        expect(msg[2]!.data.qq).toBe("all");
+        expect(msg[3]).toEqual({ type: "at", data: { qq: "10001" } });
+        expect(msg[4]!.data).not.toHaveProperty("qq");
     });
 
     test("falls back to segmentsToString when raw_message is missing", () => {
