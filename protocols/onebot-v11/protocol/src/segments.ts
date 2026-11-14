@@ -55,9 +55,10 @@ function resolveAtTarget(
     data: Record<string, unknown>,
     context: SegmentIdContext,
 ): string | undefined {
-    if (data.scope === "all" || data.type === "all") return "all";
+    // 显式 qq 优先；all 范围只优先于 user_id / id
     return (
         existingQq(data.qq) ??
+        (data.scope === "all" || data.type === "all" ? "all" : undefined) ??
         toV11AtTarget(data.user_id, context) ??
         toV11AtTarget(data.id, context)
     );

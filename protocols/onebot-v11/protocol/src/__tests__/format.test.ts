@@ -358,6 +358,7 @@ describe("OneBot V11 message format conversion", () => {
                 { type: "at", data: { user_id: "all", scope: "all" } },
                 { type: "at", data: { scope: "all" } },
                 { type: "at", data: { user_id: "staff-abc", scope: "all" } },
+                { type: "at", data: { qq: "10002", scope: "all" } },
                 { type: "at", data: { user_id: "self", is_self: true } },
                 { type: "at", data: { qq: "10001" } },
                 { type: "at", data: { role_id: { number: 7, string: "7", source: "7" } } },
@@ -373,10 +374,11 @@ describe("OneBot V11 message format conversion", () => {
         expect(msg[2]!.data.qq).toBe("all");
         expect(msg[3]!.data.qq).toBe("all");
         expect(msg[4]!.data.qq).toBe("all");
-        expect(msg[5]!.data.qq).toBe("12345678");
+        expect(msg[5]!.data.qq).toBe("10002");
+        expect(msg[6]!.data.qq).toBe("12345678");
         expect(adapter.createId).not.toHaveBeenCalledWith("self");
-        expect(msg[6]).toEqual({ type: "at", data: { qq: "10001" } });
-        expect(msg[7]).toEqual({ type: "text", data: { text: "@7" } });
+        expect(msg[7]).toEqual({ type: "at", data: { qq: "10001" } });
+        expect(msg[8]).toEqual({ type: "text", data: { text: "@7" } });
     });
 
     test("degrades an at segment to text when ID mapping fails, keeping the message", () => {
