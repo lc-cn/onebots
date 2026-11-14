@@ -12,6 +12,8 @@ export interface SegmentIdContext {
     createId: CreateId;
     /** 当前机器人账号的通用 ID（适配器用 `self` 标记 @机器人 时使用） */
     selfId: () => CommonTypes.Id;
+    /** ID 映射失败时的错误上报（该段会降级为文本，不中断整条消息） */
+    onError: (error: unknown) => void;
 }
 
 export interface V11Segment {
@@ -49,15 +51,46 @@ function existingQq(value: unknown): string | undefined {
     return undefined;
 }
 
-function convertAtSegment(segment: CommonTypes.Segment, context: SegmentIdContext): V11Segment {
-    const data = (segment.data ?? {}) as Record<string, unknown>;
-    const scope = data.scope === "all" || data.type === "all" ? "all" : undefined;
-    const qq =
+function resolveAtTarget(
+    data: Record<string, unknown>,
+    context: SegmentIdContext,
+): string | undefined {
+    if (data.scope === "all" || data.type === "all") return "all";
+    return (
         existingQq(data.qq) ??
         toV11AtTarget(data.user_id, context) ??
-        toV11AtTarget(data.id, context) ??
-        scope;
-    if (qq === undefined) return { type: segment.type, data: segment.data };
+        toV11AtTarget(data.id, context)
+    );
+}
+
+function idLabel(value: unknown): string | undefined {
+    if (isCommonId(value)) return value.string;
+    if (typeof value === "string" && value) return value;
+    if (typeof value === "number") return String(value);
+    return undefined;
+}
+
+/** 无法给出合法 `qq` 的 at 段（如仅有 role_id）退化为可见文本，避免产出非法 V11 段 */
+function atAsText(data: Record<string, unknown>): V11Segment {
+    const label =
+        idLabel(data.name) ??
+        idLabel(data.text) ??
+        idLabel(data.role_id) ??
+        idLabel(data.user_id) ??
+        idLabel(data.id) ??
+        "";
+    return { type: "text", data: { text: `@${label.replace(/^@/u, "")}` } };
+}
+
+function convertAtSegment(segment: CommonTypes.Segment, context: SegmentIdContext): V11Segment {
+    const data = (segment.data ?? {}) as Record<string, unknown>;
+    let qq: string | undefined;
+    try {
+        qq = resolveAtTarget(data, context);
+    } catch (error) {
+        context.onError(error);
+    }
+    if (qq === undefined) return atAsText(data);
     return { type: "at", data: { ...data, qq } };
 }
 

@@ -349,11 +349,15 @@ describe("OneBot V11 message format conversion", () => {
             message: [
                 {
                     type: "at",
-                    data: { user_id: { number: 42, string: "42", source: "42" }, name: "小明" },
+                    data: {
+                        user_id: { number: 42, string: "dy_open_42", source: "dy_open_42" },
+                        name: "小明",
+                    },
                 },
                 { type: "at", data: { user_id: "staff-abc" } },
                 { type: "at", data: { user_id: "all", scope: "all" } },
                 { type: "at", data: { scope: "all" } },
+                { type: "at", data: { user_id: "staff-abc", scope: "all" } },
                 { type: "at", data: { user_id: "self", is_self: true } },
                 { type: "at", data: { qq: "10001" } },
                 { type: "at", data: { role_id: { number: 7, string: "7", source: "7" } } },
@@ -368,10 +372,34 @@ describe("OneBot V11 message format conversion", () => {
         expect(adapter.createId).toHaveBeenCalledWith("staff-abc");
         expect(msg[2]!.data.qq).toBe("all");
         expect(msg[3]!.data.qq).toBe("all");
-        expect(msg[4]!.data.qq).toBe("12345678");
+        expect(msg[4]!.data.qq).toBe("all");
+        expect(msg[5]!.data.qq).toBe("12345678");
         expect(adapter.createId).not.toHaveBeenCalledWith("self");
-        expect(msg[5]).toEqual({ type: "at", data: { qq: "10001" } });
-        expect(msg[6]!.data).not.toHaveProperty("qq");
+        expect(msg[6]).toEqual({ type: "at", data: { qq: "10001" } });
+        expect(msg[7]).toEqual({ type: "text", data: { text: "@7" } });
+    });
+
+    test("degrades an at segment to text when ID mapping fails, keeping the message", () => {
+        const { adapter, protocol } = createProtocol();
+        adapter.createId.mockImplementationOnce(() => {
+            throw new Error("SQLITE_BUSY");
+        });
+        const event = textMsgEvent({
+            message_type: "group",
+            group: { id: { number: 20001, string: "g20001", source: "g20001" } },
+            message: [
+                { type: "text", data: { text: "hi " } },
+                { type: "at", data: { user_id: "staff-abc", name: "小红" } },
+            ],
+            raw_message: "",
+        });
+        const result = protocol["convertToV11Format"](event as unknown as CommonEvent.Event)!;
+
+        expect(result.message).toEqual([
+            { type: "text", data: { text: "hi " } },
+            { type: "text", data: { text: "@小红" } },
+        ]);
+        expect(protocol.logger.error).toHaveBeenCalled();
     });
 
     test("falls back to segmentsToString when raw_message is missing", () => {

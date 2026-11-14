@@ -392,6 +392,7 @@ export class OneBotV11Protocol extends Protocol<"v11", OneBotV11Config.Config> {
         return convertSegmentsToV11(segments, {
             createId: raw => this.adapter.createId(raw),
             selfId: () => this.adapter.resolveAccountId(this.account.account_id),
+            onError: error => this.logger.error("at 段目标 ID 映射失败，已降级为文本", error),
         });
     }
 
